@@ -20,7 +20,7 @@ ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
-DAEMONS: tuple[str, ...] = ("ares",)
+DAEMONS: frozenset[str] = frozenset({"ares"})
 
 #: Names that MUST NOT appear anywhere in vNext code paths (spec §10 Bucket C).
 #: The registry rejects these at registration time. Tests enforce that no
@@ -197,7 +197,7 @@ def _validate() -> None:
     if overlap:
         raise RuntimeError(f"ACTIVE_AGENTS overlaps RETIRED: {overlap}")
     # No daemon name appears in ACTIVE_AGENTS or RETIRED
-    daemon_overlap = (set(DAEMONS) & set(ACTIVE_AGENTS)) | (set(DAEMONS) & RETIRED)
+    daemon_overlap = (DAEMONS & set(ACTIVE_AGENTS)) | (DAEMONS & RETIRED)
     if daemon_overlap:
         raise RuntimeError(f"DAEMONS overlaps active/retired: {daemon_overlap}")
     # Every agent routes to a real server
