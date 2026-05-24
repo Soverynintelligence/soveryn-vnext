@@ -185,6 +185,16 @@ class ConversationStore:
                 ).fetchall()
         return tuple(Session(**dict(r)) for r in rows)
 
+    def get_session(self, session_id: str) -> Session | None:
+        """Return the session metadata, or None if no such session."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT session_id, agent, title, created_at, updated_at "
+                "FROM conversation_meta WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+        return Session(**dict(row)) if row else None
+
     def delete_session(self, session_id: str) -> None:
         """Drop the session meta AND all turns. Cascading by hand (no FK between tables in production)."""
         with self._conn() as conn:

@@ -187,3 +187,16 @@ def test_store_never_writes_outside_injected_path(store, tmp_path):
 
 def test_valid_roles_constant():
     assert VALID_ROLES == {"user", "assistant", "system", "tool"}
+
+
+def test_get_session_returns_session_for_existing_id(store):
+    sid = store.new_session("aetheria", title="hello")
+    session = store.get_session(sid)
+    assert session is not None
+    assert session.session_id == sid
+    assert session.agent == "aetheria"
+    assert session.title == "hello"
+
+
+def test_get_session_returns_none_for_missing_id(store):
+    assert store.get_session("does-not-exist") is None
