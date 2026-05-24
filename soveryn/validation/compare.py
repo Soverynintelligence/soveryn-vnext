@@ -203,13 +203,24 @@ def _aggregate_sse_events(events: list[dict]) -> tuple[str, str | None, dict | N
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _ensure_session(base: str, agent: str, existing: str | None, timeout: float) -> tuple[str | None, str | None]:
-    """Return (session_id, error). If existing is provided, return it as-is."""
+    """Return (session_id, error).
+
+    - If `existing` is provided, return it as-is.
+    - If POST /sessions returns 404, treat as "this side has no explicit
+      sessions endpoint" (production behaves this way — it auto-mints
+      session_ids inside /chat). Return (None, None) so the caller proceeds
+      WITHOUT a session_id; the chat body will omit the field.
+    - Any other non-2xx is a real error.
+    """
     if existing:
         return existing, None
     try:
         status, body = _post_json(base, "/sessions", {"agent": agent}, timeout)
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return None, f"session create transport error: {type(e).__name__}: {e}"
+    if status == 404:
+        # Side doesn't expose POST /sessions — fall back to ambient/auto-mint.
+        return None, None
     if not (200 <= status < 300):
         return None, f"session create HTTP {status}: {body}"
     sid = body.get("session_id")
@@ -235,9 +246,12 @@ def run_one_side(
     if err:
         result.error = err
         return result
-    result.session_id = sid
+    result.session_id = sid  # may be None when ambient-session side
 
-    body = {"agent": agent, "session_id": sid, "message": message}
+    # Build chat body. Omit session_id when None (ambient session — prod auto-mints).
+    body: dict = {"agent": agent, "message": message}
+    if sid is not None:
+        body["session_id"] = sid
     path = "/chat_stream" if stream else "/chat"
 
     started = time.monotonic()
