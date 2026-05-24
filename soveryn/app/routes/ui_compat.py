@@ -1,15 +1,15 @@
 """SOVERYN vNext — legacy UI compatibility bridge.
 
-TODO(vnext-ui): this serves the production desktop_v2.html / mobile_v3.html
-templates from soveryn_complete/templates so we can validate vNext against
-the existing UI. It is NOT a commitment to the legacy HTML as vNext's
-final interface — when vNext gets its own UI, this bridge goes away.
+After the vNext-native UI landed, the legacy bridge moved from / to
+/legacy. The vNext-native UI now occupies /. The legacy UI is still
+reachable at /legacy (desktop) and /legacy/mobile (mobile) as a
+fallback during any validation period.
 
 Behavior:
-  GET /          → desktop_v2.html (raw HTML, no template rendering)
-  GET /mobile    → mobile_v3.html
-  GET /ui/source → JSON describing which file is being served and the
-                   `_temporary: true` flag so the situation is obvious.
+  GET /legacy        → desktop_v2.html (raw HTML, no template rendering)
+  GET /legacy/mobile → mobile_v3.html
+  GET /ui/source     → JSON describing which file is being served and the
+                       `_temporary: true` flag so the situation is obvious.
 
 The bridge reads from `app.config["SOVERYN_LEGACY_TEMPLATES_DIR"]`
 (default `/home/jon-deoliveira/soveryn_complete/templates`). If the
@@ -73,12 +73,12 @@ def _serve_template(filename: str):
     return resp
 
 
-@bp.get("/")
+@bp.get("/legacy")
 def desktop():
     return _serve_template(DESKTOP_TEMPLATE)
 
 
-@bp.get("/mobile")
+@bp.get("/legacy/mobile")
 def mobile():
     return _serve_template(MOBILE_TEMPLATE)
 

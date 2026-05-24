@@ -47,37 +47,37 @@ def _err(resp):
     return json.loads(resp.data)["error"]
 
 
-# ─── GET / (desktop) ─────────────────────────────────────────────────────────
+# ─── GET /legacy (desktop) ───────────────────────────────────────────────────
 
-def test_root_serves_legacy_desktop_html(app_state):
-    resp = app_state.get("/")
+def test_legacy_serves_legacy_desktop_html(app_state):
+    resp = app_state.get("/legacy")
     assert resp.status_code == 200
     assert resp.content_type.startswith("text/html")
     assert b"desktop-legacy" in resp.data
 
 
-def test_root_sets_legacy_source_header(app_state):
-    resp = app_state.get("/")
+def test_legacy_sets_legacy_source_header(app_state):
+    resp = app_state.get("/legacy")
     assert resp.headers.get(LEGACY_SOURCE_HEADER) == LEGACY_SOURCE_VALUE
 
 
-# ─── GET /mobile ─────────────────────────────────────────────────────────────
+# ─── GET /legacy/mobile ──────────────────────────────────────────────────────
 
-def test_mobile_serves_legacy_mobile_html(app_state):
-    resp = app_state.get("/mobile")
+def test_legacy_mobile_serves_legacy_mobile_html(app_state):
+    resp = app_state.get("/legacy/mobile")
     assert resp.status_code == 200
     assert resp.content_type.startswith("text/html")
     assert b"mobile-legacy" in resp.data
 
 
-def test_mobile_sets_legacy_source_header(app_state):
-    resp = app_state.get("/mobile")
+def test_legacy_mobile_sets_legacy_source_header(app_state):
+    resp = app_state.get("/legacy/mobile")
     assert resp.headers.get(LEGACY_SOURCE_HEADER) == LEGACY_SOURCE_VALUE
 
 
 # ─── Missing files → 503 JSON, NOT stack trace ───────────────────────────────
 
-def test_root_503_when_desktop_template_missing(tmp_path, fake_chat):
+def test_legacy_503_when_desktop_template_missing(tmp_path, fake_chat):
     """No desktop_v2.html in the legacy dir → 503 JSON, not a 500 stack trace."""
     conv = ConversationStore(tmp_path / "conv.db")
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
@@ -86,7 +86,7 @@ def test_root_503_when_desktop_template_missing(tmp_path, fake_chat):
     empty_dir = tmp_path / "empty_legacy"
     empty_dir.mkdir()
     app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] = str(empty_dir)
-    resp = app.test_client().get("/")
+    resp = app.test_client().get("/legacy")
     assert resp.status_code == 503
     assert resp.content_type.startswith("application/json")
     assert _err(resp)["code"] == "ui_unavailable"
@@ -94,7 +94,7 @@ def test_root_503_when_desktop_template_missing(tmp_path, fake_chat):
     assert resp.headers.get(LEGACY_SOURCE_HEADER) is None
 
 
-def test_mobile_503_when_mobile_template_missing(tmp_path, fake_chat):
+def test_legacy_mobile_503_when_mobile_template_missing(tmp_path, fake_chat):
     conv = ConversationStore(tmp_path / "conv.db")
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
@@ -105,19 +105,19 @@ def test_mobile_503_when_mobile_template_missing(tmp_path, fake_chat):
     (partial_dir / "desktop_v2.html").write_text("<html></html>")
     app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] = str(partial_dir)
     client = app.test_client()
-    assert client.get("/").status_code == 200  # desktop works
-    resp = client.get("/mobile")
+    assert client.get("/legacy").status_code == 200  # desktop works
+    resp = client.get("/legacy/mobile")
     assert resp.status_code == 503
     assert _err(resp)["code"] == "ui_unavailable"
 
 
-def test_root_503_when_legacy_dir_does_not_exist(tmp_path, fake_chat):
+def test_legacy_503_when_legacy_dir_does_not_exist(tmp_path, fake_chat):
     conv = ConversationStore(tmp_path / "conv.db")
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
     app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] = str(tmp_path / "does_not_exist")
-    resp = app.test_client().get("/")
+    resp = app.test_client().get("/legacy")
     assert resp.status_code == 503
     assert _err(resp)["code"] == "ui_unavailable"
 
