@@ -24,7 +24,7 @@
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
-  body { display:grid; grid-template-columns:280px 1fr 0; height:100vh; overflow:hidden; }
+  body { display:grid; grid-template-columns:280px 1fr 0; grid-template-rows:100vh; height:100vh; overflow:hidden; }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
   /* Sidebar */
@@ -165,7 +165,7 @@
 
   /* Composer */
   .composer {
-    position:absolute; left:296px; right:16px; bottom:24px;
+    position:absolute; left:16px; right:16px; bottom:24px;
     display:flex; align-items:center; gap:10px;
     padding:10px 14px;
     background:var(--glass-bg);
@@ -191,7 +191,8 @@
     font-weight:700;
   }
   .composer .send:disabled { opacity:0.4; cursor:default; }
-  main { position:relative; }
+  main { position:relative; min-height:0; }
+  main > .thread { min-height:0; }
 </style>
 </head>
 <body>
