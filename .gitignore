@@ -21,3 +21,6 @@ Thumbs.db
 
 # Runtime
 *.log
+
+# Superpowers brainstorm session content (ephemeral)
+.superpowers/
