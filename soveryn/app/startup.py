@@ -46,6 +46,10 @@ def create_app(
     app = Flask("soveryn")
     app.config.setdefault("SOVERYN_REQUIRE_LOCALHOST", True)
     app.config.setdefault("SOVERYN_VERSION", __version__)
+    app.config.setdefault(
+        "SOVERYN_LEGACY_TEMPLATES_DIR",
+        "/home/jon-deoliveira/soveryn_complete/templates",
+    )
 
     env = env if env is not None else load_env_config()
     if conv_store is None:
@@ -119,7 +123,9 @@ def _register_blueprints(app: Flask) -> None:
     from soveryn.app.routes.chat import bp as chat_bp
     from soveryn.app.routes.compat import bp as compat_bp
     from soveryn.app.routes.health import bp as health_bp
+    from soveryn.app.routes.ui_compat import bp as ui_compat_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(chat_bp)
     app.register_blueprint(compat_bp)
+    app.register_blueprint(ui_compat_bp)
