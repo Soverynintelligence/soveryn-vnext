@@ -125,3 +125,13 @@ def test_chat_page_groups_history_by_date(client):
 def test_chat_page_fetches_sessions_on_agent_change(client):
     body = client.get("/chat").data.decode("utf-8")
     assert "/sessions?agent=" in body
+
+
+def test_chat_page_thread_has_aria_live(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'aria-live="polite"' in body or "aria-live='polite'" in body
+
+
+def test_chat_composer_input_has_label(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert "aria-label" in body

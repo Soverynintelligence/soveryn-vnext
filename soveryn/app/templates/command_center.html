@@ -122,6 +122,9 @@
     font-size:12px; color:rgba(236,243,244,0.6);
   }
   .attention .empty { color:rgba(236,243,244,0.35); font-style:italic; }
+
+  a.agent-card:focus-visible { outline:2px solid var(--node); outline-offset:4px; border-radius:var(--r-lg); }
+  button:focus-visible { outline:2px solid var(--node); outline-offset:2px; }
 </style>
 </head>
 <body data-testid="command-center">
@@ -138,7 +141,7 @@
     </section>
 
     <section class="agent-row" data-testid="agent-row">
-      <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria">
+      <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria" aria-label="Open chat with Aetheria">
         <div class="disc"></div>
         <div class="body">
           <div class="name">aetheria</div>
@@ -146,7 +149,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
       </a>
-      <a href="/chat?agent=vett" class="agent-card" data-agent="vett">
+      <a href="/chat?agent=vett" class="agent-card" data-agent="vett" aria-label="Open chat with Vett">
         <div class="disc"></div>
         <div class="body">
           <div class="name">vett</div>
@@ -154,7 +157,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
       </a>
-      <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty">
+      <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty" aria-label="Open chat with Scotty">
         <div class="disc"></div>
         <div class="body">
           <div class="name">scotty</div>
@@ -167,7 +170,7 @@
     <section class="bottom-row">
       <div class="panel activity" data-testid="activity-feed">
         <h3>Recent activity</h3>
-        <div class="activity-feed" data-feed>
+        <div class="activity-feed" data-feed aria-live="polite" aria-label="Recent activity">
           <div class="activity-item" data-empty>nothing to report yet.</div>
         </div>
         <div class="sparkline" data-sparkline aria-label="memory writes per day, last 14 days"></div>
@@ -175,7 +178,7 @@
 
       <div class="panel system" data-testid="system-panel">
         <h3>System</h3>
-        <div class="gpu-bars" data-testid="gpu-bars">
+        <div class="gpu-bars" data-testid="gpu-bars" aria-live="polite" aria-label="GPU statistics">
           <div class="gpu-bar" data-empty>GPU stats loading…</div>
         </div>
         <div class="system-stats" data-stats>
@@ -184,7 +187,7 @@
           <div>last backup <span data-stat="backup">—</span></div>
           <div>boards <span data-stat="boards">—</span></div>
         </div>
-        <div class="attention" data-attention>
+        <div class="attention" data-attention aria-live="polite">
           <div class="empty">nothing needs attention.</div>
         </div>
       </div>

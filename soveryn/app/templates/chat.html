@@ -193,6 +193,10 @@
   .composer .send:disabled { opacity:0.4; cursor:default; }
   main { position:relative; min-height:0; }
   main > .thread { min-height:0; }
+
+  button:focus-visible, a:focus-visible, input:focus-visible {
+    outline:2px solid var(--node); outline-offset:2px; border-radius:6px;
+  }
 </style>
 </head>
 <body>
@@ -241,10 +245,10 @@
       </div>
     </header>
 
-    <div class="thread" data-testid="thread"></div>
+    <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
     <form class="composer" data-testid="composer" onsubmit="return false">
-      <input type="text" placeholder="Message…" data-testid="composer-input" autofocus>
+      <input type="text" placeholder="Message…" data-testid="composer-input" aria-label="Message" autofocus>
       <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
       <button type="submit" class="send" data-testid="send" aria-label="Send">↑</button>
     </form>

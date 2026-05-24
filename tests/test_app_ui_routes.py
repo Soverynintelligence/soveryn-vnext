@@ -122,3 +122,15 @@ def test_root_javascript_fetches_sessions(app_state):
 def test_root_javascript_fetches_health(app_state):
     body = app_state.get("/").data.decode("utf-8")
     assert "/health" in body
+
+
+def test_root_has_aria_live_for_dynamic_panels(app_state):
+    """Activity feed and stats panels update live; screen readers need to know."""
+    body = app_state.get("/").data.decode("utf-8")
+    assert 'aria-live=' in body
+
+
+def test_root_agent_cards_have_aria_labels(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    # Each agent card should announce itself — at least 3 aria-label attrs
+    assert body.count("aria-label") >= 3
