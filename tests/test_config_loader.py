@@ -4,7 +4,10 @@ import pytest
 from pathlib import Path
 
 from soveryn.config import runtime
-from soveryn.config.loader import EnvConfig, EnvConfigError, load_env_config
+from soveryn.config.loader import (
+    EnvConfig, EnvConfigError, load_env_config,
+    DEFAULT_LATTICE_DB, DEFAULT_CONVERSATIONS_DB,
+)
 
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
@@ -114,3 +117,54 @@ def test_env_config_is_frozen():
 
 def test_daemons_is_frozenset():
     assert isinstance(runtime.DAEMONS, frozenset)
+
+
+# ─── DB path fields ──────────────────────────────────────────────────────────
+
+def test_lattice_db_default():
+    """Default lattice_db must be the _vnext side-by-side path (not production)."""
+    cfg = load_env_config(env={})
+    assert cfg.lattice_db == DEFAULT_LATTICE_DB
+    assert isinstance(cfg.lattice_db, Path)
+    assert "lattice_vnext" in cfg.lattice_db.name
+
+
+def test_conversations_db_default():
+    """Default conversations_db must be the _vnext side-by-side path (not production)."""
+    cfg = load_env_config(env={})
+    assert cfg.conversations_db == DEFAULT_CONVERSATIONS_DB
+    assert isinstance(cfg.conversations_db, Path)
+    assert "conversations_vnext" in cfg.conversations_db.name
+
+
+def test_override_lattice_db():
+    cfg = load_env_config(env={"SOVERYN_LATTICE_DB": "/tmp/custom_lattice.db"})
+    assert cfg.lattice_db == Path("/tmp/custom_lattice.db")
+
+
+def test_override_conversations_db():
+    cfg = load_env_config(env={"SOVERYN_CONVERSATIONS_DB": "/tmp/custom_conv.db"})
+    assert cfg.conversations_db == Path("/tmp/custom_conv.db")
+
+
+def test_empty_string_lattice_db_uses_default():
+    cfg = load_env_config(env={"SOVERYN_LATTICE_DB": ""})
+    assert cfg.lattice_db == DEFAULT_LATTICE_DB
+
+
+def test_empty_string_conversations_db_uses_default():
+    cfg = load_env_config(env={"SOVERYN_CONVERSATIONS_DB": ""})
+    assert cfg.conversations_db == DEFAULT_CONVERSATIONS_DB
+
+
+def test_db_paths_are_path_objects():
+    cfg = load_env_config(env={})
+    assert isinstance(cfg.lattice_db, Path)
+    assert isinstance(cfg.conversations_db, Path)
+
+
+def test_default_db_paths_not_production():
+    """Safety check: defaults must NOT be the bare production paths (lattice.db / conversations.db)."""
+    cfg = load_env_config(env={})
+    assert cfg.lattice_db.name != "lattice.db", "Default must not point at production lattice.db"
+    assert cfg.conversations_db.name != "conversations.db", "Default must not point at production conversations.db"

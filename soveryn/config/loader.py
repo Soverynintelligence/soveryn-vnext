@@ -15,6 +15,14 @@ from pathlib import Path
 
 from soveryn.config import runtime
 
+# ─── Default DB paths ─────────────────────────────────────────────────────────
+# These point at *_vnext.db side-by-side files in the production memory dir.
+# Production paths (lattice.db, conversations.db) require an explicit env
+# override — safe side-by-side operation.
+
+DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
+DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
+
 
 @dataclass(frozen=True)
 class EnvConfig:
@@ -27,6 +35,8 @@ class EnvConfig:
     app_port: int
     model_root: Path
     health_timeout_seconds: float
+    lattice_db: Path
+    conversations_db: Path
 
 
 class EnvConfigError(ValueError):
@@ -68,4 +78,8 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         health_timeout_seconds=_parse_float(
             "SOVERYN_HEALTH_TIMEOUT", env.get("SOVERYN_HEALTH_TIMEOUT"),
             default=2.0),
+        lattice_db=_parse_path("SOVERYN_LATTICE_DB", env.get("SOVERYN_LATTICE_DB"),
+                               default=DEFAULT_LATTICE_DB),
+        conversations_db=_parse_path("SOVERYN_CONVERSATIONS_DB", env.get("SOVERYN_CONVERSATIONS_DB"),
+                                     default=DEFAULT_CONVERSATIONS_DB),
     )
