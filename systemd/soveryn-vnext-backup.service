@@ -1,0 +1,22 @@
+# SOVERYN vNext code backup — template (NOT installed by this commit)
+#
+# Install: copy to ~/.config/systemd/user/ then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now soveryn-vnext-backup.timer
+#
+# Or system-wide: copy to /etc/systemd/system/ and adapt User=.
+
+[Unit]
+Description=SOVERYN vNext code backup (one-shot)
+After=network.target
+
+[Service]
+Type=oneshot
+User=jon-deoliveira
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.backup.daemon --once
+StandardOutput=append:/var/log/soveryn-vnext-backup.log
+StandardError=append:/var/log/soveryn-vnext-backup.log
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,18 @@
+# SOVERYN vNext code backup timer — daily at 04:30
+# Offset from production backup.sh at 04:00 to avoid I/O collision.
+#
+# Install: copy to ~/.config/systemd/user/ then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now soveryn-vnext-backup.timer
+
+[Unit]
+Description=Daily SOVERYN vNext code backup at 04:30
+Requires=soveryn-vnext-backup.service
+
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=soveryn-vnext-backup.service
+
+[Install]
+WantedBy=timers.target
