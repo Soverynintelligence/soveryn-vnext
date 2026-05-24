@@ -139,6 +139,8 @@
   .msg.assistant .msg-bubble { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
   .msg.error .msg-bubble { background: #1a0a0a; border-color: var(--red); color: var(--red); }
   .msg.streaming .msg-bubble::after { content: "▌"; animation: blink 0.7s step-start infinite; }
+  .msg-bubble.thinking-placeholder { color: var(--muted); font-style: italic; opacity: 0.7; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
   @keyframes blink { 50% { opacity: 0; } }
 
   .empty-state {
@@ -548,9 +550,17 @@ async function sendStream(text) {
       throw new Error(err ? `${err.code}: ${err.message}` : `HTTP ${resp.status}`);
     }
 
-    // Create streaming bubble
+    // Create streaming bubble with "thinking…" placeholder. Models with
+    // hidden-reasoning modes (Qwen3 thinking, etc.) can spend 10-60s
+    // emitting <think> blocks before any visible content delta arrives.
+    // vNext's chat_stream correctly drops empty-content deltas, so without
+    // a placeholder the bubble just sits blank and the user assumes the
+    // agent died. The placeholder is replaced on the first non-empty token.
     msgEl = appendMessage("assistant", "", true);
     bubble = msgEl.querySelector(".msg-bubble");
+    bubble.textContent = "thinking…";
+    bubble.classList.add("thinking-placeholder");
+    let firstToken = true;
     scrollToBottom();
 
     const reader = resp.body.getReader();
@@ -573,14 +583,25 @@ async function sendStream(text) {
           let evt;
           try { evt = JSON.parse(raw); } catch { continue; }
           if (evt.type === "token") {
-            bubble.textContent += evt.delta || "";
-            scrollToBottom();
+            const delta = evt.delta || "";
+            if (delta) {
+              if (firstToken) {
+                // Replace "thinking…" placeholder on first real content
+                bubble.textContent = "";
+                bubble.classList.remove("thinking-placeholder");
+                firstToken = false;
+              }
+              bubble.textContent += delta;
+              scrollToBottom();
+            }
           } else if (evt.type === "done") {
             // Finalize — replace accumulated text with canonical content
+            bubble.classList.remove("thinking-placeholder");
             if (evt.content != null) bubble.textContent = evt.content;
             msgEl.classList.remove("streaming");
             await loadSessions();
           } else if (evt.type === "error") {
+            bubble.classList.remove("thinking-placeholder");
             msgEl.classList.remove("streaming");
             msgEl.classList.add("error");
             bubble.textContent = `${evt.code || "error"}: ${evt.message || "stream error"}`;
