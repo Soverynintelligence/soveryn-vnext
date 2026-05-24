@@ -102,3 +102,23 @@ def test_legacy_mobile_moved_to_legacy_path(app_state):
 def test_ui_source_metadata_still_works(app_state):
     resp = app_state.get("/ui/source")
     assert resp.status_code == 200
+
+
+def test_root_javascript_fetches_gpu(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert "/api/system/gpu" in body
+
+
+def test_root_javascript_fetches_memory_activity(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert "/api/memory/activity" in body
+
+
+def test_root_javascript_fetches_sessions(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert "/sessions" in body
+
+
+def test_root_javascript_fetches_health(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert "/health" in body

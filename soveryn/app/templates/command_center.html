@@ -191,5 +191,135 @@
     </section>
 
   </div>
+<script>
+(() => {
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+
+  // ─── Fetch helpers ─────────────────────────────────────────────────────────
+  const fetchJson = async (url) => {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  };
+
+  // ─── Greeting (client builds it from /sessions + /api/memory/activity) ────
+  async function renderGreeting() {
+    const hour = new Date().getHours();
+    let heading = "Late, Jon.";
+    if (hour < 5) heading = "Late, Jon.";
+    else if (hour < 12) heading = "Morning, Jon.";
+    else if (hour < 17) heading = "Afternoon, Jon.";
+    else if (hour < 22) heading = "Evening, Jon.";
+    document.querySelector("[data-greeting-heading]").textContent = heading;
+
+    const activity = await fetchJson("/api/memory/activity?days=1");
+    const sessions = await fetchJson("/sessions?limit=10");
+    const parts = [];
+    const today = activity && activity.buckets && activity.buckets[activity.buckets.length-1];
+    if (today && today.count > 0) {
+      for (const [agent, n] of Object.entries(today.by_agent || {})) {
+        const noun = n === 1 ? "note" : "notes";
+        parts.push(`${agent[0].toUpperCase() + agent.slice(1)} wrote ${n} ${noun}.`);
+      }
+    }
+    if (sessions && sessions.sessions && sessions.sessions.length) {
+      const n = sessions.sessions.length;
+      parts.push(`${n} recent session${n === 1 ? "" : "s"}.`);
+    }
+    document.querySelector("[data-greeting-body]").textContent =
+      parts.length ? parts.join(" ") : "It's been quiet since you were last here.";
+  }
+
+  // ─── Agent cards (state from /sessions per agent) ─────────────────────────
+  async function renderAgentStates() {
+    for (const agent of ACTIVE_AGENTS) {
+      const data = await fetchJson(`/sessions?agent=${agent}&limit=1`);
+      const recent = data && data.sessions && data.sessions[0];
+      const el = document.querySelector(`.agent-card[data-agent="${agent}"] [data-agent-state]`);
+      if (!el) continue;
+      el.textContent = recent ? `last active ${new Date(recent.updated_at).toLocaleString()}` : "idle";
+    }
+  }
+
+  // ─── GPU bars ─────────────────────────────────────────────────────────────
+  async function renderGpu() {
+    const data = await fetchJson("/api/system/gpu");
+    const container = document.querySelector('[data-testid="gpu-bars"]');
+    if (!data || !data.available) {
+      container.innerHTML = `<div class="gpu-bar" style="opacity:0.5">${(data && data.message) || "GPU stats unavailable"}</div>`;
+      return;
+    }
+    container.innerHTML = "";
+    for (const g of data.gpus) {
+      const memPct = g.mem_total_mib ? Math.round((g.mem_used_mib / g.mem_total_mib) * 100) : 0;
+      container.insertAdjacentHTML("beforeend", `
+        <div class="gpu-bar">
+          <div class="row"><span>gpu ${g.index}</span><span class="pct">${g.util_pct}% · ${g.temp_c}°C · ${memPct}% mem</span></div>
+          <div class="track"><div class="fill" style="width:${g.util_pct}%"></div></div>
+        </div>
+      `);
+    }
+  }
+
+  // ─── Sparkline (14d memory writes) ────────────────────────────────────────
+  async function renderSparkline() {
+    const data = await fetchJson("/api/memory/activity?days=14");
+    const container = document.querySelector("[data-sparkline]");
+    if (!container || !data) return;
+    const max = Math.max(1, ...data.buckets.map(b => b.count));
+    container.innerHTML = data.buckets.map(b => {
+      const h = Math.round((b.count / max) * 100);
+      return `<div class="bar" style="height:${h}%" title="${b.date}: ${b.count}"></div>`;
+    }).join("");
+  }
+
+  // ─── Activity feed ────────────────────────────────────────────────────────
+  async function renderFeed() {
+    const sessions = await fetchJson("/sessions?limit=6");
+    const container = document.querySelector("[data-feed]");
+    if (!container || !sessions || !sessions.sessions || !sessions.sessions.length) return;
+    container.innerHTML = sessions.sessions.map(s => `
+      <div class="activity-item">
+        <span class="who" data-agent="${s.agent}">${s.agent}</span>
+        ${s.title ? `· ${s.title}` : "· (untitled session)"}
+        <span class="ts">${new Date(s.updated_at).toLocaleString()}</span>
+      </div>
+    `).join("");
+  }
+
+  // ─── System stats ─────────────────────────────────────────────────────────
+  async function renderStats() {
+    const [activity, sessions, health] = await Promise.all([
+      fetchJson("/api/memory/activity?days=1"),
+      fetchJson("/sessions?limit=200"),
+      fetchJson("/health"),
+    ]);
+    const set = (k, v) => {
+      const el = document.querySelector(`[data-stat="${k}"]`);
+      if (el) el.textContent = v;
+    };
+    if (activity) set("nodes", activity.total_nodes);
+    if (sessions) set("sessions", (sessions.sessions || []).length);
+    if (health && health.boards !== undefined) set("boards", health.boards);
+    set("backup", "—");  // TODO(vnext-backup-mtime): wire when backup daemon exposes a status route
+  }
+
+  // ─── Boot + polling ───────────────────────────────────────────────────────
+  function refreshAll() {
+    renderGreeting();
+    renderAgentStates();
+    renderGpu();
+    renderSparkline();
+    renderFeed();
+    renderStats();
+  }
+  document.addEventListener("DOMContentLoaded", () => {
+    refreshAll();
+    setInterval(refreshAll, 10000);  // poll every 10s
+  });
+})();
+</script>
 </body>
 </html>
