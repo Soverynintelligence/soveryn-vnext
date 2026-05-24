@@ -263,6 +263,54 @@
     abort: null,
   };
 
+  // ─── History grouping ─────────────────────────────────────────────────────
+  const HISTORY_BUCKETS = ["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
+
+  function bucketFor(updatedAt) {
+    const now = new Date();
+    const then = new Date(updatedAt);
+    const days = Math.floor((now - then) / (1000 * 60 * 60 * 24));
+    if (days < 1) return "Today";
+    if (days < 2) return "Yesterday";
+    if (days < 7) return "Previous 7 days";
+    if (days < 30) return "Previous 30 days";
+    return "Older";
+  }
+
+  async function loadSessions() {
+    const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
+    if (!r.ok) return;
+    const data = await r.json();
+    state.sessions = data.sessions || [];
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const grouped = {};
+    for (const b of HISTORY_BUCKETS) grouped[b] = [];
+    const q = (document.querySelector('[data-testid="search"]').value || "").toLowerCase();
+    for (const s of state.sessions) {
+      if (q && !(s.title || "").toLowerCase().includes(q)) continue;
+      grouped[bucketFor(s.updated_at)].push(s);
+    }
+    const host = elHistory();
+    host.innerHTML = "";
+    for (const bucket of HISTORY_BUCKETS) {
+      const items = grouped[bucket];
+      if (!items.length) continue;
+      const h = document.createElement("h4");
+      h.textContent = bucket;
+      host.appendChild(h);
+      for (const s of items) {
+        const a = document.createElement("a");
+        a.href = `/chat/${s.session_id}`;
+        if (s.session_id === state.sessionId) a.className = "active";
+        a.innerHTML = `<span class="dot" style="background:${AGENT_COLORS[s.agent] || "var(--gold)"}"></span>${s.title || "(untitled)"}`;
+        host.appendChild(a);
+      }
+    }
+  }
+
   // ─── URL parsing ───────────────────────────────────────────────────────────
   function parseUrl() {
     const path = window.location.pathname;
@@ -299,6 +347,7 @@
     $$('.agent-pill').forEach(p => p.setAttribute("aria-pressed", String(p.dataset.agent === name)));
     elAgentName().textContent = name;
     elAgentDisc().style.background = `linear-gradient(135deg, ${AGENT_COLORS[name] || "var(--gold)"}, var(--bronze))`;
+    loadSessions();
   }
 
   function appendBubble(role, content, opts = {}) {
@@ -464,6 +513,8 @@
       window.history.replaceState({}, "", "/chat");
       elInput().focus();
     });
+
+    document.querySelector('[data-testid="search"]').addEventListener("input", renderHistory);
   }
 
   async function onSubmit() {
@@ -481,6 +532,7 @@
     state.sessionId = sessionId;
     elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
     bindEvents();
+    loadSessions();
     if (sessionId) loadHistory(sessionId);
   }
   document.addEventListener("DOMContentLoaded", boot);

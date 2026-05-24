@@ -113,3 +113,15 @@ def test_chat_page_posts_to_chat_stream(client):
 def test_chat_page_posts_to_chat_sync(client):
     body = client.get("/chat").data.decode("utf-8")
     assert '"/chat"' in body or "'/chat'" in body
+
+
+def test_chat_page_groups_history_by_date(client):
+    body = client.get("/chat").data.decode("utf-8")
+    # The grouping logic uses these labels
+    for label in ("Today", "Yesterday", "Previous 7 days"):
+        assert label in body
+
+
+def test_chat_page_fetches_sessions_on_agent_change(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert "/sessions?agent=" in body
