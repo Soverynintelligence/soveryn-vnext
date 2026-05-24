@@ -117,7 +117,9 @@ def _register_error_handlers(app: Flask) -> None:
 
 def _register_blueprints(app: Flask) -> None:
     from soveryn.app.routes.chat import bp as chat_bp
+    from soveryn.app.routes.compat import bp as compat_bp
     from soveryn.app.routes.health import bp as health_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(chat_bp)
+    app.register_blueprint(compat_bp)
