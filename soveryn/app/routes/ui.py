@@ -32,3 +32,31 @@ def vnext_ui():
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
     return resp
+
+
+CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"
+
+
+def _serve_chat_html():
+    if not CHAT_TEMPLATE.is_file():
+        return jsonify({"error": {
+            "code": "ui_unavailable",
+            "message": f"Chat template missing at {CHAT_TEMPLATE}",
+        }}), 500
+    html = CHAT_TEMPLATE.read_text(encoding="utf-8")
+    resp = make_response(html, 200)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
+    return resp
+
+
+@bp.get("/chat")
+def chat_index():
+    """Serve the chat page (agent picker via ?agent=X query string, client-side)."""
+    return _serve_chat_html()
+
+
+@bp.get("/chat/<session_id>")
+def chat_session(session_id: str):  # noqa: ARG001 - client reads session from URL
+    """Serve the chat page; the client JS reads the session_id from the URL."""
+    return _serve_chat_html()

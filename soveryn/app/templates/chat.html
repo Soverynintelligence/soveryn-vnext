@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Chat</title>
+<style>
+  :root {
+    --canvas:#000000;
+    --earth:#4e2d11;
+    --leaf:#455142;
+    --slate:#2a4459;
+    --node:#75cbe8;
+    --bronze:#986d42;
+    --gold:#af9a6d;
+    --text:#ecf3f4;
+    --glass-bg:rgba(20,24,32,0.62);
+    --glass-border:rgba(255,255,255,0.06);
+    --glass-blur:blur(22px) saturate(140%);
+    --r-lg:22px;
+    --r-md:14px;
+    --r-sm:10px;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+  }
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+  html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
+  body { display:grid; grid-template-columns:280px 1fr 0; height:100vh; overflow:hidden; }
+  button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
+
+  /* Sidebar */
+  aside {
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border-right:1px solid var(--glass-border);
+    display:flex; flex-direction:column;
+    padding:16px;
+    gap:12px;
+  }
+  .brand { display:flex; justify-content:space-between; align-items:center; padding:4px 6px 12px; }
+  .brand .wordmark { font-weight:600; letter-spacing:0.18em; color:var(--gold); font-size:13px; }
+  .brand .home { color:rgba(236,243,244,0.55); font-size:11px; text-decoration:none; }
+  .brand .home:hover { color:var(--text); }
+
+  .new-chat {
+    background:linear-gradient(180deg,rgba(117,203,232,0.18),rgba(117,203,232,0.08));
+    border:1px solid rgba(117,203,232,0.35);
+    color:var(--text);
+    padding:10px 14px; border-radius:var(--r-md);
+    font-size:13px; font-weight:500;
+    text-align:left;
+  }
+  .new-chat:hover { border-color:rgba(117,203,232,0.6); }
+
+  .agent-pills { display:flex; gap:6px; }
+  .agent-pill {
+    flex:1; padding:8px 10px; border-radius:var(--r-sm);
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--glass-border);
+    font-size:11px; font-weight:500;
+    text-align:center;
+    color:rgba(236,243,244,0.7);
+  }
+  .agent-pill[aria-pressed="true"] {
+    background:rgba(175,154,109,0.14);
+    border-color:rgba(175,154,109,0.4);
+    color:var(--text);
+  }
+  .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(175,154,109,0.5); }
+  .agent-pill[data-agent="vett"][aria-pressed="true"] { border-color:rgba(117,203,232,0.45); }
+  .agent-pill[data-agent="scotty"][aria-pressed="true"] { border-color:rgba(69,81,66,0.6); }
+
+  .search input {
+    width:100%; padding:8px 12px; border-radius:var(--r-sm);
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--glass-border);
+    color:var(--text); font-size:12px; outline:none;
+  }
+  .search input:focus { border-color:rgba(117,203,232,0.45); }
+
+  .history { flex:1; overflow-y:auto; padding-right:4px; }
+  .history h4 { font-size:10px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
+  .history a {
+    display:flex; align-items:center; gap:8px;
+    padding:7px 8px; border-radius:8px;
+    color:rgba(236,243,244,0.82); text-decoration:none;
+    font-size:12px;
+    border-left:2px solid transparent;
+  }
+  .history a:hover { background:rgba(255,255,255,0.04); }
+  .history a.active { background:rgba(175,154,109,0.08); border-left-color:var(--gold); color:var(--text); }
+  .history .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+  .profile {
+    border-top:1px solid var(--glass-border);
+    padding:10px 6px 4px;
+    display:flex; align-items:center; gap:10px;
+    font-size:12px;
+  }
+  .profile .avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--earth),var(--bronze)); }
+  .profile .who { flex:1; }
+  .profile .who div:first-child { color:var(--text); }
+  .profile .who div:last-child { color:rgba(236,243,244,0.45); font-size:10px; }
+  .profile .cog { color:rgba(236,243,244,0.55); }
+  .profile .cog:hover { color:var(--text); }
+
+  main { display:flex; flex-direction:column; }
+</style>
+</head>
+<body>
+  <aside data-testid="sidebar">
+    <div class="brand">
+      <div class="wordmark">SOVERYN</div>
+      <a href="/" class="home" data-testid="mission-control-link">⌂ mission control</a>
+    </div>
+
+    <button class="new-chat" data-testid="new-chat">+ New conversation</button>
+
+    <div class="agent-pills" role="tablist" aria-label="Select agent">
+      <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>
+      <button class="agent-pill" data-agent="vett"     role="tab" aria-pressed="false">vett</button>
+      <button class="agent-pill" data-agent="scotty"   role="tab" aria-pressed="false">scotty</button>
+    </div>
+
+    <div class="search"><input type="search" placeholder="Search chats" data-testid="search"></div>
+
+    <div class="history" data-testid="history">
+      <h4>Today</h4>
+      <a href="#" class="active"><span class="dot" style="background:var(--gold)"></span>Session loading…</a>
+    </div>
+
+    <div class="profile">
+      <div class="avatar"></div>
+      <div class="who">
+        <div>Jon</div>
+        <div>localhost · vNext</div>
+      </div>
+      <button class="cog" aria-label="Settings">⚙</button>
+    </div>
+  </aside>
+
+  <main data-testid="main"><!-- thread + input in next task --></main>
+</body>
+</html>

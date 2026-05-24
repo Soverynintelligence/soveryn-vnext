@@ -1,0 +1,60 @@
+"""Tests for /chat page route (Phase 1: static skeleton)."""
+
+import re
+import pytest
+
+from soveryn.agents.loop import AgentLoop
+from soveryn.app.startup import create_app
+from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.inference.llama_server_client import ChatResponse
+from soveryn.memory.conversation_store import ConversationStore
+
+
+@pytest.fixture
+def fake_chat():
+    return lambda req, server, timeout=60: ChatResponse(
+        content="ok", finish_reason="stop", tool_calls=None, usage=None, raw={})
+
+
+@pytest.fixture
+def client(tmp_path, fake_chat):
+    conv = ConversationStore(tmp_path / "conv.db")
+    loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
+    app = create_app(conv_store=conv, agent_loops=loops)
+    app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
+    return app.test_client()
+
+
+def test_chat_route_returns_html(client):
+    resp = client.get("/chat")
+    assert resp.status_code == 200
+    assert resp.content_type.startswith("text/html")
+    assert resp.headers.get("X-SOVERYN-UI-Source") == "vnext-native"
+
+
+def test_chat_page_has_sidebar_marker(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="sidebar"' in body
+
+
+def test_chat_page_has_new_chat_button(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="new-chat"' in body
+
+
+def test_chat_page_has_agent_pills_for_active_agents(client):
+    body = client.get("/chat").data.decode("utf-8").lower()
+    for agent in ACTIVE_AGENTS:
+        assert f'data-agent="{agent}"' in body
+
+
+def test_chat_page_no_retired_agents(client):
+    body = client.get("/chat").data.decode("utf-8").lower()
+    for retired in ("scout", "vision", "tinker", "ares_llm"):
+        assert retired not in body, f"retired {retired!r} leaked into chat page"
+
+
+def test_chat_page_no_external_resources(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert re.findall(r'<script[^>]+src=["\']https?://', body) == []
+    assert re.findall(r'<link[^>]+href=["\']https?://', body) == []
