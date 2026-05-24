@@ -374,3 +374,227 @@ def test_retired_agent_persona_lookup_fails_at_construction(conv_store):
     for retired in ["scout", "vision", "tinker", "forge"]:
         with pytest.raises(PersonaError):
             get_persona(retired)
+
+
+# ─── Memory recall (opt-in, off by default) ──────────────────────────────────
+
+from soveryn.memory.lattice import LatticeStore, Node
+
+
+def _make_lattice_store(tmp_path):
+    return LatticeStore(tmp_path / "lattice.db")
+
+
+def _fake_embed_returning(vector):
+    """Embed_fn fake. Returns the given vector regardless of input."""
+    def _f(text):
+        return tuple(vector)
+    return _f
+
+
+def test_recall_off_by_default_no_embed_no_lattice_call(conv_store, tmp_path):
+    """recall_k=0 → embed_fn never called, no lattice access."""
+    sid = conv_store.new_session("aetheria")
+    fake_chat = _CapturingChat()
+    embed_called = {"n": 0}
+    def fake_embed(text):
+        embed_called["n"] += 1
+        return (1.0,)
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        # recall_k defaults to 0 — no lattice_store needed
+        embed_fn=fake_embed,
+    )
+    loop.process_message(sid, "hi")
+    assert embed_called["n"] == 0
+
+
+def test_recall_enabled_requires_lattice_store(conv_store):
+    """recall_k > 0 with lattice_store=None → constructor raises."""
+    with pytest.raises(ValueError, match="recall_k > 0 requires lattice_store"):
+        AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat(), recall_k=3)
+
+
+def test_recall_k_negative_raises(conv_store, tmp_path):
+    with pytest.raises(ValueError, match="recall_k must be >= 0"):
+        AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat(), recall_k=-1)
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.1, 1.01, 2.0])
+def test_recall_threshold_out_of_range_raises(conv_store, tmp_path, bad):
+    """Threshold must be in (0.0, 1.0] when recall is enabled."""
+    store = _make_lattice_store(tmp_path)
+    with pytest.raises(ValueError, match="recall_threshold"):
+        AgentLoop(
+            "aetheria", conv_store, chat_fn=_CapturingChat(),
+            lattice_store=store, recall_k=3, recall_threshold=bad,
+        )
+
+
+def test_recall_threshold_validation_skipped_when_disabled(conv_store, tmp_path):
+    """recall_k=0 → threshold value is irrelevant, no validation."""
+    # Even passing a bad threshold is fine when recall is off.
+    AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat(),
+              recall_k=0, recall_threshold=-1.0)
+
+
+def test_recall_enabled_calls_embed_and_lattice(conv_store, tmp_path):
+    """Happy path: recall on → embed user message → query lattice → format → prepend."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    # Seed the lattice with one node whose embedding matches our query.
+    nid = store.write_node(
+        "aetheria", "Jon prefers Signal over Telegram",
+        intensity=0.8, embedding=(1.0, 0.0, 0.0),
+    )
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=3, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0, 0.0)),
+    )
+    loop.process_message(sid, "remind me of my notification preference")
+
+    # The chat_fn was called with: system=persona, system=recall, user
+    msgs = fake_chat.calls[0]["request"].messages
+    assert msgs[0].role == "system"  # persona
+    assert "Aetheria" in msgs[0].content
+    assert msgs[1].role == "system"  # recall
+    assert "Recalled from memory" in msgs[1].content
+    assert "Jon prefers Signal" in msgs[1].content
+    assert msgs[2].role == "user"
+    assert msgs[2].content == "remind me of my notification preference"
+
+
+def test_recall_zero_matches_omits_recall_system_message(conv_store, tmp_path):
+    """If no nodes meet threshold → no recall system message at all."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    # Seed a node with orthogonal embedding, threshold high → no match.
+    store.write_node(
+        "aetheria", "irrelevant", intensity=0.5,
+        embedding=(0.0, 1.0, 0.0),
+    )
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=3, recall_threshold=0.99,
+        embed_fn=_fake_embed_returning((1.0, 0.0, 0.0)),
+    )
+    loop.process_message(sid, "hi")
+    msgs = fake_chat.calls[0]["request"].messages
+    # Persona + user only — no second system
+    assert [m.role for m in msgs] == ["system", "user"]
+
+
+def test_recall_empty_lattice_omits_recall_system_message(conv_store, tmp_path):
+    """Empty lattice → no nodes → no recall message."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=5, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0, 0.0)),
+    )
+    loop.process_message(sid, "hi")
+    msgs = fake_chat.calls[0]["request"].messages
+    assert [m.role for m in msgs] == ["system", "user"]
+
+
+def test_recall_embed_failure_propagates(conv_store, tmp_path):
+    """Constraint 7: embed_fn raises → AgentLoop propagates loudly."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+
+    def broken_embed(text):
+        raise RuntimeError("embeddings server down")
+
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=3, recall_threshold=0.5,
+        embed_fn=broken_embed,
+    )
+    with pytest.raises(RuntimeError, match="embeddings server down"):
+        loop.process_message(sid, "hi")
+    # User turn DID save (it precedes recall in process_message order).
+    assert len(conv_store.load_history(sid)) == 1
+    # chat_fn never called
+    assert fake_chat.calls == []
+
+
+def test_recall_lattice_failure_propagates(conv_store, tmp_path, monkeypatch):
+    """Constraint 7: lattice query raises → propagates."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    def broken_query(*args, **kwargs):
+        raise RuntimeError("lattice DB locked")
+    monkeypatch.setattr(store, "find_nodes_by_embedding", broken_query)
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=3, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0, 0.0)),
+    )
+    with pytest.raises(RuntimeError, match="lattice DB locked"):
+        loop.process_message(sid, "hi")
+    assert fake_chat.calls == []
+
+
+def test_recall_does_not_write_to_lattice(conv_store, tmp_path):
+    """Constraint 8: this commit is READ-ONLY. AgentLoop must not write nodes."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    fake_chat = _CapturingChat()
+    write_calls = {"n": 0}
+    original_write = store.write_node
+    def counted_write(*args, **kwargs):
+        write_calls["n"] += 1
+        return original_write(*args, **kwargs)
+    store.write_node = counted_write
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=3, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0, 0.0)),
+    )
+    loop.process_message(sid, "hi")
+    assert write_calls["n"] == 0, "AgentLoop wrote to Lattice — read-only this commit"
+
+
+def test_recall_placement_is_after_persona(conv_store, tmp_path):
+    """Constraint 9: persona is index 0, recall is index 1, history follows."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    store.write_node("aetheria", "matched node", intensity=0.5,
+                     embedding=(1.0, 0.0))
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=store, recall_k=2, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0)),
+    )
+    loop.process_message(sid, "hi")
+    msgs = fake_chat.calls[0]["request"].messages
+    assert msgs[0].role == "system" and "Aetheria" in msgs[0].content  # persona
+    assert msgs[1].role == "system" and "Recalled from memory" in msgs[1].content
+    assert msgs[2].role == "user"
+
+
+def test_recall_with_empty_persona_still_works(conv_store, tmp_path):
+    """system_prompt='' + recall enabled → just the recall system, then user."""
+    sid = conv_store.new_session("aetheria")
+    store = _make_lattice_store(tmp_path)
+    store.write_node("aetheria", "matched node", intensity=0.5,
+                     embedding=(1.0, 0.0))
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        system_prompt="",
+        lattice_store=store, recall_k=2, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0)),
+    )
+    loop.process_message(sid, "hi")
+    msgs = fake_chat.calls[0]["request"].messages
+    assert [m.role for m in msgs] == ["system", "user"]
+    assert "Recalled from memory" in msgs[0].content
