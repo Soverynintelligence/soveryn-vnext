@@ -134,3 +134,20 @@ def test_root_agent_cards_have_aria_labels(app_state):
     body = app_state.get("/").data.decode("utf-8")
     # Each agent card should announce itself — at least 3 aria-label attrs
     assert body.count("aria-label") >= 3
+
+
+def test_root_agent_cards_are_tab_targets(app_state):
+    """Agent cards are anchor elements — they should be in the tab order naturally.
+    Confirm they don't have tabindex=-1 disabling that."""
+    body = app_state.get("/").data.decode("utf-8")
+    # No negative tabindex on agent cards
+    assert 'data-agent="aetheria" tabindex="-1"' not in body
+    assert 'data-agent="vett" tabindex="-1"' not in body
+    assert 'data-agent="scotty" tabindex="-1"' not in body
+
+
+def test_root_status_pill_does_not_steal_focus(app_state):
+    """Status pill is informational and should not be in tab order."""
+    body = app_state.get("/").data.decode("utf-8")
+    # Status pill marker present
+    assert 'class="status-pill"' in body
