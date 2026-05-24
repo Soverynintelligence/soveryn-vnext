@@ -24,7 +24,7 @@ import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 from soveryn.config.runtime import MODEL_SERVERS, ModelServer
 
@@ -209,6 +209,153 @@ def chat(
         usage=parsed.get("usage"),
         raw=parsed,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Streaming chat
+# ─────────────────────────────────────────────────────────────────────────────
+
+DEFAULT_STREAM_TIMEOUT_SECONDS = 120.0  # streams can be long; per-read socket timeout below
+DEFAULT_STREAM_READ_TIMEOUT_SECONDS = 60.0  # max gap between chunks
+SSE_DATA_PREFIX = "data: "
+SSE_DONE_MARKER = "[DONE]"
+
+
+@dataclass(frozen=True)
+class StreamChunk:
+    """One parsed chunk from llama-server's SSE stream.
+
+    `delta` is the content delta (may be empty string).
+    `finish_reason` is None mid-stream, set on the terminal chunk.
+    `tool_calls_delta` is the raw OpenAI tool_calls delta list for this chunk
+    (or None). Callers accumulate by index across chunks.
+    `raw` is the full parsed chunk dict (preserve for debugging).
+    """
+    delta: str
+    finish_reason: str | None
+    tool_calls_delta: list | None
+    usage: dict | None
+    raw: dict
+
+
+def chat_stream(
+    request: ChatRequest,
+    server: ModelServer,
+    timeout: float = DEFAULT_STREAM_TIMEOUT_SECONDS,
+) -> "Iterator[StreamChunk]":
+    """Open a streaming chat completion. Yields StreamChunk per upstream chunk.
+
+    The final chunk has `finish_reason != None`. After that, the upstream may
+    emit a literal `data: [DONE]` terminator which we consume but do NOT yield.
+
+    Raises LlamaServerError / LlamaServerTimeout on network failure OR if a
+    chunk that looks terminal (contains finish_reason or [DONE]) is malformed.
+    """
+    payload: dict[str, Any] = {
+        "model": request.model,
+        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "temperature": request.temperature,
+        "max_tokens": request.max_tokens,
+        "stream": True,
+    }
+    if request.top_p is not None:
+        payload["top_p"] = request.top_p
+    if request.stop is not None:
+        payload["stop"] = list(request.stop)
+    if request.tools is not None:
+        payload["tools"] = [dict(t) for t in request.tools]
+
+    url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        body_text = ""
+        try:
+            body_text = e.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            pass
+        raise LlamaServerError(status_code=e.code, detail=body_text or e.reason,
+                               server_name=server.name)
+    except (socket.timeout, TimeoutError):
+        raise LlamaServerTimeout(server_name=server.name, timeout_seconds=timeout)
+    except urllib.error.URLError as e:
+        raise LlamaServerError(status_code=0, detail=f"URLError: {e.reason}",
+                               server_name=server.name)
+
+    try:
+        yield from _parse_sse_chunks(resp, server.name)
+    finally:
+        try:
+            resp.close()
+        except Exception:
+            pass
+
+
+def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
+    """Iterate over `data:` lines from an SSE response. Yields StreamChunk.
+
+    Behavior:
+      - Lines not starting with `data: ` are skipped (SSE comments, blank lines, etc.).
+      - `data: [DONE]` is recognized as the clean terminator — consumed, not yielded.
+      - Lines whose JSON parse fails are skipped IF clearly non-terminal junk,
+        but raise LlamaServerError if the line contains `finish_reason` or `[DONE]`
+        (looks terminal, must not silently lose).
+    """
+    for raw_line in resp:
+        line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+        if not line:
+            continue  # blank line between events
+        if not line.startswith(SSE_DATA_PREFIX):
+            continue  # SSE comment / other event types — ignore
+        data = line[len(SSE_DATA_PREFIX):].strip()
+        if data == SSE_DONE_MARKER:
+            return  # clean terminator
+        # Try to parse JSON
+        try:
+            parsed = json.loads(data)
+        except json.JSONDecodeError as e:
+            # If this looks terminal-shaped, fail loud per Jon's constraint 7.
+            # Check for both `finish_reason` and `[DONE` (catches `[DONE]` and
+            # truncated variants like `[DONE` that passed the exact-marker check).
+            if "finish_reason" in data or "[DONE" in data:
+                raise LlamaServerError(
+                    status_code=200,
+                    detail=f"malformed terminal SSE chunk: {data[:200]!r} ({e})",
+                    server_name=server_name,
+                )
+            continue  # non-terminal junk — skip
+
+        choices = parsed.get("choices") if isinstance(parsed, dict) else None
+        if not choices or not isinstance(choices, list):
+            continue
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            continue
+        delta_obj = choice.get("delta") or {}
+        content_delta = delta_obj.get("content") or ""
+        if not isinstance(content_delta, str):
+            content_delta = ""
+        finish_reason = choice.get("finish_reason")
+        tc_delta = delta_obj.get("tool_calls")
+        if tc_delta is not None and not isinstance(tc_delta, list):
+            tc_delta = None
+        usage = parsed.get("usage")
+        if usage is not None and not isinstance(usage, dict):
+            usage = None
+        yield StreamChunk(
+            delta=content_delta,
+            finish_reason=finish_reason,
+            tool_calls_delta=tc_delta,
+            usage=usage,
+            raw=parsed,
+        )
 
 
 def _embeddings_server() -> ModelServer:

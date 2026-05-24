@@ -1,13 +1,16 @@
 """SOVERYN vNext — chat + session routes.
 
-Sync /chat only (no SSE). No persona, no tools, no memory recall.
+Sync /chat and streaming /chat_stream (SSE). No persona, no tools, no memory recall.
 Stable machine-readable error codes (see soveryn/app/startup.py).
 """
 
 from __future__ import annotations
-from flask import Blueprint, current_app, jsonify, request
+import json as _json
+from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
-from soveryn.agents.loop import AgentLoop, AgentLoopError
+from soveryn.agents.loop import (
+    AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
+)
 from soveryn.config.runtime import ACTIVE_AGENTS, RETIRED
 from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerTimeout
 from soveryn.inference.routing import RoutingError
@@ -176,3 +179,98 @@ def chat():
         "tool_calls": list(response.tool_calls) if response.tool_calls else None,
         "usage": response.usage,
     }), 200
+
+
+# ─── /chat_stream (SSE streaming) ────────────────────────────────────────────
+
+def _sse(payload: dict) -> str:
+    """Format one SSE event line."""
+    return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _event_to_dict(event: AgentStreamEvent) -> dict:
+    if isinstance(event, TokenEvent):
+        return {"type": "token", "delta": event.delta}
+    if isinstance(event, DoneEvent):
+        return {
+            "type": "done",
+            "content": event.content,
+            "finish_reason": event.finish_reason,
+            "tool_calls": list(event.tool_calls) if event.tool_calls else None,
+            "usage": event.usage,
+        }
+    if isinstance(event, ErrorEvent):
+        return {"type": "error", "code": event.code, "message": event.message}
+    # Defensive — shouldn't happen with the union closed
+    return {"type": "error", "code": "internal_error",
+            "message": f"unknown event type {type(event).__name__}"}
+
+
+@bp.post("/chat_stream")
+def chat_stream():
+    body, err = _parse_json_body()
+    if err:
+        return err
+
+    agent, err = _resolve_agent(body.get("agent"))
+    if err:
+        return err
+
+    session_id = body.get("session_id")
+    if not isinstance(session_id, str) or not session_id.strip():
+        return _err("missing_field", "Required field: session_id", 400)
+
+    message = body.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return _err("invalid_message", "message must be a non-empty string", 400)
+
+    state = _state()
+    loop = state["agent_loops"].get(agent)
+    if loop is None:
+        return _err("unknown_agent", f"No loop registered for {agent!r}", 400)
+
+    # ── Open the AgentLoop stream and pump the first chunk *before* returning
+    # the SSE Response. This lets setup errors (session mismatch, recall
+    # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
+    # per constraint 3, rather than appearing inside a half-opened text/event-stream.
+    try:
+        event_iter = loop.process_message_stream(session_id, message)
+        # Pre-fetch the first event so setup errors surface here.
+        try:
+            first_event = next(event_iter)
+        except StopIteration:
+            # Generator returned without yielding anything (shouldn't happen on
+            # success; AgentLoop always yields at least a DoneEvent or ErrorEvent).
+            return _err("internal_error", "AgentLoop yielded no events", 500)
+    except AgentLoopError as e:
+        msg = str(e)
+        if "does not exist" in msg:
+            return _err("missing_session", msg, 404)
+        if "belongs to agent" in msg:
+            return _err("session_agent_mismatch", msg, 409)
+        return _err("internal_error", msg, 500)
+    except LlamaServerTimeout as e:
+        return _err("chat_timeout", str(e), 504)
+    except LlamaServerError as e:
+        return _err("chat_server_error", str(e), 502)
+    except RoutingError as e:
+        return _err("unknown_agent", str(e), 400)
+    except Exception as e:
+        return _err("chat_server_error", f"{type(e).__name__}: {e}", 502)
+
+    # ── Setup OK. Now wrap the iterator in an SSE response.
+    def _generate():
+        # First event was already pulled — emit it.
+        yield _sse(_event_to_dict(first_event))
+        for event in event_iter:
+            yield _sse(_event_to_dict(event))
+
+    return Response(
+        stream_with_context(_generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream; charset=utf-8",
+        },
+    )

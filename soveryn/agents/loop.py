@@ -25,7 +25,8 @@ turn-processing time.
 """
 
 from __future__ import annotations
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.recall import format_recall_context
@@ -33,7 +34,11 @@ from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
     ChatResponse,
+    LlamaServerError,
+    LlamaServerTimeout,
+    StreamChunk,
     chat as _default_chat,
+    chat_stream as _default_chat_stream,
 )
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
@@ -42,6 +47,72 @@ from soveryn.memory.lattice import LatticeStore, embed_text as _default_embed
 
 ChatFn = Callable[..., ChatResponse]
 EmbedFn = Callable[[str], tuple[float, ...]]
+StreamFn = Callable[..., Iterator[StreamChunk]]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Stream event types
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class TokenEvent:
+    """One content delta from the stream."""
+    delta: str
+
+
+@dataclass(frozen=True)
+class DoneEvent:
+    """Stream completed normally. Carries accumulated content + finish_reason."""
+    content: str
+    finish_reason: str
+    tool_calls: tuple[dict, ...] | None
+    usage: dict | None
+
+
+@dataclass(frozen=True)
+class ErrorEvent:
+    """Stream failed. NO assistant turn was saved when this event fires."""
+    code: str
+    message: str
+
+
+# Union type alias for typing
+AgentStreamEvent = TokenEvent | DoneEvent | ErrorEvent
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool-call accumulation helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _accumulate_tool_calls(
+    accumulated: list[dict],
+    delta_list: list,
+) -> list[dict]:
+    """Merge OpenAI-format tool_call deltas into the accumulator (by index).
+
+    OpenAI streams tool_calls as deltas keyed by `index`. Each delta may carry
+    partial id, type, function.name, function.arguments — we merge them
+    positionally. Mutates `accumulated` in place and returns it for chaining.
+    """
+    for d in delta_list:
+        if not isinstance(d, dict):
+            continue
+        idx = d.get("index", 0)
+        # Ensure the slot exists
+        while len(accumulated) <= idx:
+            accumulated.append({"index": len(accumulated), "function": {"name": "", "arguments": ""}})
+        slot = accumulated[idx]
+        if "id" in d and d["id"]:
+            slot["id"] = d["id"]
+        if "type" in d and d["type"]:
+            slot["type"] = d["type"]
+        fn_delta = d.get("function") or {}
+        if isinstance(fn_delta, dict):
+            if fn_delta.get("name"):
+                slot["function"]["name"] = slot["function"].get("name", "") + fn_delta["name"]
+            if "arguments" in fn_delta:
+                slot["function"]["arguments"] = slot["function"].get("arguments", "") + (fn_delta.get("arguments") or "")
+    return accumulated
 
 
 class AgentLoopError(Exception):
@@ -61,6 +132,7 @@ class AgentLoop:
         agent_name: str,
         conv_store: ConversationStore,
         chat_fn: ChatFn = _default_chat,
+        stream_fn: StreamFn = _default_chat_stream,
         chat_timeout_seconds: float = 60.0,
         temperature: float = 0.7,
         max_tokens: int = 2048,
@@ -76,6 +148,7 @@ class AgentLoop:
         self.server = route_for_agent(self.agent_name)
         self.conv_store = conv_store
         self.chat_fn = chat_fn
+        self.stream_fn = stream_fn
         self.chat_timeout_seconds = chat_timeout_seconds
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -181,3 +254,124 @@ class AgentLoop:
 
         # 6. Return raw ChatResponse (constraint 3).
         return response
+
+    def process_message_stream(
+        self,
+        session_id: str,
+        user_message: str,
+    ) -> "Iterator[AgentStreamEvent]":
+        """Streaming variant. Yields TokenEvent per content delta, then either
+        DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
+        saved ONLY on DoneEvent, AND only if upstream sent an explicit
+        finish_reason (constraint 5).
+
+        Setup errors (session validation, recall failures, LlamaServerError
+        BEFORE the first chunk) propagate as exceptions — the Flask route
+        translates those to JSON 5xx before opening SSE. Errors AFTER the
+        first chunk are caught here and yielded as ErrorEvent.
+        """
+        # ── Session validation (BEFORE any side effect, same as sync path)
+        session = self.conv_store.get_session(session_id)
+        if session is None:
+            raise AgentLoopError(
+                f"session_id={session_id!r} does not exist; "
+                "call conv_store.new_session() first"
+            )
+        if session.agent != self.agent_name:
+            raise AgentLoopError(
+                f"session {session_id!r} belongs to agent {session.agent!r}, "
+                f"not {self.agent_name!r}"
+            )
+
+        # ── Save user turn FIRST (honest state if stream fails later)
+        self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
+        history_turns = self.conv_store.load_history(session_id)
+
+        # ── Recall (opt-in; same as sync). Failures propagate — route turns into JSON 5xx.
+        recall_context: str = ""
+        if self.recall_k > 0:
+            query_vector = self.embed_fn(user_message)
+            ranked = self.lattice_store.find_nodes_by_embedding(
+                self.agent_name, query_vector,
+                limit=self.recall_k, threshold=self.recall_threshold,
+            )
+            recall_context = format_recall_context(ranked, threshold=self.recall_threshold)
+
+        # ── Build messages
+        history_messages = tuple(
+            ChatMessage(role=t.role, content=t.content) for t in history_turns
+        )
+        prelude: tuple[ChatMessage, ...] = ()
+        if self.system_prompt:
+            prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        if recall_context:
+            prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+        messages = prelude + history_messages
+
+        request = ChatRequest(
+            messages=messages,
+            model=self.server.name,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
+
+        # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).
+        chunk_iter = self.stream_fn(request, self.server, timeout=self.chat_timeout_seconds)
+
+        accumulated_content_parts: list[str] = []
+        accumulated_tool_calls: list[dict] = []
+        final_finish_reason: str | None = None
+        final_usage: dict | None = None
+        first_chunk_seen = False
+
+        try:
+            for chunk in chunk_iter:
+                first_chunk_seen = True
+                if chunk.delta:
+                    accumulated_content_parts.append(chunk.delta)
+                    yield TokenEvent(delta=chunk.delta)
+                if chunk.tool_calls_delta:
+                    _accumulate_tool_calls(accumulated_tool_calls, chunk.tool_calls_delta)
+                if chunk.usage:
+                    final_usage = chunk.usage
+                if chunk.finish_reason is not None:
+                    final_finish_reason = chunk.finish_reason
+        except LlamaServerTimeout as e:
+            if not first_chunk_seen:
+                raise  # setup error → route returns 504 JSON
+            yield ErrorEvent(code="chat_timeout", message=str(e))
+            return
+        except LlamaServerError as e:
+            if not first_chunk_seen:
+                raise  # setup error → route returns 502 JSON
+            yield ErrorEvent(code="chat_server_error", message=str(e))
+            return
+        except Exception as e:
+            # Mid-stream unknown failure: yield error, don't save.
+            if not first_chunk_seen:
+                raise
+            yield ErrorEvent(code="internal_error", message=f"{type(e).__name__}: {e}")
+            return
+
+        # ── Stream ended. Determine success: did we see an explicit finish_reason?
+        if final_finish_reason is None:
+            # No explicit done from upstream — treat as incomplete; do NOT save.
+            yield ErrorEvent(
+                code="incomplete_stream",
+                message="stream closed without finish_reason — no assistant turn saved",
+            )
+            return
+
+        accumulated_content = "".join(accumulated_content_parts)
+        accumulated_tc_tuple = tuple(accumulated_tool_calls) if accumulated_tool_calls else None
+
+        # ── Save assistant turn (content only, per existing sync rules).
+        #     Empty content + explicit finish_reason IS acceptable (Jon constraint 5).
+        self.conv_store.save_turn(session_id, self.agent_name, "assistant", accumulated_content)
+
+        yield DoneEvent(
+            content=accumulated_content,
+            finish_reason=final_finish_reason,
+            tool_calls=accumulated_tc_tuple,
+            usage=final_usage,
+        )
