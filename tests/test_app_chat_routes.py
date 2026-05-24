@@ -367,7 +367,9 @@ def test_unknown_route_returns_404_envelope(app_state):
 
 
 def test_wrong_method_returns_405_envelope(app_state):
-    resp = app_state["client"].get("/chat")
+    # GET /chat now serves the chat UI HTML; use a still-POST-only sibling
+    # (/chat_stream) to exercise the 405 envelope.
+    resp = app_state["client"].get("/chat_stream")
     assert resp.status_code == 405
     assert _err(resp)["code"] == "method_not_allowed"
 
