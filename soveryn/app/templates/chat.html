@@ -248,5 +248,242 @@
       <button type="submit" class="send" data-testid="send" aria-label="Send">↑</button>
     </form>
   </main>
+<script>
+(() => {
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+  const AGENT_COLORS = { aetheria:"var(--gold)", vett:"var(--node)", scotty:"var(--leaf)" };
+
+  // ─── State ─────────────────────────────────────────────────────────────────
+  const state = {
+    agent: null,
+    sessionId: null,
+    sessions: [],
+    stream: localStorage.getItem("soveryn.stream") !== "false",
+    abort: null,
+  };
+
+  // ─── URL parsing ───────────────────────────────────────────────────────────
+  function parseUrl() {
+    const path = window.location.pathname;
+    const m = path.match(/^\/chat\/([^/]+)$/);
+    if (m) return { sessionId: m[1], agent: null };
+    const sp = new URLSearchParams(window.location.search);
+    return { sessionId: null, agent: sp.get("agent") };
+  }
+
+  function pickInitialAgent(urlAgent) {
+    if (urlAgent && ACTIVE_AGENTS.includes(urlAgent.toLowerCase())) {
+      return urlAgent.toLowerCase();
+    }
+    const stored = localStorage.getItem("soveryn.agent");
+    if (stored && ACTIVE_AGENTS.includes(stored)) return stored;
+    return "aetheria";
+  }
+
+  // ─── DOM helpers ───────────────────────────────────────────────────────────
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  const elThread = () => $('[data-testid="thread"]');
+  const elInput  = () => $('[data-testid="composer-input"]');
+  const elSend   = () => $('[data-testid="send"]');
+  const elStreamToggle = () => $('[data-testid="stream-toggle"]');
+  const elHistory = () => $('[data-testid="history"]');
+  const elAgentName = () => $('[data-agent-name]');
+  const elAgentDisc = () => $('[data-agent-disc]');
+  const elSessionMeta = () => $('[data-session-meta]');
+
+  function setAgent(name) {
+    state.agent = name;
+    localStorage.setItem("soveryn.agent", name);
+    $$('.agent-pill').forEach(p => p.setAttribute("aria-pressed", String(p.dataset.agent === name)));
+    elAgentName().textContent = name;
+    elAgentDisc().style.background = `linear-gradient(135deg, ${AGENT_COLORS[name] || "var(--gold)"}, var(--bronze))`;
+  }
+
+  function appendBubble(role, content, opts = {}) {
+    const div = document.createElement("div");
+    div.className = `bubble ${role}`;
+    if (opts.placeholder) {
+      const span = document.createElement("span");
+      span.className = "thinking-placeholder";
+      span.textContent = "thinking…";
+      div.appendChild(span);
+    } else {
+      div.textContent = content;
+    }
+    elThread().appendChild(div);
+    elThread().scrollTop = elThread().scrollHeight;
+    return div;
+  }
+
+  // ─── Session minting ───────────────────────────────────────────────────────
+  // Backend requires session_id on every /chat and /chat_stream POST. We mint
+  // lazily before the first send (or after new-chat / agent switch).
+  async function ensureSession() {
+    if (state.sessionId) return state.sessionId;
+    const r = await fetch("/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: state.agent }),
+    });
+    if (!r.ok) throw new Error(`failed to mint session: ${r.status}`);
+    const data = await r.json();
+    state.sessionId = data.session_id;
+    window.history.replaceState({}, "", `/chat/${data.session_id}`);
+    return state.sessionId;
+  }
+
+  // ─── Streaming (POST + ReadableStream) ─────────────────────────────────────
+  async function sendStreaming(message) {
+    appendBubble("user", message);
+    const respBubble = appendBubble("assistant", "", { placeholder: true });
+    let cleared = false;
+    let finalContent = "";
+
+    try {
+      await ensureSession();
+    } catch (e) {
+      respBubble.textContent = `error · ${e.message}`;
+      return;
+    }
+
+    state.abort = new AbortController();
+    try {
+      const r = await fetch("/chat_stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent: state.agent, session_id: state.sessionId, message }),
+        signal: state.abort.signal,
+      });
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // SSE parse: chunks split by \n\n, each line starts "data: "
+        const parts = buf.split("\n\n");
+        buf = parts.pop();
+        for (const part of parts) {
+          const line = part.split("\n").find(l => l.startsWith("data: "));
+          if (!line) continue;
+          const payload = JSON.parse(line.slice(6));
+          if (payload.type === "token" && payload.delta) {
+            if (!cleared) { respBubble.textContent = ""; cleared = true; }
+            respBubble.textContent += payload.delta;
+            finalContent += payload.delta;
+            elThread().scrollTop = elThread().scrollHeight;
+          } else if (payload.type === "done") {
+            // Fallback: if deltas were dropped, render the canonical accumulated content.
+            if (!cleared && payload.content) {
+              respBubble.textContent = payload.content;
+              cleared = true;
+            }
+          } else if (payload.type === "error") {
+            respBubble.textContent = `error · ${payload.code}: ${payload.message}`;
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") {
+        if (!cleared) respBubble.textContent = "(stopped)";
+      } else {
+        respBubble.textContent = `error · ${e.message}`;
+      }
+    } finally {
+      state.abort = null;
+    }
+  }
+
+  // ─── Sync send ─────────────────────────────────────────────────────────────
+  async function sendSync(message) {
+    appendBubble("user", message);
+    const respBubble = appendBubble("assistant", "", { placeholder: true });
+    try {
+      await ensureSession();
+      const r = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent: state.agent, session_id: state.sessionId, message }),
+      });
+      const data = await r.json();
+      if (data.error) {
+        respBubble.textContent = `error · ${data.error.code}: ${data.error.message}`;
+      } else {
+        respBubble.textContent = data.content || "";
+      }
+    } catch (e) {
+      respBubble.textContent = `error · ${e.message}`;
+    }
+  }
+
+  async function loadHistory(sessionId) {
+    try {
+      const r = await fetch(`/sessions/${sessionId}/history`);
+      if (!r.ok) return;
+      const data = await r.json();
+      elThread().innerHTML = "";
+      for (const t of data.turns || []) {
+        if (t.role === "user" || t.role === "assistant") appendBubble(t.role, t.content);
+      }
+      elSessionMeta().textContent = `${(data.turns || []).length} messages`;
+    } catch { /* noop */ }
+  }
+
+  // ─── Events ────────────────────────────────────────────────────────────────
+  function bindEvents() {
+    $$('.agent-pill').forEach(p => {
+      p.addEventListener("click", () => {
+        setAgent(p.dataset.agent);
+        state.sessionId = null;
+        elThread().innerHTML = "";
+        elSessionMeta().textContent = "new session";
+        window.history.replaceState({}, "", "/chat");
+      });
+    });
+
+    elSend().addEventListener("click", onSubmit);
+    elInput().addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); }
+    });
+    elStreamToggle().addEventListener("click", () => {
+      state.stream = !state.stream;
+      localStorage.setItem("soveryn.stream", String(state.stream));
+      elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
+    });
+
+    $('[data-testid="new-chat"]').addEventListener("click", () => {
+      state.sessionId = null;
+      elThread().innerHTML = "";
+      elSessionMeta().textContent = "new session";
+      window.history.replaceState({}, "", "/chat");
+      elInput().focus();
+    });
+  }
+
+  async function onSubmit() {
+    const msg = elInput().value.trim();
+    if (!msg) return;
+    elInput().value = "";
+    if (state.stream) await sendStreaming(msg);
+    else await sendSync(msg);
+  }
+
+  // ─── Boot ──────────────────────────────────────────────────────────────────
+  function boot() {
+    const { sessionId, agent } = parseUrl();
+    setAgent(pickInitialAgent(agent));
+    state.sessionId = sessionId;
+    elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
+    bindEvents();
+    if (sessionId) loadHistory(sessionId);
+  }
+  document.addEventListener("DOMContentLoaded", boot);
+})();
+</script>
 </body>
 </html>

@@ -86,3 +86,30 @@ def test_chat_page_has_header_with_agent_identity_slot(client):
 def test_chat_page_has_streaming_toggle(client):
     body = client.get("/chat").data.decode("utf-8")
     assert 'data-testid="stream-toggle"' in body
+
+
+def test_chat_page_reads_agent_from_query_string(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert "searchParams" in body or "URLSearchParams" in body
+
+
+def test_chat_page_uses_fetch_for_streaming(client):
+    """Streaming uses fetch + ReadableStream, not EventSource."""
+    body = client.get("/chat").data.decode("utf-8")
+    assert "ReadableStream" in body or "getReader" in body
+    assert "EventSource" not in body, "EventSource doesn't POST; must use fetch"
+
+
+def test_chat_page_supports_abort(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert "AbortController" in body
+
+
+def test_chat_page_posts_to_chat_stream(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert "/chat_stream" in body
+
+
+def test_chat_page_posts_to_chat_sync(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert '"/chat"' in body or "'/chat'" in body
