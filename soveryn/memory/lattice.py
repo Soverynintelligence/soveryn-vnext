@@ -101,13 +101,54 @@ def _row_to_node(row: sqlite3.Row) -> Node:
         intensity=float(row["intensity"]),
         salience=float(row["salience"]),
         access_count=int(row["access_count"]),
-        tags=tuple(json.loads(tags_raw)) if tags_raw else (),
+        tags=_safe_parse_tags(tags_raw),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
-        embedding=tuple(json.loads(embedding_raw)) if embedding_raw else None,
+        embedding=_safe_parse_embedding(embedding_raw),
         intent=row["intent"],
-        provenance=json.loads(provenance_raw) if provenance_raw else None,
+        provenance=_safe_parse_provenance(provenance_raw),
     )
+
+
+def _safe_parse_embedding(raw: str | None) -> tuple[float, ...] | None:
+    """Parse JSON-encoded embedding. Returns None on missing/malformed —
+    callers (e.g. find_nodes_by_embedding) treat None as 'skip this row'.
+    Production data can have corrupt or truncated JSON; the adapter
+    tolerates it rather than crashing recall (Jon constraint 7)."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(parsed, list):
+        return None
+    try:
+        return tuple(float(x) for x in parsed)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_parse_tags(raw: str | None) -> tuple[str, ...]:
+    if not raw:
+        return ()
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return ()
+    if not isinstance(parsed, list):
+        return ()
+    return tuple(str(x) for x in parsed)
+
+
+def _safe_parse_provenance(raw: str | None) -> dict | None:
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:

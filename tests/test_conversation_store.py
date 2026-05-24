@@ -113,7 +113,7 @@ def test_schema_includes_fts_table(store):
     assert rows, "conversations_fts virtual table missing"
 
 
-def test_fts_trigger_populates_index(store):
+def test_fts_trigger_populates_index_on_insert(store):
     """Inserting a turn should populate conversations_fts via trigger."""
     import sqlite3
     sid = store.new_session("aetheria")
@@ -125,6 +125,60 @@ def test_fts_trigger_populates_index(store):
     ).fetchall()
     conn.close()
     assert len(rows) == 1
+
+
+def test_fts_trigger_removes_index_on_delete_session(store):
+    """delete_session DELETEs from conversations — FTS must drop the row too."""
+    import sqlite3
+    sid = store.new_session("aetheria")
+    store.save_turn(sid, "aetheria", "user", "phrase-deletion-marker-abcdef")
+    # Confirm present first
+    conn = sqlite3.connect(str(store.db_path))
+    before = conn.execute(
+        "SELECT rowid FROM conversations_fts WHERE content MATCH ?",
+        ("abcdef",),
+    ).fetchall()
+    conn.close()
+    assert len(before) == 1
+    # Now delete the whole session
+    store.delete_session(sid)
+    conn = sqlite3.connect(str(store.db_path))
+    after = conn.execute(
+        "SELECT rowid FROM conversations_fts WHERE content MATCH ?",
+        ("abcdef",),
+    ).fetchall()
+    conn.close()
+    assert len(after) == 0, "FTS still has stale row after session deletion"
+
+
+def test_fts_trigger_syncs_on_update(store):
+    """UPDATE-trigger should rewrite the FTS row when the underlying content changes.
+
+    No public API issues UPDATEs (the store is append-only), but production
+    occasionally runs raw UPDATEs (e.g. content scrubs). Use raw SQL here to
+    verify the trigger is wired correctly — that's the kind of schema detail
+    that breaks silently otherwise.
+    """
+    import sqlite3
+    sid = store.new_session("aetheria")
+    store.save_turn(sid, "aetheria", "user", "phrase-old-foo-aaaaaa")
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "UPDATE conversations SET content = ? WHERE session_id = ?",
+            ("phrase-new-bar-bbbbbb", sid),
+        )
+        conn.commit()
+    with sqlite3.connect(str(store.db_path)) as conn:
+        old_hits = conn.execute(
+            "SELECT rowid FROM conversations_fts WHERE content MATCH ?",
+            ("aaaaaa",),
+        ).fetchall()
+        new_hits = conn.execute(
+            "SELECT rowid FROM conversations_fts WHERE content MATCH ?",
+            ("bbbbbb",),
+        ).fetchall()
+    assert len(old_hits) == 0, "FTS still indexes the old content after UPDATE"
+    assert len(new_hits) == 1, "FTS missing the new content after UPDATE"
 
 
 def test_store_never_writes_outside_injected_path(store, tmp_path):

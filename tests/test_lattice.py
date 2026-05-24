@@ -157,6 +157,111 @@ def test_embedding_search_empty_db_returns_empty(store):
     assert results == ()
 
 
+# ─── Malformed embedding tolerance (Jon: prove graceful skip) ────────────────
+
+def _raw_insert_node(db_path, *, node_id, agent, embedding_text, intensity=0.5, layer="private"):
+    """Insert a node with arbitrary raw embedding text (bypassing write_node)."""
+    import sqlite3
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
+            "access_count, tags, created_at, updated_at, embedding) "
+            "VALUES (?, 'fact', ?, ?, 'x', ?, ?, 0, '[]', 'now', 'now', ?)",
+            (node_id, layer, agent, intensity, intensity, embedding_text),
+        )
+        conn.commit()
+
+
+def test_embedding_search_skips_corrupt_json_embedding(store):
+    """A row with truncated/corrupt JSON in embedding must not crash recall."""
+    _raw_insert_node(store.db_path, node_id="corrupt-1", agent="aetheria",
+                     embedding_text="[0.1, 0.2, NOT_JSON")
+    store.write_node("aetheria", "good", embedding=(1.0, 0.0), intensity=0.5)
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    assert len(results) == 1
+    assert results[0][0].content == "good"
+
+
+def test_embedding_search_skips_non_list_embedding(store):
+    """A row whose embedding JSON is a dict / scalar must be skipped, not crash."""
+    _raw_insert_node(store.db_path, node_id="dict-emb", agent="aetheria",
+                     embedding_text='{"unexpected": "shape"}')
+    _raw_insert_node(store.db_path, node_id="scalar-emb", agent="aetheria",
+                     embedding_text='42')
+    store.write_node("aetheria", "ok", embedding=(1.0, 0.0), intensity=0.5)
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    assert {r[0].content for r in results} == {"ok"}
+
+
+def test_embedding_search_skips_non_numeric_elements(store):
+    """A row whose embedding has non-float elements must be skipped, not crash."""
+    _raw_insert_node(store.db_path, node_id="strs-emb", agent="aetheria",
+                     embedding_text='["not", "a", "vector"]')
+    store.write_node("aetheria", "ok", embedding=(1.0, 0.0), intensity=0.5)
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    assert {r[0].content for r in results} == {"ok"}
+
+
+def test_embedding_search_handles_wrong_length_embedding(store):
+    """Different-length embeddings score 0 (cosine length-mismatch), filtered by threshold."""
+    store.write_node("aetheria", "len-2", embedding=(1.0, 0.0), intensity=0.5)
+    store.write_node("aetheria", "len-3", embedding=(1.0, 0.0, 0.0), intensity=0.5)
+    # Query with length-2; len-2 matches exactly, len-3 scores 0 and is filtered
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    assert {r[0].content for r in results} == {"len-2"}
+
+
+def test_embedding_search_handles_empty_list_embedding(store):
+    """An empty embedding list must not crash, scores 0 vs anything, filtered."""
+    _raw_insert_node(store.db_path, node_id="empty-emb", agent="aetheria",
+                     embedding_text='[]')
+    store.write_node("aetheria", "ok", embedding=(1.0, 0.0), intensity=0.5)
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    assert {r[0].content for r in results} == {"ok"}
+
+
+def test_get_node_with_corrupt_embedding_returns_none_embedding(store):
+    """get_node on a corrupt-embedding row returns the node with embedding=None,
+    rather than crashing on json.loads."""
+    _raw_insert_node(store.db_path, node_id="corrupt-getn", agent="aetheria",
+                     embedding_text="not valid json {{{")
+    node = store.get_node("corrupt-getn")
+    assert node is not None
+    assert node.embedding is None
+
+
+def test_get_node_with_corrupt_tags_returns_empty_tuple(store):
+    """get_node on a corrupt-tags row returns tags=() rather than crashing."""
+    import sqlite3
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
+            "access_count, tags, created_at, updated_at) "
+            "VALUES ('corrupt-tags', 'fact', 'private', 'aetheria', 'x', 0.5, 0.5, 0, "
+            "'[malformed', 'now', 'now')"
+        )
+        conn.commit()
+    node = store.get_node("corrupt-tags")
+    assert node is not None
+    assert node.tags == ()
+
+
+def test_get_node_with_corrupt_provenance_returns_none(store):
+    """get_node on a corrupt-provenance row returns provenance=None."""
+    import sqlite3
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
+            "access_count, tags, created_at, updated_at, provenance) "
+            "VALUES ('corrupt-prov', 'fact', 'private', 'aetheria', 'x', 0.5, 0.5, 0, "
+            "'[]', 'now', 'now', 'not json')"
+        )
+        conn.commit()
+    node = store.get_node("corrupt-prov")
+    assert node is not None
+    assert node.provenance is None
+
+
 def test_cosine_handles_zero_vector():
     assert _cosine((0.0, 0.0), (1.0, 1.0)) == 0.0
     assert _cosine((1.0, 1.0), (0.0, 0.0)) == 0.0
