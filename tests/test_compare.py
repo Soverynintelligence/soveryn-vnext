@@ -135,6 +135,43 @@ def test_ensure_session_reports_transport_error():
     assert "transport error" in err
 
 
+def test_ensure_session_404_falls_back_to_ambient():
+    """Production has no POST /sessions endpoint — returns 404. Compare
+    must treat as ambient-session mode (auto-mint inside /chat), not error."""
+    import urllib.error
+    err404 = urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b"<!doctype html>"))
+    with patch("urllib.request.urlopen", side_effect=err404):
+        sid, err = _ensure_session("http://prod", "vett", None, 10.0)
+    assert sid is None
+    assert err is None  # NOT an error — ambient session mode
+
+
+def test_run_one_side_omits_session_id_when_ambient():
+    """When _ensure_session returns (None, None), the /chat body must
+    omit session_id entirely so the server doesn't reject the request."""
+    import urllib.error
+    err404 = urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b""))
+    captured = {}
+    chat_resp = _json_resp(200, {"response": "prod-style answer",
+                                  "session_id": None, "source": "memory"})
+    def fake(req, timeout=None):
+        url = req.full_url
+        if url.endswith("/sessions"):
+            raise err404
+        captured["chat_url"] = url
+        captured["chat_body"] = json.loads(req.data.decode())
+        return chat_resp
+    with patch("urllib.request.urlopen", side_effect=fake):
+        r = run_one_side(base="http://prod", agent="vett", message="hi",
+                         session_id=None, stream=False, timeout=10.0)
+    assert r.ok is True
+    assert r.session_id is None  # never minted
+    assert r.content == "prod-style answer"  # via 'response' fallback field
+    # /chat body MUST omit session_id when ambient
+    assert "session_id" not in captured["chat_body"]
+    assert captured["chat_body"] == {"agent": "vett", "message": "hi"}
+
+
 # ─── run_one_side — sync /chat ───────────────────────────────────────────────
 
 def test_run_one_side_sync_happy_path():
