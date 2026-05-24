@@ -57,6 +57,13 @@ def test_construction_routes_aetheria_to_8085(conv_store):
     assert loop.agent_name == "aetheria"
 
 
+def test_default_chat_timeout_is_120_seconds(conv_store):
+    """Cold-start KV + 35B + thinking mode can exceed 60s on turn 1.
+    Default bumped from 60 → 120 per validation finding 2026-05-24 (UI-11)."""
+    loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat())
+    assert loop.chat_timeout_seconds == 120.0
+
+
 def test_construction_routes_vett_to_8084(conv_store):
     loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
     assert loop.server.port == 8084

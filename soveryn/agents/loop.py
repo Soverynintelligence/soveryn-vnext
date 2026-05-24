@@ -133,7 +133,7 @@ class AgentLoop:
         conv_store: ConversationStore,
         chat_fn: ChatFn = _default_chat,
         stream_fn: StreamFn = _default_chat_stream,
-        chat_timeout_seconds: float = 60.0,
+        chat_timeout_seconds: float = 120.0,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         system_prompt: str | None = None,
