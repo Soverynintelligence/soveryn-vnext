@@ -123,9 +123,40 @@ I can't drive a browser. When you're ready:
    - WebSocket `vision_frame` — no socket open (UI's listener silently no-ops)
 5. Capture findings here:
 
-### UI session findings
+### UI session findings — 2026-05-24
 
-(populated by Jon)
+Jon ran the UI pass against vNext on `:5001` via the legacy UI compat bridge (`/` serves `soveryn_complete/templates/desktop_v2.html` per commit `834c608`). Findings:
+
+**UI-1 — All six agents render in the drawer, including retired ones.**
+The legacy template hardcodes a six-agent `AGENT_MAP` (Aetheria, V.E.T.T., Tinker, Ares, Scout, Vision) at `desktop_v2.html:565-585` and again as buttons at `:651-679`. vNext's `/api/models` correctly returns only the three active agents, but the template doesn't consult it — the agent cards are static HTML. Clicking a retired agent fires `POST /chat {agent: "scout"}` → vNext returns `400 retired_agent` (defense works), but the agent appears clickable in the UI which is confusing.
+
+**UI-2 — Every GPU label is wrong.**
+Template `:762-800` hardcodes:
+- `"GPU 0 — Blackwell"` (truth: GPU 0 is Quadro RTX 8000)
+- `"GPU 1 — Quadro (Right)"` (truth: GPU 1 IS the Blackwell)
+- `"GPU 2 — Quadro (Left/RTX?)"` (the `?` in the label itself is the dev not knowing at author time)
+
+The template predates the Blackwell upgrade.
+
+**UI-3 — Every agent's displayed model is wrong.**
+Template hardcodes:
+- Aetheria "Gemma 4 31B · GPU 0" — actually Qwen3.6-35B-A3B-UD-Q8_K_XL on GPU 1 (Blackwell primary, 90/10 split with GPU 0 spillover)
+- V.E.T.T. "Gemma 4 26B · GPU 2" — actually Qwen3.5-27B-Q8_0 on GPU 0
+- Tinker "Qwen2.5-Coder 32B · GPU 2" — Tinker retired entirely
+- Ares "Qwen3 14B · GPU 2" — Ares is a no-LLM daemon now
+- Scout "Gemma 4 26B · GPU 1" — retired
+- Vision "Qwen VL 7B · GPU 1" — retired (mmproj native on active agents now)
+
+The template predates the Qwen3 migration (April), the agent consolidation (May 14-15), and the Blackwell upgrade. It's not "slightly stale" — it's a museum exhibit from a different SOVERYN era.
+
+**Decision (Jon, 2026-05-24): stop patching the legacy UI. Build a new vNext-native UI.**
+
+Patching `desktop_v2.html` would be reverse-engineering 6+ months of decisions that no longer apply. The compat bridge served its purpose — surfaced these drifts as load-bearing signal — and stays in place as the temporary backstop until vNext gets its own UI.
+
+**Implications for upcoming work:**
+- The UI commit (vNext-native frontend) becomes a real priority, parallel with or possibly before F (Lattice writes).
+- Until the new UI lands, vNext is operated via curl / `python -m soveryn.validation.compare` / browser-dev-tools against the legacy bridge.
+- The legacy bridge will keep the `X-SOVERYN-UI-Source: legacy-template` header and `/ui/source` `_temporary: true` flag so the situation stays visible.
 
 ## Summary observations
 
