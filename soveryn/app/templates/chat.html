@@ -105,6 +105,93 @@
   .profile .cog:hover { color:var(--text); }
 
   main { display:flex; flex-direction:column; }
+
+  /* Header */
+  .chat-header {
+    display:flex; align-items:center; gap:14px;
+    padding:14px 24px;
+    border-bottom:1px solid var(--glass-border);
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+  }
+  .chat-header .disc { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--gold),var(--bronze)); flex-shrink:0; }
+  .chat-header .meta { flex:1; }
+  .chat-header .meta .title { font-size:14px; font-weight:500; }
+  .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
+  .chat-header .actions { display:flex; gap:6px; }
+  .chat-header .actions button { color:rgba(236,243,244,0.55); padding:6px 8px; border-radius:8px; font-size:14px; }
+  .chat-header .actions button:hover { background:rgba(255,255,255,0.04); color:var(--text); }
+
+  /* Thread */
+  .thread {
+    flex:1; overflow-y:auto;
+    padding:24px 32px 140px;
+    display:flex; flex-direction:column; gap:18px;
+  }
+  .bubble {
+    max-width:78%;
+    padding:12px 18px;
+    border-radius:var(--r-md);
+    font-size:14px; line-height:1.55;
+    white-space:pre-wrap; word-wrap:break-word;
+  }
+  .bubble.user {
+    align-self:flex-end;
+    background:rgba(117,203,232,0.14);
+    border:1px solid rgba(117,203,232,0.22);
+    border-bottom-right-radius:4px;
+  }
+  .bubble.assistant {
+    align-self:flex-start;
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-bottom-left-radius:4px;
+  }
+  .bubble .thinking-placeholder {
+    color:rgba(236,243,244,0.45);
+    font-style:italic;
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:0.35 } 50% { opacity:0.85 } }
+  .bubble .cursor {
+    display:inline-block; width:6px; height:14px;
+    background:var(--node); vertical-align:middle; margin-left:2px;
+    animation:blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity:0 } }
+
+  /* Composer */
+  .composer {
+    position:absolute; left:296px; right:16px; bottom:24px;
+    display:flex; align-items:center; gap:10px;
+    padding:10px 14px;
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-radius:30px;
+  }
+  .composer input {
+    flex:1; padding:8px 10px;
+    background:transparent; border:none; outline:none;
+    color:var(--text); font-size:14px;
+  }
+  .composer .stream-toggle {
+    font-size:11px; color:rgba(236,243,244,0.55);
+    padding:6px 10px; border-radius:14px;
+    background:rgba(255,255,255,0.04);
+  }
+  .composer .send {
+    width:32px; height:32px; border-radius:50%;
+    background:var(--node); color:#000;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700;
+  }
+  .composer .send:disabled { opacity:0.4; cursor:default; }
+  main { position:relative; }
 </style>
 </head>
 <body>
@@ -139,6 +226,27 @@
     </div>
   </aside>
 
-  <main data-testid="main"><!-- thread + input in next task --></main>
+  <main data-testid="main">
+    <header class="chat-header" data-testid="chat-header">
+      <div class="disc" data-agent-disc></div>
+      <div class="meta">
+        <div class="title" data-agent-name>aetheria</div>
+        <div class="sub" data-session-meta>new session</div>
+      </div>
+      <div class="actions">
+        <button title="Persona inspector" aria-label="Persona">ⓘ</button>
+        <button title="Export" aria-label="Export">⤓</button>
+        <button title="More" aria-label="More">⋯</button>
+      </div>
+    </header>
+
+    <div class="thread" data-testid="thread"></div>
+
+    <form class="composer" data-testid="composer" onsubmit="return false">
+      <input type="text" placeholder="Message…" data-testid="composer-input" autofocus>
+      <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
+      <button type="submit" class="send" data-testid="send" aria-label="Send">↑</button>
+    </form>
+  </main>
 </body>
 </html>

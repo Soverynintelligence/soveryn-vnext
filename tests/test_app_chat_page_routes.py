@@ -58,3 +58,31 @@ def test_chat_page_no_external_resources(client):
     body = client.get("/chat").data.decode("utf-8")
     assert re.findall(r'<script[^>]+src=["\']https?://', body) == []
     assert re.findall(r'<link[^>]+href=["\']https?://', body) == []
+
+
+def test_chat_page_has_thread_marker(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="thread"' in body
+
+
+def test_chat_page_has_input_marker(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="composer"' in body
+
+
+def test_chat_page_has_thinking_placeholder_template(client):
+    """The thinking-placeholder CSS class must exist so streaming bubbles can show
+    'thinking…' before the first non-empty token."""
+    body = client.get("/chat").data.decode("utf-8")
+    assert "thinking-placeholder" in body
+    assert "@keyframes" in body  # pulse animation lives somewhere in the styles
+
+
+def test_chat_page_has_header_with_agent_identity_slot(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="chat-header"' in body
+
+
+def test_chat_page_has_streaming_toggle(client):
+    body = client.get("/chat").data.decode("utf-8")
+    assert 'data-testid="stream-toggle"' in body
