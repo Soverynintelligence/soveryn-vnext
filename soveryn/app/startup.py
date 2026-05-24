@@ -131,6 +131,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(compat_bp)
     from soveryn.app.routes.api_system import bp as api_system_bp
     app.register_blueprint(api_system_bp)
+    from soveryn.app.routes.api_memory import bp as api_memory_bp
+    app.register_blueprint(api_memory_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)
