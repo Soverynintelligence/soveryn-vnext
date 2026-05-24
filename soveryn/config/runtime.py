@@ -8,9 +8,8 @@ Derived from docs/CURRENT_TRUTH_2026-05-23.md § 1, 3, 4, 8, 10.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import FrozenSet
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent identity
@@ -92,6 +91,88 @@ AGENT_TO_SERVER: dict[str, str] = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Non-llama service endpoints (spec §2, §3, §8 Bucket A)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class ServiceEndpoint:
+    """A non-llama-server service endpoint (STT, etc.) the active fleet depends on.
+
+    Distinct from `ModelServer` because there's no GGUF model — these are
+    independent Python services with their own runtime.
+    """
+    name: str               # logical identity, e.g. "parakeet_stt"
+    port: int               # 127.0.0.1:<port>
+    role: str = ""          # human-readable purpose
+
+
+#: Active-fleet services that are NOT llama-servers but ARE Bucket A. vNext's
+#: preflight must verify these are reachable before declaring boot healthy.
+SERVICE_ENDPOINTS: tuple[ServiceEndpoint, ...] = (
+    ServiceEndpoint(
+        name="parakeet_stt",
+        port=8087,
+        role="Speech-to-text (Parakeet, conda env `parakeet`, systemd parakeet.service)",
+    ),
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime services (process-level dependencies — spec §2, §8 Bucket A)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class RuntimeService:
+    """A process-level runtime dependency that's part of the active fleet.
+
+    NOT a network endpoint (those are `ModelServer` / `ServiceEndpoint`),
+    NOT an agent (those are `ACTIVE_AGENTS`). These are background
+    processes, in-process threads, or scheduled jobs that must be
+    alive/wired for the system to function. vNext preflight checks each
+    of these has either a running process or a scheduled job, depending
+    on `kind`.
+    """
+    name: str
+    kind: str       # "process" | "thread" | "scheduled"
+    launch: str     # "systemd" | "app_startup" | "user_launched"
+    role: str = ""
+
+
+#: Active-fleet runtime services. Spec §2, §8 Bucket A.
+RUNTIME_SERVICES: tuple[RuntimeService, ...] = (
+    RuntimeService(
+        name="ares_daemon",
+        kind="process",
+        launch="user_launched",
+        role="Security daemon — scans + posts findings to inboxes (no LLM)",
+    ),
+    RuntimeService(
+        name="aetheria_stream",
+        kind="process",
+        launch="user_launched",
+        role="Aetheria streaming / proprioception surface (separate process)",
+    ),
+    RuntimeService(
+        name="heartbeat",
+        kind="thread",
+        launch="app_startup",
+        role="AetheriaAutonomy autonomous cycle (thread inside app.py)",
+    ),
+    RuntimeService(
+        name="cognition",
+        kind="thread",
+        launch="app_startup",
+        role="AetheriaCognition thread inside app.py — POSTs to cognition :8089",
+    ),
+    RuntimeService(
+        name="dream_aetheria",
+        kind="scheduled",
+        launch="systemd",
+        role="Nightly memory consolidation @ 03:00 (soveryn-dream-aetheria.timer)",
+    ),
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Application surface
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -130,6 +211,40 @@ def _validate() -> None:
     unrouted = set(ACTIVE_AGENTS) - set(AGENT_TO_SERVER)
     if unrouted:
         raise RuntimeError(f"Active agents without server routing: {unrouted}")
+    # No port collision across MODEL_SERVERS, SERVICE_ENDPOINTS, APP_PORT
+    seen_ports: dict[int, str] = {}
+    for s in MODEL_SERVERS:
+        if s.port in seen_ports:
+            raise RuntimeError(f"Port {s.port} collision: {seen_ports[s.port]} vs MODEL_SERVERS:{s.name}")
+        seen_ports[s.port] = f"MODEL_SERVERS:{s.name}"
+    for e in SERVICE_ENDPOINTS:
+        if e.port in seen_ports:
+            raise RuntimeError(f"Port {e.port} collision: {seen_ports[e.port]} vs SERVICE_ENDPOINTS:{e.name}")
+        seen_ports[e.port] = f"SERVICE_ENDPOINTS:{e.name}"
+    if APP_PORT in seen_ports:
+        raise RuntimeError(f"APP_PORT {APP_PORT} collides with {seen_ports[APP_PORT]}")
+    # RuntimeService.kind / launch are constrained vocabularies
+    valid_kinds = {"process", "thread", "scheduled"}
+    valid_launches = {"systemd", "app_startup", "user_launched"}
+    for r in RUNTIME_SERVICES:
+        if r.kind not in valid_kinds:
+            raise RuntimeError(f"RuntimeService {r.name!r}: invalid kind {r.kind!r}")
+        if r.launch not in valid_launches:
+            raise RuntimeError(f"RuntimeService {r.name!r}: invalid launch {r.launch!r}")
+    # RuntimeService names must not collide with agent names or each other
+    service_names = [r.name for r in RUNTIME_SERVICES]
+    if len(service_names) != len(set(service_names)):
+        raise RuntimeError(f"RUNTIME_SERVICES has duplicate names: {service_names}")
+    name_overlap = set(service_names) & (set(ACTIVE_AGENTS) | RETIRED)
+    if name_overlap:
+        raise RuntimeError(f"RuntimeService names overlap agents/retired: {name_overlap}")
+
+
+def all_ports() -> frozenset[int]:
+    """Every port the active fleet should be listening on (excluding APP_PORT)."""
+    return frozenset(
+        {s.port for s in MODEL_SERVERS} | {e.port for e in SERVICE_ENDPOINTS}
+    )
 
 
 _validate()
