@@ -181,9 +181,11 @@ def test_history_includes_prior_turns_on_subsequent_calls(conv_store):
     loop.process_message(sid, "turn-1")
     fake.content = "reply-2"
     loop.process_message(sid, "turn-2")
-    # The second call's request should carry: u1, a1, u2 (3 messages)
+    # The second call's request should carry: system, u1, a1, u2 (4 messages)
     second_request = fake.calls[1]["request"]
-    contents = [m.content for m in second_request.messages]
+    # Extract just the user/assistant roles to verify history accumulation
+    # (system is prepended each time, so we skip it for this assertion)
+    contents = [m.content for m in second_request.messages if m.role != "system"]
     assert contents == ["turn-1", "reply-1", "turn-2"]
 
 
@@ -250,3 +252,125 @@ def test_assistant_save_failure_propagates(conv_store, monkeypatch):
     history = conv_store.load_history(sid)
     assert len(history) == 1
     assert history[0].role == "user"
+
+
+# ─── Persona / system_prompt tri-state ───────────────────────────────────────
+
+from soveryn.agents.personas import AETHERIA_PERSONA, VETT_PERSONA
+
+
+def test_default_system_prompt_loads_persona_for_agent(conv_store):
+    """system_prompt=None (default) → loads the agent's canonical persona."""
+    loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat())
+    assert loop.system_prompt == AETHERIA_PERSONA
+
+
+def test_default_system_prompt_loads_vett_persona(conv_store):
+    loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
+    assert loop.system_prompt == VETT_PERSONA
+
+
+def test_custom_system_prompt_overrides_default(conv_store):
+    custom = "You are a test stub. Reply with 'OK'."
+    loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat(),
+                     system_prompt=custom)
+    assert loop.system_prompt == custom
+
+
+def test_empty_system_prompt_means_no_system_message(conv_store):
+    """system_prompt='' → no system message sent at all (tri-state)."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake, system_prompt="")
+    loop.process_message(sid, "hello")
+    request = fake.calls[0]["request"]
+    # First (and only, for one turn) message should be the user — NO system.
+    assert request.messages[0].role == "user"
+    assert all(m.role != "system" for m in request.messages)
+
+
+def test_default_persona_prepends_system_message_first(conv_store):
+    """Default persona → system message is the FIRST message sent to chat_fn."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "hello")
+    request = fake.calls[0]["request"]
+    assert request.messages[0].role == "system"
+    assert request.messages[0].content == AETHERIA_PERSONA
+    assert request.messages[1].role == "user"
+    assert request.messages[1].content == "hello"
+
+
+def test_custom_system_prompt_prepends_when_non_empty(conv_store):
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake,
+                     system_prompt="test system prompt")
+    loop.process_message(sid, "hello")
+    request = fake.calls[0]["request"]
+    assert request.messages[0].role == "system"
+    assert request.messages[0].content == "test system prompt"
+    assert request.messages[1].role == "user"
+
+
+def test_system_message_not_saved_to_conversations_table(conv_store):
+    """The system message reconstructs every turn from self.system_prompt;
+    it does NOT appear in load_history()."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat(content="reply")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "hi")
+    history = conv_store.load_history(sid)
+    # Only user + assistant — never system
+    assert [t.role for t in history] == ["user", "assistant"]
+    assert all(t.role != "system" for t in history)
+
+
+def test_multi_turn_prepends_one_system_message_per_request(conv_store):
+    """Each process_message call rebuilds the messages tuple with ONE
+    system at position 0, regardless of turn number. The persisted history
+    grows; the system prefix does not."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "turn 1")
+    fake.content = "reply 2"
+    loop.process_message(sid, "turn 2")
+
+    # First call: system + user
+    first_msgs = fake.calls[0]["request"].messages
+    assert [m.role for m in first_msgs] == ["system", "user"]
+
+    # Second call: system + user + assistant + user (history accumulated)
+    second_msgs = fake.calls[1]["request"].messages
+    assert [m.role for m in second_msgs] == ["system", "user", "assistant", "user"]
+    # Exactly one system message — never duplicated.
+    assert sum(1 for m in second_msgs if m.role == "system") == 1
+
+
+def test_persona_immutable_after_construction(conv_store):
+    """No setter discipline — but verify the attribute is just a string."""
+    loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat())
+    # Can technically reassign self.system_prompt (Python doesn't prevent it),
+    # but the contract is: don't. Verify the construction-time value sticks
+    # absent explicit mutation.
+    initial = loop.system_prompt
+    fake = _CapturingChat()
+    loop.chat_fn = fake  # ok to swap chat for testing
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = fake.calls[0]["request"]
+    assert request.messages[0].content == initial
+
+
+def test_retired_agent_persona_lookup_fails_at_construction(conv_store):
+    """RoutingError fires first (already tested), but if someone bypassed
+    routing somehow, get_persona would also reject. Test that path by
+    constructing with an existing-but-misrouted scenario: the default
+    construction already rejects retired names via routing, so this is
+    really a defense-in-depth assertion that personas mirror the registry."""
+    from soveryn.agents.personas import PersonaError, get_persona
+    for retired in ["scout", "vision", "tinker", "forge"]:
+        with pytest.raises(PersonaError):
+            get_persona(retired)

@@ -27,6 +27,7 @@ turn-processing time.
 from __future__ import annotations
 from typing import Callable
 
+from soveryn.agents.personas import get_persona
 from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
@@ -60,6 +61,7 @@ class AgentLoop:
         chat_timeout_seconds: float = 60.0,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        system_prompt: str | None = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -70,6 +72,14 @@ class AgentLoop:
         self.chat_timeout_seconds = chat_timeout_seconds
         self.temperature = temperature
         self.max_tokens = max_tokens
+        # Tri-state per Jon:
+        #   None         → load default persona for this agent
+        #   non-empty    → use as system message
+        #   empty string → NO system message (skip the system turn)
+        if system_prompt is None:
+            self.system_prompt: str = get_persona(self.agent_name)
+        else:
+            self.system_prompt = system_prompt
 
     def process_message(self, session_id: str, user_message: str) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
@@ -101,9 +111,17 @@ class AgentLoop:
         history_turns = self.conv_store.load_history(session_id)
 
         # 3. Build immutable tuple[ChatMessage, ...] (constraint 7).
-        messages: tuple[ChatMessage, ...] = tuple(
+        # System message is prepended at request build time — NOT persisted
+        # to conversations table. Empty system_prompt means skip it entirely.
+        history_messages = tuple(
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
+        if self.system_prompt:
+            messages: tuple[ChatMessage, ...] = (
+                ChatMessage(role="system", content=self.system_prompt),
+            ) + history_messages
+        else:
+            messages = history_messages
 
         # 4. Dispatch chat. Any failure propagates; user turn is already saved.
         request = ChatRequest(
