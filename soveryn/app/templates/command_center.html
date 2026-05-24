@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Command Center</title>
+<style>
+  :root {
+    --canvas:#000000;
+    --earth:#4e2d11;
+    --leaf:#455142;
+    --slate:#2a4459;
+    --node:#75cbe8;
+    --bronze:#986d42;
+    --gold:#af9a6d;
+    --text:#ecf3f4;
+    --glass-bg:rgba(20,24,32,0.62);
+    --glass-border:rgba(255,255,255,0.06);
+    --glass-blur:blur(22px) saturate(140%);
+    --r-lg:22px;
+    --r-md:14px;
+    --r-sm:10px;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+  }
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+  html,body { background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
+  a { color:inherit; text-decoration:none; }
+  button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
+
+  .page { max-width:1280px; margin:0 auto; padding:32px 40px 64px; display:flex; flex-direction:column; gap:24px; }
+
+  header.top {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 4px;
+  }
+  header.top .wordmark { color:var(--gold); font-weight:600; letter-spacing:0.22em; font-size:13px; }
+  header.top .status-pill {
+    display:flex; align-items:center; gap:8px;
+    padding:6px 12px; border-radius:14px;
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    font-size:11px; color:rgba(236,243,244,0.7);
+  }
+  header.top .status-pill .dot { width:8px; height:8px; border-radius:50%; background:#3dba6f; box-shadow:0 0 8px #3dba6f; }
+
+  .panel {
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-radius:var(--r-lg);
+    padding:24px 28px;
+  }
+
+  .greeting h1 { font-size:28px; font-weight:500; letter-spacing:-0.01em; }
+  .greeting p { margin-top:8px; color:rgba(236,243,244,0.7); line-height:1.55; font-size:14px; }
+
+  .agent-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .agent-card {
+    display:flex; align-items:center; gap:16px;
+    padding:20px 22px;
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-radius:var(--r-lg);
+    transition:transform 0.18s ease, border-color 0.18s ease;
+  }
+  .agent-card:hover { transform:translateY(-2px); border-color:rgba(255,255,255,0.16); }
+  .agent-card .disc {
+    width:46px; height:46px; border-radius:50%;
+    position:relative; flex-shrink:0;
+  }
+  .agent-card .disc::after {
+    content:""; position:absolute; inset:-6px;
+    border-radius:50%;
+    border:1px solid currentColor;
+    opacity:0.35;
+    animation:ring 2.4s ease-in-out infinite;
+  }
+  @keyframes ring { 0%,100% { transform:scale(1); opacity:0.35 } 50% { transform:scale(1.08); opacity:0.1 } }
+  .agent-card[data-agent="aetheria"] .disc { background:linear-gradient(135deg,var(--gold),var(--bronze)); color:var(--gold); }
+  .agent-card[data-agent="vett"]     .disc { background:linear-gradient(135deg,var(--node),var(--slate)); color:var(--node); }
+  .agent-card[data-agent="scotty"]   .disc { background:linear-gradient(135deg,var(--leaf),var(--earth)); color:var(--leaf); }
+  .agent-card .body { flex:1; min-width:0; }
+  .agent-card .name { font-size:14px; font-weight:500; }
+  .agent-card .role { color:rgba(236,243,244,0.55); font-size:11px; margin-top:2px; }
+  .agent-card .state { color:rgba(236,243,244,0.85); font-size:12px; margin-top:6px; }
+
+  .bottom-row { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; }
+
+  .activity h3, .system h3 {
+    font-size:11px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em;
+    margin-bottom:14px;
+  }
+  .activity-feed { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:4px; }
+  .activity-item { font-size:13px; color:rgba(236,243,244,0.78); line-height:1.5; }
+  .activity-item .who { font-weight:500; }
+  .activity-item .who[data-agent="aetheria"] { color:var(--gold); }
+  .activity-item .who[data-agent="vett"] { color:var(--node); }
+  .activity-item .who[data-agent="scotty"] { color:#7c9476; }
+  .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
+
+  .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
+  .sparkline .bar { flex:1; background:var(--node); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+
+  .gpu-bars { display:flex; flex-direction:column; gap:10px; }
+  .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
+  .gpu-bar .row { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .gpu-bar .row .pct { font-variant-numeric:tabular-nums; }
+  .gpu-bar .track { height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
+  .gpu-bar .fill { height:100%; background:linear-gradient(90deg,#3dba6f,#d4a827,#c0392b); }
+
+  .system-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-top:18px; font-size:11px; }
+  .system-stats div { display:flex; justify-content:space-between; color:rgba(236,243,244,0.55); }
+  .system-stats div span { color:var(--text); font-variant-numeric:tabular-nums; }
+
+  .attention {
+    margin-top:18px; padding-top:14px; border-top:1px solid var(--glass-border);
+    font-size:12px; color:rgba(236,243,244,0.6);
+  }
+  .attention .empty { color:rgba(236,243,244,0.35); font-style:italic; }
+</style>
+</head>
+<body data-testid="command-center">
+  <div class="page">
+
+    <header class="top">
+      <div class="wordmark">SOVERYN</div>
+      <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
+    </header>
+
+    <section class="panel greeting" data-testid="greeting">
+      <h1 data-greeting-heading>Morning, Jon.</h1>
+      <p data-greeting-body>Loading recent activity…</p>
+    </section>
+
+    <section class="agent-row" data-testid="agent-row">
+      <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria">
+        <div class="disc"></div>
+        <div class="body">
+          <div class="name">aetheria</div>
+          <div class="role">primary · cathedral</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+      </a>
+      <a href="/chat?agent=vett" class="agent-card" data-agent="vett">
+        <div class="disc"></div>
+        <div class="body">
+          <div class="name">vett</div>
+          <div class="role">verifier</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+      </a>
+      <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty">
+        <div class="disc"></div>
+        <div class="body">
+          <div class="name">scotty</div>
+          <div class="role">executor</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+      </a>
+    </section>
+
+    <section class="bottom-row">
+      <div class="panel activity" data-testid="activity-feed">
+        <h3>Recent activity</h3>
+        <div class="activity-feed" data-feed>
+          <div class="activity-item" data-empty>nothing to report yet.</div>
+        </div>
+        <div class="sparkline" data-sparkline aria-label="memory writes per day, last 14 days"></div>
+      </div>
+
+      <div class="panel system" data-testid="system-panel">
+        <h3>System</h3>
+        <div class="gpu-bars" data-testid="gpu-bars">
+          <div class="gpu-bar" data-empty>GPU stats loading…</div>
+        </div>
+        <div class="system-stats" data-stats>
+          <div>memory nodes <span data-stat="nodes">—</span></div>
+          <div>sessions <span data-stat="sessions">—</span></div>
+          <div>last backup <span data-stat="backup">—</span></div>
+          <div>boards <span data-stat="boards">—</span></div>
+        </div>
+        <div class="attention" data-attention>
+          <div class="empty">nothing needs attention.</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

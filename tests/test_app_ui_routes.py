@@ -1,4 +1,4 @@
-"""Tests for soveryn/app/routes/ui.py — vNext-native UI route."""
+"""Tests for soveryn/app/routes/ui.py — vNext command center at /."""
 
 import json
 import re
@@ -26,50 +26,68 @@ def app_state(tmp_path, fake_chat):
     return app.test_client()
 
 
-def test_root_serves_vnext_native_ui(app_state):
+def test_root_serves_command_center(app_state):
     resp = app_state.get("/")
     assert resp.status_code == 200
     assert resp.content_type.startswith("text/html")
     assert resp.headers.get("X-SOVERYN-UI-Source") == "vnext-native"
-    # Smoke: the page has a recognizable marker
     body = resp.data.decode("utf-8")
-    assert "vNext" in body or "soveryn" in body.lower()
+    assert 'data-testid="command-center"' in body
 
 
-def test_root_no_external_resources_loaded(app_state):
-    """No <script src="https://..."> or <link href="https://...">"""
+def test_root_has_greeting_block(app_state):
     body = app_state.get("/").data.decode("utf-8")
-    external_scripts = re.findall(r'<script[^>]+src=["\']https?://', body)
-    external_styles = re.findall(r'<link[^>]+href=["\']https?://', body)
-    assert external_scripts == [], f"external scripts found: {external_scripts}"
-    assert external_styles == [], f"external stylesheets found: {external_styles}"
+    assert 'data-testid="greeting"' in body
 
 
-def test_root_uses_no_hardcoded_agents(app_state):
-    """The page must NOT list scout/vision/ares/tinker. Agent list is fetched
-    from /api/models at runtime."""
+def test_root_has_agent_row_with_active_agents(app_state):
     body = app_state.get("/").data.decode("utf-8").lower()
-    # Agent NAMES that must not appear as hardcoded UI labels
-    forbidden = ["scout", "vision", "tinker", "ares_llm", "aetheria_public"]
-    for name in forbidden:
-        assert name not in body, f"hardcoded retired agent name {name!r} in UI"
+    for agent in ACTIVE_AGENTS:
+        assert f'data-agent="{agent}"' in body
 
 
-def test_root_uses_no_hardcoded_gpu_labels(app_state):
-    """The page must NOT carry hardcoded GPU labels (Blackwell, RTX 8000, GPU 0/1/2)."""
+def test_root_has_activity_feed(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert 'data-testid="activity-feed"' in body
+
+
+def test_root_has_system_panel(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert 'data-testid="system-panel"' in body
+
+
+def test_root_has_gpu_bars(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert 'data-testid="gpu-bars"' in body
+
+
+def test_root_no_hardcoded_retired_agents(app_state):
     body = app_state.get("/").data.decode("utf-8").lower()
-    forbidden = ["blackwell", "rtx 8000", "rtx pro 5000", "quadro"]
-    for label in forbidden:
-        assert label not in body, f"hardcoded GPU label {label!r} in UI"
+    for retired in ("scout", "vision", "tinker", "ares_llm"):
+        assert retired not in body, f"hardcoded retired {retired!r} in command center"
+
+
+def test_root_no_hardcoded_gpu_labels(app_state):
+    body = app_state.get("/").data.decode("utf-8").lower()
+    for label in ("blackwell", "rtx 8000", "rtx pro 5000", "quadro"):
+        assert label not in body, f"hardcoded GPU label {label!r} in command center"
+
+
+def test_root_no_external_resources(app_state):
+    body = app_state.get("/").data.decode("utf-8")
+    assert re.findall(r'<script[^>]+src=["\']https?://', body) == []
+    assert re.findall(r'<link[^>]+href=["\']https?://', body) == []
+
+
+def test_agent_cards_link_to_chat(app_state):
+    """Each agent card on the command center is a link into /chat?agent=<n>."""
+    body = app_state.get("/").data.decode("utf-8")
+    for agent in ACTIVE_AGENTS:
+        assert f'/chat?agent={agent}' in body
 
 
 def test_legacy_moved_to_legacy_path(app_state):
-    """The legacy bridge moved from / to /legacy."""
     resp = app_state.get("/legacy")
-    # In the test fixture the default legacy_templates_dir points at production,
-    # which DOES exist in the dev environment — the response should be 200 OR 503
-    # (503 if the dev environment doesn't have it). Either is OK; what matters
-    # is that /legacy ROUTES to ui_compat, not 404.
     assert resp.status_code in (200, 503)
     if resp.status_code == 503:
         body = json.loads(resp.data)
@@ -81,19 +99,6 @@ def test_legacy_mobile_moved_to_legacy_path(app_state):
     assert resp.status_code in (200, 503)
 
 
-def test_old_root_no_longer_serves_legacy_template(app_state):
-    """GET / serves vNext UI, NOT the legacy desktop_v2.html."""
-    resp = app_state.get("/")
-    body = resp.data.decode("utf-8")
-    # Legacy template had this signature drawer button text
-    assert "Tinker" not in body
-    assert "Vision" not in body
-    assert "Scout" not in body
-    # And no X-SOVERYN-UI-Source: legacy-template
-    assert resp.headers.get("X-SOVERYN-UI-Source") == "vnext-native"
-
-
 def test_ui_source_metadata_still_works(app_state):
-    """/ui/source still reports legacy bridge metadata for the moved paths."""
     resp = app_state.get("/ui/source")
     assert resp.status_code == 200
