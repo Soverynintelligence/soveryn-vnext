@@ -19,13 +19,15 @@ from soveryn.config.loader import EnvConfig
 from soveryn.config.runtime import ACTIVE_AGENTS
 
 
-def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_vnext.db"):
+def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_vnext.db",
+         souls_dir="/tmp/souls"):
     return EnvConfig(
         app_port=app_port,
         model_root=Path("/tmp/models"),
         health_timeout_seconds=2.0,
         lattice_db=Path(lattice_db),
         conversations_db=Path(conv_db),
+        souls_dir=Path(souls_dir),
     )
 
 

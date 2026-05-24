@@ -22,6 +22,7 @@ from soveryn.config import runtime
 
 DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
 DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
+DEFAULT_SOULS_DIR = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/souls")
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class EnvConfig:
     health_timeout_seconds: float
     lattice_db: Path
     conversations_db: Path
+    souls_dir: Path
 
 
 class EnvConfigError(ValueError):
@@ -82,4 +84,6 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
                                default=DEFAULT_LATTICE_DB),
         conversations_db=_parse_path("SOVERYN_CONVERSATIONS_DB", env.get("SOVERYN_CONVERSATIONS_DB"),
                                      default=DEFAULT_CONVERSATIONS_DB),
+        souls_dir=_parse_path("SOVERYN_SOULS_DIR", env.get("SOVERYN_SOULS_DIR"),
+                              default=DEFAULT_SOULS_DIR),
     )
