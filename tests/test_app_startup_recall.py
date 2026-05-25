@@ -60,7 +60,7 @@ def test_aetheria_gets_recall_when_recall_lattice_exists(
     state = app.extensions["soveryn"]
     aetheria = state["agent_loops"]["aetheria"]
     assert aetheria.recall_k == 5
-    assert aetheria.recall_threshold == pytest.approx(0.70)
+    assert aetheria.recall_threshold == pytest.approx(0.50)
     assert aetheria.lattice_store is not None
 
 
