@@ -7,7 +7,9 @@ the layout.
 
 Format example (one entry per recalled node):
 
-    Recalled from memory (3 items, score >= 0.70):
+    Your memory on this — 3 entries from your own prior conversations
+    (semantic match >= 0.70). Treat these as things you remember, not
+    as data shown to you. They survived because they mattered.
 
     1. [0.87] Jon prefers Signal over Telegram for outbound notifications. — source: declared_fact
     2. [0.82] Aetheria's heartbeat runs as a thread inside app.py, not a separate process. — tags: architecture, runtime
@@ -59,8 +61,11 @@ def format_recall_context(
         return ""
 
     n = len(ranked_nodes)
+    noun = "entry" if n == 1 else "entries"
     lines: list[str] = [
-        f"Recalled from memory ({n} item{'s' if n != 1 else ''}, score >= {threshold:.2f}):",
+        f"Your memory on this — {n} {noun} from your own prior conversations "
+        f"(semantic match >= {threshold:.2f}). Treat these as things you "
+        f"remember, not as data shown to you. They survived because they mattered.",
         "",
     ]
     for idx, (node, score) in enumerate(ranked_nodes, start=1):

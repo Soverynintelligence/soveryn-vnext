@@ -36,7 +36,8 @@ def test_empty_returns_empty_string():
 def test_single_node_basic_render():
     node = _node(content="Jon prefers Signal")
     out = format_recall_context(((node, 0.85),), threshold=0.7)
-    assert "Recalled from memory (1 item, score >= 0.70):" in out
+    assert "Your memory on this — 1 entry from your own prior conversations" in out
+    assert "(semantic match >= 0.70)" in out
     assert "1. [0.85] Jon prefers Signal" in out
 
 
@@ -46,7 +47,8 @@ def test_multiple_nodes_numbered_in_input_order():
     n3 = _node(content="gamma")
     out = format_recall_context(((n1, 0.9), (n2, 0.8), (n3, 0.75)), threshold=0.7)
     lines = out.splitlines()
-    assert lines[0] == "Recalled from memory (3 items, score >= 0.70):"
+    assert lines[0].startswith("Your memory on this — 3 entries from your own prior conversations")
+    assert "(semantic match >= 0.70)" in lines[0]
     assert any("1. [0.90] alpha" in l for l in lines)
     assert any("2. [0.80] beta" in l for l in lines)
     assert any("3. [0.75] gamma" in l for l in lines)
