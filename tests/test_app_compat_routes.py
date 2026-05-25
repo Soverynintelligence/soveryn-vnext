@@ -52,7 +52,7 @@ def test_api_models_aetheria_uses_qwen_3_6_35b(app_state):
 def test_api_models_vett_and_scotty_share_same_27b(app_state):
     payload = json.loads(app_state.get("/api/models").data)
     assert payload["vett"] == payload["scotty"]
-    assert "Qwen3.5-27B" in payload["vett"]
+    assert "Qwen3.6-27B" in payload["vett"]
 
 
 def test_api_models_excludes_retired_agents(app_state):

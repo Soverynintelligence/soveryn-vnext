@@ -65,9 +65,9 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="vett_scotty_shared",
         port=8084,
-        model_path=MODEL_ROOT / "Qwen3.5-27B-Q8_0.gguf",
-        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.5-27B-F16.gguf",
-        role="Vett + Scotty shared 27B (Quadro GPU 0)",
+        model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
+        role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0) — same family as Aetheria, accepts multiple system messages",
     ),
     ModelServer(
         name="embeddings",
