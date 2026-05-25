@@ -55,7 +55,7 @@ def create_app(
     if conv_store is None:
         conv_store = ConversationStore(env.conversations_db)
     if agent_loops is None:
-        agent_loops = {name: AgentLoop(name, conv_store) for name in ACTIVE_AGENTS}
+        agent_loops = {name: AgentLoop(name, conv_store, soul_text=None) for name in ACTIVE_AGENTS}
 
     app.extensions["soveryn"] = {
         "env": env,

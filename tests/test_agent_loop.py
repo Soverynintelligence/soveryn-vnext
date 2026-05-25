@@ -605,3 +605,89 @@ def test_recall_with_empty_persona_still_works(conv_store, tmp_path):
     msgs = fake_chat.calls[0]["request"].messages
     assert [m.role for m in msgs] == ["system", "user"]
     assert "Recalled from memory" in msgs[0].content
+
+
+# ─── Souls Step 3: soul_text wiring ──────────────────────────────────────────
+
+def test_default_soul_text_skips_soul_message(conv_store):
+    """Default behavior: soul_text='' means no soul system message added."""
+    capturing = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=capturing)
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    # Inspect the messages sent to chat_fn — should have ONE system msg (persona), then user
+    request = capturing.calls[0]["request"]
+    system_count = sum(1 for m in request.messages if m.role == "system")
+    assert system_count == 1, f"expected 1 system message, got {system_count}"
+
+
+def test_soul_text_explicit_string_added_as_second_system_message(conv_store):
+    """When soul_text is a non-empty string, it goes in as a SECOND system message
+    immediately after the persona."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text="I am the soul of Aetheria.",
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 2, f"expected 2 system messages, got {len(system_msgs)}"
+    # Persona first
+    assert "Aetheria" in system_msgs[0].content or "coordinating" in system_msgs[0].content.lower()
+    # Soul second, exact content
+    assert system_msgs[1].content == "I am the soul of Aetheria."
+
+
+def test_soul_text_none_loads_from_souls_dir(conv_store, tmp_path):
+    """soul_text=None triggers get_soul() against the souls_dir param."""
+    souls = tmp_path / "souls"
+    souls.mkdir()
+    (souls / "aetheria.md").write_text("loaded from disk\n", encoding="utf-8")
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text=None,
+        souls_dir=souls,
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 2
+    assert "loaded from disk" in system_msgs[1].content
+
+
+def test_soul_text_none_raises_when_file_missing(conv_store, tmp_path):
+    """soul_text=None with missing souls/<agent>.md raises at construction."""
+    from soveryn.agents.souls import SoulMissingError
+    empty_souls = tmp_path / "souls"
+    empty_souls.mkdir()
+    with pytest.raises(SoulMissingError):
+        AgentLoop(
+            "aetheria", conv_store,
+            chat_fn=_CapturingChat(),
+            soul_text=None,
+            souls_dir=empty_souls,
+        )
+
+
+def test_soul_not_concatenated_into_persona(conv_store):
+    """The persona text and the soul text must be DISTINCT messages, not joined."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text="UNIQUE_SOUL_TOKEN",
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    # The persona message must NOT contain the soul token
+    assert "UNIQUE_SOUL_TOKEN" not in system_msgs[0].content
+    # The soul message must contain ONLY the soul token (not the persona)
+    assert system_msgs[1].content == "UNIQUE_SOUL_TOKEN"

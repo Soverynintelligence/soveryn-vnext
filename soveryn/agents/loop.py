@@ -26,10 +26,12 @@ turn-processing time.
 
 from __future__ import annotations
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.recall import format_recall_context
+from soveryn.agents.souls import get_soul
 from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
@@ -141,6 +143,8 @@ class AgentLoop:
         recall_k: int = 0,
         recall_threshold: float = 0.70,
         embed_fn: EmbedFn = _default_embed,
+        soul_text: str | None = "",
+        souls_dir: Path | None = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -179,6 +183,15 @@ class AgentLoop:
         self.recall_k = recall_k
         self.recall_threshold = recall_threshold
         self.embed_fn = embed_fn
+
+        # Tri-state per Jon (parallel to system_prompt's tri-state):
+        #   ""           → SKIP soul (no soul system message). Tests rely on this default.
+        #   None         → LOAD soul via get_soul() — raises SoulMissingError if file missing.
+        #   non-empty    → USE the given string as soul content.
+        if soul_text is None:
+            self.soul_text: str = get_soul(self.agent_name, souls_dir=souls_dir)
+        else:
+            self.soul_text = soul_text
 
     def process_message(self, session_id: str, user_message: str) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
@@ -233,6 +246,8 @@ class AgentLoop:
         prelude: tuple[ChatMessage, ...] = ()
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        if self.soul_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
@@ -304,6 +319,8 @@ class AgentLoop:
         prelude: tuple[ChatMessage, ...] = ()
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        if self.soul_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages = prelude + history_messages
