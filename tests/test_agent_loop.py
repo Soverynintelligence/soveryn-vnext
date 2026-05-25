@@ -694,27 +694,21 @@ def test_soul_not_concatenated_into_persona(conv_store):
 
 
 def test_soul_concatenated_into_persona_when_server_rejects_multi_system(conv_store):
-    """Defensive coverage: when ANY model's chat template forbids multiple
-    system messages, the soul is concatenated into the persona content (single
-    system message) with a paragraph break. As of 2026-05-25 no active server
-    is configured this way (Vett/Scotty moved to a UD variant that permits
-    multi-system), so the test injects a False flag via dataclasses.replace
-    to keep the concat code path covered."""
-    import dataclasses
+    """For models whose chat template forbids multiple system messages, the soul
+    is concatenated into the persona content (single system message) with a
+    paragraph break. Vett's server has this constraint."""
     capturing = _CapturingChat()
     loop = AgentLoop(
         "vett", conv_store,
         chat_fn=capturing,
         soul_text="VETT_SOUL_TOKEN",
     )
-    # Override the server flag for this test only (frozen dataclass requires replace)
-    loop.server = dataclasses.replace(loop.server, supports_multi_system_messages=False)
     sid = conv_store.new_session("vett")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
     assert len(system_msgs) == 1, (
-        f"single-system server should emit ONE concatenated system message, got {len(system_msgs)}"
+        f"vett's server should emit ONE concatenated system message, got {len(system_msgs)}"
     )
     # The single system message contains BOTH persona text and the soul token
     content = system_msgs[0].content
@@ -782,13 +776,11 @@ def test_pinned_text_added_between_persona_and_soul_for_aetheria(conv_store):
     assert system_msgs[2].content == "SOUL_TOKEN"        # soul
 
 
-def test_pinned_text_concatenated_with_persona_and_soul_when_single_system(conv_store):
-    """Defensive coverage for the three-layer concat path: when a server
-    forbids multiple system messages AND all of persona/pinned/soul are
-    present, everything concatenates in persona-pinned-soul order into ONE
-    system message. No active production server is configured this way as of
-    2026-05-25, so we override the flag for the test."""
-    import dataclasses
+def test_pinned_text_concatenated_with_persona_and_soul_for_vett(conv_store):
+    """Vett's server forbids multiple systems — when pinned + soul both present,
+    everything concatenates in persona-pinned-soul order into ONE system message.
+    (In production, Vett gets pinned_text='' anyway; this verifies the safety
+    net if pinned ever WERE passed.)"""
     capturing = _CapturingChat()
     loop = AgentLoop(
         "vett", conv_store,
@@ -796,7 +788,6 @@ def test_pinned_text_concatenated_with_persona_and_soul_when_single_system(conv_
         soul_text="VETT_SOUL",
         pinned_text="VETT_PINNED",
     )
-    loop.server = dataclasses.replace(loop.server, supports_multi_system_messages=False)
     sid = conv_store.new_session("vett")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
