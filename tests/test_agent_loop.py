@@ -691,3 +691,47 @@ def test_soul_not_concatenated_into_persona(conv_store):
     assert "UNIQUE_SOUL_TOKEN" not in system_msgs[0].content
     # The soul message must contain ONLY the soul token (not the persona)
     assert system_msgs[1].content == "UNIQUE_SOUL_TOKEN"
+
+
+def test_soul_concatenated_into_persona_when_server_rejects_multi_system(conv_store):
+    """For models whose chat template forbids multiple system messages, the soul
+    is concatenated into the persona content (single system message) with a
+    paragraph break. Vett's server has this constraint."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "vett", conv_store,
+        chat_fn=capturing,
+        soul_text="VETT_SOUL_TOKEN",
+    )
+    sid = conv_store.new_session("vett")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 1, (
+        f"vett's server should emit ONE concatenated system message, got {len(system_msgs)}"
+    )
+    # The single system message contains BOTH persona text and the soul token
+    content = system_msgs[0].content
+    assert "VETT_SOUL_TOKEN" in content
+    # Persona should be present too (the existing persona text mentions "V.E.T.T." or "research")
+    assert ("V.E.T.T." in content) or ("research" in content.lower())
+    # And the soul should appear AFTER the persona (paragraph break separator)
+    assert content.index("VETT_SOUL_TOKEN") > 50, "soul should follow persona, not lead"
+
+
+def test_soul_kept_separate_for_aetheria_whose_server_supports_multi_system(conv_store):
+    """Aetheria's server supports multiple system messages — soul stays as its
+    own system message after the persona (unchanged behavior from Step 3)."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text="AETHERIA_SOUL_TOKEN",
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 2, "aetheria should still get two system messages"
+    assert "AETHERIA_SOUL_TOKEN" not in system_msgs[0].content
+    assert system_msgs[1].content == "AETHERIA_SOUL_TOKEN"

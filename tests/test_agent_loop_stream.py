@@ -274,3 +274,24 @@ def test_stream_soul_text_added_as_second_system_message(conv_store):
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
     assert len(system_msgs) == 2
     assert system_msgs[1].content == "STREAM_SOUL_TOKEN"
+
+
+def test_stream_soul_concatenated_for_vett(conv_store):
+    """Streaming path also concatenates soul into persona when server rejects multi-system."""
+    captured_requests = []
+
+    def stream(req, server, timeout):
+        captured_requests.append(req)
+        yield TokenEvent(delta="ok")
+        yield DoneEvent(content="ok", finish_reason="stop", tool_calls=None, usage=None)
+
+    loop = AgentLoop(
+        "vett", conv_store,
+        stream_fn=stream,
+        soul_text="STREAM_VETT_SOUL",
+    )
+    sid = conv_store.new_session("vett")
+    list(loop.process_message_stream(sid, "hi"))
+    system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
+    assert len(system_msgs) == 1
+    assert "STREAM_VETT_SOUL" in system_msgs[0].content

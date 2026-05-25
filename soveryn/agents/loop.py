@@ -244,9 +244,17 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        if self.system_prompt:
-            prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-        if self.soul_text:
+        system_content = self.system_prompt or ""
+        if self.soul_text and not self.server.supports_multi_system_messages:
+            # Chat template requires single system message at position 0.
+            # Concatenate soul into persona with a paragraph break.
+            if system_content:
+                system_content = system_content + "\n\n" + self.soul_text
+            else:
+                system_content = self.soul_text
+        if system_content:
+            prelude = prelude + (ChatMessage(role="system", content=system_content),)
+        if self.soul_text and self.server.supports_multi_system_messages:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
@@ -317,9 +325,17 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        if self.system_prompt:
-            prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-        if self.soul_text:
+        system_content = self.system_prompt or ""
+        if self.soul_text and not self.server.supports_multi_system_messages:
+            # Chat template requires single system message at position 0.
+            # Concatenate soul into persona with a paragraph break.
+            if system_content:
+                system_content = system_content + "\n\n" + self.soul_text
+            else:
+                system_content = self.soul_text
+        if system_content:
+            prelude = prelude + (ChatMessage(role="system", content=system_content),)
+        if self.soul_text and self.server.supports_multi_system_messages:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)

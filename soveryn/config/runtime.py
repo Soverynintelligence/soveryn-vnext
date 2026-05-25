@@ -51,6 +51,11 @@ class ModelServer:
     model_path: Path                # GGUF file
     mmproj_path: Path | None = None
     role: str = ""                  # human-readable: "Aetheria primary inference", etc.
+    #: Whether this server's chat template accepts multiple system messages.
+    #: Default True (modern permissive case). Set False for base Qwen3.5/3.6
+    #: 27B templates which reject any second system message — AgentLoop then
+    #: concatenates the soul into the persona content as a single system msg.
+    supports_multi_system_messages: bool = True
 
 
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
@@ -67,7 +72,8 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         port=8084,
         model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
         mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
-        role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0) — same family as Aetheria, accepts multiple system messages",
+        role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
+        supports_multi_system_messages=False,  # base 27B template rejects 2nd system message
     ),
     ModelServer(
         name="embeddings",

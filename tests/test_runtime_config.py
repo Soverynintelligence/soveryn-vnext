@@ -140,3 +140,18 @@ def test_ares_daemon_is_a_process_not_an_agent():
     # daemon name "ares" should be in DAEMONS, not retired
     assert "ares" in runtime.DAEMONS
     assert "ares" not in runtime.RETIRED
+
+
+def test_vett_scotty_shared_marked_as_single_system_only():
+    """Base Qwen3.6-27B chat template rejects multiple system messages;
+    vett_scotty_shared MUST be flagged so AgentLoop concatenates the soul."""
+    from soveryn.config.runtime import MODEL_SERVERS
+    vs = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")
+    assert vs.supports_multi_system_messages is False
+
+
+def test_aetheria_primary_supports_multi_system_by_default():
+    """Aetheria's Qwen3.6-35B UD variant accepts multiple system messages."""
+    from soveryn.config.runtime import MODEL_SERVERS
+    a = next(s for s in MODEL_SERVERS if s.name == "aetheria_primary")
+    assert a.supports_multi_system_messages is True
