@@ -20,7 +20,7 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 
 
 def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_vnext.db",
-         souls_dir="/tmp/souls"):
+         souls_dir="/tmp/souls", pinned_memory_path="/tmp/pinned_memory.md"):
     return EnvConfig(
         app_port=app_port,
         model_root=Path("/tmp/models"),
@@ -28,6 +28,7 @@ def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_v
         lattice_db=Path(lattice_db),
         conversations_db=Path(conv_db),
         souls_dir=Path(souls_dir),
+        pinned_memory_path=Path(pinned_memory_path),
     )
 
 

@@ -55,7 +55,23 @@ def create_app(
     if conv_store is None:
         conv_store = ConversationStore(env.conversations_db)
     if agent_loops is None:
-        agent_loops = {name: AgentLoop(name, conv_store, soul_text=None) for name in ACTIVE_AGENTS}
+        # Pinned memory is Aetheria-only by design — it's her relationship
+        # substrate (facts about Jon, the project, her continuity). Vett and
+        # Scotty don't get it (different scopes, different prompt budgets).
+        pinned_path = env.pinned_memory_path
+        if not pinned_path.is_file():
+            raise FileNotFoundError(
+                f"pinned_memory.md missing at {pinned_path}; "
+                f"set SOVERYN_PINNED_MEMORY_PATH or place the file at the default location"
+            )
+        pinned_text = pinned_path.read_text(encoding="utf-8")
+
+        agent_loops = {}
+        for name in ACTIVE_AGENTS:
+            kwargs = {"soul_text": None}
+            if name == "aetheria":
+                kwargs["pinned_text"] = pinned_text
+            agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
     app.extensions["soveryn"] = {
         "env": env,

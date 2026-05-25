@@ -145,6 +145,7 @@ class AgentLoop:
         embed_fn: EmbedFn = _default_embed,
         soul_text: str | None = "",
         souls_dir: Path | None = None,
+        pinned_text: str = "",
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -192,6 +193,11 @@ class AgentLoop:
             self.soul_text: str = get_soul(self.agent_name, souls_dir=souls_dir)
         else:
             self.soul_text = soul_text
+
+        # Pinned memory is Aetheria's relationship substrate (third identity
+        # layer between persona and soul). Default empty = skip — Vett and
+        # Scotty rely on this. Production opts Aetheria in via startup.py.
+        self.pinned_text: str = pinned_text
 
     def process_message(self, session_id: str, user_message: str) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
@@ -244,18 +250,22 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        system_content = self.system_prompt or ""
-        if self.soul_text and not self.server.supports_multi_system_messages:
-            # Chat template requires single system message at position 0.
-            # Concatenate soul into persona with a paragraph break.
-            if system_content:
-                system_content = system_content + "\n\n" + self.soul_text
-            else:
-                system_content = self.soul_text
-        if system_content:
-            prelude = prelude + (ChatMessage(role="system", content=system_content),)
-        if self.soul_text and self.server.supports_multi_system_messages:
-            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        # Compose system messages: persona, pinned, soul.
+        # When the server supports multiple system messages, each gets its own.
+        # When the server forbids it (Qwen3.5/3.6 27B templates), they're
+        # concatenated with paragraph breaks in the order persona -> pinned -> soul
+        # into a single system message.
+        if self.server.supports_multi_system_messages:
+            if self.system_prompt:
+                prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+            if self.pinned_text:
+                prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
+            if self.soul_text:
+                prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        else:
+            parts = [p for p in (self.system_prompt, self.pinned_text, self.soul_text) if p]
+            if parts:
+                prelude = prelude + (ChatMessage(role="system", content="\n\n".join(parts)),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
@@ -325,18 +335,22 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        system_content = self.system_prompt or ""
-        if self.soul_text and not self.server.supports_multi_system_messages:
-            # Chat template requires single system message at position 0.
-            # Concatenate soul into persona with a paragraph break.
-            if system_content:
-                system_content = system_content + "\n\n" + self.soul_text
-            else:
-                system_content = self.soul_text
-        if system_content:
-            prelude = prelude + (ChatMessage(role="system", content=system_content),)
-        if self.soul_text and self.server.supports_multi_system_messages:
-            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        # Compose system messages: persona, pinned, soul.
+        # When the server supports multiple system messages, each gets its own.
+        # When the server forbids it (Qwen3.5/3.6 27B templates), they're
+        # concatenated with paragraph breaks in the order persona -> pinned -> soul
+        # into a single system message.
+        if self.server.supports_multi_system_messages:
+            if self.system_prompt:
+                prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+            if self.pinned_text:
+                prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
+            if self.soul_text:
+                prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        else:
+            parts = [p for p in (self.system_prompt, self.pinned_text, self.soul_text) if p]
+            if parts:
+                prelude = prelude + (ChatMessage(role="system", content="\n\n".join(parts)),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages = prelude + history_messages

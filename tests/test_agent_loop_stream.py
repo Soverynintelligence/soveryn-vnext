@@ -295,3 +295,28 @@ def test_stream_soul_concatenated_for_vett(conv_store):
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
     assert len(system_msgs) == 1
     assert "STREAM_VETT_SOUL" in system_msgs[0].content
+
+
+# ─── Pinned memory wiring (streaming path) ───────────────────────────────────
+
+def test_stream_pinned_text_added_between_persona_and_soul(conv_store):
+    """Streaming path: same persona -> pinned -> soul ordering."""
+    captured_requests = []
+
+    def stream(req, server, timeout):
+        captured_requests.append(req)
+        yield TokenEvent(delta="ok")
+        yield DoneEvent(content="ok", finish_reason="stop", tool_calls=None, usage=None)
+
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        stream_fn=stream,
+        soul_text="STREAM_SOUL",
+        pinned_text="STREAM_PINNED",
+    )
+    sid = conv_store.new_session("aetheria")
+    list(loop.process_message_stream(sid, "hi"))
+    system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
+    assert len(system_msgs) == 3
+    assert system_msgs[1].content == "STREAM_PINNED"
+    assert system_msgs[2].content == "STREAM_SOUL"

@@ -23,6 +23,7 @@ from soveryn.config import runtime
 DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
 DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
 DEFAULT_SOULS_DIR = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/souls")
+DEFAULT_PINNED_MEMORY_PATH = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/pinned_memory.md")
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class EnvConfig:
     lattice_db: Path
     conversations_db: Path
     souls_dir: Path
+    pinned_memory_path: Path
 
 
 class EnvConfigError(ValueError):
@@ -86,4 +88,7 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
                                      default=DEFAULT_CONVERSATIONS_DB),
         souls_dir=_parse_path("SOVERYN_SOULS_DIR", env.get("SOVERYN_SOULS_DIR"),
                               default=DEFAULT_SOULS_DIR),
+        pinned_memory_path=_parse_path(
+            "SOVERYN_PINNED_MEMORY_PATH", env.get("SOVERYN_PINNED_MEMORY_PATH"),
+            default=DEFAULT_PINNED_MEMORY_PATH),
     )

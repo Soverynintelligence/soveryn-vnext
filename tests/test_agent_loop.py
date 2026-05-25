@@ -735,3 +735,85 @@ def test_soul_kept_separate_for_aetheria_whose_server_supports_multi_system(conv
     assert len(system_msgs) == 2, "aetheria should still get two system messages"
     assert "AETHERIA_SOUL_TOKEN" not in system_msgs[0].content
     assert system_msgs[1].content == "AETHERIA_SOUL_TOKEN"
+
+
+# ─── Pinned memory: Aetheria-only third identity layer ───────────────────────
+
+def test_default_pinned_text_skips_pinned_message(conv_store):
+    """Default pinned_text='' means no pinned system message added.
+    Vett/Scotty rely on this — they get nothing pinned-related."""
+    capturing = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=capturing)
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    # With no soul_text and no pinned_text: just persona = 1 message
+    assert len(system_msgs) == 1
+
+
+def test_pinned_text_added_between_persona_and_soul_for_aetheria(conv_store):
+    """Aetheria (multi-system server): 3 separate system messages in order
+    persona, pinned, soul."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text="SOUL_TOKEN",
+        pinned_text="PINNED_TOKEN",
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 3, (
+        f"expected 3 system messages, got {len(system_msgs)}"
+    )
+    # Order: persona first, pinned second, soul third
+    assert "PINNED_TOKEN" not in system_msgs[0].content  # persona
+    assert "SOUL_TOKEN" not in system_msgs[0].content    # persona
+    assert system_msgs[1].content == "PINNED_TOKEN"      # pinned
+    assert system_msgs[2].content == "SOUL_TOKEN"        # soul
+
+
+def test_pinned_text_concatenated_with_persona_and_soul_for_vett(conv_store):
+    """Vett's server forbids multiple systems — when pinned + soul both present,
+    everything concatenates in persona-pinned-soul order into ONE system message.
+    (In production, Vett gets pinned_text='' anyway; this verifies the safety
+    net if pinned ever WERE passed.)"""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "vett", conv_store,
+        chat_fn=capturing,
+        soul_text="VETT_SOUL",
+        pinned_text="VETT_PINNED",
+    )
+    sid = conv_store.new_session("vett")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 1
+    content = system_msgs[0].content
+    assert "VETT_PINNED" in content
+    assert "VETT_SOUL" in content
+    # Order check: persona substring, then pinned, then soul
+    pinned_idx = content.index("VETT_PINNED")
+    soul_idx = content.index("VETT_SOUL")
+    assert pinned_idx < soul_idx, "pinned should appear before soul"
+
+
+def test_pinned_alone_without_soul_for_aetheria(conv_store):
+    """pinned_text set but soul_text='' — just persona + pinned, no soul message."""
+    capturing = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=capturing,
+        soul_text="",
+        pinned_text="PINNED_ONLY",
+    )
+    sid = conv_store.new_session("aetheria")
+    loop.process_message(sid, "hi")
+    request = capturing.calls[0]["request"]
+    system_msgs = [m for m in request.messages if m.role == "system"]
+    assert len(system_msgs) == 2
+    assert system_msgs[1].content == "PINNED_ONLY"
