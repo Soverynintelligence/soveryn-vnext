@@ -234,7 +234,7 @@ def test_stream_with_recall_includes_recall_system_message(conv_store, tmp_path)
     list(loop.process_message_stream(sid, "hi"))
     msgs = stream.calls[0]["request"].messages
     assert [m.role for m in msgs[:3]] == ["system", "system", "user"]
-    assert "Your memory on this" in msgs[1].content
+    assert "Recalled from memory" in msgs[1].content
 
 
 # ─── Souls Step 3: soul_text wiring (streaming path) ─────────────────────────

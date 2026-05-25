@@ -467,7 +467,7 @@ def test_recall_enabled_calls_embed_and_lattice(conv_store, tmp_path):
     assert msgs[0].role == "system"  # persona
     assert "Aetheria" in msgs[0].content
     assert msgs[1].role == "system"  # recall
-    assert "Your memory on this" in msgs[1].content
+    assert "Recalled from memory" in msgs[1].content
     assert "Jon prefers Signal" in msgs[1].content
     assert msgs[2].role == "user"
     assert msgs[2].content == "remind me of my notification preference"
@@ -584,7 +584,7 @@ def test_recall_placement_is_after_persona(conv_store, tmp_path):
     loop.process_message(sid, "hi")
     msgs = fake_chat.calls[0]["request"].messages
     assert msgs[0].role == "system" and "Aetheria" in msgs[0].content  # persona
-    assert msgs[1].role == "system" and "Your memory on this" in msgs[1].content
+    assert msgs[1].role == "system" and "Recalled from memory" in msgs[1].content
     assert msgs[2].role == "user"
 
 
@@ -604,7 +604,7 @@ def test_recall_with_empty_persona_still_works(conv_store, tmp_path):
     loop.process_message(sid, "hi")
     msgs = fake_chat.calls[0]["request"].messages
     assert [m.role for m in msgs] == ["system", "user"]
-    assert "Your memory on this" in msgs[0].content
+    assert "Recalled from memory" in msgs[0].content
 
 
 # ─── Souls Step 3: soul_text wiring ──────────────────────────────────────────
