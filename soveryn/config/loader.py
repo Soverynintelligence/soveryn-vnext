@@ -25,6 +25,12 @@ DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_m
 DEFAULT_SOULS_DIR = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/souls")
 DEFAULT_PINNED_MEMORY_PATH = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/pinned_memory.md")
 
+# Read source for recall — prod's lattice.db with 1605 nodes (1367 are Aetheria's).
+# Separate from DEFAULT_LATTICE_DB (which is the write target for vNext's own writes,
+# currently lattice_vnext.db, used when F ships). Read-only enforcement is at usage
+# (AgentLoop only ever calls find_nodes_by_*, never write_node).
+DEFAULT_RECALL_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice.db")
+
 
 @dataclass(frozen=True)
 class EnvConfig:
@@ -41,6 +47,7 @@ class EnvConfig:
     conversations_db: Path
     souls_dir: Path
     pinned_memory_path: Path
+    recall_lattice_db: Path
 
 
 class EnvConfigError(ValueError):
@@ -91,4 +98,7 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         pinned_memory_path=_parse_path(
             "SOVERYN_PINNED_MEMORY_PATH", env.get("SOVERYN_PINNED_MEMORY_PATH"),
             default=DEFAULT_PINNED_MEMORY_PATH),
+        recall_lattice_db=_parse_path(
+            "SOVERYN_RECALL_LATTICE_DB", env.get("SOVERYN_RECALL_LATTICE_DB"),
+            default=DEFAULT_RECALL_LATTICE_DB),
     )

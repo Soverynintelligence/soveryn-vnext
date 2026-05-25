@@ -66,11 +66,30 @@ def create_app(
             )
         pinned_text = pinned_path.read_text(encoding="utf-8")
 
+        # Recall wiring (Aetheria only). LatticeStore opens prod's lattice.db
+        # for reads only — AgentLoop's recall path only calls find_nodes_by_embedding,
+        # never write_node. F (write path) ships separately and writes to env.lattice_db
+        # (vNext's own), not env.recall_lattice_db.
+        recall_lattice = None
+        if env.recall_lattice_db.is_file():
+            from soveryn.memory.lattice import LatticeStore
+            recall_lattice = LatticeStore(env.recall_lattice_db)
+        else:
+            logger.warning(
+                "recall_lattice_db missing at %s — Aetheria will run without recall",
+                env.recall_lattice_db,
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
+                if recall_lattice is not None:
+                    kwargs["lattice_store"] = recall_lattice
+                    kwargs["recall_k"] = 5
+                    kwargs["recall_threshold"] = 0.70
+                    # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
     app.extensions["soveryn"] = {
