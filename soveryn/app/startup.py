@@ -88,7 +88,12 @@ def create_app(
                 if recall_lattice is not None:
                     kwargs["lattice_store"] = recall_lattice
                     kwargs["recall_k"] = 5
-                    kwargs["recall_threshold"] = 0.70
+                    # 0.50 not 0.70 — nomic-embed v1.5's semantic matches sit in
+                    # the 0.45-0.65 range. 0.70 was a near-identical-phrasing
+                    # cutoff that silently rejected all recall (verified
+                    # 2026-05-25: "how SOVERYN started" matched real founding
+                    # memories at 0.55-0.58, but 0.70 returned 0 results).
+                    kwargs["recall_threshold"] = 0.50
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
