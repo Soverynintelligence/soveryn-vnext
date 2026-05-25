@@ -276,8 +276,13 @@ def test_stream_soul_text_added_as_second_system_message(conv_store):
     assert system_msgs[1].content == "STREAM_SOUL_TOKEN"
 
 
-def test_stream_soul_concatenated_for_vett(conv_store):
-    """Streaming path also concatenates soul into persona when server rejects multi-system."""
+def test_stream_soul_concatenated_when_server_rejects_multi_system(conv_store):
+    """Streaming path defensive coverage: when a server forbids multiple system
+    messages, soul concatenates into persona. As of 2026-05-25 no active
+    production server is configured this way (Vett moved to a UD variant
+    that permits multi-system), so the test injects a False flag via
+    dataclasses.replace to keep the concat code path covered."""
+    import dataclasses
     captured_requests = []
 
     def stream(req, server, timeout):
@@ -290,6 +295,7 @@ def test_stream_soul_concatenated_for_vett(conv_store):
         stream_fn=stream,
         soul_text="STREAM_VETT_SOUL",
     )
+    loop.server = dataclasses.replace(loop.server, supports_multi_system_messages=False)
     sid = conv_store.new_session("vett")
     list(loop.process_message_stream(sid, "hi"))
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]

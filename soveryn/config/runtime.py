@@ -70,10 +70,11 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="vett_scotty_shared",
         port=8084,
-        model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
-        mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
-        role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
-        supports_multi_system_messages=False,  # base 27B template rejects 2nd system message
+        model_path=MODEL_ROOT / "Qwen3.6-27B-MTP-UD-Q8_K_XL.gguf",
+        mmproj_path=MODEL_ROOT / "Qwen3.6-27B-MTP-UD-Q8_K_XL.mmproj-BF16.gguf",
+        role="Vett + Scotty shared Qwen3.6-27B MTP UD Q8_K_XL (Quadro GPU 0)",
+        # UD variant template is permissive — same family as Aetheria's UD-Q8_K_XL —
+        # so multiple system messages work natively (drops the concat workaround).
     ),
     ModelServer(
         name="embeddings",
