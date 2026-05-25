@@ -56,8 +56,8 @@ def test_multiple_nodes_numbered_in_input_order():
 
 def test_pluralization_singular_vs_plural():
     n = _node()
-    assert "1 item," in format_recall_context(((n, 0.8),), threshold=0.7)
-    assert "2 items," in format_recall_context(((n, 0.8), (n, 0.7)), threshold=0.7)
+    assert "1 entry " in format_recall_context(((n, 0.8),), threshold=0.7)
+    assert "2 entries " in format_recall_context(((n, 0.8), (n, 0.7)), threshold=0.7)
 
 
 def test_content_truncated_at_200_chars():
@@ -154,4 +154,4 @@ def test_deterministic_output_for_same_input():
 
 def test_threshold_appears_in_header_two_decimal_places():
     out = format_recall_context(((_node(), 0.9),), threshold=0.857)
-    assert "score >= 0.86" in out
+    assert "semantic match >= 0.86" in out
