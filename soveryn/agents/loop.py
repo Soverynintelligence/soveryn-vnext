@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
-from soveryn.agents.recall import format_recall_context
+from soveryn.agents.aetheria.recall_policy import format_recall_context
 from soveryn.agents.souls import get_soul
 from soveryn.inference.llama_server_client import (
     ChatMessage,
