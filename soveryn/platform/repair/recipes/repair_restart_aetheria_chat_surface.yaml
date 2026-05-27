@@ -1,0 +1,11 @@
+name: repair_restart_aetheria_chat_surface
+tier: A
+preconditions:
+  - aetheria.chat_surface.http_health != 200
+  - aetheria.chat_surface.last_response_ms > 60000
+action:
+  - systemctl --user restart aetheria-chat.service
+verify:
+  - aetheria.chat_surface.http_health == 200
+rollback: null
+on_repeated_failure: escalate
