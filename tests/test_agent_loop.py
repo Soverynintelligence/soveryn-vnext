@@ -51,9 +51,13 @@ class _CapturingChat:
 
 # ─── Constructor: routing at construction ────────────────────────────────────
 
-def test_construction_routes_aetheria_to_8085(conv_store):
+def test_construction_routes_aetheria_to_aetheria_primary(conv_store):
+    """Phase 7 router cutover: assert agent → logical preset identity, not port.
+    All ModelServers now share :8090; the routing distinction lives in name +
+    model_alias, which is what the router dispatches on via the "model" field."""
     loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat())
-    assert loop.server.port == 8085
+    assert loop.server.name == "aetheria_primary"
+    assert loop.server.model_alias == "aetheria"
     assert loop.agent_name == "aetheria"
 
 
@@ -64,9 +68,11 @@ def test_default_chat_timeout_is_120_seconds(conv_store):
     assert loop.chat_timeout_seconds == 120.0
 
 
-def test_construction_routes_vett_to_8084(conv_store):
+def test_construction_routes_vett_to_vett_scotty_shared(conv_store):
+    """Phase 7 — agent → logical identity, not port (all share :8090 now)."""
     loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
-    assert loop.server.port == 8084
+    assert loop.server.name == "vett_scotty_shared"
+    assert loop.server.model_alias == "vett-scotty"
 
 
 def test_construction_normalizes_name_case(conv_store):

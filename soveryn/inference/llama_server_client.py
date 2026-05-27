@@ -374,10 +374,16 @@ def embed(
     timeout: float = DEFAULT_EMBED_TIMEOUT_SECONDS,
 ) -> EmbeddingResponse:
     """POST /v1/embeddings to the embeddings server. NO server parameter — embeddings
-    are NEVER routed through an agent server (boundary 5)."""
+    are NEVER routed through an agent server (boundary 5).
+
+    Phase 7 (2026-05-26) — under router mode, the "model" field must match a
+    preset alias. The embeddings server's `model_alias` is authoritative; the
+    EmbeddingRequest.model default ("nomic-embed-text-v1.5") doesn't match any
+    router alias, so the server's alias is preferred when set.
+    """
     server = _embeddings_server()
     payload = {
-        "model": request.model,
+        "model": server.model_alias or request.model,
         "input": list(request.input),
     }
     url = f"http://127.0.0.1:{server.port}/v1/embeddings"

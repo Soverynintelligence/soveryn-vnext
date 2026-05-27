@@ -93,7 +93,7 @@ def test_chat_builds_openai_compat_payload():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
         temperature=0.5,
         max_tokens=100,
     )
@@ -104,7 +104,7 @@ def test_chat_builds_openai_compat_payload():
     payload = json.loads(captured["body"].decode())
     assert "messages" in payload
     assert payload["messages"] == [{"role": "user", "content": "hi"}]
-    assert payload["model"] == "vett_scotty_shared"
+    assert payload["model"] == "vett-scotty"
     assert payload["temperature"] == 0.5
     assert payload["max_tokens"] == 100
     assert payload["stream"] is False
@@ -114,7 +114,7 @@ def test_chat_payload_omits_optional_fields_when_unset():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     captured, ctx = _patch_urlopen(body=_minimal_chat_ok_body())
     with ctx:
@@ -130,7 +130,7 @@ def test_chat_payload_includes_optional_fields_when_set():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
         top_p=0.9,
         stop=("<|endoftext|>", "<|im_end|>"),
         tools=({"type": "function", "function": {"name": "foo"}},),
@@ -153,7 +153,7 @@ def test_chat_200_returns_chatresponse_with_content():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="ping"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     body = _minimal_chat_ok_body("pong")
     _, ctx = _patch_urlopen(body=body)
@@ -169,7 +169,7 @@ def test_chat_preserves_raw_tool_calls():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="use tool"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     raw_tc = [{"id": "call_abc", "type": "function", "function": {"name": "foo", "arguments": "{}"}}]
     body = {
@@ -203,7 +203,7 @@ def test_chat_preserves_usage_and_raw():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     body = _minimal_chat_ok_body("hello")
     _, ctx = _patch_urlopen(body=body)
@@ -222,12 +222,12 @@ def test_chat_500_raises_llama_server_error():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
 
     # urllib raises HTTPError for non-2xx responses
     http_err = urllib.error.HTTPError(
-        url="http://127.0.0.1:8084/v1/chat/completions",
+        url="http://127.0.0.1:8090/v1/chat/completions",
         code=500,
         msg="Internal Server Error",
         hdrs=None,
@@ -247,7 +247,7 @@ def test_chat_timeout_raises_llama_server_timeout():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     _, ctx = _patch_urlopen(raise_exc=socket.timeout("timed out"))
     with ctx:
@@ -263,7 +263,7 @@ def test_chat_url_error_raises_llama_server_error_with_status_0():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     url_err = urllib.error.URLError(reason="Connection refused")
     _, ctx = _patch_urlopen(raise_exc=url_err)
@@ -280,7 +280,7 @@ def test_chat_invalid_response_shape_raises_llama_server_error():
     server = _vett_server()
     request = ChatRequest(
         messages=(ChatMessage(role="user", content="hi"),),
-        model="vett_scotty_shared",
+        model="vett-scotty",
     )
     # Missing "choices" key entirely
     body = {"not_choices": []}
@@ -298,7 +298,13 @@ def test_chat_invalid_response_shape_raises_llama_server_error():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_embed_routes_to_embeddings_server_only():
-    """embed() must contact the embeddings server port (8086), not an agent server."""
+    """embed() must contact the embeddings endpoint, never a chat endpoint.
+
+    Phase 7 (router cutover): all four MODEL_SERVERS now share :8090 — the
+    per-port isolation that used to enforce this boundary is gone, replaced by
+    per-model dispatch on the router. The semantic invariant that survives is:
+    embed() goes to /v1/embeddings with the embeddings server's model_alias,
+    NEVER to /v1/chat/completions. Verify both pieces."""
     request = EmbeddingRequest(input=("hello world",))
     body = {
         "data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}],
@@ -308,12 +314,15 @@ def test_embed_routes_to_embeddings_server_only():
     with ctx:
         embed(request)
 
-    # Must hit the embeddings server port (8086), not any agent server
+    # Must hit /v1/embeddings on the router port; never /v1/chat/completions
     url_called = captured["req"].full_url
-    assert ":8086/v1/embeddings" in url_called
-    # Must NOT be an agent port
-    assert ":8084" not in url_called
-    assert ":8085" not in url_called
+    assert ":8090/v1/embeddings" in url_called
+    assert "/v1/chat/completions" not in url_called
+
+    # Payload must carry the embeddings server's alias so the router
+    # dispatches to the embeddings child subprocess, not an agent child.
+    payload = json.loads(captured["body"].decode())
+    assert payload["model"] == "embeddings"
 
 
 def test_embed_response_parses_vectors():
@@ -336,7 +345,7 @@ def test_embed_response_parses_vectors():
 def test_embed_500_raises_llama_server_error():
     request = EmbeddingRequest(input=("hello",))
     http_err = urllib.error.HTTPError(
-        url="http://127.0.0.1:8086/v1/embeddings",
+        url="http://127.0.0.1:8090/v1/embeddings",
         code=500,
         msg="Internal Server Error",
         hdrs=None,

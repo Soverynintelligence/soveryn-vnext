@@ -47,7 +47,8 @@ def test_app_port_is_5001_during_side_by_side():
 
 
 def test_embeddings_url_resolves():
-    assert runtime.embeddings_url() == "http://127.0.0.1:8086"
+    # Phase 7 (2026-05-26) — router cutover: all MODEL_SERVERS share :8090.
+    assert runtime.embeddings_url() == "http://127.0.0.1:8090"
 
 
 # ─── Service endpoints (spec §2, §3) ─────────────────────────────────────────
@@ -59,34 +60,64 @@ def test_parakeet_stt_service_endpoint_present():
     assert parakeet[0].port == 8087
 
 
-def test_model_server_ports_are_exactly_8084_8085_8086_8089():
-    """Spec §3 — llama-server endpoints only."""
+def test_model_servers_all_route_through_router_port_8090():
+    """Phase 7 router cutover: one llama-server router on :8090 fronts every
+    logical preset via per-model dispatch in the request body's "model" field."""
     ports = {s.port for s in runtime.MODEL_SERVERS}
-    assert ports == {8084, 8085, 8086, 8089}
+    assert ports == {8090}
 
 
-def test_8089_is_cognition_not_aetheria_public():
-    """Spec §3 — post-reset config.py drift would put aetheria_public on :8089. vNext refuses."""
-    server_on_8089 = next(s for s in runtime.MODEL_SERVERS if s.port == 8089)
-    assert server_on_8089.name == "cognition"
-    assert "aetheria_public" not in server_on_8089.name
-    assert "aetheria_public" not in server_on_8089.role
+def test_model_servers_have_distinct_logical_names():
+    """Even though they share a port, the four MODEL_SERVERS remain distinct
+    logical identities — that's the whole point of the (port, name) pair."""
+    names = {s.name for s in runtime.MODEL_SERVERS}
+    assert names == {"aetheria_primary", "vett_scotty_shared", "embeddings", "cognition"}
+
+
+def test_each_model_server_has_router_alias_populated():
+    """Under router mode, the chat/embeddings payload "model" field must match
+    a preset alias registered in router-presets.ini. Verify each ModelServer
+    carries the alias that router-presets.ini knows about."""
+    expected = {
+        "aetheria_primary": "aetheria",
+        "vett_scotty_shared": "vett-scotty",
+        "embeddings": "embeddings",
+        "cognition": "cognition",
+    }
+    actual = {s.name: s.model_alias for s in runtime.MODEL_SERVERS}
+    assert actual == expected
+
+
+def test_cognition_is_cognition_not_aetheria_public():
+    """Spec §3 — post-reset config.py drift would put aetheria_public somewhere
+    Aetheria-confusable. vNext refuses. (Pre-Phase-7 this was bound to :8089;
+    under router mode the test instead checks the cognition logical entry.)"""
+    cognition = next(s for s in runtime.MODEL_SERVERS if s.name == "cognition")
+    assert cognition.model_alias == "cognition"
+    assert "aetheria_public" not in cognition.name
+    assert "aetheria_public" not in cognition.role
 
 
 def test_all_ports_includes_parakeet():
-    """all_ports() must surface every active-fleet port for preflight checks."""
+    """all_ports() must surface every active-fleet port for preflight checks.
+    Under router mode the model-server side collapses to a single port."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    assert ports == {8084, 8085, 8086, 8087, 8089}
+    assert ports == {8087, 8090}
 
 
-def test_no_port_collisions_across_servers_services_app():
-    """_validate() at import time should have rejected any collision. Sanity assert."""
-    all_used = {s.port for s in runtime.MODEL_SERVERS}
-    all_used |= {e.port for e in runtime.SERVICE_ENDPOINTS}
-    all_used.add(runtime.APP_PORT)
-    expected_count = len(runtime.MODEL_SERVERS) + len(runtime.SERVICE_ENDPOINTS) + 1
-    assert len(all_used) == expected_count, "port collision somewhere"
+def test_model_servers_can_share_port_but_not_with_service_endpoints():
+    """_validate() at import time enforces the router-mode invariant: MODEL_SERVERS
+    may share ports with each other (router architecture) but must not collide
+    with SERVICE_ENDPOINTS or APP_PORT."""
+    ms_ports = {s.port for s in runtime.MODEL_SERVERS}
+    se_ports = {e.port for e in runtime.SERVICE_ENDPOINTS}
+    assert ms_ports.isdisjoint(se_ports), "MODEL_SERVERS port collides with SERVICE_ENDPOINTS"
+    assert runtime.APP_PORT not in ms_ports, "APP_PORT collides with MODEL_SERVERS"
+    assert runtime.APP_PORT not in se_ports, "APP_PORT collides with SERVICE_ENDPOINTS"
+    # Names within MODEL_SERVERS must still be unique (port + name pair uniqueness)
+    ms_names = [s.name for s in runtime.MODEL_SERVERS]
+    assert len(ms_names) == len(set(ms_names)), "MODEL_SERVERS has duplicate names"
 
 
 # ─── Runtime services (process-level dependencies, spec §2, §8) ──────────────

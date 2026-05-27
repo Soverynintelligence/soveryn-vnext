@@ -273,7 +273,7 @@ class AgentLoop:
         # 4. Dispatch chat. Any failure propagates; user turn is already saved.
         request = ChatRequest(
             messages=messages,
-            model=self.server.name,
+            model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
@@ -357,7 +357,7 @@ class AgentLoop:
 
         request = ChatRequest(
             messages=messages,
-            model=self.server.name,
+            model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )

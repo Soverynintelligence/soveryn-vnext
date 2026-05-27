@@ -11,19 +11,19 @@ from soveryn.inference.routing import RoutingError, route_for_agent
 def test_aetheria_routes_to_aetheria_primary():
     server = route_for_agent("aetheria")
     assert server.name == "aetheria_primary"
-    assert server.port == 8085
+    assert server.model_alias == "aetheria"
 
 
 def test_vett_routes_to_shared_server():
     server = route_for_agent("vett")
     assert server.name == "vett_scotty_shared"
-    assert server.port == 8084
+    assert server.model_alias == "vett-scotty"
 
 
 def test_scotty_routes_to_shared_server():
     server = route_for_agent("scotty")
     assert server.name == "vett_scotty_shared"
-    assert server.port == 8084
+    assert server.model_alias == "vett-scotty"
 
 
 def test_name_is_lowercased_and_stripped():

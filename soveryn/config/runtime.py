@@ -45,9 +45,16 @@ MODEL_ROOT = Path("/mnt/soveryn_models/GGUF")
 
 @dataclass(frozen=True)
 class ModelServer:
-    """A single llama-server endpoint."""
+    """A single llama-server endpoint.
+
+    Phase 7 (2026-05-26) — router cutover: all four MODEL_SERVERS now share
+    port 8090. `name` remains the logical preset identity inside vNext;
+    `model_alias` is the router-facing identifier sent in the OpenAI `model`
+    field. The router's preset .ini (soveryn_complete/router-presets.ini)
+    has both the alias and the model basename registered, so both resolve.
+    """
     name: str                       # logical identity, e.g. "aetheria_primary"
-    port: int                       # 127.0.0.1:<port>
+    port: int                       # 127.0.0.1:<port>  — all model servers share :8090 under router mode
     model_path: Path                # GGUF file
     mmproj_path: Path | None = None
     role: str = ""                  # human-readable: "Aetheria primary inference", etc.
@@ -56,36 +63,44 @@ class ModelServer:
     #: 27B templates which reject any second system message — AgentLoop then
     #: concatenates the soul into the persona content as a single system msg.
     supports_multi_system_messages: bool = True
+    #: Router-facing model identifier. This goes into the "model" field of
+    #: /v1/chat/completions and /v1/embeddings request bodies. Must match a
+    #: preset alias (section name or registered basename) in router-presets.ini.
+    model_alias: str = ""
 
 
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
 MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="aetheria_primary",
-        port=8085,
+        port=8090,
         model_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
         mmproj_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.mmproj-BF16.gguf",
         role="Aetheria primary (Blackwell 90% + Quadro spillover 10%)",
+        model_alias="aetheria",
     ),
     ModelServer(
         name="vett_scotty_shared",
-        port=8084,
+        port=8090,
         model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
         mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
         role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
         supports_multi_system_messages=False,  # base 27B template rejects 2nd system message
+        model_alias="vett-scotty",
     ),
     ModelServer(
         name="embeddings",
-        port=8086,
+        port=8090,
         model_path=MODEL_ROOT / "nomic-embed-text-v1.5.Q8_0.gguf",
         role="Single embedding backend (nomic-embed), used by Lattice",
+        model_alias="embeddings",
     ),
     ModelServer(
         name="cognition",
-        port=8089,
+        port=8090,
         model_path=MODEL_ROOT / "gemma-4-E4B-it-Q8_0.gguf",
         role="Cognition layer — dream consolidation, background dispatch worker",
+        model_alias="cognition",
     ),
 )
 
@@ -217,18 +232,36 @@ def _validate() -> None:
     unrouted = set(ACTIVE_AGENTS) - set(AGENT_TO_SERVER)
     if unrouted:
         raise RuntimeError(f"Active agents without server routing: {unrouted}")
-    # No port collision across MODEL_SERVERS, SERVICE_ENDPOINTS, APP_PORT
-    seen_ports: dict[int, str] = {}
-    for s in MODEL_SERVERS:
-        if s.port in seen_ports:
-            raise RuntimeError(f"Port {s.port} collision: {seen_ports[s.port]} vs MODEL_SERVERS:{s.name}")
-        seen_ports[s.port] = f"MODEL_SERVERS:{s.name}"
+    # Port-collision invariant under router mode (Phase 7, 2026-05-26):
+    # MODEL_SERVERS deliberately share a single port (8090) because one
+    # llama-server router process proxies all four logical servers via the
+    # "model" field. The collision check therefore validates uniqueness by
+    # (port, name) for MODEL_SERVERS — duplicates on port alone are allowed
+    # — while still preventing MODEL_SERVERS ports from colliding with
+    # SERVICE_ENDPOINTS or APP_PORT (those are independent processes that
+    # cannot share a port with the router or each other).
+    ms_keys = [(s.port, s.name) for s in MODEL_SERVERS]
+    if len(ms_keys) != len(set(ms_keys)):
+        raise RuntimeError(f"MODEL_SERVERS has duplicate (port, name): {ms_keys}")
+    ms_names = [s.name for s in MODEL_SERVERS]
+    if len(ms_names) != len(set(ms_names)):
+        raise RuntimeError(f"MODEL_SERVERS has duplicate names: {ms_names}")
+    ms_ports = {s.port for s in MODEL_SERVERS}
+    se_names = [e.name for e in SERVICE_ENDPOINTS]
+    if len(se_names) != len(set(se_names)):
+        raise RuntimeError(f"SERVICE_ENDPOINTS has duplicate names: {se_names}")
     for e in SERVICE_ENDPOINTS:
-        if e.port in seen_ports:
-            raise RuntimeError(f"Port {e.port} collision: {seen_ports[e.port]} vs SERVICE_ENDPOINTS:{e.name}")
-        seen_ports[e.port] = f"SERVICE_ENDPOINTS:{e.name}"
-    if APP_PORT in seen_ports:
-        raise RuntimeError(f"APP_PORT {APP_PORT} collides with {seen_ports[APP_PORT]}")
+        if e.port in ms_ports:
+            raise RuntimeError(
+                f"Port {e.port} collision: SERVICE_ENDPOINTS:{e.name} vs MODEL_SERVERS"
+            )
+    se_ports = {e.port for e in SERVICE_ENDPOINTS}
+    if len(se_ports) != len(SERVICE_ENDPOINTS):
+        raise RuntimeError(f"SERVICE_ENDPOINTS has duplicate ports: {[e.port for e in SERVICE_ENDPOINTS]}")
+    if APP_PORT in ms_ports:
+        raise RuntimeError(f"APP_PORT {APP_PORT} collides with MODEL_SERVERS")
+    if APP_PORT in se_ports:
+        raise RuntimeError(f"APP_PORT {APP_PORT} collides with SERVICE_ENDPOINTS")
     # RuntimeService.kind / launch are constrained vocabularies
     valid_kinds = {"process", "thread", "scheduled"}
     valid_launches = {"systemd", "app_startup", "user_launched"}
