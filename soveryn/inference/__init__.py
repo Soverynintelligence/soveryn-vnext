@@ -1,5 +1,6 @@
-"""SOVERYN vNext — inference package.
+"""Compatibility package for inference imports.
 
-HTTP clients and routing logic for the llama-server fleet defined in
-soveryn.config.runtime.MODEL_SERVERS. No in-process llama-cpp-python bindings.
+Inference implementation now lives under `soveryn.platform.inference`.
+Existing callers may continue importing `soveryn.inference.*` during the
+Phase 1 refactor window.
 """
