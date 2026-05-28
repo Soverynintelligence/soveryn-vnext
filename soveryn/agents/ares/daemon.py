@@ -6,19 +6,11 @@ behavior is ported in a later phase; this module declares the entry surface.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from soveryn.agents.ares.findings import AresFinding
 
 
 class AresDaemonNotPortedError(NotImplementedError):
     """Raised when Ares execution is requested before the port exists."""
-
-
-@dataclass(frozen=True)
-class AresFinding:
-    finding_type: str
-    severity: str
-    evidence: dict[str, Any]
 
 
 class AresDaemonSurface:
