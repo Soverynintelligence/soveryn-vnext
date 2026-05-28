@@ -3,7 +3,6 @@
 import pytest
 
 from soveryn.agents.ares.daemon import (
-    AresDaemonNotPortedError,
     AresDaemonSurface,
     AresFinding,
 )
@@ -39,12 +38,23 @@ def test_contract_dataclasses_are_instantiable():
 
 
 def test_contract_surfaces_are_declared_not_ported():
-    with pytest.raises(AresDaemonNotPortedError):
-        AresDaemonSurface().scan_once()
     with pytest.raises(VettResearchNotPortedError):
         VettResearchSurface().run(ResearchRequest("query"))
     with pytest.raises(ScottyRepairNotPortedError):
         ScottyRepairSurface().execute(RepairRequest("recipe", "A", {}))
+
+
+def test_ares_daemon_surface_now_scans_without_llm(tmp_path):
+    from soveryn.agents.ares.findings import FindingTracker
+
+    surface = AresDaemonSurface(
+        collectors=[lambda: []],
+        tracker=FindingTracker(tmp_path / "ares_state.json"),
+        sinks=None,
+    )
+
+    assert surface.scan_once() == ()
+    assert surface.uses_llm is False
 
 
 def test_explicit_cast_is_aetheria_ares_vett_scotty_only():
