@@ -14,8 +14,9 @@ def test_supervisor_health_probe_shape_is_declared():
 
     assert check.name == "aetheria-chat"
     assert check.target == "systemd:aetheria-chat.service"
-    with pytest.raises(NotImplementedError, match="declared, not implemented"):
-        HealthProbe().check(check)
+    result = HealthProbe().check(check)
+    assert result.name == "aetheria-chat"
+    assert result.state == "unknown"
 
 
 def test_telemetry_event_shape_is_reviewable():
