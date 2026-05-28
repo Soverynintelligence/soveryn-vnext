@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from soveryn.agents.ares.findings import Severity
-from soveryn.agents.ares.lanes.hardware import GpuThresholds, collect_gpu, nvidia_smi_query_args
+from soveryn.agents.ares.lanes.hardware import (
+    DiskSpaceThresholds,
+    GpuThresholds,
+    collect_cpu,
+    collect_drives,
+    collect_gpu,
+    nvidia_smi_query_args,
+)
 
 HEALTHY_NVIDIA_SMI = """
 0, Quadro RTX 8000, 39, 36445, 49152, [N/A], [N/A]
@@ -103,3 +110,110 @@ def test_gpu_thresholds_can_be_loaded_from_env():
     })
 
     assert thresholds == GpuThresholds(warn_temp_c=70, critical_temp_c=85)
+
+
+L3_MCE_LOG = """
+[Tue May 26 14:22:10 2026] mce: [Hardware Error]: CPU 0: Machine Check: 0 Bank 4: bea0000000000108
+[Tue May 26 14:22:10 2026] mce: [Hardware Error]: TSC 0 ADDR 1ffff8100 MISC d012000100000000 SYND 4d000000 IPID 500b000000000
+[Tue May 26 14:22:10 2026] mce: [Hardware Error]: PROCESSOR 2:a20f12 TIME 1779823330 SOCKET 0 APIC 0 microcode a20120e
+[Tue May 26 14:22:10 2026] mce: [Hardware Error]: L3 cache data array error, corrected
+"""
+
+SMART_HEALTHY = """
+SMART overall-health self-assessment test result: PASSED
+ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+  5 Reallocated_Sector_Ct   0x0033   100   100   010    Pre-fail  Always       -       0
+"""
+
+SMART_WARNING = """
+SMART overall-health self-assessment test result: PASSED
+ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+  5 Reallocated_Sector_Ct   0x0033   100   100   010    Pre-fail  Always       -       12
+"""
+
+SMART_FAIL = """
+SMART overall-health self-assessment test result: FAILED!
+ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
+  5 Reallocated_Sector_Ct   0x0033   050   050   010    Pre-fail  Always       -       200
+"""
+
+
+def test_collect_cpu_edac_corrected_warning_and_uncorrected_critical():
+    findings = collect_cpu(edac_counters={"ce_count": 3, "ue_count": 1}, mce_log="")
+
+    assert [finding.finding_type for finding in findings] == ["cpu.edac", "cpu.edac"]
+    assert [finding.severity for finding in findings] == [Severity.WARNING, Severity.CRITICAL]
+    assert findings[0].evidence == {"counter": "ce_count", "count": 3}
+    assert findings[1].evidence == {"counter": "ue_count", "count": 1}
+
+
+def test_collect_cpu_l3_mce_corrected_class_is_warning():
+    findings = collect_cpu(edac_counters={}, mce_log=L3_MCE_LOG)
+
+    assert len(findings) == 1
+    assert findings[0].finding_type == "cpu.mce"
+    assert findings[0].severity is Severity.WARNING
+    assert findings[0].evidence["class"] == "l3-cache"
+    assert findings[0].evidence["corrected"] is True
+
+
+def test_collect_cpu_uncorrected_mce_is_critical():
+    log = "mce: [Hardware Error]: CPU 3: Machine Check Exception: uncorrected memory error"
+
+    findings = collect_cpu(edac_counters={}, mce_log=log)
+
+    assert findings[0].finding_type == "cpu.mce"
+    assert findings[0].severity is Severity.CRITICAL
+    assert findings[0].evidence["corrected"] is False
+
+
+def test_collect_drives_smart_health_fail_is_critical():
+    findings = collect_drives(smart_outputs={"/dev/nvme0n1": SMART_FAIL})
+
+    assert len(findings) == 1
+    assert findings[0].finding_type == "drive.smart"
+    assert findings[0].severity is Severity.CRITICAL
+    assert findings[0].evidence["device"] == "/dev/nvme0n1"
+    assert findings[0].evidence["overall_health"] == "failed"
+
+
+def test_collect_drives_reallocated_sectors_warning_and_healthy_info():
+    findings = collect_drives(smart_outputs={
+        "/dev/nvme0n1": SMART_WARNING,
+        "/dev/nvme1n1": SMART_HEALTHY,
+    })
+
+    assert [finding.severity for finding in findings] == [Severity.WARNING, Severity.INFO]
+    assert findings[0].finding_type == "drive.smart"
+    assert findings[0].evidence["reallocated_sectors"] == 12
+    assert findings[1].finding_type == "drive.smart"
+    assert findings[1].evidence["overall_health"] == "passed"
+
+
+def test_collect_drives_filesystem_space_thresholds():
+    thresholds = DiskSpaceThresholds(warn_free_pct=15.0, critical_free_pct=5.0)
+    findings = collect_drives(
+        disk_usages={
+            "/": (100, 87, 13),
+            "/mnt/critical": (100, 97, 3),
+            "/mnt/healthy": (100, 20, 80),
+        },
+        space_thresholds=thresholds,
+    )
+
+    assert [finding.severity for finding in findings] == [Severity.WARNING, Severity.CRITICAL]
+    assert [finding.evidence["path"] for finding in findings] == ["/", "/mnt/critical"]
+
+
+def test_collect_drives_missing_expected_mount_warning():
+    proc_mounts = """
+/dev/nvme0n1p2 / ext4 rw,relatime 0 0
+/dev/sda1 /mnt/easystore ntfs3 rw,relatime 0 0
+"""
+
+    findings = collect_drives(proc_mounts=proc_mounts, expected_mounts=["/mnt/easystore", "/mnt/missing"])
+
+    assert len(findings) == 1
+    assert findings[0].finding_type == "drive.mount"
+    assert findings[0].severity is Severity.WARNING
+    assert findings[0].evidence == {"mount": "/mnt/missing", "reason": "missing"}
