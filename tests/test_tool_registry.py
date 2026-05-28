@@ -2,7 +2,10 @@
 
 import pytest
 
+from soveryn.platform.telemetry import query
 from soveryn.platform.tools.registry import (
+    TOOL_AUDIT_SOURCE,
+    TOOL_INVOKED_EVENT,
     ToolAuditEvent,
     ToolArgError,
     ToolRegistry,
@@ -108,6 +111,53 @@ def test_invoke_runs_handler_and_emits_audit_event():
     )]
 
 
+def test_default_audit_hook_writes_success_to_telemetry(monkeypatch, tmp_path):
+    monkeypatch.setenv("SOVERYN_TELEMETRY_DIR", str(tmp_path / "telemetry"))
+    registry = ToolRegistry()
+    registry.register(ToolSpec(
+        name="echo",
+        owner="aetheria",
+        schema={"type": "object"},
+        handler=lambda args: {"echo": args["text"]},
+    ))
+
+    registry.invoke("aetheria", "echo", {"text": "hello"})
+
+    events = query({"source": TOOL_AUDIT_SOURCE, "event_type": TOOL_INVOKED_EVENT})
+    assert len(events) == 1
+    assert events[0].level == "info"
+    assert events[0].payload == {
+        "agent": "aetheria",
+        "tool_name": "echo",
+        "ok": True,
+        "error": None,
+    }
+
+
+def test_default_audit_hook_writes_failure_to_telemetry(monkeypatch, tmp_path):
+    monkeypatch.setenv("SOVERYN_TELEMETRY_DIR", str(tmp_path / "telemetry"))
+    registry = ToolRegistry()
+    registry.register(ToolSpec(
+        name="explode",
+        owner="scotty",
+        schema={"type": "object"},
+        handler=lambda args: (_ for _ in ()).throw(RuntimeError("boom")),
+    ))
+
+    with pytest.raises(RuntimeError, match="boom"):
+        registry.invoke("scotty", "explode", {})
+
+    events = query({"source": TOOL_AUDIT_SOURCE, "event_type": TOOL_INVOKED_EVENT})
+    assert len(events) == 1
+    assert events[0].level == "error"
+    assert events[0].payload == {
+        "agent": "scotty",
+        "tool_name": "explode",
+        "ok": False,
+        "error": "RuntimeError: boom",
+    }
+
+
 def test_compatibility_shim_reexports_platform_registry_objects():
     from soveryn.tools import registry as compat
     from soveryn.platform.tools import registry as platform
@@ -115,4 +165,5 @@ def test_compatibility_shim_reexports_platform_registry_objects():
     assert compat.ToolRegistry is platform.ToolRegistry
     assert compat.ToolSpec is platform.ToolSpec
     assert compat.ToolAuditEvent is platform.ToolAuditEvent
+    assert compat.ToolArgError is platform.ToolArgError
     assert compat.ToolRegistryError is platform.ToolRegistryError

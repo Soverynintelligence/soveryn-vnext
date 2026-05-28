@@ -16,6 +16,8 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 
 ToolHandler = Callable[[Mapping[str, Any]], Any]
 AuditHook = Callable[["ToolAuditEvent"], None]
+TOOL_AUDIT_SOURCE = "platform.tools.registry"
+TOOL_INVOKED_EVENT = "tool.invoked"
 
 
 class ToolRegistryError(LookupError):
@@ -63,7 +65,7 @@ class ToolRegistry:
         audit_hook: AuditHook | None = None,
     ) -> None:
         self._active_agents = frozenset(active_agents)
-        self._audit_hook = audit_hook
+        self._audit_hook = telemetry_audit_hook if audit_hook is None else audit_hook
         self._tools: dict[tuple[str, str], ToolSpec] = {}
 
     def register(self, spec: ToolSpec) -> None:
@@ -132,6 +134,24 @@ class ToolRegistry:
     def _emit(self, event: ToolAuditEvent) -> None:
         if self._audit_hook is not None:
             self._audit_hook(event)
+
+
+def telemetry_audit_hook(event: ToolAuditEvent) -> None:
+    """Persist tool invocation audits to the platform telemetry store."""
+
+    from soveryn.platform import telemetry
+
+    telemetry.log(
+        source=TOOL_AUDIT_SOURCE,
+        event_type=TOOL_INVOKED_EVENT,
+        level="info" if event.ok else "error",
+        payload={
+            "agent": event.agent,
+            "tool_name": event.tool_name,
+            "ok": event.ok,
+            "error": event.error,
+        },
+    )
 
 
 def _normalize(value: str) -> str:
