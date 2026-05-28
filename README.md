@@ -15,7 +15,7 @@ vNext is a working side-by-side Flask app and Phase 1 platform refactor substrat
 - Compatibility shims for old import paths during the refactor window
 - Command center UI, chat UI, sessions, streaming, compatibility routes, validation harness, and code-backup daemon from earlier vnext work
 
-Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Later phases build and swap the remaining platform components one at a time.
+Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Phase 3a ports Ares core + the hardware lane as a detection-only host sentinel with dry-run mode for shadow-bake operation beside prod Ares. Later phases build and swap the remaining platform components one at a time.
 
 ## Layout
 
@@ -34,6 +34,7 @@ soveryn/
 
 Phase 1 verification: `docs/PHASE1_VNEXT_REFACTOR_VERIFY.md`.
 Phase 2a verification: `docs/PHASE2_ARES_PREREQS_VERIFY.md`.
+Phase 3a verification: `docs/PHASE3A_ARES_CORE_HARDWARE_VERIFY.md`.
 
 ## Running tests
 
