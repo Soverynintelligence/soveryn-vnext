@@ -1,9 +1,7 @@
 """Platform-owned tool registry for SOVERYN vNext.
 
 This module defines the narrow mechanism boundary for tool capability lookup and
-mediated execution. It is intentionally small in Phase 1: schema validation,
-permission tiers, and durable telemetry are represented by explicit shapes but
-implemented in later platform tasks.
+mediated execution.
 """
 
 from __future__ import annotations
@@ -11,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
+
+from jsonschema import ValidationError, validate
 
 from soveryn.config.runtime import ACTIVE_AGENTS
 
@@ -20,6 +20,10 @@ AuditHook = Callable[["ToolAuditEvent"], None]
 
 class ToolRegistryError(LookupError):
     """Raised when a tool cannot be registered or invoked."""
+
+
+class ToolArgError(ValueError):
+    """Raised when tool invocation arguments fail schema validation."""
 
 
 @dataclass(frozen=True)
@@ -83,13 +87,26 @@ class ToolRegistry:
 
     def invoke(self, agent: str, tool_name: str, args: Mapping[str, Any]) -> Any:
         spec = self._lookup(agent, tool_name)
+        invocation_args = dict(args)
         try:
-            result = spec.handler(dict(args))
+            validate(instance=invocation_args, schema=dict(spec.schema))
+        except ValidationError as exc:
+            error = f"ToolArgError: {exc.message}"
+            self._emit(ToolAuditEvent(
+                agent=spec.owner,
+                tool_name=spec.name,
+                args=invocation_args,
+                ok=False,
+                error=error,
+            ))
+            raise ToolArgError(exc.message) from exc
+        try:
+            result = spec.handler(invocation_args)
         except Exception as exc:
             self._emit(ToolAuditEvent(
                 agent=spec.owner,
                 tool_name=spec.name,
-                args=dict(args),
+                args=invocation_args,
                 ok=False,
                 error=f"{type(exc).__name__}: {exc}",
             ))
@@ -97,7 +114,7 @@ class ToolRegistry:
         self._emit(ToolAuditEvent(
             agent=spec.owner,
             tool_name=spec.name,
-            args=dict(args),
+            args=invocation_args,
             ok=True,
             result=result,
         ))

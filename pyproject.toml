@@ -9,6 +9,7 @@ description = "SOVERYN vNext — clean rebuild of the multi-agent system"
 requires-python = ">=3.11"
 dependencies = [
     "Flask>=3.0",
+    "jsonschema>=4.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -4,6 +4,7 @@ import pytest
 
 from soveryn.platform.tools.registry import (
     ToolAuditEvent,
+    ToolArgError,
     ToolRegistry,
     ToolRegistryError,
     ToolSpec,
@@ -42,6 +43,35 @@ def test_tool_registered_for_one_agent_cannot_be_invoked_by_another():
 
     with pytest.raises(ToolRegistryError, match="not registered"):
         registry.invoke("aetheria", "read_file", {})
+
+
+def test_invalid_tool_args_raise_before_dispatch_and_emit_audit_event():
+    events: list[ToolAuditEvent] = []
+    handler_calls: list[dict] = []
+    registry = ToolRegistry(audit_hook=events.append)
+    registry.register(ToolSpec(
+        name="read_file",
+        owner="scotty",
+        schema={
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+        handler=lambda args: handler_calls.append(dict(args)),
+    ))
+
+    with pytest.raises(ToolArgError, match="'path' is a required property"):
+        registry.invoke("scotty", "read_file", {})
+
+    assert handler_calls == []
+    assert events == [ToolAuditEvent(
+        agent="scotty",
+        tool_name="read_file",
+        args={},
+        ok=False,
+        error="ToolArgError: 'path' is a required property",
+    )]
 
 
 def test_retired_or_unknown_agent_cannot_own_tool():
