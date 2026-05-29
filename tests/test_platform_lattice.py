@@ -67,11 +67,13 @@ def test_private_legacy_node_marks_entry_private(tmp_path):
     assert entry.region is Region.EPISODIC
 
 
-def test_attic_store_interface_declared_not_implemented():
-    attic = AtticStore()
+def test_attic_store_interface_is_implemented(tmp_path):
+    attic = AtticStore(tmp_path / "attic.db")
 
-    with pytest.raises(NotImplementedError):
-        attic.fetch("private thought")
+    record = attic.append("private thought")
+
+    assert attic.fetch("private")
+    assert record.content == "private thought"
 
 
 def test_memory_lattice_compatibility_shim_reexports_platform_objects():
