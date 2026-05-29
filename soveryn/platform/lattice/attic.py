@@ -144,6 +144,52 @@ class AtticStore:
             rows = conn.execute(sql, params).fetchall()
             return tuple(_row_to_entry(conn, row) for row in rows)
 
+    def get_record(self, attic_id: str) -> AtticRecord | None:
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM attic_entries WHERE id = ?", (attic_id,)).fetchone()
+            return _row_to_record(conn, row) if row else None
+
+    def promote(
+        self,
+        attic_id: str,
+        *,
+        lattice_store,
+        to_region: Region,
+        trigger: str | None,
+        agent: str = "aetheria",
+        corroboration_count: int = 0,
+        corroboration_threshold: int = 2,
+    ) -> str:
+        record = self.get_record(attic_id)
+        if record is None:
+            raise ValueError(f"attic entry not found: {attic_id}")
+        normalized_region = to_region if isinstance(to_region, Region) else Region(str(to_region))
+        if normalized_region is Region.UNKNOWN:
+            raise ValueError("to_region must be a canonical region")
+        trigger_metadata = _validate_promotion_trigger(
+            trigger,
+            corroboration_count=corroboration_count,
+            corroboration_threshold=corroboration_threshold,
+        )
+        promoted_at = datetime.now(timezone.utc).isoformat()
+        provenance = Provenance(
+            ProvenanceClass.CONSOLIDATED,
+            source="attic_promotion",
+            confidence=1.0 if trigger_metadata["trigger"] == "review" else 0.8,
+            temporal_context=promoted_at,
+            generator="AtticStore.promote",
+            chain=(record.id,),
+        )
+        provenance_dict = _provenance_to_dict(provenance)
+        provenance_dict.update(trigger_metadata)
+        provenance_dict["attic_id"] = record.id
+        return lattice_store.write_node(
+            agent,
+            record.content,
+            node_type=normalized_region.value,
+            provenance=provenance_dict,
+        )
+
 
 def _row_to_entry(conn: sqlite3.Connection, row: sqlite3.Row) -> Entry:
     metadata = _json_load_dict(row["metadata"])
@@ -170,6 +216,46 @@ def _row_to_entry(conn: sqlite3.Connection, row: sqlite3.Row) -> Entry:
         private=True,
         provenance=_provenance_load(row["provenance"]),
     )
+
+
+def _row_to_record(conn: sqlite3.Connection, row: sqlite3.Row) -> AtticRecord:
+    links = tuple(
+        str(item["lattice_id"])
+        for item in conn.execute(
+            "SELECT lattice_id FROM attic_links WHERE attic_id = ? ORDER BY lattice_id ASC",
+            (row["id"],),
+        ).fetchall()
+    )
+    return AtticRecord(
+        id=row["id"],
+        content=row["content"],
+        metadata=_json_load_dict(row["metadata"]),
+        linked_lattice_ids=links,
+        provenance=_provenance_load(row["provenance"]),
+        created_at=row["created_at"],
+    )
+
+
+def _validate_promotion_trigger(
+    trigger: str | None,
+    *,
+    corroboration_count: int,
+    corroboration_threshold: int,
+) -> dict[str, Any]:
+    normalized = (trigger or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if normalized == "review":
+        return {"trigger": "review"}
+    if normalized == "corroboration":
+        if corroboration_threshold < 1:
+            raise ValueError("corroboration_threshold must be >= 1")
+        if corroboration_count < corroboration_threshold:
+            raise ValueError("corroboration trigger requires count meeting threshold")
+        return {
+            "trigger": "corroboration",
+            "corroboration_count": corroboration_count,
+            "corroboration_threshold": corroboration_threshold,
+        }
+    raise ValueError("trigger must be 'review' or threshold-satisfied 'corroboration'")
 
 
 def _default_attic_path() -> Path:
@@ -203,7 +289,11 @@ def _json_load_dict(raw: str) -> dict[str, Any]:
 
 
 def _provenance_dump(provenance: Provenance) -> str:
-    return json.dumps({
+    return json.dumps(_provenance_to_dict(provenance), sort_keys=True)
+
+
+def _provenance_to_dict(provenance: Provenance) -> dict[str, Any]:
+    return {
         "cls": provenance.cls.value,
         "source": provenance.source,
         "confidence": provenance.confidence,
@@ -211,7 +301,7 @@ def _provenance_dump(provenance: Provenance) -> str:
         "generator": provenance.generator,
         "chain": list(provenance.chain),
         "derived_from": list(provenance.derived_from),
-    }, sort_keys=True)
+    }
 
 
 def _provenance_load(raw: str) -> Provenance:

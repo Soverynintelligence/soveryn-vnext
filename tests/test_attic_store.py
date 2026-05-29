@@ -72,3 +72,96 @@ def test_attic_storage_is_separate_from_lattice_region_queries(tmp_path):
     assert [entry.content for entry in attic_entries] == ["secret attic pattern"]
     assert [node.content for node in lattice_nodes] == ["public lattice pattern"]
     assert all(node.content != "secret attic pattern" for node in lattice_nodes)
+
+
+def test_promote_creates_canonical_lattice_entry_with_chain_and_preserves_raw(tmp_path):
+    attic = AtticStore(tmp_path / "attic.db")
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    raw = attic.append(
+        "reviewed pattern",
+        metadata={"facet": "pattern_reservoir"},
+        linked_lattice_ids=("prior-lattice-id",),
+    )
+    before = attic.get_record(raw.id)
+
+    promoted_id = attic.promote(
+        raw.id,
+        lattice_store=lattice,
+        to_region=Region.SEMANTIC,
+        trigger="review",
+        agent="aetheria",
+    )
+
+    promoted = lattice.get_node(promoted_id)
+    after = attic.get_record(raw.id)
+    assert promoted is not None
+    assert promoted.content == "reviewed pattern"
+    assert promoted.type == "semantic"
+    assert promoted.provenance["cls"] == "consolidated"
+    assert promoted.provenance["source"] == "attic_promotion"
+    assert promoted.provenance["chain"] == [raw.id]
+    assert promoted.provenance["trigger"] == "review"
+    assert after == before
+    assert attic.fetch("reviewed")[0].id == raw.id
+
+
+def test_promote_requires_valid_trigger(tmp_path):
+    attic = AtticStore(tmp_path / "attic.db")
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    raw = attic.append("unreviewed raw material")
+
+    for trigger in (None, "", "volume", "recency"):
+        try:
+            attic.promote(raw.id, lattice_store=lattice, to_region=Region.SEMANTIC, trigger=trigger)
+        except ValueError as exc:
+            assert "trigger" in str(exc)
+        else:
+            raise AssertionError(f"trigger {trigger!r} should not promote")
+
+    assert lattice.find_nodes_by_keywords("aetheria", "unreviewed") == ()
+
+
+def test_corroboration_promotion_requires_threshold(tmp_path):
+    attic = AtticStore(tmp_path / "attic.db")
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    raw = attic.append("corroborated raw material")
+
+    try:
+        attic.promote(
+            raw.id,
+            lattice_store=lattice,
+            to_region=Region.PROCEDURAL,
+            trigger="corroboration",
+            corroboration_count=1,
+            corroboration_threshold=2,
+        )
+    except ValueError as exc:
+        assert "corroboration" in str(exc)
+    else:
+        raise AssertionError("corroboration below threshold should not promote")
+
+    promoted_id = attic.promote(
+        raw.id,
+        lattice_store=lattice,
+        to_region=Region.PROCEDURAL,
+        trigger="corroboration",
+        corroboration_count=2,
+        corroboration_threshold=2,
+    )
+
+    promoted = lattice.get_node(promoted_id)
+    assert promoted.type == "procedural"
+    assert promoted.provenance["trigger"] == "corroboration"
+    assert promoted.provenance["corroboration_count"] == 2
+    assert promoted.provenance["corroboration_threshold"] == 2
+
+
+def test_volume_and_recency_never_auto_promote(tmp_path):
+    attic = AtticStore(tmp_path / "attic.db")
+    lattice = LatticeStore(tmp_path / "lattice.db")
+
+    for _ in range(5):
+        attic.append("repeated raw material")
+
+    assert len(attic.fetch("repeated")) == 5
+    assert lattice.find_nodes_by_keywords("aetheria", "repeated") == ()
