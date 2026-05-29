@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from soveryn.platform.lattice.provenance import Provenance
 
 
 class Region(StrEnum):
@@ -32,3 +35,4 @@ class Entry:
     source: str = "lattice"
     metadata: dict[str, Any] = field(default_factory=dict)
     private: bool = False
+    provenance: "Provenance | None" = None

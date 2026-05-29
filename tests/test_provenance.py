@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from soveryn.platform.lattice import Entry, LatticeStore, Region, entry_from_node
 from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
 
 
@@ -98,3 +99,45 @@ def test_provenance_accepts_string_class_and_normalizes_tuples():
     assert provenance.cls is ProvenanceClass.LEGACY
     assert provenance.chain == ("old-id",)
     assert provenance.derived_from == ()
+
+
+def test_entry_accepts_optional_structured_provenance():
+    provenance = Provenance(
+        ProvenanceClass.TOLD,
+        source="jon",
+        confidence=0.9,
+        temporal_context="current-session",
+        generator="test",
+    )
+
+    entry = Entry(
+        id="entry-1",
+        content="Jon prefers Signal.",
+        region=Region.SEMANTIC,
+        provenance=provenance,
+    )
+
+    assert entry.provenance is provenance
+
+
+def test_entry_old_construction_defaults_provenance_none():
+    entry = Entry(id="entry-1", content="Legacy shape still works.")
+
+    assert entry.region is Region.UNKNOWN
+    assert entry.source == "lattice"
+    assert entry.provenance is None
+
+
+def test_legacy_entry_from_node_keeps_metadata_provenance_but_no_structured_entry_provenance(tmp_path):
+    store = LatticeStore(tmp_path / "lattice.db")
+    node_id = store.write_node(
+        "aetheria",
+        "legacy memory",
+        provenance={"source_type": "declared_fact"},
+    )
+
+    entry = entry_from_node(store.get_node(node_id))
+
+    assert entry.source == "legacy_lattice"
+    assert entry.metadata["provenance"] == {"source_type": "declared_fact"}
+    assert entry.provenance is None
