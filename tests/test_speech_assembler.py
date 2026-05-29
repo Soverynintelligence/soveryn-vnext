@@ -98,6 +98,7 @@ def test_assemble_recall_composes_mixed_channels_in_deterministic_sections() -> 
     assert raw_a not in rendered
     assert raw_b not in rendered
 
+
 def test_quotable_section_contains_only_supplied_channel_a_content() -> None:
     supplied_a = "Aetheria uses provenance phrases for memory"
     supplied_b = "raw legacy content that must not be quotable"
@@ -150,3 +151,36 @@ def test_unsupplied_content_cannot_appear_in_assembled_context() -> None:
     )
 
     assert unsupplied not in rendered
+
+def test_empty_entries_produce_empty_recall_context() -> None:
+    assert assemble_recall(()) == ""
+
+
+def test_all_channel_b_input_has_no_quotable_recall() -> None:
+    raw_claim = "raw legacy claim must not become citable"
+    rendered = assemble_recall(
+        (
+            _entry("b-1", raw_claim, ProvenanceClass.LEGACY),
+            _entry("b-2", "another raw note", None),
+        )
+    )
+
+    assert _quotable_section(rendered) == ""
+    assert rendered == (
+        "Uncertain context:\n"
+        "- I have 2 uncertain older notes related to this, but I can't treat them as memory yet."
+    )
+    assert raw_claim not in rendered
+
+
+def test_empty_quotable_context_shapes_i_do_not_know_floor() -> None:
+    rendered = assemble_recall(())
+    prompt_fixture = (
+        "Memory context supplied to Aetheria:\n"
+        f"{rendered}\n"
+        "If there is no stateable recall, answer from current context or say I don't know."
+    )
+
+    assert "Stateable recall:" not in prompt_fixture
+    assert "I remember" not in prompt_fixture
+    assert "You told me" not in prompt_fixture
