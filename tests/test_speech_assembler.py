@@ -3,6 +3,12 @@ from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
 from soveryn.platform.lattice.types import Entry
 
 
+def _quotable_section(rendered: str) -> str:
+    if not rendered.startswith("Stateable recall:"):
+        return ""
+    return rendered.split("\n\nUncertain context:", maxsplit=1)[0]
+
+
 def _entry(
     entry_id: str,
     content: str,
@@ -91,3 +97,56 @@ def test_assemble_recall_composes_mixed_channels_in_deterministic_sections() -> 
     )
     assert raw_a not in rendered
     assert raw_b not in rendered
+
+def test_quotable_section_contains_only_supplied_channel_a_content() -> None:
+    supplied_a = "Aetheria uses provenance phrases for memory"
+    supplied_b = "raw legacy content that must not be quotable"
+    rendered = assemble_recall(
+        (
+            _entry("a-1", supplied_a, ProvenanceClass.WITNESSED),
+            _entry(
+                "b-1",
+                supplied_b,
+                ProvenanceClass.LEGACY,
+                metadata={"canonical": False},
+            ),
+        )
+    )
+
+    quotable = _quotable_section(rendered)
+
+    assert supplied_a in quotable
+    assert supplied_b not in quotable
+    assert "raw legacy content" not in quotable
+
+
+def test_channel_b_content_never_appears_in_quotable_section() -> None:
+    raw_claims = (
+        "Channel B says a fabricated claim",
+        "Another unreviewed note with private content",
+    )
+    rendered = assemble_recall(
+        (
+            _entry("a-1", "only this is stateable", ProvenanceClass.TOLD, source="user"),
+            _entry("b-1", raw_claims[0], ProvenanceClass.LEGACY),
+            _entry("b-2", raw_claims[1], None),
+        )
+    )
+
+    quotable = _quotable_section(rendered)
+
+    assert "only this is stateable" in quotable
+    for raw_claim in raw_claims:
+        assert raw_claim not in quotable
+
+
+def test_unsupplied_content_cannot_appear_in_assembled_context() -> None:
+    unsupplied = "this sentence was never supplied to the assembler"
+    rendered = assemble_recall(
+        (
+            _entry("a-1", "supplied channel a content", ProvenanceClass.CONSOLIDATED),
+            _entry("b-1", "supplied raw channel b content", ProvenanceClass.LEGACY),
+        )
+    )
+
+    assert unsupplied not in rendered
