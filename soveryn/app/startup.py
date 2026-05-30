@@ -24,10 +24,11 @@ from typing import Any
 from flask import Flask, g, jsonify, request
 
 from soveryn import __version__
-from soveryn.agents.loop import AgentLoop
+from soveryn.agents.loop import AgentLoop, _default_embed
 from soveryn.config.loader import EnvConfig, load_env_config
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.memory.conversation_store import ConversationStore
+from soveryn.platform.tools.registry import ToolRegistry
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,7 @@ def create_app(
     env = env if env is not None else load_env_config()
     if conv_store is None:
         conv_store = ConversationStore(env.conversations_db)
+    tool_registry = None
     if agent_loops is None:
         # Pinned memory is Aetheria-only by design — it's her relationship
         # substrate (facts about Jon, the project, her continuity). Vett and
@@ -82,6 +84,16 @@ def create_app(
                 env.recall_lattice_db,
             )
 
+        tool_registry = ToolRegistry()
+        if recall_lattice is not None:
+            from soveryn.agents.aetheria.tools import register_aetheria_tools
+
+            register_aetheria_tools(
+                tool_registry,
+                recall_lattice=recall_lattice,
+                embed_fn=_default_embed,
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -94,6 +106,7 @@ def create_app(
                     kwargs["recall_k"] = 5
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
+                    kwargs["tool_registry"] = tool_registry
                 # Cap hidden reasoning per turn — leaves room inside max_tokens
                 # for the visible answer. Calibration baseline; iterate from here.
                 kwargs["thinking_budget_tokens"] = 384
@@ -103,6 +116,7 @@ def create_app(
         "env": env,
         "conv_store": conv_store,
         "agent_loops": agent_loops,
+        "tool_registry": tool_registry,
     }
 
     _register_guards(app)
