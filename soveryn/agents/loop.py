@@ -25,6 +25,7 @@ turn-processing time.
 """
 
 from __future__ import annotations
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
@@ -45,7 +46,7 @@ from soveryn.inference.llama_server_client import (
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
-from soveryn.platform.tools.registry import ToolRegistry
+from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 
 
 ChatFn = Callable[..., ChatResponse]
@@ -302,9 +303,41 @@ class AgentLoop:
             model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            tools=self._tool_schemas() or None,
             thinking_budget_tokens=self.thinking_budget_tokens,
         )
         response = self.chat_fn(request, self.server, timeout=self.chat_timeout_seconds)
+
+        tool_rounds = 0
+        while response.tool_calls and self.tool_registry is not None:
+            if tool_rounds >= self.max_tool_rounds:
+                response = ChatResponse(
+                    content=response.content,
+                    finish_reason="tool_round_limit",
+                    tool_calls=response.tool_calls,
+                    usage=response.usage,
+                    raw=response.raw,
+                )
+                break
+            messages = messages + (ChatMessage(
+                role="assistant",
+                content=response.content,
+                tool_calls=response.tool_calls,
+            ),)
+            messages = messages + tuple(
+                self._tool_result_message(tool_call)
+                for tool_call in response.tool_calls
+            )
+            request = ChatRequest(
+                messages=messages,
+                model=self.server.model_alias,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                tools=self._tool_schemas() or None,
+                thinking_budget_tokens=self.thinking_budget_tokens,
+            )
+            response = self.chat_fn(request, self.server, timeout=self.chat_timeout_seconds)
+            tool_rounds += 1
 
         # 5. Save assistant turn from response.content ONLY (constraint 4).
         #    Any DB error here propagates (constraint 5) — we don't pretend success.
@@ -314,6 +347,26 @@ class AgentLoop:
 
         # 6. Return raw ChatResponse (constraint 3).
         return response
+
+    def _tool_result_message(self, tool_call: dict) -> ChatMessage:
+        call_id = str(tool_call.get("id") or "")
+        function = tool_call.get("function") or {}
+        tool_name = str(function.get("name") or "")
+        raw_args = function.get("arguments") or "{}"
+        try:
+            args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+        except (TypeError, json.JSONDecodeError) as exc:
+            result = {"error": "ToolArgError", "message": str(exc)}
+        else:
+            try:
+                result = self.tool_registry.invoke(self.agent_name, tool_name, args)
+            except ToolArgError as exc:
+                result = {"error": "ToolArgError", "message": str(exc)}
+        return ChatMessage(
+            role="tool",
+            content=json.dumps(result, sort_keys=True),
+            tool_call_id=call_id,
+        )
 
     def process_message_stream(
         self,
