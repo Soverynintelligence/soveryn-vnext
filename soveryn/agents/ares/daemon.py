@@ -14,7 +14,9 @@ from pathlib import Path
 
 from soveryn.agents.ares import signal_sender
 from soveryn.agents.ares.findings import AresFinding, FindingTracker
+from soveryn.agents.ares.lanes.architecture import collect_architecture_live
 from soveryn.agents.ares.lanes.hardware import collect_cpu_live, collect_drives_live, collect_gpu_live
+from soveryn.agents.ares.lanes.network import collect_network_live
 from soveryn.agents.ares.router import AresSinks, default_sinks, route_cleared, route_finding
 from soveryn.platform.bus import SQLiteBus
 
@@ -93,7 +95,13 @@ class AresDaemonSurface:
 
 
 def _default_collectors() -> tuple[Collector, ...]:
-    return (collect_gpu_live, collect_cpu_live, collect_drives_live)
+    return (
+        collect_gpu_live,
+        collect_cpu_live,
+        collect_drives_live,
+        collect_network_live,
+        collect_architecture_live,
+    )
 
 
 def _default_sinks() -> AresSinks:

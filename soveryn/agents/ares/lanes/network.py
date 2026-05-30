@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 
 from soveryn.agents.ares.findings import AresFinding, Severity
@@ -178,3 +179,35 @@ def _parse_public_allowlist(value: str) -> list[tuple[int, str]]:
             continue
         entries.append((int(port_text), process.strip()))
     return entries
+
+
+def ss_listeners_command() -> list[str]:
+    return ["ss", "-H", "-tlnp"]
+
+
+def collect_network_live(
+    *,
+    allow_list: NetworkAllowList | None = None,
+    expected: ExpectedServices | None = None,
+) -> list[AresFinding]:
+    """Run ss once and feed both pure network parsers the same snapshot."""
+
+    allow_list = allow_list or NetworkAllowList.from_env()
+    expected = expected or ExpectedServices.from_env()
+    try:
+        output = subprocess.check_output(
+            ss_listeners_command(),
+            text=True,
+            stderr=subprocess.STDOUT,
+            timeout=15,
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        return [AresFinding(
+            "network.collector",
+            Severity.WARNING,
+            {"reason": f"ss-invocation-failed: {type(exc).__name__}: {exc}"},
+            key="ss-invocation",
+        )]
+    listeners = collect_listeners(output, allow_list=allow_list)
+    presence = collect_service_presence(output, expected=expected)
+    return listeners + presence

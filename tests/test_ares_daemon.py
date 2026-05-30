@@ -7,7 +7,7 @@ import inspect
 
 import pytest
 
-from soveryn.agents.ares.daemon import AresDaemonSurface
+from soveryn.agents.ares.daemon import AresDaemonSurface, _default_collectors
 from soveryn.agents.ares.findings import AresFinding, FindingTracker, Severity
 from soveryn.agents.ares.router import AresSinks
 
@@ -103,6 +103,65 @@ def test_run_forever_can_be_bounded_for_scheduler_tests(tmp_path):
     surface.run_forever(interval_seconds=2.5, iterations=3, sleep=calls["sleep"].append)
 
     assert calls == {"scan": 3, "sleep": [2.5, 2.5]}
+
+
+def test_default_collectors_include_network_and_architecture_lanes():
+    collectors = _default_collectors()
+    names = {getattr(c, "__name__", repr(c)) for c in collectors}
+    assert "collect_gpu_live" in names
+    assert "collect_cpu_live" in names
+    assert "collect_drives_live" in names
+    assert "collect_network_live" in names
+    assert "collect_listeners_live" not in names
+    assert "collect_service_presence_live" not in names
+    assert "collect_architecture_live" in names
+
+
+def test_unified_network_live_runs_ss_once_per_call(monkeypatch):
+    import soveryn.agents.ares.lanes.network as net
+
+    calls: list = []
+
+    def fake_check_output(cmd, **kwargs):
+        calls.append(tuple(cmd))
+        return (
+            'LISTEN 0 4096 127.0.0.1:5001  0.0.0.0:* users:(("python3.11",pid=1,fd=1))\n'
+        )
+
+    monkeypatch.setattr(net.subprocess, "check_output", fake_check_output)
+    findings = net.collect_network_live()
+    assert len(calls) == 1
+    assert any(
+        f.finding_type == "network.service_missing" and f.evidence["port"] == 8090
+        for f in findings
+    )
+
+
+def test_dry_run_default_still_suppresses_signal_with_new_lanes(tmp_path):
+    state_path = tmp_path / "ares_state.json"
+    tracker = FindingTracker(state_path=state_path)
+    signal_calls: list = []
+    sinks = AresSinks(
+        telemetry_sink=lambda f: None,
+        bus_sink=lambda f: None,
+        signal_sink=lambda f, priority=False: signal_calls.append((f, priority)),
+    )
+
+    def fake_emergency_collector():
+        return [AresFinding(
+            "network.public_listener_unallowlisted",
+            Severity.EMERGENCY,
+            {"bind_address": "0.0.0.0", "port": 4444, "process": "nc"},
+        )]
+
+    daemon = AresDaemonSurface(
+        collectors=[fake_emergency_collector],
+        tracker=tracker,
+        sinks=sinks,
+        dry_run=True,
+    )
+    daemon.scan_once()
+    assert signal_calls == []
 
 
 def _recording_sinks(calls: dict[str, list]) -> AresSinks:

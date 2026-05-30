@@ -127,3 +127,24 @@ def test_tool_owned_by_retired_agent_is_warning():
     assert f.finding_type == "architecture.tool_owned_by_inactive_agent"
     assert f.evidence["tool"] == "scrape_dealers"
     assert f.evidence["owner"] == "scout"
+
+
+def test_collect_architecture_live_against_synthetic_root(monkeypatch, tmp_path):
+    agents_dir = tmp_path / "soveryn" / "agents"
+    fake_agent = agents_dir / "fakeagent"
+    fake_agent.mkdir(parents=True)
+    (fake_agent / "__init__.py").write_text("", encoding="utf-8")
+    (fake_agent / "bad.py").write_text("import sqlite3\n", encoding="utf-8")
+    tinker = agents_dir / "tinker"
+    tinker.mkdir()
+    (tinker / "__init__.py").write_text("", encoding="utf-8")
+
+    monkeypatch.setenv("SOVERYN_VNEXT_ROOT", str(tmp_path))
+    import soveryn.agents.ares.lanes.architecture as arch
+
+    monkeypatch.setattr(arch, "_tool_ownership_snapshot", lambda: ({}, frozenset()))
+    findings = arch.collect_architecture_live()
+    types = {f.finding_type for f in findings}
+    assert "architecture.raw_io_in_agents" in types
+    assert "architecture.retired_agent_present" in types
+    assert "architecture.tool_owned_by_inactive_agent" not in types
