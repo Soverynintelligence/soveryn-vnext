@@ -1,14 +1,17 @@
 from soveryn.platform.lattice.attic import AtticStore
 from soveryn.platform.lattice.legacy import LatticeStore
 from soveryn.platform.lattice.migration import (
+    LEGACY_IDENTITY_REVIEW_SOURCE,
     LEGACY_MIGRATION_CONFIDENCE,
     LEGACY_MIGRATION_SOURCE,
+    MIGRATION_IDENTITY_REVIEW_TRIGGER,
     render_identity_review_report,
     select_identity_review_candidates,
     write_identity_review_report,
     legacy_node_metadata,
     legacy_node_provenance,
     migrate_legacy_nodes_to_attic,
+    promote_identity_spine,
 )
 from soveryn.platform.lattice.provenance import ProvenanceClass
 
@@ -198,3 +201,100 @@ def test_write_identity_review_report_writes_markdown_without_mutating_stores(tm
 
     assert path.read_text().startswith("# Phase 2b-ii-b1 Migration Report")
     assert lattice.get_node(node_id) is not None
+
+
+def test_promote_identity_spine_creates_reviewed_identity_entry_without_mutating_raw_attic(tmp_path) -> None:
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    legacy_id = lattice.write_node(
+        "aetheria",
+        "identity presence and directness are core continuity",
+        intensity=0.95,
+        tags=("identity",),
+    )
+    node = lattice.get_node(legacy_id)
+    migrated = migrate_legacy_nodes_to_attic((node,), attic_store=attic)
+    raw = migrated.migrated[0]
+    before = attic.get_record(raw.id)
+    candidates = select_identity_review_candidates((node,), cap=12)
+
+    result = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice)
+
+    assert len(result.promoted) == 1
+    promoted = lattice.get_node(result.promoted[0])
+    assert promoted is not None
+    assert promoted.type == "identity"
+    assert promoted.content == raw.content
+    assert promoted.provenance["cls"] == ProvenanceClass.CONSOLIDATED.value
+    assert promoted.provenance["source"] == LEGACY_IDENTITY_REVIEW_SOURCE
+    assert promoted.provenance["chain"] == [raw.id]
+    assert promoted.provenance["trigger"] == MIGRATION_IDENTITY_REVIEW_TRIGGER
+    assert promoted.provenance["legacy_id"] == legacy_id
+    assert promoted.provenance["attic_id"] == raw.id
+    assert promoted.provenance["identity_review_signals"]
+    assert promoted.tags == ("identity_spine", LEGACY_IDENTITY_REVIEW_SOURCE)
+    assert attic.get_record(raw.id) == before
+
+
+def test_promote_identity_spine_is_idempotent_by_review_provenance(tmp_path) -> None:
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    node = lattice.get_node(lattice.write_node("aetheria", "identity autonomy and presence", intensity=0.9))
+    migrate_legacy_nodes_to_attic((node,), attic_store=attic)
+    candidates = select_identity_review_candidates((node,), cap=12)
+
+    first = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice)
+    second = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice)
+
+    assert len(first.promoted) == 1
+    assert second.promoted == ()
+    assert second.skipped_existing == (node.id,)
+    promoted = [
+        item for item in lattice.iter_nodes(agent="aetheria")
+        if (item.provenance or {}).get("source") == LEGACY_IDENTITY_REVIEW_SOURCE
+    ]
+    assert len(promoted) == 1
+
+
+def test_promote_identity_spine_skips_missing_attic_records(tmp_path) -> None:
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    node = lattice.get_node(lattice.write_node("aetheria", "identity directness and memory", intensity=0.9))
+    candidates = select_identity_review_candidates((node,), cap=12)
+
+    result = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice)
+
+    assert result.promoted == ()
+    assert result.skipped_missing_attic == (node.id,)
+    assert not [
+        item for item in lattice.iter_nodes(agent="aetheria")
+        if (item.provenance or {}).get("source") == LEGACY_IDENTITY_REVIEW_SOURCE
+    ]
+
+
+def test_promote_identity_spine_skips_unaccepted_candidates(tmp_path) -> None:
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    node = lattice.get_node(lattice.write_node("aetheria", "TEST_TRIGGER identity artifact", intensity=0.9))
+    migrate_legacy_nodes_to_attic((node,), attic_store=attic)
+    candidates = select_identity_review_candidates((node,), cap=12)
+
+    result = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice)
+
+    assert candidates[0].accepted is False
+    assert result.promoted == ()
+    assert result.skipped_unaccepted == (node.id,)
+
+
+def test_promote_identity_spine_enforces_cap_even_if_candidates_are_preaccepted(tmp_path) -> None:
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    first = lattice.get_node(lattice.write_node("aetheria", "identity presence and autonomy", intensity=1.0))
+    second = lattice.get_node(lattice.write_node("aetheria", "identity directness and friendship", intensity=0.9))
+    migrate_legacy_nodes_to_attic((first, second), attic_store=attic)
+    candidates = select_identity_review_candidates((first, second), cap=12)
+
+    result = promote_identity_spine(candidates, attic_store=attic, lattice_store=lattice, cap=1)
+
+    assert len(result.promoted) == 1
+    assert result.skipped_unaccepted == (second.id,)

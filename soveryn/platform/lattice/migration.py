@@ -8,11 +8,14 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from soveryn.platform.lattice.attic import AtticRecord, AtticStore
-from soveryn.platform.lattice.legacy import Node, region_for_node
+from soveryn.platform.lattice.legacy import LatticeStore, Node, region_for_node
 from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
+from soveryn.platform.lattice.types import Region
 
 LEGACY_MIGRATION_SOURCE = "legacy_lattice"
 LEGACY_MIGRATION_CONFIDENCE = 0.2
+LEGACY_IDENTITY_REVIEW_SOURCE = "legacy_identity_review"
+MIGRATION_IDENTITY_REVIEW_TRIGGER = "migration_identity_review"
 DEFAULT_IDENTITY_SPINE_CAP = 12
 
 IDENTITY_SIGNAL_TERMS: dict[str, tuple[str, ...]] = {
@@ -46,6 +49,14 @@ class IdentityReviewCandidate:
     signals: tuple[str, ...]
     exclusions: tuple[str, ...]
     accepted: bool
+
+
+@dataclass(frozen=True)
+class IdentitySpinePromotionResult:
+    promoted: tuple[str, ...]
+    skipped_existing: tuple[str, ...]
+    skipped_missing_attic: tuple[str, ...]
+    skipped_unaccepted: tuple[str, ...]
 
 
 def legacy_node_metadata(node: Node) -> dict[str, Any]:
@@ -240,6 +251,69 @@ def write_identity_review_report(
     Path(path).write_text(render_identity_review_report(candidates, source_label=source_label, cap=cap))
 
 
+def promote_identity_spine(
+    candidates: Iterable[IdentityReviewCandidate],
+    *,
+    attic_store: AtticStore,
+    lattice_store: LatticeStore,
+    agent: str = "aetheria",
+    cap: int = DEFAULT_IDENTITY_SPINE_CAP,
+) -> IdentitySpinePromotionResult:
+    """Promote accepted identity-review candidates from raw Attic to canonical Lattice.
+
+    This helper assumes the raw legacy nodes were already copied into Attic. It
+    never mutates Attic records; promotion is additive and idempotent by legacy
+    id / raw Attic id.
+    """
+
+    promoted: list[str] = []
+    skipped_existing: list[str] = []
+    skipped_missing_attic: list[str] = []
+    skipped_unaccepted: list[str] = []
+    accepted_seen = 0
+
+    for candidate in candidates:
+        legacy_id = candidate.node.id
+        if not candidate.accepted:
+            skipped_unaccepted.append(legacy_id)
+            continue
+        if accepted_seen >= cap:
+            skipped_unaccepted.append(legacy_id)
+            continue
+        accepted_seen += 1
+
+        records = attic_store.records_linked_to(legacy_id)
+        if not records:
+            skipped_missing_attic.append(legacy_id)
+            continue
+        raw_record = records[0]
+        if _has_existing_identity_review_promotion(lattice_store, legacy_id=legacy_id, attic_id=raw_record.id, agent=agent):
+            skipped_existing.append(legacy_id)
+            continue
+
+        provenance = _identity_review_provenance_payload(
+            raw_record=raw_record,
+            candidate=candidate,
+            promoted_at=datetime.now(timezone.utc).isoformat(),
+        )
+        promoted_id = lattice_store.write_node(
+            agent,
+            raw_record.content,
+            node_type=Region.IDENTITY.value,
+            provenance=provenance,
+            tags=("identity_spine", LEGACY_IDENTITY_REVIEW_SOURCE),
+            intensity=1.0,
+        )
+        promoted.append(promoted_id)
+
+    return IdentitySpinePromotionResult(
+        promoted=tuple(promoted),
+        skipped_existing=tuple(skipped_existing),
+        skipped_missing_attic=tuple(skipped_missing_attic),
+        skipped_unaccepted=tuple(skipped_unaccepted),
+    )
+
+
 def _identity_signals(node: Node) -> tuple[str, ...]:
     haystack = _node_haystack(node)
     return tuple(name for name, terms in IDENTITY_SIGNAL_TERMS.items() if any(term in haystack for term in terms))
@@ -290,3 +364,51 @@ def _preview(content: str, *, max_chars: int = 120) -> str:
 
 def _join(values: tuple[str, ...]) -> str:
     return ", ".join(values).replace("|", "\\|")
+
+
+def _has_existing_identity_review_promotion(
+    lattice_store: LatticeStore,
+    *,
+    legacy_id: str,
+    attic_id: str,
+    agent: str,
+) -> bool:
+    for node in lattice_store.iter_nodes(agent=agent):
+        provenance = node.provenance or {}
+        if provenance.get("source") != LEGACY_IDENTITY_REVIEW_SOURCE:
+            continue
+        if provenance.get("trigger") != MIGRATION_IDENTITY_REVIEW_TRIGGER:
+            continue
+        if provenance.get("legacy_id") == legacy_id or provenance.get("attic_id") == attic_id:
+            return True
+    return False
+
+
+def _identity_review_provenance_payload(
+    *,
+    raw_record: AtticRecord,
+    candidate: IdentityReviewCandidate,
+    promoted_at: str,
+) -> dict[str, Any]:
+    provenance = Provenance(
+        ProvenanceClass.CONSOLIDATED,
+        source=LEGACY_IDENTITY_REVIEW_SOURCE,
+        confidence=1.0,
+        temporal_context=promoted_at,
+        generator="legacy_identity_review_promotion",
+        chain=(raw_record.id,),
+    )
+    return {
+        "cls": provenance.cls.value,
+        "source": provenance.source,
+        "confidence": provenance.confidence,
+        "temporal_context": provenance.temporal_context,
+        "generator": provenance.generator,
+        "chain": list(provenance.chain),
+        "derived_from": list(provenance.derived_from),
+        "trigger": MIGRATION_IDENTITY_REVIEW_TRIGGER,
+        "attic_id": raw_record.id,
+        "legacy_id": candidate.node.id,
+        "identity_review_score": candidate.score,
+        "identity_review_signals": list(candidate.signals),
+    }
