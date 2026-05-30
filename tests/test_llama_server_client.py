@@ -125,6 +125,7 @@ def test_chat_payload_omits_optional_fields_when_unset():
     assert "top_p" not in payload
     assert "stop" not in payload
     assert "tools" not in payload
+    assert "thinking_budget_tokens" not in payload
 
 
 def test_chat_payload_includes_optional_fields_when_set():
@@ -135,6 +136,7 @@ def test_chat_payload_includes_optional_fields_when_set():
         top_p=0.9,
         stop=("<|endoftext|>", "<|im_end|>"),
         tools=({"type": "function", "function": {"name": "foo"}},),
+        thinking_budget_tokens=384,
     )
     captured, ctx = _patch_urlopen(body=_minimal_chat_ok_body())
     with ctx:
@@ -144,6 +146,7 @@ def test_chat_payload_includes_optional_fields_when_set():
     assert payload["top_p"] == 0.9
     assert payload["stop"] == ["<|endoftext|>", "<|im_end|>"]
     assert payload["tools"] == [{"type": "function", "function": {"name": "foo"}}]
+    assert payload["thinking_budget_tokens"] == 384
 
 
 # ─────────────────────────────────────────────────────────────────────────────

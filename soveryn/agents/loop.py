@@ -138,6 +138,7 @@ class AgentLoop:
         chat_timeout_seconds: float = 120.0,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        thinking_budget_tokens: int | None = None,
         system_prompt: str | None = None,
         lattice_store: LatticeStore | None = None,
         identity_spine_store: LatticeStore | None = None,
@@ -158,6 +159,7 @@ class AgentLoop:
         self.chat_timeout_seconds = chat_timeout_seconds
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.thinking_budget_tokens = thinking_budget_tokens
         # Tri-state per Jon:
         #   None         → load default persona for this agent
         #   non-empty    → use as system message
@@ -278,6 +280,7 @@ class AgentLoop:
             model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            thinking_budget_tokens=self.thinking_budget_tokens,
         )
         response = self.chat_fn(request, self.server, timeout=self.chat_timeout_seconds)
 
@@ -357,6 +360,7 @@ class AgentLoop:
             model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
+            thinking_budget_tokens=self.thinking_budget_tokens,
         )
 
         # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).

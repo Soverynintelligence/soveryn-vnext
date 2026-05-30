@@ -78,6 +78,10 @@ class ChatRequest:
     top_p: float | None = None
     stop: tuple[str, ...] | None = None
     tools: tuple[dict, ...] | None = None   # OpenAI-schema passthrough
+    # Cap on hidden reasoning tokens (llama-server `thinking_budget_tokens`).
+    # None = unrestricted (server-side `--reasoning-budget` default applies).
+    # int  = per-request cap; lets visible answer fit inside max_tokens.
+    thinking_budget_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -230,6 +234,8 @@ def chat(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.thinking_budget_tokens is not None:
+        payload["thinking_budget_tokens"] = request.thinking_budget_tokens
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
@@ -312,6 +318,8 @@ def chat_stream(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.thinking_budget_tokens is not None:
+        payload["thinking_budget_tokens"] = request.thinking_budget_tokens
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     body = json.dumps(payload).encode("utf-8")

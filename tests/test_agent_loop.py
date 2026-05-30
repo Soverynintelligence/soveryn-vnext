@@ -328,6 +328,27 @@ def test_custom_system_prompt_prepends_when_non_empty(conv_store):
     assert request.messages[1].role == "user"
 
 
+def test_thinking_budget_tokens_default_none(conv_store):
+    """Default AgentLoop sends ChatRequest with thinking_budget_tokens=None
+    (server-side --reasoning-budget applies)."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "hello")
+    assert fake.calls[0]["request"].thinking_budget_tokens is None
+
+
+def test_thinking_budget_tokens_flows_to_chat_request(conv_store):
+    """When AgentLoop is constructed with thinking_budget_tokens, that value
+    reaches ChatRequest verbatim — per-agent reasoning cap (Aetheria-only)."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake,
+                     thinking_budget_tokens=384)
+    loop.process_message(sid, "hello")
+    assert fake.calls[0]["request"].thinking_budget_tokens == 384
+
+
 def test_system_message_not_saved_to_conversations_table(conv_store):
     """The system message reconstructs every turn from self.system_prompt;
     it does NOT appear in load_history()."""
