@@ -34,6 +34,21 @@ class NetworkAllowList:
         )
 
 
+@dataclass(frozen=True)
+class ExpectedServices:
+    """Listeners that must be present; absence means service hard-down."""
+
+    loopback_ports: frozenset[int] = field(default_factory=frozenset)
+
+    @classmethod
+    def from_env(cls, env: dict[str, str] | None = None) -> "ExpectedServices":
+        env = env or os.environ
+        return cls(loopback_ports=frozenset(_parse_port_list(env.get(
+            "ARES_NET_EXPECTED_LOOPBACK",
+            "5001,8090",
+        ))))
+
+
 _LISTEN_RE = re.compile(
     r"^LISTEN\s+\S+\s+\S+\s+(?P<local>\S+)\s+\S+"
     r"(?:\s+users:\(\(\"(?P<proc>[^\"]+)\",pid=(?P<pid>\d+)[^)]*\)\))?"
@@ -75,6 +90,39 @@ def collect_listeners(
         finding = _classify(bind_address, port, process, allow_list)
         if finding is not None:
             findings.append(finding)
+    return findings
+
+
+def collect_service_presence(
+    ss_output: str,
+    *,
+    expected: ExpectedServices,
+) -> list[AresFinding]:
+    """Detect expected loopback listeners that are missing from captured ss output."""
+
+    present_loopback: set[int] = set()
+    for raw_line in ss_output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        match = _LISTEN_RE.match(line)
+        if match is None:
+            continue
+        try:
+            bind_address, port = _split_local(match.group("local"))
+        except ValueError:
+            continue
+        if bind_address in LOOPBACK_BIND_ADDRESSES:
+            present_loopback.add(port)
+
+    findings: list[AresFinding] = []
+    for missing in sorted(expected.loopback_ports - present_loopback):
+        findings.append(AresFinding(
+            "network.service_missing",
+            Severity.CRITICAL,
+            {"bind_address": "127.0.0.1", "port": missing},
+            key=f"127.0.0.1:{missing}",
+        ))
     return findings
 
 

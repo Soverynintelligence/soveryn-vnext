@@ -1,7 +1,12 @@
 """Fixture-driven tests for Ares network lane collectors."""
 
 from soveryn.agents.ares.findings import Severity
-from soveryn.agents.ares.lanes.network import NetworkAllowList, collect_listeners
+from soveryn.agents.ares.lanes.network import (
+    ExpectedServices,
+    NetworkAllowList,
+    collect_listeners,
+    collect_service_presence,
+)
 
 
 HEALTHY_FIXTURE = (
@@ -91,3 +96,38 @@ def test_finding_id_stable_across_calls():
     first = collect_listeners(PUBLIC_INTRUDER_FIXTURE, allow_list=_allowlist())
     second = collect_listeners(PUBLIC_INTRUDER_FIXTURE, allow_list=_allowlist())
     assert {f.id for f in first} == {f.id for f in second}
+
+
+def test_all_expected_services_present_emits_no_finding():
+    fixture = (
+        'LISTEN 0      4096   127.0.0.1:5001       0.0.0.0:*  users:(("python3.11",pid=1,fd=1))\n'
+        'LISTEN 0      4096   127.0.0.1:8090       0.0.0.0:*  users:(("llama-server",pid=2,fd=2))\n'
+    )
+    services = ExpectedServices(loopback_ports=frozenset({5001, 8090}))
+    findings = collect_service_presence(fixture, expected=services)
+    assert findings == []
+
+
+def test_missing_expected_service_is_critical():
+    fixture = (
+        'LISTEN 0      4096   127.0.0.1:5001       0.0.0.0:*  users:(("python3.11",pid=1,fd=1))\n'
+    )
+    services = ExpectedServices(loopback_ports=frozenset({5001, 8090}))
+    findings = collect_service_presence(fixture, expected=services)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severity == Severity.CRITICAL
+    assert f.finding_type == "network.service_missing"
+    assert f.evidence["port"] == 8090
+    assert f.evidence["bind_address"] == "127.0.0.1"
+
+
+def test_service_presence_unaffected_by_extra_listeners():
+    fixture = (
+        'LISTEN 0      4096   127.0.0.1:5001       0.0.0.0:*  users:(("python3.11",pid=1,fd=1))\n'
+        'LISTEN 0      4096   127.0.0.1:8090       0.0.0.0:*  users:(("llama-server",pid=2,fd=2))\n'
+        'LISTEN 0      128    127.0.0.1:9999       0.0.0.0:*  users:(("randomthing",pid=3,fd=3))\n'
+    )
+    services = ExpectedServices(loopback_ports=frozenset({5001, 8090}))
+    findings = collect_service_presence(fixture, expected=services)
+    assert findings == []
