@@ -45,6 +45,7 @@ from soveryn.inference.llama_server_client import (
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
+from soveryn.platform.tools.registry import ToolRegistry
 
 
 ChatFn = Callable[..., ChatResponse]
@@ -139,6 +140,8 @@ class AgentLoop:
         temperature: float = 0.7,
         max_tokens: int = 2048,
         thinking_budget_tokens: int | None = None,
+        tool_registry: ToolRegistry | None = None,
+        max_tool_rounds: int = 4,
         system_prompt: str | None = None,
         lattice_store: LatticeStore | None = None,
         identity_spine_store: LatticeStore | None = None,
@@ -160,6 +163,8 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.thinking_budget_tokens = thinking_budget_tokens
+        self.tool_registry = tool_registry
+        self.max_tool_rounds = max_tool_rounds
         # Tri-state per Jon:
         #   None         → load default persona for this agent
         #   non-empty    → use as system message
@@ -202,6 +207,23 @@ class AgentLoop:
         # layer between persona and soul). Default empty = skip — Vett and
         # Scotty rely on this. Production opts Aetheria in via startup.py.
         self.pinned_text: str = pinned_text
+
+    def _tool_schemas(self) -> tuple[dict, ...]:
+        """Return OpenAI-compatible tool schemas for this agent."""
+
+        if self.tool_registry is None:
+            return ()
+        schemas: list[dict] = []
+        for spec in self.tool_registry.iter_tools_for_agent(self.agent_name):
+            schemas.append({
+                "type": "function",
+                "function": {
+                    "name": spec.name,
+                    "description": spec.description,
+                    "parameters": dict(spec.schema),
+                },
+            })
+        return tuple(schemas)
 
     def process_message(self, session_id: str, user_message: str) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.

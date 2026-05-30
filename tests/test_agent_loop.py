@@ -399,6 +399,38 @@ def test_persona_immutable_after_construction(conv_store):
     assert request.messages[0].content == initial
 
 
+def test_agent_loop_accepts_tool_registry_and_exposes_schemas(conv_store):
+    from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
+
+    registry = ToolRegistry(active_agents=("aetheria",), audit_hook=None)
+    registry.register(ToolSpec(
+        name="dummy",
+        owner="aetheria",
+        schema={"type": "object", "properties": {}, "additionalProperties": False},
+        handler=lambda args: {"ok": True},
+        description="dummy",
+    ))
+
+    loop = AgentLoop(
+        "aetheria",
+        conv_store,
+        chat_fn=_CapturingChat(),
+        tool_registry=registry,
+        max_tool_rounds=4,
+    )
+    schemas = loop._tool_schemas()
+    assert len(schemas) == 1
+    assert schemas[0]["type"] == "function"
+    assert schemas[0]["function"]["name"] == "dummy"
+    assert "parameters" in schemas[0]["function"]
+
+
+def test_agent_loop_default_no_tool_registry(conv_store):
+    loop = AgentLoop("aetheria", conv_store, chat_fn=_CapturingChat())
+    assert loop.tool_registry is None
+    assert loop._tool_schemas() == ()
+
+
 def test_retired_agent_persona_lookup_fails_at_construction(conv_store):
     """RoutingError fires first (already tested), but if someone bypassed
     routing somehow, get_persona would also reject. Test that path by

@@ -149,6 +149,70 @@ def test_chat_payload_includes_optional_fields_when_set():
     assert payload["thinking_budget_tokens"] == 384
 
 
+def test_chat_message_supports_tool_fields_optional():
+    tool_msg = ChatMessage(role="tool", content='{"result": "ok"}', tool_call_id="call_123")
+    assert tool_msg.tool_call_id == "call_123"
+    assert tool_msg.tool_calls is None
+    asst_msg = ChatMessage(
+        role="assistant",
+        content="",
+        tool_calls=({"id": "c1", "function": {"name": "x"}},),
+    )
+    assert asst_msg.tool_calls is not None
+    assert asst_msg.tool_call_id is None
+    plain = ChatMessage(role="user", content="hi")
+    assert plain.tool_call_id is None
+    assert plain.tool_calls is None
+
+
+def test_chat_payload_emits_tool_call_id_only_on_tool_messages():
+    server = _vett_server()
+    request = ChatRequest(
+        messages=(
+            ChatMessage(role="user", content="hi"),
+            ChatMessage(role="tool", content='{"ok": true}', tool_call_id="call_123"),
+        ),
+        model="vett-scotty",
+    )
+    captured, ctx = _patch_urlopen(body=_minimal_chat_ok_body())
+    with ctx:
+        chat(request, server)
+    payload = json.loads(captured["body"].decode())
+    tool_msg = payload["messages"][-1]
+    assert tool_msg["role"] == "tool"
+    assert tool_msg["tool_call_id"] == "call_123"
+    assert "tool_call_id" not in payload["messages"][0]
+
+
+def test_chat_payload_emits_tool_calls_only_on_assistant_messages():
+    server = _vett_server()
+    tool_calls = ({
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "echo", "arguments": "{}"},
+    },)
+    request = ChatRequest(
+        messages=(
+            ChatMessage(role="user", content="hi"),
+            ChatMessage(role="assistant", content="", tool_calls=tool_calls),
+            ChatMessage(role="tool", content='{"ok": true}', tool_call_id="c1"),
+        ),
+        model="vett-scotty",
+    )
+    captured, ctx = _patch_urlopen(body=_minimal_chat_ok_body())
+    with ctx:
+        chat(request, server)
+    payload = json.loads(captured["body"].decode())
+    asst_msg = payload["messages"][1]
+    assert asst_msg["role"] == "assistant"
+    assert asst_msg["tool_calls"] == [{
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "echo", "arguments": "{}"},
+    }]
+    assert "tool_calls" not in payload["messages"][0]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Response parsing tests
 # ─────────────────────────────────────────────────────────────────────────────

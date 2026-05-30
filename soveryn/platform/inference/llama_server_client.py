@@ -65,8 +65,8 @@ class LlamaServerTimeout(Exception):
 class ChatMessage:
     role: str          # "system" | "user" | "assistant" | "tool"
     content: str
-    # NOTE: requests don't model assistant tool_calls here — vNext doesn't
-    # send assistant turns back with tool_calls yet. If/when it does, add.
+    tool_call_id: str | None = None
+    tool_calls: tuple[dict, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +210,15 @@ def prepare_wire_messages(
     return (folded,) + messages[prelude_end:]
 
 
+def _wire_message(m: ChatMessage) -> dict[str, Any]:
+    out: dict[str, Any] = {"role": m.role, "content": m.content}
+    if m.role == "tool" and m.tool_call_id is not None:
+        out["tool_call_id"] = m.tool_call_id
+    if m.role == "assistant" and m.tool_calls is not None:
+        out["tool_calls"] = [dict(tool_call) for tool_call in m.tool_calls]
+    return out
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
@@ -223,7 +232,7 @@ def chat(
     wire_messages = prepare_wire_messages(request.messages, server)
     payload: dict[str, Any] = {
         "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in wire_messages],
+        "messages": [_wire_message(m) for m in wire_messages],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
         "stream": False,
@@ -307,7 +316,7 @@ def chat_stream(
     wire_messages = prepare_wire_messages(request.messages, server)
     payload: dict[str, Any] = {
         "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in wire_messages],
+        "messages": [_wire_message(m) for m in wire_messages],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
         "stream": True,

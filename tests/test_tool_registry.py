@@ -167,3 +167,47 @@ def test_compatibility_shim_reexports_platform_registry_objects():
     assert compat.ToolAuditEvent is platform.ToolAuditEvent
     assert compat.ToolArgError is platform.ToolArgError
     assert compat.ToolRegistryError is platform.ToolRegistryError
+
+
+def test_iter_tools_for_agent_returns_only_that_owner():
+    registry = ToolRegistry(active_agents=("aetheria", "vett"), audit_hook=None)
+    schema = {"type": "object", "properties": {}, "additionalProperties": False}
+    registry.register(ToolSpec(
+        name="a1", owner="aetheria", schema=schema, handler=lambda args: None,
+    ))
+    registry.register(ToolSpec(
+        name="a2", owner="aetheria", schema=schema, handler=lambda args: None,
+    ))
+    registry.register(ToolSpec(
+        name="v1", owner="vett", schema=schema, handler=lambda args: None,
+    ))
+    aetheria_tools = registry.iter_tools_for_agent("aetheria")
+    assert {spec.name for spec in aetheria_tools} == {"a1", "a2"}
+    assert all(spec.owner == "aetheria" for spec in aetheria_tools)
+
+
+def test_iter_tools_for_agent_normalizes_input():
+    registry = ToolRegistry(active_agents=("aetheria",), audit_hook=None)
+    schema = {"type": "object", "properties": {}, "additionalProperties": False}
+    registry.register(ToolSpec(
+        name="x", owner="aetheria", schema=schema, handler=lambda args: None,
+    ))
+    assert len(registry.iter_tools_for_agent("  AETHERIA  ")) == 1
+
+
+def test_iter_tools_for_agent_empty_when_no_tools():
+    registry = ToolRegistry(active_agents=("aetheria",), audit_hook=None)
+    assert registry.iter_tools_for_agent("aetheria") == ()
+
+
+def test_iter_tools_with_owners_returns_sorted_pairs():
+    registry = ToolRegistry(active_agents=("aetheria", "vett"), audit_hook=None)
+    schema = {"type": "object", "properties": {}, "additionalProperties": False}
+    registry.register(ToolSpec(
+        name="zulu", owner="vett", schema=schema, handler=lambda args: None,
+    ))
+    registry.register(ToolSpec(
+        name="alpha", owner="aetheria", schema=schema, handler=lambda args: None,
+    ))
+    pairs = registry.iter_tools_with_owners()
+    assert pairs == (("alpha", "aetheria"), ("zulu", "vett"))

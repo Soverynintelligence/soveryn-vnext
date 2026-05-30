@@ -87,6 +87,20 @@ class ToolRegistry:
     def schema_for(self, agent: str, tool_name: str) -> Mapping[str, Any]:
         return dict(self._lookup(agent, tool_name).schema)
 
+    def iter_tools_for_agent(self, agent: str) -> tuple[ToolSpec, ...]:
+        """Return every tool registered for one owner, in insertion order."""
+
+        normalized = _normalize(agent)
+        return tuple(
+            spec for (owner, _name), spec in self._tools.items()
+            if owner == normalized
+        )
+
+    def iter_tools_with_owners(self) -> tuple[tuple[str, str], ...]:
+        """Return (tool_name, owner_agent) pairs sorted by tool name."""
+
+        return tuple(sorted((spec.name, spec.owner) for spec in self._tools.values()))
+
     def invoke(self, agent: str, tool_name: str, args: Mapping[str, Any]) -> Any:
         spec = self._lookup(agent, tool_name)
         invocation_args = dict(args)
