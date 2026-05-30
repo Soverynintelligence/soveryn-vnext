@@ -29,6 +29,56 @@ The final cutover stays narrow but correct:
 - `AgentLoop` adds the reviewed `legacy_identity_review` identity nodes from that store as Channel A entries.
 - Both sync and streaming paths use the same assembler.
 
+## How to Verify the Spine Is Live (Forensics)
+
+If you need to confirm Aetheria is actually citing her spine — or recover from a state where she isn't — these are the exact paths and commands.
+
+**The spine lives at the path `env.lattice_db` resolves to** (`soveryn/config/loader.py:92`):
+
+- Default: `/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db`
+- Override via `SOVERYN_LATTICE_DB` env var
+
+**Diagnostic guard (learned 2026-05-30):** do NOT assume the spine lives under `~/soveryn_vnext/data/lattice/`. The `data/lattice/` directory is the gitignored runtime tree, but the default env path actually reads from inside `soveryn_complete/soveryn_memory/`. The ground-truth path is named in the running app's startup log:
+
+```
+[soveryn] vNext serving on http://127.0.0.1:5001 — agents=[...] — conv=<path> — lattice=<the env path>
+```
+
+That `lattice=` field is the canonical answer; trust it over filesystem assumptions.
+
+**Direct disk check** (no process needed):
+
+```bash
+python3 -c "
+import sqlite3
+c = sqlite3.connect('/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db')
+print('Tables:', [r[0] for r in c.execute('SELECT name FROM sqlite_master WHERE type=\"table\"').fetchall()])
+print('Identity nodes:', c.execute('SELECT COUNT(*) FROM nodes WHERE type=?', ('identity',)).fetchone()[0])
+print('with source=legacy_identity_review:', c.execute(\"SELECT COUNT(*) FROM nodes WHERE type='identity' AND json_extract(provenance,'\$.source')='legacy_identity_review'\").fetchone()[0])
+"
+```
+
+Expected: `Tables: ['nodes']`, `Identity nodes: 12`, `with source=legacy_identity_review: 12`.
+
+**Code-level smoke** (proves the assembler sees the spine — what AgentLoop puts in the prompt):
+
+```bash
+cd ~/soveryn_vnext && /home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -c "
+from soveryn.platform.lattice.legacy import LatticeStore
+from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
+from soveryn.agents.loop import _identity_spine_nodes
+
+store = LatticeStore('/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db')
+spine = _identity_spine_nodes(store, agent='aetheria')
+print(f'Spine nodes: {len(spine)}')
+print(assemble_ranked_recall(ranked_nodes=(), identity_nodes=spine))
+"
+```
+
+Expected: `Spine nodes: 12`, followed by a `Stateable recall:` block with 12 lines each prefixed `- From older reviewed notes, I carry …`.
+
+**Recovery if the spine ever needs re-promotion** — the migration helpers live at `soveryn/platform/lattice/migration.py`. The 12 accepted legacy ids are persisted in `docs/phase2b-ii-b1-real-migration-result.json` field `accepted_legacy_ids`. Re-running `promote_identity_spine(...)` against the existing `AtticStore` (`data/lattice/attic.db`) with `lattice_store=LatticeStore(<the env path above>)` and candidates flagged `accepted=True` will recreate the spine deterministically. Idempotency guards prevent duplicates if the spine partially exists.
+
 ## Behavioral Proofs
 
 Focused cutover suite:
