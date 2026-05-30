@@ -1,0 +1,122 @@
+{
+  "accepted_identity_candidates": 12,
+  "accepted_legacy_ids": [
+    "54c24a1f-f48d-4636-9405-099612bad263",
+    "defb66f1-2558-4aba-babe-b64fac7f1abc",
+    "0b662fe7-b431-4d38-8b24-70e30378e1ad",
+    "8e68f048-9e6c-4067-98d4-2b1cdbb0623d",
+    "0fd5013e-6d48-43fe-a7ea-f511483427d5",
+    "6c839f37-cfd5-4f63-abbc-57da9380bf35",
+    "176b4080-e9cb-4407-8907-3de38bdaa6ed",
+    "caa7fb44-4b11-45fc-bc9a-e18958d1e8be",
+    "dc9c4521-a7f5-41d6-9d78-9ed597e1718a",
+    "babbbca5-c752-41ed-98bd-12c5dc11fdaf",
+    "38cf3a39-688f-4eb1-b0d0-13e7ff71dd10",
+    "0a134b96-39d3-4b8c-a3d3-64a926d628a6"
+  ],
+  "aetheria_non_library_candidates_evaluated": 1417,
+  "attic_count_after": 1682,
+  "attic_count_before": 0,
+  "attic_db_path": "/home/jon-deoliveira/soveryn_vnext/data/lattice/attic.db",
+  "identity_promoted": 12,
+  "identity_skipped_existing": 0,
+  "identity_skipped_missing_attic": 0,
+  "identity_skipped_unaccepted": 1405,
+  "identity_spine_cap": 12,
+  "migration_migrated": 1682,
+  "migration_skipped_existing": 0,
+  "prod_lattice_path": "/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice.db",
+  "prod_mtime_ns_after": 1780108071529894889,
+  "prod_mtime_ns_before": 1780108071529894889,
+  "prod_sha256_after": "3a77987247ca90f4c46f71eacd7ff2492a7045a70b5db162fdad7d907c56b2d5",
+  "prod_sha256_before": "3a77987247ca90f4c46f71eacd7ff2492a7045a70b5db162fdad7d907c56b2d5",
+  "prod_size_after": 17686528,
+  "prod_size_before": 17686528,
+  "prod_unchanged": true,
+  "promoted_ids": [
+    "2254d5f1-fc09-4e20-adbe-90a5eed80c2e",
+    "90a5b089-8165-484d-bc4f-4ff29732b1e9",
+    "2d449fb8-c205-4c91-864e-0df5a3dc2cfd",
+    "dff427db-abdc-4664-8c20-edd2872ee8c1",
+    "ab481b58-3da5-4f1b-8308-9f50a46856df",
+    "904ff2d2-07da-495e-b18f-cf634cd37258",
+    "769bf04d-bdf4-44f2-acf2-7879b1cebb03",
+    "981c95c2-8bd8-4375-8fc3-1b0af982366a",
+    "fc73f534-20de-4b36-b07d-19a18b74a0e7",
+    "de2b9a48-1650-41d2-8ad2-75a7162ee038",
+    "6fa7a811-49cf-4790-8084-a87742b50520",
+    "1f664eb4-7ce4-476e-ab71-b204bc638707"
+  ],
+  "rejected_identity_candidates": 1405,
+  "reviewed_identity_after": [
+    {
+      "attic_id": "96135a37-d2ef-463c-8df7-7dc0bfd0a25c",
+      "id": "2254d5f1-fc09-4e20-adbe-90a5eed80c2e",
+      "legacy_id": "54c24a1f-f48d-4636-9405-099612bad263"
+    },
+    {
+      "attic_id": "c5193ec6-5e15-40aa-8445-11b07b5a89a9",
+      "id": "90a5b089-8165-484d-bc4f-4ff29732b1e9",
+      "legacy_id": "defb66f1-2558-4aba-babe-b64fac7f1abc"
+    },
+    {
+      "attic_id": "bc169ef6-6642-4320-8b91-9da33f0caca7",
+      "id": "2d449fb8-c205-4c91-864e-0df5a3dc2cfd",
+      "legacy_id": "0b662fe7-b431-4d38-8b24-70e30378e1ad"
+    },
+    {
+      "attic_id": "7d2872e3-3f95-4fc2-b51c-c20fe37e8dca",
+      "id": "dff427db-abdc-4664-8c20-edd2872ee8c1",
+      "legacy_id": "8e68f048-9e6c-4067-98d4-2b1cdbb0623d"
+    },
+    {
+      "attic_id": "3f0e52e0-2a6c-49cc-b211-9903166f5e50",
+      "id": "ab481b58-3da5-4f1b-8308-9f50a46856df",
+      "legacy_id": "0fd5013e-6d48-43fe-a7ea-f511483427d5"
+    },
+    {
+      "attic_id": "e389b0c9-a08c-4be0-bc9f-e6e2216e77d0",
+      "id": "904ff2d2-07da-495e-b18f-cf634cd37258",
+      "legacy_id": "6c839f37-cfd5-4f63-abbc-57da9380bf35"
+    },
+    {
+      "attic_id": "3f6a43e6-8b9e-4a19-aa19-d07cd718a9ae",
+      "id": "769bf04d-bdf4-44f2-acf2-7879b1cebb03",
+      "legacy_id": "176b4080-e9cb-4407-8907-3de38bdaa6ed"
+    },
+    {
+      "attic_id": "cadc8971-91a0-4ca3-807e-afd93b0add97",
+      "id": "981c95c2-8bd8-4375-8fc3-1b0af982366a",
+      "legacy_id": "caa7fb44-4b11-45fc-bc9a-e18958d1e8be"
+    },
+    {
+      "attic_id": "a61024d6-509d-48db-96de-a6f6895f812c",
+      "id": "fc73f534-20de-4b36-b07d-19a18b74a0e7",
+      "legacy_id": "dc9c4521-a7f5-41d6-9d78-9ed597e1718a"
+    },
+    {
+      "attic_id": "e30d07c4-39db-4804-85f9-cc921fc12139",
+      "id": "de2b9a48-1650-41d2-8ad2-75a7162ee038",
+      "legacy_id": "babbbca5-c752-41ed-98bd-12c5dc11fdaf"
+    },
+    {
+      "attic_id": "1313806f-dbd1-4a32-859d-71c184afa45d",
+      "id": "6fa7a811-49cf-4790-8084-a87742b50520",
+      "legacy_id": "38cf3a39-688f-4eb1-b0d0-13e7ff71dd10"
+    },
+    {
+      "attic_id": "b5386b37-5f31-4f52-997b-9891ae64ad7a",
+      "id": "1f664eb4-7ce4-476e-ab71-b204bc638707",
+      "legacy_id": "0a134b96-39d3-4b8c-a3d3-64a926d628a6"
+    }
+  ],
+  "reviewed_identity_before": [],
+  "second_identity_promoted": 0,
+  "second_identity_skipped_existing": 12,
+  "second_migration_migrated": 0,
+  "second_migration_skipped_existing": 1682,
+  "total_prod_nodes_read": 1682,
+  "vnext_lattice_db_path": "/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db",
+  "vnext_node_count_after": 12,
+  "vnext_node_count_before": 0
+}

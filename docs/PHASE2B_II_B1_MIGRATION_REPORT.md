@@ -89,4 +89,41 @@ Task 6 may promote only accepted rows from this report, capped by the identity s
 
 The reviewed identity-spine promotion helper is implemented and fixture-tested. It promotes only accepted candidates that already have linked raw Attic records, writes canonical `identity` nodes with `CONSOLIDATED` provenance from `legacy_identity_review`, preserves `chain=(raw_attic_id,)`, records `trigger=migration_identity_review` plus the original legacy id, and is idempotent on rerun.
 
-This helper has **not** been run against the real prod-derived lattice or Attic data in Task 6. Task 7 owns real execution and the resulting migration verification.
+## Task 7 Real Dark Migration Execution
+
+- Prod source: `/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice.db`
+- Prod SHA-256 before: `3a77987247ca90f4c46f71eacd7ff2492a7045a70b5db162fdad7d907c56b2d5`
+- Prod SHA-256 after: `3a77987247ca90f4c46f71eacd7ff2492a7045a70b5db162fdad7d907c56b2d5`
+- Prod mtime_ns before/after: `1780108071529894889` / `1780108071529894889`
+- Prod unchanged: `True`
+- Total prod rows read: `1682`
+- Attic DB path: `/home/jon-deoliveira/soveryn_vnext/data/lattice/attic.db`
+- Vnext canonical lattice DB path: `/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db`
+- Attic rows before/after: `0` / `1682`
+- Legacy rows migrated to Attic: `1682`
+- Legacy rows skipped as existing: `0`
+- Idempotency check, second Attic run migrated/skipped: `0` / `1682`
+- Identity candidates evaluated: `1417`
+- Accepted / rejected identity candidates: `12` / `1405`
+- Identity spine cap: `12`
+- Canonical identity spine promoted this run: `12`
+- Identity promotion skipped existing/missing/unaccepted: `0` / `0` / `1405`
+- Idempotency check, second identity run promoted/skipped-existing: `0` / `12`
+- Result JSON: `docs/phase2b-ii-b1-real-migration-result.json`
+- Live recall diff vs `c930fef` for `recall_policy.py`, `loop.py`, `startup.py`: `empty`
+- Runtime DBs are intentionally not committed; `data/lattice/*.db*` is ignored.
+
+Promoted canonical identity ids:
+
+- `2254d5f1-fc09-4e20-adbe-90a5eed80c2e` ← legacy `54c24a1f-f48d-4636-9405-099612bad263` / attic `96135a37-d2ef-463c-8df7-7dc0bfd0a25c`
+- `90a5b089-8165-484d-bc4f-4ff29732b1e9` ← legacy `defb66f1-2558-4aba-babe-b64fac7f1abc` / attic `c5193ec6-5e15-40aa-8445-11b07b5a89a9`
+- `2d449fb8-c205-4c91-864e-0df5a3dc2cfd` ← legacy `0b662fe7-b431-4d38-8b24-70e30378e1ad` / attic `bc169ef6-6642-4320-8b91-9da33f0caca7`
+- `dff427db-abdc-4664-8c20-edd2872ee8c1` ← legacy `8e68f048-9e6c-4067-98d4-2b1cdbb0623d` / attic `7d2872e3-3f95-4fc2-b51c-c20fe37e8dca`
+- `ab481b58-3da5-4f1b-8308-9f50a46856df` ← legacy `0fd5013e-6d48-43fe-a7ea-f511483427d5` / attic `3f0e52e0-2a6c-49cc-b211-9903166f5e50`
+- `904ff2d2-07da-495e-b18f-cf634cd37258` ← legacy `6c839f37-cfd5-4f63-abbc-57da9380bf35` / attic `e389b0c9-a08c-4be0-bc9f-e6e2216e77d0`
+- `769bf04d-bdf4-44f2-acf2-7879b1cebb03` ← legacy `176b4080-e9cb-4407-8907-3de38bdaa6ed` / attic `3f6a43e6-8b9e-4a19-aa19-d07cd718a9ae`
+- `981c95c2-8bd8-4375-8fc3-1b0af982366a` ← legacy `caa7fb44-4b11-45fc-bc9a-e18958d1e8be` / attic `cadc8971-91a0-4ca3-807e-afd93b0add97`
+- `fc73f534-20de-4b36-b07d-19a18b74a0e7` ← legacy `dc9c4521-a7f5-41d6-9d78-9ed597e1718a` / attic `a61024d6-509d-48db-96de-a6f6895f812c`
+- `de2b9a48-1650-41d2-8ad2-75a7162ee038` ← legacy `babbbca5-c752-41ed-98bd-12c5dc11fdaf` / attic `e30d07c4-39db-4804-85f9-cc921fc12139`
+- `6fa7a811-49cf-4790-8084-a87742b50520` ← legacy `38cf3a39-688f-4eb1-b0d0-13e7ff71dd10` / attic `1313806f-dbd1-4a32-859d-71c184afa45d`
+- `1f664eb4-7ce4-476e-ab71-b204bc638707` ← legacy `0a134b96-39d3-4b8c-a3d3-64a926d628a6` / attic `b5386b37-5f31-4f52-997b-9891ae64ad7a`

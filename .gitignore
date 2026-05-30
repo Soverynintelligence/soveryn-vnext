@@ -24,3 +24,5 @@ Thumbs.db
 
 # Superpowers brainstorm session content (ephemeral)
 .superpowers/
+# Runtime data stores
+data/lattice/*.db*
