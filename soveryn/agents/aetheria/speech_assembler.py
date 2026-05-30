@@ -7,10 +7,32 @@ from collections.abc import Iterable
 from soveryn.agents.aetheria.channels import Channel, classify_channel
 from soveryn.agents.aetheria.phrase_renderer import render_phrase
 from soveryn.agents.aetheria.uncertainty_renderer import render_uncertainty
+from soveryn.memory.lattice import Node, region_for_node
+from soveryn.platform.lattice.provenance import Provenance
 from soveryn.platform.lattice.types import Entry
 
 QUOTABLE_RECALL_HEADING = "Stateable recall:"
 UNCERTAINTY_HEADING = "Uncertain context:"
+
+
+def assemble_ranked_recall(
+    ranked_nodes: Iterable[tuple[Node, float]],
+    *,
+    identity_nodes: Iterable[Node] = (),
+) -> str:
+    """Assemble live recall from scored Lattice nodes plus reviewed identity spine.
+
+    Scored legacy nodes keep their content non-quotable unless they carry valid
+    Channel-A provenance. Reviewed identity-spine nodes are supplied separately
+    because they are canonical but may not have embeddings yet.
+    """
+
+    entries: list[Entry] = []
+    for node, score in ranked_nodes:
+        entries.append(_entry_from_node(node, score=score))
+    for node in identity_nodes:
+        entries.append(_entry_from_node(node, score=None))
+    return assemble_recall(entries)
 
 
 def assemble_recall(entries: Iterable[Entry]) -> str:
@@ -39,3 +61,50 @@ def _render_quotable_section(entries: list[Entry]) -> str:
     lines = [QUOTABLE_RECALL_HEADING]
     lines.extend(f"- {render_phrase(entry)}" for entry in entries)
     return "\n".join(lines)
+
+
+def _entry_from_node(node: Node, *, score: float | None) -> Entry:
+    metadata = {
+        "legacy_type": node.type,
+        "layer": node.layer,
+        "agent": node.agent,
+        "salience": node.salience,
+        "intensity": node.intensity,
+        "access_count": node.access_count,
+        "tags": list(node.tags),
+        "created_at": node.created_at,
+        "updated_at": node.updated_at,
+    }
+    if score is not None:
+        metadata["score"] = score
+    if node.intent is not None:
+        metadata["intent"] = node.intent
+    if node.provenance is not None:
+        metadata["provenance"] = node.provenance
+    return Entry(
+        id=node.id,
+        content=node.content,
+        region=region_for_node(node),
+        source="legacy_lattice",
+        metadata=metadata,
+        private=node.layer == "private",
+        provenance=_provenance_from_node(node),
+    )
+
+
+def _provenance_from_node(node: Node) -> Provenance | None:
+    raw = node.provenance
+    if not isinstance(raw, dict) or "cls" not in raw:
+        return None
+    try:
+        return Provenance(
+            raw["cls"],
+            source=str(raw["source"]),
+            confidence=float(raw["confidence"]),
+            temporal_context=str(raw["temporal_context"]),
+            generator=str(raw["generator"]),
+            chain=tuple(raw.get("chain") or ()),
+            derived_from=tuple(raw.get("derived_from") or ()),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None

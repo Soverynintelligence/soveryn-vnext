@@ -66,14 +66,16 @@ def create_app(
             )
         pinned_text = pinned_path.read_text(encoding="utf-8")
 
-        # Recall wiring (Aetheria only). LatticeStore opens prod's lattice.db
-        # for reads only — AgentLoop's recall path only calls find_nodes_by_embedding,
-        # never write_node. F (write path) ships separately and writes to env.lattice_db
-        # (vNext's own), not env.recall_lattice_db.
+        # Recall wiring (Aetheria only). Prod lattice remains the embedding
+        # recall source; vnext lattice supplies the reviewed identity spine.
+        # Both are read-only in AgentLoop. Writes stay out of live recall.
         recall_lattice = None
+        identity_spine_lattice = None
         if env.recall_lattice_db.is_file():
             from soveryn.memory.lattice import LatticeStore
             recall_lattice = LatticeStore(env.recall_lattice_db)
+            if env.lattice_db.is_file():
+                identity_spine_lattice = LatticeStore(env.lattice_db)
         else:
             logger.warning(
                 "recall_lattice_db missing at %s — Aetheria will run without recall",
@@ -87,6 +89,8 @@ def create_app(
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:
                     kwargs["lattice_store"] = recall_lattice
+                    if identity_spine_lattice is not None:
+                        kwargs["identity_spine_store"] = identity_spine_lattice
                     kwargs["recall_k"] = 5
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)

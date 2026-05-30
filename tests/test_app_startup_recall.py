@@ -11,6 +11,7 @@ from soveryn.config.runtime import ACTIVE_AGENTS, MODEL_ROOT
 from soveryn.inference.llama_server_client import ChatResponse
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore
+from soveryn.platform.lattice.provenance import ProvenanceClass
 
 
 @pytest.fixture
@@ -63,6 +64,40 @@ def test_aetheria_gets_recall_when_recall_lattice_exists(
     assert aetheria.recall_threshold == pytest.approx(0.70)
     assert aetheria.lattice_store is not None
 
+
+
+def test_aetheria_gets_identity_spine_store_when_vnext_lattice_exists(
+    tmp_path, fake_chat, seeded_recall_lattice, fake_souls_dir, fake_pinned, monkeypatch
+):
+    identity_lattice = LatticeStore(tmp_path / "lattice_vnext.db")
+    identity_lattice.write_node(
+        "aetheria",
+        "identity spine entry",
+        node_type="identity",
+        provenance={
+            "cls": ProvenanceClass.CONSOLIDATED.value,
+            "source": "legacy_identity_review",
+            "confidence": 1.0,
+            "temporal_context": "fixture",
+            "generator": "test",
+            "chain": ["raw-attic-id"],
+            "derived_from": [],
+            "trigger": "migration_identity_review",
+        },
+    )
+    monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
+    monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(seeded_recall_lattice))
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(tmp_path / "lattice_vnext.db"))
+    conv = ConversationStore(tmp_path / "conv.db")
+
+    app = create_app(conv_store=conv)
+
+    aetheria = app.extensions["soveryn"]["agent_loops"]["aetheria"]
+    assert aetheria.identity_spine_store is not None
+    spine = aetheria.identity_spine_store.iter_nodes(agent="aetheria")
+    assert len(spine) == 1
+    assert spine[0].provenance["source"] == "legacy_identity_review"
 
 def test_vett_and_scotty_do_not_get_recall(
     tmp_path, fake_chat, seeded_recall_lattice, fake_souls_dir, fake_pinned, monkeypatch

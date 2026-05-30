@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
-from soveryn.agents.aetheria.recall_policy import format_recall_context
+from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
 from soveryn.agents.souls import get_soul
 from soveryn.inference.llama_server_client import (
     ChatMessage,
@@ -44,7 +44,7 @@ from soveryn.inference.llama_server_client import (
 )
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
-from soveryn.memory.lattice import LatticeStore, embed_text as _default_embed
+from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
 
 
 ChatFn = Callable[..., ChatResponse]
@@ -140,6 +140,7 @@ class AgentLoop:
         max_tokens: int = 2048,
         system_prompt: str | None = None,
         lattice_store: LatticeStore | None = None,
+        identity_spine_store: LatticeStore | None = None,
         recall_k: int = 0,
         recall_threshold: float = 0.70,
         embed_fn: EmbedFn = _default_embed,
@@ -181,6 +182,7 @@ class AgentLoop:
                     f"(got {recall_threshold})"
                 )
         self.lattice_store = lattice_store
+        self.identity_spine_store = identity_spine_store
         self.recall_k = recall_k
         self.recall_threshold = recall_threshold
         self.embed_fn = embed_fn
@@ -241,7 +243,10 @@ class AgentLoop:
                 limit=self.recall_k,
                 threshold=self.recall_threshold,
             )
-            recall_context = format_recall_context(ranked, threshold=self.recall_threshold)
+            recall_context = assemble_ranked_recall(
+                ranked,
+                identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
+            )
 
         # 3. Build immutable tuple[ChatMessage, ...] (constraint 7).
         # System message is prepended at request build time — NOT persisted
@@ -328,7 +333,10 @@ class AgentLoop:
                 self.agent_name, query_vector,
                 limit=self.recall_k, threshold=self.recall_threshold,
             )
-            recall_context = format_recall_context(ranked, threshold=self.recall_threshold)
+            recall_context = assemble_ranked_recall(
+                ranked,
+                identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
+            )
 
         # ── Build messages
         history_messages = tuple(
@@ -422,3 +430,14 @@ class AgentLoop:
             tool_calls=accumulated_tc_tuple,
             usage=final_usage,
         )
+
+
+def _identity_spine_nodes(store: LatticeStore | None, *, agent: str) -> tuple[Node, ...]:
+    if store is None:
+        return ()
+    nodes = []
+    for node in store.iter_nodes(agent=agent, include_library=False):
+        provenance = node.provenance or {}
+        if node.type == "identity" and provenance.get("source") == "legacy_identity_review":
+            nodes.append(node)
+    return tuple(nodes)

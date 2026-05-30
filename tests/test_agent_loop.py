@@ -14,6 +14,7 @@ from soveryn.inference.llama_server_client import (
 )
 from soveryn.inference.routing import RoutingError
 from soveryn.memory.conversation_store import ConversationStore
+from soveryn.platform.lattice.provenance import ProvenanceClass
 
 
 # ─── Fixtures + fakes ────────────────────────────────────────────────────────
@@ -473,11 +474,55 @@ def test_recall_enabled_calls_embed_and_lattice(conv_store, tmp_path):
     assert msgs[0].role == "system"  # persona
     assert "Aetheria" in msgs[0].content
     assert msgs[1].role == "system"  # recall
-    assert "Recalled from memory" in msgs[1].content
-    assert "Jon prefers Signal" in msgs[1].content
+    assert "Uncertain context:" in msgs[1].content
+    assert "Jon prefers Signal" not in msgs[1].content
     assert msgs[2].role == "user"
     assert msgs[2].content == "remind me of my notification preference"
 
+
+
+def test_recall_cutover_includes_identity_spine_and_does_not_leak_channel_b_content(conv_store, tmp_path):
+    sid = conv_store.new_session("aetheria")
+    recall_store = _make_lattice_store(tmp_path)
+    raw_claim = "raw legacy content must not be quoted"
+    recall_store.write_node(
+        "aetheria", raw_claim,
+        intensity=0.8, embedding=(1.0, 0.0),
+    )
+    identity_store = LatticeStore(tmp_path / "identity.db")
+    identity_store.write_node(
+        "aetheria",
+        "presence over performance is part of my identity",
+        node_type="identity",
+        intensity=1.0,
+        provenance={
+            "cls": ProvenanceClass.CONSOLIDATED.value,
+            "source": "legacy_identity_review",
+            "confidence": 1.0,
+            "temporal_context": "fixture",
+            "generator": "test",
+            "chain": ["raw-attic-id"],
+            "derived_from": [],
+            "trigger": "migration_identity_review",
+            "legacy_id": "legacy-id",
+            "attic_id": "raw-attic-id",
+        },
+    )
+    fake_chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake_chat,
+        lattice_store=recall_store, identity_spine_store=identity_store,
+        recall_k=3, recall_threshold=0.5,
+        embed_fn=_fake_embed_returning((1.0, 0.0)),
+    )
+
+    loop.process_message(sid, "what do you remember about yourself?")
+
+    recall_message = fake_chat.calls[0]["request"].messages[1].content
+    assert "Stateable recall:" in recall_message
+    assert "From older reviewed notes, I carry presence over performance is part of my identity" in recall_message
+    assert "Uncertain context:" in recall_message
+    assert raw_claim not in recall_message
 
 def test_recall_zero_matches_omits_recall_system_message(conv_store, tmp_path):
     """If no nodes meet threshold → no recall system message at all."""
@@ -590,7 +635,7 @@ def test_recall_placement_is_after_persona(conv_store, tmp_path):
     loop.process_message(sid, "hi")
     msgs = fake_chat.calls[0]["request"].messages
     assert msgs[0].role == "system" and "Aetheria" in msgs[0].content  # persona
-    assert msgs[1].role == "system" and "Recalled from memory" in msgs[1].content
+    assert msgs[1].role == "system" and "Uncertain context:" in msgs[1].content
     assert msgs[2].role == "user"
 
 
@@ -610,7 +655,7 @@ def test_recall_with_empty_persona_still_works(conv_store, tmp_path):
     loop.process_message(sid, "hi")
     msgs = fake_chat.calls[0]["request"].messages
     assert [m.role for m in msgs] == ["system", "user"]
-    assert "Recalled from memory" in msgs[0].content
+    assert "Uncertain context:" in msgs[0].content
 
 
 # ─── Souls Step 3: soul_text wiring ──────────────────────────────────────────
