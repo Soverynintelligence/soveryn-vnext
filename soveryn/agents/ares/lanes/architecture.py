@@ -15,6 +15,13 @@ FORBIDDEN_IN_AGENTS: frozenset[str] = frozenset({
     "http.client",
 })
 
+RETIRED_AGENTS: frozenset[str] = frozenset({
+    "scout",
+    "vision",
+    "tinker",
+    "aetheria_public",
+})
+
 
 def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:
     """Flag direct raw I/O imports under `soveryn/agents/`.
@@ -42,6 +49,38 @@ def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:
                         {"path": posix, "line": node.lineno, "module": module},
                         key=f"{posix}:{node.lineno}:{module}",
                     ))
+    return findings
+
+
+def check_no_retired_agent_packages(
+    *,
+    present_packages: frozenset[str],
+) -> list[AresFinding]:
+    findings: list[AresFinding] = []
+    for agent in sorted(present_packages & RETIRED_AGENTS):
+        findings.append(AresFinding(
+            "architecture.retired_agent_present",
+            Severity.WARNING,
+            {"agent": agent},
+            key=agent,
+        ))
+    return findings
+
+
+def check_tool_ownership_intact(
+    *,
+    tool_owners: dict[str, str],
+    active_agents: frozenset[str],
+) -> list[AresFinding]:
+    findings: list[AresFinding] = []
+    for tool, owner in sorted(tool_owners.items()):
+        if owner not in active_agents:
+            findings.append(AresFinding(
+                "architecture.tool_owned_by_inactive_agent",
+                Severity.WARNING,
+                {"tool": tool, "owner": owner},
+                key=f"{tool}:{owner}",
+            ))
     return findings
 
 

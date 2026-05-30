@@ -3,7 +3,12 @@
 from pathlib import Path
 
 from soveryn.agents.ares.findings import Severity
-from soveryn.agents.ares.lanes.architecture import check_no_raw_io_in_agents
+from soveryn.agents.ares.lanes.architecture import (
+    RETIRED_AGENTS,
+    check_no_raw_io_in_agents,
+    check_no_retired_agent_packages,
+    check_tool_ownership_intact,
+)
 
 
 def test_clean_agent_module_emits_no_finding():
@@ -81,3 +86,44 @@ def test_finding_id_includes_path_so_multiple_violations_distinct():
         Path("soveryn/agents/b/y.py"): "import sqlite3\n",
     })
     assert len({f.id for f in findings}) == 2
+
+
+def test_no_retired_packages_emits_no_finding():
+    findings = check_no_retired_agent_packages(
+        present_packages=frozenset({"aetheria", "vett", "scotty", "ares"})
+    )
+    assert findings == []
+
+
+def test_retired_package_present_is_warning():
+    findings = check_no_retired_agent_packages(
+        present_packages=frozenset({"aetheria", "tinker"})
+    )
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severity == Severity.WARNING
+    assert f.finding_type == "architecture.retired_agent_present"
+    assert f.evidence["agent"] == "tinker"
+
+
+def test_retired_agents_list_matches_design():
+    assert RETIRED_AGENTS == frozenset({"scout", "vision", "tinker", "aetheria_public"})
+
+
+def test_tool_ownership_clean_emits_no_finding():
+    owners = {"persistent_memory": "aetheria", "browser_fetch": "vett"}
+    active = frozenset({"aetheria", "vett", "scotty", "ares"})
+    findings = check_tool_ownership_intact(tool_owners=owners, active_agents=active)
+    assert findings == []
+
+
+def test_tool_owned_by_retired_agent_is_warning():
+    owners = {"scrape_dealers": "scout", "persistent_memory": "aetheria"}
+    active = frozenset({"aetheria", "vett", "scotty", "ares"})
+    findings = check_tool_ownership_intact(tool_owners=owners, active_agents=active)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f.severity == Severity.WARNING
+    assert f.finding_type == "architecture.tool_owned_by_inactive_agent"
+    assert f.evidence["tool"] == "scrape_dealers"
+    assert f.evidence["owner"] == "scout"
