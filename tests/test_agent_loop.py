@@ -744,10 +744,17 @@ def test_soul_not_concatenated_into_persona(conv_store):
     assert system_msgs[1].content == "UNIQUE_SOUL_TOKEN"
 
 
-def test_soul_concatenated_into_persona_when_server_rejects_multi_system(conv_store):
-    """For models whose chat template forbids multiple system messages, the soul
-    is concatenated into the persona content (single system message) with a
-    paragraph break. Vett's server has this constraint."""
+def test_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+    """AgentLoop produces semantic layers (persona / pinned / soul / recall)
+    as SEPARATE ChatMessages regardless of the server's multi-system support.
+
+    The transport adapter `prepare_wire_messages` (in llama_server_client.py)
+    folds them into one system message at the HTTP boundary if the target
+    server's chat template can't honor multi-system messages. The fold is a
+    wire-format accommodation; the AgentLoop-level structure stays separate.
+
+    See project_soveryn_three_tracks_workaround_capability_agency.
+    """
     capturing = _CapturingChat()
     loop = AgentLoop(
         "vett", conv_store,
@@ -758,16 +765,14 @@ def test_soul_concatenated_into_persona_when_server_rejects_multi_system(conv_st
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
-    assert len(system_msgs) == 1, (
-        f"vett's server should emit ONE concatenated system message, got {len(system_msgs)}"
+    assert len(system_msgs) == 2, (
+        f"AgentLoop should keep persona + soul as separate ChatMessages even "
+        f"when the server's template can't handle multi-system. "
+        f"Wire folding happens at the transport adapter. Got {len(system_msgs)}."
     )
-    # The single system message contains BOTH persona text and the soul token
-    content = system_msgs[0].content
-    assert "VETT_SOUL_TOKEN" in content
-    # Persona should be present too (the existing persona text mentions "V.E.T.T." or "research")
-    assert ("V.E.T.T." in content) or ("research" in content.lower())
-    # And the soul should appear AFTER the persona (paragraph break separator)
-    assert content.index("VETT_SOUL_TOKEN") > 50, "soul should follow persona, not lead"
+    # Persona first, then soul as its own message
+    assert "VETT_SOUL_TOKEN" not in system_msgs[0].content
+    assert system_msgs[1].content == "VETT_SOUL_TOKEN"
 
 
 def test_soul_kept_separate_for_aetheria_whose_server_supports_multi_system(conv_store):
@@ -827,11 +832,13 @@ def test_pinned_text_added_between_persona_and_soul_for_aetheria(conv_store):
     assert system_msgs[2].content == "SOUL_TOKEN"        # soul
 
 
-def test_pinned_text_concatenated_with_persona_and_soul_for_vett(conv_store):
-    """Vett's server forbids multiple systems — when pinned + soul both present,
-    everything concatenates in persona-pinned-soul order into ONE system message.
-    (In production, Vett gets pinned_text='' anyway; this verifies the safety
-    net if pinned ever WERE passed.)"""
+def test_pinned_and_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+    """AgentLoop produces persona / pinned / soul as THREE separate
+    ChatMessages even when the server's template can't honor multi-system.
+    Wire folding happens at the transport adapter. (In production, Vett gets
+    pinned_text='' anyway; this verifies the safety net if pinned ever WERE
+    passed.)
+    """
     capturing = _CapturingChat()
     loop = AgentLoop(
         "vett", conv_store,
@@ -843,14 +850,16 @@ def test_pinned_text_concatenated_with_persona_and_soul_for_vett(conv_store):
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
-    assert len(system_msgs) == 1
-    content = system_msgs[0].content
-    assert "VETT_PINNED" in content
-    assert "VETT_SOUL" in content
-    # Order check: persona substring, then pinned, then soul
-    pinned_idx = content.index("VETT_PINNED")
-    soul_idx = content.index("VETT_SOUL")
-    assert pinned_idx < soul_idx, "pinned should appear before soul"
+    assert len(system_msgs) == 3, (
+        f"expected 3 separate system messages at AgentLoop level (persona / "
+        f"pinned / soul); transport adapter handles wire folding. "
+        f"Got {len(system_msgs)}."
+    )
+    # Order: persona first, pinned second, soul third
+    assert "VETT_PINNED" not in system_msgs[0].content  # persona
+    assert "VETT_SOUL" not in system_msgs[0].content    # persona
+    assert system_msgs[1].content == "VETT_PINNED"
+    assert system_msgs[2].content == "VETT_SOUL"
 
 
 def test_pinned_alone_without_soul_for_aetheria(conv_store):

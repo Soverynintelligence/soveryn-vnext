@@ -255,22 +255,19 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        # Compose system messages: persona, pinned, soul.
-        # When the server supports multiple system messages, each gets its own.
-        # When the server forbids it (Qwen3.5/3.6 27B templates), they're
-        # concatenated with paragraph breaks in the order persona -> pinned -> soul
-        # into a single system message.
-        if self.server.supports_multi_system_messages:
-            if self.system_prompt:
-                prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-            if self.pinned_text:
-                prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
-            if self.soul_text:
-                prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
-        else:
-            parts = [p for p in (self.system_prompt, self.pinned_text, self.soul_text) if p]
-            if parts:
-                prelude = prelude + (ChatMessage(role="system", content="\n\n".join(parts)),)
+        # Semantic layers (persona / pinned / soul / recall+spine) are kept
+        # separate at the AgentLoop level regardless of model. The transport
+        # adapter `prepare_wire_messages` (in llama_server_client.py) folds
+        # them into one system message at the HTTP boundary if the target
+        # server's chat template can't honor multiple system messages.
+        # See project_soveryn_qwen36_multisystem_drop +
+        # project_soveryn_three_tracks_workaround_capability_agency.
+        if self.system_prompt:
+            prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        if self.pinned_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
+        if self.soul_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
@@ -343,22 +340,14 @@ class AgentLoop:
             ChatMessage(role=t.role, content=t.content) for t in history_turns
         )
         prelude: tuple[ChatMessage, ...] = ()
-        # Compose system messages: persona, pinned, soul.
-        # When the server supports multiple system messages, each gets its own.
-        # When the server forbids it (Qwen3.5/3.6 27B templates), they're
-        # concatenated with paragraph breaks in the order persona -> pinned -> soul
-        # into a single system message.
-        if self.server.supports_multi_system_messages:
-            if self.system_prompt:
-                prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-            if self.pinned_text:
-                prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
-            if self.soul_text:
-                prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
-        else:
-            parts = [p for p in (self.system_prompt, self.pinned_text, self.soul_text) if p]
-            if parts:
-                prelude = prelude + (ChatMessage(role="system", content="\n\n".join(parts)),)
+        # Same as sync path — semantic layers stay separate; transport adapter
+        # folds at wire if the server's template can't honor multi-system.
+        if self.system_prompt:
+            prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        if self.pinned_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
+        if self.soul_text:
+            prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages = prelude + history_messages

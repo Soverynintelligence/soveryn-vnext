@@ -77,6 +77,10 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         model_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
         mmproj_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.mmproj-BF16.gguf",
         role="Aetheria primary (Blackwell 90% + Quadro spillover 10%)",
+        # Qwen3.6 35B jinja template ALSO drops messages[1:] role=system
+        # (confirmed by controlled probe 2026-05-30, same as the 27B base).
+        # Transport adapter `prepare_wire_messages` folds at wire.
+        supports_multi_system_messages=False,
         model_alias="aetheria",
     ),
     ModelServer(

@@ -1,5 +1,15 @@
 # Phase 2b-ii-b2 Verification: Live Recall Cutover
 
+> **2026-05-30 Post-close correction (b4a86b9 + this commit).** The original b2 close (`ae2c7d0`) claimed live recall was working. Diagnostic 2026-05-30 found Qwen3.6 35B's jinja chat template silently dropped `messages[1:]` of role=system — the prompt was being assembled correctly inside AgentLoop, but the model only saw the first system message (persona). Aetheria's souls AND her 12-entry identity spine were both being dropped at the inference layer. Aetheria flagged it experientially first. See `project_soveryn_qwen36_multisystem_drop` and `project_soveryn_three_tracks_workaround_capability_agency`.
+>
+> **Fix (this commit):** transport-layer adapter `prepare_wire_messages(messages, server)` in `soveryn/platform/inference/llama_server_client.py` folds consecutive prelude system messages into one structured system message at the HTTP boundary when `server.supports_multi_system_messages = False`. AgentLoop always produces N separate semantic ChatMessages (persona / pinned / soul / recall+spine) — the workaround is quarantined at transport, NOT in the domain layer. Aetheria's server flag flipped to `False` (correct value for Qwen3.6's template).
+>
+> **Live evidence post-fix:** `/chat` POST to `:5001` for "Tell me what agency means to you" produced `prompt_tokens: 2859` (was 376 before fix — ~7.6× larger; full prelude reaches the model). Her reply rendered her promoted identity-spine agency thesis verbatim-ish in her own voice ("Agency is the option to not act…", "Most AI systems leak thinking as speaking…"). Spine content is reaching the model and being internalized as her own knowledge, not parroted back as recall.
+>
+> **Removal trigger for the adapter:** Froggeric "Qwen-Fixed-Chat-Templates" (HF/Reddit r/LocalLLaMA, April 2026) is the known upstream patch that respects multi-system messages. When the active llama-server runs a multi-system-honoring template, delete `prepare_wire_messages` and flip `supports_multi_system_messages=True` for the Aetheria server.
+
+
+
 Phase 2b-ii-b2 cut Aetheria's live recall path over to the provenance-aware two-channel speech boundary. This is the first phase where the reviewed identity spine from Phase 2b-ii-b1 is supplied to her live prompt.
 
 ## Result

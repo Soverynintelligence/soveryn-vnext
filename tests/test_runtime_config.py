@@ -181,8 +181,16 @@ def test_vett_scotty_shared_marked_as_single_system_only():
     assert vs.supports_multi_system_messages is False
 
 
-def test_aetheria_primary_supports_multi_system_by_default():
-    """Aetheria's Qwen3.6-35B UD variant accepts multiple system messages."""
+def test_aetheria_primary_does_not_support_multi_system_qwen36_template():
+    """Aetheria's Qwen3.6 35B jinja chat template silently drops messages[1:]
+    of role=system (controlled probe 2026-05-30 — single 2,642-char system
+    message yielded 577 prompt_tokens; four system messages totaling 730 chars
+    yielded only 87 prompt_tokens, consistent with only the first reaching the
+    model). Transport adapter `prepare_wire_messages` folds at wire.
+
+    See project_soveryn_qwen36_multisystem_drop and
+    project_soveryn_three_tracks_workaround_capability_agency.
+    """
     from soveryn.config.runtime import MODEL_SERVERS
     a = next(s for s in MODEL_SERVERS if s.name == "aetheria_primary")
-    assert a.supports_multi_system_messages is True
+    assert a.supports_multi_system_messages is False

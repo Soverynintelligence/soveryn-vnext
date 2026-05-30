@@ -18,6 +18,7 @@ from soveryn.inference.llama_server_client import (
     LlamaServerError,
     LlamaServerTimeout,
     chat,
+    prepare_wire_messages,
     embed,
 )
 
@@ -400,3 +401,157 @@ def test_no_imports_from_legacy_or_flask():
             assert pattern not in source, (
                 f"{fpath.name} contains banned import pattern {pattern!r}"
             )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# prepare_wire_messages — transport adapter for chat templates that only
+# honor messages[0] of role=system (Qwen3.6 jinja). Tests prove the seam:
+# AgentLoop produces semantic layers as separate ChatMessages; the adapter
+# folds them at the wire boundary only when the server's template demands it.
+# See feedback_workaround_is_not_architecture and
+# project_soveryn_three_tracks_workaround_capability_agency.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _server(*, supports_multi: bool, name: str = "test") -> ModelServer:
+    return ModelServer(
+        name=name,
+        port=8090,
+        model_path=Path("/dev/null"),
+        role="test",
+        supports_multi_system_messages=supports_multi,
+        model_alias=name,
+    )
+
+
+def test_prepare_wire_messages_passes_through_when_multi_supported():
+    """If the server's template handles multi-system messages, the adapter is
+    a no-op — preserves every ChatMessage identity."""
+    msgs = (
+        ChatMessage(role="system", content="persona"),
+        ChatMessage(role="system", content="pinned"),
+        ChatMessage(role="system", content="soul"),
+        ChatMessage(role="system", content="recall"),
+        ChatMessage(role="user", content="hi"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=True))
+    assert out == msgs
+
+
+def test_prepare_wire_messages_folds_consecutive_prelude_systems_when_unsupported():
+    """Aetheria-shape: 4 prelude system messages + 1 user. Adapter folds the
+    4 system messages into 1 (the locked Qwen3.6 accommodation), preserves
+    the user message exactly."""
+    msgs = (
+        ChatMessage(role="system", content="persona"),
+        ChatMessage(role="system", content="pinned"),
+        ChatMessage(role="system", content="soul"),
+        ChatMessage(role="system", content="recall"),
+        ChatMessage(role="user", content="hi"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    assert len(out) == 2, f"expected 1 folded system + 1 user, got {len(out)}"
+    assert out[0].role == "system"
+    assert out[0].content == "persona\n\npinned\n\nsoul\n\nrecall"
+    assert out[1] == ChatMessage(role="user", content="hi")
+
+
+def test_prepare_wire_messages_preserves_order_persona_pinned_soul_recall():
+    """Folded content must preserve the AgentLoop's prelude order exactly."""
+    msgs = (
+        ChatMessage(role="system", content="A"),
+        ChatMessage(role="system", content="B"),
+        ChatMessage(role="system", content="C"),
+        ChatMessage(role="system", content="D"),
+        ChatMessage(role="user", content="q"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    # "A...B...C...D" — substring order check independent of separator
+    folded = out[0].content
+    a_idx = folded.index("A")
+    b_idx = folded.index("B")
+    c_idx = folded.index("C")
+    d_idx = folded.index("D")
+    assert a_idx < b_idx < c_idx < d_idx, f"order broken: {folded!r}"
+
+
+def test_prepare_wire_messages_leaves_history_and_user_alone():
+    """user / assistant / tool history is not touched, in either mode."""
+    msgs = (
+        ChatMessage(role="system", content="persona"),
+        ChatMessage(role="system", content="soul"),
+        ChatMessage(role="user", content="first user msg"),
+        ChatMessage(role="assistant", content="prior reply"),
+        ChatMessage(role="user", content="current"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    assert out[-3] == ChatMessage(role="user", content="first user msg")
+    assert out[-2] == ChatMessage(role="assistant", content="prior reply")
+    assert out[-1] == ChatMessage(role="user", content="current")
+
+
+def test_prepare_wire_messages_handles_single_prelude_system():
+    """One system + one user: nothing to fold, but adapter still works."""
+    msgs = (
+        ChatMessage(role="system", content="persona only"),
+        ChatMessage(role="user", content="hi"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    assert out == msgs
+
+
+def test_prepare_wire_messages_only_folds_prelude_not_interior_system():
+    """A 'system' message that appears AFTER user/assistant turns is part of
+    history (e.g. tool injection), not the prelude — adapter must not fold
+    it into the front."""
+    msgs = (
+        ChatMessage(role="system", content="persona"),
+        ChatMessage(role="system", content="soul"),
+        ChatMessage(role="user", content="q"),
+        ChatMessage(role="system", content="tool result note"),
+        ChatMessage(role="user", content="follow-up"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    # The prelude (positions 0,1) folds into 1 system message; everything
+    # from position 2 onward is preserved exactly.
+    assert out[0].role == "system"
+    assert "persona" in out[0].content and "soul" in out[0].content
+    assert out[1] == ChatMessage(role="user", content="q")
+    assert out[2] == ChatMessage(role="system", content="tool result note")
+    assert out[3] == ChatMessage(role="user", content="follow-up")
+
+
+def test_prepare_wire_messages_aetheria_seam_4_separate_at_agent_loop_folds_to_1_at_wire():
+    """End-to-end seam proof: AgentLoop assembles four semantically separate
+    ChatMessages (persona / pinned / soul / recall) for Aetheria; the adapter
+    folds them into ONE structured system message at the wire boundary, with
+    all four sections present in order. This is the locked Qwen3.6 workaround
+    that does NOT collapse the domain-layer architecture.
+
+    See feedback_workaround_is_not_architecture.
+    """
+    # Simulate what AgentLoop's process_message hands to the chat function
+    # for an Aetheria turn (server.supports_multi_system_messages = False per
+    # the runtime config — that's the Qwen3.6 35B template constraint).
+    aetheria_server = _server(supports_multi=False, name="aetheria_primary")
+    agent_loop_messages = (
+        ChatMessage(role="system", content="PERSONA_BODY"),
+        ChatMessage(role="system", content="PINNED_BODY"),
+        ChatMessage(role="system", content="SOUL_BODY"),
+        ChatMessage(role="system", content="Stateable recall:\n- entry"),
+        ChatMessage(role="user", content="hello"),
+    )
+    # Domain side — semantic layers stay separate
+    domain_system_count = sum(1 for m in agent_loop_messages if m.role == "system")
+    assert domain_system_count == 4, "AgentLoop must produce 4 separate system messages"
+    # Transport side — adapter folds for the Qwen template
+    wire = prepare_wire_messages(agent_loop_messages, aetheria_server)
+    wire_system_count = sum(1 for m in wire if m.role == "system")
+    assert wire_system_count == 1, (
+        "transport adapter should produce 1 system message for a Qwen-shape "
+        "server; got " + str(wire_system_count)
+    )
+    # All four sections present in order in the single wire-system message
+    folded = wire[0].content
+    assert folded.index("PERSONA_BODY") < folded.index("PINNED_BODY") < folded.index("SOUL_BODY") < folded.index("Stateable recall:")
+    # User message preserved
+    assert wire[-1] == ChatMessage(role="user", content="hello")

@@ -161,6 +161,52 @@ def _post_json(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Transport adapter — model accommodation, NOT domain change.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def prepare_wire_messages(
+    messages: tuple["ChatMessage", ...],
+    server: ModelServer,
+) -> tuple["ChatMessage", ...]:
+    """Adapter for chat templates that only honor messages[0] of role=system.
+
+    Qwen3.6 jinja chat templates silently drop messages[1:] of role=system
+    (confirmed by controlled probe 2026-05-30 against router :8090 — single
+    system msg of N chars produces ~N/4 tokens; 4 system msgs of N/4 chars
+    each produces ~N/16 tokens, consistent with only msg[0] reaching the
+    model). This adapter folds CONSECUTIVE prelude system messages from the
+    start of the tuple into ONE structured system message at the wire boundary.
+
+    Domain code (AgentLoop) keeps the semantic layers separate
+    (persona / pinned / soul / recall+spine) — only the wire payload is
+    collapsed. This is a transport-layer accommodation, not an architectural
+    decision. See feedback_workaround_is_not_architecture and
+    project_soveryn_three_tracks_workaround_capability_agency.
+
+    Pass-through when `server.supports_multi_system_messages` is True.
+    user/assistant history is left untouched in all cases.
+
+    Removal trigger: delete this adapter (and revert `chat`/`chat_stream` to
+    use `request.messages` directly) when no active MODEL_SERVERS entry has
+    `supports_multi_system_messages=False`.
+    """
+    if server.supports_multi_system_messages:
+        return messages
+    # Count consecutive prelude system messages from index 0.
+    prelude_end = 0
+    for m in messages:
+        if m.role == "system":
+            prelude_end += 1
+        else:
+            break
+    if prelude_end <= 1:
+        return messages
+    joined = "\n\n".join(m.content for m in messages[:prelude_end] if m.content)
+    folded = ChatMessage(role="system", content=joined)
+    return (folded,) + messages[prelude_end:]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -170,9 +216,10 @@ def chat(
     timeout: float = DEFAULT_CHAT_TIMEOUT_SECONDS,
 ) -> ChatResponse:
     """Send a non-streaming chat completion. Caller picks the server (via routing)."""
+    wire_messages = prepare_wire_messages(request.messages, server)
     payload: dict[str, Any] = {
         "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "messages": [{"role": m.role, "content": m.content} for m in wire_messages],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
         "stream": False,
@@ -251,9 +298,10 @@ def chat_stream(
     Raises LlamaServerError / LlamaServerTimeout on network failure OR if a
     chunk that looks terminal (contains finish_reason or [DONE]) is malformed.
     """
+    wire_messages = prepare_wire_messages(request.messages, server)
     payload: dict[str, Any] = {
         "model": request.model,
-        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "messages": [{"role": m.role, "content": m.content} for m in wire_messages],
         "temperature": request.temperature,
         "max_tokens": request.max_tokens,
         "stream": True,

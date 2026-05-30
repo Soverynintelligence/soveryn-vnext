@@ -276,8 +276,9 @@ def test_stream_soul_text_added_as_second_system_message(conv_store):
     assert system_msgs[1].content == "STREAM_SOUL_TOKEN"
 
 
-def test_stream_soul_concatenated_for_vett(conv_store):
-    """Streaming path also concatenates soul into persona when server rejects multi-system."""
+def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+    """Streaming path mirrors sync: AgentLoop keeps semantic layers separate;
+    transport adapter `prepare_wire_messages` handles wire folding."""
     captured_requests = []
 
     def stream(req, server, timeout):
@@ -293,8 +294,12 @@ def test_stream_soul_concatenated_for_vett(conv_store):
     sid = conv_store.new_session("vett")
     list(loop.process_message_stream(sid, "hi"))
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
-    assert len(system_msgs) == 1
-    assert "STREAM_VETT_SOUL" in system_msgs[0].content
+    assert len(system_msgs) == 2, (
+        f"AgentLoop stream path should also keep persona + soul as separate "
+        f"ChatMessages. Got {len(system_msgs)}."
+    )
+    assert "STREAM_VETT_SOUL" not in system_msgs[0].content
+    assert system_msgs[1].content == "STREAM_VETT_SOUL"
 
 
 # ─── Pinned memory wiring (streaming path) ───────────────────────────────────
