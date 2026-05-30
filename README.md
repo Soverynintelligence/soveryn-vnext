@@ -15,7 +15,7 @@ vNext is a working side-by-side Flask app and Phase 1 platform refactor substrat
 - Compatibility shims for old import paths during the refactor window
 - Command center UI, chat UI, sessions, streaming, compatibility routes, validation harness, and code-backup daemon from earlier vnext work
 
-Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Phase 2b-i adds the safe memory storage substrate: first-class provenance, write gates, durable Attic storage, additive promotion, a provenance-aware writer, and provisional metadata facets while freezing recall behavior. Phase 2b-ii-a adds Aetheria's deterministic speech-boundary components as a dark path: channel classification, provenance phrasing, uncertainty-only Channel B rendering, the two-channel assembler, no-ghost structural tests, and the IDK floor. Phase 2b-ii-b1 migrates prod-derived legacy memory into vnext Attic as raw low-confidence material and creates a bounded 12-entry reviewed identity spine in vnext lattice, still dark and not wired into live recall. Phase 3a ports Ares core + the hardware lane as a detection-only host sentinel with dry-run mode for shadow-bake operation beside prod Ares. Later phases build and swap the remaining platform components one at a time.
+Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Phase 2b-i adds the safe memory storage substrate: first-class provenance, write gates, durable Attic storage, additive promotion, a provenance-aware writer, and provisional metadata facets while freezing recall behavior. Phase 2b-ii-a adds Aetheria's deterministic speech-boundary components as a dark path: channel classification, provenance phrasing, uncertainty-only Channel B rendering, the two-channel assembler, no-ghost structural tests, and the IDK floor. Phase 2b-ii-b1 migrates prod-derived legacy memory into vnext Attic as raw low-confidence material and creates a bounded 12-entry reviewed identity spine in vnext lattice. Phase 2b-ii-b2 cuts Aetheria live recall over to the two-channel speech boundary: reviewed identity spine entries are Channel A, raw legacy matches are Channel B uncertainty, and Channel B content is not quoted. Phase 3a ports Ares core + the hardware lane as a detection-only host sentinel with dry-run mode for shadow-bake operation beside prod Ares. Later phases build and swap the remaining platform components one at a time.
 
 ## Layout
 
@@ -37,6 +37,7 @@ Phase 2a verification: `docs/PHASE2_ARES_PREREQS_VERIFY.md`.
 Phase 2b-i verification: `docs/PHASE2B_I_VERIFY.md`.
 Phase 2b-ii-a verification: `docs/PHASE2B_II_A_VERIFY.md`.
 Phase 2b-ii-b1 verification: `docs/PHASE2B_II_B1_VERIFY.md`.
+Phase 2b-ii-b2 verification: `docs/PHASE2B_II_B2_VERIFY.md`.
 Phase 3a verification: `docs/PHASE3A_ARES_CORE_HARDWARE_VERIFY.md`.
 
 ## Running tests
