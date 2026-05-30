@@ -286,6 +286,26 @@ class LatticeStore:
             row = conn.execute("SELECT * FROM nodes WHERE id = ?", (node_id,)).fetchone()
         return _row_to_node(row) if row else None
 
+    def iter_nodes(self, *, agent: str | None = None, include_library: bool = True) -> tuple[Node, ...]:
+        """Read-only full export for migration/audit callers."""
+
+        sql = "SELECT * FROM nodes"
+        params: list[str] = []
+        where: list[str] = []
+        if agent is not None:
+            where.append("agent = ?")
+            params.append(agent)
+        if not include_library:
+            where.append("layer != ?")
+            params.append(LAYER_LIBRARY)
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY created_at ASC, id ASC"
+
+        with self._conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return tuple(_row_to_node(row) for row in rows)
+
     def find_nodes_by_keywords(
         self,
         agent: str,

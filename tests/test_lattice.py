@@ -73,6 +73,68 @@ def test_get_node_missing_returns_none(store):
     assert store.get_node("does-not-exist") is None
 
 
+def test_iter_nodes_returns_all_rows_in_deterministic_order(store):
+    first = store.write_node("aetheria", "first", node_type="fact")
+    second = store.write_node("vett", "second", node_type="event")
+
+    nodes = store.iter_nodes()
+
+    assert [node.id for node in nodes] == [first, second]
+    assert [node.content for node in nodes] == ["first", "second"]
+
+
+def test_iter_nodes_filters_by_agent(store):
+    store.write_node("aetheria", "aetheria node")
+    store.write_node("vett", "vett node")
+
+    nodes = store.iter_nodes(agent="aetheria")
+
+    assert [node.content for node in nodes] == ["aetheria node"]
+
+
+def test_iter_nodes_can_exclude_library_rows(store):
+    store.write_node("aetheria", "private node", layer=LAYER_PRIVATE)
+    store.write_node("aetheria", "library node", layer=LAYER_LIBRARY)
+
+    nodes = store.iter_nodes(include_library=False)
+
+    assert [node.content for node in nodes] == ["private node"]
+
+
+def test_iter_nodes_preserves_legacy_layer_values(store):
+    import sqlite3
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
+            "access_count, tags, created_at, updated_at) "
+            "VALUES ('legacy-layer', 'fact', 'core', 'aetheria', 'legacy', 0.3, 0.3, 0, '[]', 'now', 'now')"
+        )
+        conn.commit()
+
+    nodes = store.iter_nodes()
+
+    assert len(nodes) == 1
+    assert nodes[0].layer == "core"
+
+
+def test_iter_nodes_tolerates_malformed_optional_json(store):
+    import sqlite3
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
+            "access_count, tags, created_at, updated_at, embedding, provenance) "
+            "VALUES ('bad-json', 'fact', 'private', 'aetheria', 'bad json', 0.3, 0.3, 0, "
+            "'NOT_JSON', 'now', 'now', '[0.1, NOPE', '{bad')"
+        )
+        conn.commit()
+
+    node = store.iter_nodes()[0]
+
+    assert node.tags == ()
+    assert node.embedding is None
+    assert node.provenance is None
+
+
 def test_keyword_search_matches_content(store):
     store.write_node("aetheria", "rainy day in Boston", intensity=0.5)
     store.write_node("aetheria", "sunny day in Miami", intensity=0.4)
