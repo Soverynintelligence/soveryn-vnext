@@ -149,6 +149,19 @@ class AtticStore:
             row = conn.execute("SELECT * FROM attic_entries WHERE id = ?", (attic_id,)).fetchone()
             return _row_to_record(conn, row) if row else None
 
+    def records_linked_to(self, lattice_id: str) -> tuple[AtticRecord, ...]:
+        """Return Attic records linked to a legacy/canonical lattice id."""
+
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT e.* FROM attic_entries e "
+                "JOIN attic_links l ON l.attic_id = e.id "
+                "WHERE l.lattice_id = ? "
+                "ORDER BY e.created_at ASC, e.id ASC",
+                (str(lattice_id),),
+            ).fetchall()
+            return tuple(_row_to_record(conn, row) for row in rows)
+
     def promote(
         self,
         attic_id: str,

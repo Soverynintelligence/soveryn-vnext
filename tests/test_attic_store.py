@@ -60,6 +60,37 @@ def test_attic_round_trips_across_store_reinstantiation(tmp_path):
     assert entries[0].provenance == provenance
 
 
+def test_records_linked_to_returns_matching_records(tmp_path):
+    store = AtticStore(tmp_path / "attic.db")
+    first = store.append("first linked record", linked_lattice_ids=("legacy-1",))
+    second = store.append("second linked record", linked_lattice_ids=("legacy-1", "legacy-2"))
+    store.append("unlinked record", linked_lattice_ids=("legacy-3",))
+
+    records = store.records_linked_to("legacy-1")
+
+    assert [record.id for record in records] == [first.id, second.id]
+    assert [record.content for record in records] == ["first linked record", "second linked record"]
+    assert records[0].linked_lattice_ids == ("legacy-1",)
+    assert records[1].linked_lattice_ids == ("legacy-1", "legacy-2")
+
+
+def test_records_linked_to_missing_lattice_id_returns_empty_tuple(tmp_path):
+    store = AtticStore(tmp_path / "attic.db")
+    store.append("linked record", linked_lattice_ids=("legacy-1",))
+
+    assert store.records_linked_to("missing") == ()
+
+
+def test_records_linked_to_survives_store_reinstantiation(tmp_path):
+    db_path = tmp_path / "attic.db"
+    first = AtticStore(db_path).append("durable linked record", linked_lattice_ids=("legacy-1",))
+
+    records = AtticStore(db_path).records_linked_to("legacy-1")
+
+    assert [record.id for record in records] == [first.id]
+    assert records[0].content == "durable linked record"
+
+
 def test_attic_storage_is_separate_from_lattice_region_queries(tmp_path):
     attic = AtticStore(tmp_path / "attic.db")
     lattice = LatticeStore(tmp_path / "lattice.db")
