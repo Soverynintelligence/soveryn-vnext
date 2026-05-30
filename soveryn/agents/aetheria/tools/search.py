@@ -65,3 +65,48 @@ def build_search_by_embedding_tool(
         },
         handler=handler,
     )
+
+
+def build_search_by_keywords_tool(*, store: LatticeStore) -> ToolSpec:
+    """Build Aetheria's keyword-backed lattice search tool."""
+
+    def handler(args: Mapping[str, Any]) -> dict[str, Any]:
+        keywords = tuple(str(item).strip() for item in args["keywords"] if str(item).strip())
+        k = int(args.get("k", DEFAULT_SEARCH_K))
+
+        nodes_by_id = {}
+        for keyword in keywords:
+            for node in store.find_nodes_by_keywords("aetheria", keyword, limit=k):
+                nodes_by_id.setdefault(node.id, node)
+                if len(nodes_by_id) >= k:
+                    break
+            if len(nodes_by_id) >= k:
+                break
+
+        return classify_and_render(tuple(nodes_by_id.values()))
+
+    return ToolSpec(
+        name="search_lattice_by_keywords",
+        owner="aetheria",
+        description="Search Aetheria's lattice by content or tag keywords.",
+        schema={
+            "type": "object",
+            "properties": {
+                "keywords": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "description": "Keywords to search for in lattice content and tags.",
+                },
+                "k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": DEFAULT_SEARCH_K,
+                },
+            },
+            "required": ["keywords"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
