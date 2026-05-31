@@ -23,6 +23,7 @@ from soveryn.platform.bus import SQLiteBus
 DEFAULT_ARES_BUS_PATH = Path("/home/jon-deoliveira/soveryn_vnext/data/ares/ares_bus.sqlite3")
 Collector = Callable[[], Iterable[AresFinding]]
 Sleep = Callable[[float], None]
+StopRequested = Callable[[], bool]
 
 
 class AresDaemonNotPortedError(NotImplementedError):
@@ -70,14 +71,20 @@ class AresDaemonSurface:
         interval_seconds: float = 60.0,
         iterations: int | None = None,
         sleep: Sleep = time.sleep,
+        stop_requested: StopRequested | None = None,
     ) -> None:
         """Run the scan loop; `iterations` exists so tests can bound it."""
 
+        should_stop = stop_requested or _never_stop
         completed = 0
         while iterations is None or completed < iterations:
+            if should_stop():
+                break
             self.scan_once()
             completed += 1
             if iterations is not None and completed >= iterations:
+                break
+            if should_stop():
                 break
             sleep(interval_seconds)
 
@@ -116,3 +123,7 @@ def _default_bus_path() -> Path:
 
 def _suppress_signal(finding: AresFinding, priority: bool = False) -> None:
     return None
+
+
+def _never_stop() -> bool:
+    return False
