@@ -78,6 +78,10 @@ def test_loopback_address_helper_handles_rfc_loopback_and_malformed_input():
     assert is_loopback_address("not-an-ip") is False
 
 
+def test_loopback_address_helper_strips_scope_id_suffix():
+    assert is_loopback_address("127.0.0.53%lo") is True
+
+
 def test_loopback_process_identity_allows_dynamic_loopback_port():
     fixture = (
         'LISTEN 0      4096   127.0.0.1:39477      0.0.0.0:*  users:(("llama-server",pid=7,fd=1))\n'

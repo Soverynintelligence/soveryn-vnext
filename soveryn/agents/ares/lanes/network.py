@@ -13,7 +13,7 @@ from soveryn.agents.ares.findings import AresFinding, Severity
 
 def is_loopback_address(bind: str) -> bool:
     try:
-        return ipaddress.ip_address(bind).is_loopback
+        return ipaddress.ip_address(bind.split("%", 1)[0]).is_loopback
     except ValueError:
         return False
 
