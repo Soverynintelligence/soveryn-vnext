@@ -6,6 +6,7 @@ from soveryn.agents.ares.lanes.network import (
     NetworkAllowList,
     collect_listeners,
     collect_service_presence,
+    is_loopback_address,
 )
 
 
@@ -28,7 +29,8 @@ NEW_LOCAL_LISTENER_FIXTURE = (
 
 def _allowlist() -> NetworkAllowList:
     return NetworkAllowList(
-        loopback_ports=frozenset({5001, 8090, 8087, 47017, 39477}),
+        loopback_ports=frozenset({5001, 8090, 8087, 47017}),
+        loopback_process_names=frozenset({"llama-server"}),
         public_ports=frozenset({(22, "sshd")}),
     )
 
@@ -70,13 +72,36 @@ def test_new_loopback_listener_is_warning():
     assert f.evidence["port"] == 9999
 
 
-def test_ipv6_public_listener_is_emergency():
-    fixture = 'LISTEN 0  128  [::]:31337  [::]:*  users:(("badproc",pid=42,fd=3))\n'
-    findings = collect_listeners(fixture, allow_list=_allowlist())
-    assert any(
-        f.severity == Severity.EMERGENCY and f.evidence["port"] == 31337
-        for f in findings
+def test_loopback_address_helper_handles_rfc_loopback_and_malformed_input():
+    assert is_loopback_address("127.0.0.53") is True
+    assert is_loopback_address("::1") is True
+    assert is_loopback_address("not-an-ip") is False
+
+
+def test_loopback_process_identity_allows_dynamic_loopback_port():
+    fixture = (
+        'LISTEN 0      4096   127.0.0.1:39477      0.0.0.0:*  users:(("llama-server",pid=7,fd=1))\n'
     )
+    findings = collect_listeners(fixture, allow_list=_allowlist())
+    assert findings == []
+
+
+def test_loopback_process_identity_allows_ipv6_loopback_port():
+    fixture = (
+        'LISTEN 0      4096   [::1]:47018        [::]:*  users:(("llama-server",pid=7,fd=1))\n'
+    )
+    findings = collect_listeners(fixture, allow_list=_allowlist())
+    assert findings == []
+
+
+def test_loopback_process_identity_does_not_allow_public_bind():
+    fixture = (
+        'LISTEN 0      4096   0.0.0.0:39477       0.0.0.0:*  users:(("llama-server",pid=7,fd=1))\n'
+    )
+    findings = collect_listeners(fixture, allow_list=_allowlist())
+    assert len(findings) == 1
+    assert findings[0].severity == Severity.EMERGENCY
+    assert findings[0].evidence["bind_address"] == "0.0.0.0"
 
 
 def test_allowlisted_public_listener_emits_no_finding():
@@ -100,10 +125,11 @@ def test_finding_id_stable_across_calls():
 
 def test_all_expected_services_present_emits_no_finding():
     fixture = (
+        'LISTEN 0      4096   127.0.0.53:53        0.0.0.0:*  users:(("systemd-resolved",pid=1,fd=1))\n'
         'LISTEN 0      4096   127.0.0.1:5001       0.0.0.0:*  users:(("python3.11",pid=1,fd=1))\n'
         'LISTEN 0      4096   127.0.0.1:8090       0.0.0.0:*  users:(("llama-server",pid=2,fd=2))\n'
     )
-    services = ExpectedServices(loopback_ports=frozenset({5001, 8090}))
+    services = ExpectedServices(loopback_ports=frozenset({53, 5001, 8090}))
     findings = collect_service_presence(fixture, expected=services)
     assert findings == []
 
@@ -131,3 +157,27 @@ def test_service_presence_unaffected_by_extra_listeners():
     services = ExpectedServices(loopback_ports=frozenset({5001, 8090}))
     findings = collect_service_presence(fixture, expected=services)
     assert findings == []
+
+
+def test_network_allowlist_from_env_defaults_include_loopback_process_name():
+    allowlist = NetworkAllowList.from_env({})
+    assert "llama-server" in allowlist.loopback_process_names
+
+
+def test_network_allowlist_from_env_override_loopback_process_names():
+    allowlist = NetworkAllowList.from_env({
+        "ARES_NET_LOOPBACK_PROCESS_ALLOWLIST": "llama-server,embeddings",
+    })
+    assert allowlist.loopback_process_names == frozenset({"llama-server", "embeddings"})
+
+
+def test_network_allowlist_from_env_trims_blank_process_names():
+    allowlist = NetworkAllowList.from_env({
+        "ARES_NET_LOOPBACK_PROCESS_ALLOWLIST": " llama-server , , embeddings ,, ",
+    })
+    assert allowlist.loopback_process_names == frozenset({"llama-server", "embeddings"})
+
+
+def test_expected_services_from_env_override_loopback_ports():
+    services = ExpectedServices.from_env({"ARES_NET_EXPECTED_LOOPBACK": "5001, 8090, 53"})
+    assert services.loopback_ports == frozenset({53, 5001, 8090})

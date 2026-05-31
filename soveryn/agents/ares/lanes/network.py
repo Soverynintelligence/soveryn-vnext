@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import subprocess
@@ -10,14 +11,19 @@ from dataclasses import dataclass, field
 from soveryn.agents.ares.findings import AresFinding, Severity
 
 
-LOOPBACK_BIND_ADDRESSES = frozenset({"127.0.0.1", "::1"})
+def is_loopback_address(bind: str) -> bool:
+    try:
+        return ipaddress.ip_address(bind).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
 class NetworkAllowList:
-    """Ports allowed to listen, split by bind class."""
+    """Ports and loopback process names allowed to listen, split by bind class."""
 
     loopback_ports: frozenset[int] = field(default_factory=frozenset)
+    loopback_process_names: frozenset[str] = field(default_factory=frozenset)
     public_ports: frozenset[tuple[int, str]] = field(default_factory=frozenset)
 
     @classmethod
@@ -27,6 +33,10 @@ class NetworkAllowList:
             loopback_ports=frozenset(_parse_port_list(env.get(
                 "ARES_NET_LOOPBACK_ALLOWLIST",
                 "5001,8090,8087,47017,39477",
+            ))),
+            loopback_process_names=frozenset(_parse_name_list(env.get(
+                "ARES_NET_LOOPBACK_PROCESS_ALLOWLIST",
+                "llama-server",
             ))),
             public_ports=frozenset(_parse_public_allowlist(env.get(
                 "ARES_NET_PUBLIC_ALLOWLIST",
@@ -113,7 +123,7 @@ def collect_service_presence(
             bind_address, port = _split_local(match.group("local"))
         except ValueError:
             continue
-        if bind_address in LOOPBACK_BIND_ADDRESSES:
+        if is_loopback_address(bind_address):
             present_loopback.add(port)
 
     findings: list[AresFinding] = []
@@ -145,8 +155,8 @@ def _classify(
     process: str,
     allow_list: NetworkAllowList,
 ) -> AresFinding | None:
-    if bind_address in LOOPBACK_BIND_ADDRESSES:
-        if port in allow_list.loopback_ports:
+    if is_loopback_address(bind_address):
+        if process in allow_list.loopback_process_names or port in allow_list.loopback_ports:
             return None
         return AresFinding(
             "network.loopback_listener_unallowlisted",
@@ -179,6 +189,10 @@ def _parse_public_allowlist(value: str) -> list[tuple[int, str]]:
             continue
         entries.append((int(port_text), process.strip()))
     return entries
+
+
+def _parse_name_list(value: str) -> list[str]:
+    return [part.strip() for part in value.split(",") if part.strip()]
 
 
 def ss_listeners_command() -> list[str]:
