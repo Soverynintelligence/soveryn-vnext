@@ -20,6 +20,7 @@ parsing — nothing more.
 
 from __future__ import annotations
 import json
+import re
 import socket
 import urllib.error
 import urllib.request
@@ -104,6 +105,36 @@ class EmbeddingResponse:
     vectors: tuple[tuple[float, ...], ...]  # parallel to request.input
     usage: dict[str, int] | None
     raw: dict
+
+
+_THINK_BLOCK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+_THINK_OPEN_RE = re.compile(r"<think>[\s\S]*", re.IGNORECASE)
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
+_THINK_PREFIXES = ("<think>", "</think>")
+
+
+def _strip_think_markup(text: str) -> str:
+    """Remove think blocks and stray think tags from visible content."""
+    if not text:
+        return text
+    cleaned = _THINK_BLOCK_RE.sub("", text)
+    cleaned = _THINK_OPEN_RE.sub("", cleaned)
+    cleaned = _THINK_CLOSE_RE.sub("", cleaned)
+    return cleaned
+
+
+def _safe_visible_prefix(text: str, *, final: bool) -> str:
+    """Hold back a tiny suffix so partial think tags never leak between stream chunks."""
+    if final or not text:
+        return text
+    lower = text.lower()
+    hold = 0
+    for prefix in _THINK_PREFIXES:
+        for n in range(1, len(prefix)):
+            if lower.endswith(prefix[:n]) and n > hold:
+                hold = n
+    return text[:-hold] if hold else text
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -253,7 +284,7 @@ def chat(
     try:
         choice = parsed["choices"][0]
         message = choice["message"]
-        content = message.get("content") or ""
+        content = _strip_think_markup(message.get("content") or "")
         raw_tool_calls = message.get("tool_calls")
         tool_calls = tuple(raw_tool_calls) if raw_tool_calls else None
         finish_reason = choice.get("finish_reason", "")
@@ -373,6 +404,8 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         but raise LlamaServerError if the line contains `finish_reason` or `[DONE]`
         (looks terminal, must not silently lose).
     """
+    raw_content = ""
+    emitted_visible_len = 0
     for raw_line in resp:
         line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
         if not line:
@@ -414,8 +447,17 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         usage = parsed.get("usage")
         if usage is not None and not isinstance(usage, dict):
             usage = None
+
+        raw_content += content_delta
+        visible_content = _strip_think_markup(raw_content)
+        visible_content = _safe_visible_prefix(visible_content, final=finish_reason is not None)
+        if len(visible_content) < emitted_visible_len:
+            emitted_visible_len = len(visible_content)
+        delta_to_emit = visible_content[emitted_visible_len:]
+        emitted_visible_len = len(visible_content)
+
         yield StreamChunk(
-            delta=content_delta,
+            delta=delta_to_emit,
             finish_reason=finish_reason,
             tool_calls_delta=tc_delta,
             usage=usage,

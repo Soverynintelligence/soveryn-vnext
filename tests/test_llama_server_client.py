@@ -18,6 +18,7 @@ from soveryn.inference.llama_server_client import (
     LlamaServerError,
     LlamaServerTimeout,
     chat,
+    chat_stream,
     prepare_wire_messages,
     embed,
 )
@@ -280,6 +281,78 @@ def test_chat_preserves_usage_and_raw():
 
     assert resp.usage == {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
     assert resp.raw == body
+
+
+def test_chat_strips_think_markup_from_content_but_keeps_reasoning_raw():
+    server = _vett_server()
+    request = ChatRequest(
+        messages=(ChatMessage(role="user", content="hi"),),
+        model="vett-scotty",
+    )
+    body = {
+        "choices": [
+            {
+                "message": {
+                    "content": "<think>draft</think>final",
+                    "reasoning_content": "scratchpad prose",
+                    "role": "assistant",
+                },
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+    }
+    _, ctx = _patch_urlopen(body=body)
+    with ctx:
+        resp = chat(request, server)
+
+    assert resp.content == "final"
+    assert resp.raw["choices"][0]["message"]["reasoning_content"] == "scratchpad prose"
+
+
+class _MockSSEResp:
+    def __init__(self, lines):
+        self._lines = [line if isinstance(line, bytes) else line.encode() for line in lines]
+        self.closed = False
+
+    def __iter__(self):
+        return iter(self._lines)
+
+    def close(self):
+        self.closed = True
+
+
+def _sse_line(payload: dict) -> bytes:
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+def test_chat_stream_strips_think_markup_from_deltas_and_done():
+    server = _vett_server()
+    request = ChatRequest(
+        messages=(ChatMessage(role="user", content="hi"),),
+        model="vett-scotty",
+    )
+    lines = [
+        _sse_line({
+            "choices": [{"delta": {"content": "Hello ", "role": "assistant"}, "finish_reason": None}],
+        }),
+        _sse_line({
+            "choices": [{"delta": {"content": "<think>draft</think>world", "role": "assistant"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+        }),
+    ]
+
+    def fake_urlopen(req, timeout=None):
+        return _MockSSEResp(lines)
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        chunks = list(chat_stream(request, server))
+
+    deltas = [chunk.delta for chunk in chunks if chunk.delta]
+    assert deltas == ["Hello ", "world"]
+    assert chunks[-1].finish_reason == "stop"
+    assert "<think>" not in "".join(deltas)
+    assert "</think>" not in "".join(deltas)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
