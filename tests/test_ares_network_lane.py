@@ -82,6 +82,44 @@ def test_loopback_address_helper_strips_scope_id_suffix():
     assert is_loopback_address("127.0.0.53%lo") is True
 
 
+def test_listen_re_captures_process_from_multi_tuple_users_field():
+    """Socket-activated sshd shows two process tuples in the users: field:
+    users:(("sshd",pid=3003,fd=3),("systemd",pid=1,fd=156))
+
+    Before the fix, _LISTEN_RE only matched single-tuple users fields, so
+    the multi-tuple sshd row had its proc capture fall back to empty,
+    causing a (22, "") public-listener finding that couldn't match the
+    (22, "sshd") allow-list entry → false EMERGENCY. Fix extends the
+    regex to accept zero-or-more additional ",(...)" tuples after the
+    first. We capture the FIRST process name (sshd) and ignore the rest.
+    """
+    fixture = (
+        'LISTEN 0      4096         0.0.0.0:22    0.0.0.0:* '
+        'users:(("sshd",pid=3003,fd=3),("systemd",pid=1,fd=156))\n'
+    )
+    allow = NetworkAllowList(
+        loopback_ports=frozenset(),
+        public_ports=frozenset({(22, "sshd")}),
+    )
+    findings = collect_listeners(fixture, allow_list=allow)
+    # (22, "sshd") matches → no finding
+    assert findings == []
+
+
+def test_listen_re_multi_tuple_ipv6_sshd_via_systemd_socket_activation():
+    """Same multi-tuple shape but for the IPv6 sshd row."""
+    fixture = (
+        'LISTEN 0      4096            [::]:22       [::]:* '
+        'users:(("sshd",pid=3003,fd=4),("systemd",pid=1,fd=157))\n'
+    )
+    allow = NetworkAllowList(
+        loopback_ports=frozenset(),
+        public_ports=frozenset({(22, "sshd")}),
+    )
+    findings = collect_listeners(fixture, allow_list=allow)
+    assert findings == []
+
+
 def test_loopback_process_identity_allows_dynamic_loopback_port():
     fixture = (
         'LISTEN 0      4096   127.0.0.1:39477      0.0.0.0:*  users:(("llama-server",pid=7,fd=1))\n'

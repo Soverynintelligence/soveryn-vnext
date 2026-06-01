@@ -62,7 +62,14 @@ class ExpectedServices:
 
 _LISTEN_RE = re.compile(
     r"^LISTEN\s+\S+\s+\S+\s+(?P<local>\S+)\s+\S+"
-    r"(?:\s+users:\(\(\"(?P<proc>[^\"]+)\",pid=(?P<pid>\d+)[^)]*\)\))?"
+    # users:((proc1...))            single tuple (cupsd, llama-server, etc.)
+    # users:((proc1...),(proc2...)) multi-tuple (sshd via socket activation
+    #                               lists both sshd and systemd). Capture the
+    #                               first tuple's name+pid; allow any number
+    #                               of additional ",(...)" tuples before the
+    #                               outer close.
+    r"(?:\s+users:\(\(\"(?P<proc>[^\"]+)\",pid=(?P<pid>\d+)[^)]*\)"
+    r"(?:,\([^)]*\))*\))?"
 )
 
 
