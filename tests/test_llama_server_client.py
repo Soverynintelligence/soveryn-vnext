@@ -148,6 +148,7 @@ def test_chat_payload_includes_optional_fields_when_set():
     assert payload["stop"] == ["<|endoftext|>", "<|im_end|>"]
     assert payload["tools"] == [{"type": "function", "function": {"name": "foo"}}]
     assert payload["thinking_budget_tokens"] == 384
+    assert payload["repetition_penalty"] == 1.1
 
 
 def test_chat_message_supports_tool_fields_optional():
@@ -324,6 +325,8 @@ class _MockSSEResp:
 
 def _sse_line(payload: dict) -> bytes:
     return f"data: {json.dumps(payload)}\n\n".encode()
+
+
 
 
 def test_chat_stream_strips_think_markup_from_deltas_and_done():

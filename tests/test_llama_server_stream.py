@@ -50,6 +50,28 @@ def _done_line() -> bytes:
 
 # ─── Happy path ──────────────────────────────────────────────────────────────
 
+def test_chat_stream_payload_includes_repetition_penalty():
+    captured = {}
+    body = [
+        _data_line({"choices": [{"delta": {"content": "hi"}, "index": 0, "finish_reason": None}]}),
+        _data_line({"choices": [{"delta": {}, "index": 0, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}}),
+        _done_line(),
+    ]
+
+    def fake_urlopen(req, timeout=None):
+        captured["req"] = req
+        captured["timeout"] = timeout
+        return _FakeSSEResponse(body)
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        chunks = list(chat_stream(_request(), _server()))
+
+    payload = json.loads(captured["req"].data.decode())
+    assert payload["repetition_penalty"] == 1.1
+    assert [c.delta for c in chunks] == ["hi", ""]
+
+
 def test_chat_stream_yields_content_deltas():
     body = [
         _data_line({"choices": [{"delta": {"content": "hi"}, "index": 0, "finish_reason": None}]}),

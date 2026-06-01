@@ -32,6 +32,7 @@ from soveryn.config.runtime import MODEL_SERVERS, ModelServer
 DEFAULT_CHAT_TIMEOUT_SECONDS = 30.0
 DEFAULT_EMBED_TIMEOUT_SECONDS = 10.0
 EMBEDDINGS_SERVER_NAME = "embeddings"
+DEFAULT_REPETITION_PENALTY = 1.1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -264,6 +265,7 @@ def chat(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
+    payload["repetition_penalty"] = DEFAULT_REPETITION_PENALTY
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
@@ -348,6 +350,7 @@ def chat_stream(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
+    payload["repetition_penalty"] = DEFAULT_REPETITION_PENALTY
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     body = json.dumps(payload).encode("utf-8")
