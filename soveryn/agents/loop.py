@@ -341,6 +341,13 @@ class AgentLoop:
 
         # 5. Save assistant turn from response.content ONLY (constraint 4).
         #    Any DB error here propagates (constraint 5) — we don't pretend success.
+        #    Mirror of the streaming guard: refuse to persist an empty turn with
+        #    no tool_calls — that row poisons next-load context (see streaming path).
+        if not response.content and not response.tool_calls:
+            raise AgentLoopError(
+                f"empty_generation: model produced no visible content "
+                f"(finish_reason={response.finish_reason}); no assistant turn saved"
+            )
         self.conv_store.save_turn(
             session_id, self.agent_name, "assistant", response.content
         )
@@ -495,8 +502,20 @@ class AgentLoop:
         accumulated_content = "".join(accumulated_content_parts)
         accumulated_tc_tuple = tuple(accumulated_tool_calls) if accumulated_tool_calls else None
 
-        # ── Save assistant turn (content only, per existing sync rules).
-        #     Empty content + explicit finish_reason IS acceptable (Jon constraint 5).
+        # An assistant turn with no visible content AND no tool_calls is a generation
+        # failure (typically finish_reason=length burned on hidden reasoning). Saving
+        # the empty row poisons future loads — on the next user turn the model sees
+        # "prior assistant emitted nothing for this prompt" and degenerates, often
+        # closing </think> early and verbalising its scratch into content. Reported
+        # 2026-06-01: session b94a6200 retry produced 5781 chars of unfenced scratch
+        # after an earlier empty turn from the no-cap streaming bug.
+        if not accumulated_content and not accumulated_tc_tuple:
+            yield ErrorEvent(
+                code="empty_generation",
+                message=f"model produced no visible content (finish_reason={final_finish_reason}); no assistant turn saved",
+            )
+            return
+
         self.conv_store.save_turn(session_id, self.agent_name, "assistant", accumulated_content)
 
         yield DoneEvent(
