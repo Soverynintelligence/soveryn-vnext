@@ -107,7 +107,14 @@ def create_app(
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
                     kwargs["tool_registry"] = tool_registry
-                kwargs["thinking_budget_tokens"] = 384
+                # thinking_budget_tokens left unset (None = unrestricted).
+                # As of 2026-06-01 router-presets.ini sets enable_thinking=false
+                # for [aetheria] via chat-template-kwargs, so the Qwen3.6-A3B
+                # model never enters thinking mode. The budget cap is therefore
+                # a no-op — and the prior cap-at-384 was the documented bleed
+                # trigger (Qwen-A3B token-budget cutoff injects </think>
+                # mid-trace and dumps the partial reasoning into content).
+                # See router-presets.ini + project_soveryn_qwen36_thinking_off.md.
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
     app.extensions["soveryn"] = {
