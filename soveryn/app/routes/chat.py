@@ -10,6 +10,7 @@ from flask import Blueprint, Response, current_app, jsonify, request, stream_wit
 
 from soveryn.agents.loop import (
     AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
+    ToolCallEvent, ToolResultEvent,
 )
 from soveryn.config.runtime import ACTIVE_AGENTS, RETIRED
 from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerTimeout
@@ -201,6 +202,21 @@ def _event_to_dict(event: AgentStreamEvent) -> dict:
         }
     if isinstance(event, ErrorEvent):
         return {"type": "error", "code": event.code, "message": event.message}
+    if isinstance(event, ToolCallEvent):
+        return {
+            "type": "tool_call",
+            "call_id": event.call_id,
+            "name": event.name,
+            "args": event.args,
+        }
+    if isinstance(event, ToolResultEvent):
+        return {
+            "type": "tool_result",
+            "call_id": event.call_id,
+            "name": event.name,
+            "content": event.content,
+            "channel": event.channel,
+        }
     # Defensive — shouldn't happen with the union closed
     return {"type": "error", "code": "internal_error",
             "message": f"unknown event type {type(event).__name__}"}

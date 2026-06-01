@@ -80,8 +80,36 @@ class ErrorEvent:
     message: str
 
 
+@dataclass(frozen=True)
+class ToolCallEvent:
+    """The model finalized a tool_call mid-stream. Emitted before invocation
+    so the UI can show "Aetheria is using tool X" while the handler runs.
+
+    args: the JSON-string args as the model produced them. The UI gets the raw
+    string; structured parsing happens at the registry boundary.
+    """
+    call_id: str
+    name: str
+    args: str
+
+
+@dataclass(frozen=True)
+class ToolResultEvent:
+    """A tool handler returned. Emitted after the result has been rendered
+    through classify_and_render so channel-aware framing is preserved.
+
+    channel: "A" (witnessed content) or "B" (count-only / uncertain) — lets the
+    UI style the result differently so Channel B doesn't masquerade as a
+    grounded retrieval. Optional for callers that don't classify.
+    """
+    call_id: str
+    name: str
+    content: str
+    channel: str | None = None
+
+
 # Union type alias for typing
-AgentStreamEvent = TokenEvent | DoneEvent | ErrorEvent
+AgentStreamEvent = TokenEvent | DoneEvent | ErrorEvent | ToolCallEvent | ToolResultEvent
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -444,63 +472,132 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
         messages = prelude + history_messages
 
-        request = ChatRequest(
-            messages=messages,
-            model=self.server.model_alias,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            thinking_budget_tokens=self.thinking_budget_tokens,
-        )
-
-        # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).
-        chunk_iter = self.stream_fn(request, self.server, timeout=self.chat_timeout_seconds)
-
-        accumulated_content_parts: list[str] = []
-        accumulated_tool_calls: list[dict] = []
+        # Round loop: streaming generation → maybe tool calls → tool dispatch →
+        # next streaming generation, until the model emits a final answer or we
+        # hit max_tool_rounds. Mirrors the sync-path semantics in
+        # process_message.
+        tool_rounds = 0
+        final_content_parts: list[str] = []
         final_finish_reason: str | None = None
         final_usage: dict | None = None
-        first_chunk_seen = False
 
-        try:
-            for chunk in chunk_iter:
-                first_chunk_seen = True
-                if chunk.delta:
-                    accumulated_content_parts.append(chunk.delta)
-                    yield TokenEvent(delta=chunk.delta)
-                if chunk.tool_calls_delta:
-                    _accumulate_tool_calls(accumulated_tool_calls, chunk.tool_calls_delta)
-                if chunk.usage:
-                    final_usage = chunk.usage
-                if chunk.finish_reason is not None:
-                    final_finish_reason = chunk.finish_reason
-        except LlamaServerTimeout as e:
-            if not first_chunk_seen:
-                raise  # setup error → route returns 504 JSON
-            yield ErrorEvent(code="chat_timeout", message=str(e))
-            return
-        except LlamaServerError as e:
-            if not first_chunk_seen:
-                raise  # setup error → route returns 502 JSON
-            yield ErrorEvent(code="chat_server_error", message=str(e))
-            return
-        except Exception as e:
-            # Mid-stream unknown failure: yield error, don't save.
-            if not first_chunk_seen:
-                raise
-            yield ErrorEvent(code="internal_error", message=f"{type(e).__name__}: {e}")
-            return
-
-        # ── Stream ended. Determine success: did we see an explicit finish_reason?
-        if final_finish_reason is None:
-            # No explicit done from upstream — treat as incomplete; do NOT save.
-            yield ErrorEvent(
-                code="incomplete_stream",
-                message="stream closed without finish_reason — no assistant turn saved",
+        while True:
+            request = ChatRequest(
+                messages=messages,
+                model=self.server.model_alias,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                tools=self._tool_schemas() or None,
+                thinking_budget_tokens=self.thinking_budget_tokens,
             )
-            return
 
-        accumulated_content = "".join(accumulated_content_parts)
-        accumulated_tc_tuple = tuple(accumulated_tool_calls) if accumulated_tool_calls else None
+            # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).
+            chunk_iter = self.stream_fn(request, self.server, timeout=self.chat_timeout_seconds)
+
+            round_content_parts: list[str] = []
+            round_tool_calls: list[dict] = []
+            round_finish_reason: str | None = None
+            first_chunk_seen = False
+
+            try:
+                for chunk in chunk_iter:
+                    first_chunk_seen = True
+                    if chunk.delta:
+                        round_content_parts.append(chunk.delta)
+                        yield TokenEvent(delta=chunk.delta)
+                    if chunk.tool_calls_delta:
+                        _accumulate_tool_calls(round_tool_calls, chunk.tool_calls_delta)
+                    if chunk.usage:
+                        final_usage = chunk.usage
+                    if chunk.finish_reason is not None:
+                        round_finish_reason = chunk.finish_reason
+            except LlamaServerTimeout as e:
+                if not first_chunk_seen and tool_rounds == 0:
+                    raise  # setup error on first round → route returns 504 JSON
+                yield ErrorEvent(code="chat_timeout", message=str(e))
+                return
+            except LlamaServerError as e:
+                if not first_chunk_seen and tool_rounds == 0:
+                    raise  # setup error on first round → route returns 502 JSON
+                yield ErrorEvent(code="chat_server_error", message=str(e))
+                return
+            except Exception as e:
+                if not first_chunk_seen and tool_rounds == 0:
+                    raise
+                yield ErrorEvent(code="internal_error", message=f"{type(e).__name__}: {e}")
+                return
+
+            # ── Round ended. Determine success.
+            if round_finish_reason is None:
+                yield ErrorEvent(
+                    code="incomplete_stream",
+                    message="stream closed without finish_reason — no assistant turn saved",
+                )
+                return
+
+            round_content = "".join(round_content_parts)
+            round_tc_tuple = tuple(round_tool_calls) if round_tool_calls else None
+
+            # If the model wants tools and we're within the round budget, dispatch.
+            if round_tc_tuple and self.tool_registry is not None:
+                if tool_rounds >= self.max_tool_rounds:
+                    # Cap hit: keep whatever content we have for this round, mark
+                    # the finish reason for the caller, and break out to save+done.
+                    final_content_parts.append(round_content)
+                    final_finish_reason = "tool_round_limit"
+                    break
+
+                # Carry the assistant-with-tool_calls message into the next round's
+                # context so the model has a coherent transcript.
+                messages = messages + (ChatMessage(
+                    role="assistant",
+                    content=round_content,
+                    tool_calls=list(round_tc_tuple),
+                ),)
+
+                # Invoke each tool, emit visibility events, append result messages.
+                for tool_call in round_tc_tuple:
+                    function = tool_call.get("function") or {}
+                    yield ToolCallEvent(
+                        call_id=str(tool_call.get("id") or ""),
+                        name=str(function.get("name") or ""),
+                        args=str(function.get("arguments") or ""),
+                    )
+                    result_message = self._tool_result_message(tool_call)
+                    yield ToolResultEvent(
+                        call_id=str(tool_call.get("id") or ""),
+                        name=str(function.get("name") or ""),
+                        content=result_message.content,
+                    )
+                    messages = messages + (result_message,)
+
+                tool_rounds += 1
+                # Re-enter the round loop for the model's next response.
+                continue
+
+            # Tool calls present but no registry to dispatch them — surface
+            # the tool_calls in DoneEvent so an external caller (test harness,
+            # or a future client that handles dispatch itself) can act on them.
+            # This is the "platform plumbing, no in-loop dispatch" contract.
+            if round_tc_tuple:
+                # Don't save: no content to persist, and the empty-turn
+                # poisoning concern is specifically about saving an empty row.
+                # Tool-only turns aren't persisted in the conversations table
+                # by design (tool_calls are ephemeral plumbing).
+                yield DoneEvent(
+                    content=round_content,
+                    finish_reason=round_finish_reason,
+                    tool_calls=round_tc_tuple,
+                    usage=final_usage,
+                )
+                return
+
+            # No tool calls: this round produced the final answer.
+            final_content_parts.append(round_content)
+            final_finish_reason = round_finish_reason
+            break
+
+        accumulated_content = "".join(final_content_parts)
 
         # An assistant turn with no visible content AND no tool_calls is a generation
         # failure (typically finish_reason=length burned on hidden reasoning). Saving
@@ -509,7 +606,7 @@ class AgentLoop:
         # closing </think> early and verbalising its scratch into content. Reported
         # 2026-06-01: session b94a6200 retry produced 5781 chars of unfenced scratch
         # after an earlier empty turn from the no-cap streaming bug.
-        if not accumulated_content and not accumulated_tc_tuple:
+        if not accumulated_content:
             yield ErrorEvent(
                 code="empty_generation",
                 message=f"model produced no visible content (finish_reason={final_finish_reason}); no assistant turn saved",
@@ -520,8 +617,8 @@ class AgentLoop:
 
         yield DoneEvent(
             content=accumulated_content,
-            finish_reason=final_finish_reason,
-            tool_calls=accumulated_tc_tuple,
+            finish_reason=final_finish_reason or "stop",
+            tool_calls=None,
             usage=final_usage,
         )
 

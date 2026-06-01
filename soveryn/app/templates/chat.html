@@ -159,6 +159,27 @@
     border:1px solid var(--glass-border);
     border-bottom-left-radius:4px;
   }
+  .tool-strip {
+    align-self:flex-start;
+    max-width:78%;
+    font-family:"SF Mono","Menlo",monospace;
+    font-size:11px; line-height:1.5;
+    color:rgba(236,243,244,0.6);
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:6px;
+    padding:6px 10px;
+    margin-bottom:-2px;
+    white-space:pre-wrap; word-wrap:break-word;
+  }
+  .tool-strip .tool-name { color:var(--gold); }
+  .tool-strip .tool-result {
+    color:rgba(236,243,244,0.5);
+    margin-top:3px;
+    padding-top:3px;
+    border-top:1px dashed rgba(255,255,255,0.05);
+  }
+  .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .bubble .thinking-placeholder {
     color:rgba(236,243,244,0.45);
     font-style:italic;
@@ -373,6 +394,22 @@
   // ─── DOM helpers ───────────────────────────────────────────────────────────
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  // Tool-strip helpers
+  function escapeArgs(raw) {
+    if (!raw) return "";
+    let s = String(raw);
+    if (s.length > 90) s = s.slice(0, 87) + "…";
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function cssEsc(s) {
+    // CSS.escape isn't available everywhere; cheap fallback for our UUID/string ids.
+    return String(s).replace(/[^a-zA-Z0-9_-]/g, c => "\\" + c);
+  }
+  function truncateResult(s) {
+    if (!s) return "(no result)";
+    return s.length > 240 ? s.slice(0, 237) + "…" : s;
+  }
   const elThread = () => $('[data-testid="thread"]');
   const elInput  = () => $('[data-testid="composer-input"]');
   const elSend   = () => $('[data-testid="send"]');
@@ -466,6 +503,29 @@
             if (!cleared) { respBubble.textContent = ""; cleared = true; }
             respBubble.textContent += payload.delta;
             finalContent += payload.delta;
+            elThread().scrollTop = elThread().scrollHeight;
+          } else if (payload.type === "tool_call") {
+            // Insert a tool-activity strip right before the assistant bubble.
+            const strip = document.createElement("div");
+            strip.className = "tool-strip";
+            strip.dataset.callId = payload.call_id;
+            const nameLine = document.createElement("div");
+            nameLine.innerHTML = `→ <span class="tool-name">${payload.name}</span>(${escapeArgs(payload.args)})`;
+            const resultLine = document.createElement("div");
+            resultLine.className = "tool-result pending";
+            resultLine.textContent = "running…";
+            strip.appendChild(nameLine);
+            strip.appendChild(resultLine);
+            elThread().insertBefore(strip, respBubble);
+            elThread().scrollTop = elThread().scrollHeight;
+          } else if (payload.type === "tool_result") {
+            // Update the matching strip's result line.
+            const strip = elThread().querySelector(`.tool-strip[data-call-id="${cssEsc(payload.call_id)}"]`);
+            if (strip) {
+              const resultLine = strip.querySelector(".tool-result");
+              resultLine.classList.remove("pending");
+              resultLine.textContent = truncateResult(payload.content);
+            }
             elThread().scrollTop = elThread().scrollHeight;
           } else if (payload.type === "done") {
             // Fallback: if deltas were dropped, render the canonical accumulated content.
