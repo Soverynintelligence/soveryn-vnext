@@ -1,0 +1,331 @@
+"""Tool factories for the four coordination board operations.
+
+These are shared across agents. Per-agent registration determines who can do
+what — read is granted to all three; create/update_status/archive go to
+Aetheria and Scotty per the locked spec. Vett posts Signal nodes via create
+(her primary write surface for unverified leads).
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Mapping
+from typing import Any
+
+from soveryn.platform.coordination.store import CoordinationStore
+from soveryn.platform.coordination.types import (
+    CoordBoard,
+    CoordStatus,
+    CoordinationError,
+    CoordinationNode,
+)
+from soveryn.platform.tools.registry import ToolArgError, ToolSpec
+
+
+# ─── Rendering helpers ──────────────────────────────────────────────────────
+
+def _node_to_dict(node: CoordinationNode) -> dict:
+    return {
+        "id": node.id,
+        "board": node.board.value,
+        "status": node.status.value,
+        "owner": node.owner,
+        "content": node.content,
+        "lattice_ref": node.lattice_ref,
+        "archived_lesson_id": node.archived_lesson_id,
+        "created_at": node.created_at,
+        "updated_at": node.updated_at,
+    }
+
+
+# ─── Read tool: list coordination nodes ─────────────────────────────────────
+
+def build_read_coord_nodes_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Read tool. Granted to all three agents. The reading agent is recorded
+    in coord_references for Phase-2 weight back-computation."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        board_arg = args.get("board")
+        status_arg = args.get("status")
+        include_archived = bool(args.get("include_archived", False))
+        try:
+            board = CoordBoard(board_arg) if board_arg else None
+        except ValueError:
+            raise ToolArgError(
+                f"invalid board {board_arg!r}; must be one of "
+                f"{[b.value for b in CoordBoard]}"
+            )
+        try:
+            status = CoordStatus(status_arg) if status_arg else None
+        except ValueError:
+            raise ToolArgError(
+                f"invalid status {status_arg!r}; must be one of "
+                f"{[s.value for s in CoordStatus]}"
+            )
+        nodes = store.list_nodes(
+            board=board,
+            status=status,
+            include_archived=include_archived,
+            reading_agent=owner_agent,
+        )
+        return {"nodes": [_node_to_dict(n) for n in nodes], "count": len(nodes)}
+
+    return ToolSpec(
+        name="read_coordination_nodes",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "board": {
+                    "type": "string",
+                    "enum": [b.value for b in CoordBoard],
+                    "description": "Filter to one board. Omit for all boards.",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [s.value for s in CoordStatus],
+                    "description": "Filter to one status. Omit for all non-archived.",
+                },
+                "include_archived": {
+                    "type": "boolean",
+                    "description": "By default Archived nodes are excluded from board view. "
+                                   "Set true for audit reads.",
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "List Coordination Board nodes filtered by board (Signal | Blueprint | "
+            "Friction) and/or status (Open | Refining | Ready | Archived). "
+            "Archived nodes are hidden from board view unless include_archived=true."
+        ),
+    )
+
+
+# ─── Create tool: post a coord node ─────────────────────────────────────────
+
+def build_create_coord_node_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Create a Coordination Board node in the Open state. Vett uses this for
+    Signal posts; Aetheria for refined Blueprint or Friction; Scotty for
+    execution Blueprints he's spec'd."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        board_arg = args.get("board")
+        try:
+            board = CoordBoard(board_arg)
+        except ValueError:
+            raise ToolArgError(
+                f"invalid board {board_arg!r}; must be one of "
+                f"{[b.value for b in CoordBoard]}"
+            )
+        content = args.get("content", "")
+        if not isinstance(content, str) or not content.strip():
+            raise ToolArgError("content must be a non-empty string")
+        lattice_ref = args.get("lattice_ref")
+        if lattice_ref is not None and not isinstance(lattice_ref, str):
+            raise ToolArgError("lattice_ref must be a string or omitted")
+        try:
+            node = store.create_node(
+                board=board,
+                owner=owner_agent,
+                content=content,
+                lattice_ref=lattice_ref or None,
+            )
+        except CoordinationError as e:
+            raise ToolArgError(str(e))
+        return {"created": _node_to_dict(node)}
+
+    return ToolSpec(
+        name="create_coordination_node",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "board": {
+                    "type": "string",
+                    "enum": [b.value for b in CoordBoard],
+                    "description": "Which board this node lives on.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The lead, plan, or contradiction. Must be non-empty.",
+                },
+                "lattice_ref": {
+                    "type": "string",
+                    "description": "Optional: lattice node id this coord node references "
+                                   "(e.g. the memory thesis being refined into a Blueprint).",
+                },
+            },
+            "required": ["board", "content"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Post a new Coordination Board node. Starts in Open status; you can "
+            "transition it via update_coordination_status. Pass lattice_ref to "
+            "link this coord node back to an existing lattice memory."
+        ),
+    )
+
+
+# ─── Update status tool ─────────────────────────────────────────────────────
+
+def build_update_coord_status_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Transition a coord node through the lifecycle. Archive is NOT done via
+    this tool — that requires a Lesson Learned payload, so it has its own tool."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        node_id = args.get("node_id", "")
+        if not isinstance(node_id, str) or not node_id:
+            raise ToolArgError("node_id must be a non-empty string")
+        new_status_arg = args.get("new_status")
+        try:
+            new_status = CoordStatus(new_status_arg)
+        except ValueError:
+            raise ToolArgError(
+                f"invalid new_status {new_status_arg!r}; must be one of "
+                f"{[s.value for s in CoordStatus if s != CoordStatus.ARCHIVED]} "
+                f"(use archive_coordination_node for Archived)"
+            )
+        if new_status == CoordStatus.ARCHIVED:
+            raise ToolArgError(
+                "use archive_coordination_node(node_id, lesson_learned_content) "
+                "to archive; this tool transitions through Open/Refining/Ready only"
+            )
+        try:
+            node = store.update_status(node_id, new_status, acting_agent=owner_agent)
+        except CoordinationError as e:
+            raise ToolArgError(str(e))
+        return {"updated": _node_to_dict(node)}
+
+    return ToolSpec(
+        name="update_coordination_status",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "node_id": {
+                    "type": "string",
+                    "description": "ID of the coord node to transition.",
+                },
+                "new_status": {
+                    "type": "string",
+                    "enum": [
+                        CoordStatus.OPEN.value,
+                        CoordStatus.REFINING.value,
+                        CoordStatus.READY.value,
+                    ],
+                    "description": "Target status. Open->Refining->Ready only via this tool; "
+                                   "Archived requires archive_coordination_node.",
+                },
+            },
+            "required": ["node_id", "new_status"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Move a coordination node through the Open -> Refining -> Ready lifecycle. "
+            "Invalid transitions (e.g. backwards or skipping states) are rejected. "
+            "Archive has its own tool because it requires a Lesson Learned payload."
+        ),
+    )
+
+
+# ─── Archive tool ───────────────────────────────────────────────────────────
+
+def build_archive_coord_node_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Archive a coord node AND write the paired Lesson Learned lattice node.
+    Spec rule: archive vanishes from board view, BUT the resolution becomes
+    permanent recallable memory via the Lesson Learned link."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        node_id = args.get("node_id", "")
+        if not isinstance(node_id, str) or not node_id:
+            raise ToolArgError("node_id must be a non-empty string")
+        lesson = args.get("lesson_learned_content", "")
+        if not isinstance(lesson, str) or not lesson.strip():
+            raise ToolArgError(
+                "lesson_learned_content must be a non-empty string — archiving "
+                "without a lesson means losing the resolution"
+            )
+        try:
+            node = store.archive_node(
+                node_id,
+                lesson_learned_content=lesson,
+                acting_agent=owner_agent,
+            )
+        except CoordinationError as e:
+            raise ToolArgError(str(e))
+        return {
+            "archived": _node_to_dict(node),
+            "lesson_learned_id": node.archived_lesson_id,
+        }
+
+    return ToolSpec(
+        name="archive_coordination_node",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "node_id": {
+                    "type": "string",
+                    "description": "ID of the coord node to archive.",
+                },
+                "lesson_learned_content": {
+                    "type": "string",
+                    "description": "The resolution captured as permanent memory. "
+                                   "Required — archive without a lesson loses what was learned.",
+                },
+            },
+            "required": ["node_id", "lesson_learned_content"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Archive a coordination node and write a Lesson Learned lattice "
+            "memory in one operation. Coord node is marked Archived (hidden from "
+            "board view) and the lesson becomes a recallable lattice node tagged "
+            "with the originating coord node id."
+        ),
+    )
+
+
+# ─── Bulk registration ──────────────────────────────────────────────────────
+
+def register_coord_tools(
+    registry,
+    *,
+    coord_store: CoordinationStore,
+    owner_agent: str,
+    grant_write: bool = True,
+) -> None:
+    """Register the four coord tools for one agent.
+
+    grant_write=False registers only the read tool — useful when an agent
+    needs visibility into the boards but isn't a write principal. Vett gets
+    full grant_write=True because she's the Signal-poster; Aetheria gets full
+    grant_write because she refines and arbitrates; Scotty gets full grant_write
+    because he Blueprints execution.
+    """
+    registry.register(build_read_coord_nodes_tool(store=coord_store, owner_agent=owner_agent))
+    if grant_write:
+        registry.register(build_create_coord_node_tool(store=coord_store, owner_agent=owner_agent))
+        registry.register(build_update_coord_status_tool(store=coord_store, owner_agent=owner_agent))
+        registry.register(build_archive_coord_node_tool(store=coord_store, owner_agent=owner_agent))

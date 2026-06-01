@@ -67,21 +67,32 @@ def test_startup_creates_tool_registry_for_aetheria(
     aetheria_loop = app.extensions["soveryn"]["agent_loops"]["aetheria"]
     schemas = aetheria_loop._tool_schemas()
     names = {schema["function"]["name"] for schema in schemas}
-    assert names == {
+    # Aetheria's lattice read tools (Track 2)
+    assert {
         "search_lattice_by_embedding",
         "search_lattice_by_keywords",
         "get_lattice_node",
         "recent_lattice_entries",
-    }
+    } <= names
+    # Coordination Board tools (boards phase, vnext 2026-06-01)
+    assert {
+        "read_coordination_nodes",
+        "create_coordination_node",
+        "update_coordination_status",
+        "archive_coordination_node",
+    } <= names
 
 
-def test_other_agents_do_not_get_aetheria_tools(
+def test_other_agents_do_not_get_aetheria_lattice_tools(
     tmp_path,
     monkeypatch,
     fake_souls_dir,
     fake_pinned,
     recall_lattice,
 ) -> None:
+    """Vett and Scotty must NOT see Aetheria-owned lattice tools (no capability
+    leakage across agents through the shared registry), but they DO get the
+    Coordination Board tools per the boards phase (vnext 2026-06-01)."""
     _configure_startup_env(
         monkeypatch,
         fake_souls_dir=fake_souls_dir,
@@ -90,6 +101,22 @@ def test_other_agents_do_not_get_aetheria_tools(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
 
+    aetheria_lattice_tools = {
+        "search_lattice_by_embedding",
+        "search_lattice_by_keywords",
+        "get_lattice_node",
+        "recent_lattice_entries",
+    }
+    coord_tools = {
+        "read_coordination_nodes",
+        "create_coordination_node",
+        "update_coordination_status",
+        "archive_coordination_node",
+    }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
-        assert loop._tool_schemas() == ()
+        names = {schema["function"]["name"] for schema in loop._tool_schemas()}
+        assert names.isdisjoint(aetheria_lattice_tools), \
+            f"{agent} sees Aetheria-only tools: {names & aetheria_lattice_tools}"
+        assert coord_tools <= names, \
+            f"{agent} missing coord tools: {coord_tools - names}"

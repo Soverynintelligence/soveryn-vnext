@@ -134,6 +134,23 @@ CREATE INDEX IF NOT EXISTS idx_nodes_layer    ON nodes(layer);
 CREATE INDEX IF NOT EXISTS idx_nodes_type     ON nodes(type);
 CREATE INDEX IF NOT EXISTS idx_nodes_salience ON nodes(salience DESC);
 CREATE INDEX IF NOT EXISTS idx_nodes_created  ON nodes(created_at DESC);
+
+-- Cross-reference instrumentation for Coordination Boards (Phase-1 substrate
+-- for Phase-2 weight back-computation). Logs every time an agent reads or
+-- references a coord node. Source/referenced ids are TEXT (UUIDs) and do NOT
+-- carry FK constraints on purpose — coord nodes get archived/cleared but
+-- references should outlive the original target as historical signal.
+CREATE TABLE IF NOT EXISTS coord_references (
+    id                  TEXT PRIMARY KEY,
+    source_node_id      TEXT NOT NULL,
+    referenced_node_id  TEXT NOT NULL,
+    source_agent        TEXT NOT NULL,
+    created_at          TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_coord_refs_source     ON coord_references(source_node_id);
+CREATE INDEX IF NOT EXISTS idx_coord_refs_referenced ON coord_references(referenced_node_id);
+CREATE INDEX IF NOT EXISTS idx_coord_refs_agent      ON coord_references(source_agent);
 """
 
 

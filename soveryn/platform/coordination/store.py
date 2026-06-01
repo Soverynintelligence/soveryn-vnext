@@ -1,0 +1,303 @@
+"""CoordinationStore — CRUD + state machine + cross-reference instrumentation.
+
+Composes over LatticeStore. Coordination Nodes live in the existing nodes
+table with type='coordination'; board/status/lattice_ref/owner live in the
+provenance JSON column. Archive writes a paired Lesson Learned node
+(type='lesson_learned') back into the same store so the resolution becomes
+recallable memory.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import uuid
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
+from typing import Iterator
+
+from soveryn.platform.coordination.types import (
+    COORDINATION_NODE_TYPE,
+    LESSON_LEARNED_NODE_TYPE,
+    CoordBoard,
+    CoordStatus,
+    CoordinationError,
+    CoordinationNode,
+    VALID_TRANSITIONS,
+)
+
+
+DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
+
+
+class CoordinationStore:
+    """SQLite-backed coordination store. Path-injected; no module state."""
+
+    def __init__(self, db_path: Path, timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS) -> None:
+        self.db_path = Path(db_path)
+        self.timeout_seconds = timeout_seconds
+
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(str(self.db_path), timeout=self.timeout_seconds)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    # ─── Read ───────────────────────────────────────────────────────────────
+
+    def list_nodes(
+        self,
+        *,
+        board: CoordBoard | None = None,
+        status: CoordStatus | None = None,
+        include_archived: bool = False,
+        reading_agent: str | None = None,
+    ) -> tuple[CoordinationNode, ...]:
+        """Return Coordination Nodes filtered by board/status. Excludes Archived
+        from "board view" by default — matches the spec ("Archive vanishes from
+        the board"). Pass include_archived=True for audit/admin reads.
+
+        If reading_agent is set, every returned node is logged to
+        coord_references so cross-reference instrumentation captures the read.
+        Phase-2 weight back-computation reads from that table.
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM nodes WHERE type = ? ORDER BY created_at ASC",
+                (COORDINATION_NODE_TYPE,),
+            ).fetchall()
+
+        results: list[CoordinationNode] = []
+        for r in rows:
+            node = _row_to_coord_node(r)
+            if board is not None and node.board != board:
+                continue
+            if status is not None and node.status != status:
+                continue
+            if not include_archived and node.status == CoordStatus.ARCHIVED:
+                continue
+            results.append(node)
+
+        if reading_agent:
+            self._log_references(reading_agent, [n.id for n in results])
+
+        return tuple(results)
+
+    def get_node(self, node_id: str, *, reading_agent: str | None = None) -> CoordinationNode | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM nodes WHERE id = ? AND type = ?",
+                (node_id, COORDINATION_NODE_TYPE),
+            ).fetchone()
+        if row is None:
+            return None
+        node = _row_to_coord_node(row)
+        if reading_agent:
+            self._log_references(reading_agent, [node.id])
+        return node
+
+    # ─── Write ──────────────────────────────────────────────────────────────
+
+    def create_node(
+        self,
+        *,
+        board: CoordBoard,
+        owner: str,
+        content: str,
+        lattice_ref: str | None = None,
+    ) -> CoordinationNode:
+        """Create a new Coordination Node in the Open state."""
+        if not content or not content.strip():
+            raise CoordinationError("content must be non-empty")
+        node_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        provenance = {
+            "board": board.value,
+            "status": CoordStatus.OPEN.value,
+            "owner": owner,
+            "lattice_ref": lattice_ref,
+            "archived_lesson_id": None,
+        }
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, "
+                "intensity, salience, access_count, tags, created_at, "
+                "updated_at, embedding, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, NULL, NULL, ?)",
+                (node_id, COORDINATION_NODE_TYPE, owner, content.strip(),
+                 now, now, json.dumps(provenance, sort_keys=True)),
+            )
+        # If this node references an existing lattice node, log that as the
+        # initial cross-reference so the source<->target link enters the table
+        # from creation time.
+        if lattice_ref:
+            self._log_references(owner, [lattice_ref], source_node_id=node_id)
+        return CoordinationNode(
+            id=node_id, board=board, status=CoordStatus.OPEN, owner=owner,
+            content=content.strip(), lattice_ref=lattice_ref,
+            archived_lesson_id=None, created_at=now, updated_at=now,
+        )
+
+    def update_status(
+        self,
+        node_id: str,
+        new_status: CoordStatus,
+        *,
+        acting_agent: str,
+    ) -> CoordinationNode:
+        """Transition a node's status. Validates against VALID_TRANSITIONS."""
+        existing = self.get_node(node_id)
+        if existing is None:
+            raise CoordinationError(f"coord node {node_id!r} not found")
+        allowed = VALID_TRANSITIONS[existing.status]
+        if new_status not in allowed:
+            raise CoordinationError(
+                f"invalid transition {existing.status.value} -> {new_status.value} "
+                f"(allowed: {sorted(s.value for s in allowed) or 'none — terminal state'})"
+            )
+        if new_status == CoordStatus.ARCHIVED:
+            raise CoordinationError(
+                "use archive_node(...) to transition into Archived; it requires "
+                "a lesson_learned payload"
+            )
+        now = datetime.now().isoformat()
+        provenance = _provenance_for(existing)
+        provenance["status"] = new_status.value
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE nodes SET provenance = ?, updated_at = ?, agent = agent "
+                "WHERE id = ? AND type = ?",
+                (json.dumps(provenance, sort_keys=True), now, node_id, COORDINATION_NODE_TYPE),
+            )
+        # Log the cross-reference: the acting agent touched this node.
+        self._log_references(acting_agent, [node_id])
+        return self.get_node(node_id)  # re-read for the canonical row
+
+    def archive_node(
+        self,
+        node_id: str,
+        *,
+        lesson_learned_content: str,
+        acting_agent: str,
+    ) -> CoordinationNode:
+        """Archive a coord node AND write a paired Lesson Learned lattice node.
+
+        Per spec: Archive != Delete. The coord node is marked Archived (vanishes
+        from board view but stays in the table for audit). A Lesson Learned
+        node is written into the lattice (type='lesson_learned') so the
+        resolution becomes recallable memory. The two are cross-referenced
+        through archived_lesson_id (coord -> lesson) and provenance
+        (lesson -> coord).
+        """
+        if not lesson_learned_content or not lesson_learned_content.strip():
+            raise CoordinationError("lesson_learned_content must be non-empty")
+        existing = self.get_node(node_id)
+        if existing is None:
+            raise CoordinationError(f"coord node {node_id!r} not found")
+        if existing.status == CoordStatus.ARCHIVED:
+            raise CoordinationError(f"coord node {node_id!r} is already Archived")
+        lesson_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        lesson_provenance = {
+            "source": "coordination_archive",
+            "archived_coord_node_id": node_id,
+            "archived_by": acting_agent,
+            "from_board": existing.board.value,
+        }
+        coord_provenance = _provenance_for(existing)
+        coord_provenance["status"] = CoordStatus.ARCHIVED.value
+        coord_provenance["archived_lesson_id"] = lesson_id
+        with self._conn() as conn:
+            # 1. Write the Lesson Learned lattice node.
+            conn.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, "
+                "intensity, salience, access_count, tags, created_at, "
+                "updated_at, embedding, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, NULL, NULL, ?)",
+                (lesson_id, LESSON_LEARNED_NODE_TYPE, acting_agent,
+                 lesson_learned_content.strip(), now, now,
+                 json.dumps(lesson_provenance, sort_keys=True)),
+            )
+            # 2. Mark the coord node Archived and link the lesson.
+            conn.execute(
+                "UPDATE nodes SET provenance = ?, updated_at = ? WHERE id = ? AND type = ?",
+                (json.dumps(coord_provenance, sort_keys=True), now, node_id,
+                 COORDINATION_NODE_TYPE),
+            )
+        # Cross-reference: archive ties coord node to lesson node.
+        self._log_references(acting_agent, [lesson_id], source_node_id=node_id)
+        return self.get_node(node_id)
+
+    # ─── Cross-reference instrumentation ────────────────────────────────────
+
+    def _log_references(
+        self,
+        source_agent: str,
+        referenced_node_ids: list[str],
+        *,
+        source_node_id: str | None = None,
+    ) -> None:
+        """Record cross-references in the coord_references table.
+
+        Phase-1 substrate: capture every read/write as a separate row so
+        Phase-2 can back-compute weight from the observed reference pattern.
+        source_node_id is the coord node being acted on (None for plain reads,
+        set when one coord node references another via lattice_ref or archive).
+        """
+        if not referenced_node_ids:
+            return
+        now = datetime.now().isoformat()
+        with self._conn() as conn:
+            for ref_id in referenced_node_ids:
+                conn.execute(
+                    "INSERT INTO coord_references "
+                    "(id, source_node_id, referenced_node_id, source_agent, created_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), source_node_id or ref_id, ref_id, source_agent, now),
+                )
+
+    def reference_count(self, node_id: str) -> int:
+        """Count how many times this node has been referenced — the raw signal
+        Phase-2 weight scoring will back-compute on."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM coord_references WHERE referenced_node_id = ?",
+                (node_id,),
+            ).fetchone()
+        return int(row[0])
+
+
+# ─── Row mapping helpers ────────────────────────────────────────────────────
+
+def _row_to_coord_node(row: sqlite3.Row) -> CoordinationNode:
+    provenance = json.loads(row["provenance"] or "{}")
+    return CoordinationNode(
+        id=row["id"],
+        board=CoordBoard(provenance.get("board", CoordBoard.SIGNAL.value)),
+        status=CoordStatus(provenance.get("status", CoordStatus.OPEN.value)),
+        owner=provenance.get("owner", row["agent"]),
+        content=row["content"],
+        lattice_ref=provenance.get("lattice_ref"),
+        archived_lesson_id=provenance.get("archived_lesson_id"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _provenance_for(node: CoordinationNode) -> dict:
+    return {
+        "board": node.board.value,
+        "status": node.status.value,
+        "owner": node.owner,
+        "lattice_ref": node.lattice_ref,
+        "archived_lesson_id": node.archived_lesson_id,
+    }

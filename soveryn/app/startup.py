@@ -94,9 +94,34 @@ def create_app(
                 embed_fn=_default_embed,
             )
 
+        # Coordination Boards — register the four board tools for all three
+        # agents per the locked spec (Aetheria 2026-06-01). The CoordinationStore
+        # composes over the consolidated lattice DB (env.lattice_db == recall
+        # path post-consolidation 2026-06-01 / vnext 7d75535). Vett, Aetheria,
+        # and Scotty all get full read+write grant. Friction arbitration is
+        # enforced at the persona/relational layer, not the tool layer — any
+        # agent can OPEN a Friction node; resolution flows through Aetheria.
+        coord_store = None
+        if env.lattice_db.is_file():
+            from soveryn.platform.coordination import CoordinationStore
+            from soveryn.platform.coordination.tools import register_coord_tools
+
+            coord_store = CoordinationStore(env.lattice_db)
+            for agent_name in ("aetheria", "vett", "scotty"):
+                register_coord_tools(
+                    tool_registry,
+                    coord_store=coord_store,
+                    owner_agent=agent_name,
+                    grant_write=True,
+                )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
+            # Every active agent gets the shared tool_registry. Each agent's
+            # _tool_schemas() filters to only its own owner-keyed tools, so
+            # sharing the registry doesn't leak capability across agents.
+            kwargs["tool_registry"] = tool_registry
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:
@@ -106,7 +131,6 @@ def create_app(
                     kwargs["recall_k"] = 5
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
-                    kwargs["tool_registry"] = tool_registry
                 # thinking_budget_tokens left unset (None = unrestricted).
                 # As of 2026-06-01 Aetheria runs on Gemma 4 31B (vanilla Google
                 # instruct) with thinking disabled via chat-template-kwargs in
