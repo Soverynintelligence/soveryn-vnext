@@ -146,6 +146,63 @@ def test_tool_arg_error_surfaces_as_tool_result_not_exception(conv_store):
     assert response.content == "recovered"
 
 
+def test_handler_runtime_error_surfaces_as_tool_result_not_exception(conv_store):
+    """A tool handler raising anything other than ToolArgError (DB lock,
+    transient failure, bug, etc.) must surface as a tool-result payload
+    so the model can see 'this tool failed' and recover. Without this,
+    a single tool handler raise would crash the whole turn."""
+
+    def crashing_handler(args):
+        raise RuntimeError("simulated DB lock")
+
+    registry = _make_registry(crashing_handler)
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "echo", {"text": "x"}),),
+            usage={}, raw={},
+        ),
+        ChatResponse(content="recovered from handler error", finish_reason="stop",
+                     tool_calls=None, usage={}, raw={}),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry)
+    response = loop.process_message(sid, "go")
+    tool_msg = next(m for m in fake.calls[1]["request"].messages if m.role == "tool")
+    body = json.loads(tool_msg.content)
+    assert body["error"] == "RuntimeError"
+    assert "simulated DB lock" in body["message"]
+    assert response.content == "recovered from handler error"
+
+
+def test_handler_value_error_carries_real_exception_type_not_tool_arg_error(conv_store):
+    """ValueError from inside a handler must NOT be misreported as
+    ToolArgError — the latter is for schema-validation failures only.
+    Real exception class name carries through."""
+
+    def value_error_handler(args):
+        raise ValueError("genuine internal value error")
+
+    registry = _make_registry(value_error_handler)
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "echo", {"text": "x"}),),
+            usage={}, raw={},
+        ),
+        ChatResponse(content="ok", finish_reason="stop", tool_calls=None, usage={}, raw={}),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry)
+    loop.process_message(sid, "go")
+    tool_msg = next(m for m in fake.calls[1]["request"].messages if m.role == "tool")
+    body = json.loads(tool_msg.content)
+    assert body["error"] == "ValueError"
+    assert body["error"] != "ToolArgError"
+
+
 def test_no_registry_passes_tool_calls_through_unchanged(conv_store):
     fake = _ScriptedChat([
         ChatResponse(

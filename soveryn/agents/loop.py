@@ -362,6 +362,13 @@ class AgentLoop:
                 result = self.tool_registry.invoke(self.agent_name, tool_name, args)
             except ToolArgError as exc:
                 result = {"error": "ToolArgError", "message": str(exc)}
+            except Exception as exc:  # noqa: BLE001 — handler failures must surface
+                # Any other tool handler exception (DB lock, transient network,
+                # bug in a tool) becomes a tool-result payload the model can
+                # see and respond to. Without this, a single tool handler raise
+                # crashes the whole turn. BaseException stays unhandled —
+                # SystemExit / KeyboardInterrupt propagate as intended.
+                result = {"error": type(exc).__name__, "message": str(exc)}
         return ChatMessage(
             role="tool",
             content=json.dumps(result, sort_keys=True),
