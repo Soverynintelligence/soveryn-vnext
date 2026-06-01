@@ -171,12 +171,6 @@ RUNTIME_SERVICES: tuple[RuntimeService, ...] = (
         role="Security daemon — scans + posts findings to inboxes (no LLM)",
     ),
     RuntimeService(
-        name="aetheria_stream",
-        kind="process",
-        launch="user_launched",
-        role="Aetheria streaming / proprioception surface (separate process)",
-    ),
-    RuntimeService(
         name="heartbeat",
         kind="thread",
         launch="app_startup",

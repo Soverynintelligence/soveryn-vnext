@@ -125,8 +125,9 @@ def test_model_servers_can_share_port_but_not_with_service_endpoints():
 def test_runtime_services_includes_all_required():
     """Spec §2, §8 Bucket A: these process-level dependencies must exist."""
     names = {r.name for r in runtime.RUNTIME_SERVICES}
-    required = {"ares_daemon", "aetheria_stream", "heartbeat", "cognition", "dream_aetheria"}
+    required = {"ares_daemon", "heartbeat", "cognition", "dream_aetheria"}
     assert required.issubset(names), f"missing runtime services: {required - names}"
+    assert "aetheria_stream" not in names
 
 
 def test_runtime_service_kinds_are_constrained():
