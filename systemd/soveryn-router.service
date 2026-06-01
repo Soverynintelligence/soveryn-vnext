@@ -1,0 +1,18 @@
+# SOVERYN router unit — user service.
+# Install into ~/.config/systemd/user/ and enable under soveryn.target.
+
+[Unit]
+Description=SOVERYN llama-server router (:8090)
+After=network.target
+
+[Service]
+Type=simple
+User=jon-deoliveira
+WorkingDirectory=/home/jon-deoliveira/soveryn_complete
+ExecStart=/home/jon-deoliveira/llama.cpp/build/bin/llama-server --models-preset /home/jon-deoliveira/soveryn_complete/router-presets.ini --models-max 4 --host 127.0.0.1 --port 8090
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+
+[Install]
+WantedBy=soveryn.target
