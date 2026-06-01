@@ -20,7 +20,6 @@ parsing — nothing more.
 
 from __future__ import annotations
 import json
-import re
 import socket
 import urllib.error
 import urllib.request
@@ -107,34 +106,9 @@ class EmbeddingResponse:
     raw: dict
 
 
-_THINK_BLOCK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
-_THINK_OPEN_RE = re.compile(r"<think>[\s\S]*", re.IGNORECASE)
-_THINK_NAKED_RE = re.compile(
-    r"\A(?:(?!<think>).)*?</think>\s*", re.IGNORECASE | re.DOTALL,
-)
-_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
+from soveryn.platform.text import strip_think_markup as _strip_think_markup
+
 _THINK_PREFIXES = ("<think>", "</think>")
-
-
-def _strip_think_markup(text: str) -> str:
-    """Remove think blocks and stray think tags from visible content.
-
-    Four patterns, applied in order:
-      1. <think>...</think>  — paired block (canonical case).
-      2. <think>...EOF       — open tag with no close (cap saturation, truncation).
-      3. Naked reasoning at start followed by a lone </think> — the model
-         streamed reasoning prose with no opening tag, then closed it.
-         Without this pattern the reasoning prose stays visible above the
-         response after the close tag itself is stripped.
-      4. Any residual lone </think> — backstop.
-    """
-    if not text:
-        return text
-    cleaned = _THINK_BLOCK_RE.sub("", text)
-    cleaned = _THINK_OPEN_RE.sub("", cleaned)
-    cleaned = _THINK_NAKED_RE.sub("", cleaned)
-    cleaned = _THINK_CLOSE_RE.sub("", cleaned)
-    return cleaned
 
 
 def _safe_visible_prefix(text: str, *, final: bool) -> str:
