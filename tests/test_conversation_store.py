@@ -46,6 +46,19 @@ def test_save_turn_custom_source(store):
     assert store.load_history(sid)[0].source == "mobile"
 
 
+def test_load_history_strips_think_markup_from_persisted_rows(store):
+    import sqlite3
+    sid = store.new_session("aetheria")
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT INTO conversations (session_id, agent, role, content, timestamp, source) VALUES (?, ?, ?, ?, datetime('now'), ?)",
+            (sid, "aetheria", "assistant", "<think>scratch</think>final", "direct"),
+        )
+        conn.commit()
+    history = store.load_history(sid)
+    assert [t.content for t in history] == ["final"]
+
+
 @pytest.mark.parametrize("bad_role", ["narrator", "Aetheria", "USER", "", "robot"])
 def test_save_turn_rejects_unknown_role(store, bad_role):
     sid = store.new_session("aetheria")

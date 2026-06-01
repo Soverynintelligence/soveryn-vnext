@@ -10,6 +10,7 @@ soveryn.config.loader; tests pass tmp_path).
 """
 
 from __future__ import annotations
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -21,6 +22,21 @@ from typing import Iterator
 
 VALID_ROLES: frozenset[str] = frozenset({"user", "assistant", "system", "tool"})
 DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
+
+_THINK_BLOCK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+_THINK_OPEN_RE = re.compile(r"<think>[\s\S]*", re.IGNORECASE)
+_THINK_NAKED_RE = re.compile(r"\A(?:(?!<think>).)*?</think>\s*", re.IGNORECASE | re.DOTALL)
+_THINK_CLOSE_RE = re.compile(r"</think>", re.IGNORECASE)
+
+
+def _strip_think_markup(text: str) -> str:
+    if not text:
+        return text
+    cleaned = _THINK_BLOCK_RE.sub("", text)
+    cleaned = _THINK_OPEN_RE.sub("", cleaned)
+    cleaned = _THINK_NAKED_RE.sub("", cleaned)
+    cleaned = _THINK_CLOSE_RE.sub("", cleaned)
+    return cleaned
 
 
 class ConversationStoreError(Exception):
@@ -166,7 +182,7 @@ class ConversationStore:
                 "FROM conversations WHERE session_id = ? ORDER BY rowid ASC",
                 (session_id,),
             ).fetchall()
-        return tuple(Turn(**dict(r)) for r in rows)
+        return tuple(Turn(**{**dict(r), "content": _strip_think_markup(str(r["content"]))}) for r in rows)
 
     def list_sessions(self, agent: str | None = None, limit: int = 100) -> tuple[Session, ...]:
         """Return sessions, newest first, optionally scoped to one agent."""
