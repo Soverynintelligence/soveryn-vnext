@@ -47,3 +47,35 @@ def test_router_unit_is_user_scoped_and_restarts_on_failure():
 def test_router_unit_installs_under_soveryn_target():
     unit = _load_unit("soveryn-router.service")
     assert unit.get("Install", "WantedBy") == "soveryn.target"
+
+
+def test_vnext_unit_has_router_dependency_and_execstartpre_waits_on_props():
+    unit = _load_unit("soveryn-vnext.service")
+    assert unit.get("Unit", "After") == "soveryn-router.service"
+    assert unit.get("Unit", "Requires") == "soveryn-router.service"
+    pre = unit.get("Service", "ExecStartPre")
+    assert "python -m soveryn.platform.supervisor.readiness" in pre
+    assert "http://127.0.0.1:8090/props" in pre
+    assert "--name router" in pre
+    assert "--max-wait 180" in pre
+
+
+def test_vnext_unit_runs_flask_app_on_5001_with_locked_env_port():
+    unit = _load_unit("soveryn-vnext.service")
+    assert unit.get("Service", "Environment") == "SOVERYN_APP_PORT=5001"
+    assert unit.get("Service", "ExecStart").endswith("-m soveryn.app")
+    assert "python" in unit.get("Service", "ExecStart")
+    assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
+
+
+def test_vnext_unit_restarts_on_failure_and_times_out_for_cold_start():
+    unit = _load_unit("soveryn-vnext.service")
+    assert unit.get("Service", "Restart") == "on-failure"
+    assert unit.get("Service", "RestartSec") == "5"
+    assert unit.get("Service", "TimeoutStartSec") == "180"
+    assert unit.get("Service", "Type") == "simple"
+
+
+def test_vnext_unit_installs_under_soveryn_target():
+    unit = _load_unit("soveryn-vnext.service")
+    assert unit.get("Install", "WantedBy") == "soveryn.target"
