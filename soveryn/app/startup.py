@@ -108,13 +108,15 @@ def create_app(
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
                     kwargs["tool_registry"] = tool_registry
                 # thinking_budget_tokens left unset (None = unrestricted).
-                # As of 2026-06-01 router-presets.ini sets enable_thinking=false
-                # for [aetheria] via chat-template-kwargs, so the Qwen3.6-A3B
-                # model never enters thinking mode. The budget cap is therefore
-                # a no-op — and the prior cap-at-384 was the documented bleed
-                # trigger (Qwen-A3B token-budget cutoff injects </think>
-                # mid-trace and dumps the partial reasoning into content).
-                # See router-presets.ini + project_soveryn_qwen36_thinking_off.md.
+                # As of 2026-06-01 Aetheria runs on Gemma 4 31B (vanilla Google
+                # instruct) with thinking disabled via chat-template-kwargs in
+                # router-presets.ini. Reason: llama.cpp's generic reasoning
+                # extractor doesn't have model-specific parsers — Qwen3-A3B
+                # bleeds and Gemma's <|channel>thought consumes all output.
+                # The proper fix (per-model parsers like vLLM's --reasoning-parser
+                # qwen3) lands when Aetheria moves to vLLM on uniform-Blackwell
+                # hardware (Spark arrival, all-Blackwell roadmap). Until then,
+                # thinking stays off across whichever model carries her.
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
     app.extensions["soveryn"] = {
