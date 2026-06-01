@@ -142,7 +142,6 @@ def test_collect_architecture_live_against_synthetic_root(monkeypatch, tmp_path)
     monkeypatch.setenv("SOVERYN_VNEXT_ROOT", str(tmp_path))
     import soveryn.agents.ares.lanes.architecture as arch
 
-    monkeypatch.setattr(arch, "_tool_ownership_snapshot", lambda: ({}, frozenset()))
     findings = arch.collect_architecture_live()
     types = {f.finding_type for f in findings}
     assert "architecture.raw_io_in_agents" in types

@@ -88,7 +88,12 @@ def check_tool_ownership_intact(
 
 
 def collect_architecture_live() -> list[AresFinding]:
-    """Run all architecture invariants over the live vnext source tree."""
+    """Run the architecture invariants that can be checked from this process.
+
+    Tool-ownership monitoring is intentionally excluded here: the daemon runs in a
+    separate process from the Flask app that owns ToolRegistry state, so a direct
+    live snapshot would always be empty unless we add explicit shared-state plumbing.
+    """
 
     root = _vnext_root()
     findings: list[AresFinding] = []
@@ -96,12 +101,6 @@ def collect_architecture_live() -> list[AresFinding]:
     findings.extend(check_no_retired_agent_packages(
         present_packages=_present_agent_packages(root),
     ))
-    owners, active_agents = _tool_ownership_snapshot()
-    if owners and active_agents:
-        findings.extend(check_tool_ownership_intact(
-            tool_owners=owners,
-            active_agents=active_agents,
-        ))
     return findings
 
 
@@ -136,19 +135,6 @@ def _present_agent_packages(root: Path) -> frozenset[str]:
         if path.is_dir() and (path / "__init__.py").is_file()
     )
 
-
-def _tool_ownership_snapshot() -> tuple[dict[str, str], frozenset[str]]:
-    try:
-        from soveryn.config.runtime import ACTIVE_AGENTS
-        active_agents = frozenset(ACTIVE_AGENTS)
-    except Exception:
-        active_agents = frozenset()
-    try:
-        from soveryn.platform.tools.registry import iter_tools_with_owners
-        owners = dict(iter_tools_with_owners())
-    except Exception:
-        owners = {}
-    return owners, active_agents
 
 
 def _imported_modules(node: ast.AST) -> tuple[str, ...]:
