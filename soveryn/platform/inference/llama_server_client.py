@@ -32,7 +32,6 @@ from soveryn.config.runtime import MODEL_SERVERS, ModelServer
 DEFAULT_CHAT_TIMEOUT_SECONDS = 30.0
 DEFAULT_EMBED_TIMEOUT_SECONDS = 10.0
 EMBEDDINGS_SERVER_NAME = "embeddings"
-DEFAULT_REPETITION_PENALTY = 1.1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,25 +104,6 @@ class EmbeddingResponse:
     vectors: tuple[tuple[float, ...], ...]  # parallel to request.input
     usage: dict[str, int] | None
     raw: dict
-
-
-from soveryn.platform.text import strip_think_markup as _strip_think_markup
-
-_THINK_PREFIXES = ("<think>", "</think>")
-
-
-def _safe_visible_prefix(text: str, *, final: bool) -> str:
-    """Hold back a tiny suffix so partial think tags never leak between stream chunks."""
-    if final or not text:
-        return text
-    lower = text.lower()
-    hold = 0
-    for prefix in _THINK_PREFIXES:
-        for n in range(1, len(prefix)):
-            if lower.endswith(prefix[:n]) and n > hold:
-                hold = n
-    return text[:-hold] if hold else text
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -265,7 +245,6 @@ def chat(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
-    payload["repetition_penalty"] = DEFAULT_REPETITION_PENALTY
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
@@ -274,7 +253,7 @@ def chat(
     try:
         choice = parsed["choices"][0]
         message = choice["message"]
-        content = _strip_think_markup(message.get("content") or "")
+        content = message.get("content") or ""
         raw_tool_calls = message.get("tool_calls")
         tool_calls = tuple(raw_tool_calls) if raw_tool_calls else None
         finish_reason = choice.get("finish_reason", "")
@@ -350,7 +329,6 @@ def chat_stream(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
-    payload["repetition_penalty"] = DEFAULT_REPETITION_PENALTY
 
     url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
     body = json.dumps(payload).encode("utf-8")
@@ -395,8 +373,6 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         but raise LlamaServerError if the line contains `finish_reason` or `[DONE]`
         (looks terminal, must not silently lose).
     """
-    raw_content = ""
-    emitted_visible_len = 0
     for raw_line in resp:
         line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
         if not line:
@@ -439,16 +415,8 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         if usage is not None and not isinstance(usage, dict):
             usage = None
 
-        raw_content += content_delta
-        visible_content = _strip_think_markup(raw_content)
-        visible_content = _safe_visible_prefix(visible_content, final=finish_reason is not None)
-        if len(visible_content) < emitted_visible_len:
-            emitted_visible_len = len(visible_content)
-        delta_to_emit = visible_content[emitted_visible_len:]
-        emitted_visible_len = len(visible_content)
-
         yield StreamChunk(
-            delta=delta_to_emit,
+            delta=content_delta,
             finish_reason=finish_reason,
             tool_calls_delta=tc_delta,
             usage=usage,

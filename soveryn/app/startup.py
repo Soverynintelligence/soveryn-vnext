@@ -107,9 +107,6 @@ def create_app(
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
                     kwargs["tool_registry"] = tool_registry
-                # Cap hidden reasoning per turn — leaves room inside max_tokens
-                # for the visible answer. Calibration baseline; iterate from here.
-                kwargs["thinking_budget_tokens"] = 384
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
     app.extensions["soveryn"] = {

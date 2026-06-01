@@ -148,7 +148,6 @@ def test_chat_payload_includes_optional_fields_when_set():
     assert payload["stop"] == ["<|endoftext|>", "<|im_end|>"]
     assert payload["tools"] == [{"type": "function", "function": {"name": "foo"}}]
     assert payload["thinking_budget_tokens"] == 384
-    assert payload["repetition_penalty"] == 1.1
 
 
 def test_chat_message_supports_tool_fields_optional():
@@ -284,33 +283,6 @@ def test_chat_preserves_usage_and_raw():
     assert resp.raw == body
 
 
-def test_chat_strips_think_markup_from_content_but_keeps_reasoning_raw():
-    server = _vett_server()
-    request = ChatRequest(
-        messages=(ChatMessage(role="user", content="hi"),),
-        model="vett-scotty",
-    )
-    body = {
-        "choices": [
-            {
-                "message": {
-                    "content": "<think>draft</think>final",
-                    "reasoning_content": "scratchpad prose",
-                    "role": "assistant",
-                },
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
-    }
-    _, ctx = _patch_urlopen(body=body)
-    with ctx:
-        resp = chat(request, server)
-
-    assert resp.content == "final"
-    assert resp.raw["choices"][0]["message"]["reasoning_content"] == "scratchpad prose"
-
-
 class _MockSSEResp:
     def __init__(self, lines):
         self._lines = [line if isinstance(line, bytes) else line.encode() for line in lines]
@@ -327,132 +299,6 @@ def _sse_line(payload: dict) -> bytes:
     return f"data: {json.dumps(payload)}\n\n".encode()
 
 
-
-
-def test_chat_stream_strips_think_markup_from_deltas_and_done():
-    server = _vett_server()
-    request = ChatRequest(
-        messages=(ChatMessage(role="user", content="hi"),),
-        model="vett-scotty",
-    )
-    lines = [
-        _sse_line({
-            "choices": [{"delta": {"content": "Hello ", "role": "assistant"}, "finish_reason": None}],
-        }),
-        _sse_line({
-            "choices": [{"delta": {"content": "<think>draft</think>world", "role": "assistant"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
-        }),
-    ]
-
-    def fake_urlopen(req, timeout=None):
-        return _MockSSEResp(lines)
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        chunks = list(chat_stream(request, server))
-
-    deltas = [chunk.delta for chunk in chunks if chunk.delta]
-    assert deltas == ["Hello ", "world"]
-    assert chunks[-1].finish_reason == "stop"
-    assert "<think>" not in "".join(deltas)
-    assert "</think>" not in "".join(deltas)
-
-
-def test_chat_strips_naked_reasoning_before_lone_close_tag():
-    """The pattern observed live 2026-05-31: model emits reasoning prose
-    with NO opening <think> tag, then a lone </think>, then the response.
-    Previously the block/open/close trio stripped only the close tag and
-    left the reasoning above intact. The naked-close pattern strips
-    everything from start of content up to and including the close tag."""
-    server = _vett_server()
-    request = ChatRequest(
-        messages=(ChatMessage(role="user", content="hi"),),
-        model="vett-scotty",
-    )
-    bleeding = (
-        "ok issue was a bit messy.\n"
-        "I will respond to that.\n"
-        "Ready.\n"
-        "</think>\n"
-        "Solid win. Now what's next?"
-    )
-    body = {
-        "choices": [{
-            "message": {"content": bleeding, "role": "assistant"},
-            "finish_reason": "stop",
-        }],
-        "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
-    }
-    _, ctx = _patch_urlopen(body=body)
-    with ctx:
-        resp = chat(request, server)
-    assert resp.content == "Solid win. Now what's next?"
-    assert "</think>" not in resp.content
-    assert "I will respond" not in resp.content
-
-
-def test_chat_stream_strips_naked_reasoning_streamed_across_chunks():
-    """Same pattern in the streaming path: reasoning tokens flow before
-    any <think> opening, then a lone </think>, then the response. The
-    UI must never see the reasoning deltas — they get retracted when the
-    close tag arrives (delta_to_emit goes negative-relative; emitted len
-    rewinds; only the response surfaces in subsequent deltas)."""
-    server = _vett_server()
-    request = ChatRequest(
-        messages=(ChatMessage(role="user", content="hi"),),
-        model="vett-scotty",
-    )
-    lines = [
-        _sse_line({"choices": [{"delta": {"content": "reasoning prose ", "role": "assistant"}, "finish_reason": None}]}),
-        _sse_line({"choices": [{"delta": {"content": "more reasoning. ", "role": "assistant"}, "finish_reason": None}]}),
-        _sse_line({"choices": [{"delta": {"content": "</think>", "role": "assistant"}, "finish_reason": None}]}),
-        _sse_line({"choices": [{"delta": {"content": "Solid response.", "role": "assistant"}, "finish_reason": "stop"}],
-                   "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}}),
-    ]
-
-    def fake_urlopen(req, timeout=None):
-        return _MockSSEResp(lines)
-
-    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        chunks = list(chat_stream(request, server))
-
-    accumulated = "".join(chunk.delta for chunk in chunks if chunk.delta)
-    # The final visible content after the stream completes must be only the response.
-    # (Mid-stream the reasoning may have been visible — that's a known limitation of
-    # streaming without lookahead; the contract is the FINAL visible state is clean
-    # and any reader who waits for finish_reason sees only the response.)
-    assert "Solid response." in accumulated
-    assert "</think>" not in accumulated
-    # The naked-close strip retracts the reasoning so the final accumulated state
-    # contains the response, not the reasoning prose.
-    final_content = chunks[-1].raw["choices"][0]["delta"]["content"]  # raw last chunk for reference
-    # The accumulated VISIBLE content (across all delta emissions) ends with
-    # exactly the response, with no reasoning text appearing in the final state.
-    # We allow for the streaming-mid-state reasoning to have flickered, but the
-    # final delta_to_emit must complete cleanly to the response only.
-    assert chunks[-1].finish_reason == "stop"
-
-
-def test_strip_naked_does_not_overstrip_when_open_tag_precedes():
-    """Belt and braces: when both <think> and </think> are present (the
-    canonical block case), the block regex catches it. The naked regex
-    must NOT additionally strip content above a <think>...</think> pair."""
-    from soveryn.platform.inference.llama_server_client import _strip_think_markup
-    text = "intro prose\n<think>scratch</think>\nresponse"
-    out = _strip_think_markup(text)
-    assert "intro prose" in out
-    assert "response" in out
-    assert "<think>" not in out
-    assert "</think>" not in out
-    assert "scratch" not in out
-
-
-def test_strip_naked_no_close_tag_unchanged():
-    """Sanity: if there's no </think> anywhere, content passes through unchanged."""
-    from soveryn.platform.inference.llama_server_client import _strip_think_markup
-    text = "completely clean response with no markup at all"
-    out = _strip_think_markup(text)
-    assert out == text
 
 
 # ─────────────────────────────────────────────────────────────────────────────

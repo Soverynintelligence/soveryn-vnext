@@ -18,8 +18,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
-from soveryn.platform.text import strip_think_markup as _strip_think_markup
-
 
 VALID_ROLES: frozenset[str] = frozenset({"user", "assistant", "system", "tool"})
 DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
@@ -168,7 +166,7 @@ class ConversationStore:
                 "FROM conversations WHERE session_id = ? ORDER BY rowid ASC",
                 (session_id,),
             ).fetchall()
-        return tuple(Turn(**{**dict(r), "content": _strip_think_markup(str(r["content"]))}) for r in rows)
+        return tuple(Turn(**dict(r)) for r in rows)
 
     def list_sessions(self, agent: str | None = None, limit: int = 100) -> tuple[Session, ...]:
         """Return sessions, newest first, optionally scoped to one agent."""
