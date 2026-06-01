@@ -169,19 +169,43 @@ def collect_cpu(
         elif normalized.startswith("ce") or "corrected" in normalized:
             findings.append(AresFinding(
                 "cpu.edac",
-                Severity.WARNING,
+                Severity.INFO,
                 {"counter": counter, "count": count},
                 key=counter,
             ))
-    for idx, line in enumerate(_hardware_error_lines(mce_log)):
+    mce_buckets: dict[str, dict[str, object]] = {}
+    for line in _hardware_error_lines(mce_log):
         lowered = line.lower()
         corrected = "uncorrected" not in lowered and "corrected" in lowered
-        finding_class = "l3-cache" if "l3" in lowered else "mce"
+        finding_class = "l3-cache" if "l3" in lowered else "generic"
+        bucket_key = f"{'corrected' if corrected else 'uncorrected'}_{finding_class}"
+        bucket = mce_buckets.setdefault(
+            bucket_key,
+            {
+                "count": 0,
+                "class": finding_class,
+                "corrected": corrected,
+                "most_recent_line": line,
+            },
+        )
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["most_recent_line"] = line
+    for bucket_key, bucket in sorted(mce_buckets.items()):
+        corrected = bool(bucket["corrected"])
+        finding_class = str(bucket["class"])
+        severity = Severity.WARNING if corrected and finding_class == "l3-cache" else (
+            Severity.INFO if corrected else Severity.CRITICAL
+        )
         findings.append(AresFinding(
             "cpu.mce",
-            Severity.WARNING if corrected else Severity.CRITICAL,
-            {"line": line, "class": finding_class, "corrected": corrected},
-            key=f"mce{idx}:{finding_class}",
+            severity,
+            {
+                "count": bucket["count"],
+                "class": finding_class,
+                "corrected": corrected,
+                "most_recent_line": bucket["most_recent_line"],
+            },
+            key=bucket_key,
         ))
     return findings
 

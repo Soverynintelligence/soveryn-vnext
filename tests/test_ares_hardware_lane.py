@@ -119,6 +119,14 @@ L3_MCE_LOG = """
 [Tue May 26 14:22:10 2026] mce: [Hardware Error]: L3 cache data array error, corrected
 """
 
+AGGREGATED_MCE_LOG = """
+[Tue May 26 14:22:10 2026] mce: [Hardware Error]: CPU 0: corrected memory error
+[Tue May 26 14:22:11 2026] mce: [Hardware Error]: CPU 0: corrected memory error
+[Tue May 26 14:22:12 2026] mce: [Hardware Error]: L3 cache data array error, corrected
+[Tue May 26 14:22:13 2026] mce: [Hardware Error]: CPU 3: Machine Check Exception: uncorrected memory error
+[Tue May 26 14:22:14 2026] mce: [Hardware Error]: CPU 3: Machine Check Exception: uncorrected memory error
+"""
+
 SMART_HEALTHY = """
 SMART overall-health self-assessment test result: PASSED
 ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_FAILED RAW_VALUE
@@ -138,11 +146,11 @@ ID# ATTRIBUTE_NAME          FLAG     VALUE WORST THRESH TYPE      UPDATED  WHEN_
 """
 
 
-def test_collect_cpu_edac_corrected_warning_and_uncorrected_critical():
+def test_collect_cpu_edac_corrected_info_and_uncorrected_critical():
     findings = collect_cpu(edac_counters={"ce_count": 3, "ue_count": 1}, mce_log="")
 
     assert [finding.finding_type for finding in findings] == ["cpu.edac", "cpu.edac"]
-    assert [finding.severity for finding in findings] == [Severity.WARNING, Severity.CRITICAL]
+    assert [finding.severity for finding in findings] == [Severity.INFO, Severity.CRITICAL]
     assert findings[0].evidence == {"counter": "ce_count", "count": 3}
     assert findings[1].evidence == {"counter": "ue_count", "count": 1}
 
@@ -155,6 +163,19 @@ def test_collect_cpu_l3_mce_corrected_class_is_warning():
     assert findings[0].severity is Severity.WARNING
     assert findings[0].evidence["class"] == "l3-cache"
     assert findings[0].evidence["corrected"] is True
+
+
+def test_collect_cpu_aggregates_mce_lines_by_class_and_counts():
+    findings = collect_cpu(edac_counters={}, mce_log=AGGREGATED_MCE_LOG)
+
+    assert [finding.finding_type for finding in findings] == ["cpu.mce", "cpu.mce", "cpu.mce"]
+    assert [finding.severity for finding in findings] == [Severity.INFO, Severity.WARNING, Severity.CRITICAL]
+    assert [finding.evidence["count"] for finding in findings] == [2, 1, 2]
+    assert findings[0].evidence["class"] == "generic"
+    assert findings[0].evidence["most_recent_line"].endswith("corrected memory error")
+    assert findings[1].evidence["class"] == "l3-cache"
+    assert findings[2].evidence["corrected"] is False
+    assert findings[2].evidence["most_recent_line"].endswith("uncorrected memory error")
 
 
 def test_collect_cpu_uncorrected_mce_is_critical():
