@@ -102,7 +102,89 @@ def test_run_forever_can_be_bounded_for_scheduler_tests(tmp_path):
     surface.scan_once = scan_once
     surface.run_forever(interval_seconds=2.5, iterations=3, sleep=calls["sleep"].append)
 
-    assert calls == {"scan": 3, "sleep": [2.5, 2.5]}
+    # Sleep is chunked into granularity-sized pieces (default 1.0s) so SIGTERM
+    # mid-sleep can be observed within ~1s instead of waiting full interval.
+    # Two inter-scan gaps × 2.5s = 5.0s total sleep regardless of chunking.
+    assert calls["scan"] == 3
+    assert sum(calls["sleep"]) == pytest.approx(5.0)
+    # And the chunking shape: 1.0 + 1.0 + 0.5 per gap, twice.
+    assert calls["sleep"] == [1.0, 1.0, 0.5, 1.0, 1.0, 0.5]
+
+
+def test_run_forever_exits_promptly_when_stop_requested_mid_sleep(tmp_path):
+    """The actual bug from 2026-05-31: SIGTERM mid-sleep set the shutdown
+    flag but Python's time.sleep (PEP 475) waited the full interval before
+    the loop checked again — up to 60s shutdown lag. The chunked sleep
+    polls stop_requested every ~granularity, so shutdown lag is bounded."""
+    calls = {"scan": 0, "sleep_calls": 0}
+    surface = AresDaemonSurface(
+        collectors=[lambda: []],
+        tracker=FindingTracker(tmp_path / "ares_state.json"),
+        sinks=_recording_sinks({"telemetry": [], "bus": [], "signal": []}),
+    )
+
+    def scan_once():
+        calls["scan"] += 1
+        return ()
+
+    surface.scan_once = scan_once
+
+    # Stop flag flips True after the 3rd sleep chunk.
+    flip_at_chunk = 3
+    def fake_sleep(secs):
+        calls["sleep_calls"] += 1
+
+    stop = {"flag": False}
+    def should_stop():
+        if calls["sleep_calls"] >= flip_at_chunk:
+            stop["flag"] = True
+        return stop["flag"]
+
+    surface.run_forever(
+        interval_seconds=60.0,
+        sleep=fake_sleep,
+        stop_requested=should_stop,
+    )
+
+    # Daemon ran exactly 1 scan, then started sleeping. Stop flipped at chunk 3
+    # of the first inter-scan gap → daemon exits without starting scan #2.
+    assert calls["scan"] == 1
+    # Only the chunks before the stop check fired: 3 chunks of 1s each.
+    assert calls["sleep_calls"] == flip_at_chunk
+
+
+def test_interruptible_sleep_helper_polls_stop_every_granularity(tmp_path):
+    """Direct unit test of the helper: with a should_stop that returns True
+    after the third poll, the helper exits early after 3 sleep chunks even
+    though duration is much larger."""
+    from soveryn.agents.ares.daemon import _interruptible_sleep
+
+    polls = {"n": 0}
+    def should_stop():
+        polls["n"] += 1
+        return polls["n"] >= 3
+    sleeps = []
+    _interruptible_sleep(
+        duration_seconds=60.0,
+        should_stop=should_stop,
+        sleep=sleeps.append,
+        granularity=1.0,
+    )
+    # Polls: 1 (returns False), then sleep, then 2 (False), then sleep, then
+    # 3 (True) → return. So 2 sleep chunks of 1.0 fired.
+    assert sleeps == [1.0, 1.0]
+
+
+def test_interruptible_sleep_zero_duration_returns_immediately():
+    from soveryn.agents.ares.daemon import _interruptible_sleep
+    sleeps = []
+    _interruptible_sleep(
+        duration_seconds=0.0,
+        should_stop=lambda: False,
+        sleep=sleeps.append,
+        granularity=1.0,
+    )
+    assert sleeps == []
 
 
 def test_default_collectors_include_network_and_architecture_lanes():

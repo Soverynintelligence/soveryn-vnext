@@ -72,8 +72,16 @@ class AresDaemonSurface:
         iterations: int | None = None,
         sleep: Sleep = time.sleep,
         stop_requested: StopRequested | None = None,
+        shutdown_poll_granularity_seconds: float = 1.0,
     ) -> None:
-        """Run the scan loop; `iterations` exists so tests can bound it."""
+        """Run the scan loop; `iterations` exists so tests can bound it.
+
+        Sleep between scans is chunked into `shutdown_poll_granularity_seconds`
+        slices so a SIGTERM-driven `stop_requested` flip is observed within
+        ~one granularity, not at end of the full inter-scan sleep. Python 3.5+
+        sleep is non-interruptible (PEP 475 — sleep resumes after signal),
+        so without chunking, SIGTERM mid-sleep would wait the full interval.
+        """
 
         should_stop = stop_requested or _never_stop
         completed = 0
@@ -86,7 +94,12 @@ class AresDaemonSurface:
                 break
             if should_stop():
                 break
-            sleep(interval_seconds)
+            _interruptible_sleep(
+                interval_seconds,
+                should_stop=should_stop,
+                sleep=sleep,
+                granularity=shutdown_poll_granularity_seconds,
+            )
 
     def _routed_sinks(self) -> AresSinks:
         sinks = self.sinks or _default_sinks()
@@ -127,3 +140,28 @@ def _suppress_signal(finding: AresFinding, priority: bool = False) -> None:
 
 def _never_stop() -> bool:
     return False
+
+
+def _interruptible_sleep(
+    duration_seconds: float,
+    *,
+    should_stop: StopRequested,
+    sleep: Sleep,
+    granularity: float = 1.0,
+) -> None:
+    """Sleep up to `duration_seconds` total, but check `should_stop()`
+    every `granularity` seconds and exit early on True. Chunks the call
+    to the injected `sleep` so tests can verify both the chunking and
+    the early-exit behavior with deterministic fake sleep.
+    """
+    if duration_seconds <= 0:
+        return
+    if granularity <= 0:
+        granularity = duration_seconds
+    elapsed = 0.0
+    while elapsed < duration_seconds:
+        if should_stop():
+            return
+        chunk = min(granularity, duration_seconds - elapsed)
+        sleep(chunk)
+        elapsed += chunk
