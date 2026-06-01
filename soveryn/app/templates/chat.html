@@ -99,6 +99,27 @@
     border-radius:4px;
   }
   .history .del-session:hover { opacity:1; color:#f5a3a3; background:rgba(245,163,163,0.08); }
+  .bulk-actions {
+    padding:8px 6px 4px;
+    border-top:1px solid var(--glass-border);
+  }
+  .bulk-clear {
+    width:100%;
+    background:transparent;
+    border:1px solid rgba(245,163,163,0.18);
+    color:rgba(245,163,163,0.7);
+    padding:8px 10px;
+    border-radius:6px;
+    font-size:11px;
+    letter-spacing:0.04em;
+    cursor:pointer;
+    transition:background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+  .bulk-clear:hover {
+    background:rgba(245,163,163,0.08);
+    color:#f5a3a3;
+    border-color:rgba(245,163,163,0.35);
+  }
 
   .profile {
     border-top:1px solid var(--glass-border);
@@ -249,6 +270,12 @@
     <div class="history" data-testid="history">
       <h4>Today</h4>
       <a href="#" class="active"><span class="dot" style="background:var(--gold)"></span>Session loading…</a>
+    </div>
+
+    <div class="bulk-actions">
+      <button type="button" class="bulk-clear" data-testid="bulk-clear" title="Delete all sessions for this agent except the one currently open">
+        Clear all sessions
+      </button>
     </div>
 
     <div class="profile">
@@ -616,6 +643,30 @@
     });
 
     document.querySelector('[data-testid="search"]').addEventListener("input", renderHistory);
+
+    document.querySelector('[data-testid="bulk-clear"]').addEventListener("click", async () => {
+      // Count sessions that would be deleted (everything for the current agent
+      // EXCEPT the one currently open, so we don't nuke the chat the user is in).
+      const total = state.sessions.length;
+      const keepOpen = state.sessionId && state.sessions.some(s => s.session_id === state.sessionId);
+      const toDelete = keepOpen ? total - 1 : total;
+      if (toDelete === 0) {
+        alert("No other sessions to clear.");
+        return;
+      }
+      const msg = keepOpen
+        ? `Delete ${toDelete} ${state.agent} session${toDelete === 1 ? "" : "s"}? (Your current open session will be kept.) This cannot be undone.`
+        : `Delete ALL ${toDelete} ${state.agent} sessions? This cannot be undone.`;
+      if (!confirm(msg)) return;
+      const targets = state.sessions.filter(s => s.session_id !== state.sessionId);
+      let failed = 0;
+      for (const s of targets) {
+        const r = await fetch(`/sessions/${s.session_id}`, { method: "DELETE" });
+        if (!r.ok) failed++;
+      }
+      if (failed > 0) alert(`${failed} delete${failed === 1 ? "" : "s"} failed; the rest were cleared.`);
+      loadSessions();
+    });
   }
 
   async function onSubmit() {

@@ -202,3 +202,55 @@ def test_get_session_returns_none_for_missing_id(store):
     assert store.get_session("does-not-exist") is None
 
 
+# ─── Auto-title from first user turn ────────────────────────────────────────
+
+def test_save_turn_auto_titles_session_from_first_user_message(store):
+    """First user turn on a session with title=None should auto-derive a title."""
+    sid = store.new_session("aetheria")
+    assert store.get_session(sid).title is None
+    store.save_turn(sid, "aetheria", "user", "What do you remember about autonomy?")
+    assert store.get_session(sid).title == "What do you remember about autonomy?"
+
+
+def test_save_turn_does_not_overwrite_existing_title(store):
+    """An explicit title set by the caller wins; auto-title doesn't clobber."""
+    sid = store.new_session("aetheria", title="explicit")
+    store.save_turn(sid, "aetheria", "user", "anything")
+    assert store.get_session(sid).title == "explicit"
+
+
+def test_save_turn_auto_title_only_on_first_user_turn(store):
+    """Subsequent user turns must not retitle — only the very first one."""
+    sid = store.new_session("aetheria")
+    store.save_turn(sid, "aetheria", "user", "first message")
+    store.save_turn(sid, "aetheria", "assistant", "reply")
+    store.save_turn(sid, "aetheria", "user", "second message")
+    assert store.get_session(sid).title == "first message"
+
+
+def test_save_turn_auto_title_truncates_long_messages(store):
+    """A very long first message becomes a sidebar-readable title."""
+    sid = store.new_session("aetheria")
+    long_msg = "This is a really long opening message " * 8  # > 60 chars
+    store.save_turn(sid, "aetheria", "user", long_msg)
+    title = store.get_session(sid).title
+    assert title is not None
+    assert len(title) <= 70  # 60 + ellipsis + word-boundary slack
+    assert title.endswith("…")
+
+
+def test_save_turn_auto_title_collapses_whitespace(store):
+    """Multi-line / multi-space messages produce one-line titles."""
+    sid = store.new_session("aetheria")
+    store.save_turn(sid, "aetheria", "user", "hello\n\n  world\t\n")
+    assert store.get_session(sid).title == "hello world"
+
+
+def test_save_turn_auto_title_skipped_for_assistant_first_turn(store):
+    """An assistant-first turn (unusual, but possible) doesn't title from
+    the model's reply — only user-originated content seeds the title."""
+    sid = store.new_session("aetheria")
+    store.save_turn(sid, "aetheria", "assistant", "unsolicited opener")
+    assert store.get_session(sid).title is None
+
+

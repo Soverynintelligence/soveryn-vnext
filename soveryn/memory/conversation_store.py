@@ -21,6 +21,28 @@ from typing import Iterator
 
 VALID_ROLES: frozenset[str] = frozenset({"user", "assistant", "system", "tool"})
 DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
+AUTO_TITLE_MAX_LENGTH = 60
+
+
+def _derive_title(message: str) -> str:
+    """Turn a user message into a sidebar-friendly title.
+
+    Collapses whitespace, takes the first ~60 chars, trims at a word boundary
+    when possible. Returns empty string if the input has no usable content
+    (the caller skips the title update on empty).
+    """
+    if not message:
+        return ""
+    flat = " ".join(message.split())
+    if not flat:
+        return ""
+    if len(flat) <= AUTO_TITLE_MAX_LENGTH:
+        return flat
+    cut = flat[:AUTO_TITLE_MAX_LENGTH]
+    last_space = cut.rfind(" ")
+    if last_space > AUTO_TITLE_MAX_LENGTH // 2:
+        cut = cut[:last_space]
+    return cut.rstrip(" ,.;:!?") + "…"
 
 
 class ConversationStoreError(Exception):
@@ -141,7 +163,13 @@ class ConversationStore:
 
     def save_turn(self, session_id: str, agent: str, role: str, content: str,
                   source: str = "direct") -> None:
-        """Append a turn. Validates role. Touches conversation_meta.updated_at."""
+        """Append a turn. Validates role. Touches conversation_meta.updated_at.
+
+        Side effect: if this is the FIRST user turn in a session AND the
+        session's title is currently NULL, auto-derive a title from the
+        message. Keeps the sidebar readable without requiring an explicit
+        title call from the caller.
+        """
         if role not in VALID_ROLES:
             raise ConversationStoreError(
                 f"role={role!r} not in {sorted(VALID_ROLES)}"
@@ -157,6 +185,26 @@ class ConversationStore:
                 "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
                 (now, session_id),
             )
+            if role == "user":
+                # Set title only if currently NULL and this is the first user
+                # turn (one preceding row at most — the one we just inserted).
+                row = conn.execute(
+                    "SELECT title FROM conversation_meta WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()
+                if row is not None and row["title"] is None:
+                    user_count = conn.execute(
+                        "SELECT COUNT(*) FROM conversations "
+                        "WHERE session_id = ? AND role = 'user'",
+                        (session_id,),
+                    ).fetchone()[0]
+                    if user_count == 1:
+                        derived = _derive_title(content)
+                        if derived:
+                            conn.execute(
+                                "UPDATE conversation_meta SET title = ? WHERE session_id = ?",
+                                (derived, session_id),
+                            )
 
     def load_history(self, session_id: str) -> tuple[Turn, ...]:
         """Return all turns for a session in insertion order."""
