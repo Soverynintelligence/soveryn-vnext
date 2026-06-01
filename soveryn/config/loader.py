@@ -16,20 +16,18 @@ from pathlib import Path
 from soveryn.config import runtime
 
 # ─── Default DB paths ─────────────────────────────────────────────────────────
-# These point at *_vnext.db side-by-side files in the production memory dir.
-# Production paths (lattice.db, conversations.db) require an explicit env
-# override — safe side-by-side operation.
+# Post-consolidation (2026-06-01): legacy lattice.db was merged into
+# lattice_vnext.db. Single source of truth for both recall (read) and writes.
+# DEFAULT_RECALL_LATTICE_DB intentionally points at the SAME file as
+# DEFAULT_LATTICE_DB now — the dual-DB scheme is retired. Legacy lattice.db
+# was renamed to lattice_legacy_FROZEN_<timestamp>.db and preserved on disk
+# for rollback. See soveryn/platform/lattice/consolidate.py for the migration.
 
 DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
 DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
 DEFAULT_SOULS_DIR = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/souls")
 DEFAULT_PINNED_MEMORY_PATH = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/pinned_memory.md")
-
-# Read source for recall — prod's lattice.db with 1605 nodes (1367 are Aetheria's).
-# Separate from DEFAULT_LATTICE_DB (which is the write target for vNext's own writes,
-# currently lattice_vnext.db, used when F ships). Read-only enforcement is at usage
-# (AgentLoop only ever calls find_nodes_by_*, never write_node).
-DEFAULT_RECALL_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice.db")
+DEFAULT_RECALL_LATTICE_DB = DEFAULT_LATTICE_DB
 
 
 @dataclass(frozen=True)

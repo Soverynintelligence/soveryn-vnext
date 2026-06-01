@@ -163,19 +163,22 @@ def test_stream_happy_path_saves_assistant_and_emits_done(conv_store):
     assert history[1].content == "hi there"
 
 
-def test_stream_empty_content_with_explicit_finish_saves_empty(conv_store):
-    """Constraint 5: empty content + explicit finish_reason → save empty assistant."""
+def test_stream_empty_content_with_explicit_finish_is_rejected(conv_store):
+    """Post-2026-06-01: empty content + no tool_calls is a generation failure,
+    not a valid turn. Saving the empty row poisons future-load context
+    (the model degenerates when it sees "prior assistant said nothing for
+    this prompt" — see soveryn/agents/loop.py guard). We now refuse to save
+    and yield ErrorEvent so the caller can surface the failure clearly."""
     sid = conv_store.new_session("aetheria")
     stream = _CapturingStream(chunks=_chunks(("", "length")))
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
     events = list(loop.process_message_stream(sid, "hi"))
-    done = events[-1]
-    assert isinstance(done, DoneEvent)
-    assert done.content == ""
-    assert done.finish_reason == "length"
+    last = events[-1]
+    assert isinstance(last, ErrorEvent)
+    assert last.code == "empty_generation"
     history = conv_store.load_history(sid)
-    assert [t.role for t in history] == ["user", "assistant"]
-    assert history[1].content == ""
+    # Only the user turn should be persisted; the empty assistant is rejected.
+    assert [t.role for t in history] == ["user"]
 
 
 def test_stream_accumulates_tool_calls_silently_surfaces_in_done(conv_store):

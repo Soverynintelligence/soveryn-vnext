@@ -131,9 +131,10 @@ def test_aetheria_runs_without_recall_if_recall_lattice_missing(
     assert aetheria.lattice_store is None
 
 
-def test_env_config_default_recall_path_points_at_prod_lattice():
-    """Default recall_lattice_db points at prod's lattice.db so out-of-the-box
-    deployments give Aetheria her history without any env config."""
-    from soveryn.config.loader import DEFAULT_RECALL_LATTICE_DB
-    assert str(DEFAULT_RECALL_LATTICE_DB).endswith("/soveryn_memory/lattice.db")
-    assert "lattice_vnext" not in str(DEFAULT_RECALL_LATTICE_DB)
+def test_env_config_default_recall_path_matches_lattice_db():
+    """Post-consolidation (2026-06-01): legacy lattice.db was merged into
+    lattice_vnext.db, retiring the dual-DB scheme. Recall and writes share one
+    source of truth. The two defaults must therefore point at the same file."""
+    from soveryn.config.loader import DEFAULT_LATTICE_DB, DEFAULT_RECALL_LATTICE_DB
+    assert DEFAULT_RECALL_LATTICE_DB == DEFAULT_LATTICE_DB
+    assert str(DEFAULT_RECALL_LATTICE_DB).endswith("/soveryn_memory/lattice_vnext.db")
