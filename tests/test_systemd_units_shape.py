@@ -51,28 +51,38 @@ def test_router_unit_installs_under_soveryn_target():
 
 def test_vnext_unit_has_router_dependency_and_execstartpre_waits_on_props():
     unit = _load_unit("soveryn-vnext.service")
-    assert unit.get("Unit", "After") == "soveryn-router.service"
+    assert unit.get("Unit", "After") == "soveryn-router.service network-online.target"
     assert unit.get("Unit", "Requires") == "soveryn-router.service"
+    assert "parakeet.service" in unit.get("Unit", "Wants")
     pre = unit.get("Service", "ExecStartPre")
     assert "python -m soveryn.platform.supervisor.readiness" in pre
     assert "http://127.0.0.1:8090/props" in pre
     assert "--name router" in pre
-    assert "--max-wait 180" in pre
+    assert "--max-wait 60" in pre
 
 
 def test_vnext_unit_runs_flask_app_on_5001_with_locked_env_port():
     unit = _load_unit("soveryn-vnext.service")
-    assert unit.get("Service", "Environment") == "SOVERYN_APP_PORT=5001"
+    env = unit.get("Service", "Environment")
+    assert "PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin" in env
+    assert "SOVERYN_APP_PORT=5001" in env
     assert unit.get("Service", "ExecStart").endswith("-m soveryn.app")
     assert "python" in unit.get("Service", "ExecStart")
     assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
 
 
+def test_vnext_unit_exposes_path_and_parakeet_wants():
+    unit = _load_unit("soveryn-vnext.service")
+    env = unit.get("Service", "Environment")
+    assert "PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin" in env
+    assert "parakeet.service" in unit.get("Unit", "Wants")
+    assert "network-online.target" in unit.get("Unit", "Wants")
+
+
 def test_vnext_unit_restarts_on_failure_and_times_out_for_cold_start():
     unit = _load_unit("soveryn-vnext.service")
     assert unit.get("Service", "Restart") == "on-failure"
-    assert unit.get("Service", "RestartSec") == "5"
-    assert unit.get("Service", "TimeoutStartSec") == "180"
+    assert unit.get("Service", "RestartSec") == "5s"
     assert unit.get("Service", "Type") == "simple"
 
 
@@ -83,8 +93,8 @@ def test_vnext_unit_installs_under_soveryn_target():
 
 def test_ares_unit_waits_for_vnext_health_and_runs_without_restart():
     unit = _load_unit("soveryn-ares.service")
-    assert unit.get("Unit", "After") == "soveryn-vnext.service"
-    assert unit.get("Unit", "Requires") == "soveryn-vnext.service"
+    assert unit.get("Unit", "After") == "soveryn-vnext.service network-online.target"
+    assert unit.get("Unit", "PartOf") == "soveryn.target"
     pre = unit.get("Service", "ExecStartPre")
     assert "python -m soveryn.platform.supervisor.readiness" in pre
     assert "http://127.0.0.1:5001/health" in pre
@@ -97,8 +107,17 @@ def test_ares_unit_is_user_scoped_and_timebounded():
     unit = _load_unit("soveryn-ares.service")
     assert unit.get("Service", "User") == "jon-deoliveira"
     assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
-    assert unit.get("Service", "TimeoutStartSec") == "180"
     assert unit.get("Service", "Type") == "simple"
+    assert unit.get("Service", "StandardOutput") == "append:/tmp/soveryn-ares.log"
+    assert unit.get("Service", "StandardError") == "append:/tmp/soveryn-ares.log"
+
+
+def test_ares_unit_exposes_loopback_allowlist_env():
+    unit = _load_unit("soveryn-ares.service")
+    env = unit.get("Service", "Environment")
+    assert "PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin" in env
+    assert "ARES_NET_LOOPBACK_ALLOWLIST=5001,8090,8087,47017,39477,53,631" in env
+    assert "network-online.target" in unit.get("Unit", "Wants")
 
 
 def test_ares_unit_installs_under_soveryn_target():
