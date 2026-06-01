@@ -79,3 +79,41 @@ def test_vnext_unit_restarts_on_failure_and_times_out_for_cold_start():
 def test_vnext_unit_installs_under_soveryn_target():
     unit = _load_unit("soveryn-vnext.service")
     assert unit.get("Install", "WantedBy") == "soveryn.target"
+
+
+def test_ares_unit_waits_for_vnext_health_and_runs_without_restart():
+    unit = _load_unit("soveryn-ares.service")
+    assert unit.get("Unit", "After") == "soveryn-vnext.service"
+    assert unit.get("Unit", "Requires") == "soveryn-vnext.service"
+    pre = unit.get("Service", "ExecStartPre")
+    assert "python -m soveryn.platform.supervisor.readiness" in pre
+    assert "http://127.0.0.1:5001/health" in pre
+    assert "--name vnext" in pre
+    assert unit.get("Service", "ExecStart").endswith("-m soveryn.agents.ares")
+    assert unit.get("Service", "Restart") == "no"
+
+
+def test_ares_unit_is_user_scoped_and_timebounded():
+    unit = _load_unit("soveryn-ares.service")
+    assert unit.get("Service", "User") == "jon-deoliveira"
+    assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
+    assert unit.get("Service", "TimeoutStartSec") == "180"
+    assert unit.get("Service", "Type") == "simple"
+
+
+def test_ares_unit_installs_under_soveryn_target():
+    unit = _load_unit("soveryn-ares.service")
+    assert unit.get("Install", "WantedBy") == "soveryn.target"
+
+
+def test_soveryn_target_wants_all_three_services():
+    unit = _load_unit("soveryn.target")
+    wants = unit.get("Unit", "Wants")
+    assert "soveryn-router.service" in wants
+    assert "soveryn-vnext.service" in wants
+    assert "soveryn-ares.service" in wants
+
+
+def test_soveryn_target_installs_under_default_target():
+    unit = _load_unit("soveryn.target")
+    assert unit.get("Install", "WantedBy") == "default.target"

@@ -1,0 +1,19 @@
+# SOVERYN Ares unit — user service.
+# Waits for vNext /health before starting the daemon.
+
+[Unit]
+Description=SOVERYN Ares daemon
+After=soveryn-vnext.service
+Requires=soveryn-vnext.service
+
+[Service]
+Type=simple
+User=jon-deoliveira
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 180
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.agents.ares
+Restart=no
+TimeoutStartSec=180
+
+[Install]
+WantedBy=soveryn.target
