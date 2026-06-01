@@ -123,3 +123,85 @@ def test_keyword_search_schema_requires_keywords_array(store: LatticeStore) -> N
     assert schema["properties"]["keywords"]["items"] == {"type": "string"}
     assert "keywords" in schema["required"]
     assert schema["properties"]["k"]["default"] == 5
+
+
+@pytest.fixture
+def distinct_keyword_store(tmp_path) -> LatticeStore:
+    """Three nodes with distinct content words for UNION testing.
+    Each node is matched by a unique keyword."""
+    lattice = LatticeStore(tmp_path / "lattice_union.db")
+    provenance = {
+        "cls": "witnessed",
+        "source": "test",
+        "confidence": 0.9,
+        "temporal_context": "fixture",
+        "generator": "test",
+    }
+    lattice.write_node(
+        "aetheria", "apple harvest in october",
+        node_type="memory", intensity=0.8,
+        embedding=(0.1, 0.2, 0.3), provenance=provenance,
+    )
+    lattice.write_node(
+        "aetheria", "banana ripening time",
+        node_type="memory", intensity=0.8,
+        embedding=(0.1, 0.2, 0.3), provenance=provenance,
+    )
+    lattice.write_node(
+        "aetheria", "cherry blossom season",
+        node_type="memory", intensity=0.8,
+        embedding=(0.1, 0.2, 0.3), provenance=provenance,
+    )
+    return lattice
+
+
+def test_keyword_search_union_two_distinct_keywords_match_two_distinct_nodes(
+    distinct_keyword_store: LatticeStore,
+) -> None:
+    """UNION semantics: when multiple keywords match different nodes, ALL
+    matching nodes surface in the result — not just the first keyword's
+    hits. This is the documented design call from Track 2 Task 6: the
+    per-keyword loop in the handler accumulates union'd results deduped
+    by node id."""
+    spec = build_search_by_keywords_tool(store=distinct_keyword_store)
+
+    result = spec.handler({"keywords": ["apple", "banana"], "k": 5})
+
+    # Channel A entries: both apple and banana nodes are canonical witnessed,
+    # so both go to stateable. Cherry is not in either keyword → not in result.
+    rendered = [entry["rendered"] for entry in result["stateable"]]
+    assert any("apple harvest" in r for r in rendered), \
+        f"apple node missing from UNION: {rendered}"
+    assert any("banana ripening" in r for r in rendered), \
+        f"banana node missing from UNION: {rendered}"
+    assert not any("cherry blossom" in r for r in rendered), \
+        f"cherry node leaked into UNION result: {rendered}"
+
+
+def test_keyword_search_union_dedupes_node_when_multiple_keywords_match_it(
+    distinct_keyword_store: LatticeStore,
+) -> None:
+    """If both keywords match the SAME node (the apple harvest node contains
+    both 'apple' and 'harvest'), the node surfaces exactly once — dedup by
+    node id, not double-counted."""
+    spec = build_search_by_keywords_tool(store=distinct_keyword_store)
+
+    result = spec.handler({"keywords": ["apple", "harvest"], "k": 5})
+
+    rendered = [entry["rendered"] for entry in result["stateable"]]
+    apple_matches = [r for r in rendered if "apple harvest" in r]
+    assert len(apple_matches) == 1, \
+        f"apple harvest node should appear exactly once via dedup, got: {rendered}"
+
+
+def test_keyword_search_union_respects_k_cap_across_keywords(
+    distinct_keyword_store: LatticeStore,
+) -> None:
+    """When k=1 and two keywords each match a distinct node, only one node
+    surfaces — k caps the TOTAL across the union, not per-keyword."""
+    spec = build_search_by_keywords_tool(store=distinct_keyword_store)
+
+    result = spec.handler({"keywords": ["apple", "banana"], "k": 1})
+
+    total = len(result["stateable"]) + sum(result["uncertain_count_by_class"].values())
+    assert total == 1, f"k=1 should cap union to one node, got total={total}"
