@@ -11,7 +11,6 @@ Wants=parakeet.service network-online.target
 
 [Service]
 Type=simple
-User=jon-deoliveira
 WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
 Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin SOVERYN_APP_PORT=5001
 # Block until the router's /props endpoint reports ok (up to 60s).

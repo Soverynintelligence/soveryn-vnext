@@ -10,7 +10,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=jon-deoliveira
 WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
 Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin ARES_NET_LOOPBACK_ALLOWLIST=5001,8090,8087,47017,39477,53,631
 ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 60

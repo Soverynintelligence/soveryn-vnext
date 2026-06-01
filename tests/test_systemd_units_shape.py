@@ -38,7 +38,7 @@ def test_router_unit_runs_llama_server_router_on_port_8090():
 
 def test_router_unit_is_user_scoped_and_restarts_on_failure():
     unit = _load_unit("soveryn-router.service")
-    assert unit.get("Service", "User") == "jon-deoliveira"
+    assert not unit.has_option("Service", "User")
     assert unit.get("Service", "Restart") == "on-failure"
     assert unit.get("Service", "TimeoutStartSec") == "180"
     assert unit.get("Service", "Type") == "simple"
@@ -105,7 +105,7 @@ def test_ares_unit_waits_for_vnext_health_and_runs_without_restart():
 
 def test_ares_unit_is_user_scoped_and_timebounded():
     unit = _load_unit("soveryn-ares.service")
-    assert unit.get("Service", "User") == "jon-deoliveira"
+    assert not unit.has_option("Service", "User")
     assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
     assert unit.get("Service", "Type") == "simple"
     assert unit.get("Service", "StandardOutput") == "append:/tmp/soveryn-ares.log"
