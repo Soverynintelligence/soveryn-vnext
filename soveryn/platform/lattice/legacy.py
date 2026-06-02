@@ -171,6 +171,25 @@ CREATE TABLE IF NOT EXISTS coord_event_log (
 CREATE INDEX IF NOT EXISTS idx_coord_event_log_created ON coord_event_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_coord_event_log_node    ON coord_event_log(node_id);
 CREATE INDEX IF NOT EXISTS idx_coord_event_log_actor   ON coord_event_log(actor_agent);
+
+-- Heartbeat daemon audit log. Every tick — eligible or skipped, success or
+-- failure, live or dry-run — writes one row. See
+-- docs/superpowers/specs/2026-06-02-heartbeat.md for design rationale and
+-- the design rules informed by old-SOVERYN heartbeat damage.
+CREATE TABLE IF NOT EXISTS heartbeat_log (
+    id                TEXT PRIMARY KEY,
+    triggered_at      TEXT NOT NULL,
+    completed_at      TEXT,
+    eligible          INTEGER NOT NULL,           -- 0 or 1
+    skip_reason       TEXT,                       -- 'backoff' | 'quiet_hours' | 'disabled' | 'interval' | NULL
+    action_taken      INTEGER,                    -- 0/1; NULL if skipped or errored
+    tool_call_count   INTEGER,
+    response_length   INTEGER,
+    error             TEXT,
+    dry_run           INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeat_log_triggered ON heartbeat_log(triggered_at DESC);
 """
 
 
