@@ -115,6 +115,13 @@ def create_app(
                     grant_write=True,
                 )
 
+        # Scotty's bounded mechanical tools (read-only observation surface:
+        # read_file, list_directory, git_status, git_diff, run_pytest).
+        # Path-allowlisted to SCOTTY_PROJECT_ROOT, size/time/output capped.
+        # Detect + Verify shipped; Fix + Rollback (write tools) still queued.
+        from soveryn.agents.scotty.tools import register_scotty_tools
+        register_scotty_tools(tool_registry)
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}

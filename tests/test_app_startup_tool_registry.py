@@ -117,6 +117,13 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "promote_coordination_node",
         "add_friction_block",
     }
+    scotty_mechanical_tools = {
+        "read_file",
+        "list_directory",
+        "git_status",
+        "git_diff",
+        "run_pytest",
+    }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
         names = {schema["function"]["name"] for schema in loop._tool_schemas()}
@@ -124,3 +131,10 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             f"{agent} sees Aetheria-only tools: {names & aetheria_lattice_tools}"
         assert coord_tools <= names, \
             f"{agent} missing coord tools: {coord_tools - names}"
+        if agent == "scotty":
+            assert scotty_mechanical_tools <= names, \
+                f"scotty missing mechanical tools: {scotty_mechanical_tools - names}"
+        else:
+            # Vett must NOT see Scotty's owner-keyed mechanical tools.
+            assert names.isdisjoint(scotty_mechanical_tools), \
+                f"vett sees Scotty-only tools: {names & scotty_mechanical_tools}"
