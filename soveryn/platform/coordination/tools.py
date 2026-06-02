@@ -72,7 +72,18 @@ def build_read_coord_nodes_tool(
             include_archived=include_archived,
             reading_agent=owner_agent,
         )
-        return {"nodes": [_node_to_dict(n) for n in nodes], "count": len(nodes)}
+        # Phase B: enrich Blueprint nodes with blocked_by — list of non-Archived
+        # Friction node ids that have this Blueprint in their provenance.blocks.
+        # Surfaces the block state to agents reading the boards so they don't
+        # try to Ready a node and get a CoordinationError.
+        rendered = []
+        for n in nodes:
+            d = _node_to_dict(n)
+            if n.board == CoordBoard.BLUEPRINT:
+                blockers = store.blueprint_blockers(n.id)
+                d["blocked_by"] = [b.id for b in blockers]
+            rendered.append(d)
+        return {"nodes": rendered, "count": len(rendered)}
 
     return ToolSpec(
         name="read_coordination_nodes",
@@ -400,6 +411,69 @@ def build_promote_coord_node_tool(
     )
 
 
+# ─── Friction block tool (Phase B) ──────────────────────────────────────────
+
+def build_add_friction_block_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Declare that a Friction node blocks a Blueprint from reaching Ready.
+
+    Per Aetheria's spec: Friction acts as a structural blocker on linked
+    Blueprint nodes until resolved. Archiving the Friction is the canonical
+    unblock action — there's no separate remove_block tool by design (use the
+    archive flow with a resolution lesson). Idempotent: re-adding the same
+    block pair is a no-op.
+    """
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        friction_id = args.get("friction_node_id", "")
+        blueprint_id = args.get("blueprint_node_id", "")
+        if not isinstance(friction_id, str) or not friction_id:
+            raise ToolArgError("friction_node_id must be a non-empty string")
+        if not isinstance(blueprint_id, str) or not blueprint_id:
+            raise ToolArgError("blueprint_node_id must be a non-empty string")
+        try:
+            friction = store.add_block(friction_id, blueprint_id, acting_agent=owner_agent)
+        except CoordinationError as e:
+            raise ToolArgError(str(e))
+        return {
+            "friction": _node_to_dict(friction),
+            "blocks": list(store.get_blocks(friction_id)),
+        }
+
+    return ToolSpec(
+        name="add_friction_block",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "friction_node_id": {
+                    "type": "string",
+                    "description": "ID of the Friction node declaring the block. "
+                                   "Must be on Friction board, non-Archived.",
+                },
+                "blueprint_node_id": {
+                    "type": "string",
+                    "description": "ID of the Blueprint being blocked. Must be on "
+                                   "Blueprint board.",
+                },
+            },
+            "required": ["friction_node_id", "blueprint_node_id"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Declare that a Friction node blocks a Blueprint from reaching Ready "
+            "status. The block holds until the Friction is Archived with a "
+            "resolution lesson. Idempotent — re-adding the same pair is a no-op. "
+            "Any agent can declare a block; resolution flows through Aetheria's "
+            "arbitration role per the persona layer."
+        ),
+    )
+
+
 # ─── Bulk registration ──────────────────────────────────────────────────────
 
 def register_coord_tools(
@@ -423,3 +497,4 @@ def register_coord_tools(
         registry.register(build_update_coord_status_tool(store=coord_store, owner_agent=owner_agent))
         registry.register(build_archive_coord_node_tool(store=coord_store, owner_agent=owner_agent))
         registry.register(build_promote_coord_node_tool(store=coord_store, owner_agent=owner_agent))
+        registry.register(build_add_friction_block_tool(store=coord_store, owner_agent=owner_agent))

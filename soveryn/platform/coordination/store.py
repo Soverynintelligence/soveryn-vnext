@@ -169,6 +169,19 @@ class CoordinationStore:
                 "use archive_node(...) to transition into Archived; it requires "
                 "a lesson_learned payload"
             )
+        # Phase B (Friction-as-blocker): Blueprint -> Ready transition refused
+        # while any non-Archived Friction node lists this blueprint in its
+        # provenance.blocks list. Archived Frictions don't block — archiving
+        # a Friction is the canonical resolution-unblock action.
+        if (existing.board == CoordBoard.BLUEPRINT
+                and new_status == CoordStatus.READY):
+            blockers = self.blueprint_blockers(node_id)
+            if blockers:
+                raise CoordinationError(
+                    f"blueprint {node_id!r} cannot move to Ready while blocked "
+                    f"by {len(blockers)} unresolved Friction node(s): "
+                    f"{[b.id for b in blockers]}. Archive the Friction(s) to unblock."
+                )
         now = datetime.now().isoformat()
         provenance = _provenance_for(existing)
         provenance["status"] = new_status.value
@@ -181,6 +194,101 @@ class CoordinationStore:
         # Log the cross-reference: the acting agent touched this node.
         self._log_references(acting_agent, [node_id])
         return self.get_node(node_id)  # re-read for the canonical row
+
+    # ─── Phase B: Friction-as-blocker ───────────────────────────────────────
+
+    def add_block(
+        self,
+        friction_node_id: str,
+        blueprint_node_id: str,
+        *,
+        acting_agent: str,
+    ) -> CoordinationNode:
+        """Declare that a Friction node blocks a Blueprint node from reaching
+        Ready. Mutation lives in the Friction's provenance.blocks list.
+
+        Idempotent: re-adding the same (friction, blueprint) pair is a no-op,
+        not an error. The persona/relational layer decides when to remove
+        blocks (typically by archiving the Friction with a resolution lesson).
+        """
+        friction = self.get_node(friction_node_id)
+        if friction is None:
+            raise CoordinationError(f"friction node {friction_node_id!r} not found")
+        if friction.board != CoordBoard.FRICTION:
+            raise CoordinationError(
+                f"node {friction_node_id!r} is on board {friction.board.value}, "
+                f"not Friction — only Friction nodes can block"
+            )
+        if friction.status == CoordStatus.ARCHIVED:
+            raise CoordinationError(
+                f"friction node {friction_node_id!r} is Archived — archived "
+                f"Frictions cannot block (archive is the unblock action)"
+            )
+        blueprint = self.get_node(blueprint_node_id)
+        if blueprint is None:
+            raise CoordinationError(f"blueprint node {blueprint_node_id!r} not found")
+        if blueprint.board != CoordBoard.BLUEPRINT:
+            raise CoordinationError(
+                f"node {blueprint_node_id!r} is on board {blueprint.board.value}, "
+                f"not Blueprint — only Blueprint nodes can be blocked"
+            )
+        # Idempotent merge.
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT provenance FROM nodes WHERE id = ? AND type = ?",
+                (friction_node_id, COORDINATION_NODE_TYPE),
+            ).fetchone()
+            provenance = json.loads(row["provenance"] or "{}")
+            current_blocks = list(provenance.get("blocks") or [])
+            if blueprint_node_id not in current_blocks:
+                current_blocks.append(blueprint_node_id)
+                provenance["blocks"] = current_blocks
+                now = datetime.now().isoformat()
+                conn.execute(
+                    "UPDATE nodes SET provenance = ?, updated_at = ? "
+                    "WHERE id = ? AND type = ?",
+                    (json.dumps(provenance, sort_keys=True), now,
+                     friction_node_id, COORDINATION_NODE_TYPE),
+                )
+        # Cross-reference: log the block declaration so reference_count reflects it.
+        self._log_references(acting_agent, [blueprint_node_id],
+                             source_node_id=friction_node_id)
+        return self.get_node(friction_node_id)
+
+    def blueprint_blockers(self, blueprint_node_id: str) -> tuple[CoordinationNode, ...]:
+        """Return non-Archived Friction nodes whose provenance.blocks list
+        contains this Blueprint's id. Used by update_status to refuse the
+        Refining -> Ready transition and by list_nodes to enrich rows with
+        a blocked_by field."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM nodes WHERE type = ?",
+                (COORDINATION_NODE_TYPE,),
+            ).fetchall()
+        results: list[CoordinationNode] = []
+        for r in rows:
+            provenance = json.loads(r["provenance"] or "{}")
+            if provenance.get("board") != CoordBoard.FRICTION.value:
+                continue
+            if provenance.get("status") == CoordStatus.ARCHIVED.value:
+                continue
+            blocks_list = provenance.get("blocks") or []
+            if blueprint_node_id in blocks_list:
+                results.append(_row_to_coord_node(r))
+        return tuple(results)
+
+    def get_blocks(self, friction_node_id: str) -> tuple[str, ...]:
+        """Return the list of Blueprint IDs blocked by this Friction node.
+        Read accessor for tests + UI enrichment."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT provenance FROM nodes WHERE id = ? AND type = ?",
+                (friction_node_id, COORDINATION_NODE_TYPE),
+            ).fetchone()
+        if row is None:
+            return ()
+        provenance = json.loads(row["provenance"] or "{}")
+        return tuple(provenance.get("blocks") or [])
 
     def promote_node(
         self,
