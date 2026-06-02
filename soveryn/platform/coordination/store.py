@@ -17,6 +17,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator
 
+from soveryn.platform.coordination.events import (
+    CoordEvent,
+    CoordEventKind,
+    EventBus,
+    NullEventBus,
+    get_active_chain,
+)
 from soveryn.platform.coordination.types import (
     COORDINATION_NODE_TYPE,
     LESSON_LEARNED_NODE_TYPE,
@@ -32,11 +39,23 @@ DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
 
 
 class CoordinationStore:
-    """SQLite-backed coordination store. Path-injected; no module state."""
+    """SQLite-backed coordination store. Path-injected; no module state.
 
-    def __init__(self, db_path: Path, timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS) -> None:
+    event_bus is optional — when None (the default), mutations don't emit
+    CoordEvents. Callers that want webhook-driven triggering pass an
+    InMemoryEventBus (typically via startup.py wiring).
+    """
+
+    def __init__(
+        self,
+        db_path: Path,
+        timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS,
+        *,
+        event_bus: EventBus | None = None,
+    ) -> None:
         self.db_path = Path(db_path)
         self.timeout_seconds = timeout_seconds
+        self.event_bus: EventBus = event_bus or NullEventBus()
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -141,11 +160,23 @@ class CoordinationStore:
         # from creation time.
         if lattice_ref:
             self._log_references(owner, [lattice_ref], source_node_id=node_id)
-        return CoordinationNode(
+        created = CoordinationNode(
             id=node_id, board=board, status=CoordStatus.OPEN, owner=owner,
             content=content.strip(), lattice_ref=lattice_ref,
             archived_lesson_id=None, created_at=now, updated_at=now,
         )
+        self._emit(
+            kind=CoordEventKind.NODE_CREATED,
+            node_id=node_id,
+            actor_agent=owner,
+            payload={
+                "board": board.value,
+                "owner": owner,
+                "lattice_ref": lattice_ref,
+                "content_head": content.strip()[:200],
+            },
+        )
+        return created
 
     def update_status(
         self,
@@ -193,6 +224,16 @@ class CoordinationStore:
             )
         # Log the cross-reference: the acting agent touched this node.
         self._log_references(acting_agent, [node_id])
+        self._emit(
+            kind=CoordEventKind.STATUS_CHANGED,
+            node_id=node_id,
+            actor_agent=acting_agent,
+            payload={
+                "board": existing.board.value,
+                "old_status": existing.status.value,
+                "new_status": new_status.value,
+            },
+        )
         return self.get_node(node_id)  # re-read for the canonical row
 
     # ─── Phase B: Friction-as-blocker ───────────────────────────────────────
@@ -253,6 +294,12 @@ class CoordinationStore:
         # Cross-reference: log the block declaration so reference_count reflects it.
         self._log_references(acting_agent, [blueprint_node_id],
                              source_node_id=friction_node_id)
+        self._emit(
+            kind=CoordEventKind.BLOCK_ADDED,
+            node_id=friction_node_id,
+            actor_agent=acting_agent,
+            payload={"blocks_blueprint_id": blueprint_node_id},
+        )
         return self.get_node(friction_node_id)
 
     def blueprint_blockers(self, blueprint_node_id: str) -> tuple[CoordinationNode, ...]:
@@ -387,6 +434,18 @@ class CoordinationStore:
         # each endpoint reflects the actual touchpoints honestly.
         self._log_references(acting_agent, [target_id], source_node_id=source_node_id)
         self._log_references(acting_agent, [lesson_id], source_node_id=source_node_id)
+        self._emit(
+            kind=CoordEventKind.PROMOTED,
+            node_id=target_id,
+            actor_agent=acting_agent,
+            payload={
+                "source_node_id": source_node_id,
+                "source_board": existing.board.value,
+                "target_board": target_board.value,
+                "lesson_id": lesson_id,
+                "content_head": new_content.strip()[:200],
+            },
+        )
         return (self.get_node(source_node_id), self.get_node(target_id))
 
     def archive_node(
@@ -442,6 +501,16 @@ class CoordinationStore:
             )
         # Cross-reference: archive ties coord node to lesson node.
         self._log_references(acting_agent, [lesson_id], source_node_id=node_id)
+        self._emit(
+            kind=CoordEventKind.ARCHIVED,
+            node_id=node_id,
+            actor_agent=acting_agent,
+            payload={
+                "board": existing.board.value,
+                "lesson_id": lesson_id,
+                "lesson_content_head": lesson_learned_content.strip()[:200],
+            },
+        )
         return self.get_node(node_id)
 
     # ─── Cross-reference instrumentation ────────────────────────────────────
@@ -481,6 +550,60 @@ class CoordinationStore:
                 (node_id,),
             ).fetchone()
         return int(row[0])
+
+    # ─── Event emission (Phase E) ───────────────────────────────────────────
+
+    def _emit(
+        self,
+        *,
+        kind: CoordEventKind,
+        node_id: str,
+        actor_agent: str,
+        payload: dict,
+    ) -> None:
+        """Construct a CoordEvent + log it to coord_event_log + push to the
+        event bus. Called after the relevant DB write has committed.
+
+        Chain depth + parent_event_id are pulled from the thread-local set
+        by the dispatcher when an agent is running under a webhook
+        invocation. Outside webhook context, chain_depth=0 and
+        parent_event_id=None (user-triggered actions).
+        """
+        chain = get_active_chain()
+        chain_depth = (chain.chain_depth + 1) if chain else 0
+        parent_id = chain.parent_event_id if chain else None
+        event = CoordEvent.new(
+            kind=kind, node_id=node_id, actor_agent=actor_agent, payload=payload,
+            chain_depth=chain_depth, parent_event_id=parent_id,
+        )
+        # Persist to the audit log first so even bus failures don't lose the event.
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    "INSERT INTO coord_event_log "
+                    "(id, kind, node_id, actor_agent, chain_depth, parent_event_id, "
+                    "payload_json, triggered_agents, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)",
+                    (event.id, event.kind.value, event.node_id, event.actor_agent,
+                     event.chain_depth, event.parent_event_id,
+                     json.dumps(event.payload, sort_keys=True), event.timestamp),
+                )
+        except Exception:
+            # Audit failure shouldn't fail the mutation. The state change
+            # already committed; just log and continue.
+            import logging
+            logging.getLogger(__name__).warning(
+                "failed to log coord event %s for node %s", event.id, node_id,
+                exc_info=True,
+            )
+        # Bus emission is best-effort.
+        try:
+            self.event_bus.emit(event)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "event bus failed to accept event %s", event.id, exc_info=True,
+            )
 
 
 # ─── Row mapping helpers ────────────────────────────────────────────────────

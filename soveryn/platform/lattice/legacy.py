@@ -151,6 +151,26 @@ CREATE TABLE IF NOT EXISTS coord_references (
 CREATE INDEX IF NOT EXISTS idx_coord_refs_source     ON coord_references(source_node_id);
 CREATE INDEX IF NOT EXISTS idx_coord_refs_referenced ON coord_references(referenced_node_id);
 CREATE INDEX IF NOT EXISTS idx_coord_refs_agent      ON coord_references(source_agent);
+
+-- Phase E: coord webhook event log. Every CoordEvent emitted by the
+-- CoordinationStore lands here for audit. triggered_agents is filled by
+-- the worker after routing decides who got the event (or 'ERROR: ...'
+-- on dispatch failure).
+CREATE TABLE IF NOT EXISTS coord_event_log (
+    id                TEXT PRIMARY KEY,
+    kind              TEXT NOT NULL,
+    node_id           TEXT NOT NULL,
+    actor_agent       TEXT NOT NULL,
+    chain_depth       INTEGER NOT NULL DEFAULT 0,
+    parent_event_id   TEXT,
+    payload_json      TEXT,
+    triggered_agents  TEXT,
+    created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_coord_event_log_created ON coord_event_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_coord_event_log_node    ON coord_event_log(node_id);
+CREATE INDEX IF NOT EXISTS idx_coord_event_log_actor   ON coord_event_log(actor_agent);
 """
 
 

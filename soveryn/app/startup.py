@@ -56,6 +56,9 @@ def create_app(
     if conv_store is None:
         conv_store = ConversationStore(env.conversations_db)
     tool_registry = None
+    coord_store = None
+    coord_event_bus = None
+    coord_worker = None
     if agent_loops is None:
         # Pinned memory is Aetheria-only by design — it's her relationship
         # substrate (facts about Jon, the project, her continuity). Vett and
@@ -102,11 +105,18 @@ def create_app(
         # enforced at the persona/relational layer, not the tool layer — any
         # agent can OPEN a Friction node; resolution flows through Aetheria.
         coord_store = None
+        coord_event_bus = None
         if env.lattice_db.is_file():
             from soveryn.platform.coordination import CoordinationStore
+            from soveryn.platform.coordination.events import InMemoryEventBus
             from soveryn.platform.coordination.tools import register_coord_tools
 
-            coord_store = CoordinationStore(env.lattice_db)
+            # Phase E: wire an InMemoryEventBus into the store so mutations
+            # emit CoordEvents. The worker thread (started below, after
+            # agent_loops are built) drains the bus and dispatches per the
+            # routing rules.
+            coord_event_bus = InMemoryEventBus()
+            coord_store = CoordinationStore(env.lattice_db, event_bus=coord_event_bus)
             for agent_name in ("aetheria", "vett", "scotty"):
                 register_coord_tools(
                     tool_registry,
@@ -150,11 +160,28 @@ def create_app(
                 # thinking stays off across whichever model carries her.
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
+        # Phase E: start the coord event worker now that agent_loops exists.
+        # Worker pulls from coord_event_bus and dispatches to webhook sessions.
+        # Dispatcher composes over agent_loops + conv_store; webhook sessions
+        # are durable per-agent (lazily created on first use).
+        coord_worker = None
+        if coord_event_bus is not None:
+            from soveryn.platform.coordination.dispatcher import AgentDispatcher
+            from soveryn.platform.coordination.worker import CoordEventWorker
+            dispatcher = AgentDispatcher(agent_loops, conv_store)
+            coord_worker = CoordEventWorker(
+                coord_event_bus, dispatcher, lattice_db_path=env.lattice_db,
+            )
+            coord_worker.start()
+
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
         "agent_loops": agent_loops,
         "tool_registry": tool_registry,
+        "coord_store": coord_store,
+        "coord_event_bus": coord_event_bus,
+        "coord_worker": coord_worker,
     }
 
     _register_guards(app)
