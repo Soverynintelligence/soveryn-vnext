@@ -182,6 +182,105 @@ class CoordinationStore:
         self._log_references(acting_agent, [node_id])
         return self.get_node(node_id)  # re-read for the canonical row
 
+    def promote_node(
+        self,
+        source_node_id: str,
+        *,
+        target_board: CoordBoard,
+        new_content: str,
+        acting_agent: str,
+        lesson_learned_content: str | None = None,
+    ) -> tuple[CoordinationNode, CoordinationNode]:
+        """Atomic promote: archive source + create target Blueprint/Friction in
+        one transaction. The target carries lattice_ref=source_id so the link
+        is preserved.
+
+        Source must exist and not already be Archived. target_board must be
+        Blueprint or Friction (promoting INTO Signal makes no semantic sense
+        and is rejected at the tool layer; rejected here too as a safety net).
+        new_content is the target's content (the *plan* or *contradiction*),
+        not a copy of the source's content. lesson_learned_content overrides
+        the auto-generated "Promoted to {target_board} {new_id}" message.
+
+        Returns (source_now_archived, target_just_created).
+        """
+        if target_board == CoordBoard.SIGNAL:
+            raise CoordinationError(
+                "promote target cannot be Signal — Signal is the source side of the "
+                "promote pipeline, not a destination"
+            )
+        if not new_content or not new_content.strip():
+            raise CoordinationError("new_content must be non-empty")
+        existing = self.get_node(source_node_id)
+        if existing is None:
+            raise CoordinationError(f"source coord node {source_node_id!r} not found")
+        if existing.status == CoordStatus.ARCHIVED:
+            raise CoordinationError(
+                f"source coord node {source_node_id!r} is already Archived"
+            )
+
+        target_id = str(uuid.uuid4())
+        lesson_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        effective_lesson = (
+            lesson_learned_content.strip()
+            if lesson_learned_content and lesson_learned_content.strip()
+            else f"Promoted to {target_board.value} {target_id}"
+        )
+
+        target_provenance = {
+            "board": target_board.value,
+            "status": CoordStatus.OPEN.value,
+            "owner": acting_agent,
+            "lattice_ref": source_node_id,
+            "archived_lesson_id": None,
+        }
+        lesson_provenance = {
+            "source": "coordination_promote",
+            "archived_coord_node_id": source_node_id,
+            "promoted_to_coord_node_id": target_id,
+            "promoted_to_board": target_board.value,
+            "archived_by": acting_agent,
+            "from_board": existing.board.value,
+        }
+        source_archived_provenance = _provenance_for(existing)
+        source_archived_provenance["status"] = CoordStatus.ARCHIVED.value
+        source_archived_provenance["archived_lesson_id"] = lesson_id
+
+        with self._conn() as conn:
+            # 1. Create the target coord node on the destination board.
+            conn.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, "
+                "intensity, salience, access_count, tags, created_at, "
+                "updated_at, embedding, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, NULL, NULL, ?)",
+                (target_id, COORDINATION_NODE_TYPE, acting_agent,
+                 new_content.strip(), now, now,
+                 json.dumps(target_provenance, sort_keys=True)),
+            )
+            # 2. Write the Lesson Learned lattice node tying source -> target.
+            conn.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, "
+                "intensity, salience, access_count, tags, created_at, "
+                "updated_at, embedding, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, NULL, NULL, ?)",
+                (lesson_id, LESSON_LEARNED_NODE_TYPE, acting_agent,
+                 effective_lesson, now, now,
+                 json.dumps(lesson_provenance, sort_keys=True)),
+            )
+            # 3. Archive the source coord node and link the lesson.
+            conn.execute(
+                "UPDATE nodes SET provenance = ?, updated_at = ? WHERE id = ? AND type = ?",
+                (json.dumps(source_archived_provenance, sort_keys=True), now,
+                 source_node_id, COORDINATION_NODE_TYPE),
+            )
+        # Cross-reference: source -> target (the promotion link). The
+        # source -> lesson link gets logged separately so reference_count for
+        # each endpoint reflects the actual touchpoints honestly.
+        self._log_references(acting_agent, [target_id], source_node_id=source_node_id)
+        self._log_references(acting_agent, [lesson_id], source_node_id=source_node_id)
+        return (self.get_node(source_node_id), self.get_node(target_id))
+
     def archive_node(
         self,
         node_id: str,

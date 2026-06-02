@@ -307,6 +307,99 @@ def build_archive_coord_node_tool(
     )
 
 
+# ─── Promote tool ───────────────────────────────────────────────────────────
+
+def build_promote_coord_node_tool(
+    *,
+    store: CoordinationStore,
+    owner_agent: str,
+) -> ToolSpec:
+    """Promote a Signal (or any non-Archived coord node) into a Blueprint or
+    Friction. One transaction: target created with lattice_ref=source, source
+    archived with Lesson Learned describing the promotion. Collapses the
+    canonical Signal -> Blueprint pipeline into a single call."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        source_id = args.get("source_node_id", "")
+        if not isinstance(source_id, str) or not source_id:
+            raise ToolArgError("source_node_id must be a non-empty string")
+        target_arg = args.get("target_board")
+        try:
+            target_board = CoordBoard(target_arg)
+        except ValueError:
+            raise ToolArgError(
+                f"invalid target_board {target_arg!r}; must be one of "
+                f"{[b.value for b in CoordBoard if b != CoordBoard.SIGNAL]} "
+                f"(Signal cannot be a promote target)"
+            )
+        if target_board == CoordBoard.SIGNAL:
+            raise ToolArgError(
+                "target_board cannot be Signal — Signal is the source side of "
+                "the promote pipeline, not a destination"
+            )
+        new_content = args.get("new_content", "")
+        if not isinstance(new_content, str) or not new_content.strip():
+            raise ToolArgError("new_content must be a non-empty string")
+        lesson = args.get("lesson_learned_content")
+        if lesson is not None and not isinstance(lesson, str):
+            raise ToolArgError("lesson_learned_content must be a string or omitted")
+        try:
+            source, target = store.promote_node(
+                source_id,
+                target_board=target_board,
+                new_content=new_content,
+                acting_agent=owner_agent,
+                lesson_learned_content=lesson,
+            )
+        except CoordinationError as e:
+            raise ToolArgError(str(e))
+        return {
+            "promoted_source": _node_to_dict(source),
+            "created_target": _node_to_dict(target),
+            "lesson_learned_id": source.archived_lesson_id,
+        }
+
+    return ToolSpec(
+        name="promote_coordination_node",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "source_node_id": {
+                    "type": "string",
+                    "description": "ID of the source coord node (typically a Signal) to promote. "
+                                   "Must not already be Archived.",
+                },
+                "target_board": {
+                    "type": "string",
+                    "enum": [CoordBoard.BLUEPRINT.value, CoordBoard.FRICTION.value],
+                    "description": "Destination board. Signal is not a valid target.",
+                },
+                "new_content": {
+                    "type": "string",
+                    "description": "Content of the new Blueprint or Friction node — the *plan* or "
+                                   "*contradiction*, not a copy of the source. Required.",
+                },
+                "lesson_learned_content": {
+                    "type": "string",
+                    "description": "Optional override of the auto-generated archive lesson. "
+                                   "Default: 'Promoted to {target_board} {new_id}'.",
+                },
+            },
+            "required": ["source_node_id", "target_board", "new_content"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Promote a coordination node from one board to another (typically Signal -> "
+            "Blueprint). Atomic: the new target node is created on target_board with "
+            "lattice_ref linking back to the source, and the source is archived with a "
+            "Lesson Learned describing the promotion. Use this instead of separate "
+            "create + archive calls when refining a Signal into an actionable Blueprint."
+        ),
+    )
+
+
 # ─── Bulk registration ──────────────────────────────────────────────────────
 
 def register_coord_tools(
@@ -316,7 +409,7 @@ def register_coord_tools(
     owner_agent: str,
     grant_write: bool = True,
 ) -> None:
-    """Register the four coord tools for one agent.
+    """Register the coord tools for one agent.
 
     grant_write=False registers only the read tool — useful when an agent
     needs visibility into the boards but isn't a write principal. Vett gets
@@ -329,3 +422,4 @@ def register_coord_tools(
         registry.register(build_create_coord_node_tool(store=coord_store, owner_agent=owner_agent))
         registry.register(build_update_coord_status_tool(store=coord_store, owner_agent=owner_agent))
         registry.register(build_archive_coord_node_tool(store=coord_store, owner_agent=owner_agent))
+        registry.register(build_promote_coord_node_tool(store=coord_store, owner_agent=owner_agent))

@@ -80,6 +80,7 @@ def test_startup_creates_tool_registry_for_aetheria(
         "create_coordination_node",
         "update_coordination_status",
         "archive_coordination_node",
+        "promote_coordination_node",
     } <= names
 
 
@@ -112,6 +113,7 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "create_coordination_node",
         "update_coordination_status",
         "archive_coordination_node",
+        "promote_coordination_node",
     }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
