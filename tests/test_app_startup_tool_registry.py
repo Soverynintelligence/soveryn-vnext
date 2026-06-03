@@ -83,6 +83,12 @@ def test_startup_creates_tool_registry_for_aetheria(
         "promote_coordination_node",
         "add_friction_block",
     } <= names
+    # File-read tools (added 2026-06-03 so Aetheria can reference her own
+    # design docs in docs/superpowers/specs/ and the code that implements
+    # her behavior). NOT git/pytest — those are Scotty's surface.
+    assert {"read_file", "list_directory"} <= names
+    assert {"git_status", "git_diff", "run_pytest"}.isdisjoint(names), \
+        "Aetheria should NOT see Scotty's git/pytest tools"
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(

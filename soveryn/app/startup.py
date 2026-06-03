@@ -129,8 +129,19 @@ def create_app(
         # read_file, list_directory, git_status, git_diff, run_pytest).
         # Path-allowlisted to SCOTTY_PROJECT_ROOT, size/time/output capped.
         # Detect + Verify shipped; Fix + Rollback (write tools) still queued.
-        from soveryn.agents.scotty.tools import register_scotty_tools
+        from soveryn.agents.scotty.tools import (
+            build_list_directory_tool,
+            build_read_file_tool,
+            register_scotty_tools,
+        )
         register_scotty_tools(tool_registry)
+        # Aetheria gets read_file + list_directory too (2026-06-03), so she can
+        # reference her own design docs (docs/superpowers/specs/) and the code
+        # that implements her behavior. Same path allow-list as Scotty (vnext
+        # repo only, no /etc, no credentialed paths). She does NOT get
+        # git/pytest tools — those are Scotty's executor surface, not hers.
+        tool_registry.register(build_read_file_tool(owner_agent="aetheria"))
+        tool_registry.register(build_list_directory_tool(owner_agent="aetheria"))
 
         agent_loops = {}
         for name in ACTIVE_AGENTS:
