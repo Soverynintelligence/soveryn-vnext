@@ -24,7 +24,17 @@
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
-  body { display:grid; grid-template-columns:280px 1fr 0; grid-template-rows:100vh; height:100vh; overflow:hidden; }
+  /* 100vh fallback + 100dvh override for browsers that support dynamic viewport
+     height. dvh shrinks with the mobile URL bar so the composer never falls
+     below the visible area. */
+  body {
+    display:grid; grid-template-columns:280px 1fr 0;
+    grid-template-rows:100vh; height:100vh;
+    overflow:hidden;
+  }
+  @supports (height: 100dvh) {
+    body { grid-template-rows:100dvh; height:100dvh; }
+  }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
   /* Sidebar */
@@ -214,9 +224,14 @@
   }
   @keyframes blink { 50% { opacity:0 } }
 
-  /* Composer */
+  /* Composer — in-flow at the bottom of the main flex column, NOT absolute.
+     The previous absolute positioning could land the input below the visible
+     viewport when 100vh disagreed with actual screen height (mobile address
+     bar, small windows). Flex-shrink:0 keeps it from collapsing if the thread
+     wants to grow. */
   .composer {
-    position:absolute; left:16px; right:16px; bottom:24px;
+    flex-shrink:0;
+    margin:0 16px 16px;
     display:flex; align-items:center; gap:10px;
     padding:10px 14px;
     background:var(--glass-bg);
@@ -242,7 +257,11 @@
     font-weight:700;
   }
   .composer .send:disabled { opacity:0.4; cursor:default; }
-  main { position:relative; min-height:0; }
+  /* main is a flex column: header (natural height) + thread (flex 1, scrolls)
+     + composer (natural height, flex-shrink:0). min-height:0 on main and the
+     thread is the standard flex-overflow incantation so the thread can shrink
+     below its content height (otherwise it would push the composer out). */
+  main { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
   main > .thread { min-height:0; }
 
   button:focus-visible, a:focus-visible, input:focus-visible {
