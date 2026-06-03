@@ -461,3 +461,53 @@ def test_daemon_latest_heartbeat_completed_at_returns_most_recent_completed_row(
                     ("b", "2026-06-02T11:00:00", "2026-06-02T11:00:02", 1))
     result = daemon._latest_heartbeat_completed_at()
     assert result == datetime(2026, 6, 2, 11, 0, 2)
+
+
+def test_daemon_does_not_spin_after_consecutive_skipped_ticks(
+    lattice_db, conv_db,
+):
+    """Regression: 2026-06-02 dry-run bake found the daemon spinning at
+    ~152 ticks/sec (628k backoff rows in 68 min) after skipped backoff
+    ticks. Cause was last_heartbeat_at advancing only on eligible ticks,
+    leaving sleep_target stuck in the past when backoff fired post-eligible.
+
+    The fix: always advance the tick clock for sleep math, regardless of
+    eligibility. This test exercises the run() loop briefly with a forced
+    backoff and confirms the row rate stays bounded (not thousands/min)."""
+    import threading
+
+    config_short = HeartbeatConfig(
+        enabled=True, dry_run=True,
+        interval_seconds=1,    # 1s so we can run multiple ticks fast
+        backoff_seconds=999,   # always within backoff -> always skip
+        quiet_hours="",
+    )
+    daemon = HeartbeatDaemon(
+        config_short,
+        vnext_base="http://127.0.0.1:5001",
+        lattice_db=lattice_db,
+        conv_db=conv_db,
+    )
+    # Plant an "Aetheria active right now" record so backoff always fires
+    cs = ConversationStore(conv_db)
+    sid = cs.new_session("aetheria", title="user chat")
+    cs.save_turn(sid, "aetheria", "user", "hi")
+
+    t = threading.Thread(target=daemon.run, daemon=True)
+    t.start()
+    import time as _t
+    _t.sleep(2.5)  # ~2 ticks worth at the 1s interval
+    daemon._stop = True
+    t.join(timeout=5)
+
+    with sqlite3.connect(str(lattice_db)) as con:
+        n_rows = con.execute("SELECT COUNT(*) FROM heartbeat_log").fetchone()[0]
+    # Before the fix, this loop would have produced hundreds-to-thousands
+    # of rows in 2.5 seconds. With the fix, we get at most ~3 (initial
+    # tick + roughly one per interval). Allow generous slack to avoid
+    # CI flakiness — the bug surfaced as orders-of-magnitude differences.
+    assert n_rows <= 10, (
+        f"daemon wrote {n_rows} rows in 2.5s — should be ~3. Sleep math is "
+        f"spinning on consecutive skipped ticks. Check that last_tick_at is "
+        f"advanced on EVERY tick, not just eligible ones."
+    )

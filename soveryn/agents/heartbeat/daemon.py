@@ -90,7 +90,14 @@ class HeartbeatDaemon:
             "heartbeat daemon starting. config=%s vnext=%s",
             self.config, self.vnext_base,
         )
+        # `last_heartbeat_at` (eligible-only) is what the interval gate uses
+        # in evaluate_tick. `last_tick_at` is what the SLEEP math uses to
+        # decide when to next consider a tick. We advance last_tick_at on
+        # EVERY tick — eligible or skipped — so consecutive skipped ticks
+        # don't leave sleep_target stuck in the past and spin (which the
+        # 2026-06-02 dry-run bake surfaced as 628k backoff rows in 68 min).
         last_heartbeat_at = self._latest_heartbeat_completed_at()
+        last_tick_at: datetime | None = None
         while not self._stop:
             now = datetime.now()
             last_activity_at = self._latest_aetheria_activity_at()
@@ -103,9 +110,10 @@ class HeartbeatDaemon:
             self._do_tick(now=now, eligibility=eligibility)
             if eligibility.eligible:
                 last_heartbeat_at = now
+            last_tick_at = now  # always advance — the bug fix
             # Sleep until the next interval boundary OR until shutdown.
             # Use shorter sleeps so SIGTERM is responsive.
-            sleep_target = (last_heartbeat_at or now) + timedelta(
+            sleep_target = last_tick_at + timedelta(
                 seconds=self.config.interval_seconds
             )
             while not self._stop and datetime.now() < sleep_target:
