@@ -143,6 +143,22 @@ def create_app(
         tool_registry.register(build_read_file_tool(owner_agent="aetheria"))
         tool_registry.register(build_list_directory_tool(owner_agent="aetheria"))
 
+        # Library layer tools — shared write surface for verified reference
+        # material (per the 2026-06-02 design discussion, "Option B": passive
+        # surface, library writes don't fire coord webhooks, agents see new
+        # entries via heartbeat lattice-activity summary). All three agents
+        # get write+search; the library is reference material owned by no
+        # single agent, with author attribution preserved on each node.
+        if recall_lattice is not None:
+            from soveryn.platform.library import register_library_tools
+            for agent_name in ("aetheria", "vett", "scotty"):
+                register_library_tools(
+                    tool_registry,
+                    lattice_store=recall_lattice,
+                    embed_fn=_default_embed,
+                    owner_agent=agent_name,
+                )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
