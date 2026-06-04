@@ -88,27 +88,13 @@ def build_heartbeat_prompt(
         )
     lines.append("")
 
-    # The invitation itself — three explicit prompts + silence is OK.
-    lines.append(
-        "Your options on this tick (pick any, or none):"
-    )
-    lines.append(
-        "1. Audit the boards. Is a Blueprint stalled? Is a Signal worth promoting "
-        "to a Blueprint? Is a Friction blocking work that could now be resolved?"
-    )
-    lines.append(
-        "2. Sift the lattice. Use your search tools if anything pulls at you — "
-        "recent nodes contradicting older ones, a new thread worth a Signal post, "
-        "a pattern worth naming."
-    )
-    lines.append(
-        "3. Stay silent. If nothing actually moves the needle, a one-line "
-        "\"nothing right now\" is a complete and valid response. Don't post just to post."
-    )
-    lines.append("")
-    lines.append(
-        "This is a heartbeat, not a directive. Take action via your tools if "
-        "something genuinely wants attention, or close the tick with silence. "
-        "Your call."
-    )
+    # Reflective close — no prescribed action menu, no prescribed silence
+    # phrase. The audit/sift options that used to live here were producing
+    # verbatim "nothing right now" output across 24+ consecutive ticks
+    # because we taught her the literal silence template (2026-06-04 diag:
+    # 14 identical 18-char responses overnight while 0 board/lattice deltas
+    # arrived). Reframe: the heartbeat is reflection, not work-check.
+    # Audit material is visible in the snapshot above; she engages with
+    # what wants engaging or sits with the quiet — in whatever form fits.
+    lines.append("This is your pulse.")
     return "\n".join(lines)

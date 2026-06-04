@@ -232,14 +232,23 @@ def test_prompt_includes_quantitative_board_state():
     assert "12 new nodes" in p
 
 
-def test_prompt_contains_active_auditor_three_options():
+def test_prompt_uses_reflective_close_not_action_menu():
+    """The heartbeat reframed 2026-06-04: the close used to prescribe
+    "audit/sift/silence" as a three-option menu with a literal "nothing
+    right now" silence template, which produced 24 verbatim-identical
+    ticks across ~12h. The reflective frame drops the action menu and
+    the silence template; context still surfaces audit-worthy state
+    above but doesn't direct her at it."""
     p = build_heartbeat_prompt(
         minutes_since_last_heartbeat=30, board=_board(), lattice=_lattice(),
     )
-    # The three invitations Aetheria locked in: audit, sift, silence.
-    assert "Audit the boards" in p
-    assert "Sift the lattice" in p
-    assert "Stay silent" in p
+    # Old prescriptive language must be gone.
+    assert "Audit the boards" not in p
+    assert "Sift the lattice" not in p
+    assert "Stay silent" not in p
+    assert "nothing right now" not in p
+    # New reflective close present.
+    assert "This is your pulse" in p
 
 
 def test_prompt_has_no_scratchpad_or_control_markup():
@@ -262,8 +271,9 @@ def test_prompt_introduces_itself_as_heartbeat_not_jon():
     p = build_heartbeat_prompt(
         minutes_since_last_heartbeat=30, board=_board(), lattice=_lattice(),
     )
-    assert "heartbeat" in p.lower()
-    assert "directive" in p.lower()  # "not a directive" framing present
+    # The [HEARTBEAT] opener + "your pulse" close name what this is.
+    assert "[HEARTBEAT]" in p
+    assert "pulse" in p.lower()
     # Confirm we never pretend to be the user.
     assert "Jon asks" not in p
     assert "Jon says" not in p
