@@ -91,6 +91,11 @@ class ChatResponse:
     tool_calls: tuple[dict, ...] | None     # raw, uninterpreted
     usage: dict[str, int] | None            # prompt_tokens / completion_tokens / total_tokens
     raw: dict                               # full response for debugging
+    # AgentLoop-populated when history_token_budget is active. Shape:
+    #   {prompt_tokens, budget_tokens, elided_turns, context_window}.
+    # None when budget disabled. Surfaces to /chat JSON + SSE done payload
+    # so the UI can show context-pressure warnings before forced trimming.
+    context_usage: dict | None = None
 
 
 @dataclass(frozen=True)

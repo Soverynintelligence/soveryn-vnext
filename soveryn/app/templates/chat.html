@@ -264,6 +264,23 @@
   main { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
   main > .thread { min-height:0; }
 
+  /* Context-pressure banner — visible when prompt_tokens/context_window ≥ 0.85
+     so Jon can see context filling up before forced trimming kicks in heavily.
+     Hidden by default; .visible flips display on. Amber instead of red — this
+     is a "heads up" not an error. Reads from the last chat response's
+     context_usage payload (sync /chat JSON and SSE done both carry it). */
+  .context-banner {
+    display:none;
+    padding:5px 12px;
+    background:rgba(240,180,80,0.12);
+    color:rgba(240,200,140,0.95);
+    border-bottom:1px solid rgba(240,180,80,0.25);
+    font-size:12px;
+    text-align:center;
+    flex-shrink:0;
+  }
+  .context-banner.visible { display:block; }
+
   button:focus-visible, a:focus-visible, input:focus-visible {
     outline:2px solid var(--node); outline-offset:2px; border-radius:6px;
   }
@@ -321,6 +338,7 @@
       </div>
     </header>
 
+    <div class="context-banner" data-testid="context-banner" aria-live="polite" aria-atomic="true"></div>
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
     <form class="composer" data-testid="composer" onsubmit="return false">
@@ -342,6 +360,31 @@
     stream: localStorage.getItem("soveryn.stream") !== "false",
     abort: null,
   };
+
+  const CONTEXT_BANNER_THRESHOLD = 0.85;
+
+  function updateContextUsage(usage) {
+    const el = document.querySelector('[data-testid="context-banner"]');
+    if (!el) return;
+    if (!usage || !usage.context_window || !usage.prompt_tokens) {
+      el.classList.remove("visible");
+      el.textContent = "";
+      return;
+    }
+    const ratio = usage.prompt_tokens / usage.context_window;
+    if (ratio < CONTEXT_BANNER_THRESHOLD) {
+      el.classList.remove("visible");
+      el.textContent = "";
+      return;
+    }
+    const pct = Math.round(ratio * 100);
+    const elided = usage.elided_turns || 0;
+    const tail = elided > 0
+      ? ` — ${elided} older turn${elided === 1 ? "" : "s"} elided`
+      : "";
+    el.textContent = `Context ${pct}% full${tail}`;
+    el.classList.add("visible");
+  }
 
   // ─── History grouping ─────────────────────────────────────────────────────
   const HISTORY_BUCKETS = ["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
@@ -579,6 +622,7 @@
               respBubble.textContent = payload.content;
               cleared = true;
             }
+            updateContextUsage(payload.context_usage);
           } else if (payload.type === "error") {
             respBubble.textContent = `error · ${payload.code}: ${payload.message}`;
             return;
@@ -612,6 +656,7 @@
         respBubble.textContent = `error · ${data.error.code}: ${data.error.message}`;
       } else {
         respBubble.textContent = data.content || "";
+        updateContextUsage(data.context_usage);
       }
     } catch (e) {
       respBubble.textContent = `error · ${e.message}`;
@@ -624,6 +669,9 @@
       if (!r.ok) return;
       const data = await r.json();
       elThread().innerHTML = "";
+      // Clear the context banner — the new session's pressure state is
+      // unknown until the next chat response arrives.
+      updateContextUsage(null);
       for (const t of data.turns || []) {
         if (t.role === "user" || t.role === "assistant") appendBubble(t.role, t.content);
       }

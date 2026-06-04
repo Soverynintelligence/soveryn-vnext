@@ -1,0 +1,246 @@
+"""Tests for the history token budgeter + context_usage reporting.
+
+Two layers:
+  1. Pure-function tests against _estimate_tokens / _apply_history_budget
+  2. AgentLoop tests verifying budget is applied in both process_message
+     and process_message_stream, and that ChatResponse.context_usage /
+     DoneEvent.context_usage are populated correctly.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from soveryn.agents.loop import (
+    AgentLoop,
+    DoneEvent,
+    TokenEvent,
+    _apply_history_budget,
+    _estimate_message_tokens,
+    _estimate_tokens,
+)
+from soveryn.inference.llama_server_client import (
+    ChatMessage,
+    ChatRequest,
+    ChatResponse,
+    StreamChunk,
+)
+from soveryn.memory.conversation_store import ConversationStore
+
+
+# ─── Estimator ──────────────────────────────────────────────────────────────
+
+def test_estimate_tokens_empty_string_returns_at_least_one():
+    assert _estimate_tokens("") == 1
+
+
+def test_estimate_tokens_short_text_returns_at_least_one():
+    assert _estimate_tokens("hi") == 1
+
+
+def test_estimate_tokens_uses_char_quarter_heuristic():
+    # 40 chars → 10 tokens
+    assert _estimate_tokens("a" * 40) == 10
+
+
+def test_estimate_message_tokens_includes_per_message_overhead():
+    # 40 chars → 10 content tokens + 5 overhead = 15
+    msg = ChatMessage(role="user", content="a" * 40)
+    assert _estimate_message_tokens(msg) == 15
+
+
+# ─── Budgeter: pure function ────────────────────────────────────────────────
+
+def _msg(role: str, chars: int) -> ChatMessage:
+    return ChatMessage(role=role, content="x" * chars)
+
+
+def test_budgeter_empty_history_returns_noop():
+    prelude = (_msg("system", 40),)
+    history: tuple[ChatMessage, ...] = ()
+    trimmed, marker, elided = _apply_history_budget(prelude, history, budget=1000)
+    assert trimmed == ()
+    assert marker is None
+    assert elided == 0
+
+
+def test_budgeter_under_budget_returns_noop():
+    prelude = (_msg("system", 40),)  # 15 tokens
+    history = (_msg("user", 40), _msg("assistant", 40), _msg("user", 40))  # 45
+    trimmed, marker, elided = _apply_history_budget(prelude, history, budget=1000)
+    assert trimmed == history
+    assert marker is None
+    assert elided == 0
+
+
+def test_budgeter_over_budget_drops_oldest_and_returns_marker():
+    # prelude 40 chars → 15 tokens
+    prelude = (_msg("system", 40),)
+    # 4 history messages, each 40 chars → 15 tokens each → 60 total
+    # 15 + 60 = 75 total; budget 50 → must drop messages until <= 50
+    history = (
+        _msg("user", 40),       # oldest
+        _msg("assistant", 40),
+        _msg("user", 40),
+        _msg("assistant", 40),  # newest (preserved)
+    )
+    trimmed, marker, elided = _apply_history_budget(prelude, history, budget=50)
+    # After dropping 2: 15 (prelude) + 30 (2 kept) = 45 ≤ 50; one more drop
+    # would leave only the newest. The minimal viable trim is 2 drops here.
+    assert elided >= 2
+    assert marker is not None
+    assert marker.role == "system"
+    assert "elided" in marker.content
+    assert trimmed[-1] is history[-1]  # newest always preserved
+
+
+def test_budgeter_single_turn_over_budget_keeps_just_newest_no_marker():
+    """When even the most recent turn alone blows budget, we can't help —
+    keep just the newest turn, report 0 elided (we didn't trim — the
+    overflow is a separate problem that surfaces via context_usage)."""
+    prelude = (_msg("system", 4000),)  # huge prelude
+    history = (_msg("user", 40),)  # one turn
+    trimmed, marker, elided = _apply_history_budget(prelude, history, budget=100)
+    # Budget already blown by prelude alone — nothing to drop from history
+    # without killing the just-asked question.
+    assert trimmed == history
+    assert marker is None
+    assert elided == 0
+
+
+def test_budgeter_preserves_newest_when_multi_turn_overflow():
+    """Multi-turn history where the just-saved newest turn alone fits but
+    everything older doesn't: drop everything else, keep newest, add marker."""
+    prelude = (_msg("system", 40),)  # 15 tokens
+    history = (
+        _msg("user", 4000),       # 1005 tokens
+        _msg("assistant", 4000),  # 1005 tokens
+        _msg("user", 40),         # 15 tokens (newest)
+    )
+    trimmed, marker, elided = _apply_history_budget(prelude, history, budget=100)
+    assert trimmed == (history[-1],)
+    assert marker is not None
+    assert elided == 2
+
+
+# ─── AgentLoop integration ──────────────────────────────────────────────────
+
+class _CapturingChat:
+    def __init__(self, *, content="OK", prompt_tokens=42):
+        self.calls = []
+        self.content = content
+        self.prompt_tokens = prompt_tokens
+
+    def __call__(self, request, server, timeout=60.0):
+        self.calls.append(request)
+        return ChatResponse(
+            content=self.content,
+            finish_reason="stop",
+            tool_calls=None,
+            usage={"prompt_tokens": self.prompt_tokens, "completion_tokens": 1, "total_tokens": self.prompt_tokens + 1},
+            raw={},
+        )
+
+
+@pytest.fixture
+def conv_store(tmp_path):
+    return ConversationStore(tmp_path / "conv.db")
+
+
+def test_process_message_returns_context_usage_when_budget_set(conv_store):
+    chat = _CapturingChat(prompt_tokens=1234)
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=chat,
+        history_token_budget=20_000, context_window=32_768,
+    )
+    sid = conv_store.new_session("aetheria")
+    response = loop.process_message(sid, "hello")
+    assert response.context_usage is not None
+    assert response.context_usage["prompt_tokens"] == 1234
+    assert response.context_usage["budget_tokens"] == 20_000
+    assert response.context_usage["context_window"] == 32_768
+    assert response.context_usage["elided_turns"] == 0
+
+
+def test_process_message_context_usage_is_none_without_budget(conv_store):
+    chat = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=chat)
+    sid = conv_store.new_session("aetheria")
+    response = loop.process_message(sid, "hello")
+    assert response.context_usage is None
+
+
+def test_process_message_elides_when_history_exceeds_budget(conv_store):
+    """Seed conv_store with a long history; verify the chat call sees a
+    trimmed message list with the elision marker present."""
+    chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=chat,
+        history_token_budget=200, context_window=32_768,
+    )
+    sid = conv_store.new_session("aetheria")
+    # Seed 6 prior turns (3 user + 3 assistant) of ~400 chars each. With a
+    # 200-token budget the budgeter must drop most of them.
+    for i in range(3):
+        conv_store.save_turn(sid, "aetheria", "user", "u" * 400 + f" turn {i}")
+        conv_store.save_turn(sid, "aetheria", "assistant", "a" * 400 + f" turn {i}")
+    response = loop.process_message(sid, "newest question")
+    assert response.context_usage["elided_turns"] > 0
+    # The request sent to chat_fn must contain the elision marker as a system msg
+    request = chat.calls[-1]
+    system_contents = [m.content for m in request.messages if m.role == "system"]
+    assert any("elided" in c for c in system_contents), \
+        f"elision marker missing from system messages: {system_contents}"
+
+
+# ─── Streaming path ─────────────────────────────────────────────────────────
+
+class _CapturingStream:
+    """Fake stream_fn that emits one token + finish_reason + usage."""
+    def __init__(self, *, content="OK", prompt_tokens=42):
+        self.calls = []
+        self.content = content
+        self.prompt_tokens = prompt_tokens
+
+    def __call__(self, request, server, timeout=60.0):
+        self.calls.append(request)
+        yield StreamChunk(
+            delta=self.content,
+            finish_reason="stop",
+            tool_calls_delta=None,
+            usage={"prompt_tokens": self.prompt_tokens, "completion_tokens": 1, "total_tokens": self.prompt_tokens + 1},
+            raw={},
+        )
+
+
+def test_stream_done_event_carries_context_usage_when_budget_set(conv_store):
+    stream = _CapturingStream(prompt_tokens=999)
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=_CapturingChat(),
+        stream_fn=stream,
+        history_token_budget=20_000, context_window=32_768,
+    )
+    sid = conv_store.new_session("aetheria")
+    events = list(loop.process_message_stream(sid, "hi"))
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert len(done) == 1
+    assert done[0].context_usage is not None
+    assert done[0].context_usage["prompt_tokens"] == 999
+    assert done[0].context_usage["budget_tokens"] == 20_000
+    assert done[0].context_usage["context_window"] == 32_768
+    assert done[0].context_usage["elided_turns"] == 0
+
+
+def test_stream_done_event_context_usage_none_without_budget(conv_store):
+    stream = _CapturingStream()
+    loop = AgentLoop(
+        "aetheria", conv_store,
+        chat_fn=_CapturingChat(),
+        stream_fn=stream,
+    )
+    sid = conv_store.new_session("aetheria")
+    events = list(loop.process_message_stream(sid, "hi"))
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert len(done) == 1
+    assert done[0].context_usage is None

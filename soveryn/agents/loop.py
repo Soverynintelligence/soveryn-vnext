@@ -71,6 +71,9 @@ class DoneEvent:
     finish_reason: str
     tool_calls: tuple[dict, ...] | None
     usage: dict | None
+    # Populated by AgentLoop when history_token_budget is active. Same shape
+    # as ChatResponse.context_usage so /chat_stream and /chat agree.
+    context_usage: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +150,63 @@ def _accumulate_tool_calls(
     return accumulated
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# History budgeter — char/4 estimator + trim helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PER_MESSAGE_OVERHEAD_TOKENS = 5
+
+
+def _estimate_tokens(text: str) -> int:
+    """Char/4 ballpark. Actual token count comes back from llama-server's
+    usage.prompt_tokens post-call; this estimator only drives trim decisions."""
+    return max(1, len(text or "") // 4)
+
+
+def _estimate_message_tokens(msg: ChatMessage) -> int:
+    """Per-message estimate with small overhead for role/structure framing."""
+    return _estimate_tokens(msg.content) + _PER_MESSAGE_OVERHEAD_TOKENS
+
+
+def _apply_history_budget(
+    prelude: tuple[ChatMessage, ...],
+    history: tuple[ChatMessage, ...],
+    budget: int,
+) -> tuple[tuple[ChatMessage, ...], ChatMessage | None, int]:
+    """Drop oldest history turns until prelude + history fits inside budget.
+
+    Always preserves history[-1] (the just-saved user message). Returns:
+      (possibly_trimmed_history, elision_marker_or_None, elided_count)
+
+    If the most recent turn alone (plus prelude) already blows the budget,
+    that's a prompt-overflow condition the budgeter can't fix — we still
+    drop everything older and surface the overflow via context_usage so the
+    UI banner reflects it.
+    """
+    if not history:
+        return history, None, 0
+    prelude_tokens = sum(_estimate_message_tokens(m) for m in prelude)
+    history_tokens = [_estimate_message_tokens(m) for m in history]
+    total = prelude_tokens + sum(history_tokens)
+    if total <= budget:
+        return history, None, 0
+
+    kept = list(history)
+    kept_tokens = list(history_tokens)
+    dropped = 0
+    while len(kept) > 1 and total > budget:
+        total -= kept_tokens.pop(0)
+        kept.pop(0)
+        dropped += 1
+    if dropped == 0:
+        return history, None, 0
+    marker = ChatMessage(
+        role="system",
+        content=f"[Context: {dropped} older turn(s) elided to fit token budget.]",
+    )
+    return tuple(kept), marker, dropped
+
+
 class AgentLoopError(Exception):
     """Raised by AgentLoop on session validation or contract violations."""
 
@@ -169,6 +229,8 @@ class AgentLoop:
         temperature: float = 0.7,
         max_tokens: int = 2048,
         thinking_budget_tokens: int | None = None,
+        history_token_budget: int | None = None,
+        context_window: int | None = None,
         tool_registry: ToolRegistry | None = None,
         max_tool_rounds: int = 4,
         system_prompt: str | None = None,
@@ -192,6 +254,23 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.thinking_budget_tokens = thinking_budget_tokens
+        # History budget: when set, oldest history turns are dropped before
+        # building the request until estimated tokens fit. Surfaced via
+        # context_usage on ChatResponse/DoneEvent so the UI can warn at ≥85%
+        # of context_window before forced trimming. None = unlimited (Vett,
+        # Scotty, tests). context_window is the underlying server's max
+        # context — used by the UI as the denominator for the pressure bar,
+        # not enforced here.
+        if history_token_budget is not None and history_token_budget <= 0:
+            raise ValueError(
+                f"history_token_budget must be > 0 if set (got {history_token_budget})"
+            )
+        if context_window is not None and context_window <= 0:
+            raise ValueError(
+                f"context_window must be > 0 if set (got {context_window})"
+            )
+        self.history_token_budget = history_token_budget
+        self.context_window = context_window
         self.tool_registry = tool_registry
         self.max_tool_rounds = max_tool_rounds
         # Tri-state per Jon:
@@ -323,6 +402,14 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+
+        elided_turns = 0
+        if self.history_token_budget is not None:
+            history_messages, marker, elided_turns = _apply_history_budget(
+                prelude, history_messages, self.history_token_budget,
+            )
+            if marker is not None:
+                prelude = prelude + (marker,)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
 
         # 4. Dispatch chat. Any failure propagates; user turn is already saved.
@@ -380,8 +467,40 @@ class AgentLoop:
             session_id, self.agent_name, "assistant", response.content
         )
 
-        # 6. Return raw ChatResponse (constraint 3).
+        # 6. Return raw ChatResponse (constraint 3). When a history budget is
+        # active, decorate with context_usage so the UI can show pressure.
+        if self.history_token_budget is not None:
+            response = ChatResponse(
+                content=response.content,
+                finish_reason=response.finish_reason,
+                tool_calls=response.tool_calls,
+                usage=response.usage,
+                raw=response.raw,
+                context_usage=self._build_context_usage(response.usage, elided_turns),
+            )
         return response
+
+    def _build_context_usage(
+        self, usage: dict | None, elided_turns: int,
+    ) -> dict:
+        """Build the context_usage payload returned alongside a ChatResponse.
+
+        prompt_tokens comes from the model's reported usage when available;
+        if the server didn't return usage (e.g. a fake_chat in tests), we
+        fall back to 0 so the UI math is defined.
+        """
+        prompt_tokens = 0
+        if isinstance(usage, dict):
+            try:
+                prompt_tokens = int(usage.get("prompt_tokens") or 0)
+            except (TypeError, ValueError):
+                prompt_tokens = 0
+        return {
+            "prompt_tokens": prompt_tokens,
+            "budget_tokens": self.history_token_budget,
+            "elided_turns": elided_turns,
+            "context_window": self.context_window,
+        }
 
     def _tool_result_message(self, tool_call: dict) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
@@ -470,6 +589,14 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+
+        elided_turns = 0
+        if self.history_token_budget is not None:
+            history_messages, marker, elided_turns = _apply_history_budget(
+                prelude, history_messages, self.history_token_budget,
+            )
+            if marker is not None:
+                prelude = prelude + (marker,)
         messages = prelude + history_messages
 
         # Round loop: streaming generation → maybe tool calls → tool dispatch →
@@ -589,6 +716,10 @@ class AgentLoop:
                     finish_reason=round_finish_reason,
                     tool_calls=round_tc_tuple,
                     usage=final_usage,
+                    context_usage=(
+                        self._build_context_usage(final_usage, elided_turns)
+                        if self.history_token_budget is not None else None
+                    ),
                 )
                 return
 
@@ -620,6 +751,10 @@ class AgentLoop:
             finish_reason=final_finish_reason or "stop",
             tool_calls=None,
             usage=final_usage,
+            context_usage=(
+                self._build_context_usage(final_usage, elided_turns)
+                if self.history_token_budget is not None else None
+            ),
         )
 
 

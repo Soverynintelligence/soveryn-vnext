@@ -179,6 +179,7 @@ def chat():
         "finish_reason": response.finish_reason,
         "tool_calls": list(response.tool_calls) if response.tool_calls else None,
         "usage": response.usage,
+        "context_usage": response.context_usage,
     }), 200
 
 
@@ -199,6 +200,7 @@ def _event_to_dict(event: AgentStreamEvent) -> dict:
             "finish_reason": event.finish_reason,
             "tool_calls": list(event.tool_calls) if event.tool_calls else None,
             "usage": event.usage,
+            "context_usage": event.context_usage,
         }
     if isinstance(event, ErrorEvent):
         return {"type": "error", "code": event.code, "message": event.message}

@@ -98,6 +98,32 @@ def test_startup_creates_tool_registry_for_aetheria(
     assert "recent_self_audit" in names
 
 
+def test_aetheria_has_history_budget_others_do_not(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice,
+) -> None:
+    """History budget is Aetheria-only — Vett and Scotty stay unlimited.
+    Reserves ~12K of Gemma 4 31B's 32K window for response generation so
+    long sessions don't push her into the stuck-thinking-no-answer mode."""
+    _configure_startup_env(
+        monkeypatch,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice=recall_lattice,
+    )
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    loops = app.extensions["soveryn"]["agent_loops"]
+    assert loops["aetheria"].history_token_budget == 20_000
+    assert loops["aetheria"].context_window == 32_768
+    assert loops["vett"].history_token_budget is None
+    assert loops["vett"].context_window is None
+    assert loops["scotty"].history_token_budget is None
+    assert loops["scotty"].context_window is None
+
+
 def test_other_agents_do_not_get_aetheria_lattice_tools(
     tmp_path,
     monkeypatch,

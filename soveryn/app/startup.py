@@ -191,6 +191,13 @@ def create_app(
                     kwargs["recall_k"] = 5
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
+                # History budget — leave 12K of Gemma 4 31B's 32K window for
+                # response generation so long sessions don't push her into the
+                # "stuck thinking, no answer" failure mode. context_window is
+                # the UI denominator for the pressure bar, not enforced here.
+                # Both lines update together when the model swaps.
+                kwargs["history_token_budget"] = 20_000
+                kwargs["context_window"] = 32_768
                 # thinking_budget_tokens left unset (None = unrestricted).
                 # As of 2026-06-01 Aetheria runs on Gemma 4 31B (vanilla Google
                 # instruct) with thinking disabled via chat-template-kwargs in
