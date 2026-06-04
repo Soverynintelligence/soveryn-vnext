@@ -67,10 +67,22 @@ def test_root_no_hardcoded_retired_agents(app_state):
         assert retired not in body, f"hardcoded retired {retired!r} in command center"
 
 
-def test_root_no_hardcoded_gpu_labels(app_state):
+def test_root_no_hardcoded_gpu_labels_in_stats_panel(app_state):
+    """Guards against hardcoded GPU model names in the GPU stats area —
+    those should come from /api/system/gpu, not the template. The topology
+    view (added 2026-06-04) legitimately names hardware architecture
+    (e.g. "Blackwell 96GB · live" on the SOVERYN tower node), so we scope
+    the check to the GPU bars panel rather than the whole body."""
     body = app_state.get("/").data.decode("utf-8").lower()
+    # Slice to the gpu-bars section only.
+    gpu_section_start = body.find('data-testid="gpu-bars"')
+    assert gpu_section_start >= 0, "gpu-bars panel missing from command center"
+    # The gpu-bars section ends at the next closing </div> of the system panel.
+    gpu_section_end = body.find('class="system-stats"', gpu_section_start)
+    gpu_section = body[gpu_section_start:gpu_section_end if gpu_section_end > 0 else gpu_section_start + 2000]
     for label in ("blackwell", "rtx 8000", "rtx pro 5000", "quadro"):
-        assert label not in body, f"hardcoded GPU label {label!r} in command center"
+        assert label not in gpu_section, \
+            f"hardcoded GPU label {label!r} in the GPU stats panel"
 
 
 def test_root_no_external_resources(app_state):

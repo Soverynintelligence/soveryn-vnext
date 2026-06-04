@@ -6,17 +6,32 @@
 <title>SOVERYN · Command Center</title>
 <style>
   :root {
-    --canvas:#000000;
+    /* SOVERYN palette — mirrors chat.html. Anchored to the new logo
+       (organic + electric duality, bronze trunk as bridge). */
+    --sov-canvas:#050505;          /* near-black */
+    --sov-olive:#94a455;           /* primary brand — leaves */
+    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Scotty + trunk) — deep brown, not orange */
+    --sov-deep-blue:#1f2c44;       /* Vett */
+    --sov-electric-blue:#3ea8e8;   /* Aetheria gradient stop / phosphor */
+    --sov-sage:#8a9a4d;            /* Aetheria gradient start */
+    --sov-gray:#9a988a;            /* Aetheria gradient middle */
+    --sov-amber:#e0b878;           /* soft accent */
+    --text:#e8e3d5;                /* warm cream */
+
+    /* Legacy aliases — historic refs in this template still resolve. */
+    --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:#455142;
+    --leaf:var(--sov-bronze);
     --slate:#2a4459;
-    --node:#75cbe8;
-    --bronze:#986d42;
-    --gold:#af9a6d;
-    --text:#ecf3f4;
-    --glass-bg:rgba(20,24,32,0.62);
-    --glass-border:rgba(255,255,255,0.06);
-    --glass-blur:blur(22px) saturate(140%);
+    --node:var(--sov-deep-blue);
+    --bronze:var(--sov-bronze);
+    --gold:var(--sov-bronze);
+
+    /* Translucent so the ambient logo bg shows through panels, not just
+       around them. Blur bumped to keep text readable under the see-through. */
+    --glass-bg:rgba(18,16,12,0.40);
+    --glass-border:rgba(225,210,170,0.10);
+    --glass-blur:blur(30px) saturate(140%);
     --r-lg:22px;
     --r-md:14px;
     --r-sm:10px;
@@ -24,6 +39,23 @@
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
+
+  /* Brand presence — the tree-of-life logo as an ambient page background.
+     Fixed position so it doesn't scroll with content. ~78vmin keeps it
+     readable on both wide and tall screens without dominating. Low alpha
+     so dashboard panels read cleanly over it. pointer-events:none so it
+     never intercepts clicks. */
+  body::before {
+    content:"";
+    position:fixed; inset:0;
+    background:url("/static/logo.png") no-repeat center center;
+    background-size:160vmin auto;
+    opacity:0.50;
+    pointer-events:none;
+    z-index:0;
+  }
+  /* Lift the actual page content above the ambient background layer. */
+  .page { position:relative; z-index:1; }
   a { color:inherit; text-decoration:none; }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
@@ -31,9 +63,27 @@
 
   header.top {
     display:flex; align-items:center; justify-content:space-between;
-    padding:8px 4px;
+    padding:12px 4px 24px;
   }
-  header.top .wordmark { color:var(--gold); font-weight:600; letter-spacing:0.22em; font-size:13px; }
+  /* Brand mark: logo + wordmark + tagline. This is what makes the page
+     read as SOVERYN-the-thing, not just a dashboard. */
+  header.top .brand-mark { display:flex; align-items:center; gap:18px; }
+  header.top .brand-logo {
+    width:72px; height:72px;
+    object-fit:contain;
+    filter:drop-shadow(0 0 18px rgba(148,164,85,0.18));
+  }
+  header.top .brand-text { display:flex; flex-direction:column; gap:6px; }
+  header.top .wordmark {
+    color:var(--sov-bronze); font-weight:600;
+    letter-spacing:0.32em; font-size:18px;
+  }
+  header.top .tagline {
+    color:rgba(232,227,213,0.55);
+    font-size:10px; letter-spacing:0.28em;
+    text-transform:uppercase;
+  }
+  header.top .tagline .dot { color:var(--sov-olive); margin:0 6px; }
   header.top .status-pill {
     display:flex; align-items:center; gap:8px;
     padding:6px 12px; border-radius:14px;
@@ -41,9 +91,9 @@
     backdrop-filter:var(--glass-blur);
     -webkit-backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-border);
-    font-size:11px; color:rgba(236,243,244,0.7);
+    font-size:11px; color:rgba(232,227,213,0.7);
   }
-  header.top .status-pill .dot { width:8px; height:8px; border-radius:50%; background:#3dba6f; box-shadow:0 0 8px #3dba6f; }
+  header.top .status-pill .dot { width:8px; height:8px; border-radius:50%; background:var(--sov-olive); box-shadow:0 0 8px var(--sov-olive); }
 
   .panel {
     background:var(--glass-bg);
@@ -81,9 +131,22 @@
     animation:ring 2.4s ease-in-out infinite;
   }
   @keyframes ring { 0%,100% { transform:scale(1); opacity:0.35 } 50% { transform:scale(1.08); opacity:0.1 } }
-  .agent-card[data-agent="aetheria"] .disc { background:linear-gradient(135deg,var(--gold),var(--bronze)); color:var(--gold); }
-  .agent-card[data-agent="vett"]     .disc { background:linear-gradient(135deg,var(--node),var(--slate)); color:var(--node); }
-  .agent-card[data-agent="scotty"]   .disc { background:linear-gradient(135deg,var(--leaf),var(--earth)); color:var(--leaf); }
+  /* Agent identity discs — Aetheria carries the brand olive (she's the
+     central voice; the SOVERYN brand color is hers). Vett = deep blue,
+     Scotty = bronze. The pulse-ring `color` inherits each signature hue. */
+  .agent-card[data-agent="aetheria"] .disc {
+    background:linear-gradient(135deg, var(--sov-olive), var(--sov-sage));
+    color:var(--sov-olive);
+  }
+  .agent-card[data-agent="vett"] .disc {
+    background:linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c);
+    color:var(--sov-electric-blue);
+  }
+  .agent-card[data-agent="scotty"] .disc {
+    /* Gold highlight → dark patina, like an old worn bronze shield. */
+    background:linear-gradient(135deg, #b8945a, #5a4628);
+    color:var(--sov-bronze);
+  }
   .agent-card .body { flex:1; min-width:0; }
   .agent-card .name { font-size:14px; font-weight:500; }
   .agent-card .role { color:rgba(236,243,244,0.55); font-size:11px; margin-top:2px; }
@@ -98,13 +161,13 @@
   .activity-feed { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:4px; }
   .activity-item { font-size:13px; color:rgba(236,243,244,0.78); line-height:1.5; }
   .activity-item .who { font-weight:500; }
-  .activity-item .who[data-agent="aetheria"] { color:var(--gold); }
-  .activity-item .who[data-agent="vett"] { color:var(--node); }
-  .activity-item .who[data-agent="scotty"] { color:#7c9476; }
+  .activity-item .who[data-agent="aetheria"] { color:var(--sov-olive); }
+  .activity-item .who[data-agent="vett"]     { color:var(--sov-electric-blue); }
+  .activity-item .who[data-agent="scotty"]   { color:var(--sov-bronze); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
   .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
-  .sparkline .bar { flex:1; background:var(--node); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+  .sparkline .bar { flex:1; background:var(--sov-olive); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
 
   .gpu-bars { display:flex; flex-direction:column; gap:10px; }
   .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
@@ -123,15 +186,103 @@
   }
   .attention .empty { color:rgba(236,243,244,0.35); font-style:italic; }
 
-  a.agent-card:focus-visible { outline:2px solid var(--node); outline-offset:4px; border-radius:var(--r-lg); }
-  button:focus-visible { outline:2px solid var(--node); outline-offset:2px; }
+  a.agent-card:focus-visible { outline:2px solid var(--sov-olive); outline-offset:4px; border-radius:var(--r-lg); }
+  button:focus-visible { outline:2px solid var(--sov-olive); outline-offset:2px; }
+
+  /* ─── Daemon status strip ─────────────────────────────────────────────── */
+  .daemon-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .daemon-card {
+    padding:16px 20px;
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-radius:var(--r-md);
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .daemon-card .label { display:flex; align-items:center; gap:8px; }
+  .daemon-card .label .dot {
+    width:8px; height:8px; border-radius:50%; flex-shrink:0;
+    background:rgba(232,227,213,0.25);
+  }
+  .daemon-card[data-status="active"] .label .dot {
+    background:var(--sov-olive); box-shadow:0 0 8px rgba(148,164,85,0.5);
+  }
+  .daemon-card[data-status="stale"]  .label .dot { background:#d4a827; box-shadow:0 0 8px rgba(212,168,39,0.45); }
+  .daemon-card[data-status="quiet"]  .label .dot { background:rgba(232,227,213,0.35); }
+  .daemon-card .name { font-size:12px; font-weight:500; color:var(--text); }
+  .daemon-card .meta { font-size:11px; color:rgba(232,227,213,0.55); line-height:1.45; }
+  .daemon-card .meta strong { color:rgba(232,227,213,0.85); font-weight:500; font-variant-numeric:tabular-nums; }
+  .daemon-card[data-status="active"]::after, .daemon-card[data-status="stale"]::after { content:""; }
+
+  /* ─── Boards panel ──────────────────────────────────────────────────────── */
+  .boards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .board-col h4 {
+    font-size:10px; text-transform:uppercase; letter-spacing:0.14em;
+    color:rgba(232,227,213,0.5);
+    margin-bottom:10px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .board-col h4 .count {
+    color:var(--sov-olive); font-weight:600; font-size:11px;
+    background:rgba(148,164,85,0.10); padding:2px 8px; border-radius:10px;
+    letter-spacing:0;
+  }
+  .board-col[data-board="blueprint"] h4 .count { color:var(--sov-bronze); background:rgba(198,154,90,0.10); }
+  .board-col[data-board="friction"]  h4 .count { color:#d4a827; background:rgba(212,168,39,0.10); }
+  .board-item {
+    padding:10px 12px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.04);
+    border-radius:8px;
+    margin-bottom:8px;
+    font-size:12px; color:rgba(232,227,213,0.82);
+    line-height:1.45;
+  }
+  .board-item .head {
+    display:flex; justify-content:space-between; gap:8px;
+    font-size:10px; color:rgba(232,227,213,0.5); margin-bottom:4px;
+    text-transform:uppercase; letter-spacing:0.08em;
+  }
+  .board-item .head .who                       { color:var(--sov-olive); }
+  .board-item .head .who[data-agent="vett"]   { color:var(--sov-electric-blue); }
+  .board-item .head .who[data-agent="scotty"] { color:var(--sov-bronze); }
+  .board-item .body {
+    overflow:hidden; text-overflow:ellipsis;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
+  .board-col .empty { font-size:11px; color:rgba(232,227,213,0.35); font-style:italic; }
+
+  /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
+  .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
+  .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
+  .topology .node[data-status="alive"] rect { stroke:var(--sov-olive); stroke-width:1.5; }
+  .topology .node[data-status="pending"] rect { stroke-dasharray:4 3; stroke:rgba(232,227,213,0.25); }
+  .topology .node text { fill:var(--text); font-size:11px; font-weight:500; }
+  .topology .node .role { fill:rgba(232,227,213,0.45); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; font-weight:400; }
+  .topology .node .dot[data-status="alive"]   { fill:var(--sov-olive); }
+  .topology .node .dot[data-status="pending"] { fill:rgba(232,227,213,0.25); }
+  .topology .link {
+    stroke:rgba(225,210,170,0.18); stroke-width:1; fill:none;
+  }
+  .topology .link[data-status="active"]  { stroke:var(--sov-olive); stroke-opacity:0.6; }
+  .topology .link[data-status="pending"] { stroke-dasharray:5 4; }
+  .topology .link-label { font-size:9px; fill:rgba(232,227,213,0.4); letter-spacing:0.06em; text-transform:uppercase; }
+  .topology .legend { margin-top:14px; font-size:10px; color:rgba(232,227,213,0.45); text-align:center; letter-spacing:0.06em; text-transform:uppercase; }
+  .topology .legend .live { color:var(--sov-olive); }
+  .topology .legend .pending { color:rgba(232,227,213,0.55); }
 </style>
 </head>
 <body data-testid="command-center">
   <div class="page">
 
     <header class="top">
-      <div class="wordmark">SOVERYN</div>
+      <!-- Logo lives in the ambient page background; header carries the
+           typographic identity (wordmark + tagline) only. -->
+      <div class="brand-text">
+        <div class="wordmark">SOVERYN</div>
+        <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
+      </div>
       <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
     </header>
 
@@ -167,6 +318,41 @@
       </a>
     </section>
 
+    <!-- Daemon status strip — autonomous fleet at a glance. -->
+    <section class="daemon-row" data-testid="daemon-strip">
+      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="ares" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+    </section>
+
+    <!-- Coordination Boards panel — live state of the work surface. -->
+    <section class="panel" data-testid="boards-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Boards</h3>
+      <div class="boards">
+        <div class="board-col" data-board="signal">
+          <h4>Signal <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open signals.</div></div>
+        </div>
+        <div class="board-col" data-board="blueprint">
+          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open blueprints.</div></div>
+        </div>
+        <div class="board-col" data-board="friction">
+          <h4>Friction <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open friction.</div></div>
+        </div>
+      </div>
+    </section>
+
     <section class="bottom-row">
       <div class="panel activity" data-testid="activity-feed">
         <h3>Recent activity</h3>
@@ -190,6 +376,61 @@
         <div class="attention" data-attention aria-live="polite">
           <div class="empty">nothing needs attention.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- Topology — the sovereign fabric. SOVERYN tower live; 2x DGX Spark
+         + ConnectX-7 are scaffolded as "pending" until hardware arrives,
+         then the data-status flip is the only change needed. -->
+    <section class="panel topology" data-testid="topology">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:18px;">Fabric</h3>
+      <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" aria-label="SOVERYN compute fabric topology">
+        <!-- Links first so they sit under the nodes. -->
+        <g class="link" data-status="active">
+          <!-- SOVERYN <-> Spark A (left) — mgmt ethernet -->
+          <path d="M 200 90 Q 130 180 130 230"/>
+        </g>
+        <g class="link" data-status="active">
+          <!-- SOVERYN <-> Spark B (right) — mgmt ethernet -->
+          <path d="M 440 90 Q 510 180 510 230"/>
+        </g>
+        <g class="link" data-status="pending" data-testid="topology-link-spark-spark">
+          <!-- Spark A <-> Spark B — 400G ConnectX-7 DAC -->
+          <path d="M 200 250 L 440 250"/>
+        </g>
+        <text class="link-label" x="320" y="244" text-anchor="middle">400G DAC</text>
+
+        <!-- SOVERYN tower — alive, the existing node. -->
+        <g class="node" data-status="alive" data-node="soveryn" transform="translate(232 30)">
+          <rect width="176" height="62"/>
+          <circle class="dot" data-status="alive" cx="14" cy="18" r="4"/>
+          <text x="26" y="22">SOVERYN tower</text>
+          <text class="role" x="14" y="40">Blackwell 96GB · live</text>
+          <text class="role" x="14" y="54">Aetheria, daemons</text>
+        </g>
+
+        <!-- DGX Spark A — pending. -->
+        <g class="node" data-status="pending" data-node="spark-a" transform="translate(42 220)">
+          <rect width="176" height="62"/>
+          <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
+          <text x="26" y="22">DGX Spark A</text>
+          <text class="role" x="14" y="40">GB10 · 128GB unified</text>
+          <text class="role" x="14" y="54">pending arrival</text>
+        </g>
+
+        <!-- DGX Spark B — pending. -->
+        <g class="node" data-status="pending" data-node="spark-b" transform="translate(422 220)">
+          <rect width="176" height="62"/>
+          <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
+          <text x="26" y="22">DGX Spark B</text>
+          <text class="role" x="14" y="40">GB10 · 128GB unified</text>
+          <text class="role" x="14" y="54">pending arrival</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <span class="live">●</span> live &nbsp;·&nbsp;
+        <span class="pending">○</span> pending
+        &nbsp;·&nbsp; mgmt ethernet always-on · 400G ConnectX-7 once Sparks land
       </div>
     </section>
 
@@ -309,6 +550,90 @@
     set("backup", "—");  // TODO(vnext-backup-mtime): wire when backup daemon exposes a status route
   }
 
+  // ─── Daemon status strip ──────────────────────────────────────────────────
+  function formatRelativeAge(ageSeconds) {
+    if (ageSeconds == null) return "no data";
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    if (ageSeconds < 3600) return `${Math.round(ageSeconds / 60)}m ago`;
+    if (ageSeconds < 86400) return `${Math.round(ageSeconds / 3600)}h ago`;
+    return `${Math.round(ageSeconds / 86400)}d ago`;
+  }
+
+  function describeHeartbeat(d) {
+    if (d.status === "unknown") return "no heartbeat ticks recorded.";
+    const age = formatRelativeAge(d.age_seconds);
+    if (!d.eligible) return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    const action = d.action_taken ? `acted (${d.tool_call_count || 0} tools)` : "silent";
+    return `<strong>${age}</strong>, ${action}${d.dry_run ? " · dry-run" : ""}`;
+  }
+
+  function describePatrol(d) {
+    if (d.status === "unknown") return "no patrol ticks recorded.";
+    const age = formatRelativeAge(d.age_seconds);
+    if (!d.eligible) return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    const sources = d.sources_visited ?? 0;
+    const signals = d.signals_posted ?? 0;
+    return `<strong>${age}</strong>, ${sources} source${sources===1?"":"s"} · ${signals} signal${signals===1?"":"s"}${d.dry_run ? " · dry-run" : ""}`;
+  }
+
+  function describeAres(d) {
+    if (d.status === "quiet") return "no findings posted — system clean.";
+    if (d.status === "unknown") return "no data.";
+    const age = formatRelativeAge(d.age_seconds);
+    return `<strong>${age}</strong>, last finding posted`;
+  }
+
+  async function renderDaemons() {
+    const data = await fetchJson("/api/system/daemons");
+    if (!data) return;
+    const apply = (name, daemon, describe) => {
+      const card = document.querySelector(`.daemon-card[data-daemon="${name}"]`);
+      if (!card) return;
+      card.setAttribute("data-status", daemon.status);
+      const meta = card.querySelector("[data-daemon-meta]");
+      if (meta) meta.innerHTML = describe(daemon);
+    };
+    apply("heartbeat", data.heartbeat, describeHeartbeat);
+    apply("patrol",    data.patrol,    describePatrol);
+    apply("ares",      data.ares,      describeAres);
+  }
+
+  // ─── Boards panel ─────────────────────────────────────────────────────────
+  function renderBoardColumn(boardName, board) {
+    const col = document.querySelector(`.board-col[data-board="${boardName}"]`);
+    if (!col) return;
+    let totalOpen = 0;
+    if (boardName === "blueprint") {
+      totalOpen = (board.open || 0) + (board.refining || 0) + (board.ready || 0);
+    } else {
+      totalOpen = board.open || 0;
+    }
+    col.querySelector("[data-board-count]").textContent = totalOpen;
+    const listEl = col.querySelector("[data-board-list]");
+    const items = board.top || [];
+    if (items.length === 0) {
+      listEl.innerHTML = `<div class="empty">no open ${boardName}.</div>`;
+      return;
+    }
+    listEl.innerHTML = items.map(it => `
+      <div class="board-item">
+        <div class="head">
+          <span class="who" data-agent="${it.agent || ""}">${it.agent || "?"}${it.owner && it.owner !== it.agent ? ` → ${it.owner}` : ""}</span>
+          <span>${it.status || ""}</span>
+        </div>
+        <div class="body">${(it.content_head || "").replace(/[<>]/g, c => ({"<":"&lt;",">":"&gt;"})[c])}</div>
+      </div>
+    `).join("");
+  }
+
+  async function renderBoards() {
+    const data = await fetchJson("/api/coord/summary");
+    if (!data) return;
+    renderBoardColumn("signal", data.signal);
+    renderBoardColumn("blueprint", data.blueprint);
+    renderBoardColumn("friction", data.friction);
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
   function refreshAll() {
     renderGreeting();
@@ -317,6 +642,8 @@
     renderSparkline();
     renderFeed();
     renderStats();
+    renderDaemons();
+    renderBoards();
   }
   document.addEventListener("DOMContentLoaded", () => {
     refreshAll();

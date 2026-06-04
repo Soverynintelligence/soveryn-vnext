@@ -6,16 +6,36 @@
 <title>SOVERYN · Chat</title>
 <style>
   :root {
-    --canvas:#000000;
+    /* SOVERYN palette — anchored to the new logo (organic + electric
+       duality, bronze trunk as bridge). Background is warm dark earth,
+       not cool ink-navy. Agent identity:
+         Aetheria → tri-stop spectrum (sage → warm gray → electric blue)
+         Vett     → deep background blue (cosmic depth)
+         Scotty   → bronze (the structural trunk; forged executor) */
+
+    /* Brand tokens */
+    --sov-canvas:#050505;          /* near-black — editorial weight, retains depth for glass panels */
+    --sov-olive:#94a455;           /* primary brand — the leaves */
+    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Scotty + trunk) — deep brown, not orange */
+    --sov-deep-blue:#1f2c44;       /* Vett */
+    --sov-electric-blue:#3ea8e8;   /* Aetheria gradient stop / phosphor */
+    --sov-sage:#8a9a4d;            /* Aetheria gradient start */
+    --sov-gray:#9a988a;            /* Aetheria gradient middle */
+    --sov-amber:#e0b878;           /* soft accent / focus rings */
+    --text:#e8e3d5;                /* warm cream */
+
+    /* Legacy aliases — old token names map into the new palette. */
+    --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:#455142;
+    --leaf:var(--sov-bronze);
     --slate:#2a4459;
-    --node:#75cbe8;
-    --bronze:#986d42;
-    --gold:#af9a6d;
-    --text:#ecf3f4;
-    --glass-bg:rgba(20,24,32,0.62);
-    --glass-border:rgba(255,255,255,0.06);
+    --node:var(--sov-deep-blue);
+    --bronze:var(--sov-bronze);
+    --gold:var(--sov-bronze);
+
+    /* Glass + structure */
+    --glass-bg:rgba(18,16,12,0.68);          /* warm dark glass */
+    --glass-border:rgba(225,210,170,0.07);   /* faint warm border */
     --glass-blur:blur(22px) saturate(140%);
     --r-lg:22px;
     --r-md:14px;
@@ -73,15 +93,16 @@
   .brand .home { color:rgba(236,243,244,0.55); font-size:11px; text-decoration:none; }
   .brand .home:hover { color:var(--text); }
 
+  /* Brand olive — the SOVERYN action button. */
   .new-chat {
-    background:linear-gradient(180deg,rgba(117,203,232,0.18),rgba(117,203,232,0.08));
-    border:1px solid rgba(117,203,232,0.35);
+    background:linear-gradient(180deg,rgba(148,164,85,0.18),rgba(148,164,85,0.08));
+    border:1px solid rgba(148,164,85,0.4);
     color:var(--text);
     padding:10px 14px; border-radius:var(--r-md);
     font-size:13px; font-weight:500;
     text-align:left;
   }
-  .new-chat:hover { border-color:rgba(117,203,232,0.6); }
+  .new-chat:hover { border-color:rgba(148,164,85,0.65); }
 
   .agent-pills { display:flex; gap:6px; }
   .agent-pill {
@@ -93,13 +114,14 @@
     color:rgba(236,243,244,0.7);
   }
   .agent-pill[aria-pressed="true"] {
-    background:rgba(175,154,109,0.14);
-    border-color:rgba(175,154,109,0.4);
+    background:rgba(154,152,138,0.14);
+    border-color:rgba(154,152,138,0.4);
     color:var(--text);
   }
-  .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(175,154,109,0.5); }
-  .agent-pill[data-agent="vett"][aria-pressed="true"] { border-color:rgba(117,203,232,0.45); }
-  .agent-pill[data-agent="scotty"][aria-pressed="true"] { border-color:rgba(69,81,66,0.6); }
+  /* Per-agent pressed border colors match each agent's signature hue. */
+  .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(154,152,138,0.55); }
+  .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(62,168,232,0.5); }
+  .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(198,154,90,0.55); }
 
   .search input {
     width:100%; padding:8px 12px; border-radius:var(--r-sm);
@@ -107,7 +129,7 @@
     border:1px solid var(--glass-border);
     color:var(--text); font-size:12px; outline:none;
   }
-  .search input:focus { border-color:rgba(117,203,232,0.45); }
+  .search input:focus { border-color:rgba(148,164,85,0.5); }
 
   .history { flex:1; overflow-y:auto; padding-right:4px; }
   .history h4 { font-size:10px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
@@ -120,7 +142,8 @@
   }
   .history a:hover { background:rgba(255,255,255,0.04); }
   .history a:hover .del-session { opacity:0.55; }
-  .history a.active { background:rgba(175,154,109,0.08); border-left-color:var(--gold); color:var(--text); }
+  /* Active session uses the brand olive — this is the SOVERYN-flagged row. */
+  .history a.active { background:rgba(148,164,85,0.10); border-left-color:var(--sov-olive); color:var(--text); }
   .history .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .history .label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .history .del-session {
@@ -158,7 +181,8 @@
     display:flex; align-items:center; gap:10px;
     font-size:12px;
   }
-  .profile .avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--earth),var(--bronze)); }
+  /* Jon's avatar — bronze leaning into amber, trunk-into-glow vector. */
+  .profile .avatar { width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg,var(--sov-bronze),var(--sov-amber)); }
   .profile .who { flex:1; }
   .profile .who div:first-child { color:var(--text); }
   .profile .who div:last-child { color:rgba(236,243,244,0.45); font-size:10px; }
@@ -176,7 +200,14 @@
     backdrop-filter:var(--glass-blur);
     -webkit-backdrop-filter:var(--glass-blur);
   }
-  .chat-header .disc { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,var(--gold),var(--bronze)); flex-shrink:0; }
+  /* Default disc = Aetheria's olive (overridden by JS per agent).
+     The brand color is hers since she's the central voice. */
+  .chat-header .disc {
+    width:32px; height:32px; border-radius:50%;
+    background:linear-gradient(135deg, var(--sov-olive), var(--sov-sage));
+    flex-shrink:0;
+    box-shadow:inset 0 0 0 1px rgba(232,227,213,0.06), 0 0 14px rgba(148,164,85,0.15);
+  }
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
   .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
@@ -197,10 +228,11 @@
     font-size:14px; line-height:1.55;
     white-space:pre-wrap; word-wrap:break-word;
   }
+  /* User bubble: brand olive at low intensity. */
   .bubble.user {
     align-self:flex-end;
-    background:rgba(117,203,232,0.14);
-    border:1px solid rgba(117,203,232,0.22);
+    background:rgba(148,164,85,0.16);
+    border:1px solid rgba(148,164,85,0.30);
     border-bottom-right-radius:4px;
   }
   .bubble.assistant {
@@ -224,7 +256,8 @@
     margin-bottom:-2px;
     white-space:pre-wrap; word-wrap:break-word;
   }
-  .tool-strip .tool-name { color:var(--gold); }
+  /* Tool name in bronze — Scotty's color, signature of "agent used a tool." */
+  .tool-strip .tool-name { color:var(--sov-bronze); }
   .tool-strip .tool-result {
     color:rgba(236,243,244,0.5);
     margin-top:3px;
@@ -238,9 +271,10 @@
     animation:pulse 1.6s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity:0.35 } 50% { opacity:0.85 } }
+  /* Live cursor — electric blue, the connective end of Aetheria's spectrum. */
   .bubble .cursor {
     display:inline-block; width:6px; height:14px;
-    background:var(--node); vertical-align:middle; margin-left:2px;
+    background:var(--sov-electric-blue); vertical-align:middle; margin-left:2px;
     animation:blink 1s steps(2) infinite;
   }
   @keyframes blink { 50% { opacity:0 } }
@@ -271,9 +305,10 @@
     padding:6px 10px; border-radius:14px;
     background:rgba(255,255,255,0.04);
   }
+  /* Send button — brand olive (the SOVERYN action). */
   .composer .send {
     width:32px; height:32px; border-radius:50%;
-    background:var(--node); color:#000;
+    background:var(--sov-olive); color:#0d0a07;
     display:flex; align-items:center; justify-content:center;
     font-weight:700;
   }
@@ -373,7 +408,21 @@
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
-  const AGENT_COLORS = { aetheria:"var(--gold)", vett:"var(--node)", scotty:"var(--leaf)" };
+  // Full background-value per agent (applied directly on the agent disc).
+  // Aetheria carries the brand olive — she's the central voice, so the
+  // SOVERYN brand color belongs to her. Two-stop gradients give each disc
+  // depth without complicating the identity.
+  const AGENT_COLORS = {
+    aetheria: "linear-gradient(135deg, var(--sov-olive), var(--sov-sage))",
+    vett:     "linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c)",
+    scotty:   "linear-gradient(135deg, #b8945a, #5a4628)",  /* gold highlight → dark patina, like worn bronze */
+  };
+  // Single-color variant for tiny 6px dots where a gradient muddies.
+  const AGENT_DOT_COLORS = {
+    aetheria: "var(--sov-olive)",
+    vett:     "var(--sov-deep-blue)",
+    scotty:   "var(--sov-bronze)",
+  };
 
   // ─── State ─────────────────────────────────────────────────────────────────
   const state = {
@@ -453,7 +502,7 @@
         if (s.session_id === state.sessionId) a.className = "active";
         const dot = document.createElement("span");
         dot.className = "dot";
-        dot.style.background = AGENT_COLORS[s.agent] || "var(--gold)";
+        dot.style.background = AGENT_DOT_COLORS[s.agent] || "var(--sov-bronze)";
         const label = document.createElement("span");
         label.className = "label";
         label.textContent = s.title || "(untitled)";
@@ -536,7 +585,11 @@
     localStorage.setItem("soveryn.agent", name);
     $$('.agent-pill').forEach(p => p.setAttribute("aria-pressed", String(p.dataset.agent === name)));
     elAgentName().textContent = name;
-    elAgentDisc().style.background = `linear-gradient(135deg, ${AGENT_COLORS[name] || "var(--gold)"}, var(--bronze))`;
+    // AGENT_COLORS values are full background strings (gradients). Apply
+    // directly — no wrapping. The pre-2026-06-04 wrapping forced every agent
+    // through a bronze-trailing gradient, which doesn't serve the spectrum
+    // treatment Aetheria needs.
+    elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
     loadSessions();
   }
 
