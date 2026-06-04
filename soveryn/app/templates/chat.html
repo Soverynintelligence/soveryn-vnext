@@ -31,10 +31,15 @@
     display:grid; grid-template-columns:280px 1fr 0;
     grid-template-rows:100vh; height:100vh;
     overflow:hidden;
+    transition:grid-template-columns 0.18s ease;
   }
   @supports (height: 100dvh) {
     body { grid-template-rows:100dvh; height:100dvh; }
   }
+  /* Collapsed sidebar: the column goes to 0 and the sidebar's overflow
+     hides its contents during the slide. The toggle in the chat-header
+     stays visible because it lives in <main>, not in <aside>. */
+  body.sidebar-collapsed { grid-template-columns:0 1fr 0; }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
   /* Sidebar */
@@ -46,7 +51,23 @@
     display:flex; flex-direction:column;
     padding:16px;
     gap:12px;
+    overflow:hidden;
+    transition:padding 0.18s ease;
   }
+  body.sidebar-collapsed aside { padding:0; border-right:none; }
+
+  /* Sidebar toggle in the chat header. Chevron rotates 180° when
+     collapsed so the same icon means "open the sidebar." */
+  .sidebar-toggle {
+    width:32px; height:32px; border-radius:var(--r-sm);
+    color:rgba(236,243,244,0.55);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; line-height:1;
+    flex-shrink:0;
+    transition:background 0.12s ease, color 0.12s ease, transform 0.18s ease;
+  }
+  .sidebar-toggle:hover { background:rgba(255,255,255,0.05); color:var(--text); }
+  body.sidebar-collapsed .sidebar-toggle { transform:rotate(180deg); }
   .brand { display:flex; justify-content:space-between; align-items:center; padding:4px 6px 12px; }
   .brand .wordmark { font-weight:600; letter-spacing:0.18em; color:var(--gold); font-size:13px; }
   .brand .home { color:rgba(236,243,244,0.55); font-size:11px; text-decoration:none; }
@@ -326,6 +347,8 @@
 
   <main data-testid="main">
     <header class="chat-header" data-testid="chat-header">
+      <button class="sidebar-toggle" data-testid="sidebar-toggle"
+              aria-label="Toggle sidebar" title="Toggle sidebar (⌘B)">‹</button>
       <div class="disc" data-agent-disc></div>
       <div class="meta">
         <div class="title" data-agent-name>aetheria</div>
@@ -744,8 +767,30 @@
     else await sendSync(msg);
   }
 
+  // ─── Sidebar collapse ──────────────────────────────────────────────────────
+  function applySidebarState(collapsed) {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    localStorage.setItem("soveryn.sidebar.collapsed", String(collapsed));
+  }
+  function toggleSidebar() {
+    applySidebarState(!document.body.classList.contains("sidebar-collapsed"));
+  }
+  function initSidebar() {
+    applySidebarState(localStorage.getItem("soveryn.sidebar.collapsed") === "true");
+    const btn = document.querySelector('[data-testid="sidebar-toggle"]');
+    if (btn) btn.addEventListener("click", toggleSidebar);
+    // ⌘B / Ctrl-B power-user shortcut. Matches VS Code, ChatGPT.
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    });
+  }
+
   // ─── Boot ──────────────────────────────────────────────────────────────────
   function boot() {
+    initSidebar();
     const { sessionId, agent } = parseUrl();
     setAgent(pickInitialAgent(agent));
     state.sessionId = sessionId;
