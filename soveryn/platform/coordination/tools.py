@@ -354,6 +354,9 @@ def build_promote_coord_node_tool(
         lesson = args.get("lesson_learned_content")
         if lesson is not None and not isinstance(lesson, str):
             raise ToolArgError("lesson_learned_content must be a string or omitted")
+        target_owner_arg = args.get("target_owner")
+        if target_owner_arg is not None and not isinstance(target_owner_arg, str):
+            raise ToolArgError("target_owner must be a string or omitted")
         try:
             source, target = store.promote_node(
                 source_id,
@@ -361,6 +364,7 @@ def build_promote_coord_node_tool(
                 new_content=new_content,
                 acting_agent=owner_agent,
                 lesson_learned_content=lesson,
+                target_owner=target_owner_arg,
             )
         except CoordinationError as e:
             raise ToolArgError(str(e))
@@ -395,6 +399,15 @@ def build_promote_coord_node_tool(
                     "type": "string",
                     "description": "Optional override of the auto-generated archive lesson. "
                                    "Default: 'Promoted to {target_board} {new_id}'.",
+                },
+                "target_owner": {
+                    "type": "string",
+                    "description": "Optional owner for the new Blueprint/Friction. Defaults "
+                                   "to the agent doing the promote. Set this when you're "
+                                   "assigning the work to a different agent (e.g. Aetheria "
+                                   "promoting a Signal to a Blueprint that Vett or Scotty "
+                                   "should pick up). The webhook router uses this to wake "
+                                   "the owner.",
                 },
             },
             "required": ["source_node_id", "target_board", "new_content"],

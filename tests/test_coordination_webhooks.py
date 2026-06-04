@@ -172,6 +172,7 @@ def test_route_signal_created_goes_to_aetheria_triage():
 
 
 def test_route_blueprint_created_goes_to_aetheria_review():
+    """Blueprint created without an owner field — only review fires."""
     e = _event(CoordEventKind.NODE_CREATED, "scotty", {"board": "Blueprint"})
     assert route(e) == ("aetheria",)
 
@@ -184,10 +185,67 @@ def test_route_self_triggering_filtered_out():
     assert route(e) == ()
 
 
-def test_route_promoted_to_blueprint_goes_to_scotty():
+def test_route_blueprint_created_with_vett_owner_routes_to_vett_too():
+    """Owner-aware routing (2026-06-04): NODE_CREATED on Blueprint routes
+    to aetheria (review) AND the owner, so Vett gets woken when Aetheria
+    creates Blueprint work for him."""
+    e = _event(CoordEventKind.NODE_CREATED, "aetheria",
+                {"board": "Blueprint", "owner": "vett"})
+    # aetheria self-filters out (she's the actor); vett remains.
+    assert route(e) == ("vett",)
+
+
+def test_route_blueprint_created_by_vett_with_scotty_owner_routes_both_minus_actor():
+    """Vett creates a Blueprint with Scotty as owner: aetheria (review) +
+    scotty (start). Vett is the actor and self-filters out anyway."""
+    e = _event(CoordEventKind.NODE_CREATED, "vett",
+                {"board": "Blueprint", "owner": "scotty"})
+    assert route(e) == ("aetheria", "scotty")
+
+
+def test_route_blueprint_created_with_owner_same_as_aetheria_dedupes():
+    """If owner == aetheria, she shouldn't appear twice in the destination
+    tuple (review + owner). The dedup makes this deterministic."""
+    e = _event(CoordEventKind.NODE_CREATED, "scotty",
+                {"board": "Blueprint", "owner": "aetheria"})
+    assert route(e) == ("aetheria",)
+
+
+def test_route_promoted_to_blueprint_routes_to_target_owner():
+    """The old universal-to-scotty rule is gone. Routes to whoever the
+    promoter assigned as target_owner."""
+    e = _event(CoordEventKind.PROMOTED, "aetheria",
+                {"target_board": "Blueprint", "source_board": "Signal",
+                 "target_owner": "scotty"})
+    assert route(e) == ("scotty",)
+
+
+def test_route_promoted_to_blueprint_routes_to_vett_when_owner_is_vett():
+    """Aetheria promoting Signal -> Blueprint with target_owner=vett
+    wakes Vett, not Scotty. The whole point of the owner-aware refactor."""
+    e = _event(CoordEventKind.PROMOTED, "aetheria",
+                {"target_board": "Blueprint", "source_board": "Signal",
+                 "target_owner": "vett"})
+    assert route(e) == ("vett",)
+
+
+def test_route_promoted_to_blueprint_without_target_owner_routes_nowhere():
+    """Pre-refactor / hand-constructed events with no target_owner used to
+    route universally to scotty. New behavior: nowhere (no fallback).
+    Production paths always supply target_owner via promote_node's
+    effective_owner default."""
     e = _event(CoordEventKind.PROMOTED, "aetheria",
                 {"target_board": "Blueprint", "source_board": "Signal"})
-    assert route(e) == ("scotty",)
+    assert route(e) == ()
+
+
+def test_route_promoted_self_filters_when_target_owner_is_actor():
+    """Aetheria promotes a Signal to a Blueprint she owns herself —
+    self-filter drops her. Same shape as the create-self case."""
+    e = _event(CoordEventKind.PROMOTED, "aetheria",
+                {"target_board": "Blueprint", "source_board": "Signal",
+                 "target_owner": "aetheria"})
+    assert route(e) == ()
 
 
 def test_route_promoted_to_friction_does_not_auto_trigger():
@@ -399,12 +457,17 @@ def test_worker_isolates_dispatch_errors(lattice_path, bus):
                           poll_interval_seconds=0.05)
 
     # Insert audit rows + emit two events
+    # NODE_CREATED on Signal routes to aetheria (bad_loop).
+    # PROMOTED to Blueprint with target_owner=scotty routes to scotty
+    # (good_loop) — target_owner is required under the 2026-06-04 owner-
+    # aware routing refactor.
     for kind, target_board in [(CoordEventKind.NODE_CREATED, "Signal"),
                                 (CoordEventKind.PROMOTED, None)]:
         e = CoordEvent.new(
             kind=kind, node_id=f"n-{kind.value}", actor_agent="vett",
             payload={"board": target_board} if target_board else
-                    {"target_board": "Blueprint", "source_board": "Signal"},
+                    {"target_board": "Blueprint", "source_board": "Signal",
+                     "target_owner": "scotty"},
         )
         con = sqlite3.connect(str(lattice_path))
         con.execute(

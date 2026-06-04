@@ -345,6 +345,7 @@ class CoordinationStore:
         new_content: str,
         acting_agent: str,
         lesson_learned_content: str | None = None,
+        target_owner: str | None = None,
     ) -> tuple[CoordinationNode, CoordinationNode]:
         """Atomic promote: archive source + create target Blueprint/Friction in
         one transaction. The target carries lattice_ref=source_id so the link
@@ -383,10 +384,18 @@ class CoordinationStore:
             else f"Promoted to {target_board.value} {target_id}"
         )
 
+        # If the promoter assigns a different owner (e.g. Aetheria promoting
+        # a Signal to a Blueprint that Vett or Scotty should pick up),
+        # honour it. Default keeps the prior behaviour where the actor owns
+        # what they promote.
+        effective_owner = (
+            target_owner.strip() if isinstance(target_owner, str) and target_owner.strip()
+            else acting_agent
+        )
         target_provenance = {
             "board": target_board.value,
             "status": CoordStatus.OPEN.value,
-            "owner": acting_agent,
+            "owner": effective_owner,
             "lattice_ref": source_node_id,
             "archived_lesson_id": None,
         }
@@ -442,6 +451,7 @@ class CoordinationStore:
                 "source_node_id": source_node_id,
                 "source_board": existing.board.value,
                 "target_board": target_board.value,
+                "target_owner": effective_owner,
                 "lesson_id": lesson_id,
                 "content_head": new_content.strip()[:200],
             },
