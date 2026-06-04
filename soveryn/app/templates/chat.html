@@ -44,6 +44,21 @@
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
+
+  /* Brand presence — the tree-of-life mark (cropped, no wordmark) as
+     ambient page bg. Same treatment as mission control; sidebar's
+     "SOVERYN" already carries the typographic identity here. Fixed +
+     pointer-events:none so it never intercepts clicks or scrolls. */
+  body::before {
+    content:"";
+    position:fixed; inset:0;
+    background:url("/static/logo-mark.png") no-repeat center center;
+    background-size:200vmin auto;
+    opacity:0.40;
+    pointer-events:none;
+    z-index:0;
+  }
+  aside, main { position:relative; z-index:1; }
   /* 100vh fallback + 100dvh override for browsers that support dynamic viewport
      height. dvh shrinks with the mobile URL bar so the composer never falls
      below the visible area. */
@@ -235,9 +250,12 @@
     border:1px solid rgba(148,164,85,0.30);
     border-bottom-right-radius:4px;
   }
+  /* Aetheria's bubble — dropped to 0.40 alpha so the tree bg reads through
+     comparably to the user bubble (which is olive at 0.16). Sidebar/header/
+     composer panels stay at the original 0.68 — they're chrome, not content. */
   .bubble.assistant {
     align-self:flex-start;
-    background:var(--glass-bg);
+    background:rgba(18,16,12,0.40);
     backdrop-filter:var(--glass-blur);
     -webkit-backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-border);
