@@ -175,6 +175,25 @@ def create_app(
                     owner_agent=agent_name,
                 )
 
+        # Web tools (web_search + fetch_url) — Aetheria and Vett only.
+        # Backed by local SearXNG (:8095 default) for sovereign metasearch
+        # and trafilatura for main-content extraction. SSRF guard rejects
+        # private/loopback/link-local IPs in fetch so the model can't be
+        # social-engineered into hitting internal services. Scotty does NOT
+        # get these — his surface is mechanical local-host tools, not
+        # arbitrary outbound network.
+        import os
+        searxng_url = os.environ.get(
+            "SOVERYN_SEARXNG_URL", "http://127.0.0.1:8095/",
+        )
+        from soveryn.platform.web import register_web_tools
+        for agent_name in ("aetheria", "vett"):
+            register_web_tools(
+                tool_registry,
+                searxng_url=searxng_url,
+                owner_agent=agent_name,
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
