@@ -1,7 +1,17 @@
-"""Git observation tools for Scotty: git_status + git_diff.
+"""Git observation tools for Scotty: git_status + git_diff + git_restore_file.
 
-Both shell out via subprocess with arg lists (no shell=True, no string
-interpolation). All paths are validated against SCOTTY_PROJECT_ROOT.
+git_status + git_diff are read-only.
+
+git_restore_file is the supported rollback primitive for Scotty's
+edit_file: it discards unstaged changes to a single tracked file by
+running `git restore <path>`. Hard guards: file must be tracked, file
+must not have staged changes, and the path resolves under
+SCOTTY_PROJECT_ROOT. Staged changes are refused because they represent
+in-progress work Scotty (or anyone else) deliberately committed to —
+losing them silently would be a destructive surprise.
+
+All three shell out via subprocess with arg lists (no shell=True, no
+string interpolation).
 """
 
 from __future__ import annotations
@@ -10,7 +20,11 @@ import subprocess
 from collections.abc import Mapping
 from typing import Any
 
-from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
+from soveryn.agents.scotty.tools.paths import (
+    SCOTTY_PROJECT_ROOT,
+    PathOutOfBoundsError,
+    resolve_within_root,
+)
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 
@@ -128,5 +142,100 @@ def build_git_diff_tool(*, owner_agent: str) -> ToolSpec:
             f"vnext repo. Output capped at {GIT_DIFF_MAX_LINES} lines and "
             f"{GIT_DIFF_MAX_BYTES // 1024} KB; sets truncated_lines/truncated_bytes "
             f"so you know when you're looking at a partial view."
+        ),
+    )
+
+
+def build_git_restore_file_tool(*, owner_agent: str) -> ToolSpec:
+    """Discard unstaged changes to a single tracked file (rollback for edit_file).
+
+    Behavior: runs `git restore <path>`, which resets the working-tree copy of
+    the file to its staged version (or to HEAD if nothing is staged).
+
+    Refused if the file has staged changes — those are deliberate commits-
+    in-progress and shouldn't disappear silently. Refused if the file is not
+    tracked by git. Path must resolve under SCOTTY_PROJECT_ROOT.
+    """
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        path_arg = args.get("path", "")
+        if not isinstance(path_arg, str) or not path_arg.strip():
+            raise ToolArgError("path must be a non-empty string")
+        try:
+            resolved = resolve_within_root(path_arg, must_exist=True)
+        except PathOutOfBoundsError as e:
+            raise ToolArgError(str(e))
+        except FileNotFoundError as e:
+            raise ToolArgError(str(e))
+        if not resolved.is_file():
+            raise ToolArgError(f"path {path_arg!r} is not a regular file")
+        rel_path = str(resolved.relative_to(SCOTTY_PROJECT_ROOT))
+
+        # Verify the file is tracked. `git ls-files --error-unmatch <path>`
+        # exits nonzero if the path isn't tracked.
+        try:
+            rc, _, err = _run_git("ls-files", "--error-unmatch", rel_path)
+        except subprocess.TimeoutExpired:
+            raise ToolArgError(f"git ls-files timed out after {GIT_TIMEOUT_SECONDS}s")
+        if rc != 0:
+            raise ToolArgError(
+                f"refusing to restore {rel_path!r}: not a tracked file "
+                f"(git ls-files: {err.strip()[:200]})"
+            )
+
+        # Refuse if there are staged changes for this path. `git diff --cached
+        # --name-only -- <path>` outputs the path iff it has staged changes.
+        try:
+            rc, out, err = _run_git("diff", "--cached", "--name-only", "--", rel_path)
+        except subprocess.TimeoutExpired:
+            raise ToolArgError(f"git diff timed out after {GIT_TIMEOUT_SECONDS}s")
+        if rc != 0:
+            raise ToolArgError(f"git diff --cached failed (rc={rc}): {err.strip()[:200]}")
+        if out.strip():
+            raise ToolArgError(
+                f"refusing to restore {rel_path!r}: file has staged changes. "
+                f"Unstage with `git reset HEAD <path>` (Jon's call, not Scotty's), "
+                f"or commit them first, then restore."
+            )
+
+        # Do the actual restore.
+        try:
+            rc, out, err = _run_git("restore", "--", rel_path)
+        except subprocess.TimeoutExpired:
+            raise ToolArgError(f"git restore timed out after {GIT_TIMEOUT_SECONDS}s")
+        if rc != 0:
+            raise ToolArgError(f"git restore failed (rc={rc}): {err.strip()[:500]}")
+
+        return {
+            "path": str(resolved),
+            "restored": True,
+            "message": f"unstaged changes to {rel_path} discarded; file matches index",
+        }
+
+    return ToolSpec(
+        name="git_restore_file",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Path to restore, relative to the vnext repo root or "
+                        "absolute. Must be tracked by git and must NOT have "
+                        "staged changes."
+                    ),
+                },
+            },
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Discard unstaged changes to a single tracked file by running "
+            "`git restore <path>`. The rollback primitive for edit_file: use "
+            "after a bad edit to revert the working-tree copy to what's in "
+            "the index (or HEAD if nothing's staged). Refused if the file has "
+            "staged changes (those are deliberate; shouldn't disappear)."
         ),
     )
