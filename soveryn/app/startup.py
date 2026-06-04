@@ -194,6 +194,17 @@ def create_app(
                 owner_agent=agent_name,
             )
 
+        # Vett's patrol tools (read_patrol_sources + mark_source_visited).
+        # These read the static YAML source list and update per-source state
+        # in vett_patrol_state — only Vett gets them; Aetheria isn't in the
+        # patrol workflow even though she has web_search/fetch_url.
+        if env.lattice_db.is_file():
+            from soveryn.agents.vett.tools import register_vett_patrol_tools
+            register_vett_patrol_tools(
+                tool_registry,
+                lattice_db_path=env.lattice_db,
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}

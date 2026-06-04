@@ -1,0 +1,83 @@
+# V.E.T.T. patrol source list
+#
+# Static config — committed in-repo so changes go through review. Vett's
+# per-source dynamic state (last_visited_at, last_error_at, visit_count)
+# lives in the vett_patrol_state table, NOT here.
+#
+# Schema per entry:
+#   url              required — http/https URL the patrol fetches
+#   kind             required — "html" | "rss" | "atom" (parsing hint)
+#   domain           required — short tag for what this source covers
+#   visit_every_hours required — minimum hours between visits to this source
+#   keywords         optional — list of strings; surfaced in the briefing
+#                              so Vett knows what to look for
+#
+# Initial seed (2026-06-04): 7 sources spanning AI-funding (UK / EU / US /
+# NAIRR / SBIR) + research-feed (arxiv cs.AI) + model-release (HF blog).
+# Add/remove via PR. Aetheria can request additions via Signal; Jon edits.
+
+- url: https://www.gov.uk/government/organisations/department-for-science-innovation-and-technology
+  kind: html
+  domain: funding_uk
+  visit_every_hours: 24
+  keywords:
+    - sovereign AI
+    - foundation model
+    - compute access
+    - safety institute
+
+- url: https://digital-strategy.ec.europa.eu/en/funding
+  kind: html
+  domain: funding_eu
+  visit_every_hours: 24
+  keywords:
+    - Digital Europe Programme
+    - AI deployment
+    - sovereign infrastructure
+
+- url: https://nairrpilot.org/opportunities
+  kind: html
+  domain: funding_us_nairr
+  visit_every_hours: 24
+  keywords:
+    - resource allocation
+    - AI research compute
+    - early-career
+
+- url: https://new.nsf.gov/funding/opportunities
+  kind: html
+  domain: funding_us_nsf
+  visit_every_hours: 24
+  keywords:
+    - AI
+    - machine learning
+    - foundation models
+    - safety
+
+- url: https://www.sbir.gov/topics
+  kind: html
+  domain: funding_us_sbir
+  visit_every_hours: 24
+  keywords:
+    - artificial intelligence
+    - small business
+    - phase I
+
+- url: https://arxiv.org/list/cs.AI/recent
+  kind: html
+  domain: research_arxiv
+  visit_every_hours: 12
+  keywords:
+    - mixture of experts
+    - on-device
+    - distillation
+    - alignment
+
+- url: https://huggingface.co/blog
+  kind: html
+  domain: model_releases
+  visit_every_hours: 24
+  keywords:
+    - release
+    - model card
+    - open weights

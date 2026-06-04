@@ -1,0 +1,19 @@
+"""Vett's own tool surface.
+
+Distinct from the cross-agent platform tools (web_search/fetch_url,
+library, coordination) — these are tools only Vett gets, scoped to his
+patrol workflow.
+"""
+
+from soveryn.agents.vett.tools.patrol_sources import (
+    build_mark_source_visited_tool,
+    build_read_patrol_sources_tool,
+    register_vett_patrol_tools,
+)
+
+
+__all__ = [
+    "build_mark_source_visited_tool",
+    "build_read_patrol_sources_tool",
+    "register_vett_patrol_tools",
+]

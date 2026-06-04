@@ -60,6 +60,7 @@ def fetch_and_extract(
     *,
     max_chars: int = DEFAULT_MAX_CHARS,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    user_agent: str | None = None,
 ) -> FetchedPage:
     """Fetch `url`, extract main content via trafilatura, return FetchedPage.
 
@@ -68,6 +69,10 @@ def fetch_and_extract(
       2. SSRF guard on resolved address(es)
       3. HTTP GET with timeout and byte cap
       4. trafilatura.extract on the response body
+
+    `user_agent`: optional override. Tool factories pass an agent-specific
+    UA so external services see which sovereign agent is fetching. None
+    falls back to the generic USER_AGENT.
     """
     if not isinstance(url, str) or not url.strip():
         raise FetchError("url must be a non-empty string")
@@ -87,7 +92,10 @@ def fetch_and_extract(
 
     req = urllib.request.Request(
         url.strip(),
-        headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*"},
+        headers={
+            "User-Agent": user_agent or USER_AGENT,
+            "Accept": "text/html,*/*",
+        },
         method="GET",
     )
     try:

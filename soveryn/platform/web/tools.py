@@ -31,6 +31,18 @@ WEB_SEARCH_DEFAULT_K = 5
 WEB_SEARCH_MAX_K = 20
 
 
+# Per-agent user-agents. Vett identifies himself as the patrolling agent
+# so external sources see which sovereign agent is fetching (and have a
+# contact). Aetheria's lighter-weight fetches stay on the generic UA
+# from soveryn.platform.web.fetch.
+AGENT_USER_AGENTS: dict[str, str] = {
+    "vett": (
+        "SOVERYN-Vett/1.0 (Sovereign AI Research Agent; "
+        "contact: jon.deoliveira@gmail.com)"
+    ),
+}
+
+
 def build_web_search_tool(
     *,
     searxng_url: str,
@@ -101,7 +113,13 @@ def build_web_search_tool(
 
 
 def build_fetch_url_tool(*, owner_agent: str) -> ToolSpec:
-    """Tool wrapping fetch_and_extract with arg validation + structured errors."""
+    """Tool wrapping fetch_and_extract with arg validation + structured errors.
+
+    Uses per-agent User-Agent when one is registered in AGENT_USER_AGENTS;
+    otherwise falls back to the generic UA inside fetch_and_extract.
+    """
+
+    agent_ua = AGENT_USER_AGENTS.get(owner_agent)
 
     def handler(args: Mapping[str, Any]) -> Any:
         url = args.get("url", "")
@@ -115,7 +133,9 @@ def build_fetch_url_tool(*, owner_agent: str) -> ToolSpec:
                 f"max_chars must be between 1 and 32000 (got {max_chars})"
             )
         try:
-            page = fetch_and_extract(url, max_chars=max_chars)
+            page = fetch_and_extract(
+                url, max_chars=max_chars, user_agent=agent_ua,
+            )
         except SSRFError as e:
             return {"error": "ssrf_blocked", "message": str(e)}
         except FetchError as e:

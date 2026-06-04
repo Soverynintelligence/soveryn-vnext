@@ -190,6 +190,36 @@ CREATE TABLE IF NOT EXISTS heartbeat_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_heartbeat_log_triggered ON heartbeat_log(triggered_at DESC);
+
+-- Vett patrol daemon audit log. Mirrors heartbeat_log shape. One row per
+-- tick (eligible OR skipped, live OR dry-run). See
+-- docs/superpowers/specs/2026-06-02-vett-patrol.md.
+CREATE TABLE IF NOT EXISTS vett_patrol_log (
+    id                TEXT PRIMARY KEY,
+    triggered_at      TEXT NOT NULL,
+    completed_at      TEXT,
+    eligible          INTEGER NOT NULL,           -- 0 or 1
+    skip_reason       TEXT,                       -- 'disabled' | 'interval' | 'backoff' | 'quiet_hours' | 'no_sources' | NULL
+    sources_visited   INTEGER,                    -- fetched at least once during the patrol
+    signals_posted    INTEGER,                    -- coord nodes created on Signal board
+    response_length   INTEGER,
+    error             TEXT,
+    dry_run           INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_vett_patrol_log_triggered ON vett_patrol_log(triggered_at DESC);
+
+-- Per-source state for Vett's patrol. The YAML source-list is read-only
+-- config (committed in repo); this table tracks the dynamic state Vett
+-- mutates as he visits sources. URL is the join key because the YAML
+-- supports re-ordering / inserting without breaking identity.
+CREATE TABLE IF NOT EXISTS vett_patrol_state (
+    source_url        TEXT PRIMARY KEY,
+    last_visited_at   TEXT,
+    last_error_at     TEXT,
+    last_error        TEXT,
+    visit_count       INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
