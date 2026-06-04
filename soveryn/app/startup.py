@@ -159,6 +159,22 @@ def create_app(
                     owner_agent=agent_name,
                 )
 
+        # recent_self_audit — closes the introspection gap surfaced 2026-06-03:
+        # agents can't see intermediate tool calls in their conversation
+        # history (AgentLoop.save_turn persists user/assistant only). This
+        # tool returns their own recent actions from the audit log
+        # (coord_event_log + coord_references + library writes) so they can
+        # verify what they actually did rather than relying on filtered
+        # context. Registered for all three agents.
+        if env.lattice_db.is_file():
+            from soveryn.platform.audit import register_audit_tools
+            for agent_name in ("aetheria", "vett", "scotty"):
+                register_audit_tools(
+                    tool_registry,
+                    lattice_db_path=env.lattice_db,
+                    owner_agent=agent_name,
+                )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}

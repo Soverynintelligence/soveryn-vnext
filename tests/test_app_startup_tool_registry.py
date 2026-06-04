@@ -92,6 +92,10 @@ def test_startup_creates_tool_registry_for_aetheria(
     # Library tools (added 2026-06-03 — shared write surface for verified
     # reference material; all three agents get them).
     assert {"write_library_node", "search_library"} <= names
+    # Self-audit tool (added 2026-06-03 to close the introspection gap —
+    # agents can't see intermediate tool calls in their conversation
+    # history, so they confabulate absence of actions they actually took).
+    assert "recent_self_audit" in names
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(
@@ -144,6 +148,8 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             f"{agent} missing coord tools: {coord_tools - names}"
         assert library_tools <= names, \
             f"{agent} missing library tools: {library_tools - names}"
+        assert "recent_self_audit" in names, \
+            f"{agent} missing recent_self_audit tool"
         if agent == "scotty":
             assert scotty_mechanical_tools <= names, \
                 f"scotty missing mechanical tools: {scotty_mechanical_tools - names}"
