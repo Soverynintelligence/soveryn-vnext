@@ -54,6 +54,8 @@ def route(event: CoordEvent) -> tuple[str, ...]:
     - STATUS_CHANGED Blueprint Refining->Ready  -> aetheria (review before user handoff)
     - BLOCK_ADDED on Blueprint     -> aetheria (arbitration territory)
     - ARCHIVED                     -> (none — terminal, lesson lives in lattice for recall)
+    - NEEDS_DIRECTION              -> aetheria (peer agents ping for a judgment
+                                       call; see DAC spec, Delta 2)
 
     Destinations are deduped (preserving first-seen order) and the actor
     is filtered out. Returns an empty tuple when no rule fires.
@@ -96,6 +98,11 @@ def route(event: CoordEvent) -> tuple[str, ...]:
     elif event.kind == CoordEventKind.ARCHIVED:
         # Terminal; lesson now lives in lattice for recall but no auto-trigger.
         pass
+
+    elif event.kind == CoordEventKind.NEEDS_DIRECTION:
+        # Peer agents (Vett, Scotty) raise this to ping Aetheria for a judgment
+        # call on direction. See DAC spec, Delta 2.
+        destinations.append("aetheria")
 
     # Hard rule: agents don't trigger themselves. Also dedupe — under
     # owner-aware routing, the same agent can appear twice (e.g. an

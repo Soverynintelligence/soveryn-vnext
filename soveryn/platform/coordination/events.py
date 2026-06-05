@@ -30,6 +30,7 @@ class CoordEventKind(str, Enum):
     PROMOTED = "promoted"
     BLOCK_ADDED = "block_added"
     ARCHIVED = "archived"
+    NEEDS_DIRECTION = "needs_direction"  # peer agents ping Aetheria for direction (DAC Delta 2)
 
 
 @dataclass(frozen=True)
