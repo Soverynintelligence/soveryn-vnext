@@ -223,6 +223,18 @@ def create_app(
                     owner_agent="aetheria",
                 )
 
+        # Aetheria-only dream-recall tools (recent_dreams + search_dreams).
+        # NOT auto-injected — she queries her own dream layer when she
+        # chooses to look. Restricted to layer='dream' on the nodes table.
+        # The dream daemon writes those nodes during quiet hours.
+        if env.lattice_db.is_file():
+            from soveryn.agents.dream.tools import register_dream_tools
+            register_dream_tools(
+                tool_registry,
+                lattice_db_path=env.lattice_db,
+                owner_agent="aetheria",
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}

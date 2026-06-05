@@ -96,6 +96,9 @@ def test_startup_creates_tool_registry_for_aetheria(
     # agents can't see intermediate tool calls in their conversation
     # history, so they confabulate absence of actions they actually took).
     assert "recent_self_audit" in names
+    # Dream-recall tools (added 2026-06-05 — Aetheria-only, not auto-injected;
+    # she queries her own dream layer when she chooses to look).
+    assert {"recent_dreams", "search_dreams"} <= names
     # Web tools (added 2026-06-04 — sovereign metasearch via SearXNG +
     # trafilatura content extraction). Aetheria + Vett only; Scotty's
     # surface stays mechanical/local.
@@ -169,6 +172,8 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     }
     # Library tools are owned by each agent (shared write surface).
     library_tools = {"write_library_node", "search_library"}
+    # Dream tools are Aetheria-only — Vett and Scotty don't dream.
+    dream_tools = {"recent_dreams", "search_dreams"}
     # Web tools are Aetheria+Vett only (sovereign metasearch + content fetch).
     web_tools = {"web_search", "fetch_url"}
     for agent in ("vett", "scotty"):
@@ -197,3 +202,5 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # Vett DOES get web tools.
             assert web_tools <= names, \
                 f"vett missing web tools: {web_tools - names}"
+        assert names.isdisjoint(dream_tools), \
+            f"{agent} sees dream tools (should not): {names & dream_tools}"
