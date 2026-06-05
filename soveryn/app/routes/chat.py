@@ -20,13 +20,12 @@ bp = Blueprint("chat", __name__)
 
 
 # Vision attachments — accepted at /chat + /chat_stream, plumbed to AgentLoop.
-# Keep prefixes ASCII-narrow on purpose; any non-image data: URL is rejected.
-ALLOWED_IMAGE_MIME_PREFIXES = (
-    "data:image/jpeg",
-    "data:image/png",
-    "data:image/webp",
-    "data:image/gif",
-)
+# The MIME set is canonicalized in soveryn.platform.vision_types so the
+# route, the signal-bridge encoder, and the UI's file-input accept all
+# derive from one source. See vision_types.py + the parity test in
+# tests/test_vision_types_parity.py.
+from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES  # noqa: E402
+
 # ~25MB pre-decode ceiling (base64 expands ~4/3 → ~25MB binary). Bounded at
 # the route boundary so a malformed client can't OOM the loop or the wire.
 MAX_ATTACHMENT_DATA_URL_BYTES = 33_000_000

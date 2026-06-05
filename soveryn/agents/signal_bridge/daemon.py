@@ -49,13 +49,10 @@ SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
 
 
-_IMAGE_EXT_TO_MIME = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".gif": "image/gif",
-}
+# Inbound image extension -> MIME mapping. Canonical source is
+# soveryn.platform.vision_types.IMAGE_EXT_TO_MIME so that the daemon, the
+# /chat route validator, and the UI's accept attribute can't drift apart.
+from soveryn.platform.vision_types import IMAGE_EXT_TO_MIME as _IMAGE_EXT_TO_MIME  # noqa: E402
 
 # Per-file cap for inbound encoding. Matches the UI's 16MB client-side cap
 # and signal_send's outbound 16MB cap so all three surfaces have the same

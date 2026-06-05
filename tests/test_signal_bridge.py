@@ -407,6 +407,59 @@ def test_resolve_attachment_id_absolute_returned_as_is(tmp_path):
     assert result == f
 
 
+def test_envelope_to_chat_dispatch_integration(tmp_path, lattice_db, conv_db, monkeypatch):
+    """End-to-end producer-shape integration: a realistic signal-cli envelope
+    (with the `id` field = bare filename) flows through parse_envelopes →
+    _handle_inbound → captured /chat call carrying a real data: URL.
+
+    This is the test that would have caught T8 bug #1 (consumer expected
+    absolute paths, producer emitted filenames) at write-time instead of in
+    live verification. Keeps the producer-shape contract verified for every
+    future test run."""
+    from soveryn.agents.signal_bridge import client as client_mod
+    from soveryn.agents.signal_bridge.client import parse_envelopes
+
+    fake_attachments_dir = tmp_path / "sigcli"
+    fake_attachments_dir.mkdir()
+    img = fake_attachments_dir / "envelope-test.jpg"
+    img.write_bytes(b"\xff\xd8\xff\xe0" + b"realistic jpeg bytes")
+    monkeypatch.setattr(client_mod, "DEFAULT_SIGNAL_CLI_ATTACHMENTS_DIR", fake_attachments_dir)
+
+    # Realistic signal-cli --output json envelope (`id` is the filename).
+    raw = json.dumps({
+        "envelope": {
+            "source": "+19105813970",
+            "timestamp": 1779801000000,
+            "dataMessage": {
+                "message": "what's in this?",
+                "attachments": [{"id": "envelope-test.jpg", "contentType": "image/jpeg"}],
+            },
+        },
+    }) + "\n"
+
+    inbounds = parse_envelopes(raw)
+    assert len(inbounds) == 1
+    msg = inbounds[0]
+    # Confirm the producer contract: the field stores the bare id, not a path.
+    assert msg.attachment_ids == ("envelope-test.jpg",)
+
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["body"] = body
+        captured["attachments"] = attachments
+        return "I see it"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        daemon._handle_inbound(msg)
+
+    # The end-to-end shape Aetheria actually receives:
+    assert captured["body"] == "what's in this?"
+    assert len(captured["attachments"]) == 1
+    assert captured["attachments"][0].startswith("data:image/jpeg;base64,")
+
+
 def test_inbound_oversized_image_skipped_with_warning(tmp_path, lattice_db, conv_db, caplog):
     """An image exceeding _MAX_INBOUND_IMAGE_BYTES (16MB) is logged + skipped.
     Parity with the UI's 16MB client cap and signal_send's outbound 16MB cap."""
