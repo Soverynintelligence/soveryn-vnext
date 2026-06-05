@@ -16,6 +16,7 @@ from typing import Any
 from soveryn.platform.coordination.events import (
     ChainContext,
     CoordEvent,
+    CoordEventKind,
     chain_context,
 )
 
@@ -27,7 +28,33 @@ WEBHOOK_AGENT_TAG = "webhook"
 
 
 def build_webhook_prompt(event: CoordEvent) -> str:
-    """Construct a tight, instructional prompt describing the event."""
+    """Construct a tight, instructional prompt describing the event.
+
+    NEEDS_DIRECTION events get a specific template that explicitly tells
+    Aetheria HOW to respond (via direct_message_agent), since these
+    events ARE requests for a structured action, not generic notifications.
+    See docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md.
+    """
+    if event.kind == CoordEventKind.NEEDS_DIRECTION:
+        payload = event.payload or {}
+        requester = payload.get("requester_agent") or event.actor_agent
+        summary = payload.get("context_summary", "")
+        options = payload.get("options_considered", []) or []
+        options_block = (
+            "\n".join(f"  - {opt}" for opt in options)
+            if options else "  (no options listed)"
+        )
+        return (
+            f"[NEEDS_DIRECTION at coord:{event.node_id}]\n"
+            f"{requester} paused for your decision.\n\n"
+            f"Context: {summary}\n\n"
+            f"Options considered:\n{options_block}\n\n"
+            f"Use direct_message_agent(target='{requester}', mode='execute', "
+            f"coord_node_id='{event.node_id}', message='<your decision>') "
+            f"to instruct them on which way to go.\n"
+            f"Chain depth: {event.chain_depth}"
+        )
+
     kind = event.kind.value
     lines = [
         f"[BOARD EVENT] {kind} on coord node {event.node_id}.",
