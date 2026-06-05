@@ -331,6 +331,106 @@ def test_chat_504_on_llama_server_timeout(tmp_path):
     assert _err(resp)["code"] == "chat_timeout"
 
 
+# ─── /chat attachments (vision) ──────────────────────────────────────────────
+
+
+def _new_session(client, agent="aetheria"):
+    create = _post(client, "/sessions", {"agent": agent})
+    return json.loads(create.data)["session_id"]
+
+
+def test_chat_accepts_attachments_passes_to_loop(app_state):
+    """Happy path: attachments plumbed to AgentLoop.process_message."""
+    img = "data:image/jpeg;base64,AAAA"
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid,
+        "message": "what's this?",
+        "attachments": [img],
+    })
+    assert resp.status_code == 200
+    # Verify attachments reached the loop — inspect the captured
+    # ChatRequest.messages last user content:
+    captured = app_state["fake_chat"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in last_user.content)
+
+
+def test_chat_rejects_non_image_data_url(app_state):
+    """Only data:image/{jpeg,png,webp,gif} accepted."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": ["data:application/pdf;base64,AAAA"],
+    })
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "invalid_attachments"
+
+
+def test_chat_rejects_oversized_attachment(app_state):
+    """data: URL > 33M chars rejected at route boundary."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    big = "data:image/jpeg;base64," + ("A" * 33_500_000)
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [big],
+    })
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "invalid_attachments"
+
+
+def test_chat_rejects_attachments_on_non_aetheria_agent(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="vett")
+    resp = _post(client, "/chat", {
+        "agent": "vett", "session_id": sid, "message": "hi",
+        "attachments": ["data:image/jpeg;base64,AAAA"],
+    })
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "agent_does_not_support_vision"
+
+
+def test_chat_rejects_non_list_attachments(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": "not a list",
+    })
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "invalid_attachments"
+
+
+def test_chat_rejects_non_string_entry(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [42],
+    })
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "invalid_attachments"
+
+
+def test_chat_empty_attachments_list_treated_as_absent(app_state):
+    """[] should behave like attachments missing — no error, no splice."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post(client, "/chat", {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [],
+    })
+    assert resp.status_code == 200
+    captured = app_state["fake_chat"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, str)  # no splice happened
+
+
 def test_chat_response_includes_tool_calls_passthrough(tmp_path):
     """Raw tool_calls preserved from ChatResponse -> route response, untouched."""
     conv = ConversationStore(tmp_path / "tc.db")

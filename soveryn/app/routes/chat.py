@@ -19,10 +19,57 @@ from soveryn.inference.routing import RoutingError
 bp = Blueprint("chat", __name__)
 
 
+# Vision attachments — accepted at /chat + /chat_stream, plumbed to AgentLoop.
+# Keep prefixes ASCII-narrow on purpose; any non-image data: URL is rejected.
+ALLOWED_IMAGE_MIME_PREFIXES = (
+    "data:image/jpeg",
+    "data:image/png",
+    "data:image/webp",
+    "data:image/gif",
+)
+# ~25MB pre-decode ceiling (base64 expands ~4/3 → ~25MB binary). Bounded at
+# the route boundary so a malformed client can't OOM the loop or the wire.
+MAX_ATTACHMENT_DATA_URL_BYTES = 33_000_000
+
+
 # ─── Small helpers (route-local, deliberately not abstracted further) ────────
 
 def _err(code: str, message: str, status: int):
     return jsonify({"error": {"code": code, "message": message}}), status
+
+
+def _validate_attachments(raw, agent: str):
+    """Validate and normalize the optional 'attachments' field.
+
+    Returns: (attachments_tuple_or_none, error_response_or_none).
+    On success: (None | tuple[str, ...], None).
+    On failure: (None, (jsonified_err, status_code)).
+
+    Empty list is treated as absent (returns None) — the AgentLoop's
+    `if attachments:` truthiness gate then bypasses the vision splice.
+    """
+    if raw is None:
+        return None, None
+    if not isinstance(raw, list):
+        return None, _err("invalid_attachments",
+                          "attachments must be a list of data: URL strings", 400)
+    if not raw:  # empty list — treat as absent
+        return None, None
+    for a in raw:
+        if not isinstance(a, str):
+            return None, _err("invalid_attachments",
+                              f"attachment entries must be strings, got {type(a).__name__}",
+                              400)
+        if not a.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
+            return None, _err("invalid_attachments",
+                              "only data:image/{jpeg,png,webp,gif} URLs accepted", 400)
+        if len(a) > MAX_ATTACHMENT_DATA_URL_BYTES:
+            return None, _err("invalid_attachments",
+                              f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes", 400)
+    if agent != "aetheria":
+        return None, _err("agent_does_not_support_vision",
+                          f"agent {agent!r} has no vision model loaded", 400)
+    return tuple(raw), None
 
 
 def _parse_json_body():
@@ -147,6 +194,10 @@ def chat():
     if not isinstance(message, str) or not message.strip():
         return _err("invalid_message", "message must be a non-empty string", 400)
 
+    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    if attach_err is not None:
+        return attach_err
+
     state = _state()
     loop = state["agent_loops"].get(agent)
     if loop is None:
@@ -156,7 +207,7 @@ def chat():
     # AgentLoop validates session ownership BEFORE chat; we translate its
     # AgentLoopError into the right HTTP status here.
     try:
-        response = loop.process_message(session_id, message)
+        response = loop.process_message(session_id, message, attachments=attachments)
     except AgentLoopError as e:
         msg = str(e)
         if "does not exist" in msg:
@@ -242,6 +293,10 @@ def chat_stream():
     if not isinstance(message, str) or not message.strip():
         return _err("invalid_message", "message must be a non-empty string", 400)
 
+    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    if attach_err is not None:
+        return attach_err
+
     state = _state()
     loop = state["agent_loops"].get(agent)
     if loop is None:
@@ -252,7 +307,7 @@ def chat_stream():
     # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
     # per constraint 3, rather than appearing inside a half-opened text/event-stream.
     try:
-        event_iter = loop.process_message_stream(session_id, message)
+        event_iter = loop.process_message_stream(session_id, message, attachments=attachments)
         # Pre-fetch the first event so setup errors surface here.
         try:
             first_event = next(event_iter)

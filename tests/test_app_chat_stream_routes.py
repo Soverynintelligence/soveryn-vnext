@@ -186,6 +186,119 @@ def test_chat_stream_serializes_error_events(tmp_path):
     assert events[-1]["code"] == "chat_server_error"
 
 
+# ─── /chat_stream attachments (vision) ───────────────────────────────────────
+
+
+def _new_session(client, agent="aetheria"):
+    s = client.post("/sessions",
+                    data=json.dumps({"agent": agent}),
+                    content_type="application/json")
+    return json.loads(s.data)["session_id"]
+
+
+def test_chat_stream_accepts_attachments_passes_to_loop(app_state):
+    """Happy path: attachments plumbed through to the stream_fn's ChatRequest."""
+    img = "data:image/jpeg;base64,AAAA"
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid,
+        "message": "what's this?",
+        "attachments": [img],
+    })
+    assert resp.status_code == 200
+    # Drain the SSE response to ensure events are well-formed
+    events = _parse_sse(resp.data)
+    assert any(e["type"] == "token" for e in events)
+    assert events[-1]["type"] == "done"
+    # Verify attachments reached the loop via the captured ChatRequest:
+    captured = app_state["stream"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in last_user.content)
+
+
+def test_chat_stream_rejects_non_image_data_url(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": ["data:application/pdf;base64,AAAA"],
+    })
+    assert resp.status_code == 400
+    assert resp.content_type.startswith("application/json")
+    assert json.loads(resp.data)["error"]["code"] == "invalid_attachments"
+    assert app_state["stream"].calls == []  # loop never opened
+
+
+def test_chat_stream_rejects_oversized_attachment(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    big = "data:image/jpeg;base64," + ("A" * 33_500_000)
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [big],
+    })
+    assert resp.status_code == 400
+    assert json.loads(resp.data)["error"]["code"] == "invalid_attachments"
+    assert app_state["stream"].calls == []
+
+
+def test_chat_stream_rejects_attachments_on_non_aetheria_agent(app_state):
+    """Route-level guard fires BEFORE loop, returning clean JSON 400."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="vett")
+    resp = _post_stream(client, {
+        "agent": "vett", "session_id": sid, "message": "hi",
+        "attachments": ["data:image/jpeg;base64,AAAA"],
+    })
+    assert resp.status_code == 400
+    assert resp.content_type.startswith("application/json")
+    assert json.loads(resp.data)["error"]["code"] == "agent_does_not_support_vision"
+    assert app_state["stream"].calls == []
+
+
+def test_chat_stream_rejects_non_list_attachments(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": "not a list",
+    })
+    assert resp.status_code == 400
+    assert json.loads(resp.data)["error"]["code"] == "invalid_attachments"
+    assert app_state["stream"].calls == []
+
+
+def test_chat_stream_rejects_non_string_entry(app_state):
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [42],
+    })
+    assert resp.status_code == 400
+    assert json.loads(resp.data)["error"]["code"] == "invalid_attachments"
+    assert app_state["stream"].calls == []
+
+
+def test_chat_stream_empty_attachments_list_treated_as_absent(app_state):
+    """[] should behave like attachments missing — no error, no splice."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="aetheria")
+    resp = _post_stream(client, {
+        "agent": "aetheria", "session_id": sid, "message": "hi",
+        "attachments": [],
+    })
+    assert resp.status_code == 200
+    events = _parse_sse(resp.data)
+    assert events[-1]["type"] == "done"
+    captured = app_state["stream"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, str)  # no splice happened
+
+
 def test_chat_stream_route_response_omits_raw(app_state):
     """Constraint 6: StreamChunk.raw stays internal; not in route response."""
     s = app_state["client"].post("/sessions",
