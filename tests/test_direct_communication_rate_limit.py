@@ -45,3 +45,19 @@ def test_retry_after_seconds_when_capped():
         sender="aetheria", target="vett", now=t1,
     )
     assert retry_after == 45  # 60 - 15
+
+
+def test_seconds_until_under_cap_handles_per_minute_cap_zero():
+    """Degenerate state: cap=0 + empty deque. under_cap is False (0 < 0),
+    so seconds_until_under_cap is called — but the deque is empty so
+    q[0] would crash. Regression: returns window length so the caller's
+    retry loop paces itself instead of busy-looping or crashing."""
+    limiter = DirectCommRateLimiter(per_minute_cap=0)
+    now = datetime(2026, 6, 5, 12, 0, 0)
+    # Sanity: under_cap is False at cap=0 (the caller's prerequisite)
+    assert not limiter.under_cap(sender="aetheria", target="vett", now=now)
+    # Should NOT crash; should return a sane retry value
+    retry = limiter.seconds_until_under_cap(
+        sender="aetheria", target="vett", now=now,
+    )
+    assert retry == 60  # window length — the longest reasonable pacing

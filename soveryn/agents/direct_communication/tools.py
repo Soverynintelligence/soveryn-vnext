@@ -109,14 +109,9 @@ def build_direct_message_agent_tool(
 
         now = datetime.now()
         if not limiter.under_cap(sender=owner_agent, target=target, now=now):
-            try:
-                retry = limiter.seconds_until_under_cap(
-                    sender=owner_agent, target=target, now=now,
-                )
-            except IndexError:
-                # Degenerate cap=0 path (no recorded calls but cap forbids).
-                # Surface as "wait the full window" so the model backs off.
-                retry = 60
+            retry = limiter.seconds_until_under_cap(
+                sender=owner_agent, target=target, now=now,
+            )
             return {
                 "error": "rate_limited",
                 "retry_after_seconds": retry,

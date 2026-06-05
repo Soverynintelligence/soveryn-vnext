@@ -51,12 +51,21 @@ class DirectCommRateLimiter:
         self, *, sender: str, target: str, now: datetime,
     ) -> int:
         """Returns 0 if already under cap, else seconds until the oldest
-        recorded call falls out of the window."""
+        recorded call falls out of the window. When per_minute_cap=0 the
+        limiter is permanently blocking — return _WINDOW_SECONDS so a
+        caller's retry-after-N-seconds loop degrades gracefully instead
+        of busy-looping (or crashing on an empty deque, the failure mode
+        the DAC-T3 implementer surfaced)."""
         with self._lock:
             self._prune((sender, target), now)
             q = self._calls[(sender, target)]
             if len(q) < self._per_minute_cap:
                 return 0
+            if not q:
+                # cap=0 + nothing pending: degenerate state, retry never
+                # helps. Return the window length so the caller paces
+                # itself rather than busy-looping.
+                return _WINDOW_SECONDS
             oldest = q[0]
             seconds = _WINDOW_SECONDS - int((now - oldest).total_seconds())
             return max(seconds, 0)
