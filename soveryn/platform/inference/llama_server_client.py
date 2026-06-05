@@ -64,7 +64,7 @@ class LlamaServerTimeout(Exception):
 @dataclass(frozen=True)
 class ChatMessage:
     role: str          # "system" | "user" | "assistant" | "tool"
-    content: str
+    content: str | list[dict]   # str = plain text; list = OpenAI vision-format parts
     tool_call_id: str | None = None
     tool_calls: tuple[dict, ...] | None = None
 
@@ -173,6 +173,24 @@ def _post_json(
 # Transport adapter — model accommodation, NOT domain change.
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _content_as_str(c: str | list[dict]) -> str:
+    """Extract plain text from ChatMessage.content for fold paths.
+
+    Prelude messages are always system messages built from str sources
+    (persona / pinned / soul / recall), so list-content here is defensive.
+    For OpenAI vision-format list content, we keep only the text parts and
+    drop image_url parts — the fold is for chat templates that can't honor
+    multi-system messages, and images don't belong in system messages anyway.
+    """
+    if isinstance(c, str):
+        return c
+    return "\n\n".join(
+        part.get("text", "")
+        for part in c
+        if isinstance(part, dict) and part.get("type") == "text"
+    )
+
+
 def prepare_wire_messages(
     messages: tuple["ChatMessage", ...],
     server: ModelServer,
@@ -210,7 +228,7 @@ def prepare_wire_messages(
             break
     if prelude_end <= 1:
         return messages
-    joined = "\n\n".join(m.content for m in messages[:prelude_end] if m.content)
+    joined = "\n\n".join(_content_as_str(m.content) for m in messages[:prelude_end] if m.content)
     folded = ChatMessage(role="system", content=joined)
     return (folded,) + messages[prelude_end:]
 

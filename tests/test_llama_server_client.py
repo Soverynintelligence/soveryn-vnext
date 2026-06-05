@@ -22,6 +22,9 @@ from soveryn.inference.llama_server_client import (
     prepare_wire_messages,
     embed,
 )
+# _wire_message is a module-private helper; `from ... import *` does not
+# re-export underscored names through the shim, so import from canonical.
+from soveryn.platform.inference.llama_server_client import _wire_message
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -641,3 +644,46 @@ def test_prepare_wire_messages_aetheria_seam_4_separate_at_agent_loop_folds_to_1
     assert folded.index("PERSONA_BODY") < folded.index("PINNED_BODY") < folded.index("SOUL_BODY") < folded.index("Stateable recall:")
     # User message preserved
     assert wire[-1] == ChatMessage(role="user", content="hello")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ChatMessage.content widened to str | list[dict] for OpenAI vision parts
+# (Signal Image Vision Pipeline — Task SI-T1).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_wire_message_passes_list_content_through_unchanged():
+    """OpenAI vision parts list is passed to JSON as-is."""
+    vision_content = [
+        {"type": "text", "text": "what's this?"},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AAAA"}},
+    ]
+    msg = ChatMessage(role="user", content=vision_content)
+    wire = _wire_message(msg)
+    assert wire == {"role": "user", "content": vision_content}
+
+
+def test_wire_message_passes_str_content_unchanged():
+    """Regression: str content is wired through unchanged."""
+    msg = ChatMessage(role="user", content="hello")
+    wire = _wire_message(msg)
+    assert wire == {"role": "user", "content": "hello"}
+
+
+def test_prepare_wire_messages_folds_only_text_parts_when_prelude_has_list_content():
+    """Defensive: if a list-content message ever slips into the prelude (it
+    shouldn't — prelude is system messages built from str sources), the fold
+    must extract text parts only, not crash on str-joining a list."""
+    msgs = (
+        ChatMessage(role="system", content="persona"),
+        ChatMessage(role="system", content=[
+            {"type": "text", "text": "pinned text"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+        ]),
+        ChatMessage(role="user", content="hi"),
+    )
+    out = prepare_wire_messages(msgs, _server(supports_multi=False))
+    assert len(out) == 2
+    assert out[0].role == "system"
+    # text parts only — image_url part is skipped in the fold
+    assert out[0].content == "persona\n\npinned text"
+    assert out[1] == ChatMessage(role="user", content="hi")
