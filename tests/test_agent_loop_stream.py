@@ -328,3 +328,73 @@ def test_stream_pinned_text_added_between_persona_and_soul(conv_store):
     assert len(system_msgs) == 3
     assert system_msgs[1].content == "STREAM_PINNED"
     assert system_msgs[2].content == "STREAM_SOUL"
+
+
+# ─── SI-T2: attachments kwarg in streaming path ──────────────────────────────
+
+def test_stream_with_attachments_splices_image_url_into_current_user_message(conv_store):
+    """Streaming mirror of sync: wire-level user message is list-content;
+    DB row stays text-only."""
+    sid = conv_store.new_session("aetheria")
+    stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
+    loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
+    img_url = "data:image/jpeg;base64,AAAA"
+    list(loop.process_message_stream(sid, "what's this?", attachments=(img_url,)))
+
+    # DB stores text-only
+    history = conv_store.load_history(sid)
+    assert history[0].role == "user"
+    assert history[0].content == "what's this?"
+
+    # Wire-level message list-content with text + image parts
+    sent_user = stream.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, list)
+    assert {"type": "text", "text": "what's this?"} in sent_user.content
+    assert {"type": "image_url", "image_url": {"url": img_url}} in sent_user.content
+
+
+def test_stream_without_attachments_unchanged(conv_store):
+    """Regression: attachments=None preserves prior streaming behavior."""
+    sid = conv_store.new_session("aetheria")
+    stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
+    loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
+    list(loop.process_message_stream(sid, "plain text"))
+    sent_user = stream.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, str)
+    assert sent_user.content == "plain text"
+
+
+def test_stream_attachments_on_non_aetheria_raises_before_save(conv_store):
+    """Vision guard fires BEFORE save_turn in streaming too — no phantom turn."""
+    stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
+    loop_vett = AgentLoop("vett", conv_store, stream_fn=stream)
+    sid = conv_store.new_session("vett")
+    with pytest.raises(AgentLoopError, match="attachments only supported"):
+        list(loop_vett.process_message_stream(
+            sid, "hi", attachments=("data:image/jpeg;base64,AAAA",),
+        ))
+    # No user turn saved, no stream dispatched
+    assert conv_store.load_history(sid) == ()
+    assert stream.calls == []
+
+
+def test_stream_multiple_attachments_all_spliced(conv_store):
+    """Streaming: all image URLs become image_url parts in order."""
+    sid = conv_store.new_session("aetheria")
+    stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
+    loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
+    urls = (
+        "data:image/jpeg;base64,A",
+        "data:image/png;base64,B",
+        "data:image/webp;base64,C",
+    )
+    list(loop.process_message_stream(sid, "compare these", attachments=urls))
+    sent = stream.calls[0]["request"].messages[-1]
+    assert isinstance(sent.content, list)
+    img_parts = [p for p in sent.content if p.get("type") == "image_url"]
+    assert len(img_parts) == 3
+    assert [p["image_url"]["url"] for p in img_parts] == list(urls)
+    text_parts = [p for p in sent.content if p.get("type") == "text"]
+    assert text_parts == [{"type": "text", "text": "compare these"}]

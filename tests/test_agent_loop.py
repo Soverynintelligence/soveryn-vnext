@@ -930,3 +930,116 @@ def test_pinned_alone_without_soul_for_aetheria(conv_store):
     system_msgs = [m for m in request.messages if m.role == "system"]
     assert len(system_msgs) == 2
     assert system_msgs[1].content == "PINNED_ONLY"
+
+
+# ─── SI-T2: attachments kwarg (vision) ───────────────────────────────────────
+# DB stores the user message as plain text (no schema migration). At wire build
+# time, when attachments are passed, the current user turn's content becomes an
+# OpenAI vision-format list. Aetheria-only — the vision guard fires BEFORE
+# save_turn so guard rejections leave no state behind.
+
+def test_process_message_with_attachments_splices_image_url_into_current_user_message(conv_store):
+    """Live user-turn content is rewritten to OpenAI vision-format list when
+    attachments are passed. The DB row still stores the text-only version."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat(content="ok")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    img_url = "data:image/jpeg;base64,AAAA"
+    loop.process_message(sid, "what's this?", attachments=(img_url,))
+
+    # DB stores text-only
+    history = conv_store.load_history(sid)
+    assert history[0].role == "user"
+    assert history[0].content == "what's this?"
+
+    # Wire-level current user message is list-content with text + image parts
+    sent_user = fake.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, list)
+    assert {"type": "text", "text": "what's this?"} in sent_user.content
+    assert {"type": "image_url", "image_url": {"url": img_url}} in sent_user.content
+
+
+def test_process_message_without_attachments_unchanged(conv_store):
+    """Regression: attachments=None preserves prior behavior (str content)."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "plain text")
+    history = conv_store.load_history(sid)
+    assert history[0].content == "plain text"
+    # request messages stay str-typed
+    sent_user = fake.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, str)
+    assert sent_user.content == "plain text"
+
+
+def test_process_message_attachments_on_non_aetheria_agent_raises_before_save(conv_store):
+    """Vision guard fires BEFORE save_turn so guard rejections don't pollute
+    history with a phantom user turn."""
+    fake = _CapturingChat()
+    loop_vett = AgentLoop("vett", conv_store, chat_fn=fake)
+    sid = conv_store.new_session("vett")
+    with pytest.raises(AgentLoopError, match="attachments only supported"):
+        loop_vett.process_message(
+            sid, "hi", attachments=("data:image/jpeg;base64,AAAA",),
+        )
+    # No user turn saved, no chat dispatched
+    assert conv_store.load_history(sid) == ()
+    assert fake.calls == []
+
+
+def test_process_message_multiple_attachments_all_spliced(conv_store):
+    """All image URLs become image_url parts in order."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    urls = (
+        "data:image/jpeg;base64,A",
+        "data:image/png;base64,B",
+        "data:image/webp;base64,C",
+    )
+    loop.process_message(sid, "compare these", attachments=urls)
+    sent = fake.calls[0]["request"].messages[-1]
+    assert isinstance(sent.content, list)
+    img_parts = [p for p in sent.content if p.get("type") == "image_url"]
+    assert len(img_parts) == 3
+    assert [p["image_url"]["url"] for p in img_parts] == list(urls)
+    # Text part still present
+    text_parts = [p for p in sent.content if p.get("type") == "text"]
+    assert text_parts == [{"type": "text", "text": "compare these"}]
+
+
+def test_process_message_empty_attachments_tuple_treated_as_none(conv_store):
+    """attachments=() (falsy) → no splice, no guard fire — same as None."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat()
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(sid, "plain", attachments=())
+    sent_user = fake.calls[0]["request"].messages[-1]
+    assert isinstance(sent_user.content, str)
+    assert sent_user.content == "plain"
+
+
+def test_process_message_attachments_dont_pollute_next_turn_history(conv_store):
+    """Text-only DB save means next-turn history doesn't carry image parts.
+    The vision splice is in-flight only — intentional per SI-T2 spec."""
+    sid = conv_store.new_session("aetheria")
+    fake = _CapturingChat(content="r1")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.process_message(
+        sid, "look", attachments=("data:image/jpeg;base64,AAAA",),
+    )
+    # Second turn, no attachments
+    fake.content = "r2"
+    loop.process_message(sid, "follow up")
+    # History on second call should be: system + u1(str) + a1 + u2(str)
+    second_msgs = fake.calls[1]["request"].messages
+    # The prior user turn (now in history) must be str-content, not list
+    user_turns_in_history = [
+        m for m in second_msgs[:-1] if m.role == "user"
+    ]
+    assert len(user_turns_in_history) == 1
+    assert isinstance(user_turns_in_history[0].content, str)
+    assert user_turns_in_history[0].content == "look"

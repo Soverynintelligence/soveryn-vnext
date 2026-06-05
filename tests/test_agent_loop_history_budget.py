@@ -49,6 +49,45 @@ def test_estimate_message_tokens_includes_per_message_overhead():
     assert _estimate_message_tokens(msg) == 15
 
 
+# ─── Estimator: list-content (vision) regression ─────────────────────────────
+# After SI-T1, ChatMessage.content can be list[dict]. A naive len(text or "") // 4
+# would treat the list as ~part-count tokens (typically 2), under-counting a
+# multimodal turn by ~100x and breaking _apply_history_budget for vision turns.
+
+def test_estimate_message_tokens_handles_list_content():
+    """Vision messages: count text-part chars (//4) + per-image cost (512).
+    A naive len(list) would return ~1 instead of hundreds — that bug elides
+    history rows it shouldn't or fails to trim when it should."""
+    from soveryn.agents.loop import _PER_MESSAGE_OVERHEAD_TOKENS
+
+    # text-only vision message (no images)
+    msg = ChatMessage(role="user", content=[
+        {"type": "text", "text": "a" * 400},
+    ])
+    # 400 chars / 4 = 100 text tokens, 0 image tokens, + overhead
+    assert _estimate_message_tokens(msg) == 100 + _PER_MESSAGE_OVERHEAD_TOKENS
+
+
+def test_estimate_message_tokens_counts_image_parts_at_per_image_cost():
+    """One image = 512 tokens; two images = 1024 tokens; text adds on top."""
+    from soveryn.agents.loop import _PER_IMAGE_TOKEN_COST, _PER_MESSAGE_OVERHEAD_TOKENS
+
+    msg = ChatMessage(role="user", content=[
+        {"type": "text", "text": "x" * 40},  # 10 text tokens
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,AAAA"}},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,BBBB"}},
+    ])
+    expected = 10 + (2 * _PER_IMAGE_TOKEN_COST) + _PER_MESSAGE_OVERHEAD_TOKENS
+    assert _estimate_message_tokens(msg) == expected
+
+
+def test_estimate_message_tokens_handles_str_content_unchanged():
+    """Regression: str-content path unchanged."""
+    from soveryn.agents.loop import _PER_MESSAGE_OVERHEAD_TOKENS
+    msg = ChatMessage(role="user", content="x" * 400)
+    assert _estimate_message_tokens(msg) == 100 + _PER_MESSAGE_OVERHEAD_TOKENS
+
+
 # ─── Budgeter: pure function ────────────────────────────────────────────────
 
 def _msg(role: str, chars: int) -> ChatMessage:

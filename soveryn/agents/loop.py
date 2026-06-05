@@ -155,6 +155,11 @@ def _accumulate_tool_calls(
 # ─────────────────────────────────────────────────────────────────────────────
 
 _PER_MESSAGE_OVERHEAD_TOKENS = 5
+# Conservative ballpark for a single image's contribution to the prompt token
+# count. Real Gemma 4 mmproj cost is ~256 tokens per image at default
+# resolution; over-estimating is the safe direction for budget-trim decisions
+# (we'd rather trim slightly aggressively than fail to trim and overflow).
+_PER_IMAGE_TOKEN_COST = 512
 
 
 def _estimate_tokens(text: str) -> int:
@@ -164,8 +169,32 @@ def _estimate_tokens(text: str) -> int:
 
 
 def _estimate_message_tokens(msg: ChatMessage) -> int:
-    """Per-message estimate with small overhead for role/structure framing."""
-    return _estimate_tokens(msg.content) + _PER_MESSAGE_OVERHEAD_TOKENS
+    """Per-message estimate with small overhead for role/structure framing.
+
+    Handles both str-content (plain text) and list-content (OpenAI vision
+    parts, after SI-T1's ChatMessage.content widening). For list content,
+    each text part contributes len/4 tokens and each image_url part
+    contributes _PER_IMAGE_TOKEN_COST. A naive len(list) would treat a
+    multimodal turn as ~1 token and break history-budget trim logic on
+    vision turns.
+    """
+    content = msg.content
+    if isinstance(content, str):
+        return _estimate_tokens(content) + _PER_MESSAGE_OVERHEAD_TOKENS
+    # list[dict] — sum text-part chars (//4) + per-image cost. Unknown part
+    # shapes contribute nothing; the structure overhead is captured by the
+    # per-message overhead constant.
+    text_tokens = 0
+    image_tokens = 0
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        ptype = part.get("type")
+        if ptype == "text":
+            text_tokens += _estimate_tokens(part.get("text", ""))
+        elif ptype == "image_url":
+            image_tokens += _PER_IMAGE_TOKEN_COST
+    return text_tokens + image_tokens + _PER_MESSAGE_OVERHEAD_TOKENS
 
 
 def _apply_history_budget(
@@ -333,12 +362,28 @@ class AgentLoop:
             })
         return tuple(schemas)
 
-    def process_message(self, session_id: str, user_message: str) -> ChatResponse:
+    def process_message(
+        self,
+        session_id: str,
+        user_message: str,
+        attachments: tuple[str, ...] | None = None,
+    ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
+
+        attachments — when non-empty, the current (last) user message's
+        wire-level content is replaced with an OpenAI vision-format list
+        ([{"type": "text", ...}, {"type": "image_url", ...}, ...]). The DB
+        row still stores `user_message` as plain text (no schema migration;
+        multimodal history persistence is intentionally deferred). Aetheria
+        is the only agent with a vision-capable model loaded — passing
+        attachments to any other agent raises AgentLoopError BEFORE
+        save_turn so guard rejections don't pollute history with a phantom
+        user turn.
 
         Raises:
           AgentLoopError — session does not exist OR session.agent != self.agent_name
-                           (in both cases, NO user turn is saved, NO chat dispatched)
+                           OR attachments passed to a non-aetheria agent
+                           (in all cases, NO user turn is saved, NO chat dispatched)
           ConversationStoreError — invalid role on save (shouldn't happen here)
           LlamaServerError / LlamaServerTimeout — chat failure (user turn stays saved)
           sqlite3.* — DB error during turn save (propagates, no swallowing)
@@ -356,7 +401,18 @@ class AgentLoop:
                 f"not {self.agent_name!r}"
             )
 
+        # Vision guard — BEFORE save_turn so a rejected attachment leaves no
+        # phantom user turn behind. Aetheria is the only agent with a
+        # vision-capable model loaded; routing other agents' attachments
+        # would silently drop the image at the wire boundary.
+        if attachments and self.agent_name != "aetheria":
+            raise AgentLoopError(
+                f"attachments only supported for aetheria "
+                f"(agent {self.agent_name!r} has no vision model loaded)"
+            )
+
         # 1. Save user turn (constraint 6: stays saved if chat later fails).
+        # Text-only by design — vision parts live in-flight, not in the DB.
         self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
 
         # 2. Load history (includes the just-saved user turn).
@@ -411,6 +467,23 @@ class AgentLoop:
             if marker is not None:
                 prelude = prelude + (marker,)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
+
+        # Vision splice — replace the current (last) user message's content
+        # with an OpenAI vision-format list when attachments are present.
+        # Splice happens AFTER _apply_history_budget so the budgeter (which
+        # only ever sees str-content history) doesn't have to know about the
+        # in-flight image cost. The DB save above is unaffected.
+        if attachments:
+            last = messages[-1]
+            assert last.role == "user", (
+                "last message must be the current user turn when splicing attachments"
+            )
+            spliced_content: list[dict] = [{"type": "text", "text": user_message}]
+            for url in attachments:
+                spliced_content.append({"type": "image_url", "image_url": {"url": url}})
+            messages = messages[:-1] + (
+                ChatMessage(role="user", content=spliced_content),
+            )
 
         # 4. Dispatch chat. Any failure propagates; user turn is already saved.
         request = ChatRequest(
@@ -554,11 +627,16 @@ class AgentLoop:
         self,
         session_id: str,
         user_message: str,
+        attachments: tuple[str, ...] | None = None,
     ) -> "Iterator[AgentStreamEvent]":
         """Streaming variant. Yields TokenEvent per content delta, then either
         DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
         saved ONLY on DoneEvent, AND only if upstream sent an explicit
         finish_reason (constraint 5).
+
+        attachments — mirror of process_message: wire-level current user
+        message becomes a vision-format list; DB still stores text-only;
+        aetheria-only (raises AgentLoopError BEFORE save_turn otherwise).
 
         Setup errors (session validation, recall failures, LlamaServerError
         BEFORE the first chunk) propagate as exceptions — the Flask route
@@ -578,7 +656,16 @@ class AgentLoop:
                 f"not {self.agent_name!r}"
             )
 
-        # ── Save user turn FIRST (honest state if stream fails later)
+        # Vision guard — BEFORE save_turn so a rejected attachment leaves no
+        # phantom user turn behind. Mirrors the sync path.
+        if attachments and self.agent_name != "aetheria":
+            raise AgentLoopError(
+                f"attachments only supported for aetheria "
+                f"(agent {self.agent_name!r} has no vision model loaded)"
+            )
+
+        # ── Save user turn FIRST (honest state if stream fails later).
+        # Text-only by design — vision parts live in-flight, not in the DB.
         self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
         history_turns = self.conv_store.load_history(session_id)
 
@@ -619,6 +706,23 @@ class AgentLoop:
             if marker is not None:
                 prelude = prelude + (marker,)
         messages = prelude + history_messages
+
+        # Vision splice — replace the current (last) user message's content
+        # with an OpenAI vision-format list when attachments are present.
+        # Same logic as process_message; happens AFTER _apply_history_budget
+        # (which only ever sees str-content history) and BEFORE the round
+        # loop opens so the spliced message participates in every retry.
+        if attachments:
+            last = messages[-1]
+            assert last.role == "user", (
+                "last message must be the current user turn when splicing attachments"
+            )
+            spliced_content: list[dict] = [{"type": "text", "text": user_message}]
+            for url in attachments:
+                spliced_content.append({"type": "image_url", "image_url": {"url": url}})
+            messages = messages[:-1] + (
+                ChatMessage(role="user", content=spliced_content),
+            )
 
         # Round loop: streaming generation → maybe tool calls → tool dispatch →
         # next streaming generation, until the model emits a final answer or we
