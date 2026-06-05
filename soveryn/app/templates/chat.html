@@ -358,6 +358,54 @@
   button:focus-visible, a:focus-visible, input:focus-visible {
     outline:2px solid var(--node); outline-offset:2px; border-radius:6px;
   }
+
+  /* Attachments preview row above the composer input. Hidden when empty. */
+  .composer { flex-direction: column; align-items: stretch; gap: 0; }
+  .composer-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+  }
+  .composer-row > input[type="text"] { flex: 1; }
+  .composer-attachments-row {
+    display: flex; gap: 8px; padding: 8px 4px 6px;
+    border-bottom: 1px solid rgba(140, 145, 100, 0.15);
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .composer-attachments-row[hidden] { display: none; }
+  .composer-attachment-thumb {
+    position: relative; width: 64px; height: 64px;
+    border-radius: 6px; overflow: hidden;
+    border: 1px solid rgba(140, 145, 100, 0.45);
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .composer-attachment-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .composer-attachment-thumb .remove-attachment {
+    position: absolute; top: 3px; right: 3px;
+    width: 18px; height: 18px; line-height: 14px;
+    border: 0; background: rgba(0, 0, 0, 0.75); color: white;
+    border-radius: 50%; cursor: pointer; font-size: 14px;
+    padding: 0;
+  }
+  .composer-attach-btn {
+    background: transparent; border: 0; color: var(--text);
+    opacity: 0.55; padding: 4px 6px; font-size: 18px;
+    cursor: pointer; line-height: 1;
+  }
+  .composer-attach-btn:hover { opacity: 1; }
+  .composer-attach-btn[hidden] { display: none; }
+  /* Sent-bubble inline image preview. */
+  .bubble-images {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 6px;
+  }
+  .bubble-images img {
+    max-width: 220px; max-height: 220px; border-radius: 6px;
+    display: block; object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .bubble-text { white-space: pre-wrap; }
 </style>
 </head>
 <body>
@@ -418,9 +466,17 @@
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
     <form class="composer" data-testid="composer" onsubmit="return false">
-      <input type="text" placeholder="Message…" data-testid="composer-input" aria-label="Message" autofocus>
-      <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
-      <button type="submit" class="send" data-testid="send" aria-label="Send">↑</button>
+      <div class="composer-attachments-row" data-testid="composer-attachments" hidden></div>
+      <div class="composer-row">
+        <button type="button" class="composer-attach-btn" data-testid="composer-attach"
+                title="Attach image" aria-label="Attach image">📎</button>
+        <input type="file" data-testid="composer-file-input"
+               accept="image/jpeg,image/png,image/webp,image/gif"
+               multiple hidden>
+        <input type="text" placeholder="Message…" data-testid="composer-input" aria-label="Message" autofocus>
+        <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
+        <button type="submit" class="send" data-testid="send" aria-label="Send">↑</button>
+      </div>
     </form>
   </main>
 <script>
@@ -442,6 +498,13 @@
     scotty:   "var(--sov-bronze)",
   };
 
+  // ─── Attachments config ───────────────────────────────────────────────────
+  const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
+  const MAX_ATTACHMENT_COUNT = 4;
+  const ALLOWED_IMAGE_MIMES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+  ]);
+
   // ─── State ─────────────────────────────────────────────────────────────────
   const state = {
     agent: null,
@@ -449,6 +512,8 @@
     sessions: [],
     stream: localStorage.getItem("soveryn.stream") !== "false",
     abort: null,
+    // pendingAttachments: array of { name, dataUrl } awaiting the next send.
+    pendingAttachments: [],
   };
 
   const CONTEXT_BANNER_THRESHOLD = 0.85;
@@ -597,6 +662,46 @@
   const elAgentName = () => $('[data-agent-name]');
   const elAgentDisc = () => $('[data-agent-disc]');
   const elSessionMeta = () => $('[data-session-meta]');
+  const elAttachBtn  = () => $('[data-testid="composer-attach"]');
+  const elFileInput  = () => $('[data-testid="composer-file-input"]');
+  const elAttachRow  = () => $('[data-testid="composer-attachments"]');
+
+  // ─── Attachments helpers ──────────────────────────────────────────────────
+  function renderAttachmentsRow() {
+    const row = elAttachRow();
+    if (!row) return;
+    if (state.pendingAttachments.length === 0) {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    row.hidden = false;
+    row.innerHTML = "";
+    state.pendingAttachments.forEach((att, idx) => {
+      const thumb = document.createElement("div");
+      thumb.className = "composer-attachment-thumb";
+      const img = document.createElement("img");
+      img.src = att.dataUrl;
+      img.alt = att.name || "";
+      thumb.appendChild(img);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-attachment";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", `Remove ${att.name || "attachment"}`);
+      removeBtn.addEventListener("click", () => {
+        state.pendingAttachments.splice(idx, 1);
+        renderAttachmentsRow();
+      });
+      thumb.appendChild(removeBtn);
+      row.appendChild(thumb);
+    });
+  }
+
+  function clearPendingAttachments() {
+    state.pendingAttachments = [];
+    renderAttachmentsRow();
+  }
 
   function setAgent(name) {
     state.agent = name;
@@ -608,19 +713,38 @@
     // through a bronze-trailing gradient, which doesn't serve the spectrum
     // treatment Aetheria needs.
     elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
+    // Paperclip is Aetheria-only — other agents have no mmproj loaded and the
+    // backend would 400 anyway. Hide the button to avoid the confusing UI.
+    const attachBtn = elAttachBtn();
+    if (attachBtn) attachBtn.hidden = name !== "aetheria";
+    // Switching off aetheria? Drop any pending attachments.
+    if (name !== "aetheria") clearPendingAttachments();
     loadSessions();
   }
 
   function appendBubble(role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `bubble ${role}`;
+    if (opts.images && opts.images.length) {
+      const imgRow = document.createElement("div");
+      imgRow.className = "bubble-images";
+      for (const url of opts.images) {
+        const img = document.createElement("img");
+        img.src = url;
+        imgRow.appendChild(img);
+      }
+      div.appendChild(imgRow);
+    }
     if (opts.placeholder) {
       const span = document.createElement("span");
       span.className = "thinking-placeholder";
       span.textContent = "thinking…";
       div.appendChild(span);
     } else {
-      div.textContent = content;
+      const txt = document.createElement("div");
+      txt.className = "bubble-text";
+      txt.textContent = content;
+      div.appendChild(txt);
     }
     elThread().appendChild(div);
     elThread().scrollTop = elThread().scrollHeight;
@@ -646,7 +770,9 @@
 
   // ─── Streaming (POST + ReadableStream) ─────────────────────────────────────
   async function sendStreaming(message) {
-    appendBubble("user", message);
+    const images = state.pendingAttachments.map(a => a.dataUrl);
+    appendBubble("user", message, { images });
+    clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
     let cleared = false;
     let finalContent = "";
@@ -660,10 +786,12 @@
 
     state.abort = new AbortController();
     try {
+      const body = { agent: state.agent, session_id: state.sessionId, message };
+      if (images.length > 0) body.attachments = images;
       const r = await fetch("/chat_stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent: state.agent, session_id: state.sessionId, message }),
+        body: JSON.stringify(body),
         signal: state.abort.signal,
       });
       const reader = r.body.getReader();
@@ -736,14 +864,18 @@
 
   // ─── Sync send ─────────────────────────────────────────────────────────────
   async function sendSync(message) {
-    appendBubble("user", message);
+    const images = state.pendingAttachments.map(a => a.dataUrl);
+    appendBubble("user", message, { images });
+    clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
     try {
       await ensureSession();
+      const body = { agent: state.agent, session_id: state.sessionId, message };
+      if (images.length > 0) body.attachments = images;
       const r = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent: state.agent, session_id: state.sessionId, message }),
+        body: JSON.stringify(body),
       });
       const data = await r.json();
       if (data.error) {
@@ -795,6 +927,44 @@
       elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
     });
 
+    // Paperclip → hidden file input. Read each picked file as a data URL and
+    // queue it in state.pendingAttachments; the next send rides the queue.
+    const attachBtn = elAttachBtn();
+    const fileInput = elFileInput();
+    if (attachBtn && fileInput) {
+      attachBtn.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", async (evt) => {
+        const files = Array.from(evt.target.files || []);
+        for (const file of files) {
+          if (state.pendingAttachments.length >= MAX_ATTACHMENT_COUNT) {
+            alert(`Max ${MAX_ATTACHMENT_COUNT} attachments per message`);
+            break;
+          }
+          if (!ALLOWED_IMAGE_MIMES.has(file.type)) {
+            alert(`Not a supported image type: ${file.name} (${file.type || "unknown"})`);
+            continue;
+          }
+          if (file.size > MAX_ATTACHMENT_BYTES) {
+            alert(`${file.name} exceeds 16MB`);
+            continue;
+          }
+          try {
+            const dataUrl = await new Promise((resolve, reject) => {
+              const r = new FileReader();
+              r.onload = () => resolve(r.result);
+              r.onerror = () => reject(new Error("read failed"));
+              r.readAsDataURL(file);
+            });
+            state.pendingAttachments.push({ name: file.name, dataUrl });
+          } catch (e) {
+            alert(`Failed to read ${file.name}: ${e.message}`);
+          }
+        }
+        renderAttachmentsRow();
+        fileInput.value = "";  // reset so re-selecting same file works
+      });
+    }
+
     $('[data-testid="new-chat"]').addEventListener("click", () => {
       state.sessionId = null;
       elThread().innerHTML = "";
@@ -832,10 +1002,14 @@
 
   async function onSubmit() {
     const msg = elInput().value.trim();
-    if (!msg) return;
+    const hasAttachments = state.pendingAttachments.length > 0;
+    if (!msg && !hasAttachments) return;
     elInput().value = "";
-    if (state.stream) await sendStreaming(msg);
-    else await sendSync(msg);
+    // Server expects non-empty message. For image-only sends, synthesize
+    // "(image)" as the text — mirrors the Signal daemon's "(image only)" pattern.
+    const effectiveMsg = msg || "(image)";
+    if (state.stream) await sendStreaming(effectiveMsg);
+    else await sendSync(effectiveMsg);
   }
 
   // ─── Sidebar collapse ──────────────────────────────────────────────────────
