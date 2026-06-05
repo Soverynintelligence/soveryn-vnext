@@ -57,6 +57,10 @@ class Turn:
     content: str
     timestamp: str
     source: str = "direct"
+    # AgentLoop-populated when the upstream chat call carried a finish_reason
+    # ("stop", "length", "tool_calls", "tool_round_limit"). Optional so legacy
+    # rows + non-AgentLoop callers still work.
+    finish_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -75,7 +79,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     timestamp TEXT NOT NULL,
-    source TEXT NOT NULL DEFAULT 'direct'
+    source TEXT NOT NULL DEFAULT 'direct',
+    finish_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS conversation_meta (
@@ -146,6 +151,14 @@ class ConversationStore:
     def _init_schema(self) -> None:
         with self._conn() as conn:
             conn.executescript(_SCHEMA_SQL)
+            # Idempotent column-add for DBs created before finish_reason
+            # was part of the schema. SQLite doesn't support IF NOT EXISTS
+            # on ADD COLUMN; check pragma table_info first.
+            cols = {r["name"] for r in conn.execute(
+                "PRAGMA table_info(conversations)"
+            ).fetchall()}
+            if "finish_reason" not in cols:
+                conn.execute("ALTER TABLE conversations ADD COLUMN finish_reason TEXT")
 
     # ─── Public API (names match what production app.py imports) ─────────────
 
@@ -162,13 +175,17 @@ class ConversationStore:
         return session_id
 
     def save_turn(self, session_id: str, agent: str, role: str, content: str,
-                  source: str = "direct") -> None:
+                  source: str = "direct",
+                  finish_reason: str | None = None) -> None:
         """Append a turn. Validates role. Touches conversation_meta.updated_at.
 
         Side effect: if this is the FIRST user turn in a session AND the
         session's title is currently NULL, auto-derive a title from the
         message. Keeps the sidebar readable without requiring an explicit
         title call from the caller.
+
+        finish_reason is optional — present for assistant turns sourced
+        through AgentLoop; None for user turns and legacy callers.
         """
         if role not in VALID_ROLES:
             raise ConversationStoreError(
@@ -177,9 +194,9 @@ class ConversationStore:
         now = datetime.now().isoformat()
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO conversations (session_id, agent, role, content, timestamp, source) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (session_id, agent, role, content, now, source),
+                "INSERT INTO conversations (session_id, agent, role, content, timestamp, source, finish_reason) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (session_id, agent, role, content, now, source, finish_reason),
             )
             conn.execute(
                 "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
@@ -210,7 +227,7 @@ class ConversationStore:
         """Return all turns for a session in insertion order."""
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT session_id, agent, role, content, timestamp, source "
+                "SELECT session_id, agent, role, content, timestamp, source, finish_reason "
                 "FROM conversations WHERE session_id = ? ORDER BY rowid ASC",
                 (session_id,),
             ).fetchall()

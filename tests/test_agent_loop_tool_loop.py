@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from soveryn.agents.loop import AgentLoop
+from soveryn.agents.loop import AgentLoop, AgentLoopError
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.platform.inference.llama_server_client import ChatResponse
 from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
@@ -106,7 +106,13 @@ def test_two_tool_calls_in_one_round_both_dispatched(conv_store):
     assert {m.tool_call_id for m in tool_msgs} == {"c1", "c2"}
 
 
-def test_max_tool_rounds_bounded(conv_store):
+def test_max_tool_rounds_bounded_raises_loudly(conv_store):
+    """When the model exhausts max_tool_rounds with no visible content, the
+    loop now raises AgentLoopError instead of silently saving an empty turn.
+    Diagnosed 2026-06-04 evening: Vett hit the cap on a 7-source research
+    task, his empty content got persisted, and the failure mode was
+    invisible. The loud raise + finish_reason capture closes that gap.
+    Still verifies the loop is bounded (calls limited to max+1)."""
     registry = _make_registry(lambda args: {"echoed": args["text"]})
 
     def looping_response():
@@ -120,9 +126,40 @@ def test_max_tool_rounds_bounded(conv_store):
     fake = _ScriptedChat([looping_response() for _ in range(10)])
     sid = conv_store.new_session("aetheria")
     loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=3)
-    response = loop.process_message(sid, "go")
+    with pytest.raises(AgentLoopError, match="tool_round_limit"):
+        loop.process_message(sid, "go")
     assert len(fake.calls) == 4
+    # No assistant turn should have been saved.
+    history = conv_store.load_history(sid)
+    assistant_turns = [t for t in history if t.role == "assistant"]
+    assert assistant_turns == []
+
+
+def test_max_tool_rounds_with_content_still_saves(conv_store):
+    """If the model emits SOME content alongside its final tool_call before
+    the cap, we still save that content. The loud-raise is specifically for
+    empty-content + tool_round_limit, not all tool_round_limit cases."""
+    registry = _make_registry(lambda args: {"echoed": args["text"]})
+    # Model keeps content="partial..." on each round, with tool_calls.
+    def partial_response():
+        return ChatResponse(
+            content="partial draft",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("call_x", "echo", {"text": "loop"}),),
+            usage={}, raw={},
+        )
+    fake = _ScriptedChat([partial_response() for _ in range(10)])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=3)
+    response = loop.process_message(sid, "go")
     assert response.finish_reason == "tool_round_limit"
+    assert response.content == "partial draft"
+    history = conv_store.load_history(sid)
+    saved = [t for t in history if t.role == "assistant"]
+    assert len(saved) == 1
+    assert saved[0].content == "partial draft"
+    # finish_reason persisted on the row.
+    assert saved[0].finish_reason == "tool_round_limit"
 
 
 def test_tool_arg_error_surfaces_as_tool_result_not_exception(conv_store):

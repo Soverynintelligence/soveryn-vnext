@@ -455,16 +455,37 @@ class AgentLoop:
             tool_rounds += 1
 
         # 5. Save assistant turn from response.content ONLY (constraint 4).
-        #    Any DB error here propagates (constraint 5) — we don't pretend success.
-        #    Mirror of the streaming guard: refuse to persist an empty turn with
-        #    no tool_calls — that row poisons next-load context (see streaming path).
+        #    Any DB error here propagates (constraint 5) — we don't pretend
+        #    success. Three classes of failure are caught loudly here so the
+        #    caller (Flask route → user, or webhook dispatcher → audit) sees
+        #    them instead of getting a silently-saved empty turn:
+        #
+        #      (a) tool_round_limit: the loop hit max_tool_rounds with the
+        #          model still wanting tools. The 2026-06-04 evening probe
+        #          confirmed this class of failure was structurally invisible
+        #          — Vett emitted 4 rounds of web_search calls trying to work
+        #          through a 7-source Blueprint, hit the cap, and his empty
+        #          content got persisted with no error surfaced anywhere.
+        #      (b) empty content + no tool_calls: the model produced literal
+        #          silence with no plan to continue. Same poisoning risk as
+        #          the streaming path's existing guard.
+        #
+        # Both raise AgentLoopError. The /chat route translates to 500 with
+        # the message; the user / dispatcher sees the actual failure mode.
+        if response.finish_reason == "tool_round_limit" and not response.content:
+            raise AgentLoopError(
+                f"tool_round_limit: model exhausted the {self.max_tool_rounds}-round "
+                f"tool budget without emitting visible content. Reduce task scope or "
+                f"raise max_tool_rounds. No assistant turn saved."
+            )
         if not response.content and not response.tool_calls:
             raise AgentLoopError(
                 f"empty_generation: model produced no visible content "
                 f"(finish_reason={response.finish_reason}); no assistant turn saved"
             )
         self.conv_store.save_turn(
-            session_id, self.agent_name, "assistant", response.content
+            session_id, self.agent_name, "assistant", response.content,
+            finish_reason=response.finish_reason,
         )
 
         # 6. Return raw ChatResponse (constraint 3). When a history budget is
@@ -737,14 +758,31 @@ class AgentLoop:
         # closing </think> early and verbalising its scratch into content. Reported
         # 2026-06-01: session b94a6200 retry produced 5781 chars of unfenced scratch
         # after an earlier empty turn from the no-cap streaming bug.
+        # Mirror of the sync-path guards: surface tool_round_limit + empty as
+        # its own loud error so the caller can distinguish "model said nothing"
+        # from "model ran out of tool budget mid-research." See sync-path
+        # comment for the 2026-06-04 evening probe context.
         if not accumulated_content:
-            yield ErrorEvent(
-                code="empty_generation",
-                message=f"model produced no visible content (finish_reason={final_finish_reason}); no assistant turn saved",
-            )
+            if final_finish_reason == "tool_round_limit":
+                yield ErrorEvent(
+                    code="tool_round_limit",
+                    message=(
+                        f"model exhausted the {self.max_tool_rounds}-round tool "
+                        f"budget without emitting visible content. Reduce task "
+                        f"scope or raise max_tool_rounds. No assistant turn saved."
+                    ),
+                )
+            else:
+                yield ErrorEvent(
+                    code="empty_generation",
+                    message=f"model produced no visible content (finish_reason={final_finish_reason}); no assistant turn saved",
+                )
             return
 
-        self.conv_store.save_turn(session_id, self.agent_name, "assistant", accumulated_content)
+        self.conv_store.save_turn(
+            session_id, self.agent_name, "assistant", accumulated_content,
+            finish_reason=final_finish_reason or "stop",
+        )
 
         yield DoneEvent(
             content=accumulated_content,
