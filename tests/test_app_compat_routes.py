@@ -43,10 +43,11 @@ def test_api_models_returns_flat_map_of_active_agents(app_state):
         assert fname.endswith(".gguf"), f"{agent} → {fname!r} is not a .gguf basename"
 
 
-def test_api_models_aetheria_uses_qwen_3_6_35b(app_state):
-    """Production-compat: Aetheria's model file is Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf."""
+def test_api_models_aetheria_uses_gemma_4_31b(app_state):
+    """Production-compat: Aetheria's model file is google_gemma-4-31B-it-Q8_0.gguf
+    (swapped off Qwen3.6-35B-A3B on 2026-06-01; see project_soveryn_aetheria_gemma4)."""
     payload = json.loads(app_state.get("/api/models").data)
-    assert payload["aetheria"] == "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf"
+    assert payload["aetheria"] == "google_gemma-4-31B-it-Q8_0.gguf"
 
 
 def test_api_models_vett_and_scotty_share_same_27b(app_state):

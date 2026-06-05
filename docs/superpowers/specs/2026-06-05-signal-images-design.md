@@ -8,7 +8,7 @@
 
 ## Problem
 
-Aetheria's main model (Gemma 4 31B-Q8_0 with `mmproj-google_gemma-4-31B-it-bf16.gguf`, loaded via `~/soveryn_complete/router-presets.ini` `[aetheria]`; **note:** the metadata in `soveryn/config/runtime.py` references a Qwen3.6 mmproj path that pre-dates the 2026-06-01 Gemma 4 swap — the launcher preset is authoritative, the Python metadata is stale tech debt) is vision-capable, but:
+Aetheria's main model (Gemma 4 31B-Q8_0 with `mmproj-google_gemma-4-31B-it-bf16.gguf`, loaded via `~/soveryn_complete/router-presets.ini` `[aetheria]`) is vision-capable, but:
 
 1. **Inbound Signal:** The `signal_bridge` daemon receives attachments in `InboundMessage.attachment_paths`, but only surfaces them as a placeholder line in the user's text turn:
    `"[Signal: 1 attachment(s) attached — vision pipeline integration pending]"`.

@@ -648,3 +648,84 @@ def test_send_once_raises_on_nonzero_returncode(monkeypatch):
             body="hi",
             attachments=("/tmp/x.jpg",),
         )
+
+
+# ─── signal-cli serializer lock ─────────────────────────────────────────────
+
+def test_signal_cli_lock_serializes_concurrent_send_and_receive(monkeypatch, tmp_path):
+    """receive_once and send_once contend for the same file lock so they can
+    never race on signal-cli's own config-dir lock. The behavior under test:
+    while one holds the lock, the other blocks until released — proven
+    here by ordering observations under threading + a short held call."""
+    import threading
+    import time
+    from soveryn.agents.signal_bridge import client as client_mod
+    from soveryn.agents.signal_bridge.client import send_once, receive_once
+
+    # Redirect the lock file to a tmp path so test runs can't collide with
+    # production. Re-derive _SIGNAL_CLI_LOCK_PATH via monkeypatch.
+    monkeypatch.setattr(client_mod, "_SIGNAL_CLI_LOCK_PATH", tmp_path / "lock")
+
+    events: list[str] = []
+    def slow_run(args, *, capture_output, text, timeout):
+        from types import SimpleNamespace
+        op = "receive" if "receive" in args else "send"
+        events.append(f"{op}_enter")
+        time.sleep(0.15)  # hold the lock long enough for ordering to matter
+        events.append(f"{op}_exit")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(client_mod.subprocess, "run", slow_run)
+
+    t1 = threading.Thread(target=lambda: receive_once(
+        signal_cli_bin="/usr/local/bin/signal-cli",
+        bot_number="+19102489392",
+    ))
+    t2 = threading.Thread(target=lambda: send_once(
+        signal_cli_bin="/usr/local/bin/signal-cli",
+        bot_number="+19102489392",
+        recipient_e164="+19105813970",
+        body="hi",
+    ))
+    t1.start()
+    time.sleep(0.02)   # ensure t1 acquires first
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Strict interleave: each enter must be matched by its own exit before
+    # the other op's enter. If the lock leaked, we'd see two enters in a
+    # row (one for each thread) before either exited.
+    assert events == [
+        "receive_enter", "receive_exit",
+        "send_enter", "send_exit",
+    ], f"lock did not serialize; events were {events}"
+
+
+def test_signal_cli_lock_releases_on_subprocess_error(monkeypatch, tmp_path):
+    """The lock must release even when signal-cli returns non-zero, so a
+    failed send doesn't block the next receive forever."""
+    from soveryn.agents.signal_bridge import client as client_mod
+    from soveryn.agents.signal_bridge.client import send_once, receive_once, SignalCliError
+
+    monkeypatch.setattr(client_mod, "_SIGNAL_CLI_LOCK_PATH", tmp_path / "lock")
+
+    call_count = {"n": 0}
+    def fail_then_succeed(args, *, capture_output, text, timeout):
+        from types import SimpleNamespace
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    monkeypatch.setattr(client_mod.subprocess, "run", fail_then_succeed)
+
+    with pytest.raises(SignalCliError):
+        send_once(
+            signal_cli_bin="/usr/local/bin/signal-cli",
+            bot_number="+19102489392",
+            recipient_e164="+19105813970",
+            body="will fail",
+        )
+    # If the lock leaked, this would block forever. Test framework's timeout
+    # would catch it but we want a positive assertion that we got back out:
+    receive_once(signal_cli_bin="/usr/local/bin/signal-cli", bot_number="+1")
+    assert call_count["n"] == 2

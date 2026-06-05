@@ -74,12 +74,18 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="aetheria_primary",
         port=8090,
-        model_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
-        mmproj_path=MODEL_ROOT / "Qwen3.6-35B-A3B-UD-Q8_K_XL.mmproj-BF16.gguf",
-        role="Aetheria primary (Blackwell 90% + Quadro spillover 10%)",
-        # Qwen3.6 35B jinja template ALSO drops messages[1:] role=system
-        # (confirmed by controlled probe 2026-05-30, same as the 27B base).
-        # Transport adapter `prepare_wire_messages` folds at wire.
+        # Gemma 4 31B + its mmproj. Swapped off Qwen3.6-35B-A3B on
+        # 2026-06-01 — see project_soveryn_aetheria_gemma4.md. The router
+        # preset at ~/soveryn_complete/router-presets.ini [aetheria] is
+        # what actually loads the model; this metadata only needs to
+        # agree with the preset.
+        model_path=MODEL_ROOT / "google_gemma-4-31B-it-Q8_0.gguf",
+        mmproj_path=MODEL_ROOT / "mmproj-google_gemma-4-31B-it-bf16.gguf",
+        role="Aetheria primary (Gemma 4 31B + mmproj on Blackwell)",
+        # Kept False for safety — the prelude fold is a pass-through when
+        # the template supports multi-system, so leaving it on costs
+        # nothing structurally. Flip to True only after a controlled probe
+        # confirms Gemma 4's template honors messages[1:] role=system.
         supports_multi_system_messages=False,
         model_alias="aetheria",
     ),

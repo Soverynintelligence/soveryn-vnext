@@ -17,11 +17,13 @@ message, with `envelope.source`, `envelope.dataMessage.message`,
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 class SignalCliError(RuntimeError):
@@ -130,14 +132,47 @@ def resolve_attachment_id(
     return attachments_dir / p
 
 
+# signal-cli holds a write-lock on its data dir while a subprocess is in
+# flight. The bridge daemon's receive loop and the signal_send tool can
+# race for that lock and one will fail with a "config file locked" error.
+# Serialize at the Python level: any signal-cli invocation acquires the
+# same file lock first. The lock file lives next to signal-cli's own
+# data so it survives across daemon restarts but is scoped to this user.
+_SIGNAL_CLI_LOCK_PATH = Path.home() / ".local/share/signal-cli/.soveryn-serialize.lock"
+
+
+@contextlib.contextmanager
+def _signal_cli_lock() -> Iterator[None]:
+    """Block until exclusive access to signal-cli is held, then yield.
+
+    Uses fcntl.flock — process-level POSIX advisory lock. Both the bridge
+    daemon's receive_once and the signal_send tool's send_once acquire
+    this before invoking signal-cli, so they can never collide on
+    signal-cli's own config-dir lock. The lock is released on context
+    exit even if the subprocess raises.
+    """
+    _SIGNAL_CLI_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fd = open(_SIGNAL_CLI_LOCK_PATH, "w")
+    try:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
+        except Exception:
+            pass
+        fd.close()
+
+
 def receive_once(
     *, signal_cli_bin: str, bot_number: str, timeout_seconds: float = 30.0,
 ) -> tuple[InboundMessage, ...]:
     """Drain pending messages from the server. Blocks up to timeout."""
-    result = subprocess.run(
-        [signal_cli_bin, "-a", bot_number, "--output", "json", "receive"],
-        capture_output=True, text=True, timeout=timeout_seconds,
-    )
+    with _signal_cli_lock():
+        result = subprocess.run(
+            [signal_cli_bin, "-a", bot_number, "--output", "json", "receive"],
+            capture_output=True, text=True, timeout=timeout_seconds,
+        )
     if result.returncode != 0:
         raise SignalCliError(
             f"signal-cli receive failed (rc={result.returncode}): "
@@ -168,9 +203,10 @@ def send_once(
     if attachments:
         args.append("--")
     args.append(recipient_e164)
-    result = subprocess.run(
-        args, capture_output=True, text=True, timeout=timeout_seconds,
-    )
+    with _signal_cli_lock():
+        result = subprocess.run(
+            args, capture_output=True, text=True, timeout=timeout_seconds,
+        )
     if result.returncode != 0:
         raise SignalCliError(
             f"signal-cli send to {recipient_e164!r} failed "

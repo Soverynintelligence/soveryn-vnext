@@ -266,3 +266,81 @@ def test_streaming_no_tool_registry_passes_through_unchanged(conv_store):
     # No dispatch events fired (no registry, no invocation)
     assert not any(isinstance(e, ToolCallEvent) for e in events)
     assert not any(isinstance(e, ToolResultEvent) for e in events)
+
+
+# ─── Multi-round + attachments (per-round image re-send) ────────────────────
+
+def test_streaming_attachments_ride_every_tool_round(conv_store):
+    """When a streaming send has attachments, every tool round's request
+    must carry the same list-content user message (text + image_url parts).
+    The spliced user turn is the model's input across the whole arc — not
+    just the first round — so a vision response can reference the image
+    after a tool dispatch interrupted the thinking."""
+    registry = _make_registry(lambda args: {"echoed": args["text"]})
+    stream = _MultiRoundStream([
+        # Round 1: tool_call, no content
+        [
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, call_id="c1", name="echo")],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, arg_chunk='{"text": "hi"}')],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason="tool_calls", tool_calls_delta=None,
+                        usage=None, raw={}),
+        ],
+        # Round 2: streaming answer that references the image (the answer text
+        # isn't actually image-aware in this fixture — the contract under test
+        # is that the request CARRIED the image, not that the model used it).
+        [
+            StreamChunk(delta="I see ", finish_reason=None,
+                        tool_calls_delta=None, usage=None, raw={}),
+            StreamChunk(delta="a logo.", finish_reason=None,
+                        tool_calls_delta=None, usage=None, raw={}),
+            StreamChunk(delta="", finish_reason="stop",
+                        tool_calls_delta=None, usage={"total_tokens": 4}, raw={}),
+        ],
+    ])
+
+    img_url = "data:image/jpeg;base64,AAAA"
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop("aetheria", conv_store, stream_fn=stream,
+                    tool_registry=registry, max_tool_rounds=4)
+    events = list(loop.process_message_stream(
+        sid, "what's this?", attachments=(img_url,),
+    ))
+
+    # Both rounds happened
+    assert len(stream.calls) == 2
+
+    def assert_user_message_has_image(req, round_label):
+        # The current (spliced) user message is the LAST role=user in messages;
+        # round 2 also has assistant + tool messages appended, but the original
+        # user turn must still be list-content with the image_url part.
+        user_messages = [m for m in req.messages if m.role == "user"]
+        assert user_messages, f"{round_label}: no user message in request"
+        last_user = user_messages[-1]
+        assert isinstance(last_user.content, list), (
+            f"{round_label}: user content not list-form"
+        )
+        text_parts = [p for p in last_user.content if p.get("type") == "text"]
+        img_parts = [p for p in last_user.content if p.get("type") == "image_url"]
+        assert text_parts == [{"type": "text", "text": "what's this?"}], round_label
+        assert img_parts == [{"type": "image_url", "image_url": {"url": img_url}}], round_label
+
+    assert_user_message_has_image(stream.calls[0]["request"], "round 1")
+    assert_user_message_has_image(stream.calls[1]["request"], "round 2")
+
+    # And the visible answer streamed through normally
+    deltas = [e.delta for e in events if isinstance(e, TokenEvent)]
+    assert "".join(deltas) == "I see a logo."
+    done = events[-1]
+    assert isinstance(done, DoneEvent)
+    assert done.content == "I see a logo."
+    assert done.finish_reason == "stop"
+
+    # DB save is text-only (regression of the in-flight-only persistence contract)
+    history = conv_store.load_history(sid)
+    assert history[0].role == "user"
+    assert history[0].content == "what's this?"
+    assert isinstance(history[0].content, str)  # text-only, not JSON
