@@ -9,9 +9,12 @@ Aetheria and Scotty per the locked spec. Vett posts Signal nodes via create
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from typing import Any
 
+from soveryn.platform.coordination.events import CoordEvent, CoordEventKind
 from soveryn.platform.coordination.store import CoordinationStore
 from soveryn.platform.coordination.types import (
     CoordBoard,
@@ -491,6 +494,109 @@ def build_add_friction_block_tool(
             "resolution lesson. Idempotent — re-adding the same pair is a no-op. "
             "Any agent can declare a block; resolution flows through Aetheria's "
             "arbitration role per the persona layer."
+        ),
+    )
+
+
+# ─── Request direction tool (DAC Delta 2) ───────────────────────────────────
+
+def build_request_direction_tool(
+    *,
+    store: CoordinationStore,
+    event_bus,  # InMemoryEventBus (or any EventBus impl)
+    owner_agent: str,
+) -> ToolSpec:
+    """Peer agent (Vett or Scotty) pings Aetheria for a judgment call on
+    direction. Emits a NEEDS_DIRECTION CoordEvent — the webhook router
+    auto-invokes Aetheria with the brief rendered into her prompt.
+
+    Spec: docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md
+    """
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        node_id = args.get("node_id")
+        context_summary = args.get("context_summary")
+        options_considered = args.get("options_considered")
+
+        if not isinstance(node_id, str) or not node_id.strip():
+            raise ToolArgError("node_id must be a non-empty string")
+        if not isinstance(context_summary, str) or not context_summary.strip():
+            raise ToolArgError(
+                "context_summary must be a non-empty string"
+            )
+        if (not isinstance(options_considered, list)
+            or len(options_considered) == 0
+            or not all(isinstance(o, str) for o in options_considered)):
+            raise ToolArgError(
+                "options_considered must be a non-empty list of strings — "
+                "if you have no options, you have a panic, not a direction "
+                "question. Spell out at least one path you've considered."
+            )
+
+        node = store.get_node(node_id.strip())
+        if node is None:
+            return {"error": "unknown_node", "node_id": node_id}
+
+        event = CoordEvent(
+            id=str(uuid.uuid4()),
+            kind=CoordEventKind.NEEDS_DIRECTION,
+            node_id=node_id.strip(),
+            actor_agent=owner_agent,
+            timestamp=datetime.now().isoformat(),
+            payload={
+                "context_summary": context_summary.strip(),
+                "options_considered": list(options_considered),
+                "requester_agent": owner_agent,
+            },
+        )
+        event_bus.emit(event)
+        return {
+            "needs_direction_event_id": event.id,
+            "node_id": node_id.strip(),
+            "requester": owner_agent,
+        }
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "node_id": {
+                "type": "string",
+                "description": (
+                    "The Coord node this request is anchored to."
+                ),
+            },
+            "context_summary": {
+                "type": "string",
+                "description": (
+                    "Brief description of what you're stuck on. Aetheria "
+                    "needs enough context to make a real call without "
+                    "having to investigate from scratch."
+                ),
+            },
+            "options_considered": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "description": (
+                    "The paths you've considered. At least one — if you "
+                    "have no options, this isn't a direction request, "
+                    "it's a panic."
+                ),
+            },
+        },
+        "required": ["node_id", "context_summary", "options_considered"],
+        "additionalProperties": False,
+    }
+    return ToolSpec(
+        name="request_direction",
+        owner=owner_agent,
+        schema=schema,
+        handler=handler,
+        description=(
+            "Ping Aetheria for a judgment call on direction. Use this when "
+            "you've hit a wall that needs a decision on what to do next — "
+            "not a technical fix you can solve, but a strategic call. "
+            "Lay out the brief and the options you've considered."
         ),
     )
 
