@@ -357,6 +357,39 @@ def test_inbound_missing_attachment_file_logged_and_skipped(tmp_path, lattice_db
     assert captured["attachments"] == ()
 
 
+def test_inbound_filename_only_resolves_via_signal_cli_attachments_dir(
+    tmp_path, lattice_db, conv_db, monkeypatch,
+):
+    """Production path: parse_envelopes stores only the signal-cli `id`
+    (a bare filename). The daemon must resolve it against the signal-cli
+    attachments directory before encoding — otherwise the image is silently
+    skipped because Path('id.jpg').read_bytes() looks in CWD."""
+    from soveryn.agents.signal_bridge import daemon as daemon_mod
+
+    fake_attachments_dir = tmp_path / "sigcli"
+    fake_attachments_dir.mkdir()
+    img = fake_attachments_dir / "PRODUCTION_LIKE_ID.jpeg"
+    img.write_bytes(b"\xff\xd8\xff\xe0fake jpeg")
+    monkeypatch.setattr(daemon_mod, "SIGNAL_CLI_ATTACHMENTS_DIR", fake_attachments_dir)
+
+    d = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(d, "_ensure_session", return_value="sess-1"), \
+         patch.object(d, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="from phone",
+            attachment_paths=("PRODUCTION_LIKE_ID.jpeg",),  # filename only
+        )
+        d._handle_inbound(msg)
+    assert len(captured["attachments"]) == 1
+    assert captured["attachments"][0].startswith("data:image/jpeg;base64,")
+
+
 def test_inbound_text_only_no_attachments_unchanged(tmp_path, lattice_db, conv_db):
     """Regression: text-only message → no attachments param, body unchanged."""
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
@@ -468,8 +501,12 @@ def test_send_once_passes_attachments_as_repeated_attachment_flags(monkeypatch):
     assert len(indices) == 2
     assert args[indices[0] + 1] == "/tmp/a.jpg"
     assert args[indices[1] + 1] == "/tmp/b.png"
-    # Recipient still appears (positional, after the message)
-    assert "+19105813970" in args
+    # Recipient is the LAST argv element AND is preceded by `--` so signal-cli's
+    # nargs='*' attachment parser stops before consuming the recipient as
+    # another attachment value. Without `--` the result would be the live
+    # "no recipients given" error.
+    assert args[-1] == "+19105813970"
+    assert args[-2] == "--"
 
 
 def test_send_once_no_attachments_unchanged(monkeypatch):

@@ -120,6 +120,13 @@ def send_once(
     args = [signal_cli_bin, "-a", bot_number, "send", "-m", body]
     for path in attachments:
         args.extend(["--attachment", path])
+    # `--attachment` is argparse nargs='*' — without an explicit `--`
+    # terminator the trailing recipient gets gobbled as another attachment
+    # value and signal-cli fails with "no recipients given." Only emit the
+    # `--` when attachments are present so the non-attachment argv stays
+    # byte-identical to the pre-change shape.
+    if attachments:
+        args.append("--")
     args.append(recipient_e164)
     result = subprocess.run(
         args, capture_output=True, text=True, timeout=timeout_seconds,

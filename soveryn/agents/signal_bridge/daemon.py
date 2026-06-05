@@ -47,6 +47,12 @@ DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/con
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
 
+# signal-cli writes inbound attachments to this directory; parse_envelopes
+# stores only the filename (the `id` field) in InboundMessage.attachment_paths.
+# Resolve here so _encode_image_attachment receives an absolute path that
+# exists on disk.
+SIGNAL_CLI_ATTACHMENTS_DIR = Path.home() / ".local/share/signal-cli/attachments"
+
 
 _IMAGE_EXT_TO_MIME = {
     ".jpg": "image/jpeg",
@@ -188,7 +194,13 @@ class SignalBridgeDaemon:
         image_data_urls: list[str] = []
         skipped_count = 0
         for raw_path in msg.attachment_paths:
-            url = _encode_image_attachment(Path(raw_path))
+            # parse_envelopes stores the filename (signal-cli's `id` field).
+            # Resolve against the signal-cli attachments dir unless the
+            # caller already handed us an absolute path (tests do that).
+            p = Path(raw_path)
+            if not p.is_absolute():
+                p = SIGNAL_CLI_ATTACHMENTS_DIR / p
+            url = _encode_image_attachment(p)
             if url is None:
                 skipped_count += 1
             else:
