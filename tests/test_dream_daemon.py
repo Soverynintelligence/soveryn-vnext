@@ -42,26 +42,52 @@ def conv_db(tmp_path):
     return tmp_path / "conv.db"  # daemon reads from this for activity check
 
 
-def test_daemon_does_not_spin_on_consecutive_skipped_ticks(lattice_db, conv_db, tmp_path):
+def test_daemon_does_not_spin_on_consecutive_eligible_ticks(lattice_db, conv_db, tmp_path):
     """Regression: matches the heartbeat 0fb715b + patrol spin-bug guard.
-    With enabled=False every tick skips; sleep math must not collapse."""
-    config = _config(enabled=False)  # forces DISABLED skip on every tick
+
+    Original version used enabled=False which made every tick skip — but
+    skipped ticks DON'T write to dream_log, so the assertion was vacuous.
+    Rewritten 2026-06-05 per final code review: mock evaluate_tick to
+    always return eligible, run dry-run (so writes happen but no cognition
+    HTTP). With tick_interval_seconds=2 and ~1s wall-time, we should see
+    at most a couple of ticks. Without the spin bug, sleep math correctly
+    waits between ticks; with the bug, sleep_target stays in the past and
+    the loop fires hundreds of times per second.
+    """
+    # Seed a node so the briefing has content (dry-run still gathers it).
+    with sqlite3.connect(str(lattice_db)) as con:
+        con.execute(
+            "INSERT INTO nodes (id, type, layer, agent, content, "
+            "intensity, salience, access_count, created_at, updated_at) "
+            "VALUES ('n-seed', 'memory', 'lattice', 'aetheria', 'seed', "
+            "0.5, 0.5, 0, ?, ?)",
+            (datetime.now().isoformat(), datetime.now().isoformat()),
+        )
+    from soveryn.agents.dream.trigger import TickEligibility
+    config = _config(dry_run=True)
     daemon = DreamDaemon(
         config, lattice_db=lattice_db, conv_db=conv_db,
         tick_interval_seconds=2,
     )
-    t = threading.Thread(target=daemon.run, daemon=True)
-    t.start()
-    time.sleep(1.0)
-    daemon._stop = True
-    t.join(timeout=5)
+    with patch(
+        "soveryn.agents.dream.daemon.evaluate_tick",
+        return_value=TickEligibility(eligible=True, skip_reason=None),
+    ):
+        t = threading.Thread(target=daemon.run, daemon=True)
+        t.start()
+        time.sleep(1.0)
+        daemon._stop = True
+        t.join(timeout=5)
     with sqlite3.connect(str(lattice_db)) as con:
         row_count = con.execute(
             "SELECT COUNT(*) FROM dream_log"
         ).fetchone()[0]
-    # Without the fix this loop emits hundreds of rows; with the fix and
-    # interval=2s we should see <=5 in ~1s.
-    assert row_count <= 5, f"daemon emitted {row_count} log rows in ~1s — spin bug regressed"
+    # Without spin bug + interval=2s + wall=1s: expect 1 tick (the first
+    # iteration, before sleep). With spin bug: hundreds/thousands of rows.
+    assert row_count <= 3, (
+        f"daemon emitted {row_count} dream_log rows in ~1s with "
+        f"interval=2s — spin bug regressed"
+    )
 
 
 def test_daemon_dry_run_writes_only_audit_row(lattice_db, conv_db, tmp_path):
