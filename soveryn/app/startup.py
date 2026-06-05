@@ -238,6 +238,14 @@ def create_app(
                 # qwen3) lands when Aetheria moves to vLLM on uniform-Blackwell
                 # hardware (Spark arrival, all-Blackwell roadmap). Until then,
                 # thinking stays off across whichever model carries her.
+            elif name == "vett":
+                # Vett's tool surface is fundamentally chained: web_search →
+                # fetch_url → maybe-search-again → fetch. The default 4 rounds
+                # caps him at ~2 sources before he hits the tool_round_limit
+                # ceiling. Confirmed live 2026-06-04 evening — he tripped the
+                # cap researching philanthropy funding venues. Bumped to 8 so
+                # he can work through 3-5 sources per turn without cutoff.
+                kwargs["max_tool_rounds"] = 8
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
         # Phase E: start the coord event worker now that agent_loops exists.
