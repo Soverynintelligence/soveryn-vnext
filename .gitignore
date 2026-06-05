@@ -26,3 +26,5 @@ Thumbs.db
 .superpowers/
 # Runtime data stores
 data/lattice/*.db*
+data/ares/
+data/telemetry/
