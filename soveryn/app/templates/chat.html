@@ -740,7 +740,9 @@
       span.className = "thinking-placeholder";
       span.textContent = "thinking…";
       div.appendChild(span);
-    } else {
+    } else if (content || !(opts.images && opts.images.length)) {
+      // Render the text node when there's text OR when there are no images
+      // (otherwise an image-only user bubble would carry an empty .bubble-text).
       const txt = document.createElement("div");
       txt.className = "bubble-text";
       txt.textContent = content;
@@ -771,6 +773,10 @@
   // ─── Streaming (POST + ReadableStream) ─────────────────────────────────────
   async function sendStreaming(message) {
     const images = state.pendingAttachments.map(a => a.dataUrl);
+    // User bubble shows the original text (may be empty when image-only).
+    // The wire payload synthesizes "(image)" so the server's non-empty
+    // message check passes — but Jon doesn't need to see that echoed back.
+    const wireMessage = message || "(image)";
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
@@ -786,7 +792,7 @@
 
     state.abort = new AbortController();
     try {
-      const body = { agent: state.agent, session_id: state.sessionId, message };
+      const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
       if (images.length > 0) body.attachments = images;
       const r = await fetch("/chat_stream", {
         method: "POST",
@@ -865,12 +871,15 @@
   // ─── Sync send ─────────────────────────────────────────────────────────────
   async function sendSync(message) {
     const images = state.pendingAttachments.map(a => a.dataUrl);
+    // User bubble shows original text (may be empty for image-only); wire
+    // payload synthesizes "(image)" to satisfy the server's non-empty check.
+    const wireMessage = message || "(image)";
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
     try {
       await ensureSession();
-      const body = { agent: state.agent, session_id: state.sessionId, message };
+      const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
       if (images.length > 0) body.attachments = images;
       const r = await fetch("/chat", {
         method: "POST",
@@ -1005,11 +1014,11 @@
     const hasAttachments = state.pendingAttachments.length > 0;
     if (!msg && !hasAttachments) return;
     elInput().value = "";
-    // Server expects non-empty message. For image-only sends, synthesize
-    // "(image)" as the text — mirrors the Signal daemon's "(image only)" pattern.
-    const effectiveMsg = msg || "(image)";
-    if (state.stream) await sendStreaming(effectiveMsg);
-    else await sendSync(effectiveMsg);
+    // sendStreaming / sendSync handle the empty-msg + attachments case
+    // internally (wire payload gets "(image)" synthesized; display shows
+    // just the image with no echoed text).
+    if (state.stream) await sendStreaming(msg);
+    else await sendSync(msg);
   }
 
   // ─── Sidebar collapse ──────────────────────────────────────────────────────
