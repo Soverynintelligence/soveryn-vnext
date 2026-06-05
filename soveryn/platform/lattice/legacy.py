@@ -29,6 +29,7 @@ from soveryn.platform.lattice.types import Entry, Region
 LAYER_PRIVATE = "private"
 LAYER_GLOBAL = "global"
 LAYER_LIBRARY = "library"
+LAYER_DREAM = "dream"
 WRITE_LAYERS: frozenset[str] = frozenset({LAYER_PRIVATE, LAYER_GLOBAL, LAYER_LIBRARY})
 
 # Intensity tiers (parallel to production)
@@ -239,6 +240,27 @@ CREATE TABLE IF NOT EXISTS signal_log (
 
 CREATE INDEX IF NOT EXISTS idx_signal_log_created ON signal_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_signal_log_direction ON signal_log(direction);
+
+-- Dream daemon audit log. One row per tick (eligible OR skipped, live OR dry-run).
+-- Mirrors heartbeat_log / vett_patrol_log shape. dry_run=1 rows are written during
+-- the bake period so the audit shape is identical to live. See
+-- docs/superpowers/specs/2026-06-05-dream-daemon-design.md.
+CREATE TABLE IF NOT EXISTS dream_log (
+    id                      TEXT PRIMARY KEY,
+    trigger                 TEXT NOT NULL,
+    agent                   TEXT NOT NULL,
+    nodes_read              INTEGER DEFAULT 0,
+    edges_created           INTEGER DEFAULT 0,
+    nodes_merged            INTEGER DEFAULT 0,
+    contradictions_flagged  INTEGER DEFAULT 0,
+    summary                 TEXT,
+    ran_at                  TEXT NOT NULL,
+    loop_health             REAL DEFAULT NULL,
+    dry_run                 INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_dream_log_ran_at ON dream_log(ran_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dream_log_agent  ON dream_log(agent);
 """
 
 
@@ -343,6 +365,16 @@ class LatticeStore:
     def _init_schema(self) -> None:
         with self._conn() as conn:
             conn.executescript(_SCHEMA_SQL)
+            # Idempotent column-add for dream_log.dry_run. Pre-existing legacy
+            # DBs (9,608 rows migrated 2026-06-01) won't have this column yet.
+            existing_cols = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(dream_log)").fetchall()
+            }
+            if "dry_run" not in existing_cols:
+                conn.execute(
+                    "ALTER TABLE dream_log ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0"
+                )
 
     # ─── Public API ──────────────────────────────────────────────────────────
 
