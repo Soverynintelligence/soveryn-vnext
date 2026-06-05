@@ -53,7 +53,12 @@ def test_build_webhook_prompt_needs_direction_falls_back_to_actor_when_no_reques
         chain_depth=0,
     )
     prompt = build_webhook_prompt(event)
-    assert "vett" in prompt
+    # Strong assertions: pin both the fallback substitution AND that the
+    # early-return template was taken. The generic flow has "Actor: vett"
+    # too, so a bare "vett" check would pass even if the early-return
+    # were removed — we want to fail loudly on that regression.
+    assert "NEEDS_DIRECTION" in prompt
+    assert "vett paused for your decision" in prompt
 
 
 def test_build_webhook_prompt_needs_direction_empty_options_lists_renders_anyway():
