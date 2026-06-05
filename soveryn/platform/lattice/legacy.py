@@ -241,6 +241,28 @@ CREATE TABLE IF NOT EXISTS signal_log (
 CREATE INDEX IF NOT EXISTS idx_signal_log_created ON signal_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_signal_log_direction ON signal_log(direction);
 
+-- Lattice edges (associations between nodes). Mirrors production schema verbatim.
+-- No provenance column — production table has none; writeback uses reinforced_at.
+CREATE TABLE IF NOT EXISTS edges (
+    id                  TEXT PRIMARY KEY,
+    source_id           TEXT NOT NULL,
+    target_id           TEXT NOT NULL,
+    relationship        TEXT NOT NULL,
+    strength            REAL NOT NULL DEFAULT 0.5,
+    bidirectional       INTEGER NOT NULL DEFAULT 1,
+    archived            INTEGER NOT NULL DEFAULT 0,
+    reinforcement_count INTEGER NOT NULL DEFAULT 1,
+    reinforced_at       TEXT NOT NULL,
+    created_at          TEXT NOT NULL,
+    FOREIGN KEY (source_id) REFERENCES nodes(id),
+    FOREIGN KEY (target_id) REFERENCES nodes(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_edges_archived ON edges(archived);
+CREATE INDEX IF NOT EXISTS idx_edges_rel      ON edges(relationship);
+CREATE INDEX IF NOT EXISTS idx_edges_source   ON edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_edges_target   ON edges(target_id);
+
 -- Dream daemon audit log. One row per tick (eligible OR skipped, live OR dry-run).
 -- Mirrors heartbeat_log / vett_patrol_log shape. dry_run=1 rows are written during
 -- the bake period so the audit shape is identical to live. See
