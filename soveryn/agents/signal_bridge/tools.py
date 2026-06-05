@@ -32,6 +32,42 @@ from soveryn.agents.signal_bridge.config import SignalBridgeConfig
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 
 
+MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024  # signal-cli soft limit
+
+
+def _validate_attachment_path(raw: str) -> str | None:
+    """Validate a single attachment path. Returns an error message on failure,
+    or None on success.
+
+    Path-safety surface:
+      - absolute paths only (no surprise CWD resolution)
+      - no `..` traversal segments (no escape attempts)
+      - must exist + be a regular file (not a directory, not a symlink to nowhere)
+      - size cap at signal-cli's documented soft limit
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return f"attachment entry must be a non-empty string, got {raw!r}"
+    if not raw.startswith("/"):
+        return f"path must be absolute (start with '/'): {raw!r}"
+    p = Path(raw)
+    if ".." in p.parts:
+        return f"path contains traversal segment '..': {raw!r}"
+    if not p.exists():
+        return f"path does not exist: {raw!r}"
+    if not p.is_file():
+        return f"path is not a regular file: {raw!r}"
+    try:
+        size = p.stat().st_size
+    except OSError as e:
+        return f"cannot stat {raw!r}: {e}"
+    if size > MAX_ATTACHMENT_BYTES:
+        return (
+            f"file exceeds {MAX_ATTACHMENT_BYTES} bytes "
+            f"(actual size {size} bytes): {raw!r}"
+        )
+    return None
+
+
 def build_signal_send_tool(
     *,
     config: SignalBridgeConfig,
@@ -66,19 +102,39 @@ def build_signal_send_tool(
                 f"SOVERYN_SIGNAL_ALLOWED_NUMBERS first."
             )
 
+        raw_attachments = args.get("attachments")
+        attachments: tuple[str, ...] = ()
+        if raw_attachments is not None:
+            if not isinstance(raw_attachments, list):
+                raise ToolArgError(
+                    "attachments must be a list of absolute file paths"
+                )
+            validated: list[str] = []
+            for raw in raw_attachments:
+                err = _validate_attachment_path(raw)
+                if err is not None:
+                    return {
+                        "error": "invalid_attachment",
+                        "message": err,
+                        "recipient": recipient,
+                    }
+                validated.append(raw)
+            attachments = tuple(validated)
+
         try:
             send_once(
                 signal_cli_bin=config.signal_cli_bin,
                 bot_number=config.bot_number,
                 recipient_e164=recipient,
                 body=message,
+                attachments=attachments,
             )
         except SignalCliError as e:
             _log_event(
                 lattice_db_path,
                 direction="outbound",
                 sender=config.bot_number, recipient=recipient,
-                body_head=message[:200], attachment_count=0,
+                body_head=message[:200], attachment_count=len(attachments),
                 error=f"send failed: {e}",
             )
             return {
@@ -91,7 +147,7 @@ def build_signal_send_tool(
             lattice_db_path,
             direction="outbound",
             sender=config.bot_number, recipient=recipient,
-            body_head=message[:200], attachment_count=0,
+            body_head=message[:200], attachment_count=len(attachments),
             error=None,
         )
         return {
@@ -118,6 +174,19 @@ def build_signal_send_tool(
                     "first allowlisted number (typically Jon's). Must be "
                     "in SOVERYN_SIGNAL_ALLOWED_NUMBERS — you can't "
                     "message arbitrary numbers."
+                ),
+            },
+            "attachments": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional absolute file paths to send as Signal attachments. "
+                    "Image/video/audio/PDF supported by signal-cli, but most "
+                    "useful for images you want Jon to see. Max 16MB per file. "
+                    "Paths must be absolute (start with '/') with no traversal "
+                    "segments. Files must exist and be regular files (not "
+                    "directories or broken symlinks). Validation errors return a "
+                    "structured invalid_attachment result so you can adjust and retry."
                 ),
             },
         },

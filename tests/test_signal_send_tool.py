@@ -159,3 +159,159 @@ def test_signal_send_schema_marks_message_required(lattice_db):
     tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
     assert "message" in tool.schema["required"]
     assert "recipient" not in tool.schema["required"]
+
+
+# ─── Attachments: happy path ─────────────────────────────────────────────────
+
+def test_signal_send_passes_attachment_paths_to_send_once(lattice_db, tmp_path):
+    img = tmp_path / "photo.jpg"
+    img.write_bytes(b"\xff\xd8\xff\xe0fake")
+
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    captured: dict = {}
+    def fake_send(**kw):
+        captured.update(kw)
+    with patch("soveryn.agents.signal_bridge.tools.send_once", side_effect=fake_send):
+        result = tool.handler({
+            "message": "look at this",
+            "recipient": "+19105813970",
+            "attachments": [str(img)],
+        })
+    assert result.get("sent") is True
+    assert captured["attachments"] == (str(img),)
+    # Audit row records the actual attachment count
+    with sqlite3.connect(str(lattice_db)) as con:
+        row = con.execute(
+            "SELECT attachment_count FROM signal_log WHERE direction='outbound'"
+        ).fetchone()
+    assert row[0] == 1
+
+
+def test_signal_send_multiple_attachments_preserves_order(lattice_db, tmp_path):
+    a = tmp_path / "a.jpg"; a.write_bytes(b"x")
+    b = tmp_path / "b.png"; b.write_bytes(b"y")
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    captured: dict = {}
+    def fake_send(**kw):
+        captured.update(kw)
+    with patch("soveryn.agents.signal_bridge.tools.send_once", side_effect=fake_send):
+        tool.handler({
+            "message": "two",
+            "recipient": "+19105813970",
+            "attachments": [str(a), str(b)],
+        })
+    assert captured["attachments"] == (str(a), str(b))
+
+
+# ─── Attachments: validation ─────────────────────────────────────────────────
+
+def test_signal_send_rejects_relative_path(lattice_db, tmp_path):
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": ["relative/path.jpg"],
+        })
+    assert result.get("error") == "invalid_attachment"
+    assert "absolute" in result["message"].lower()
+    mock_send.assert_not_called()
+
+
+def test_signal_send_rejects_path_traversal(lattice_db, tmp_path):
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": ["/tmp/../etc/passwd"],
+        })
+    assert result.get("error") == "invalid_attachment"
+    assert "traversal" in result["message"].lower() or ".." in result["message"]
+    mock_send.assert_not_called()
+
+
+def test_signal_send_rejects_nonexistent_path(lattice_db, tmp_path):
+    ghost = tmp_path / "ghost.jpg"
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": [str(ghost)],
+        })
+    assert result.get("error") == "invalid_attachment"
+    assert "exist" in result["message"].lower() or "not found" in result["message"].lower()
+    mock_send.assert_not_called()
+
+
+def test_signal_send_rejects_directory_path(lattice_db, tmp_path):
+    """Path must be a regular file, not a directory."""
+    d = tmp_path / "adir"
+    d.mkdir()
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": [str(d)],
+        })
+    assert result.get("error") == "invalid_attachment"
+    assert "regular file" in result["message"].lower() or "not a" in result["message"].lower()
+    mock_send.assert_not_called()
+
+
+def test_signal_send_rejects_oversized_file(lattice_db, tmp_path):
+    big = tmp_path / "big.bin"
+    big.write_bytes(b"x" * (17 * 1024 * 1024))  # 17MB
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": [str(big)],
+        })
+    assert result.get("error") == "invalid_attachment"
+    # message should mention the size cap (16MB or 16777216 or just "size")
+    assert "16" in result["message"] or "size" in result["message"].lower()
+    mock_send.assert_not_called()
+
+
+def test_signal_send_rejects_non_list_attachments(lattice_db, tmp_path):
+    """Type violation → ToolArgError raise (not structured error)."""
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        with pytest.raises(ToolArgError, match="list"):
+            tool.handler({
+                "message": "x", "recipient": "+19105813970",
+                "attachments": "not a list",
+            })
+    mock_send.assert_not_called()
+
+
+def test_signal_send_no_attachments_unchanged(lattice_db, tmp_path):
+    """Regression: attachments=None preserves prior behavior, no kwarg on send_once."""
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    captured: dict = {}
+    def fake_send(**kw):
+        captured.update(kw)
+    with patch("soveryn.agents.signal_bridge.tools.send_once", side_effect=fake_send):
+        result = tool.handler({
+            "message": "text only", "recipient": "+19105813970",
+        })
+    assert result.get("sent") is True
+    # send_once called WITHOUT attachments kwarg (or with empty tuple — either is acceptable)
+    if "attachments" in captured:
+        assert captured["attachments"] == () or captured["attachments"] == tuple()
+
+
+def test_signal_send_audit_records_attachment_count(lattice_db, tmp_path):
+    """When attachments are passed, the audit row's attachment_count reflects the count."""
+    a = tmp_path / "a.jpg"; a.write_bytes(b"x")
+    b = tmp_path / "b.png"; b.write_bytes(b"y")
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once"):
+        tool.handler({
+            "message": "two", "recipient": "+19105813970",
+            "attachments": [str(a), str(b)],
+        })
+    with sqlite3.connect(str(lattice_db)) as con:
+        row = con.execute(
+            "SELECT attachment_count FROM signal_log WHERE direction='outbound'"
+        ).fetchone()
+    assert row[0] == 2
