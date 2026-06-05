@@ -132,6 +132,58 @@ def create_app(
                     grant_write=True,
                 )
 
+            # Direct Agent Communication (DAC Delta 1 + Delta 2).
+            # Delta 1: Aetheria's direct rail to peers (direct_message_agent).
+            # Delta 2: peers' upward channel for judgment calls
+            # (request_direction). Both gated on coord_store + coord_event_bus
+            # being live — same gate as register_coord_tools above.
+            from soveryn.agents.direct_communication.tools import (
+                build_direct_message_agent_tool,
+            )
+            from soveryn.platform.coordination.tools import (
+                build_request_direction_tool,
+            )
+            from soveryn.platform.lattice.legacy import (
+                record_direct_communication_edge,
+            )
+
+            # direct_message_agent's audit edge writes through the live
+            # recall_lattice — the same LatticeStore the rest of the system
+            # reads from — so the forensic trail lands in the production
+            # lattice. If recall_lattice didn't initialize (rare: lattice_db
+            # exists but recall_lattice_db doesn't), drop edge_writer to None
+            # so the tool still functions without the forensic edge rather
+            # than crashing on startup.
+            edge_writer = None
+            if recall_lattice is not None:
+                _live_lattice = recall_lattice
+                def edge_writer(coord_node_id, message_node_id, mode,
+                                _store=_live_lattice):
+                    return record_direct_communication_edge(
+                        store=_store,
+                        coord_node_id=coord_node_id,
+                        message_node_id=message_node_id,
+                        mode=mode,
+                    )
+
+            tool_registry.register(
+                build_direct_message_agent_tool(
+                    owner_agent="aetheria",
+                    edge_writer=edge_writer,
+                )
+            )
+            # Peers' upward channel — same tool builder, different owner per
+            # agent. Aetheria is the recipient of NEEDS_DIRECTION events via
+            # the webhook router, not a sender, so she does NOT get this tool.
+            for peer in ("vett", "scotty"):
+                tool_registry.register(
+                    build_request_direction_tool(
+                        store=coord_store,
+                        event_bus=coord_event_bus,
+                        owner_agent=peer,
+                    )
+                )
+
         # Scotty's bounded mechanical tools (read-only observation surface:
         # read_file, list_directory, git_status, git_diff, run_pytest).
         # Path-allowlisted to SCOTTY_PROJECT_ROOT, size/time/output capped.
