@@ -42,7 +42,10 @@ def _validate_attachment_path(raw: str) -> str | None:
     Path-safety surface:
       - absolute paths only (no surprise CWD resolution)
       - no `..` traversal segments (no escape attempts)
-      - must exist + be a regular file (not a directory, not a symlink to nowhere)
+      - must exist + be a regular file (not a directory)
+      - rejects symlinks at the surface (is_file() follows them — a symlink
+        to /etc/passwd would have passed every other check). The tool
+        accepts only real files Aetheria explicitly names.
       - size cap at signal-cli's documented soft limit
     """
     if not isinstance(raw, str) or not raw.strip():
@@ -54,6 +57,11 @@ def _validate_attachment_path(raw: str) -> str | None:
         return f"path contains traversal segment '..': {raw!r}"
     if not p.exists():
         return f"path does not exist: {raw!r}"
+    if p.is_symlink():
+        return (
+            f"path is a symlink (rejected at the surface to keep the path "
+            f"semantically equal to what was written): {raw!r}"
+        )
     if not p.is_file():
         return f"path is not a regular file: {raw!r}"
     try:

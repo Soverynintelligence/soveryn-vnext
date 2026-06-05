@@ -305,7 +305,9 @@
   .composer {
     flex-shrink:0;
     margin:0 16px 16px;
-    display:flex; align-items:center; gap:10px;
+    /* Column flex so the attachments preview row stacks above the input row.
+       Inner alignment lives on .composer-row (which uses align-items:center). */
+    display:flex; flex-direction:column; align-items:stretch; gap:0;
     padding:10px 14px;
     background:var(--glass-bg);
     backdrop-filter:var(--glass-blur);
@@ -360,7 +362,8 @@
   }
 
   /* Attachments preview row above the composer input. Hidden when empty. */
-  .composer { flex-direction: column; align-items: stretch; gap: 0; }
+  /* .composer column flex moved into the base rule above (was a fragile
+     downstream override). */
   .composer-row {
     display: flex; align-items: center; gap: 10px; width: 100%;
   }
@@ -753,6 +756,40 @@
     return div;
   }
 
+  // Stream/sync handlers and error paths replace bubble text via this helper
+  // so fresh-streamed assistant bubbles have the same DOM shape as bubbles
+  // reloaded through loadHistory (both end in a .bubble-text child). Without
+  // this, raw bubble.textContent writes wipe out the placeholder span AND
+  // any nested children, leaving a text node directly inside .bubble —
+  // visually identical today thanks to .bubble's pre-wrap, but a future
+  // .bubble-text style would diverge between fresh and reloaded bubbles.
+  function setBubbleText(bubble, text) {
+    let txt = bubble.querySelector(":scope > .bubble-text");
+    if (!txt) {
+      // First write: clear the placeholder (or empty initial state) and
+      // create a .bubble-text child. Preserve any .bubble-images sibling
+      // that's already rendered above the placeholder.
+      const placeholder = bubble.querySelector(":scope > .thinking-placeholder");
+      if (placeholder) placeholder.remove();
+      txt = document.createElement("div");
+      txt.className = "bubble-text";
+      bubble.appendChild(txt);
+    }
+    txt.textContent = text;
+  }
+
+  function appendBubbleText(bubble, delta) {
+    let txt = bubble.querySelector(":scope > .bubble-text");
+    if (!txt) {
+      const placeholder = bubble.querySelector(":scope > .thinking-placeholder");
+      if (placeholder) placeholder.remove();
+      txt = document.createElement("div");
+      txt.className = "bubble-text";
+      bubble.appendChild(txt);
+    }
+    txt.textContent += delta;
+  }
+
   // ─── Session minting ───────────────────────────────────────────────────────
   // Backend requires session_id on every /chat and /chat_stream POST. We mint
   // lazily before the first send (or after new-chat / agent switch).
@@ -786,7 +823,7 @@
     try {
       await ensureSession();
     } catch (e) {
-      respBubble.textContent = `error · ${e.message}`;
+      setBubbleText(respBubble, `error · ${e.message}`);
       return;
     }
 
@@ -817,8 +854,8 @@
           if (!line) continue;
           const payload = JSON.parse(line.slice(6));
           if (payload.type === "token" && payload.delta) {
-            if (!cleared) { respBubble.textContent = ""; cleared = true; }
-            respBubble.textContent += payload.delta;
+            if (!cleared) { setBubbleText(respBubble, ""); cleared = true; }
+            appendBubbleText(respBubble, payload.delta);
             finalContent += payload.delta;
             elThread().scrollTop = elThread().scrollHeight;
           } else if (payload.type === "tool_call") {
@@ -847,21 +884,21 @@
           } else if (payload.type === "done") {
             // Fallback: if deltas were dropped, render the canonical accumulated content.
             if (!cleared && payload.content) {
-              respBubble.textContent = payload.content;
+              setBubbleText(respBubble, payload.content);
               cleared = true;
             }
             updateContextUsage(payload.context_usage);
           } else if (payload.type === "error") {
-            respBubble.textContent = `error · ${payload.code}: ${payload.message}`;
+            setBubbleText(respBubble, `error · ${payload.code}: ${payload.message}`);
             return;
           }
         }
       }
     } catch (e) {
       if (e.name === "AbortError") {
-        if (!cleared) respBubble.textContent = "(stopped)";
+        if (!cleared) setBubbleText(respBubble, "(stopped)");
       } else {
-        respBubble.textContent = `error · ${e.message}`;
+        setBubbleText(respBubble, `error · ${e.message}`);
       }
     } finally {
       state.abort = null;
@@ -888,13 +925,13 @@
       });
       const data = await r.json();
       if (data.error) {
-        respBubble.textContent = `error · ${data.error.code}: ${data.error.message}`;
+        setBubbleText(respBubble, `error · ${data.error.code}: ${data.error.message}`);
       } else {
-        respBubble.textContent = data.content || "";
+        setBubbleText(respBubble, data.content || "");
         updateContextUsage(data.context_usage);
       }
     } catch (e) {
-      respBubble.textContent = `error · ${e.message}`;
+      setBubbleText(respBubble, `error · ${e.message}`);
     }
   }
 

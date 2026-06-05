@@ -257,6 +257,27 @@ def test_signal_send_rejects_directory_path(lattice_db, tmp_path):
     mock_send.assert_not_called()
 
 
+def test_signal_send_rejects_symlink(lattice_db, tmp_path):
+    """A symlink-to-a-real-file would have passed is_file() (which follows
+    symlinks). Reject at the surface so the path semantically equals what
+    was written — no "i typed /tmp/safe but signal-cli sent /etc/passwd"
+    surprise. The target's nature is irrelevant; the symlink itself is the
+    failure mode."""
+    target = tmp_path / "target.jpg"
+    target.write_bytes(b"x")
+    link = tmp_path / "link.jpg"
+    link.symlink_to(target)
+    tool = build_signal_send_tool(config=_config(), lattice_db_path=lattice_db)
+    with patch("soveryn.agents.signal_bridge.tools.send_once") as mock_send:
+        result = tool.handler({
+            "message": "x", "recipient": "+19105813970",
+            "attachments": [str(link)],
+        })
+    assert result.get("error") == "invalid_attachment"
+    assert "symlink" in result["message"].lower()
+    mock_send.assert_not_called()
+
+
 def test_signal_send_rejects_oversized_file(lattice_db, tmp_path):
     big = tmp_path / "big.bin"
     big.write_bytes(b"x" * (17 * 1024 * 1024))  # 17MB
