@@ -246,6 +246,16 @@ def create_app(
                 # cap researching philanthropy funding venues. Bumped to 8 so
                 # he can work through 3-5 sources per turn without cutoff.
                 kwargs["max_tool_rounds"] = 8
+                # Vett runs on Qwen3.6-27B which has thinking-mode enabled
+                # natively. Without a budget, his hidden reasoning can eat
+                # the entire max_tokens output budget before he emits any
+                # visible content — finish_reason=length with empty content.
+                # Surfaced live 2026-06-05 by the b50c605 visibility fix.
+                # 384 matches the Aetheria-on-Qwen tuning from
+                # project_soveryn_aetheria_reasoning_budget.md (her budget
+                # is gone now because she moved to Gemma 4 with thinking
+                # disabled; only Qwen-running agents need this).
+                kwargs["thinking_budget_tokens"] = 384
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
         # Phase E: start the coord event worker now that agent_loops exists.
