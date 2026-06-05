@@ -240,20 +240,193 @@ def test_daemon_skips_send_when_aetheria_returns_empty(lattice_db, conv_db):
     assert last_outbound[0] == "empty response from Aetheria"
 
 
-def test_daemon_dispatches_attachment_only_message_with_placeholder(lattice_db, conv_db):
-    """Image-only message (body=='', attachments=N) gets dispatched with a
-    placeholder body so Aetheria sees that an attachment came in."""
+def test_inbound_jpeg_attachment_encodes_and_forwards_as_data_url(tmp_path, lattice_db, conv_db):
+    """A .jpg in attachment_paths becomes a data:image/jpeg;base64,... URL on
+    the /chat call. The placeholder text line is dropped."""
+    img = tmp_path / "photo.jpg"
+    img.write_bytes(b"\xff\xd8\xff\xe0" + b"fake jpeg payload bytes")
+
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
-    msg = InboundMessage(
-        source_e164="+19105813970", timestamp_ms=1, body="",
-        attachment_paths=("att-1.jpg",),
-    )
-    captured = {}
-    def fake_chat(session_id, body):
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["session_id"] = session_id
         captured["body"] = body
-        return "got the pic"
+        captured["attachments"] = attachments
+        return "ack"
     with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
          patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
          patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="check this out",
+            attachment_paths=(str(img),),
+        )
         daemon._handle_inbound(msg)
-    assert "1 attachment(s)" in captured["body"]
+
+    assert captured["body"] == "check this out"
+    assert "vision pipeline integration pending" not in captured["body"]
+    assert len(captured["attachments"]) == 1
+    assert captured["attachments"][0].startswith("data:image/jpeg;base64,")
+
+
+def test_inbound_png_webp_gif_all_encoded(tmp_path, lattice_db, conv_db):
+    """Each supported image MIME is detected by extension."""
+    files = {
+        "a.png": "image/png",
+        "b.webp": "image/webp",
+        "c.gif": "image/gif",
+        "d.jpeg": "image/jpeg",
+    }
+    paths = []
+    for name in files:
+        p = tmp_path / name
+        p.write_bytes(b"x" * 16)
+        paths.append(str(p))
+
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="four images",
+            attachment_paths=tuple(paths),
+        )
+        daemon._handle_inbound(msg)
+
+    assert len(captured["attachments"]) == 4
+    mimes = [a.split(";")[0].removeprefix("data:") for a in captured["attachments"]]
+    assert mimes == ["image/png", "image/webp", "image/gif", "image/jpeg"]
+
+
+def test_inbound_non_image_attachment_skipped_with_hint(tmp_path, lattice_db, conv_db):
+    """A .pdf attachment is dropped from the forwarded attachments, but a count
+    hint is added to the message body."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["body"] = body
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="see attached",
+            attachment_paths=(str(pdf),),
+        )
+        daemon._handle_inbound(msg)
+
+    assert "1 non-image attachment" in captured["body"]
+    assert "see attached" in captured["body"]
+    assert captured["attachments"] == ()
+
+
+def test_inbound_missing_attachment_file_logged_and_skipped(tmp_path, lattice_db, conv_db):
+    """A path that doesn't exist on disk doesn't crash the daemon; it's
+    counted-as-skipped (treated as 'failed to read' rather than 'not an image')."""
+    missing = tmp_path / "ghost.jpg"  # never written
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["body"] = body
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="ping",
+            attachment_paths=(str(missing),),
+        )
+        daemon._handle_inbound(msg)
+
+    # No images succeeded; no crash; body keeps a skipped-hint OR is at least
+    # the original "ping" with a count hint. Verify it doesn't have the old
+    # placeholder text.
+    assert "vision pipeline integration pending" not in captured["body"]
+    assert captured["attachments"] == ()
+
+
+def test_inbound_text_only_no_attachments_unchanged(tmp_path, lattice_db, conv_db):
+    """Regression: text-only message → no attachments param, body unchanged."""
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["body"] = body
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="morning",
+            attachment_paths=(),
+        )
+        daemon._handle_inbound(msg)
+
+    assert captured["body"] == "morning"
+    assert captured["attachments"] == ()
+
+
+def test_inbound_image_only_empty_body_becomes_image_only_marker(tmp_path, lattice_db, conv_db):
+    """When the user sends only an image (no caption), body becomes
+    '(image only)' so the chat call has non-empty content."""
+    img = tmp_path / "shot.jpg"
+    img.write_bytes(b"\xff\xd8\xff\xe0fake")
+
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["body"] = body
+        captured["attachments"] = attachments
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="",
+            attachment_paths=(str(img),),
+        )
+        daemon._handle_inbound(msg)
+
+    assert captured["body"] == "(image only)"
+    assert len(captured["attachments"]) == 1
+
+
+def test_call_vnext_chat_includes_attachments_in_payload(lattice_db, conv_db):
+    """Unit-level: _call_vnext_chat passes the attachments tuple into the
+    /chat JSON payload only when non-empty."""
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_post(path, body, *, timeout):
+        captured["path"] = path
+        captured["body"] = body
+        return {"content": "ok"}
+    with patch.object(daemon, "_post_json", side_effect=fake_post):
+        daemon._call_vnext_chat("sess-1", "hi", attachments=("data:image/jpeg;base64,AAAA",))
+    assert captured["path"] == "/chat"
+    assert captured["body"]["attachments"] == ["data:image/jpeg;base64,AAAA"]
+
+
+def test_call_vnext_chat_omits_attachments_when_empty(lattice_db, conv_db):
+    """No 'attachments' key in payload when none provided — backward-compatible."""
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_post(path, body, *, timeout):
+        captured["body"] = body
+        return {"content": "ok"}
+    with patch.object(daemon, "_post_json", side_effect=fake_post):
+        daemon._call_vnext_chat("sess-1", "hi")
+    assert "attachments" not in captured["body"]

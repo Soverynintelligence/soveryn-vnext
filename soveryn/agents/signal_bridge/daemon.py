@@ -16,6 +16,7 @@ reply becomes an assistant turn — same shape as /chat for the chat UI.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import signal
@@ -45,6 +46,36 @@ DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/
 DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
+
+
+_IMAGE_EXT_TO_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+
+
+def _encode_image_attachment(path: Path) -> str | None:
+    """Encode a local image file as a data: URL for vision-format chat.
+
+    Returns the data URL on success, or None if the extension isn't a
+    supported image type OR the file is missing/unreadable. Failures are
+    logged at WARNING and treated as 'skipped' by the caller — the daemon
+    must NOT crash on bad attachments because a single inbound message could
+    have a mix of supported and unsupported attachments.
+    """
+    ext = path.suffix.lower()
+    mime = _IMAGE_EXT_TO_MIME.get(ext)
+    if mime is None:
+        return None
+    try:
+        data = path.read_bytes()
+    except (OSError, IOError) as e:
+        logger.warning("failed to read attachment %s: %s", path, e)
+        return None
+    return f"data:{mime};base64,{base64.b64encode(data).decode()}"
 
 
 class SignalBridgeDaemon:
@@ -149,22 +180,35 @@ class SignalBridgeDaemon:
         # Per-sender durable session — find existing or create.
         session_id = self._ensure_session(msg.source_e164)
 
-        # Build the dispatch body: include the raw message + attachment
-        # hints. Attachments-as-vision-image is wired in a follow-up; for
-        # v1 we just name the attachment count.
+        # Build the dispatch body: encode supported image attachments to
+        # data: URLs and forward via the /chat attachments field. Non-image
+        # or unreadable attachments are surfaced as a count hint in the
+        # text body so Aetheria knows something was sent.
         body = msg.body or ""
-        if msg.attachment_paths:
-            body = (
-                (body + "\n\n" if body else "")
-                + f"[Signal: {len(msg.attachment_paths)} attachment(s) attached "
-                f"— vision pipeline integration pending]"
-            )
+        image_data_urls: list[str] = []
+        skipped_count = 0
+        for raw_path in msg.attachment_paths:
+            url = _encode_image_attachment(Path(raw_path))
+            if url is None:
+                skipped_count += 1
+            else:
+                image_data_urls.append(url)
+
+        if skipped_count > 0:
+            suffix = f"[Signal: {skipped_count} non-image attachment(s) skipped]"
+            body = (body + "\n\n" if body else "") + suffix
+
         if not body.strip():
-            body = "(empty message)"
+            if image_data_urls:
+                body = "(image only)"
+            else:
+                body = "(empty message)"
 
         # Dispatch to Aetheria via the standard /chat path.
         try:
-            response_content = self._call_vnext_chat(session_id, body)
+            response_content = self._call_vnext_chat(
+                session_id, body, attachments=tuple(image_data_urls),
+            )
         except Exception as e:
             self._log_event(
                 direction="outbound",
@@ -234,8 +278,19 @@ class SignalBridgeDaemon:
         resp = self._post_json("/sessions", payload, timeout=10)
         return resp["session_id"]
 
-    def _call_vnext_chat(self, session_id: str, body: str) -> str:
-        payload = {"agent": SIGNAL_AGENT, "session_id": session_id, "message": body}
+    def _call_vnext_chat(
+        self,
+        session_id: str,
+        body: str,
+        attachments: tuple[str, ...] = (),
+    ) -> str:
+        payload: dict = {
+            "agent": SIGNAL_AGENT,
+            "session_id": session_id,
+            "message": body,
+        }
+        if attachments:
+            payload["attachments"] = list(attachments)
         resp = self._post_json("/chat", payload, timeout=self.config.chat_timeout_seconds)
         return resp.get("content", "") if isinstance(resp, dict) else ""
 
