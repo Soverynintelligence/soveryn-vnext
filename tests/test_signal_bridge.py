@@ -430,3 +430,86 @@ def test_call_vnext_chat_omits_attachments_when_empty(lattice_db, conv_db):
     with patch.object(daemon, "_post_json", side_effect=fake_post):
         daemon._call_vnext_chat("sess-1", "hi")
     assert "attachments" not in captured["body"]
+
+
+# ─── send_once: attachments ─────────────────────────────────────────────────
+
+def _ok_completed_process():
+    from types import SimpleNamespace
+    return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
+def _failed_completed_process(stderr: str = ""):
+    from types import SimpleNamespace
+    return SimpleNamespace(returncode=1, stdout="", stderr=stderr)
+
+
+def test_send_once_passes_attachments_as_repeated_attachment_flags(monkeypatch):
+    """Each path becomes a separate --attachment <path> in the argv."""
+    from soveryn.agents.signal_bridge.client import send_once
+
+    captured: dict = {}
+    def fake_run(args, *, capture_output, text, timeout):
+        captured["args"] = args
+        return _ok_completed_process()
+    monkeypatch.setattr("soveryn.agents.signal_bridge.client.subprocess.run", fake_run)
+
+    send_once(
+        signal_cli_bin="/usr/local/bin/signal-cli",
+        bot_number="+19102489392",
+        recipient_e164="+19105813970",
+        body="here you go",
+        attachments=("/tmp/a.jpg", "/tmp/b.png"),
+    )
+
+    args = captured["args"]
+    # Two --attachment flags, each immediately followed by the path.
+    indices = [i for i, x in enumerate(args) if x == "--attachment"]
+    assert len(indices) == 2
+    assert args[indices[0] + 1] == "/tmp/a.jpg"
+    assert args[indices[1] + 1] == "/tmp/b.png"
+    # Recipient still appears (positional, after the message)
+    assert "+19105813970" in args
+
+
+def test_send_once_no_attachments_unchanged(monkeypatch):
+    """Regression: no attachments → no --attachment flag, same shape as before."""
+    from soveryn.agents.signal_bridge.client import send_once
+
+    captured: dict = {}
+    def fake_run(args, *, capture_output, text, timeout):
+        captured["args"] = args
+        return _ok_completed_process()
+    monkeypatch.setattr("soveryn.agents.signal_bridge.client.subprocess.run", fake_run)
+
+    send_once(
+        signal_cli_bin="/usr/local/bin/signal-cli",
+        bot_number="+19102489392",
+        recipient_e164="+19105813970",
+        body="text only",
+    )
+
+    args = captured["args"]
+    assert "--attachment" not in args
+    assert args[-1] == "+19105813970"  # recipient still positional last
+    assert "-m" in args
+    assert args[args.index("-m") + 1] == "text only"
+
+
+def test_send_once_raises_on_nonzero_returncode(monkeypatch):
+    """Existing contract: SignalCliError on signal-cli failure. Regression check
+    after the signature change."""
+    from soveryn.agents.signal_bridge.client import send_once, SignalCliError
+
+    def fake_run(args, *, capture_output, text, timeout):
+        return _failed_completed_process(stderr="bad recipient")
+    monkeypatch.setattr("soveryn.agents.signal_bridge.client.subprocess.run", fake_run)
+
+    with pytest.raises(SignalCliError, match="bad recipient"):
+        send_once(
+            signal_cli_bin="/usr/local/bin/signal-cli",
+            bot_number="+19102489392",
+            recipient_e164="+19105813970",
+            body="hi",
+            attachments=("/tmp/x.jpg",),
+        )

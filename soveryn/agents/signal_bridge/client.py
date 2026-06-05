@@ -108,12 +108,21 @@ def receive_once(
 
 def send_once(
     *, signal_cli_bin: str, bot_number: str, recipient_e164: str,
-    body: str, timeout_seconds: float = 30.0,
+    body: str, attachments: tuple[str, ...] = (),
+    timeout_seconds: float = 30.0,
 ) -> None:
-    """Send `body` from bot to recipient. Raises SignalCliError on failure."""
+    """Send `body` from bot to recipient. Raises SignalCliError on failure.
+
+    attachments — optional tuple of local file paths. Each becomes a
+    `--attachment <path>` flag on signal-cli send. Long-form flag is used
+    to avoid ambiguity with the top-level `-a/--account` flag.
+    """
+    args = [signal_cli_bin, "-a", bot_number, "send", "-m", body]
+    for path in attachments:
+        args.extend(["--attachment", path])
+    args.append(recipient_e164)
     result = subprocess.run(
-        [signal_cli_bin, "-a", bot_number, "send", "-m", body, recipient_e164],
-        capture_output=True, text=True, timeout=timeout_seconds,
+        args, capture_output=True, text=True, timeout=timeout_seconds,
     )
     if result.returncode != 0:
         raise SignalCliError(
