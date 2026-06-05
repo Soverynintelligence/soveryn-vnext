@@ -130,12 +130,22 @@ def test_direct_message_agent_default_mode_is_execute():
     assert "[DIRECTIVE FROM AETHERIA" in chat_call["body"]["message"]
 
 
-def test_direct_message_agent_writes_lattice_edge_on_success():
-    """Every successful call records a forensic edge tying message → coord node."""
+def test_direct_message_agent_writes_lattice_forensic_record_on_success():
+    """Every successful call records a forensic record (node + edge) tying
+    the direct message back to its coord node. The edge_writer receives
+    sender, target, session_id, mode, and message head so the lattice
+    captures enough to surface 'her recent directives to Scotty.'"""
     edge_calls = []
-    def fake_edge(coord_node_id, message_node_id, mode):
-        edge_calls.append((coord_node_id, message_node_id, mode))
-        return "edge-abc"
+    def fake_edge(coord_node_id, sender, target, session_id, mode, message_head):
+        edge_calls.append({
+            "coord_node_id": coord_node_id,
+            "sender": sender,
+            "target": target,
+            "session_id": session_id,
+            "mode": mode,
+            "message_head": message_head,
+        })
+        return ("msg-node-1", "edge-abc")
     fake_poster, _ = _ok_poster_factory()
     tool = _build_tool(edge_writer=fake_edge, http_poster=fake_poster)
     result = tool.handler({
@@ -143,9 +153,31 @@ def test_direct_message_agent_writes_lattice_edge_on_success():
         "coord_node_id": "node-1", "mode": "execute",
     })
     assert len(edge_calls) == 1
-    assert edge_calls[0][0] == "node-1"
-    assert edge_calls[0][2] == "execute"
+    call = edge_calls[0]
+    assert call["coord_node_id"] == "node-1"
+    assert call["sender"] == "aetheria"
+    assert call["target"] == "vett"
+    assert call["mode"] == "execute"
+    assert "do X" in call["message_head"]
     assert result["edge_id"] == "edge-abc"
+    assert result["message_node_id"] == "msg-node-1"
+
+
+def test_direct_message_agent_continues_when_edge_writer_raises():
+    """The chat already happened — a failed audit record can't undo the
+    user-visible response. Edge failure logs + nulls the edge fields."""
+    def boom_edge(*a, **kw):
+        raise RuntimeError("FK constraint failed (simulating prod bug)")
+    fake_poster, _ = _ok_poster_factory()
+    tool = _build_tool(edge_writer=boom_edge, http_poster=fake_poster)
+    result = tool.handler({
+        "target": "vett", "message": "do X",
+        "coord_node_id": "node-1", "mode": "execute",
+    })
+    # Tool result reflects the chat response, not the audit failure
+    assert result["response_content"] == "ack"
+    assert result["edge_id"] is None
+    assert result["message_node_id"] is None
 
 
 def test_direct_message_agent_returns_structured_error_when_rate_capped():

@@ -60,7 +60,7 @@ def build_direct_message_agent_tool(
     owner_agent: str = "aetheria",
     rate_limiter: DirectCommRateLimiter | None = None,
     http_poster: Callable[[str, dict, float], dict] | None = None,
-    edge_writer: Callable[[str, str, str], str] | None = None,
+    edge_writer: Callable[[str, str, str, str, str, str], tuple[str, str]] | None = None,
     vnext_base: str = "http://127.0.0.1:5001",
     session_timeout_seconds: float = 10.0,
     dispatch_timeout_seconds: float = 240.0,
@@ -71,9 +71,14 @@ def build_direct_message_agent_tool(
     rate_limiter: defaults to a fresh DirectCommRateLimiter (8/min/peer)
     http_poster: defaults to _default_http_poster (urllib-based)
     edge_writer: optional. When provided, called as
-                 edge_writer(coord_node_id, message_node_id, mode) -> edge_id
-                 and the result included in the tool result as edge_id.
-                 None means no audit edge (tests use this).
+                 edge_writer(coord_node_id, sender, target, session_id, mode,
+                             message_head) -> (message_node_id, edge_id)
+                 to record a real lattice node for the directive AND an
+                 edge tying it to the coord node. None means no audit
+                 record (tests use this). The two-row write is what
+                 makes the forensic trail FK-satisfiable — earlier
+                 attempts to point an edge directly at a session_id
+                 silently failed on the edges table's FK constraint.
     """
     limiter = rate_limiter if rate_limiter is not None else DirectCommRateLimiter()
     poster = http_poster if http_poster is not None else _default_http_poster
@@ -173,21 +178,31 @@ def build_direct_message_agent_tool(
                 "coord_node_id": coord_node_id,
             }
 
-        # Successful dispatch — record the rate budget and the forensic edge.
+        # Successful dispatch — record the rate budget and the forensic record.
         limiter.record(sender=owner_agent, target=target, now=now)
+        message_node_id: str | None = None
         edge_id: str | None = None
         if edge_writer is not None:
             try:
-                # Use session_id as the "message node id" stand-in until
-                # /chat surfaces a last_turn_id. The lattice edge still ties
-                # the direct-message session back to the coord node, which
-                # is the forensic property we want.
-                edge_id = edge_writer(coord_node_id, session_id, mode)
+                # Edge writer signature: (coord_node_id, sender, target,
+                # session_id, mode, message_head) -> (message_node_id, edge_id).
+                # The writer creates the lattice node AND the edge — earlier
+                # attempts to point an edge at a bare session_id failed silently
+                # because session ids aren't lattice nodes (FK constraint).
+                message_node_id, edge_id = edge_writer(
+                    coord_node_id,
+                    owner_agent,
+                    target,
+                    session_id,
+                    mode,
+                    message.strip()[:200],
+                )
             except Exception:
                 logger.exception(
-                    "lattice edge write failed for coord %s; chat already happened",
+                    "lattice forensic record failed for coord %s; chat already happened",
                     coord_node_id,
                 )
+                message_node_id = None
                 edge_id = None
 
         return {
@@ -196,6 +211,7 @@ def build_direct_message_agent_tool(
             "response_content": chat_resp.get("content", ""),
             "finish_reason": chat_resp.get("finish_reason", ""),
             "coord_node_id": coord_node_id,
+            "message_node_id": message_node_id,
             "edge_id": edge_id,
         }
 

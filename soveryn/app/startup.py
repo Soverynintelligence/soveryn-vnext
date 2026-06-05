@@ -157,13 +157,18 @@ def create_app(
             edge_writer = None
             if recall_lattice is not None:
                 _live_lattice = recall_lattice
-                def edge_writer(coord_node_id, message_node_id, mode,
-                                _store=_live_lattice):
+                def edge_writer(
+                    coord_node_id, sender, target, session_id, mode,
+                    message_head, _store=_live_lattice,
+                ):
                     return record_direct_communication_edge(
                         store=_store,
                         coord_node_id=coord_node_id,
-                        message_node_id=message_node_id,
+                        sender_agent=sender,
+                        target_agent=target,
+                        session_id=session_id,
                         mode=mode,
+                        message_head=message_head,
                     )
 
             tool_registry.register(

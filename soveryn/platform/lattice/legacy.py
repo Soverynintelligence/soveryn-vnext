@@ -613,25 +613,59 @@ def record_direct_communication_edge(
     *,
     store: "LatticeStore",
     coord_node_id: str,
-    message_node_id: str,
+    sender_agent: str,
+    target_agent: str,
+    session_id: str,
     mode: str,
-) -> str:
-    """Write a typed edge tying a direct-message turn back to the coord node
-    it's anchored to. Forensic-trail substrate for Direct Agent Communication.
+    message_head: str = "",
+) -> tuple[str, str]:
+    """Write a forensic record of a direct communication. Returns
+    (message_node_id, edge_id).
 
-    relationship='direct_command' for mode='execute' (Aetheria pushed an
-    instruction); relationship='direct_query' for mode='query' (she pulled raw
-    observations). The edge makes any runaway direct-message pattern visible
-    in the lattice without trawling chat history.
+    Two rows land:
+      1. A lattice node (layer=private, type='direct_message') capturing the
+         direct-message metadata — sender, target, session id, mode, message
+         head. This node IS the lattice's record of the directive having
+         happened; the recall system can surface "her recent directives to
+         Scotty" via standard node queries.
+      2. An edge from that node to the coord node it's anchored to, with
+         relationship='direct_command' (execute) or 'direct_query' (query).
+
+    Why the node-then-edge structure: the edges table has FOREIGN KEY
+    constraints on source_id and target_id. A naive "session_id as source"
+    write fails silently because session ids aren't lattice nodes. The
+    integration verification surfaced this on 2026-06-05 — DAC-T8 saw the
+    chat round-trip working but zero forensic edges in the lattice. Root
+    fix: write a real node, then the edge.
 
     See docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md.
-    Returns the new edge id (a uuid4 string).
     """
     relationship = _DIRECT_COMM_RELATIONS.get(mode)
     if relationship is None:
         raise ValueError(
             f"mode must be 'execute' or 'query', got {mode!r}"
         )
+    content = (
+        f"[direct_{mode}] {sender_agent} -> {target_agent}\n"
+        f"session: {session_id}\n"
+        f"coord: {coord_node_id}\n"
+        f"head: {message_head[:200]}"
+    )
+    provenance = {
+        "kind": "direct_message",
+        "sender": sender_agent,
+        "target": target_agent,
+        "session_id": session_id,
+        "mode": mode,
+        "coord_node_id": coord_node_id,
+    }
+    message_node_id = store.write_node(
+        agent=sender_agent,
+        content=content,
+        node_type="direct_message",
+        layer=LAYER_PRIVATE,
+        provenance=provenance,
+    )
     edge_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     with store._conn() as conn:
@@ -642,5 +676,5 @@ def record_direct_communication_edge(
             "VALUES (?, ?, ?, ?, 0.5, 0, 0, 1, ?, ?)",
             (edge_id, message_node_id, coord_node_id, relationship, now, now),
         )
-    return edge_id
+    return message_node_id, edge_id
 
