@@ -603,3 +603,44 @@ class LegacyLatticeAdapter:
         )
         return tuple(entry_from_node(node) for node in nodes)
 
+
+# ─── Direct Agent Communication: forensic-trail edge writer ─────────────────
+
+_DIRECT_COMM_RELATIONS = {"execute": "direct_command", "query": "direct_query"}
+
+
+def record_direct_communication_edge(
+    *,
+    store: "LatticeStore",
+    coord_node_id: str,
+    message_node_id: str,
+    mode: str,
+) -> str:
+    """Write a typed edge tying a direct-message turn back to the coord node
+    it's anchored to. Forensic-trail substrate for Direct Agent Communication.
+
+    relationship='direct_command' for mode='execute' (Aetheria pushed an
+    instruction); relationship='direct_query' for mode='query' (she pulled raw
+    observations). The edge makes any runaway direct-message pattern visible
+    in the lattice without trawling chat history.
+
+    See docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md.
+    Returns the new edge id (a uuid4 string).
+    """
+    relationship = _DIRECT_COMM_RELATIONS.get(mode)
+    if relationship is None:
+        raise ValueError(
+            f"mode must be 'execute' or 'query', got {mode!r}"
+        )
+    edge_id = str(uuid.uuid4())
+    now = datetime.now().isoformat()
+    with store._conn() as conn:
+        conn.execute(
+            "INSERT INTO edges "
+            "(id, source_id, target_id, relationship, strength, bidirectional, "
+            "archived, reinforcement_count, reinforced_at, created_at) "
+            "VALUES (?, ?, ?, ?, 0.5, 0, 0, 1, ?, ?)",
+            (edge_id, message_node_id, coord_node_id, relationship, now, now),
+        )
+    return edge_id
+

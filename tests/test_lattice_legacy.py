@@ -41,3 +41,74 @@ def test_dream_log_dry_run_column_added_idempotently(tmp_path):
             "PRAGMA table_info(dream_log)"
         ).fetchall()}
         assert "dry_run" in cols
+
+
+def test_record_direct_communication_edge_writes_typed_edge_for_execute(tmp_path):
+    """A direct-communication edge ties a message node to a coord node with
+    relationship='direct_command' for mode='execute'."""
+    import sqlite3
+    from soveryn.platform.lattice.legacy import (
+        LatticeStore, LAYER_PRIVATE, record_direct_communication_edge,
+    )
+    db = tmp_path / "lattice.db"
+    store = LatticeStore(db)
+    coord_node_id = store.write_node(agent="aetheria", content="coord task X",
+                                     layer=LAYER_PRIVATE)
+    msg_node_id = store.write_node(agent="aetheria", content="do Y",
+                                   layer=LAYER_PRIVATE)
+
+    edge_id = record_direct_communication_edge(
+        store=store,
+        coord_node_id=coord_node_id,
+        message_node_id=msg_node_id,
+        mode="execute",
+    )
+
+    assert isinstance(edge_id, str)
+    with sqlite3.connect(str(db)) as con:
+        rows = con.execute(
+            "SELECT id, source_id, target_id, relationship "
+            "FROM edges WHERE id = ?",
+            (edge_id,),
+        ).fetchall()
+    assert len(rows) == 1
+    row_id, source_id, target_id, relationship = rows[0]
+    assert row_id == edge_id
+    assert source_id == msg_node_id
+    assert target_id == coord_node_id
+    assert relationship == "direct_command"
+
+
+def test_record_direct_communication_edge_query_mode_writes_direct_query(tmp_path):
+    """mode='query' → relationship='direct_query'."""
+    import sqlite3
+    from soveryn.platform.lattice.legacy import (
+        LatticeStore, LAYER_PRIVATE, record_direct_communication_edge,
+    )
+    db = tmp_path / "lattice.db"
+    store = LatticeStore(db)
+    coord_id = store.write_node(agent="aetheria", content="coord", layer=LAYER_PRIVATE)
+    msg_id = store.write_node(agent="aetheria", content="msg", layer=LAYER_PRIVATE)
+    edge_id = record_direct_communication_edge(
+        store=store, coord_node_id=coord_id, message_node_id=msg_id, mode="query",
+    )
+    with sqlite3.connect(str(db)) as con:
+        rel = con.execute(
+            "SELECT relationship FROM edges WHERE id = ?", (edge_id,),
+        ).fetchone()[0]
+    assert rel == "direct_query"
+
+
+def test_record_direct_communication_edge_rejects_invalid_mode(tmp_path):
+    """Only 'execute' and 'query' are accepted."""
+    import pytest
+    from soveryn.platform.lattice.legacy import (
+        LatticeStore, LAYER_PRIVATE, record_direct_communication_edge,
+    )
+    store = LatticeStore(tmp_path / "lattice.db")
+    coord_id = store.write_node(agent="aetheria", content="c", layer=LAYER_PRIVATE)
+    msg_id = store.write_node(agent="aetheria", content="m", layer=LAYER_PRIVATE)
+    with pytest.raises(ValueError, match="execute.*query|mode"):
+        record_direct_communication_edge(
+            store=store, coord_node_id=coord_id, message_node_id=msg_id, mode="other",
+        )
