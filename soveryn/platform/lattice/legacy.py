@@ -220,6 +220,25 @@ CREATE TABLE IF NOT EXISTS vett_patrol_state (
     last_error        TEXT,
     visit_count       INTEGER NOT NULL DEFAULT 0
 );
+
+-- Signal bridge audit log. Every inbound (accepted OR dropped), every
+-- outbound attempt (successful OR retried OR failed). The bridge daemon
+-- writes here on every event so a replay of the full conversation is
+-- possible even if conversations_vnext.db diverges. See
+-- docs/superpowers/specs/2026-06-04-signal-bridge.md.
+CREATE TABLE IF NOT EXISTS signal_log (
+    id                TEXT PRIMARY KEY,
+    direction         TEXT NOT NULL,                  -- 'inbound' | 'outbound' | 'dropped'
+    sender_e164       TEXT,                            -- who sent it (null on outbound)
+    recipient_e164    TEXT,                            -- who receives it (null on inbound to bot)
+    body_head         TEXT,                            -- first ~200 chars
+    attachment_count  INTEGER NOT NULL DEFAULT 0,
+    error             TEXT,                            -- null on success
+    created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_log_created ON signal_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_signal_log_direction ON signal_log(direction);
 """
 
 
