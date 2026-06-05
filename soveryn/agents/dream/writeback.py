@@ -77,9 +77,11 @@ def write_dream_outputs(
     nodes_read: int,
     is_dry_run: bool,
 ) -> None:
-    """Persist the dream outputs. Dry-run skips reflection + edges; the
-    audit row goes in either way."""
+    """Persist the dream outputs. Dry-run skips reflection + edges + flags;
+    the audit row goes in either way."""
     edges_created = 0
+    contradictions_flagged = 0
+    reflection_node_id: str | None = None
 
     if not is_dry_run and synthesis and synthesis.strip():
         reflection_node_id = _write_reflection_node(
@@ -94,6 +96,11 @@ def write_dream_outputs(
             synthesis=synthesis,
             reflection_node_id=reflection_node_id,
         )
+        contradictions_flagged = _write_contradiction_flags(
+            lattice_db_path,
+            contradictions=contradictions,
+            reflection_node_id=reflection_node_id,
+        )
 
     _write_dream_log_row(
         lattice_db_path,
@@ -102,6 +109,7 @@ def write_dream_outputs(
         loop_health=loop_health,
         nodes_read=nodes_read,
         edges_created=edges_created,
+        contradictions_flagged=contradictions_flagged,
         is_dry_run=is_dry_run,
     )
 
@@ -182,6 +190,50 @@ def _write_edges_from_synthesis(
     return written
 
 
+def _write_contradiction_flags(
+    lattice_db_path: Path,
+    *,
+    contradictions: str,
+    reflection_node_id: str,
+) -> int:
+    """Extract [node:ID] adjacency pairs from the Pass 2 contradictions prose
+    and write contradiction_flags rows. One row per pair.
+
+    Skips pairs where either node id doesn't exist in the nodes table
+    (best-effort tolerance — same policy as _write_edges_from_synthesis).
+    Returns the count written.
+    """
+    pairs = extract_node_pairs(contradictions)
+    if not pairs:
+        return 0
+    now = datetime.now().isoformat()
+    written = 0
+    with sqlite3.connect(str(lattice_db_path)) as con:
+        all_refs = {ref for pair in pairs for ref in pair}
+        placeholders = ",".join("?" for _ in all_refs)
+        existing = {
+            r[0] for r in con.execute(
+                f"SELECT id FROM nodes WHERE id IN ({placeholders})",
+                tuple(all_refs),
+            ).fetchall()
+        }
+        for node_a_id, node_b_id in pairs:
+            if node_a_id not in existing or node_b_id not in existing:
+                continue
+            try:
+                con.execute(
+                    "INSERT INTO contradiction_flags "
+                    "(id, edge_id, node_a_id, node_b_id, flagged_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), reflection_node_id,
+                     node_a_id, node_b_id, now),
+                )
+                written += 1
+            except sqlite3.IntegrityError:
+                continue
+    return written
+
+
 def _write_dream_log_row(
     lattice_db_path: Path,
     *,
@@ -190,6 +242,7 @@ def _write_dream_log_row(
     loop_health: float,
     nodes_read: int,
     edges_created: int,
+    contradictions_flagged: int,
     is_dry_run: bool,
 ) -> None:
     summary = synthesis.strip()[:500] if synthesis else "(silent)"
@@ -198,8 +251,8 @@ def _write_dream_log_row(
             "INSERT INTO dream_log "
             "(id, trigger, agent, nodes_read, edges_created, nodes_merged, "
             "contradictions_flagged, summary, ran_at, loop_health, dry_run) "
-            "VALUES (?, 'quiet_hours', 'aetheria', ?, ?, 0, 0, ?, ?, ?, ?)",
-            (dream_run_id, nodes_read, edges_created, summary,
-             datetime.now().isoformat(), loop_health,
+            "VALUES (?, 'quiet_hours', 'aetheria', ?, ?, 0, ?, ?, ?, ?, ?)",
+            (dream_run_id, nodes_read, edges_created, contradictions_flagged,
+             summary, datetime.now().isoformat(), loop_health,
              1 if is_dry_run else 0),
         )

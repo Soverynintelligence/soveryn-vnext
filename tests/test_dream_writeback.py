@@ -189,3 +189,59 @@ def test_write_dream_outputs_handles_empty_synthesis(lattice_db):
         ).fetchone()
     assert dream_nodes == 0
     assert log_row is not None
+
+
+def test_write_dream_outputs_writes_contradiction_flags_for_paired_refs(lattice_db):
+    """Per spec — Pass 2 contradictions prose with [node:ID] adjacency pairs
+    writes contradiction_flags rows."""
+    dream_run_id = str(uuid.uuid4())
+    write_dream_outputs(
+        lattice_db,
+        dream_run_id=dream_run_id,
+        synthesis="reflection mentions [node:seed-a].",
+        associations="x",
+        contradictions="[node:seed-a] conflicts with [node:seed-b] here.",
+        loop_health=1.0, nodes_read=2, is_dry_run=False,
+    )
+    with sqlite3.connect(str(lattice_db)) as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM contradiction_flags"
+        ).fetchone()[0]
+    assert count >= 1
+
+
+def test_write_dream_outputs_dry_run_skips_contradiction_flags(lattice_db):
+    """Dry-run must not write contradiction_flags."""
+    dream_run_id = str(uuid.uuid4())
+    write_dream_outputs(
+        lattice_db,
+        dream_run_id=dream_run_id,
+        synthesis="x",
+        associations="x",
+        contradictions="[node:seed-a] vs [node:seed-b]",
+        loop_health=1.0, nodes_read=2, is_dry_run=True,
+    )
+    with sqlite3.connect(str(lattice_db)) as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM contradiction_flags"
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_write_dream_outputs_records_contradictions_flagged_in_audit(lattice_db):
+    """The dream_log.contradictions_flagged column should reflect actual count."""
+    dream_run_id = str(uuid.uuid4())
+    write_dream_outputs(
+        lattice_db,
+        dream_run_id=dream_run_id,
+        synthesis="x",
+        associations="x",
+        contradictions="[node:seed-a] conflicts with [node:seed-b].",
+        loop_health=1.0, nodes_read=2, is_dry_run=False,
+    )
+    with sqlite3.connect(str(lattice_db)) as con:
+        row = con.execute(
+            "SELECT contradictions_flagged FROM dream_log WHERE id = ?",
+            (dream_run_id,),
+        ).fetchone()
+    assert row[0] >= 1

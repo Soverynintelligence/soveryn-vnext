@@ -263,6 +263,25 @@ CREATE INDEX IF NOT EXISTS idx_edges_rel      ON edges(relationship);
 CREATE INDEX IF NOT EXISTS idx_edges_source   ON edges(source_id);
 CREATE INDEX IF NOT EXISTS idx_edges_target   ON edges(target_id);
 
+-- Contradiction flags. Written by the dream daemon's Pass-2 parser; one row per
+-- [node:ID] adjacency pair flagged as a potential contradiction. Mirrors
+-- production schema verbatim (from 2026-06-01 legacy consolidation).
+CREATE TABLE IF NOT EXISTS contradiction_flags (
+    id               TEXT PRIMARY KEY,
+    edge_id          TEXT NOT NULL,
+    node_a_id        TEXT NOT NULL,
+    node_b_id        TEXT NOT NULL,
+    flagged_at       TEXT NOT NULL,
+    reviewed         INTEGER NOT NULL DEFAULT 0,
+    resolution       TEXT,
+    confidence_delta REAL DEFAULT 0.0,
+    last_monitored   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_contradiction_flags_node_a ON contradiction_flags(node_a_id);
+CREATE INDEX IF NOT EXISTS idx_contradiction_flags_node_b ON contradiction_flags(node_b_id);
+CREATE INDEX IF NOT EXISTS idx_contradiction_flags_flagged ON contradiction_flags(flagged_at DESC);
+
 -- Dream daemon audit log. One row per tick (eligible OR skipped, live OR dry-run).
 -- Mirrors heartbeat_log / vett_patrol_log shape. dry_run=1 rows are written during
 -- the bake period so the audit shape is identical to live. See
