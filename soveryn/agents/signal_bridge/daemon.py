@@ -34,6 +34,7 @@ from soveryn.agents.signal_bridge.client import (
     InboundMessage,
     SignalCliError,
     receive_once,
+    resolve_attachment_id,
     send_once,
 )
 from soveryn.agents.signal_bridge.config import SignalBridgeConfig
@@ -47,12 +48,6 @@ DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/con
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
 
-# signal-cli writes inbound attachments to this directory; parse_envelopes
-# stores only the filename (the `id` field) in InboundMessage.attachment_paths.
-# Resolve here so _encode_image_attachment receives an absolute path that
-# exists on disk.
-SIGNAL_CLI_ATTACHMENTS_DIR = Path.home() / ".local/share/signal-cli/attachments"
-
 
 _IMAGE_EXT_TO_MIME = {
     ".jpg": "image/jpeg",
@@ -62,19 +57,38 @@ _IMAGE_EXT_TO_MIME = {
     ".gif": "image/gif",
 }
 
+# Per-file cap for inbound encoding. Matches the UI's 16MB client-side cap
+# and signal_send's outbound 16MB cap so all three surfaces have the same
+# size ceiling. Without this, the bridge would base64-encode arbitrarily
+# large signal-cli attachments and balloon the /chat POST body before the
+# route's 33MB data:URL string check rejected it.
+_MAX_INBOUND_IMAGE_BYTES = 16 * 1024 * 1024
+
 
 def _encode_image_attachment(path: Path) -> str | None:
     """Encode a local image file as a data: URL for vision-format chat.
 
     Returns the data URL on success, or None if the extension isn't a
-    supported image type OR the file is missing/unreadable. Failures are
-    logged at WARNING and treated as 'skipped' by the caller — the daemon
-    must NOT crash on bad attachments because a single inbound message could
-    have a mix of supported and unsupported attachments.
+    supported image type, the file is missing/unreadable, OR the file
+    exceeds _MAX_INBOUND_IMAGE_BYTES. Failures are logged at WARNING and
+    treated as 'skipped' by the caller — the daemon must NOT crash on bad
+    attachments because a single inbound message could have a mix of
+    supported and unsupported attachments.
     """
     ext = path.suffix.lower()
     mime = _IMAGE_EXT_TO_MIME.get(ext)
     if mime is None:
+        return None
+    try:
+        size = path.stat().st_size
+    except OSError as e:
+        logger.warning("failed to stat attachment %s: %s", path, e)
+        return None
+    if size > _MAX_INBOUND_IMAGE_BYTES:
+        logger.warning(
+            "attachment %s exceeds %d-byte inbound cap (actual %d); skipping",
+            path, _MAX_INBOUND_IMAGE_BYTES, size,
+        )
         return None
     try:
         data = path.read_bytes()
@@ -169,7 +183,7 @@ class SignalBridgeDaemon:
                 direction="dropped",
                 sender=msg.source_e164, recipient=self.config.bot_number,
                 body_head=msg.body[:200],
-                attachment_count=len(msg.attachment_paths),
+                attachment_count=len(msg.attachment_ids),
                 error="sender not in allowlist",
             )
             logger.info("dropped inbound from %s (not allowlisted)", msg.source_e164)
@@ -179,7 +193,7 @@ class SignalBridgeDaemon:
             direction="inbound",
             sender=msg.source_e164, recipient=self.config.bot_number,
             body_head=msg.body[:200],
-            attachment_count=len(msg.attachment_paths),
+            attachment_count=len(msg.attachment_ids),
             error=None,
         )
 
@@ -193,13 +207,13 @@ class SignalBridgeDaemon:
         body = msg.body or ""
         image_data_urls: list[str] = []
         skipped_count = 0
-        for raw_path in msg.attachment_paths:
-            # parse_envelopes stores the filename (signal-cli's `id` field).
-            # Resolve against the signal-cli attachments dir unless the
-            # caller already handed us an absolute path (tests do that).
-            p = Path(raw_path)
-            if not p.is_absolute():
-                p = SIGNAL_CLI_ATTACHMENTS_DIR / p
+        for attachment_id in msg.attachment_ids:
+            try:
+                p = resolve_attachment_id(attachment_id)
+            except ValueError as e:
+                logger.warning("rejecting attachment id %r: %s", attachment_id, e)
+                skipped_count += 1
+                continue
             url = _encode_image_attachment(p)
             if url is None:
                 skipped_count += 1

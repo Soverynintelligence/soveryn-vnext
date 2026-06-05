@@ -66,7 +66,7 @@ def test_parse_envelopes_extracts_text_message():
     assert out[0].source_e164 == "+19105813970"
     assert out[0].body == "Hi"
     assert out[0].timestamp_ms == 1779801096748
-    assert out[0].attachment_paths == ()
+    assert out[0].attachment_ids == ()
 
 
 def test_parse_envelopes_extracts_attachment_filename():
@@ -81,7 +81,7 @@ def test_parse_envelopes_extracts_attachment_filename():
         },
     }) + "\n"
     out = parse_envelopes(raw)
-    assert out[0].attachment_paths == ("att-123.jpg",)
+    assert out[0].attachment_ids == ("att-123.jpg",)
 
 
 def test_parse_envelopes_skips_non_text_envelopes():
@@ -143,7 +143,7 @@ def test_daemon_drops_off_allowlist_with_audit(lattice_db, conv_db):
         source_e164="+15555550199",  # NOT on allowlist
         timestamp_ms=1,
         body="hello",
-        attachment_paths=(),
+        attachment_ids=(),
     )
     daemon._handle_inbound(msg)
     with sqlite3.connect(str(lattice_db)) as con:
@@ -158,7 +158,7 @@ def test_daemon_routes_allowlisted_message_to_chat(lattice_db, conv_db):
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
     msg = InboundMessage(
         source_e164="+19105813970", timestamp_ms=1, body="morning",
-        attachment_paths=(),
+        attachment_ids=(),
     )
     with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
          patch.object(daemon, "_call_vnext_chat", return_value="morning back."), \
@@ -181,7 +181,7 @@ def test_daemon_retries_outbound_with_backoff(lattice_db, conv_db):
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
     msg = InboundMessage(
         source_e164="+19105813970", timestamp_ms=1, body="ping",
-        attachment_paths=(),
+        attachment_ids=(),
     )
     send_side_effects = [SignalCliError("transient 1"), SignalCliError("transient 2"), None]
     with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
@@ -202,7 +202,7 @@ def test_daemon_records_outbound_failure_after_all_retries_exhausted(lattice_db,
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
     msg = InboundMessage(
         source_e164="+19105813970", timestamp_ms=1, body="ping",
-        attachment_paths=(),
+        attachment_ids=(),
     )
     persistent_err = SignalCliError("always broken")
     with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
@@ -225,7 +225,7 @@ def test_daemon_skips_send_when_aetheria_returns_empty(lattice_db, conv_db):
     daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
     msg = InboundMessage(
         source_e164="+19105813970", timestamp_ms=1, body="anything",
-        attachment_paths=(),
+        attachment_ids=(),
     )
     with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
          patch.object(daemon, "_call_vnext_chat", return_value="   "), \
@@ -241,7 +241,7 @@ def test_daemon_skips_send_when_aetheria_returns_empty(lattice_db, conv_db):
 
 
 def test_inbound_jpeg_attachment_encodes_and_forwards_as_data_url(tmp_path, lattice_db, conv_db):
-    """A .jpg in attachment_paths becomes a data:image/jpeg;base64,... URL on
+    """A .jpg in attachment_ids becomes a data:image/jpeg;base64,... URL on
     the /chat call. The placeholder text line is dropped."""
     img = tmp_path / "photo.jpg"
     img.write_bytes(b"\xff\xd8\xff\xe0" + b"fake jpeg payload bytes")
@@ -259,7 +259,7 @@ def test_inbound_jpeg_attachment_encodes_and_forwards_as_data_url(tmp_path, latt
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="check this out",
-            attachment_paths=(str(img),),
+            attachment_ids=(str(img),),
         )
         daemon._handle_inbound(msg)
 
@@ -294,7 +294,7 @@ def test_inbound_png_webp_gif_all_encoded(tmp_path, lattice_db, conv_db):
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="four images",
-            attachment_paths=tuple(paths),
+            attachment_ids=tuple(paths),
         )
         daemon._handle_inbound(msg)
 
@@ -321,7 +321,7 @@ def test_inbound_non_image_attachment_skipped_with_hint(tmp_path, lattice_db, co
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="see attached",
-            attachment_paths=(str(pdf),),
+            attachment_ids=(str(pdf),),
         )
         daemon._handle_inbound(msg)
 
@@ -346,7 +346,7 @@ def test_inbound_missing_attachment_file_logged_and_skipped(tmp_path, lattice_db
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="ping",
-            attachment_paths=(str(missing),),
+            attachment_ids=(str(missing),),
         )
         daemon._handle_inbound(msg)
 
@@ -361,16 +361,15 @@ def test_inbound_filename_only_resolves_via_signal_cli_attachments_dir(
     tmp_path, lattice_db, conv_db, monkeypatch,
 ):
     """Production path: parse_envelopes stores only the signal-cli `id`
-    (a bare filename). The daemon must resolve it against the signal-cli
-    attachments directory before encoding — otherwise the image is silently
-    skipped because Path('id.jpg').read_bytes() looks in CWD."""
-    from soveryn.agents.signal_bridge import daemon as daemon_mod
+    (a bare filename). resolve_attachment_id() resolves it against the
+    signal-cli attachments directory before the encoder reads bytes."""
+    from soveryn.agents.signal_bridge import client as client_mod
 
     fake_attachments_dir = tmp_path / "sigcli"
     fake_attachments_dir.mkdir()
     img = fake_attachments_dir / "PRODUCTION_LIKE_ID.jpeg"
     img.write_bytes(b"\xff\xd8\xff\xe0fake jpeg")
-    monkeypatch.setattr(daemon_mod, "SIGNAL_CLI_ATTACHMENTS_DIR", fake_attachments_dir)
+    monkeypatch.setattr(client_mod, "DEFAULT_SIGNAL_CLI_ATTACHMENTS_DIR", fake_attachments_dir)
 
     d = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
     captured: dict = {}
@@ -383,11 +382,57 @@ def test_inbound_filename_only_resolves_via_signal_cli_attachments_dir(
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="from phone",
-            attachment_paths=("PRODUCTION_LIKE_ID.jpeg",),  # filename only
+            attachment_ids=("PRODUCTION_LIKE_ID.jpeg",),  # bare filename, not path
         )
         d._handle_inbound(msg)
     assert len(captured["attachments"]) == 1
     assert captured["attachments"][0].startswith("data:image/jpeg;base64,")
+
+
+def test_resolve_attachment_id_rejects_traversal():
+    """Defense against hypothetical signal-cli ids containing `..` segments."""
+    from soveryn.agents.signal_bridge.client import resolve_attachment_id
+    import pytest
+    with pytest.raises(ValueError, match="traversal"):
+        resolve_attachment_id("../../etc/passwd")
+
+
+def test_resolve_attachment_id_absolute_returned_as_is(tmp_path):
+    """If the producer ever emits an absolute path, pass it through. Tests
+    that fabricate absolute tmp_path inputs keep working."""
+    from soveryn.agents.signal_bridge.client import resolve_attachment_id
+    f = tmp_path / "x.jpg"
+    f.write_bytes(b"x")
+    result = resolve_attachment_id(str(f))
+    assert result == f
+
+
+def test_inbound_oversized_image_skipped_with_warning(tmp_path, lattice_db, conv_db, caplog):
+    """An image exceeding _MAX_INBOUND_IMAGE_BYTES (16MB) is logged + skipped.
+    Parity with the UI's 16MB client cap and signal_send's outbound 16MB cap."""
+    import logging
+    big = tmp_path / "big.jpg"
+    big.write_bytes(b"\xff\xd8\xff\xe0" + b"x" * (17 * 1024 * 1024))  # ~17MB
+
+    daemon = SignalBridgeDaemon(_config(), lattice_db=lattice_db, conv_db=conv_db)
+    captured: dict = {}
+    def fake_chat(session_id, body, attachments=()):
+        captured["attachments"] = attachments
+        captured["body"] = body
+        return "ack"
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", side_effect=fake_chat), \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"), \
+         caplog.at_level(logging.WARNING, logger="soveryn.agents.signal_bridge.daemon"):
+        msg = InboundMessage(
+            source_e164="+19105813970", timestamp_ms=1,
+            body="here", attachment_ids=(str(big),),
+        )
+        daemon._handle_inbound(msg)
+    assert captured["attachments"] == ()
+    assert "non-image attachment" in captured["body"]
+    assert any("16777216" in rec.message or "inbound cap" in rec.message
+               for rec in caplog.records)
 
 
 def test_inbound_text_only_no_attachments_unchanged(tmp_path, lattice_db, conv_db):
@@ -404,7 +449,7 @@ def test_inbound_text_only_no_attachments_unchanged(tmp_path, lattice_db, conv_d
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="morning",
-            attachment_paths=(),
+            attachment_ids=(),
         )
         daemon._handle_inbound(msg)
 
@@ -430,7 +475,7 @@ def test_inbound_image_only_empty_body_becomes_image_only_marker(tmp_path, latti
         msg = InboundMessage(
             source_e164="+19105813970", timestamp_ms=1,
             body="",
-            attachment_paths=(str(img),),
+            attachment_ids=(str(img),),
         )
         daemon._handle_inbound(msg)
 

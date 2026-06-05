@@ -47,6 +47,13 @@ def create_app(
     app = Flask("soveryn")
     app.config.setdefault("SOVERYN_REQUIRE_LOCALHOST", True)
     app.config.setdefault("SOVERYN_VERSION", __version__)
+    # Bound pre-validation memory: a ~50MB cap leaves headroom above the
+    # /chat route's 33MB-per-attachment string limit (single image) but
+    # forces Flask to 413 anything bigger BEFORE json-parsing the body
+    # into Python objects. Without this, a malicious or buggy client
+    # could POST hundreds of MB and OOM the server during JSON parse,
+    # before the route's _validate_attachments size-check ever runs.
+    app.config.setdefault("MAX_CONTENT_LENGTH", 50 * 1024 * 1024)
     app.config.setdefault(
         "SOVERYN_LEGACY_TEMPLATES_DIR",
         "/home/jon-deoliveira/soveryn_complete/templates",

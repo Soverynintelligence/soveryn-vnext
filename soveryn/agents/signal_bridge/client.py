@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -32,7 +33,12 @@ class InboundMessage:
     source_e164: str
     timestamp_ms: int
     body: str
-    attachment_paths: tuple[str, ...]
+    # signal-cli's `id` field for each attachment — a bare filename, NOT
+    # an absolute path. Resolve via `resolve_attachment_id()` below before
+    # reading bytes. Field was named `attachment_paths` until 2026-06-05;
+    # the rename happened after a production bug (T8) where the consumer
+    # assumed paths and silently failed read_bytes() in CWD.
+    attachment_ids: tuple[str, ...]
 
 
 def parse_envelopes(raw_stdout: str) -> tuple[InboundMessage, ...]:
@@ -71,23 +77,57 @@ def parse_envelopes(raw_stdout: str) -> tuple[InboundMessage, ...]:
         except (TypeError, ValueError):
             ts_int = 0
         attachments = data_msg.get("attachments") or []
-        attachment_paths: list[str] = []
+        attachment_ids: list[str] = []
         if isinstance(attachments, list):
             for a in attachments:
                 if isinstance(a, dict):
                     # signal-cli writes attachments to
-                    # ~/.local/share/signal-cli/attachments/<filename>.
-                    # The JSON gives us the filename in `id` (canonical).
+                    # ~/.local/share/signal-cli/attachments/<id>. The JSON
+                    # gives us the bare filename in `id` (canonical). Use
+                    # resolve_attachment_id() below to get an absolute path.
                     fname = a.get("id") or a.get("filename") or ""
                     if isinstance(fname, str) and fname.strip():
-                        attachment_paths.append(fname.strip())
+                        attachment_ids.append(fname.strip())
         out.append(InboundMessage(
             source_e164=source.strip(),
             timestamp_ms=ts_int,
             body=body,
-            attachment_paths=tuple(attachment_paths),
+            attachment_ids=tuple(attachment_ids),
         ))
     return tuple(out)
+
+
+# Default signal-cli attachment directory. Exposed so the daemon (and
+# tests) share the same resolver — keeps the misnomer-fix quarantined.
+DEFAULT_SIGNAL_CLI_ATTACHMENTS_DIR = Path.home() / ".local/share/signal-cli/attachments"
+
+
+def resolve_attachment_id(
+    attachment_id: str,
+    *,
+    attachments_dir: Path | None = None,
+) -> Path:
+    """Resolve a signal-cli attachment id (bare filename) to an absolute path.
+
+    Defense against a hypothetical signal-cli id containing path separators
+    (today they're random-looking opaque strings; the producer doesn't
+    document the format): reject ids that traverse out of the attachments
+    directory. Re-eval trigger: signal-cli's id format ever becomes
+    documented as hierarchical.
+
+    `attachments_dir=None` resolves at call time against the module-level
+    DEFAULT_SIGNAL_CLI_ATTACHMENTS_DIR so tests can monkeypatch the default.
+    """
+    if attachments_dir is None:
+        attachments_dir = DEFAULT_SIGNAL_CLI_ATTACHMENTS_DIR
+    p = Path(attachment_id)
+    if ".." in p.parts:
+        raise ValueError(
+            f"attachment id contains traversal segment: {attachment_id!r}"
+        )
+    if p.is_absolute():
+        return p
+    return attachments_dir / p
 
 
 def receive_once(
