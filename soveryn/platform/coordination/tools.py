@@ -357,6 +357,14 @@ def build_promote_coord_node_tool(
         target_owner_arg = args.get("target_owner")
         if target_owner_arg is not None and not isinstance(target_owner_arg, str):
             raise ToolArgError("target_owner must be a string or omitted")
+        # Canonicalize at the write-path so the persisted owner field is
+        # always lowercase / no-dots. Aetheria's stylization ("V.E.T.T."
+        # for Vett) collapsed dispatch silently before 2026-06-04; we now
+        # normalize before storage so future Blueprints are clean from the
+        # start, and the routing layer's own leniency catches anything
+        # legacy that slipped through.
+        from soveryn.platform.coordination.routing import normalize_agent_name
+        normalized_target_owner = normalize_agent_name(target_owner_arg)
         try:
             source, target = store.promote_node(
                 source_id,
@@ -364,7 +372,7 @@ def build_promote_coord_node_tool(
                 new_content=new_content,
                 acting_agent=owner_agent,
                 lesson_learned_content=lesson,
-                target_owner=target_owner_arg,
+                target_owner=normalized_target_owner,
             )
         except CoordinationError as e:
             raise ToolArgError(str(e))

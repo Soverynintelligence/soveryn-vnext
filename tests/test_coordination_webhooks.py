@@ -248,6 +248,47 @@ def test_route_promoted_self_filters_when_target_owner_is_actor():
     assert route(e) == ()
 
 
+def test_route_normalizes_stylized_target_owner_v_dot_e_dot_t_dot_t():
+    """The 2026-06-04 silent-dispatch bug: Aetheria wrote target_owner as
+    'V.E.T.T.' (her stylization), router accepted it verbatim, dispatcher
+    couldn't find an agent loop named 'V.E.T.T.', failed silently.
+    Normalization at the routing layer makes the dispatch work."""
+    e = _event(CoordEventKind.PROMOTED, "aetheria",
+                {"target_board": "Blueprint", "source_board": "Signal",
+                 "target_owner": "V.E.T.T."})
+    assert route(e) == ("vett",)
+
+
+def test_route_normalizes_uppercase_owner_on_node_created():
+    """Same normalization on NODE_CREATED Blueprint owner field."""
+    e = _event(CoordEventKind.NODE_CREATED, "aetheria",
+                {"board": "Blueprint", "owner": "VETT"})
+    # aetheria self-filters; vett (normalized) remains.
+    assert route(e) == ("vett",)
+
+
+def test_route_normalizes_owner_with_whitespace_and_mixed_case():
+    e = _event(CoordEventKind.PROMOTED, "aetheria",
+                {"target_board": "Blueprint", "source_board": "Signal",
+                 "target_owner": "  Scotty  "})
+    assert route(e) == ("scotty",)
+
+
+def test_normalize_agent_name_handles_edge_cases():
+    """Direct test of the normalizer for completeness."""
+    from soveryn.platform.coordination.routing import normalize_agent_name
+    assert normalize_agent_name("V.E.T.T.") == "vett"
+    assert normalize_agent_name("Vett") == "vett"
+    assert normalize_agent_name("VETT") == "vett"
+    assert normalize_agent_name("  vett  ") == "vett"
+    assert normalize_agent_name("V. E. T. T.") == "vett"
+    assert normalize_agent_name("aetheria") == "aetheria"
+    assert normalize_agent_name("") is None
+    assert normalize_agent_name("   ") is None
+    assert normalize_agent_name(None) is None
+    assert normalize_agent_name(42) is None
+
+
 def test_route_promoted_to_friction_does_not_auto_trigger():
     """Friction promotions are arbitration territory; Aetheria handles them
     through chat, not webhook (per the locked rules)."""

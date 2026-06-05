@@ -14,6 +14,26 @@ from soveryn.platform.coordination.events import CoordEvent, CoordEventKind
 from soveryn.platform.coordination.types import CoordBoard, CoordStatus
 
 
+def normalize_agent_name(raw: object) -> str | None:
+    """Canonicalize an agent name written in a payload or tool arg.
+
+    Aetheria stylizes Vett's name as "V.E.T.T." in her prose, sometimes
+    capitalized "Vett" or "VETT". The routing system's canonical names
+    are lowercase, no dots. Without normalization, the dispatcher looks
+    up "V.E.T.T." in agent_loops, finds nothing, and silently drops the
+    dispatch — confirmed 2026-06-04 morning when a Blueprint owned by
+    "V.E.T.T." never reached Vett.
+
+    Returns None for non-strings, empty / whitespace-only inputs, or
+    values that collapse to empty after normalization. Callers treat
+    None as "no usable owner."
+    """
+    if not isinstance(raw, str):
+        return None
+    normalized = raw.strip().lower().replace(".", "").replace(" ", "")
+    return normalized or None
+
+
 def route(event: CoordEvent) -> tuple[str, ...]:
     """Return the tuple of destination agent names triggered by this event.
 
@@ -46,16 +66,16 @@ def route(event: CoordEvent) -> tuple[str, ...]:
             destinations.append("aetheria")
         elif board == CoordBoard.BLUEPRINT.value:
             destinations.append("aetheria")
-            owner = event.payload.get("owner")
-            if isinstance(owner, str) and owner.strip():
-                destinations.append(owner.strip())
+            owner = normalize_agent_name(event.payload.get("owner"))
+            if owner is not None:
+                destinations.append(owner)
 
     elif event.kind == CoordEventKind.PROMOTED:
         target_board = event.payload.get("target_board")
         if target_board == CoordBoard.BLUEPRINT.value:
-            target_owner = event.payload.get("target_owner")
-            if isinstance(target_owner, str) and target_owner.strip():
-                destinations.append(target_owner.strip())
+            target_owner = normalize_agent_name(event.payload.get("target_owner"))
+            if target_owner is not None:
+                destinations.append(target_owner)
 
     elif event.kind == CoordEventKind.STATUS_CHANGED:
         # We only act on Blueprint transitions. The payload carries old/new.
