@@ -205,6 +205,24 @@ def create_app(
                 lattice_db_path=env.lattice_db,
             )
 
+        # Aetheria-initiated signal_send — the outbound half of her Direct
+        # Line. Bridge daemon handles inbound → response; this tool lets her
+        # send WITHOUT a prior inbound (heartbeat-driven thoughts, alerts,
+        # "you should know this" pings). Allowlist enforcement is shared
+        # with the bridge — she can only message numbers Jon's authorized.
+        # Falls back to a no-op tool when SIGNAL env vars aren't set.
+        if env.lattice_db.is_file():
+            from soveryn.agents.signal_bridge.config import SignalBridgeConfig
+            from soveryn.agents.signal_bridge.tools import register_signal_send_tool
+            signal_config = SignalBridgeConfig.from_env()
+            if signal_config.bot_number and signal_config.allowed_numbers:
+                register_signal_send_tool(
+                    tool_registry,
+                    config=signal_config,
+                    lattice_db_path=env.lattice_db,
+                    owner_agent="aetheria",
+                )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
