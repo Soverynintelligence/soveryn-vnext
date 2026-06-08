@@ -124,11 +124,44 @@ def create_app(
         #         (DSL Connection section)
         #   memory: project_soveryn_dynamic_specialization_layer.md
         from soveryn.agents.specialists.tools import register_specialist_tools
+
+        # Signal-alert callback for spawn events. Best-effort — if
+        # signal-cli is misconfigured or down, the spawn still lands;
+        # the alert just gets logged-and-skipped. Built as a closure so
+        # the tool registration stays decoupled from signal_bridge.
+        def _signal_alert_on_spawn(event):
+            from soveryn.agents.signal_bridge.config import SignalBridgeConfig
+            from soveryn.agents.signal_bridge.client import send_once
+            try:
+                cfg = SignalBridgeConfig.from_env()
+                if not cfg.bot_number or not cfg.allowed_numbers:
+                    return  # signal not configured; spawn alerts silently off
+                recipient = sorted(cfg.allowed_numbers)[0]
+                body = (
+                    f"Aetheria spawned specialist '{event.name}' "
+                    f"({event.interaction_mode}, host={event.target_agent}) "
+                    f"anchored at coord:{event.coord_node_id[:8]}…\n"
+                    f"Domain: {event.domain[:120]}\n"
+                    f"specialist_id: {event.specialist_id}"
+                )
+                send_once(
+                    signal_cli_bin=cfg.signal_cli_bin,
+                    bot_number=cfg.bot_number,
+                    recipient_e164=recipient,
+                    body=body,
+                )
+            except Exception:
+                logger.warning(
+                    "specialist spawn signal alert failed; spawn already landed",
+                    exc_info=True,
+                )
+
         register_specialist_tools(
             tool_registry,
             conv_db_path=env.conversations_db,
             owner_agent="aetheria",
             vnext_base="http://127.0.0.1:5001",
+            on_spawn=_signal_alert_on_spawn,
         )
 
         # Coordination Boards — register the four board tools for all three
@@ -475,6 +508,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_memory_bp)
     from soveryn.app.routes.api_coord import bp as api_coord_bp
     app.register_blueprint(api_coord_bp)
+    from soveryn.app.routes.api_specialists import bp as api_specialists_bp
+    app.register_blueprint(api_specialists_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)

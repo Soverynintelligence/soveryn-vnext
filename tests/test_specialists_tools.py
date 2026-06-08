@@ -184,6 +184,68 @@ def test_spawn_specialist_returns_concurrency_cap_error_when_at_cap(conv_db):
     assert result["cap"] == 3
 
 
+def test_spawn_specialist_fires_on_spawn_callback_on_success(conv_db):
+    """The on_spawn callback receives a SpawnEvent with the right fields."""
+    from soveryn.agents.specialists.tools import SpawnEvent
+    captured: list = []
+    def on_spawn(event):
+        captured.append(event)
+    poster, _ = _ok_poster_factory(session_id="spec-sess-9")
+    _seed_session(conv_db, session_id="spec-sess-9", agent="vett",
+                  title="[specialist:kernel_analyst:node-1]")
+    tool = build_spawn_specialist_tool(
+        conv_db_path=conv_db, http_poster=poster, on_spawn=on_spawn,
+    )
+    tool.handler(_spawn_args())
+    assert len(captured) == 1
+    event = captured[0]
+    assert isinstance(event, SpawnEvent)
+    assert event.specialist_id == "spec-sess-9"
+    assert event.name == "kernel_analyst"
+    assert event.target_agent == "vett"
+    assert event.coord_node_id == "node-1"
+    assert event.interaction_mode == "researcher"
+    assert "CUDA kernel optimization" in event.domain
+
+
+def test_spawn_specialist_callback_failure_does_not_break_spawn(conv_db):
+    """If on_spawn raises, the spawn still returns success and the chat
+    already happened — alert is best-effort."""
+    def boom(event):
+        raise RuntimeError("signal-cli down")
+    poster, _ = _ok_poster_factory(session_id="spec-sess-9")
+    _seed_session(conv_db, session_id="spec-sess-9", agent="vett",
+                  title="[specialist:kernel_analyst:node-1]")
+    tool = build_spawn_specialist_tool(
+        conv_db_path=conv_db, http_poster=poster, on_spawn=boom,
+    )
+    result = tool.handler(_spawn_args())
+    # Spawn still landed despite the failing callback
+    assert result["specialist_id"] == "spec-sess-9"
+    assert "error" not in result
+
+
+def test_spawn_specialist_no_callback_when_session_mint_fails(conv_db):
+    """If the session mint fails, on_spawn should NOT fire (spawn never
+    actually happened)."""
+    import urllib.error, io
+    captured = []
+    def on_spawn(event):
+        captured.append(event)
+    def failing_poster(url, body, timeout):
+        if url.endswith("/sessions"):
+            raise urllib.error.HTTPError(url, 500, "boom", hdrs={},
+                                         fp=io.BytesIO(b""))
+        return {"content": "shouldn't reach", "session_id": "x",
+                "finish_reason": "stop"}
+    tool = build_spawn_specialist_tool(
+        conv_db_path=conv_db, http_poster=failing_poster, on_spawn=on_spawn,
+    )
+    result = tool.handler(_spawn_args())
+    assert result.get("error") == "spawn_failed"
+    assert captured == []
+
+
 def test_spawn_specialist_archived_sessions_do_not_count_against_cap(conv_db):
     """Sessions retitled to '[specialist-archived:...]' free up cap room."""
     # 3 archived + 0 active = under cap

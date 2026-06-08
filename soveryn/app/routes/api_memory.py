@@ -8,6 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 from soveryn.app.services.memory_activity import (
     daily_write_counts, recent_library_writes, total_node_count,
 )
+from soveryn.app.services.specialists_view import recent_dac_edges
 from soveryn.memory.lattice import LatticeStore
 
 bp = Blueprint("api_memory", __name__)
@@ -16,6 +17,8 @@ _MAX_DAYS = 90
 _DEFAULT_DAYS = 14
 _LIBRARY_FEED_DEFAULT_LIMIT = 12
 _LIBRARY_FEED_MAX_LIMIT = 50
+_DAC_EDGES_DEFAULT_LIMIT = 12
+_DAC_EDGES_MAX_LIMIT = 50
 
 
 def _err(code: str, message: str, status: int):
@@ -82,5 +85,42 @@ def api_memory_library_writes():
                 "tags": list(w.tags),
             }
             for w in writes
+        ],
+    }), 200
+
+
+@bp.get("/api/memory/dac_edges")
+def api_memory_dac_edges():
+    """Recent Direct Agent Communication traffic — surfaces
+    direct_command + direct_query edges with sender/target/coord/head
+    so the mission control comm-bus panel can show the orchestrator at
+    work in real time."""
+    raw = request.args.get("limit", str(_DAC_EDGES_DEFAULT_LIMIT))
+    try:
+        limit = int(raw)
+    except ValueError:
+        return _err("invalid_message", f"limit must be an integer, got {raw!r}", 400)
+    if limit < 1:
+        return _err("invalid_message", "limit must be >= 1", 400)
+    limit = min(limit, _DAC_EDGES_MAX_LIMIT)
+
+    state = current_app.extensions["soveryn"]
+    lattice_db_path = state["env"].lattice_db
+    edges = recent_dac_edges(lattice_db_path, limit=limit)
+    return jsonify({
+        "limit": limit,
+        "edges": [
+            {
+                "edge_id": e.edge_id,
+                "relationship": e.relationship,
+                "sender": e.sender,
+                "target": e.target,
+                "coord_node_id": e.coord_node_id,
+                "session_id": e.session_id,
+                "message_head": e.message_head,
+                "created_at": e.created_at,
+                "age_minutes": e.age_minutes,
+            }
+            for e in edges
         ],
     }), 200

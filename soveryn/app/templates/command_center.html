@@ -154,9 +154,105 @@
 
   .bottom-row { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; }
 
-  .activity h3, .system h3, .library-writes h3 {
+  .activity h3, .system h3, .library-writes h3, .specialists h3, .commbus h3 {
     font-size:11px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em;
     margin-bottom:14px;
+  }
+
+  /* Specialists + Comm bus row — twin panels side by side. */
+  .orch-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .specialists-feed, .commbus-feed {
+    display:flex; flex-direction:column; gap:10px;
+    max-height:300px; overflow-y:auto; padding-right:4px;
+  }
+
+  /* Active specialists — each item shows name, host agent, coord anchor,
+     age, kill button. Kill button is intentionally muted bronze (not red)
+     so Jon isn't tempted to fire it prematurely. */
+  .specialist-item {
+    padding:12px 14px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.05);
+    border-radius:8px;
+    display:grid; grid-template-columns:1fr auto; gap:10px; align-items:start;
+  }
+  .specialist-item[data-empty] {
+    background:none; border:none; padding:8px 0;
+    color:rgba(236,243,244,0.35); font-style:italic;
+  }
+  .specialist-item .info { min-width:0; }
+  .specialist-item .info .name {
+    font-size:13px; font-weight:500; color:var(--sov-olive);
+    margin-bottom:4px;
+  }
+  .specialist-item .info .meta {
+    font-size:11px; color:rgba(236,243,244,0.55); line-height:1.5;
+  }
+  .specialist-item .info .meta .host {
+    color:rgba(236,243,244,0.75); font-weight:500;
+  }
+  .specialist-item .info .meta .coord {
+    font-family:ui-monospace,monospace; font-size:10px;
+    color:rgba(236,243,244,0.5);
+  }
+  .specialist-item .info .meta .mode {
+    text-transform:uppercase; letter-spacing:0.08em; font-size:10px;
+    color:rgba(236,243,244,0.45);
+  }
+  .specialist-item .info .meta .age {
+    font-variant-numeric:tabular-nums;
+    color:rgba(236,243,244,0.45);
+  }
+  .specialist-item .kill {
+    background:rgba(198,154,90,0.08); border:1px solid rgba(198,154,90,0.25);
+    color:var(--sov-bronze); font-size:10px;
+    text-transform:uppercase; letter-spacing:0.1em;
+    padding:6px 12px; border-radius:6px; cursor:pointer;
+  }
+  .specialist-item .kill:hover {
+    background:rgba(198,154,90,0.15); border-color:rgba(198,154,90,0.5);
+  }
+  .specialist-item .kill[disabled] { opacity:0.4; cursor:wait; }
+
+  /* Comm bus — direct_command (filled olive arrow) + direct_query (open
+     blue arrow) edges. Each item one row, compact. */
+  .commbus-item {
+    padding:8px 12px;
+    background:rgba(255,255,255,0.025);
+    border-radius:6px;
+    display:flex; flex-direction:column; gap:4px;
+    font-size:12px;
+  }
+  .commbus-item[data-empty] {
+    background:none; padding:8px 0;
+    color:rgba(236,243,244,0.35); font-style:italic;
+  }
+  .commbus-item .head {
+    display:flex; gap:8px; align-items:baseline;
+    font-size:10px; text-transform:uppercase; letter-spacing:0.10em;
+    color:rgba(236,243,244,0.5);
+  }
+  .commbus-item .head .arrow {
+    font-family:ui-monospace,monospace; font-size:13px; line-height:1;
+  }
+  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-olive); }
+  .commbus-item[data-rel="direct_query"]   .head .arrow { color:var(--sov-electric-blue); }
+  .commbus-item .head .sender, .commbus-item .head .target {
+    font-weight:500; color:rgba(236,243,244,0.75);
+  }
+  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-olive); }
+  .commbus-item[data-sender="vett"]     .head .sender { color:var(--sov-electric-blue); }
+  .commbus-item[data-sender="scotty"]   .head .sender { color:var(--sov-bronze); }
+  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-olive); }
+  .commbus-item[data-target="vett"]     .head .target { color:var(--sov-electric-blue); }
+  .commbus-item[data-target="scotty"]   .head .target { color:var(--sov-bronze); }
+  .commbus-item .head .age {
+    margin-left:auto; font-variant-numeric:tabular-nums;
+    color:rgba(236,243,244,0.4);
+  }
+  .commbus-item .body {
+    color:rgba(236,243,244,0.78); line-height:1.4;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
 
   /* Library writes feed — surfaces type='library' nodes from the lattice.
@@ -414,6 +510,26 @@
         </div>
         <div class="attention" data-attention aria-live="polite">
           <div class="empty">nothing needs attention.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
+         Specialists shows active ephemeral DSL specialists she's spawned,
+         each with a kill switch (Jon's authoritative override per her
+         spec); comm bus shows recent direct_command / direct_query edges
+         so the conversation between agents is visible in real time. -->
+    <section class="orch-row">
+      <div class="panel specialists" data-testid="specialists-panel">
+        <h3>Active specialists</h3>
+        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Active specialists">
+          <div class="specialist-item" data-empty>none active.</div>
+        </div>
+      </div>
+      <div class="panel commbus" data-testid="commbus-panel">
+        <h3>Comm bus</h3>
+        <div class="commbus-feed" data-commbus-feed aria-live="polite" aria-label="Recent direct messages between agents">
+          <div class="commbus-item" data-empty>no recent traffic.</div>
         </div>
       </div>
     </section>
@@ -714,6 +830,107 @@
     }).join("");
   }
 
+  // ─── Active specialists + kill switch ────────────────────────────────────
+  async function killSpecialist(specialistId, btn) {
+    if (!specialistId) return;
+    if (!confirm(`Kill specialist ${specialistId.slice(0, 8)}…? Aetheria will see the session was killed (not terminated).`)) {
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const r = await fetch("/api/specialists/kill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specialist_id: specialistId }),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert(`Kill failed: ${err.error?.message || r.status}`);
+        btn.disabled = false;
+        return;
+      }
+      // Refresh the panel
+      renderSpecialists();
+    } catch (e) {
+      alert(`Kill error: ${e.message}`);
+      btn.disabled = false;
+    }
+  }
+
+  async function renderSpecialists() {
+    const data = await fetchJson("/api/specialists/active");
+    const container = document.querySelector("[data-specialists-feed]");
+    if (!container || !data) return;
+    if (!data.active || data.active.length === 0) {
+      container.innerHTML = `<div class="specialist-item" data-empty>none active.</div>`;
+      return;
+    }
+    const escapeHtml = (s) => String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    const formatAge = (m) => {
+      if (m < 60) return `${m}m`;
+      if (m < 1440) return `${Math.round(m / 60)}h`;
+      return `${Math.round(m / 1440)}d`;
+    };
+    container.innerHTML = data.active.map(s => {
+      const id = escapeHtml(s.specialist_id);
+      return `
+        <div class="specialist-item">
+          <div class="info">
+            <div class="name">${escapeHtml(s.name)}</div>
+            <div class="meta">
+              host <span class="host">${escapeHtml(s.host_agent)}</span>
+              · <span class="coord">${escapeHtml(s.coord_node_id.slice(0, 12))}${s.coord_node_id.length > 12 ? '…' : ''}</span>
+              · <span class="age">${formatAge(s.age_minutes)} old</span>
+            </div>
+          </div>
+          <button class="kill" data-specialist-id="${id}" title="Kill (Jon's override)">kill</button>
+        </div>
+      `;
+    }).join("");
+    container.querySelectorAll(".kill").forEach(btn => {
+      btn.addEventListener("click", () => killSpecialist(btn.dataset.specialistId, btn));
+    });
+  }
+
+  // ─── Comm bus (recent DAC traffic) ───────────────────────────────────────
+  async function renderCommBus() {
+    const data = await fetchJson("/api/memory/dac_edges?limit=10");
+    const container = document.querySelector("[data-commbus-feed]");
+    if (!container || !data) return;
+    if (!data.edges || data.edges.length === 0) {
+      container.innerHTML = `<div class="commbus-item" data-empty>no recent traffic.</div>`;
+      return;
+    }
+    const escapeHtml = (s) => String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    const formatAge = (m) => {
+      if (m < 60) return `${m}m`;
+      if (m < 1440) return `${Math.round(m / 60)}h`;
+      return `${Math.round(m / 1440)}d`;
+    };
+    container.innerHTML = data.edges.map(e => {
+      // Arrow glyph: command = filled, query = open
+      const arrow = e.relationship === "direct_command" ? "→" : "?";
+      return `
+        <div class="commbus-item"
+             data-rel="${escapeHtml(e.relationship)}"
+             data-sender="${escapeHtml(e.sender)}"
+             data-target="${escapeHtml(e.target)}">
+          <div class="head">
+            <span class="sender">${escapeHtml(e.sender)}</span>
+            <span class="arrow">${arrow}</span>
+            <span class="target">${escapeHtml(e.target)}</span>
+            <span class="age">${formatAge(e.age_minutes)} ago</span>
+          </div>
+          <div class="body">${escapeHtml(e.message_head)}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
   function refreshAll() {
     renderGreeting();
@@ -725,6 +942,8 @@
     renderDaemons();
     renderBoards();
     renderLibraryWrites();
+    renderSpecialists();
+    renderCommBus();
   }
   document.addEventListener("DOMContentLoaded", () => {
     refreshAll();

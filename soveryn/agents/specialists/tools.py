@@ -36,6 +36,7 @@ import sqlite3
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -55,6 +56,20 @@ _VALID_TARGET_AGENTS = frozenset({"vett", "scotty"})
 _VALID_INTERACTION_MODES = frozenset({"critic", "builder", "researcher"})
 _SESSION_TITLE_PREFIX = "[specialist:"
 _ARCHIVED_TITLE_PREFIX = "[specialist-archived:"
+
+
+@dataclass(frozen=True)
+class SpawnEvent:
+    """Payload passed to the on_spawn callback when a specialist lands.
+    Lets startup wire a signal_send alert to Jon's phone without coupling
+    spawn_specialist directly to the signal bridge."""
+    specialist_id: str
+    name: str
+    domain: str
+    objective: str
+    interaction_mode: str
+    target_agent: str
+    coord_node_id: str
 
 
 def _default_http_poster(url: str, body: dict, timeout: float) -> dict:
@@ -130,6 +145,7 @@ def build_spawn_specialist_tool(
     owner_agent: str = "aetheria",
     conv_db_path: Path,
     http_poster: Callable[[str, dict, float], dict] | None = None,
+    on_spawn: Callable[[SpawnEvent], None] | None = None,
     vnext_base: str = "http://127.0.0.1:5001",
     concurrency_cap: int = _DEFAULT_CONCURRENCY_CAP,
     session_timeout_seconds: float = 10.0,
@@ -258,6 +274,27 @@ def build_spawn_specialist_tool(
                 "specialist_id": session_id,
                 "coord_node_id": coord_node_id,
             }
+
+        # Fire the spawn alert AFTER chat success. If the callback fails
+        # (e.g., signal-cli down), log and continue — Aetheria's tool
+        # result is already valid.
+        if on_spawn is not None:
+            try:
+                on_spawn(SpawnEvent(
+                    specialist_id=session_id,
+                    name=name,
+                    domain=domain.strip(),
+                    objective=objective.strip(),
+                    interaction_mode=interaction_mode,
+                    target_agent=target_agent,
+                    coord_node_id=coord_node_id,
+                ))
+            except Exception:
+                logger.exception(
+                    "on_spawn callback failed for specialist %s; "
+                    "spawn already landed",
+                    session_id,
+                )
 
         return {
             "specialist_id": session_id,
@@ -604,12 +641,14 @@ def register_specialist_tools(
     conv_db_path: Path,
     owner_agent: str = "aetheria",
     vnext_base: str = "http://127.0.0.1:5001",
+    on_spawn: Callable[[SpawnEvent], None] | None = None,
 ) -> None:
     """Register all three specialist tools for the given agent."""
     registry.register(build_spawn_specialist_tool(
         owner_agent=owner_agent,
         conv_db_path=conv_db_path,
         vnext_base=vnext_base,
+        on_spawn=on_spawn,
     ))
     registry.register(build_query_specialist_tool(
         owner_agent=owner_agent,
