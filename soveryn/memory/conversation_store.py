@@ -127,9 +127,16 @@ END;
 class ConversationStore:
     """SQLite-backed conversation persistence. Path-injected; no module state."""
 
-    def __init__(self, db_path: Path, timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS,
+        *,
+        observer: object | None = None,
+    ) -> None:
         self.db_path = Path(db_path)
         self.timeout_seconds = timeout_seconds
+        self.observer = observer
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 
@@ -193,11 +200,12 @@ class ConversationStore:
             )
         now = datetime.now().isoformat()
         with self._conn() as conn:
-            conn.execute(
+            cur = conn.execute(
                 "INSERT INTO conversations (session_id, agent, role, content, timestamp, source, finish_reason) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (session_id, agent, role, content, now, source, finish_reason),
             )
+            inserted_rowid = cur.lastrowid
             conn.execute(
                 "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
                 (now, session_id),
@@ -222,6 +230,19 @@ class ConversationStore:
                                 "UPDATE conversation_meta SET title = ? WHERE session_id = ?",
                                 (derived, session_id),
                             )
+        # Observer notification happens AFTER commit so the observer can
+        # safely open its own connection (e.g. for the daemon-prefix title
+        # check) without deadlocking on the WAL. Best-effort — never raises.
+        if self.observer is not None and inserted_rowid is not None:
+            try:
+                self.observer.on_turn_saved(
+                    session_id=session_id,
+                    turn_rowid=int(inserted_rowid),
+                    role=role,
+                    content=content,
+                )
+            except Exception:  # pragma: no cover — defended at observer layer too
+                pass
 
     def load_history(self, session_id: str) -> tuple[Turn, ...]:
         """Return all turns for a session in insertion order."""

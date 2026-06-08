@@ -14,6 +14,10 @@ from soveryn.platform.salience.markers import (
     MarkerHit,
     detect_markers,
 )
+from soveryn.platform.salience.observer import (
+    DAEMON_SESSION_TITLE_PREFIXES,
+    SalienceObserver,
+)
 from soveryn.platform.salience.store import (
     SalienceCandidate,
     create_buffer_table,
@@ -24,9 +28,11 @@ from soveryn.platform.salience.store import (
 )
 
 __all__ = [
+    "DAEMON_SESSION_TITLE_PREFIXES",
     "MARKER_CATEGORIES",
     "MarkerHit",
     "SalienceCandidate",
+    "SalienceObserver",
     "create_buffer_table",
     "decay_old_pending",
     "detect_markers",
