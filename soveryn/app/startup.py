@@ -115,6 +115,22 @@ def create_app(
         )
         register_personal_files_tools(tool_registry, owner_agent="aetheria")
 
+        # Specialist-spawning primitive (DSL Orchestration v1).
+        # spawn_specialist / query_specialist / terminate_specialist let
+        # Aetheria instantiate session-scoped peer agents with a tight
+        # persona overlay for one coord node. Builds on DAC; max 3
+        # concurrent active specialists. See:
+        #   spec: docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md
+        #         (DSL Connection section)
+        #   memory: project_soveryn_dynamic_specialization_layer.md
+        from soveryn.agents.specialists.tools import register_specialist_tools
+        register_specialist_tools(
+            tool_registry,
+            conv_db_path=env.conversations_db,
+            owner_agent="aetheria",
+            vnext_base="http://127.0.0.1:5001",
+        )
+
         # Coordination Boards — register the four board tools for all three
         # agents per the locked spec (Aetheria 2026-06-01). The CoordinationStore
         # composes over the consolidated lattice DB (env.lattice_db == recall
