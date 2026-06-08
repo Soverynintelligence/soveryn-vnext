@@ -28,6 +28,10 @@ DEFAULT_CONVERSATIONS_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_m
 DEFAULT_SOULS_DIR = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/souls")
 DEFAULT_PINNED_MEMORY_PATH = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/pinned_memory.md")
 DEFAULT_RECALL_LATTICE_DB = DEFAULT_LATTICE_DB
+# Salience buffer lives in its OWN DB file — young, evolving schema kept
+# out of the critical recall WAL. Overridable via SOVERYN_SALIENCE_DB so
+# the heartbeat daemon, tests, and app startup all land on the same path.
+DEFAULT_SALIENCE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/salience_vnext.db")
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,7 @@ class EnvConfig:
     souls_dir: Path
     pinned_memory_path: Path
     recall_lattice_db: Path
+    salience_db: Path
 
 
 class EnvConfigError(ValueError):
@@ -99,4 +104,7 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         recall_lattice_db=_parse_path(
             "SOVERYN_RECALL_LATTICE_DB", env.get("SOVERYN_RECALL_LATTICE_DB"),
             default=DEFAULT_RECALL_LATTICE_DB),
+        salience_db=_parse_path(
+            "SOVERYN_SALIENCE_DB", env.get("SOVERYN_SALIENCE_DB"),
+            default=DEFAULT_SALIENCE_DB),
     )

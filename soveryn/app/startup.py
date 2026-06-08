@@ -61,7 +61,19 @@ def create_app(
 
     env = env if env is not None else load_env_config()
     if conv_store is None:
-        conv_store = ConversationStore(env.conversations_db)
+        # Salience buffer schema is ensured here so the observer can write
+        # candidates from the first turn. SalienceObserver is best-effort by
+        # contract — failures inside it never break save_turn.
+        from soveryn.platform.salience.observer import SalienceObserver
+        from soveryn.platform.salience.store import create_buffer_table
+        create_buffer_table(env.salience_db)
+        salience_observer = SalienceObserver(
+            salience_db=env.salience_db,
+            conv_db=env.conversations_db,
+        )
+        conv_store = ConversationStore(
+            env.conversations_db, observer=salience_observer,
+        )
     tool_registry = None
     coord_store = None
     coord_event_bus = None
@@ -295,6 +307,21 @@ def create_app(
                     embed_fn=_default_embed,
                     owner_agent=agent_name,
                 )
+
+            # Salience Engine promote tool — Aetheria-only. Gated on
+            # recall_lattice because promotion writes to library layer in the
+            # live lattice. Without recall_lattice, the engine still buffers
+            # candidates (observer runs above) but Aetheria can't promote.
+            from soveryn.platform.salience.tools import (
+                register_promote_salience_candidate_tool,
+            )
+            register_promote_salience_candidate_tool(
+                tool_registry,
+                salience_db=env.salience_db,
+                conv_db=env.conversations_db,
+                lattice_store=recall_lattice,
+                owner_agent="aetheria",
+            )
 
         # recent_self_audit — closes the introspection gap surfaced 2026-06-03:
         # agents can't see intermediate tool calls in their conversation
