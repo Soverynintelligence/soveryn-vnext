@@ -104,6 +104,17 @@ def create_app(
                 embed_fn=_default_embed,
             )
 
+        # Personal-file browser — bounded read access to Jon's content
+        # directories (~/Pictures, ~/Desktop, ~/Documents, ~/Downloads).
+        # Surfaced during signal-images T8 verification when Aetheria
+        # couldn't list her way to a photo to send Jon. This gives her
+        # autonomy over what to share without needing him to dictate
+        # paths. See soveryn/agents/aetheria/tools/personal_files.py.
+        from soveryn.agents.aetheria.tools.personal_files import (
+            register_personal_files_tools,
+        )
+        register_personal_files_tools(tool_registry, owner_agent="aetheria")
+
         # Coordination Boards — register the four board tools for all three
         # agents per the locked spec (Aetheria 2026-06-01). The CoordinationStore
         # composes over the consolidated lattice DB (env.lattice_db == recall
