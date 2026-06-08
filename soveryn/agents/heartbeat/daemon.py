@@ -43,6 +43,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_VNEXT_BASE = "http://127.0.0.1:5001"
 DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
 DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
+DEFAULT_SALIENCE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/salience_vnext.db")
 
 # Window of lattice activity to summarise in the brief (separate from the
 # interval/backoff knobs since this is a *content* knob not a *timing* knob).
@@ -71,11 +72,13 @@ class HeartbeatDaemon:
         vnext_base: str = DEFAULT_VNEXT_BASE,
         lattice_db: Path = DEFAULT_LATTICE_DB,
         conv_db: Path = DEFAULT_CONV_DB,
+        salience_db: Path = DEFAULT_SALIENCE_DB,
     ) -> None:
         self.config = config
         self.vnext_base = vnext_base.rstrip("/")
         self.lattice_db = Path(lattice_db)
         self.conv_db = Path(conv_db)
+        self.salience_db = Path(salience_db)
         self._stop = False
         self._heartbeat_session_id: str | None = None
 
@@ -179,10 +182,19 @@ class HeartbeatDaemon:
                 minutes_since = int(
                     (now - last_heartbeat).total_seconds() // 60
                 )
+            # Salience digest — decay old, read pending, render. Best-effort:
+            # _gather_salience swallows its own errors. The outer try/except
+            # below still wraps it for defense-in-depth. since fallback covers
+            # the daemon's first tick where there's no prior heartbeat row.
+            since_for_salience = last_heartbeat or (now - timedelta(days=1))
+            salience_section = _gather_salience(
+                self.salience_db, since=since_for_salience,
+            )
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
                 lattice=lattice,
+                salience_section=salience_section,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")
@@ -489,16 +501,46 @@ class HeartbeatDaemon:
             logger.exception("failed to write heartbeat_log row %s", tick_id)
 
 
+def _gather_salience(salience_db: Path, *, since: datetime) -> str:
+    """Decay-then-read-then-render. Returns '' on empty or error.
+
+    Best-effort by contract — the heartbeat tick survives salience
+    problems. Local imports keep the daemon's import-time surface lean
+    (and let the test suite monkey-patch if needed).
+    """
+    from soveryn.platform.salience.store import (
+        decay_old_pending, pending_candidates_since,
+    )
+    from soveryn.platform.salience.digest import build_salience_digest_section
+    try:
+        decay_old_pending(salience_db, older_than_days=14)
+        cands = pending_candidates_since(salience_db, since=since, limit=20)
+        return build_salience_digest_section(cands)
+    except Exception:
+        logger.exception("heartbeat: salience gather failed; using empty section")
+        return ""
+
+
+def _build_daemon_from_env() -> HeartbeatDaemon:
+    """Construct a HeartbeatDaemon honoring env overrides.
+
+    Extracted from _main so the env-wiring is testable without launching
+    the run loop (which installs signal handlers + sleeps).
+    """
+    config = HeartbeatConfig.from_env()
+    return HeartbeatDaemon(
+        config,
+        vnext_base=os.environ.get("SOVERYN_HEARTBEAT_VNEXT_BASE", DEFAULT_VNEXT_BASE),
+        salience_db=Path(os.environ.get("SOVERYN_SALIENCE_DB", str(DEFAULT_SALIENCE_DB))),
+    )
+
+
 def _main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    config = HeartbeatConfig.from_env()
-    daemon = HeartbeatDaemon(
-        config,
-        vnext_base=os.environ.get("SOVERYN_HEARTBEAT_VNEXT_BASE", DEFAULT_VNEXT_BASE),
-    )
+    daemon = _build_daemon_from_env()
     daemon.run()
     return 0
 
