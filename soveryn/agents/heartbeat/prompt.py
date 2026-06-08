@@ -49,6 +49,7 @@ def build_heartbeat_prompt(
     minutes_since_last_heartbeat: int | None,
     board: BoardSnapshot,
     lattice: LatticeSnapshot,
+    salience_section: str = "",
 ) -> str:
     """Construct the heartbeat brief. Returns a plain-text prompt string."""
     lines: list[str] = []
@@ -101,6 +102,13 @@ def build_heartbeat_prompt(
             f"worth looking at."
         )
     lines.append("")
+
+    # Salience digest — surfaces buffered candidates flagged since the
+    # last heartbeat. Pre-rendered by the daemon; empty string when nothing
+    # to surface (keeps the prompt byte-identical to pre-engine output).
+    if salience_section:
+        lines.append(salience_section.rstrip())
+        lines.append("")
 
     # Reflective close — no prescribed action menu, no prescribed silence
     # phrase. The audit/sift options that used to live here were producing
