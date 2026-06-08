@@ -183,7 +183,37 @@ def _board(**kwargs) -> BoardSnapshot:
         stalled_blueprint_count=kwargs.get("stalled_blueprint_count", 0),
         blocked_blueprint_count=kwargs.get("blocked_blueprint_count", 0),
         oldest_open_signal_age_minutes=kwargs.get("oldest_open_signal_age_minutes"),
+        oldest_open_blueprint_title=kwargs.get("oldest_open_blueprint_title"),
+        oldest_open_blueprint_age_hours=kwargs.get("oldest_open_blueprint_age_hours"),
     )
+
+
+def test_prompt_surfaces_oldest_open_blueprint_by_name():
+    """When there's an Open Blueprint, the prompt names it + age. Counter
+    to 48h of 'Nothing right now' (2026-06-07): without a name, '2 open'
+    didn't pull her forward."""
+    prompt = build_heartbeat_prompt(
+        minutes_since_last_heartbeat=29,
+        board=_board(
+            open_blueprint_count=2,
+            oldest_open_blueprint_title="IMPLEMENTATION: Cognitive Shift Detector v1",
+            oldest_open_blueprint_age_hours=49,
+        ),
+        lattice=_lattice(),
+    )
+    assert "Cognitive Shift Detector v1" in prompt
+    assert "49h old" in prompt
+
+
+def test_prompt_omits_oldest_blueprint_line_when_title_absent():
+    """No Open Blueprints → no 'oldest open' line. Regression for the
+    counts-only baseline."""
+    prompt = build_heartbeat_prompt(
+        minutes_since_last_heartbeat=29,
+        board=_board(open_blueprint_count=0),
+        lattice=_lattice(),
+    )
+    assert "oldest open:" not in prompt
 
 
 def _lattice(**kwargs) -> LatticeSnapshot:

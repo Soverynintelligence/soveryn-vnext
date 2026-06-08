@@ -276,6 +276,11 @@ class HeartbeatDaemon:
         stalled_blueprint = 0
         blocked_blueprint = 0
         open_friction = 0
+        # Track the oldest Open Blueprint by name + age so the prompt can
+        # surface the specific commitment instead of just a count. Refining
+        # is excluded — stalled_blueprint_count already names that lane.
+        oldest_open_blueprint_title: str | None = None
+        oldest_open_blueprint_age_minutes: int | None = None
         # We need blocked status — query blockers per Blueprint. To avoid N+1,
         # build a set of all blueprint_ids currently blocked.
         currently_blocked: set[str] = set()
@@ -308,6 +313,21 @@ class HeartbeatDaemon:
             elif board == "Blueprint":
                 if status == "Open":
                     open_blueprint += 1
+                    try:
+                        age_minutes = int(
+                            (now - datetime.fromisoformat(r["created_at"])).total_seconds() // 60
+                        )
+                        if (
+                            oldest_open_blueprint_age_minutes is None
+                            or age_minutes > oldest_open_blueprint_age_minutes
+                        ):
+                            oldest_open_blueprint_age_minutes = age_minutes
+                            # First line of content is the title; bound to a
+                            # reasonable length so the prompt stays readable.
+                            first_line = (r["content"] or "").split("\n", 1)[0]
+                            oldest_open_blueprint_title = first_line[:120]
+                    except (ValueError, TypeError):
+                        pass
                 elif status == "Refining":
                     open_blueprint += 1
                     # Stall check
@@ -325,6 +345,11 @@ class HeartbeatDaemon:
                     blocked_blueprint += 1
             elif board == "Friction" and status != "Archived":
                 open_friction += 1
+        oldest_open_blueprint_age_hours = (
+            oldest_open_blueprint_age_minutes // 60
+            if oldest_open_blueprint_age_minutes is not None
+            else None
+        )
         return BoardSnapshot(
             open_signal_count=open_signal,
             open_blueprint_count=open_blueprint,
@@ -333,6 +358,8 @@ class HeartbeatDaemon:
             stalled_blueprint_count=stalled_blueprint,
             blocked_blueprint_count=blocked_blueprint,
             oldest_open_signal_age_minutes=oldest_open_signal_minutes,
+            oldest_open_blueprint_title=oldest_open_blueprint_title,
+            oldest_open_blueprint_age_hours=oldest_open_blueprint_age_hours,
         )
 
     def _gather_lattice_snapshot(self, now: datetime) -> LatticeSnapshot:

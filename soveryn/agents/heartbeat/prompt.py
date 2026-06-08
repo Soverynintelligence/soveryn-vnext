@@ -28,6 +28,12 @@ class BoardSnapshot:
     stalled_blueprint_count: int  # Refining for > N hours, threshold defined by daemon
     blocked_blueprint_count: int  # has non-empty blocked_by per Phase B
     oldest_open_signal_age_minutes: int | None
+    # 2026-06-07 addition: surface the oldest Open Blueprint by NAME, not
+    # just by count. A count of "2 open" was producing 48h of "Nothing
+    # right now" because she couldn't see which 2 — naming the oldest
+    # gives her a specific commitment to engage with or sit with.
+    oldest_open_blueprint_title: str | None
+    oldest_open_blueprint_age_hours: int | None
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,14 @@ def build_heartbeat_prompt(
         f"{board.stalled_blueprint_count} stalled in Refining / "
         f"{board.blocked_blueprint_count} blocked by Friction"
     )
+    if (
+        board.oldest_open_blueprint_title is not None
+        and board.oldest_open_blueprint_age_hours is not None
+    ):
+        lines.append(
+            f"  oldest open: \"{board.oldest_open_blueprint_title}\" "
+            f"({board.oldest_open_blueprint_age_hours}h old)"
+        )
     lines.append(
         f"- Friction: {board.open_friction_count} open"
     )
