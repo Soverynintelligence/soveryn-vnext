@@ -164,6 +164,19 @@ def create_app(
             on_spawn=_signal_alert_on_spawn,
         )
 
+        # Reflection voices — Skeptic/Empath/Creative/Technical/Intuitive
+        # facets running on Phi-3.5-mini-Uncensored via the router's
+        # 'reflection' alias. Different model family from Aetheria's
+        # Gemma 4 31B so the voices aren't five flavors of the same
+        # backend. Persona-overlay-as-her-essence per the locked
+        # 2026-05-23 design + Jon's 2026-06-08 model call ("use phi").
+        from soveryn.agents.aetheria.reflection.tools import (
+            register_reflect_through_voices_tool,
+        )
+        register_reflect_through_voices_tool(
+            tool_registry, owner_agent="aetheria",
+        )
+
         # Coordination Boards — register the four board tools for all three
         # agents per the locked spec (Aetheria 2026-06-01). The CoordinationStore
         # composes over the consolidated lattice DB (env.lattice_db == recall
