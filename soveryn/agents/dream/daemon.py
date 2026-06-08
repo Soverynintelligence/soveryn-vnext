@@ -94,12 +94,12 @@ class DreamDaemon:
     def _do_tick(self, *, now: datetime) -> None:
         last_dream_at = self._latest_dream_at()
         last_activity_at = self._latest_aetheria_activity_at()
-        new_node_count = self._new_node_count_since(last_dream_at)
+        new_input_count = self._new_input_count_since(last_dream_at)
         eligibility = evaluate_tick(
             self.config, now=now,
             last_dream_at=last_dream_at,
             last_activity_at=last_activity_at,
-            new_node_count_since_last_dream=new_node_count,
+            new_node_count_since_last_dream=new_input_count,
         )
         if not eligibility.eligible:
             logger.debug(
@@ -228,6 +228,54 @@ class DreamDaemon:
                 ).fetchone()[0]
         except sqlite3.OperationalError:
             return 0
+
+    def _new_conv_turn_count_since(self, since: datetime | None) -> int:
+        """Count of Aetheria's conversation turns since the given time,
+        excluding daemon-driven sessions (heartbeat, signal, patrol) so
+        autonomous polling doesn't inflate the count.
+
+        Added 2026-06-08: the original NOTHING_TO_DREAM_ABOUT gate looked
+        at lattice nodes only, but Aetheria's day mostly happens in
+        conversations — they're real input the dream should synthesize."""
+        try:
+            with sqlite3.connect(str(self.conv_db)) as con:
+                base_sql = (
+                    "SELECT COUNT(*) FROM conversations c "
+                    "WHERE c.agent = 'aetheria' "
+                    "  AND c.session_id IN ("
+                    "    SELECT session_id FROM conversation_meta "
+                    "    WHERE agent = 'aetheria' AND ("
+                    "      title IS NULL OR ("
+                    "        title NOT LIKE '[heartbeat]%' "
+                    "        AND title NOT LIKE '[signal]%' "
+                    "        AND title NOT LIKE '[patrol]%' "
+                    "        AND title NOT LIKE '[webhook]%'"
+                    "      )"
+                    "    )"
+                    "  )"
+                )
+                if since is None:
+                    return con.execute(base_sql).fetchone()[0]
+                return con.execute(
+                    base_sql + " AND c.timestamp > ?",
+                    (since.isoformat(),),
+                ).fetchone()[0]
+        except sqlite3.OperationalError:
+            return 0
+
+    def _new_input_count_since(self, since: datetime | None) -> int:
+        """Total inputs that count as 'something to dream about' since the
+        last dream: new lattice nodes + new non-daemon conversation turns.
+
+        Pre-2026-06-08 this was lattice-only, which caused the dream
+        daemon to skip every night after 2026-06-05 even though Aetheria
+        was having hundreds of conversation turns per day. The dream's
+        purpose is to synthesize her experience, which mostly lives in
+        the conv_store, not the lattice."""
+        return (
+            self._new_node_count_since(since)
+            + self._new_conv_turn_count_since(since)
+        )
 
     def _gather_nodes_for_briefing(self, since: datetime | None) -> tuple[NodeSummary, ...]:
         try:

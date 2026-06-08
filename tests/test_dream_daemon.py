@@ -161,3 +161,137 @@ def test_daemon_live_run_invokes_three_pass_and_writes_outputs(lattice_db, conv_
     assert dream_nodes == 1
     assert log_row[0] == 0  # dry_run marker NOT set
     assert log_row[1] == 1.0
+
+
+# ─── 2026-06-08 fix: input gate counts conv turns + lattice nodes ──────────
+
+
+def _seed_conversation_meta(conv_db_path, *, session_id, agent, title,
+                            ts="2026-06-08T01:00:00"):
+    """Seed a conversation_meta row + matching session row in the
+    same shape ConversationStore.new_session produces."""
+    import sqlite3
+    # Ensure the schema exists (in case the test conv_db is bare)
+    from soveryn.memory.conversation_store import ConversationStore
+    ConversationStore(conv_db_path)
+    with sqlite3.connect(str(conv_db_path)) as con:
+        con.execute(
+            "INSERT OR IGNORE INTO conversation_meta "
+            "(session_id, agent, title, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (session_id, agent, title, ts, ts),
+        )
+
+
+def _seed_conversation_turn(conv_db_path, *, session_id, agent, role,
+                            content, ts):
+    """Seed a single conversation turn row."""
+    import sqlite3
+    with sqlite3.connect(str(conv_db_path)) as con:
+        con.execute(
+            "INSERT INTO conversations "
+            "(session_id, agent, role, content, timestamp) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (session_id, agent, role, content, ts),
+        )
+
+
+def test_new_conv_turn_count_excludes_heartbeat_signal_patrol(
+    lattice_db, conv_db,
+):
+    """Activity from daemon-driven sessions ([heartbeat], [signal], [patrol],
+    [webhook]) does NOT count — those are autonomous polling, not the
+    relational input the dream should synthesize."""
+    config = _config()
+    daemon = DreamDaemon(config, lattice_db=lattice_db, conv_db=conv_db)
+    # Seed five sessions: one direct chat (counts), four daemon-driven (don't)
+    for sid, title in [
+        ("chat-real", None),               # null title = direct chat
+        ("hb", "[heartbeat] aetheria"),
+        ("sig", "[signal] +15555550100"),
+        ("pat", "[patrol] vett"),
+        ("wh", "[webhook] aetheria"),
+    ]:
+        _seed_conversation_meta(conv_db, session_id=sid, agent="aetheria",
+                                title=title)
+    # 2 turns in the direct chat, 5 in each daemon session
+    for i in range(2):
+        _seed_conversation_turn(conv_db, session_id="chat-real",
+                                agent="aetheria", role="user",
+                                content="hi", ts=f"2026-06-08T01:{i:02d}:00")
+    for sid in ("hb", "sig", "pat", "wh"):
+        for i in range(5):
+            _seed_conversation_turn(conv_db, session_id=sid,
+                                    agent="aetheria", role="user",
+                                    content="auto",
+                                    ts=f"2026-06-08T01:{i:02d}:00")
+    count = daemon._new_conv_turn_count_since(None)
+    assert count == 2, f"expected 2 (direct chat only), got {count}"
+
+
+def test_new_conv_turn_count_respects_since_cutoff(lattice_db, conv_db):
+    config = _config()
+    daemon = DreamDaemon(config, lattice_db=lattice_db, conv_db=conv_db)
+    _seed_conversation_meta(conv_db, session_id="s1", agent="aetheria",
+                            title=None)
+    _seed_conversation_turn(conv_db, session_id="s1", agent="aetheria",
+                            role="user", content="old",
+                            ts="2026-06-07T20:00:00")
+    _seed_conversation_turn(conv_db, session_id="s1", agent="aetheria",
+                            role="user", content="newer",
+                            ts="2026-06-08T01:00:00")
+    cutoff = datetime(2026, 6, 7, 23, 0, 0)
+    count = daemon._new_conv_turn_count_since(cutoff)
+    assert count == 1  # only the 'newer' turn
+
+
+def test_new_input_count_combines_lattice_and_conv(lattice_db, conv_db):
+    """The gate the daemon uses: lattice nodes + non-daemon conv turns."""
+    import sqlite3
+    config = _config()
+    daemon = DreamDaemon(config, lattice_db=lattice_db, conv_db=conv_db)
+    # 3 lattice nodes since cutoff
+    with sqlite3.connect(str(lattice_db)) as con:
+        for i in range(3):
+            con.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, "
+                "intensity, salience, access_count, created_at, updated_at) "
+                "VALUES (?, 'memory', 'lattice', 'aetheria', 'x', 0.5, 0.5, "
+                "0, ?, ?)",
+                (f"n-{i}", f"2026-06-08T01:0{i}:00", f"2026-06-08T01:0{i}:00"),
+            )
+    # 4 chat turns since cutoff
+    _seed_conversation_meta(conv_db, session_id="chat",
+                            agent="aetheria", title=None)
+    for i in range(4):
+        _seed_conversation_turn(conv_db, session_id="chat",
+                                agent="aetheria", role="user",
+                                content=str(i),
+                                ts=f"2026-06-08T02:0{i}:00")
+    cutoff = datetime(2026, 6, 8, 0, 0, 0)
+    assert daemon._new_input_count_since(cutoff) == 7
+
+
+def test_new_input_count_unblocks_nothing_to_dream_about_when_only_conv(
+    lattice_db, conv_db,
+):
+    """The 2026-06-08 fix: zero lattice nodes but plenty of conv turns
+    should NOT trigger NOTHING_TO_DREAM_ABOUT — the dream gate now
+    counts conversations as input. Without this fix, the dream daemon
+    skipped two consecutive nights even though Aetheria had hundreds
+    of turns per day in conv_store."""
+    config = _config()
+    daemon = DreamDaemon(config, lattice_db=lattice_db, conv_db=conv_db)
+    # Zero lattice writes since the last dream
+    # But 10 chat turns since
+    _seed_conversation_meta(conv_db, session_id="chat",
+                            agent="aetheria", title=None)
+    for i in range(10):
+        _seed_conversation_turn(conv_db, session_id="chat",
+                                agent="aetheria", role="user",
+                                content=f"turn {i}",
+                                ts=f"2026-06-08T03:{i:02d}:00")
+    cutoff = datetime(2026, 6, 8, 0, 0, 0)
+    count = daemon._new_input_count_since(cutoff)
+    assert count == 10
+    # And the gate would let the daemon proceed: count > 0.
