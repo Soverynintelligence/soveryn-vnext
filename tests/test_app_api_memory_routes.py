@@ -179,3 +179,43 @@ def test_library_writes_includes_tags_and_id(library_client):
     assert set(scotty_write["tags"]) == {"milestone", "dac"}
     assert scotty_write["id"]
     assert scotty_write["created_at"]
+
+
+def test_library_writes_agent_filter_restricts_results(library_client):
+    resp = library_client.get("/api/memory/library_writes?agent=scotty")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["agent_filter"] == "scotty"
+    agents = {w["agent"] for w in data["writes"]}
+    assert agents == {"scotty"}
+
+
+def test_library_writes_tag_contains_filter(library_client):
+    resp = library_client.get("/api/memory/library_writes?tag_contains=milestone")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["tag_contains"] == "milestone"
+    # Only the scotty write (tagged with 'milestone') matches
+    assert len(data["writes"]) == 1
+    assert data["writes"][0]["agent"] == "scotty"
+
+
+def test_library_writes_combined_filters(library_client):
+    resp = library_client.get(
+        "/api/memory/library_writes?agent=scotty&tag_contains=dac"
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["agent_filter"] == "scotty"
+    assert data["tag_contains"] == "dac"
+    assert all(w["agent"] == "scotty" for w in data["writes"])
+
+
+def test_library_writes_empty_filter_strings_treated_as_no_filter(library_client):
+    """`?agent=&tag_contains=` should behave like no filter (full results)."""
+    resp = library_client.get("/api/memory/library_writes?agent=&tag_contains=")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["agent_filter"] is None
+    assert data["tag_contains"] is None
+    assert len(data["writes"]) == 3  # all library-type writes

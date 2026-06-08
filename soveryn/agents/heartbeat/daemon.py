@@ -98,6 +98,7 @@ class HeartbeatDaemon:
         # 2026-06-02 dry-run bake surfaced as 628k backoff rows in 68 min).
         last_heartbeat_at = self._latest_heartbeat_completed_at()
         last_tick_at: datetime | None = None
+        previous_skip_reason: str | None = None
         while not self._stop:
             now = datetime.now()
             last_activity_at = self._latest_aetheria_activity_at()
@@ -107,6 +108,30 @@ class HeartbeatDaemon:
                 last_heartbeat_at=last_heartbeat_at,
                 last_aetheria_activity_at=last_activity_at,
             )
+            # Boundary logging: emit ONE info line on transition into or out
+            # of QUIET_HOURS so an operator can verify the quiet window opened
+            # / closed without grepping every tick row in the DB. 2026-06-07
+            # fix: the 48h-of-templated-silence diagnosis would have been
+            # 30 seconds instead of 30 minutes if these boundaries had logs.
+            current_skip = (
+                eligibility.skip_reason.value
+                if eligibility.skip_reason is not None
+                else None
+            )
+            if current_skip != previous_skip_reason:
+                if current_skip == "quiet_hours":
+                    logger.info(
+                        "heartbeat entering quiet hours (config: %s) at %s",
+                        self.config.quiet_hours, now.isoformat(),
+                    )
+                elif previous_skip_reason == "quiet_hours":
+                    logger.info(
+                        "heartbeat exiting quiet hours at %s; "
+                        "next eligible state: %s",
+                        now.isoformat(),
+                        "eligible" if eligibility.eligible else current_skip,
+                    )
+                previous_skip_reason = current_skip
             self._do_tick(now=now, eligibility=eligibility)
             if eligibility.eligible:
                 last_heartbeat_at = now

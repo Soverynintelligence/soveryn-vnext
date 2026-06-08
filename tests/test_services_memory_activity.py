@@ -184,3 +184,78 @@ def test_recent_library_writes_preserves_per_node_agent_and_tags(store):
     writes = recent_library_writes(store)
     assert writes[0].agent == "scotty"
     assert set(writes[0].tags) == {"milestone", "dac"}
+
+
+# ─── filter params: agent + tag_contains ─────────────────────────────────
+
+
+def test_recent_library_writes_filters_by_agent(store):
+    from soveryn.app.services.memory_activity import recent_library_writes
+    base = datetime(2026, 6, 5, 12, tzinfo=timezone.utc)
+    _seed_library(store, base, agent="aetheria", content="a-write")
+    _seed_library(store, base + timedelta(seconds=1),
+                  agent="scotty", content="s-write")
+    _seed_library(store, base + timedelta(seconds=2),
+                  agent="vett", content="v-write")
+    aetheria_only = recent_library_writes(store, agent_filter="aetheria")
+    assert [w.content_head for w in aetheria_only] == ["a-write"]
+    scotty_only = recent_library_writes(store, agent_filter="scotty")
+    assert [w.content_head for w in scotty_only] == ["s-write"]
+
+
+def test_recent_library_writes_agent_filter_empty_string_treated_as_no_filter(store):
+    from soveryn.app.services.memory_activity import recent_library_writes
+    base = datetime(2026, 6, 5, 12, tzinfo=timezone.utc)
+    _seed_library(store, base, agent="aetheria", content="a")
+    _seed_library(store, base + timedelta(seconds=1), agent="vett", content="v")
+    writes = recent_library_writes(store, agent_filter="")
+    assert len(writes) == 2
+    writes2 = recent_library_writes(store, agent_filter="   ")
+    assert len(writes2) == 2
+
+
+def test_recent_library_writes_filters_by_tag_contains(store):
+    from soveryn.app.services.memory_activity import recent_library_writes
+    base = datetime(2026, 6, 5, 12, tzinfo=timezone.utc)
+    _seed_library(store, base, content="dac milestone",
+                  tags=["milestone", "dac"])
+    _seed_library(store, base + timedelta(seconds=1),
+                  content="funding probe", tags=["research", "funding"])
+    _seed_library(store, base + timedelta(seconds=2),
+                  content="cognitive detector schema probe",
+                  tags=["cognitive-shift-detector", "temp"])
+    # Substring match (case-insensitive)
+    detector = recent_library_writes(store, tag_contains="cognitive")
+    assert [w.content_head for w in detector] == ["cognitive detector schema probe"]
+    funding = recent_library_writes(store, tag_contains="fund")
+    assert [w.content_head for w in funding] == ["funding probe"]
+    # Uppercase needle still matches lowercase tags
+    upper = recent_library_writes(store, tag_contains="COGNITIVE")
+    assert [w.content_head for w in upper] == ["cognitive detector schema probe"]
+
+
+def test_recent_library_writes_tag_filter_does_not_match_content(store):
+    """The double-check on parsed tags prevents matching writes whose
+    content contains the needle but whose tags don't."""
+    from soveryn.app.services.memory_activity import recent_library_writes
+    base = datetime(2026, 6, 5, 12, tzinfo=timezone.utc)
+    _seed_library(store, base,
+                  content="this body mentions funding several times",
+                  tags=["research"])
+    writes = recent_library_writes(store, tag_contains="funding")
+    assert writes == []
+
+
+def test_recent_library_writes_combined_agent_and_tag_filters(store):
+    from soveryn.app.services.memory_activity import recent_library_writes
+    base = datetime(2026, 6, 5, 12, tzinfo=timezone.utc)
+    _seed_library(store, base, agent="aetheria",
+                  content="a-detector", tags=["cognitive-shift-detector"])
+    _seed_library(store, base + timedelta(seconds=1), agent="scotty",
+                  content="s-detector", tags=["cognitive-shift-detector"])
+    _seed_library(store, base + timedelta(seconds=2), agent="aetheria",
+                  content="a-other", tags=["research"])
+    writes = recent_library_writes(
+        store, agent_filter="aetheria", tag_contains="detector",
+    )
+    assert [w.content_head for w in writes] == ["a-detector"]

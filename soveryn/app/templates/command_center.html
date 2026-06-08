@@ -159,6 +159,26 @@
     margin-bottom:14px;
   }
 
+  /* Library writes filters live in a header row above the feed */
+  .library-header {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:12px; margin-bottom:14px;
+  }
+  .library-header h3 { margin-bottom:0; }
+  .library-filters { display:flex; gap:8px; align-items:center; }
+  .library-filters select, .library-filters input[type="text"] {
+    background:rgba(255,255,255,0.04); color:var(--text);
+    border:1px solid rgba(255,255,255,0.08); border-radius:6px;
+    padding:5px 10px; font-size:11px; font-family:inherit;
+    outline:none;
+  }
+  .library-filters input[type="text"]::placeholder {
+    color:rgba(236,243,244,0.35);
+  }
+  .library-filters select:focus, .library-filters input[type="text"]:focus {
+    border-color:rgba(148,164,85,0.5);
+  }
+
   /* Specialists + Comm bus row — twin panels side by side. */
   .orch-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .specialists-feed, .commbus-feed {
@@ -539,7 +559,19 @@
          the document-chunk bootstrap). Polled at the same cadence as the
          rest of mission control. -->
     <section class="panel library-writes" data-testid="library-writes">
-      <h3>Library writes</h3>
+      <div class="library-header">
+        <h3>Library writes</h3>
+        <div class="library-filters">
+          <select data-library-agent-filter aria-label="Filter by agent">
+            <option value="">All agents</option>
+            <option value="aetheria">Aetheria</option>
+            <option value="vett">Vett</option>
+            <option value="scotty">Scotty</option>
+          </select>
+          <input type="text" data-library-tag-filter placeholder="tag contains…"
+                 aria-label="Filter by tag substring" size="14">
+        </div>
+      </div>
       <div class="library-feed" data-library-feed aria-live="polite" aria-label="Recent library writes">
         <div class="library-item" data-empty>nothing in the library yet.</div>
       </div>
@@ -802,7 +834,12 @@
 
   // ─── Library writes feed ──────────────────────────────────────────────────
   async function renderLibraryWrites() {
-    const data = await fetchJson("/api/memory/library_writes?limit=10");
+    const agentSel = document.querySelector("[data-library-agent-filter]");
+    const tagInp = document.querySelector("[data-library-tag-filter]");
+    const params = new URLSearchParams({ limit: "10" });
+    if (agentSel && agentSel.value) params.set("agent", agentSel.value);
+    if (tagInp && tagInp.value.trim()) params.set("tag_contains", tagInp.value.trim());
+    const data = await fetchJson(`/api/memory/library_writes?${params}`);
     const container = document.querySelector("[data-library-feed]");
     if (!container || !data) return;
     if (!data.writes || data.writes.length === 0) {
@@ -946,6 +983,18 @@
     renderCommBus();
   }
   document.addEventListener("DOMContentLoaded", () => {
+    // Library filter inputs trigger an immediate refresh on change so the
+    // panel updates without waiting for the next 10s tick.
+    const agentSel = document.querySelector("[data-library-agent-filter]");
+    const tagInp = document.querySelector("[data-library-tag-filter]");
+    if (agentSel) agentSel.addEventListener("change", renderLibraryWrites);
+    if (tagInp) {
+      let debounceTimer = null;
+      tagInp.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(renderLibraryWrites, 250);
+      });
+    }
     refreshAll();
     setInterval(refreshAll, 10000);  // poll every 10s
   });

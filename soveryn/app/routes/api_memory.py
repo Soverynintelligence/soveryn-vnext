@@ -72,10 +72,18 @@ def api_memory_library_writes():
         return _err("invalid_message", "limit must be >= 1", 400)
     limit = min(limit, _LIBRARY_FEED_MAX_LIMIT)
 
+    agent_filter = request.args.get("agent")
+    tag_contains = request.args.get("tag_contains")
     store = _get_lattice_store()
-    writes = recent_library_writes(store, limit=limit)
+    writes = recent_library_writes(
+        store, limit=limit,
+        agent_filter=agent_filter,
+        tag_contains=tag_contains,
+    )
     return jsonify({
         "limit": limit,
+        "agent_filter": (agent_filter or "").strip() or None,
+        "tag_contains": (tag_contains or "").strip() or None,
         "writes": [
             {
                 "id": w.id,

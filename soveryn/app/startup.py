@@ -483,9 +483,58 @@ def _register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(Exception)
     def _unhandled(e):
-        # Don't leak internals; log full and return generic envelope.
-        logger.exception("unhandled exception in request")
-        return _error_response("internal_error", "Unhandled server error", 500)
+        # Werkzeug-recognized HTTPExceptions (404/405 etc.) should already
+        # be handled by their specific handlers above; if one slips through
+        # here, defer to its `code` rather than wrapping it as a 500.
+        from werkzeug.exceptions import HTTPException
+        if isinstance(e, HTTPException):
+            return _error_response(
+                "http_" + str(e.code),
+                e.description or e.name or "http error",
+                e.code or 500,
+            )
+
+        # Generate a short correlation id so the log line + response can be
+        # tied together. Critical when surfaces talk via JSON — the next 500
+        # is debuggable from the response body alone.
+        import traceback, uuid
+        from flask import request
+        correlation_id = uuid.uuid4().hex[:12]
+        exc_class = type(e).__name__
+        # Log full traceback + request metadata via the stdlib logger so the
+        # entry lands in soveryn-vnext.log alongside the access log entry.
+        try:
+            req_path = request.path
+            req_method = request.method
+        except Exception:
+            req_path = "?"
+            req_method = "?"
+        logger.exception(
+            "unhandled exception in request [correlation_id=%s] "
+            "%s %s -> %s",
+            correlation_id, req_method, req_path, exc_class,
+        )
+        # SOVERYN is localhost-only by default; if the localhost guard is
+        # on, surface the traceback in the response body too so Jon doesn't
+        # have to grep the log for a 500 that just happened. If the guard
+        # is OFF (multi-machine future), redact to type+message.
+        require_localhost = app.config.get("SOVERYN_REQUIRE_LOCALHOST", True)
+        body = {
+            "error": {
+                "code": "internal_error",
+                "message": "Unhandled server error",
+                "correlation_id": correlation_id,
+                "exception_class": exc_class,
+            }
+        }
+        if require_localhost:
+            tb_str = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+            # Cap traceback so a runaway recursion doesn't explode the body
+            if len(tb_str) > 8000:
+                tb_str = tb_str[:8000] + "\n... [truncated]"
+            body["error"]["traceback"] = tb_str
+            body["error"]["exception_message"] = str(e)
+        return jsonify(body), 500
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -78,21 +78,38 @@ def recent_library_writes(
     store: LatticeStore,
     *,
     limit: int = 12,
+    agent_filter: str | None = None,
+    tag_contains: str | None = None,
 ) -> list[LibraryWrite]:
     """Return the most recent library-layer writes (newest first).
 
     Filters to type='library' to surface deliberate synthesis writes, not
     document-chunk fragments from the initial library bootstrap.
+
+    agent_filter: when given, restrict to writes by that agent name.
+    tag_contains: when given, restrict to writes whose tags contain a
+                  string match for this needle (case-insensitive substring).
     """
     limit = max(1, min(limit, 100))
+    sql = (
+        "SELECT id, agent, content, created_at, tags FROM nodes "
+        "WHERE layer = 'library' AND type = ?"
+    )
+    params: list = [_LIBRARY_FEED_NODE_TYPE]
+    if agent_filter is not None and agent_filter.strip():
+        sql += " AND agent = ?"
+        params.append(agent_filter.strip())
+    if tag_contains is not None and tag_contains.strip():
+        # tags is a JSON array string; LIKE on the raw column with case
+        # insensitivity for friendly UI matching. The Python filter below
+        # double-checks on the parsed tags so we don't accept incidental
+        # content matches.
+        sql += " AND LOWER(tags) LIKE ?"
+        params.append(f"%{tag_contains.strip().lower()}%")
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
     with store._conn() as conn:
-        rows = conn.execute(
-            "SELECT id, agent, content, created_at, tags "
-            "FROM nodes "
-            "WHERE layer = 'library' AND type = ? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (_LIBRARY_FEED_NODE_TYPE, limit),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     out: list[LibraryWrite] = []
     for row in rows:
         # Single-line head — collapse newlines so the feed row stays compact.
@@ -106,6 +123,14 @@ def recent_library_writes(
             tags = tuple(json.loads(row["tags"] or "[]"))
         except (ValueError, TypeError):
             tags = ()
+        # Tag-filter double-check: the SQL LIKE matched the raw JSON
+        # string; verify the needle is actually in one of the parsed
+        # tags (case-insensitive) so we don't accept matches that hit
+        # only the JSON syntax characters.
+        if tag_contains is not None and tag_contains.strip():
+            needle = tag_contains.strip().lower()
+            if not any(needle in t.lower() for t in tags if isinstance(t, str)):
+                continue
         out.append(LibraryWrite(
             id=row["id"],
             agent=row["agent"] or "unknown",
