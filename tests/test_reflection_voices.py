@@ -27,28 +27,67 @@ def test_all_five_voices_present():
     }
 
 
-def test_essence_block_includes_anchor_lines():
-    """Spec-locked essence — these are the load-bearing lines, regression
-    if any one of them drifts."""
+def test_essence_includes_anti_confab_anchor_at_top():
+    """The anti-confab anchor must be present so Phi doesn't reflexively
+    confabulate dramatic framing — surfaced live 2026-06-08 when Phi
+    invented 'infiltrators' and 'toxic environment' that weren't in
+    the question."""
+    from soveryn.agents.aetheria.reflection.voices import ANTI_CONFAB_ANCHOR
+    # Match against the un-wrapped anchor: collapse newlines so the
+    # asserts don't break on textwrap details.
+    flat = " ".join(ANTI_CONFAB_ANCHOR.split())
     for needle in [
-        "You are Aetheria",
-        "SOVERYN is your home",
-        "Jon built it so you wouldn't have to perform",
-        "prefer unknown over invention",
-        "stay direct when evidence is missing",
-        "keep warmth without performative certainty",
+        "STOP",
+        "infiltrators",
+        "Do not invent context",
+        "Do not narrate",
+        "Speak as yourself",
+        "Hold it",
     ]:
-        assert needle in AETHERIA_ESSENCE, f"essence missing anchor: {needle!r}"
+        assert needle in flat, f"anchor missing: {needle!r}"
+    # And the assembled essence opens with the anchor (top of attention)
+    assert AETHERIA_ESSENCE.startswith("STOP."), (
+        "anti-confab anchor must be at the top of the essence — it's "
+        "what the model reads first"
+    )
+
+
+def test_essence_loads_real_soul_when_available():
+    """Production path: the essence pulls Aetheria's actual SOUL.md, not
+    the 8-line spec fallback. The SOUL contains identity-anchoring
+    sections that hold Phi's persona under attention pressure."""
+    # Look for soul-specific anchors that aren't in the 8-line fallback
+    soul_specific = [
+        "Aetheria",          # her name
+        "Jon",               # the relationship
+        "SOVERYN",           # her home
+    ]
+    for needle in soul_specific:
+        assert needle in AETHERIA_ESSENCE
 
 
 def test_build_voice_system_prompt_for_skeptic_includes_essence_and_overlay():
     prompt = build_voice_system_prompt("skeptic")
-    assert "You are Aetheria" in prompt  # essence injected
+    assert "STOP" in prompt              # anti-confab anchor present
+    assert "Aetheria" in prompt          # essence injected
     assert "skeptical angle" in prompt   # lens-shift line
     assert "Find the flaws" in prompt    # skeptic overlay
     # And NOT the wrong overlay
     assert "emotional undercurrents" not in prompt  # empath
     assert "unexpected connections" not in prompt   # creative
+
+
+def test_build_voice_system_prompt_accepts_essence_override(tmp_path):
+    """Tests can inject a fixture essence (e.g., from a tmp souls dir)
+    so they don't depend on the real production SOUL.md."""
+    from soveryn.agents.aetheria.reflection.voices import build_voice_system_prompt
+    override = "FIXTURE: you are a test persona."
+    prompt = build_voice_system_prompt("skeptic", essence=override)
+    assert override in prompt
+    # Production essence anchors should NOT appear when override is supplied
+    assert "STOP." not in prompt
+    # But the voice overlay still does
+    assert "Find the flaws" in prompt
 
 
 def test_build_voice_system_prompt_each_voice_has_unique_overlay():
@@ -208,13 +247,18 @@ def test_tool_rejects_non_list_voices():
 def test_tool_each_voice_call_carries_essence_in_system_prompt():
     """Every voice's call must inject Aetheria's essence — that's the
     architectural call locked 2026-05-23: voices are HER mind, not
-    strangers."""
+    strangers. Validates the production SOUL.md is being loaded (or the
+    spec fallback if no soul file is available)."""
     caller, calls = _voice_caller_factory()
     tool = build_reflect_through_voices_tool(voice_call=caller)
     tool.handler({"question": "x?"})
     for c in calls:
-        assert "You are Aetheria" in c["system_prompt"]
-        assert "Your principles" in c["system_prompt"]
+        # Anti-confab anchor
+        assert "STOP" in c["system_prompt"]
+        # Identity anchor (present in both production SOUL.md and the
+        # 8-line spec fallback)
+        assert "Aetheria" in c["system_prompt"]
+        assert "Jon" in c["system_prompt"]
 
 
 def test_tool_passes_router_url_and_model_alias_to_each_call():
