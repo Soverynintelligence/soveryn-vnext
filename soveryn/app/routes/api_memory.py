@@ -5,13 +5,17 @@ from dataclasses import asdict
 
 from flask import Blueprint, current_app, jsonify, request
 
-from soveryn.app.services.memory_activity import daily_write_counts, total_node_count
+from soveryn.app.services.memory_activity import (
+    daily_write_counts, recent_library_writes, total_node_count,
+)
 from soveryn.memory.lattice import LatticeStore
 
 bp = Blueprint("api_memory", __name__)
 
 _MAX_DAYS = 90
 _DEFAULT_DAYS = 14
+_LIBRARY_FEED_DEFAULT_LIMIT = 12
+_LIBRARY_FEED_MAX_LIMIT = 50
 
 
 def _err(code: str, message: str, status: int):
@@ -45,4 +49,38 @@ def api_memory_activity():
         "days": activity.days,
         "buckets": [asdict(b) for b in activity.buckets],
         "total_nodes": total_node_count(store),
+    }), 200
+
+
+@bp.get("/api/memory/library_writes")
+def api_memory_library_writes():
+    """Recent library-layer writes (newest first) for the mission control feed.
+
+    Surfaces type='library' nodes only — the deliberate synthesis writes
+    Aetheria + the agents make, not document-chunk fragments. Default 12,
+    max 50.
+    """
+    raw = request.args.get("limit", str(_LIBRARY_FEED_DEFAULT_LIMIT))
+    try:
+        limit = int(raw)
+    except ValueError:
+        return _err("invalid_message", f"limit must be an integer, got {raw!r}", 400)
+    if limit < 1:
+        return _err("invalid_message", "limit must be >= 1", 400)
+    limit = min(limit, _LIBRARY_FEED_MAX_LIMIT)
+
+    store = _get_lattice_store()
+    writes = recent_library_writes(store, limit=limit)
+    return jsonify({
+        "limit": limit,
+        "writes": [
+            {
+                "id": w.id,
+                "agent": w.agent,
+                "content_head": w.content_head,
+                "created_at": w.created_at,
+                "tags": list(w.tags),
+            }
+            for w in writes
+        ],
     }), 200

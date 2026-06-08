@@ -85,3 +85,97 @@ def test_memory_activity_includes_per_agent(client):
     flat = {b["date"]: b for b in data["buckets"]}
     today = max(flat)  # latest day in window
     assert flat[today]["count"] >= 1
+
+
+# ─── /api/memory/library_writes ─────────────────────────────────────────────
+
+@pytest.fixture
+def library_seeded_lattice(tmp_path):
+    """Seed a lattice with a mix of library + library_chunk + non-library
+    nodes so the route's type-filter is exercised."""
+    store = LatticeStore(tmp_path / "lattice.db")
+    base = datetime.now(timezone.utc)
+    import uuid, json
+    with store._conn() as conn:
+        rows = [
+            # (offset_min, agent, node_type, content, tags)
+            (0, "aetheria", "library", "Newest aetheria synthesis", ["synthesis"]),
+            (5, "scotty", "library", "DAC milestone note", ["milestone", "dac"]),
+            (10, "aetheria", "library_chunk", "doc fragment (should NOT appear)", []),
+            (15, "vett", "library", "Funding research summary", ["research"]),
+            (60, "aetheria", "fact", "private fact (NOT library layer)", []),
+        ]
+        for offset_min, agent, node_type, content, tags in rows:
+            ts = (base - timedelta(minutes=offset_min)).isoformat()
+            node_id = f"n-{uuid.uuid4().hex[:8]}"
+            layer = "library" if node_type in ("library", "library_chunk") else "private"
+            conn.execute(
+                "INSERT INTO nodes (id, type, layer, agent, content, intensity, "
+                "salience, access_count, tags, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, 0.3, 0.5, 0, ?, ?, ?)",
+                (node_id, node_type, layer, agent, content,
+                 json.dumps(tags), ts, ts),
+            )
+    return tmp_path / "lattice.db"
+
+
+@pytest.fixture
+def library_client(tmp_path, fake_chat, library_seeded_lattice, monkeypatch):
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(library_seeded_lattice))
+    conv = ConversationStore(tmp_path / "conv.db")
+    loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
+    app = create_app(conv_store=conv, agent_loops=loops)
+    app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
+    return app.test_client()
+
+
+def test_library_writes_default_returns_newest_first(library_client):
+    resp = library_client.get("/api/memory/library_writes")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    # 3 library nodes, no library_chunk, no fact
+    assert len(data["writes"]) == 3
+    heads = [w["content_head"] for w in data["writes"]]
+    assert "doc fragment (should NOT appear)" not in heads
+    assert "private fact (NOT library layer)" not in heads
+    # Order: newest first by created_at
+    assert data["writes"][0]["content_head"] == "Newest aetheria synthesis"
+    assert data["writes"][1]["agent"] == "scotty"
+    assert data["writes"][2]["agent"] == "vett"
+
+
+def test_library_writes_respects_limit(library_client):
+    resp = library_client.get("/api/memory/library_writes?limit=2")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["limit"] == 2
+    assert len(data["writes"]) == 2
+
+
+def test_library_writes_clamps_max_limit(library_client):
+    resp = library_client.get("/api/memory/library_writes?limit=999")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["limit"] == 50  # max
+
+
+def test_library_writes_rejects_non_int(library_client):
+    resp = library_client.get("/api/memory/library_writes?limit=banana")
+    assert resp.status_code == 400
+    assert resp.get_json()["error"]["code"] == "invalid_message"
+
+
+def test_library_writes_rejects_zero_and_negative(library_client):
+    resp = library_client.get("/api/memory/library_writes?limit=0")
+    assert resp.status_code == 400
+    resp = library_client.get("/api/memory/library_writes?limit=-1")
+    assert resp.status_code == 400
+
+
+def test_library_writes_includes_tags_and_id(library_client):
+    resp = library_client.get("/api/memory/library_writes")
+    data = resp.get_json()
+    scotty_write = next(w for w in data["writes"] if w["agent"] == "scotty")
+    assert set(scotty_write["tags"]) == {"milestone", "dac"}
+    assert scotty_write["id"]
+    assert scotty_write["created_at"]

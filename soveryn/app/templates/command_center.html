@@ -154,10 +154,49 @@
 
   .bottom-row { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; }
 
-  .activity h3, .system h3 {
+  .activity h3, .system h3, .library-writes h3 {
     font-size:11px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em;
     margin-bottom:14px;
   }
+
+  /* Library writes feed — surfaces type='library' nodes from the lattice.
+     Each item gets a left-border in the agent's color (olive / electric-blue /
+     bronze) so a quick scan tells you who's writing. */
+  .library-feed { display:flex; flex-direction:column; gap:12px; max-height:340px; overflow-y:auto; padding-right:4px; }
+  .library-item {
+    padding:10px 14px;
+    background:rgba(255,255,255,0.025);
+    border-left:3px solid rgba(236,243,244,0.20);
+    border-radius:0 6px 6px 0;
+    font-size:13px; color:rgba(236,243,244,0.85);
+    line-height:1.5;
+  }
+  .library-item[data-empty] {
+    color:rgba(236,243,244,0.35); font-style:italic;
+    background:none; border-left-color:transparent; padding:8px 0;
+  }
+  .library-item[data-agent="aetheria"] { border-left-color:var(--sov-olive); }
+  .library-item[data-agent="vett"]     { border-left-color:var(--sov-electric-blue); }
+  .library-item[data-agent="scotty"]   { border-left-color:var(--sov-bronze); }
+  .library-item .head {
+    display:flex; gap:10px; align-items:baseline;
+    font-size:10px; text-transform:uppercase; letter-spacing:0.10em;
+    margin-bottom:4px;
+  }
+  .library-item .head .who { font-weight:500; }
+  .library-item[data-agent="aetheria"] .head .who { color:var(--sov-olive); }
+  .library-item[data-agent="vett"]     .head .who { color:var(--sov-electric-blue); }
+  .library-item[data-agent="scotty"]   .head .who { color:var(--sov-bronze); }
+  .library-item .head .ts { color:rgba(236,243,244,0.4); font-variant-numeric:tabular-nums; }
+  .library-item .head .tags {
+    display:flex; gap:4px; flex-wrap:wrap; margin-left:auto;
+  }
+  .library-item .head .tag {
+    background:rgba(255,255,255,0.06); border-radius:4px;
+    padding:1px 6px; font-size:9px; letter-spacing:0.04em;
+    color:rgba(236,243,244,0.6);
+  }
+  .library-item .body { color:rgba(236,243,244,0.85); }
   .activity-feed { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:4px; }
   .activity-item { font-size:13px; color:rgba(236,243,244,0.78); line-height:1.5; }
   .activity-item .who { font-weight:500; }
@@ -376,6 +415,17 @@
         <div class="attention" data-attention aria-live="polite">
           <div class="empty">nothing needs attention.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- Library writes — what the agents are committing to the library layer.
+         Surfaces type='library' nodes only (deliberate synthesis writes, not
+         the document-chunk bootstrap). Polled at the same cadence as the
+         rest of mission control. -->
+    <section class="panel library-writes" data-testid="library-writes">
+      <h3>Library writes</h3>
+      <div class="library-feed" data-library-feed aria-live="polite" aria-label="Recent library writes">
+        <div class="library-item" data-empty>nothing in the library yet.</div>
       </div>
     </section>
 
@@ -634,6 +684,36 @@
     renderBoardColumn("friction", data.friction);
   }
 
+  // ─── Library writes feed ──────────────────────────────────────────────────
+  async function renderLibraryWrites() {
+    const data = await fetchJson("/api/memory/library_writes?limit=10");
+    const container = document.querySelector("[data-library-feed]");
+    if (!container || !data) return;
+    if (!data.writes || data.writes.length === 0) {
+      container.innerHTML = `<div class="library-item" data-empty>nothing in the library yet.</div>`;
+      return;
+    }
+    const escapeHtml = (s) => String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    container.innerHTML = data.writes.map(w => {
+      const ts = new Date(w.created_at).toLocaleString();
+      const tags = (w.tags || []).map(t =>
+        `<span class="tag">${escapeHtml(t)}</span>`
+      ).join("");
+      return `
+        <div class="library-item" data-agent="${escapeHtml(w.agent)}">
+          <div class="head">
+            <span class="who">${escapeHtml(w.agent)}</span>
+            <span class="ts">${escapeHtml(ts)}</span>
+            <span class="tags">${tags}</span>
+          </div>
+          <div class="body">${escapeHtml(w.content_head)}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
   function refreshAll() {
     renderGreeting();
@@ -644,6 +724,7 @@
     renderStats();
     renderDaemons();
     renderBoards();
+    renderLibraryWrites();
   }
   document.addEventListener("DOMContentLoaded", () => {
     refreshAll();
