@@ -8,6 +8,13 @@ memory on every non-daemon turn.
 See docs/superpowers/specs/2026-06-09-cross-surface-continuity-design.md.
 """
 
+from soveryn.platform.continuity.brief import (
+    BLOCK_FOOTER,
+    BLOCK_HEADER,
+    CONTENT_HEAD_CHARS,
+    build_recent_activity_brief,
+    estimate_tokens,
+)
 from soveryn.platform.continuity.config import (
     AUTONOMOUS_SESSION_PREFIXES,
     ContinuityConfig,
@@ -24,6 +31,9 @@ from soveryn.platform.continuity.store import (
 
 __all__ = [
     "AUTONOMOUS_SESSION_PREFIXES",
+    "BLOCK_FOOTER",
+    "BLOCK_HEADER",
+    "CONTENT_HEAD_CHARS",
     "ContinuityConfig",
     "DEFAULT_PER_SESSION_CAP",
     "DEFAULT_PER_SESSION_PAIRS",
@@ -31,5 +41,7 @@ __all__ = [
     "DEFAULT_WINDOW_HOURS",
     "PairedTurn",
     "SessionTail",
+    "build_recent_activity_brief",
+    "estimate_tokens",
     "recent_cross_session_tails",
 ]
