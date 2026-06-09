@@ -15,11 +15,21 @@ from soveryn.platform.continuity.config import (
     DEFAULT_TOKEN_BUDGET,
     DEFAULT_WINDOW_HOURS,
 )
+from soveryn.platform.continuity.store import (
+    DEFAULT_PER_SESSION_PAIRS,
+    PairedTurn,
+    SessionTail,
+    recent_cross_session_tails,
+)
 
 __all__ = [
     "AUTONOMOUS_SESSION_PREFIXES",
     "ContinuityConfig",
     "DEFAULT_PER_SESSION_CAP",
+    "DEFAULT_PER_SESSION_PAIRS",
     "DEFAULT_TOKEN_BUDGET",
     "DEFAULT_WINDOW_HOURS",
+    "PairedTurn",
+    "SessionTail",
+    "recent_cross_session_tails",
 ]
