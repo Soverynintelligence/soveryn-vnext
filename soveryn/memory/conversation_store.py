@@ -271,6 +271,28 @@ class ConversationStore:
                 ).fetchall()
         return tuple(Session(**dict(r)) for r in rows)
 
+    def list_sessions_with_recent_activity(
+        self,
+        *,
+        agent: str,
+        since: datetime,
+        exclude_session_id: str,
+    ) -> tuple[Session, ...]:
+        """Sessions for `agent` whose updated_at >= since, excluding the
+        given session_id. Newest first.
+
+        Used by Cross-Surface Continuity to find OTHER rails' recent activity
+        for inclusion in the Recent Activity Brief."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT session_id, agent, title, created_at, updated_at "
+                "FROM conversation_meta "
+                "WHERE agent = ? AND updated_at >= ? AND session_id != ? "
+                "ORDER BY updated_at DESC",
+                (agent, since.isoformat(), exclude_session_id),
+            ).fetchall()
+        return tuple(Session(**dict(r)) for r in rows)
+
     def get_session(self, session_id: str) -> Session | None:
         """Return the session metadata, or None if no such session."""
         with self._conn() as conn:

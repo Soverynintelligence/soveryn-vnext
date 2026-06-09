@@ -254,3 +254,95 @@ def test_save_turn_auto_title_skipped_for_assistant_first_turn(store):
     assert store.get_session(sid).title is None
 
 
+# ─── list_sessions_with_recent_activity (Cross-Surface Continuity) ──────────
+
+def test_list_sessions_with_recent_activity_excludes_current(tmp_path):
+    """The session_id passed as exclude_session_id must not appear in results."""
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    current = store.new_session("aetheria")
+    other = store.new_session("aetheria")
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id=current,
+    )
+    assert [s.session_id for s in results] == [other]
+
+
+def test_list_sessions_with_recent_activity_respects_since(tmp_path):
+    """Sessions older than `since` (via backdated updated_at) are filtered out."""
+    import sqlite3
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    fresh = store.new_session("aetheria")
+    backdated = store.new_session("aetheria")
+    old_ts = (datetime.now() - timedelta(days=7)).isoformat()
+    with sqlite3.connect(str(tmp_path / "conv.db")) as con:
+        con.execute(
+            "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
+            (old_ts, backdated),
+        )
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id="not-a-real-id",
+    )
+    ids = [s.session_id for s in results]
+    assert fresh in ids
+    assert backdated not in ids
+
+
+def test_list_sessions_with_recent_activity_filters_by_agent(tmp_path):
+    """Only sessions whose agent matches the requested agent should return."""
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    a_id = store.new_session("aetheria")
+    store.new_session("vett")
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id="not-a-real-id",
+    )
+    assert [s.session_id for s in results] == [a_id]
+
+
+def test_list_sessions_with_recent_activity_orders_by_updated_desc(tmp_path):
+    """Newest updated_at first."""
+    import time
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    first = store.new_session("aetheria")
+    time.sleep(0.01)
+    second = store.new_session("aetheria")
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id="not-a-real-id",
+    )
+    assert [s.session_id for s in results] == [second, first]
+
+
+def test_list_sessions_with_recent_activity_returns_empty_when_no_matches(tmp_path):
+    """Agent with no sessions in window returns empty tuple."""
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    store.new_session("vett")  # different agent
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id="not-a-real-id",
+    )
+    assert results == ()
+
+
+def test_list_sessions_with_recent_activity_includes_None_titled_sessions(tmp_path):
+    """A session with title=None (default for UI sessions) still appears."""
+    from datetime import datetime, timedelta
+    store = ConversationStore(tmp_path / "conv.db")
+    sid = store.new_session("aetheria")  # title=None default
+    assert store.get_session(sid).title is None
+    since = datetime.now() - timedelta(hours=1)
+    results = store.list_sessions_with_recent_activity(
+        agent="aetheria", since=since, exclude_session_id="not-a-real-id",
+    )
+    assert len(results) == 1
+    assert results[0].session_id == sid
+    assert results[0].title is None
+
+
