@@ -10,7 +10,7 @@ from flask import Blueprint, Response, current_app, jsonify, request, stream_wit
 
 from soveryn.agents.loop import (
     AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
-    ToolCallEvent, ToolResultEvent,
+    ToolCallEvent, ToolResultEvent, TTSTokenEvent,
 )
 from soveryn.config.runtime import ACTIVE_AGENTS, RETIRED
 from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerTimeout
@@ -240,9 +240,13 @@ def _sse(payload: dict) -> str:
     return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def _event_to_dict(event: AgentStreamEvent) -> dict:
+def _event_to_dict(event: AgentStreamEvent) -> dict | None:
     if isinstance(event, TokenEvent):
         return {"type": "token", "delta": event.delta}
+    if isinstance(event, TTSTokenEvent):
+        # Voice-only event — the chat SSE channel doesn't surface it. Returning
+        # None signals the SSE generator to skip without emitting a frame.
+        return None
     if isinstance(event, DoneEvent):
         return {
             "type": "done",
@@ -332,10 +336,14 @@ def chat_stream():
 
     # ── Setup OK. Now wrap the iterator in an SSE response.
     def _generate():
-        # First event was already pulled — emit it.
-        yield _sse(_event_to_dict(first_event))
+        # First event was already pulled — emit it (skip if voice-only).
+        first_payload = _event_to_dict(first_event)
+        if first_payload is not None:
+            yield _sse(first_payload)
         for event in event_iter:
-            yield _sse(_event_to_dict(event))
+            payload = _event_to_dict(event)
+            if payload is not None:
+                yield _sse(payload)
 
     return Response(
         stream_with_context(_generate()),

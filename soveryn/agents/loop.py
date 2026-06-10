@@ -48,6 +48,7 @@ from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
 from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
+from soveryn.platform.voice.sanitize import sanitize_for_tts
 
 
 ChatFn = Callable[..., ChatResponse]
@@ -112,8 +113,28 @@ class ToolResultEvent:
     channel: str | None = None
 
 
+@dataclass(frozen=True)
+class TTSTokenEvent:
+    """Sanitized assistant text fragment for TTS consumption.
+
+    Emitted alongside regular TokenEvent in process_message_stream so voice
+    consumers see only clean prose (no thinking, markup, control tokens,
+    etc.). Chat UI consumers ignore this event; voice pipeline consumers
+    subscribe to it instead of TokenEvent.
+
+    Sanitization at source — single boundary, not a downstream filter
+    cascade. Replaces the accumulated filter chain from the legacy voice
+    pipeline. Skipped entirely when the sanitized text would be empty
+    (the chunk was pure markup / control tokens / emoji).
+    """
+    text: str
+
+
 # Union type alias for typing
-AgentStreamEvent = TokenEvent | DoneEvent | ErrorEvent | ToolCallEvent | ToolResultEvent
+AgentStreamEvent = (
+    TokenEvent | DoneEvent | ErrorEvent | ToolCallEvent | ToolResultEvent
+    | TTSTokenEvent
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -807,6 +828,13 @@ class AgentLoop:
                     if chunk.delta:
                         round_content_parts.append(chunk.delta)
                         yield TokenEvent(delta=chunk.delta)
+                        # Additive sanitized-for-TTS channel. Voice consumers
+                        # subscribe to TTSTokenEvent; chat consumers ignore it.
+                        # If sanitization drops everything (pure markup chunk),
+                        # we emit nothing for that chunk — TTS never sees noise.
+                        sanitized_chunk = sanitize_for_tts(chunk.delta)
+                        if sanitized_chunk:
+                            yield TTSTokenEvent(text=sanitized_chunk)
                     if chunk.tool_calls_delta:
                         _accumulate_tool_calls(round_tool_calls, chunk.tool_calls_delta)
                     if chunk.usage:

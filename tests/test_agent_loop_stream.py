@@ -105,8 +105,10 @@ def test_stream_mid_stream_timeout_yields_error_event_no_save(conv_store):
     )
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
     events = list(loop.process_message_stream(sid, "hello"))
-    assert isinstance(events[0], TokenEvent) and events[0].delta == "hi"
-    assert isinstance(events[1], TokenEvent) and events[1].delta == " there"
+    # Filter by type — the stream now also carries TTSTokenEvent (sanitized
+    # voice channel) alongside TokenEvent. Chat consumers ignore TTS events.
+    token_deltas = [e.delta for e in events if isinstance(e, TokenEvent)]
+    assert token_deltas == ["hi", " there"]
     assert isinstance(events[-1], ErrorEvent)
     assert events[-1].code == "chat_timeout"
     # NO assistant turn saved (mid-stream failure)
