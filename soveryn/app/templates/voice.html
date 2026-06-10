@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en" data-agent="{{ agent }}">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ agent | capitalize }} — SOVERYN Voice</title>
+    <link rel="stylesheet" href="/static/voice/orb.css">
+</head>
+<body data-agent="{{ agent }}">
+    <div id="orb" class="orb-{{ agent }}" data-state="idle"></div>
+    <script src="/static/voice/voice_client.js"></script>
+</body>
+</html>

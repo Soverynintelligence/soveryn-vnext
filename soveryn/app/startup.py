@@ -491,11 +491,51 @@ def create_app(
         "coord_worker": coord_worker,
     }
 
+    # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
+    # ELEVENLABS_VOICE_ID_AETHERIA being present in the env. Missing
+    # either → voice blueprint stays unregistered, no /voice/* routes
+    # appear. This is defense in depth: voice can be disabled at the
+    # OS level by clearing the env var, no code change needed.
+    _maybe_register_voice(app, agent_loops)
+
     _register_guards(app)
     _register_error_handlers(app)
     _register_blueprints(app)
 
     return app
+
+
+def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None:
+    """Wire the voice blueprint when ELEVENLABS_API_KEY is configured.
+
+    Phase 1: aetheria only. Phase 1.5 grows the per-agent dict as
+    vett + scotty voice characters land. See
+    soveryn/platform/voice/config.py for the VoiceConfig shape.
+    """
+    import os
+    from soveryn.platform.voice.config import VoiceConfig
+
+    voice_config = VoiceConfig.from_env(os.environ)
+    aetheria_character = voice_config.agent_character("aetheria")
+    voice_state: dict[str, dict] = {}
+    if aetheria_character is not None and "aetheria" in agent_loops:
+        voice_state["aetheria"] = {
+            "agent_loop": agent_loops["aetheria"],
+            "voice_id": aetheria_character.elevenlabs_voice_id,
+            "elevenlabs_api_key": voice_config.elevenlabs_api_key,
+            "parakeet_url": os.environ.get(
+                "SOVERYN_PARAKEET_URL", "http://127.0.0.1:8087",
+            ),
+        }
+        app.extensions.setdefault("soveryn", {})["voice"] = voice_state
+        from soveryn.app.routes.voice import bp as voice_bp
+        app.register_blueprint(voice_bp)
+        logger.info("voice enabled for: %s", sorted(voice_state.keys()))
+    else:
+        logger.info(
+            "voice disabled — ELEVENLABS_API_KEY or "
+            "ELEVENLABS_VOICE_ID_AETHERIA missing"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
