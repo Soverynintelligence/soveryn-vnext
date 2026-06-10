@@ -39,6 +39,9 @@ def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_v
         cross_surface_window_hours=6,
         cross_surface_token_budget=1500,
         cross_surface_per_session_cap=400,
+        elevenlabs_api_key=None,
+        elevenlabs_voice_id_aetheria=None,
+        voice_root=Path("/tmp/test-voice"),
     )
 
 

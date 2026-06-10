@@ -62,6 +62,10 @@ def _default_salience_db(root: Path) -> Path:
     return _memory_dir(root) / "salience_vnext.db"
 
 
+def _default_voice_root(root: Path) -> Path:
+    return root / "voice"
+
+
 # ─── Backward-compat re-exports ──────────────────────────────────────────────
 # Pre-Task-2 code imports these as module-level Path constants. We preserve
 # the name + Path-value shape so external importers (and existing tests)
@@ -100,6 +104,9 @@ class EnvConfig:
     cross_surface_window_hours: int
     cross_surface_token_budget: int
     cross_surface_per_session_cap: int
+    elevenlabs_api_key: str | None
+    elevenlabs_voice_id_aetheria: str | None
+    voice_root: Path
 
 
 class EnvConfigError(ValueError):
@@ -184,4 +191,8 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         cross_surface_per_session_cap=_parse_int(
             "SOVERYN_CROSS_SURFACE_PER_SESSION_CAP", env.get("SOVERYN_CROSS_SURFACE_PER_SESSION_CAP"),
             default=400),
+        elevenlabs_api_key=env.get("ELEVENLABS_API_KEY") or None,
+        elevenlabs_voice_id_aetheria=env.get("ELEVENLABS_VOICE_ID_AETHERIA") or None,
+        voice_root=_parse_path("SOVERYN_VOICE_ROOT", env.get("SOVERYN_VOICE_ROOT"),
+                               default=_default_voice_root(data_root)),
     )
