@@ -134,7 +134,11 @@ def test_aetheria_runs_without_recall_if_recall_lattice_missing(
 def test_env_config_default_recall_path_matches_lattice_db():
     """Post-consolidation (2026-06-01): legacy lattice.db was merged into
     lattice_vnext.db, retiring the dual-DB scheme. Recall and writes share one
-    source of truth. The two defaults must therefore point at the same file."""
+    source of truth. The two defaults must therefore point at the same file.
+
+    Post-path-consolidation (2026-06-10): both defaults now derive from
+    DEFAULT_DATA_ROOT / "memory" / "lattice_vnext.db" instead of the old
+    soveryn_complete museum path."""
     from soveryn.config.loader import DEFAULT_LATTICE_DB, DEFAULT_RECALL_LATTICE_DB
     assert DEFAULT_RECALL_LATTICE_DB == DEFAULT_LATTICE_DB
-    assert str(DEFAULT_RECALL_LATTICE_DB).endswith("/soveryn_memory/lattice_vnext.db")
+    assert str(DEFAULT_RECALL_LATTICE_DB).endswith("/memory/lattice_vnext.db")

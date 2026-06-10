@@ -45,6 +45,12 @@ def _configure_startup_env(monkeypatch, *, fake_souls_dir, fake_pinned, recall_l
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice))
+    # Post-consolidation (2026-06-01): lattice_db and recall_lattice_db are
+    # the same physical file. Post-path-consolidation (2026-06-10): the
+    # default no longer points at an existing museum file, so coord-tool
+    # registration (gated on env.lattice_db.is_file()) needs the test's
+    # own fixture DB explicitly.
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice))
 
 
 def test_startup_creates_tool_registry_for_aetheria(

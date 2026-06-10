@@ -90,7 +90,10 @@ def _configure_env(
 def test_load_env_config_includes_salience_db():
     cfg = load_env_config({})
     assert cfg.salience_db == DEFAULT_SALIENCE_DB
-    assert str(cfg.salience_db).endswith("/soveryn_memory/salience_vnext.db")
+    # Post-path-consolidation (2026-06-10): the default derives from
+    # DEFAULT_DATA_ROOT / "memory" / "salience_vnext.db" instead of the
+    # legacy soveryn_complete museum path.
+    assert str(cfg.salience_db).endswith("/memory/salience_vnext.db")
 
 
 def test_load_env_config_respects_salience_env_var():
