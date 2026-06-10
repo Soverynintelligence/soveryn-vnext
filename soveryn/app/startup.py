@@ -19,6 +19,7 @@ app.extensions['soveryn']:
 
 from __future__ import annotations
 import logging
+from pathlib import Path
 from typing import Any
 
 from flask import Flask, g, jsonify, request
@@ -57,7 +58,7 @@ def create_app(
     app.config.setdefault("MAX_CONTENT_LENGTH", 50 * 1024 * 1024)
     app.config.setdefault(
         "SOVERYN_LEGACY_TEMPLATES_DIR",
-        "/home/jon-deoliveira/soveryn_complete/templates",
+        str(Path.home() / "soveryn_vnext" / "data" / "templates_legacy"),
     )
 
     env = env if env is not None else load_env_config()

@@ -156,12 +156,18 @@ def test_ui_source_reports_missing_templates_correctly(tmp_path, fake_chat):
 # ─── Default config value ────────────────────────────────────────────────────
 
 def test_default_legacy_templates_dir_is_production_path(tmp_path, fake_chat):
-    """create_app sets a sensible default pointing at the production templates dir."""
+    """create_app sets a sensible default pointing at the vnext templates_legacy dir.
+
+    Updated for path-consolidation T4 (2026-06-10): default now derives from
+    Path.home() and lives under ~/soveryn_vnext/data/templates_legacy, not
+    the soveryn_complete museum.
+    """
+    from pathlib import Path
     conv = ConversationStore(tmp_path / "conv.db")
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
-    assert app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] == \
-        "/home/jon-deoliveira/soveryn_complete/templates"
+    expected = str(Path.home() / "soveryn_vnext" / "data" / "templates_legacy")
+    assert app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] == expected
 
 
 # ─── No static asset proxy — constraint 7 ────────────────────────────────────
