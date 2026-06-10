@@ -161,9 +161,9 @@ def test_gather_salience_respects_since_window(tmp_path):
 
 
 def test_default_salience_db_constant_is_under_soveryn_memory():
-    """Smoke: the production default is the soveryn_memory canonical path."""
+    """Smoke: the production default is the canonical data_root memory path."""
     assert DEFAULT_SALIENCE_DB.name == "salience_vnext.db"
-    assert DEFAULT_SALIENCE_DB.parent.name == "soveryn_memory"
+    assert DEFAULT_SALIENCE_DB.parent.name == "memory"
 
 
 def test_heartbeat_daemon_takes_salience_db_kwarg(tmp_path):

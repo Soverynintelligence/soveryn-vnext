@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 
 # Defaults — overridable via env.
 DEFAULT_VNEXT_BASE = "http://127.0.0.1:5001"
-DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
-DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
-DEFAULT_SALIENCE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/salience_vnext.db")
+DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_SALIENCE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "salience_vnext.db"
 
 # Window of lattice activity to summarise in the brief (separate from the
 # interval/backoff knobs since this is a *content* knob not a *timing* knob).

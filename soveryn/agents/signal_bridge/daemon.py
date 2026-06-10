@@ -43,8 +43,8 @@ from soveryn.agents.signal_bridge.config import SignalBridgeConfig
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
-DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
+DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
 

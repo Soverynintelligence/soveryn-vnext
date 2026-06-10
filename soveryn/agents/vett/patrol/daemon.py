@@ -51,8 +51,8 @@ from soveryn.agents.vett.patrol.trigger import (
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LATTICE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
-DEFAULT_CONV_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/conversations_vnext.db")
+DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
 
 # Window of recent lattice activity to summarise in the briefing.
 LATTICE_WINDOW_MINUTES = 240   # 4h — slower cadence than heartbeat's hour
