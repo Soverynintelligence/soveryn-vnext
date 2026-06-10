@@ -46,6 +46,7 @@ from soveryn.inference.llama_server_client import (
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
+from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 
 
@@ -271,6 +272,7 @@ class AgentLoop:
         soul_text: str | None = "",
         souls_dir: Path | None = None,
         pinned_text: str = "",
+        continuity_config: ContinuityConfig | None = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -344,6 +346,44 @@ class AgentLoop:
         # layer between persona and soul). Default empty = skip — Vett and
         # Scotty rely on this. Production opts Aetheria in via startup.py.
         self.pinned_text: str = pinned_text
+
+        # Cross-Surface Continuity (Aetheria-only). None = disabled; the
+        # helper short-circuits to "" so non-aetheria loops never pay any
+        # query cost.
+        self.continuity_config = continuity_config
+
+    def _build_continuity_brief(self, session_id: str) -> str:
+        """Build the Cross-Surface Recent Activity Brief for this turn.
+
+        Returns '' when continuity is off, the agent isn't Aetheria, the
+        current session is autonomous (heartbeat/dream/patrol/webhook/
+        salience-smoke), there's no cross-session activity in the window,
+        or any error fires during brief computation. Never raises — chat
+        path correctness is the priority.
+        """
+        if self.continuity_config is None or not self.continuity_config.enabled:
+            return ""
+        if self.agent_name != "aetheria":
+            return ""
+        try:
+            session = self.conv_store.get_session(session_id)
+            if session is not None and self.continuity_config.session_is_autonomous(session.title):
+                return ""
+            from soveryn.platform.continuity.store import recent_cross_session_tails
+            from soveryn.platform.continuity.brief import build_recent_activity_brief
+            tails = recent_cross_session_tails(
+                self.conv_store,
+                agent=self.agent_name,
+                current_session_id=session_id,
+                config=self.continuity_config,
+            )
+            return build_recent_activity_brief(tails, config=self.continuity_config)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "continuity brief build failed; serving without it"
+            )
+            return ""
 
     def _tool_schemas(self) -> tuple[dict, ...]:
         """Return OpenAI-compatible tool schemas for this agent."""
@@ -452,6 +492,11 @@ class AgentLoop:
         # project_soveryn_three_tracks_workaround_capability_agency.
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        # Cross-Surface Continuity: slot between persona-anchor and
+        # long-term-relationship pinned memory. Empty when not applicable.
+        continuity_brief = self._build_continuity_brief(session_id)
+        if continuity_brief:
+            prelude = prelude + (ChatMessage(role="system", content=continuity_brief),)
         if self.pinned_text:
             prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
         if self.soul_text:
@@ -691,6 +736,11 @@ class AgentLoop:
         # folds at wire if the server's template can't honor multi-system.
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
+        # Cross-Surface Continuity: same placement as the sync path —
+        # between persona and pinned memory. Empty when not applicable.
+        continuity_brief = self._build_continuity_brief(session_id)
+        if continuity_brief:
+            prelude = prelude + (ChatMessage(role="system", content=continuity_brief),)
         if self.pinned_text:
             prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
         if self.soul_text:
