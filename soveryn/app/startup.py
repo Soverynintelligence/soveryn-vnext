@@ -28,6 +28,7 @@ from soveryn.agents.loop import AgentLoop, _default_embed
 from soveryn.config.loader import EnvConfig, load_env_config
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.memory.conversation_store import ConversationStore
+from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.tools.registry import ToolRegistry
 
 
@@ -399,6 +400,18 @@ def create_app(
                 owner_agent="aetheria",
             )
 
+        # Cross-Surface Continuity (Aetheria only). Env knobs flow through
+        # EnvConfig; peer agents pass through with None.
+        def _continuity_for(agent_name: str) -> ContinuityConfig | None:
+            if agent_name != "aetheria":
+                return None
+            return ContinuityConfig(
+                enabled=env.cross_surface_enabled,
+                window_hours=env.cross_surface_window_hours,
+                token_budget=env.cross_surface_token_budget,
+                per_session_cap=env.cross_surface_per_session_cap,
+            )
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -406,6 +419,7 @@ def create_app(
             # _tool_schemas() filters to only its own owner-keyed tools, so
             # sharing the registry doesn't leak capability across agents.
             kwargs["tool_registry"] = tool_registry
+            kwargs["continuity_config"] = _continuity_for(name)
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:

@@ -51,6 +51,10 @@ class EnvConfig:
     pinned_memory_path: Path
     recall_lattice_db: Path
     salience_db: Path
+    cross_surface_enabled: bool
+    cross_surface_window_hours: int
+    cross_surface_token_budget: int
+    cross_surface_per_session_cap: int
 
 
 class EnvConfigError(ValueError):
@@ -73,6 +77,12 @@ def _parse_float(name: str, raw: str | None, default: float) -> float:
         return float(raw)
     except ValueError as e:
         raise EnvConfigError(f"{name}={raw!r}: not a float") from e
+
+
+def _parse_bool(name: str, raw: str | None, default: bool) -> bool:
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in {"true", "1", "yes", "on"}
 
 
 def _parse_path(name: str, raw: str | None, default: Path) -> Path:
@@ -107,4 +117,16 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         salience_db=_parse_path(
             "SOVERYN_SALIENCE_DB", env.get("SOVERYN_SALIENCE_DB"),
             default=DEFAULT_SALIENCE_DB),
+        cross_surface_enabled=_parse_bool(
+            "SOVERYN_CROSS_SURFACE_ENABLED", env.get("SOVERYN_CROSS_SURFACE_ENABLED"),
+            default=True),
+        cross_surface_window_hours=_parse_int(
+            "SOVERYN_CROSS_SURFACE_WINDOW_HOURS", env.get("SOVERYN_CROSS_SURFACE_WINDOW_HOURS"),
+            default=6),
+        cross_surface_token_budget=_parse_int(
+            "SOVERYN_CROSS_SURFACE_TOKEN_BUDGET", env.get("SOVERYN_CROSS_SURFACE_TOKEN_BUDGET"),
+            default=1500),
+        cross_surface_per_session_cap=_parse_int(
+            "SOVERYN_CROSS_SURFACE_PER_SESSION_CAP", env.get("SOVERYN_CROSS_SURFACE_PER_SESSION_CAP"),
+            default=400),
     )

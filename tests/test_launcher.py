@@ -33,6 +33,10 @@ def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_v
         pinned_memory_path=Path(pinned_memory_path),
         recall_lattice_db=Path(recall_lattice_db),
         salience_db=Path(salience_db),
+        cross_surface_enabled=True,
+        cross_surface_window_hours=6,
+        cross_surface_token_budget=1500,
+        cross_surface_per_session_cap=400,
     )
 
 
