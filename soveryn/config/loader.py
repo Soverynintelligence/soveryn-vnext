@@ -32,6 +32,7 @@ DEFAULT_RECALL_LATTICE_DB = DEFAULT_LATTICE_DB
 # out of the critical recall WAL. Overridable via SOVERYN_SALIENCE_DB so
 # the heartbeat daemon, tests, and app startup all land on the same path.
 DEFAULT_SALIENCE_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/salience_vnext.db")
+DEFAULT_DATA_ROOT = Path.home() / "soveryn_vnext" / "data"
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class EnvConfig:
     souls_dir: Path
     pinned_memory_path: Path
     recall_lattice_db: Path
+    data_root: Path
     salience_db: Path
     cross_surface_enabled: bool
     cross_surface_window_hours: int
@@ -114,6 +116,9 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         recall_lattice_db=_parse_path(
             "SOVERYN_RECALL_LATTICE_DB", env.get("SOVERYN_RECALL_LATTICE_DB"),
             default=DEFAULT_RECALL_LATTICE_DB),
+        data_root=_parse_path(
+            "SOVERYN_DATA_ROOT", env.get("SOVERYN_DATA_ROOT"),
+            default=DEFAULT_DATA_ROOT),
         salience_db=_parse_path(
             "SOVERYN_SALIENCE_DB", env.get("SOVERYN_SALIENCE_DB"),
             default=DEFAULT_SALIENCE_DB),
