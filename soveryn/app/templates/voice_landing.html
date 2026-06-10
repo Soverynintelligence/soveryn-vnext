@@ -3,37 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <title>SOVERYN Voice</title>
+    <link rel="stylesheet" href="/static/voice/orb.css">
     <style>
-        body {
-            background: #0a0a0a;
-            color: #d4d4d4;
-            font-family: sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
+        body { gap: 60px; }
+        .orbs { display: flex; gap: 80px; align-items: center; }
+        a.agent-link {
+            display: flex; flex-direction: column; align-items: center;
+            text-decoration: none; color: var(--text-soft);
         }
-        .orbs { display: flex; gap: 40px; }
-        a.orb {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-decoration: none;
-            color: inherit;
+        .agent-link .preview-orb {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: radial-gradient(circle, var(--orb-secondary), var(--orb-primary));
+            box-shadow: 0 0 40px var(--orb-glow);
+            margin-bottom: 20px;
+            transition: transform 200ms;
         }
-        .orb-disc {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: #5d3a8e;
-            box-shadow: 0 0 40px #8e6ec4;
-            margin-bottom: 12px;
-        }
-        .orb-name {
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            font-size: 14px;
+        .agent-link:hover .preview-orb { transform: scale(1.05); }
+        .agent-name {
+            text-transform: uppercase; letter-spacing: 0.3em; font-size: 12px;
         }
         .empty {
             opacity: 0.6;
@@ -44,9 +31,9 @@
 <body>
     <div class="orbs">
         {% for agent in agents %}
-        <a class="orb" href="/voice/{{ agent }}">
-            <div class="orb-disc orb-{{ agent }}"></div>
-            <div class="orb-name">{{ agent }}</div>
+        <a class="agent-link orb-{{ agent }}" href="/voice/{{ agent }}">
+            <div class="preview-orb"></div>
+            <div class="agent-name">{{ agent }}</div>
         </a>
         {% else %}
         <div class="empty">No voice agents configured.</div>

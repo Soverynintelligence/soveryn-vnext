@@ -1,0 +1,107 @@
+/* Phase 1: Aetheria-only color theme + state machine.
+ * Phase 1.5 extends .orb-vett and .orb-scotty by setting --orb-primary
+ * and --orb-secondary to their character colors.
+ */
+
+:root {
+    --bg-deep: #0a0a0a;
+    --text-soft: #d4d4d4;
+}
+
+.orb-aetheria {
+    --orb-primary: #5d3a8e;    /* twilight violet */
+    --orb-secondary: #8e6ec4;
+    --orb-glow: rgba(142, 110, 196, 0.5);
+}
+
+body {
+    background: var(--bg-deep);
+    color: var(--text-soft);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#orb {
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, var(--orb-secondary) 0%, var(--orb-primary) 100%);
+    box-shadow: 0 0 80px var(--orb-glow);
+    transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
+    cursor: default;
+    position: relative;
+}
+
+/* State-driven visual transitions */
+#orb[data-state="idle"] {
+    transform: scale(0.95);
+    opacity: 0.5;
+}
+
+#orb[data-state="listening"] {
+    transform: scale(1.0);
+    opacity: 0.8;
+    animation: pulse-listen 2.4s ease-in-out infinite;
+}
+
+#orb[data-state="hearing"] {
+    transform: scale(1.05);
+    opacity: 1.0;
+    box-shadow: 0 0 120px var(--orb-glow);
+}
+
+#orb[data-state="thinking"] {
+    transform: scale(1.0);
+    opacity: 0.9;
+    animation: pulse-think 1.2s ease-in-out infinite;
+}
+
+#orb[data-state="speaking"] {
+    /* JS sets transform: scale(...) directly based on amplitude */
+    opacity: 1.0;
+    box-shadow: 0 0 160px var(--orb-glow);
+}
+
+#orb[data-state="interrupted"] {
+    transform: scale(0.85);
+    opacity: 0.6;
+    transition: transform 100ms, opacity 100ms;
+}
+
+@keyframes pulse-listen {
+    0%, 100% { transform: scale(1.0); }
+    50%      { transform: scale(1.04); }
+}
+
+@keyframes pulse-think {
+    0%, 100% { transform: scale(1.0); opacity: 0.8; }
+    50%      { transform: scale(1.02); opacity: 1.0; }
+}
+
+#status {
+    margin-top: 40px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: 11px;
+    opacity: 0.6;
+}
+
+#error {
+    position: fixed;
+    bottom: 20px;
+    color: #ff8888;
+    font-family: monospace;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 200ms;
+}
+
+#error.visible {
+    opacity: 1;
+}
