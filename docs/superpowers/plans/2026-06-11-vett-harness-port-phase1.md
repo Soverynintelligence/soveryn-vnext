@@ -141,7 +141,18 @@ git commit -m "feat(vett-harness): bootstrap package skeleton + Apache 2.0 attri
 
 ### Task 2: Vendor the upstream harness/ code
 
+**Vendor compatibility seam (added after Task 2 first attempt surfaced three blockers):**
+
+Three structural facts about upstream Harness-1 only become visible after the code is copied:
+
+- **Upstream assumes the top-level package name `harness`** for absolute imports like `from harness.tools import X`. When vendored under a nested path (`soveryn.agents.vett.harness.vendor.*`), those imports fail. We provide a `sys.modules` alias so the upstream cross-references resolve to our vendored copy.
+- **Upstream imports the optional Tinker (Thinking Machines) backend at module import time.** SOVERYN does not use the Tinker backend in phase 1 — we target llama-server via the OpenAI-compatible chat-completions path. To avoid pulling in the cloud SDK as a runtime dependency, we provide a **fail-closed stub** `tinker` module: imports succeed (so non-Tinker code paths stay importable), but any attempt to actually instantiate or call a Tinker class raises a clear `RuntimeError` directing the caller to `SoverynVettInferenceModel`. The stub must cover `tinker.SamplingClient`, `tinker.ServiceClient`, `tinker.TrainingClient`, AND a `tinker.types` submodule (with `SamplingParams`, `ModelInput`, `SampleResponse`) — because `agent.py` uses class-body annotations like `tinker.types.SamplingParams` evaluated at module load (no `from __future__ import annotations` upstream).
+- **Upstream `agent.py` also imports `from datagen.search_dataset import SearchDataset, get_dataset` at module top.** `datagen` is a sibling upstream package SOVERYN does not vendor in phase 1 (it's training-data scaffolding, out of scope for the eval-only port). Same fail-closed stub treatment as `tinker`: `datagen.search_dataset` submodule with `SearchDataset` (failing class), `get_dataset` (failing callable), `DATASET_REGISTRY = {}`.
+
+All three pieces live in **`soveryn/agents/vett/harness/_vendor_compat.py`** (one explicit function, `install_vendor_compat()`) and are invoked from the parent `__init__.py` BEFORE any vendor module is imported. `vendor/` files remain byte-identical to upstream. The NOTICE gains a paragraph documenting this runtime compatibility layer.
+
 **Files:**
+- Create: `soveryn/agents/vett/harness/_vendor_compat.py` (SOVERYN compatibility shim; NOT part of upstream)
 - Create: `soveryn/agents/vett/harness/vendor/__init__.py`
 - Create: `soveryn/agents/vett/harness/vendor/agent.py` (verbatim from upstream)
 - Create: `soveryn/agents/vett/harness/vendor/config.py` (verbatim)
@@ -152,7 +163,10 @@ git commit -m "feat(vett-harness): bootstrap package skeleton + Apache 2.0 attri
 - Create: `soveryn/agents/vett/harness/vendor/trajectory.py` (verbatim)
 - Create: `soveryn/agents/vett/harness/vendor/ultra_core.py` (verbatim)
 - Create: `soveryn/agents/vett/harness/vendor/utils.py` (verbatim)
-- Test: `tests/test_vett_harness_smoke.py` (extend)
+- Modify: `soveryn/agents/vett/harness/__init__.py` (call `install_vendor_compat()` before any vendor import)
+- Modify: `LICENSES/harness-1-NOTICE` (one-line addendum re: runtime compat layer)
+- Modify: `tests/test_vett_harness_smoke.py` (extend)
+- Modify: `pyproject.toml` (add the runtime deps actually needed, EXCEPT `tinker`)
 
 - [ ] **Step 1: Write the failing test asserting vendor imports succeed**
 
@@ -177,10 +191,13 @@ def test_vendored_harness_importable():
 
 def test_vendored_trajectory_class_present():
     """Trajectory is the Pydantic class the harness uses to carry state."""
+    import uuid
     from soveryn.agents.vett.harness.vendor.trajectory import Trajectory
-    t = Trajectory(actions_and_observations=[])
+    t = Trajectory(actions_and_observations=[], id=uuid.uuid4())
     assert t.num_turns == 0
 ```
+
+*(Note: upstream `Trajectory` Pydantic model requires `id: uuid.UUID`. Earlier draft of this test omitted that and was corrected during Task 2 execution.)*
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -205,41 +222,211 @@ ls soveryn/agents/vett/harness/vendor/
 
 Expected output: `__init__.py agent.py config.py prompts.py rerank.py tasks.py tools.py trajectory.py ultra_core.py utils.py` (or similar — confirm full list matches Task 2's "Create" file list).
 
-- [ ] **Step 4: Install vendored runtime dependencies**
+- [ ] **Step 4: Install vendored runtime dependencies (EXCEPT tinker)**
 
-Inspect vendored `__init__.py` and top imports of `agent.py` to identify pip deps not already in vnext. Add them to `pyproject.toml`:
+Inspect the top-level imports across vendored modules:
 ```bash
 grep -h '^import\|^from' soveryn/agents/vett/harness/vendor/*.py | sort -u
 ```
 
-Likely new deps: `openai`, `anthropic`, `openai-harmony`, `pydantic`, `rank-bm25`, `datasketch`. Verify each against current `pyproject.toml`:
+Verify which deps are already present in the conda `soveryn` env:
 ```bash
-grep -E "openai|anthropic|harmony|pydantic|rank-bm25|datasketch" pyproject.toml
+/home/jon-deoliveira/miniconda3/envs/soveryn/bin/pip list 2>/dev/null | grep -E "openai|anthropic|harmony|pydantic|rank-bm25|datasketch|structlog|tiktoken|tenacity|json-repair|baseten|chromadb"
 ```
 
-For each missing dep, add to the `[project.dependencies]` section of `pyproject.toml`. Example for `openai`:
-```toml
-[project.dependencies]
-# ... existing ...
-openai = ">=1.50"
-openai-harmony = ">=0.1"
-rank-bm25 = ">=0.2"
-datasketch = ">=1.6"
-```
-
-Then sync:
+For each external dep that's actually missing, add to `[project.dependencies]` in `pyproject.toml`. Then:
 ```bash
-pip install -e .
+/home/jon-deoliveira/miniconda3/envs/soveryn/bin/pip install -e .
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+**DO NOT install `tinker`.** It's the Thinking Machines cloud-inference SDK; we use llama-server instead. The compat shim in Step 5 stubs it out.
 
-Run: `pytest tests/test_vett_harness_smoke.py -v`
-Expected: 3 passed (package import, vendor import, trajectory class)
+- [ ] **Step 5: Inspect what vendor/agent.py and vendor/config.py import from tinker**
 
-If a vendored module fails to import due to missing dep, return to Step 4 and add it.
+The compat shim needs to stub the EXACT symbols upstream uses. Bare `AttributeError`-on-access can break `from tinker import X` imports at module load. Inspect both files:
+```bash
+grep -n "tinker" soveryn/agents/vett/harness/vendor/agent.py soveryn/agents/vett/harness/vendor/config.py
+```
 
-- [ ] **Step 6: Commit**
+Capture:
+- Whether each uses `import tinker` (referenced later as `tinker.SamplingClient` etc.) OR `from tinker import X, Y`
+- For `from tinker import X`-style: every symbol `X` that needs to exist as an attribute on the stub module
+- For `tinker.<member>` access elsewhere in the vendored code: every attribute referenced
+
+Document these in your report so the stub can be made airtight.
+
+- [ ] **Step 6: Write the failing compat-shim test**
+
+Append to `tests/test_vett_harness_smoke.py`:
+```python
+def test_vendor_compat_aliases_harness():
+    """After install_vendor_compat(), `import harness` resolves to our vendored package."""
+    from soveryn.agents.vett.harness import _vendor_compat
+    _vendor_compat.install_vendor_compat()
+    import harness as aliased  # noqa: E402  — alias is the whole point
+    from soveryn.agents.vett.harness import vendor
+    assert aliased is vendor, "harness alias did not resolve to vendor package"
+
+
+def test_vendor_compat_tinker_stub_imports_succeed_but_fail_on_use():
+    """tinker stub allows imports; raises clear RuntimeError when actually used."""
+    import sys
+    from soveryn.agents.vett.harness import _vendor_compat
+    _vendor_compat.install_vendor_compat()
+    import tinker  # noqa: E402
+    # Any attribute exists (so `from tinker import X` succeeds) but using it fails.
+    SamplingClient = tinker.SamplingClient  # accessor must not raise
+    try:
+        SamplingClient()
+    except RuntimeError as e:
+        assert "SOVERYN" in str(e) and "SoverynVettInferenceModel" in str(e), \
+            f"stub error should direct caller to SoverynVettInferenceModel; got: {e}"
+    else:
+        raise AssertionError("Tinker stub did not raise when instantiated")
+```
+
+Run: `/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m pytest tests/test_vett_harness_smoke.py::test_vendor_compat_aliases_harness -v`
+Expected: FAIL with `ModuleNotFoundError: No module named 'soveryn.agents.vett.harness._vendor_compat'`
+
+- [ ] **Step 7: Implement `_vendor_compat.py`**
+
+Create `soveryn/agents/vett/harness/_vendor_compat.py`:
+```python
+"""Runtime compatibility shim for the vendored Harness-1 upstream.
+
+This file is SOVERYN-side; it is NOT part of upstream pat-jj/harness-1.
+
+Two compatibility issues are addressed at import time, BEFORE any
+`soveryn.agents.vett.harness.vendor.*` module is imported:
+
+1. **`harness` alias.** Upstream uses absolute imports like
+   `from harness.tools import X`. When vendored under a nested package
+   path, those imports fail. We register `sys.modules['harness']` so
+   it resolves to our vendored package.
+
+2. **`tinker` stub.** Upstream's `agent.py` and `config.py` import the
+   Thinking Machines `tinker` SDK at module top. SOVERYN does not use
+   the Tinker backend in phase 1 (we use llama-server via
+   `SoverynVettInferenceModel`). Rather than pull in the cloud SDK,
+   we register a stub `tinker` module that satisfies the imports but
+   raises a clear `RuntimeError` on actual use, directing callers to
+   the supported inference path.
+
+Call `install_vendor_compat()` from the parent package's `__init__.py`
+before any vendor import takes place.
+"""
+from __future__ import annotations
+import sys
+import types
+from typing import Any
+
+
+_TINKER_FAILURE_MSG = (
+    "Tinker backend is not available in the SOVERYN Harness-1 port. "
+    "Use SoverynVettInferenceModel (chat-completions against the "
+    "llama-server router at :8090) instead. See "
+    "docs/superpowers/specs/2026-06-11-vett-harness-port-design.md."
+)
+
+
+def _make_failing_class(name: str) -> type:
+    """Build a stub class that raises on instantiation with a clear message."""
+    def _init(self, *args: Any, **kwargs: Any) -> None:
+        raise RuntimeError(f"{name}: {_TINKER_FAILURE_MSG}")
+    return type(name, (), {"__init__": _init})
+
+
+def _build_tinker_stub_module() -> types.ModuleType:
+    """Construct a fail-closed stub module that satisfies upstream's imports.
+
+    The symbol set here MUST cover every name upstream's vendored agent.py
+    and config.py import from tinker. Inspect those files (Task 2 Step 5)
+    and add any missing names to this list before depending on the stub.
+    """
+    stub = types.ModuleType("tinker")
+    # Known classes upstream imports/uses (per Task 2 Step 5 inspection):
+    # Add to this list any additional symbols inspection surfaced.
+    for cls_name in ("SamplingClient", "ServiceClient", "TrainingClient"):
+        setattr(stub, cls_name, _make_failing_class(cls_name))
+    # Fallback for any attribute access not enumerated above: return a
+    # failing class on demand so `from tinker import X` patterns succeed.
+    def _dynamic_attr(name: str) -> type:
+        return _make_failing_class(name)
+    stub.__getattr__ = _dynamic_attr  # type: ignore[method-assign]
+    return stub
+
+
+def install_vendor_compat() -> None:
+    """Install harness alias and tinker stub in sys.modules.
+
+    Idempotent: safe to call multiple times. Must be called BEFORE any
+    `soveryn.agents.vett.harness.vendor.*` module is imported.
+    """
+    # 1. harness alias → our vendored package.
+    if "harness" not in sys.modules:
+        # Import lazily to avoid touching vendor at module-load of this file.
+        from soveryn.agents.vett.harness import vendor as _vendor_pkg
+        sys.modules["harness"] = _vendor_pkg
+
+    # 2. tinker stub.
+    if "tinker" not in sys.modules:
+        sys.modules["tinker"] = _build_tinker_stub_module()
+```
+
+- [ ] **Step 8: Wire `install_vendor_compat()` into parent `__init__.py`**
+
+Modify `soveryn/agents/vett/harness/__init__.py` so it installs the compat shim before anything else can import vendor modules:
+```python
+"""SOVERYN Vett — Harness-1 port (phase 1, eval-only).
+
+Vendored harness code lives under `vendor/` with its upstream
+Apache 2.0 LICENSE and NOTICE preserved at `LICENSES/`. SOVERYN
+shims (inference model, lattice tool handlers, CLI runner) live
+alongside this __init__.
+
+This package is NOT wired into Vett's normal task surface in
+phase 1. See `docs/superpowers/specs/2026-06-11-vett-harness-port-design.md`.
+
+Runtime compatibility:
+    Upstream vendored files assume the top-level package name `harness`
+    and import the Tinker SDK at module load. SOVERYN aliases `harness`
+    to our vendored package and stubs `tinker` (fail-closed) via the
+    explicit compatibility shim in `_vendor_compat.py`, installed below
+    before any vendor module is touched.
+"""
+from soveryn.agents.vett.harness._vendor_compat import install_vendor_compat
+
+install_vendor_compat()
+```
+
+- [ ] **Step 9: Add NOTICE addendum**
+
+Append to `LICENSES/harness-1-NOTICE` (as a new paragraph after the existing modifications list):
+```
+
+Runtime compatibility layer (SOVERYN, outside `vendor/`):
+SOVERYN provides runtime aliases/stubs at module import time so that the
+upstream vendored modules can be imported under SOVERYN's nested package
+path without modification. Specifically:
+  - `sys.modules['harness']` is aliased to the vendored package so
+    upstream's absolute imports (`from harness.X import Y`) resolve.
+  - A fail-closed stub `tinker` module is registered so that vendored
+    modules importing the Thinking Machines SDK at module top can load
+    without the SDK being installed; actual use of any Tinker class
+    raises `RuntimeError` and directs the caller to the supported
+    `SoverynVettInferenceModel` inference path.
+Implementation: `soveryn/agents/vett/harness/_vendor_compat.py`.
+Vendored upstream files under `vendor/` are unmodified.
+```
+
+- [ ] **Step 10: Run the full smoke test suite**
+
+Run: `/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m pytest tests/test_vett_harness_smoke.py -v`
+Expected: 5 passed (test_package_importable, test_vendored_harness_importable, test_vendored_trajectory_class_present, test_vendor_compat_aliases_harness, test_vendor_compat_tinker_stub_imports_succeed_but_fail_on_use)
+
+If a vendored module still fails to import due to a tinker attribute the stub doesn't cover, add the missing name to the `_TINKER_STUB_CLASSES`-equivalent enumeration in `_vendor_compat.py` and re-run. The dynamic `__getattr__` fallback should catch most cases.
+
+- [ ] **Step 11: Commit**
 
 ```bash
 git add soveryn/agents/vett/harness/vendor/*.py \
