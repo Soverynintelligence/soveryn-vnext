@@ -645,15 +645,20 @@ def test_inference_model_constructor_accepts_overrides():
 @pytest.mark.integration
 def test_inference_model_round_trips_against_live_router():
     """Construct, call against live router, get a non-None Action back."""
-    from soveryn.agents.vett.harness.vendor.agent import InferenceContext  # vendored
-    model = SoverynVettInferenceModel()
-    # InferenceContext expects a Trajectory + Toolset; build the smallest
-    # version that exercises the chat-completions code path.
+    # Actual vendored shape (per Task 4 inspection):
+    #   InferenceContext(trajectory, toolset, max_tokens=None,
+    #                    previous_response_id=None, skip_response_id_update=False)
+    # - toolset is REQUIRED (use empty ToolSet(), not None)
+    # - field name is `max_tokens`, not `max_completion_tokens`
+    # - Trajectory requires id: uuid.UUID
+    import uuid
+    from soveryn.agents.vett.harness.vendor.agent import InferenceContext, ToolSet
     from soveryn.agents.vett.harness.vendor.trajectory import Trajectory
+    model = SoverynVettInferenceModel()
     ctx = InferenceContext(
-        trajectory=Trajectory(actions_and_observations=[]),
-        toolset=None,  # vendored API tolerates no tools for raw chat
-        max_completion_tokens=64,
+        trajectory=Trajectory(actions_and_observations=[], id=uuid.uuid4()),
+        toolset=ToolSet(),
+        max_tokens=64,
     )
     action = model(ctx)
     assert action is not None, "model returned None — chat-completions path is broken"
