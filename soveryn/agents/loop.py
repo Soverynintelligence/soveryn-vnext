@@ -26,7 +26,8 @@ turn-processing time.
 
 from __future__ import annotations
 import json
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -258,6 +259,42 @@ def _apply_history_budget(
     return tuple(kept), marker, dropped
 
 
+ContinuityFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | None], ...]], ...]
+
+
+@dataclass(frozen=True)
+class ContinuityCacheEntry:
+    fingerprint: ContinuityFingerprint
+    text: str
+
+
+@dataclass(frozen=True)
+class RecallCacheEntry:
+    text: str
+    query_text: str
+    expires_at: float
+    remaining_reuses: int
+
+
+@dataclass
+class SessionContextCache:
+    continuity: dict[str, ContinuityCacheEntry] = field(default_factory=dict)
+    recall: dict[str, RecallCacheEntry] = field(default_factory=dict)
+
+
+_RECALL_CACHE_TTL_SECONDS = 30.0
+_RECALL_CACHE_REUSE_TURNS = 3
+
+
+def _continuity_fingerprint(tails) -> ContinuityFingerprint:
+    """Fingerprint the underlying cross-session activity, not render time."""
+    fp = []
+    for tail in tails:
+        pairs = tuple((pair.user, pair.assistant) for pair in tail.paired_turns)
+        fp.append((tail.session_id, tail.updated_at, len(tail.paired_turns), pairs))
+    return tuple(fp)
+
+
 class AgentLoopError(Exception):
     """Raised by AgentLoop on session validation or contract violations."""
 
@@ -372,15 +409,14 @@ class AgentLoop:
         # helper short-circuits to "" so non-aetheria loops never pay any
         # query cost.
         self.continuity_config = continuity_config
+        self.session_context_cache = SessionContextCache()
 
     def _build_continuity_brief(self, session_id: str) -> str:
-        """Build the Cross-Surface Recent Activity Brief for this turn.
+        """Build or reuse the Cross-Surface Recent Activity Brief.
 
-        Returns '' when continuity is off, the agent isn't Aetheria, the
-        current session is autonomous (heartbeat/dream/patrol/webhook/
-        salience-smoke), there's no cross-session activity in the window,
-        or any error fires during brief computation. Never raises — chat
-        path correctness is the priority.
+        Cache invalidation is keyed to the underlying cross-session activity,
+        not the clock. Relative-time strings are rendered once and stay stable
+        until a different session tail appears.
         """
         if self.continuity_config is None or not self.continuity_config.enabled:
             return ""
@@ -398,13 +434,64 @@ class AgentLoop:
                 current_session_id=session_id,
                 config=self.continuity_config,
             )
-            return build_recent_activity_brief(tails, config=self.continuity_config)
+            fingerprint = _continuity_fingerprint(tails)
+            cached = self.session_context_cache.continuity.get(session_id)
+            if cached is not None and cached.fingerprint == fingerprint:
+                return cached.text
+            text = build_recent_activity_brief(tails, config=self.continuity_config)
+            self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(
+                fingerprint=fingerprint,
+                text=text,
+            )
+            return text
         except Exception:
             import logging
             logging.getLogger(__name__).exception(
                 "continuity brief build failed; serving without it"
             )
             return ""
+
+    def _build_recall_context(self, session_id: str, user_message: str) -> str:
+        """Build or briefly reuse live recall for a coherent local thread."""
+        if self.recall_k <= 0:
+            return ""
+        now = time.monotonic()
+        cached = self.session_context_cache.recall.get(session_id)
+        if (
+            cached is not None
+            and cached.remaining_reuses > 0
+            and now < cached.expires_at
+        ):
+            self.session_context_cache.recall[session_id] = RecallCacheEntry(
+                text=cached.text,
+                query_text=cached.query_text,
+                expires_at=cached.expires_at,
+                remaining_reuses=cached.remaining_reuses - 1,
+            )
+            return cached.text
+
+        query_vector = self.embed_fn(user_message)
+        ranked = self.lattice_store.find_nodes_by_embedding(
+            self.agent_name,
+            query_vector,
+            limit=self.recall_k,
+            threshold=self.recall_threshold,
+        )
+        text = assemble_ranked_recall(ranked)
+        self.session_context_cache.recall[session_id] = RecallCacheEntry(
+            text=text,
+            query_text=user_message,
+            expires_at=now + _RECALL_CACHE_TTL_SECONDS,
+            remaining_reuses=_RECALL_CACHE_REUSE_TURNS,
+        )
+        return text
+
+    def _build_identity_context(self) -> str:
+        """Identity spine is stable prelude context, independent of the user turn."""
+        return assemble_ranked_recall(
+            (),
+            identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
+        )
 
     def _tool_schemas(self) -> tuple[dict, ...]:
         """Return OpenAI-compatible tool schemas for this agent."""
@@ -479,23 +566,9 @@ class AgentLoop:
         # 2. Load history (includes the just-saved user turn).
         history_turns = self.conv_store.load_history(session_id)
 
-        # Recall context: opt-in. When enabled, embed the user message,
-        # query Lattice for nearest-K nodes, format into a second system
-        # message. Failures propagate (Jon constraint 7): if you opted
-        # into recall, you own its infrastructure.
-        recall_context: str = ""
-        if self.recall_k > 0:
-            query_vector = self.embed_fn(user_message)
-            ranked = self.lattice_store.find_nodes_by_embedding(
-                self.agent_name,
-                query_vector,
-                limit=self.recall_k,
-                threshold=self.recall_threshold,
-            )
-            recall_context = assemble_ranked_recall(
-                ranked,
-                identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
-            )
+        continuity_brief = self._build_continuity_brief(session_id)
+        recall_context = self._build_recall_context(session_id, user_message)
+        identity_context = self._build_identity_context()
 
         # 3. Build immutable tuple[ChatMessage, ...] (constraint 7).
         # System message is prepended at request build time — NOT persisted
@@ -513,15 +586,14 @@ class AgentLoop:
         # project_soveryn_three_tracks_workaround_capability_agency.
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-        # Cross-Surface Continuity: slot between persona-anchor and
-        # long-term-relationship pinned memory. Empty when not applicable.
-        continuity_brief = self._build_continuity_brief(session_id)
         if continuity_brief:
             prelude = prelude + (ChatMessage(role="system", content=continuity_brief),)
         if self.pinned_text:
             prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
         if self.soul_text:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        if identity_context:
+            prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
 
@@ -544,7 +616,8 @@ class AgentLoop:
             assert last.role == "user", (
                 "last message must be the current user turn when splicing attachments"
             )
-            spliced_content: list[dict] = [{"type": "text", "text": user_message}]
+            current_text = last.content if isinstance(last.content, str) else user_message
+            spliced_content: list[dict] = [{"type": "text", "text": current_text}]
             for url in attachments:
                 spliced_content.append({"type": "image_url", "image_url": {"url": url}})
             messages = messages[:-1] + (
@@ -735,18 +808,9 @@ class AgentLoop:
         self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
         history_turns = self.conv_store.load_history(session_id)
 
-        # ── Recall (opt-in; same as sync). Failures propagate — route turns into JSON 5xx.
-        recall_context: str = ""
-        if self.recall_k > 0:
-            query_vector = self.embed_fn(user_message)
-            ranked = self.lattice_store.find_nodes_by_embedding(
-                self.agent_name, query_vector,
-                limit=self.recall_k, threshold=self.recall_threshold,
-            )
-            recall_context = assemble_ranked_recall(
-                ranked,
-                identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
-            )
+        continuity_brief = self._build_continuity_brief(session_id)
+        recall_context = self._build_recall_context(session_id, user_message)
+        identity_context = self._build_identity_context()
 
         # ── Build messages
         history_messages = tuple(
@@ -757,15 +821,14 @@ class AgentLoop:
         # folds at wire if the server's template can't honor multi-system.
         if self.system_prompt:
             prelude = prelude + (ChatMessage(role="system", content=self.system_prompt),)
-        # Cross-Surface Continuity: same placement as the sync path —
-        # between persona and pinned memory. Empty when not applicable.
-        continuity_brief = self._build_continuity_brief(session_id)
         if continuity_brief:
             prelude = prelude + (ChatMessage(role="system", content=continuity_brief),)
         if self.pinned_text:
             prelude = prelude + (ChatMessage(role="system", content=self.pinned_text),)
         if self.soul_text:
             prelude = prelude + (ChatMessage(role="system", content=self.soul_text),)
+        if identity_context:
+            prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
 
@@ -788,7 +851,8 @@ class AgentLoop:
             assert last.role == "user", (
                 "last message must be the current user turn when splicing attachments"
             )
-            spliced_content: list[dict] = [{"type": "text", "text": user_message}]
+            current_text = last.content if isinstance(last.content, str) else user_message
+            spliced_content: list[dict] = [{"type": "text", "text": current_text}]
             for url in attachments:
                 spliced_content.append({"type": "image_url", "image_url": {"url": url}})
             messages = messages[:-1] + (

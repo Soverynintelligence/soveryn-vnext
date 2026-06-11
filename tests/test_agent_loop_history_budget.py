@@ -26,6 +26,8 @@ from soveryn.inference.llama_server_client import (
     StreamChunk,
 )
 from soveryn.memory.conversation_store import ConversationStore
+from soveryn.memory.lattice import Node
+from soveryn.platform.continuity.config import ContinuityConfig
 
 
 # ─── Estimator ──────────────────────────────────────────────────────────────
@@ -230,6 +232,113 @@ def test_process_message_elides_when_history_exceeds_budget(conv_store):
     system_contents = [m.content for m in request.messages if m.role == "system"]
     assert any("elided" in c for c in system_contents), \
         f"elision marker missing from system messages: {system_contents}"
+
+
+def test_process_message_reuses_continuity_prelude_until_fingerprint_changes(conv_store, monkeypatch):
+    import soveryn.platform.continuity.brief as brief_mod
+
+    calls = []
+
+    def fake_brief(tails, *, config, now=None):
+        calls.append(tuple(t.session_id for t in tails))
+        return f"continuity-render-{len(calls)}"
+
+    monkeypatch.setattr(brief_mod, "build_recent_activity_brief", fake_brief)
+    other_sid = conv_store.new_session("aetheria", title="other rail")
+    conv_store.save_turn(other_sid, "aetheria", "user", "other question")
+    conv_store.save_turn(other_sid, "aetheria", "assistant", "other answer")
+
+    chat = _CapturingChat()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=chat,
+        system_prompt="persona-anchor",
+        pinned_text="stable pinned memory",
+        soul_text="stable soul",
+        continuity_config=ContinuityConfig(
+            enabled=True,
+            window_hours=6,
+            token_budget=1500,
+            per_session_cap=400,
+        ),
+    )
+    sid = conv_store.new_session("aetheria", title="current rail")
+
+    loop.process_message(sid, "first question")
+    first_system = [m.content for m in chat.calls[-1].messages if m.role == "system"]
+    loop.process_message(sid, "second question")
+    second_system = [m.content for m in chat.calls[-1].messages if m.role == "system"]
+
+    assert calls == [(other_sid,)]
+    assert first_system == second_system
+    assert first_system == [
+        "persona-anchor",
+        "continuity-render-1",
+        "stable pinned memory",
+        "stable soul",
+    ]
+
+    conv_store.save_turn(other_sid, "aetheria", "user", "new other question")
+    loop.process_message(sid, "third question")
+    third_system = [m.content for m in chat.calls[-1].messages if m.role == "system"]
+
+    assert calls == [(other_sid,), (other_sid,)]
+    assert third_system[1] == "continuity-render-2"
+
+
+class _FakeLattice:
+    def __init__(self):
+        self.calls = 0
+
+    def find_nodes_by_embedding(self, agent, embedding, *, limit, threshold):
+        self.calls += 1
+        node = Node(
+            id=f"node-{self.calls}",
+            type="fact",
+            layer="private",
+            agent=agent,
+            content=f"cached recall {self.calls}",
+            intensity=0.5,
+            salience=0.5,
+            access_count=0,
+            tags=(),
+            created_at="2026-06-11T00:00:00",
+            updated_at="2026-06-11T00:00:00",
+            embedding=(1.0,),
+            intent=None,
+            provenance={
+                "cls": "told",
+                "source": "jon",
+                "confidence": 1.0,
+                "temporal_context": "test",
+                "generator": "test",
+            },
+        )
+        return ((node, 0.99),)
+
+
+def test_process_message_reuses_recall_prelude_for_short_thread_window(conv_store):
+    chat = _CapturingChat()
+    lattice = _FakeLattice()
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=chat,
+        system_prompt="persona-anchor",
+        lattice_store=lattice,
+        recall_k=5,
+        recall_threshold=0.70,
+        embed_fn=lambda _text: (1.0,),
+    )
+    sid = conv_store.new_session("aetheria")
+
+    loop.process_message(sid, "first topic turn")
+    first_system = [m.content for m in chat.calls[-1].messages if m.role == "system"]
+    loop.process_message(sid, "second related turn")
+    second_system = [m.content for m in chat.calls[-1].messages if m.role == "system"]
+
+    assert lattice.calls == 1
+    assert first_system == second_system
+    assert any("cached recall 1" in c for c in first_system)
+
+
 
 
 # ─── Streaming path ─────────────────────────────────────────────────────────
