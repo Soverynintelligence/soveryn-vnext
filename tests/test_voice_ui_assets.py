@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_orb_css_exists_and_defines_aetheria_theme():
-    css_path = Path(__file__).parent.parent / "soveryn" / "app" / "static" / "voice" / "orb.css"
+    css_path = Path(__file__).parent.parent / "soveryn" / "static" / "voice" / "orb.css"
     assert css_path.is_file()
     content = css_path.read_text()
     assert ".orb-aetheria" in content
@@ -14,7 +14,7 @@ def test_orb_css_exists_and_defines_aetheria_theme():
 
 
 def test_voice_client_js_exists():
-    js_path = Path(__file__).parent.parent / "soveryn" / "app" / "static" / "voice" / "voice_client.js"
+    js_path = Path(__file__).parent.parent / "soveryn" / "static" / "voice" / "voice_client.js"
     assert js_path.is_file()
     content = js_path.read_text()
     # Critical findings from spike: audio AND video transceivers
@@ -29,7 +29,7 @@ def test_voice_client_js_exists():
 def test_voice_client_js_uses_user_gesture_for_audio():
     """Browser autoplay policy requires user gesture; verify the JS waits
     for a click before initializing audio."""
-    js_path = Path(__file__).parent.parent / "soveryn" / "app" / "static" / "voice" / "voice_client.js"
+    js_path = Path(__file__).parent.parent / "soveryn" / "static" / "voice" / "voice_client.js"
     content = js_path.read_text()
     assert "addEventListener" in content
     assert "click" in content
@@ -37,7 +37,7 @@ def test_voice_client_js_uses_user_gesture_for_audio():
 
 def test_orb_css_defines_all_state_machine_states():
     """The state machine has 6 states; all should have corresponding CSS rules."""
-    css_path = Path(__file__).parent.parent / "soveryn" / "app" / "static" / "voice" / "orb.css"
+    css_path = Path(__file__).parent.parent / "soveryn" / "static" / "voice" / "orb.css"
     content = css_path.read_text()
     for state in ("idle", "listening", "hearing", "thinking", "speaking", "interrupted"):
         assert f'data-state="{state}"' in content, f"missing state CSS: {state}"

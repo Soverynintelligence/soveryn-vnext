@@ -36,15 +36,17 @@ from flask import (
 
 _THIS_DIR = Path(__file__).resolve().parent
 _TEMPLATES_DIR = _THIS_DIR.parent / "templates"
-_STATIC_DIR = _THIS_DIR.parent / "static"
 
 
+# Static assets (orb.css, voice_client.js) live under soveryn/app/static/voice/
+# and are served by Flask's app-level static handler at /static/voice/*.
+# The blueprint MUST NOT declare its own static_folder/static_url_path —
+# doing so registers a duplicate /static/<path> route that conflicts with
+# the app-level handler and returns 404 for blueprint-static paths.
 bp = Blueprint(
     "voice",
     __name__,
     template_folder=str(_TEMPLATES_DIR),
-    static_folder=str(_STATIC_DIR),
-    static_url_path="/static",
 )
 logger = logging.getLogger(__name__)
 
