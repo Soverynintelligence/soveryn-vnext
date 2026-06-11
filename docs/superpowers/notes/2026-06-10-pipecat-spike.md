@@ -44,20 +44,32 @@ async def run_aetheria_voice_session(webrtc_connection):
             audio_in_enabled=True,
             audio_out_enabled=True,
             audio_out_10ms_chunks=2,    # tunable: 20ms output frames
-            vad_analyzer=SileroVADAnalyzer(),   # see Q2
         ),
     )
 
-    # 2. STT — our custom Parakeet HTTP wrapper (see Q6)
+    # 2. VAD — explicit processor in the graph, not just a transport param.
+    #    This is the missing stage that turns audio frames into
+    #    VADUserStartedSpeakingFrame / VADUserStoppedSpeakingFrame for STT.
+    vad = SileroVADAnalyzer(
+        sample_rate=16000,
+        params=VADParams(
+            confidence=0.7,         # default 0.7 — speech probability threshold (0..1)
+            start_secs=0.2,         # default 0.2 — seconds of speech before SPEAKING state
+            stop_secs=0.2,          # default 0.2 — seconds of silence before QUIET state
+            min_volume=0.6,         # default 0.6 — minimum audio volume (0..1)
+        ),
+    )
+
+    # 3. STT — our custom Parakeet HTTP wrapper (see Q6)
     stt = ParakeetSegmentedSTTService(
         url="http://127.0.0.1:8087",
         sample_rate=16000,
     )
 
-    # 3. LLM bridge — our custom FrameProcessor wrapping AgentLoop (see Q5)
+    # 4. LLM bridge — our custom FrameProcessor wrapping AgentLoop (see Q5)
     llm_bridge = AgentLoopBridge(agent_loop=aetheria_agent_loop)
 
-    # 4. TTS — Pipecat's built-in ElevenLabs service
+    # 5. TTS — Pipecat's built-in ElevenLabs service
     from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
     import aiohttp
     aiohttp_session = aiohttp.ClientSession()
@@ -70,7 +82,8 @@ async def run_aetheria_voice_session(webrtc_connection):
     # 5. Pipeline — frames flow left-to-right downstream, upstream signals (interrupt) flow right-to-left
     pipeline = Pipeline([
         transport.input(),     # audio in from browser mic
-        stt,                   # AudioRawFrame -> TranscriptionFrame
+        VADProcessor(vad_analyzer=vad),  # AudioRawFrame -> VADUserStartedSpeakingFrame / VADUserStoppedSpeakingFrame
+        stt,                   # VAD-bounded AudioRawFrame -> TranscriptionFrame
         llm_bridge,            # TranscriptionFrame -> LLMTextFrame (sanitized) stream
         tts,                   # LLMTextFrame -> TTSAudioRawFrame
         transport.output(),    # audio out to browser speakers
@@ -131,7 +144,7 @@ vad = SileroVADAnalyzer(
 
 It uses the Silero VAD ONNX model under the hood (so it pulls `onnxruntime` via the `[silero]` extra). Frame size is fixed by Silero: 512 samples at 16 kHz, 256 at 8 kHz.
 
-**Wire it via `TransportParams.vad_analyzer=`** — Pipecat then emits `VADUserStartedSpeakingFrame` / `VADUserStoppedSpeakingFrame` from the transport, which `SegmentedSTTService` consumes to define utterance boundaries (see Q6).
+**Wire it via `VADProcessor(vad_analyzer=SileroVADAnalyzer(...))` in the pipeline graph** — that processor emits `VADUserStartedSpeakingFrame` / `VADUserStoppedSpeakingFrame`, which `SegmentedSTTService` consumes to define utterance boundaries (see Q6). `TransportParams.audio_in_sample_rate` still matters for resampling, but it does not itself create the VAD event stream.
 
 **Tunable knobs for SOVERYN:**
 - Bump `confidence` up to ~0.8 if Jon's desk has typing/fan noise → fewer false starts.
@@ -441,7 +454,7 @@ class AgentLoopBridge(FrameProcessor):
 `SegmentedSTTService` (in `pipecat.services.stt_service`) is the base class for STT services that operate on complete utterances (VAD-bounded segments), not continuous streaming. That matches Parakeet's interface: POST a WAV blob, get back a transcript.
 
 The base class handles the heavy lifting for us:
-- Subscribes to `VADUserStartedSpeakingFrame` / `VADUserStoppedSpeakingFrame` (emitted by `SileroVADAnalyzer` via the transport).
+- Subscribes to `VADUserStartedSpeakingFrame` / `VADUserStoppedSpeakingFrame` (emitted by `VADProcessor` wrapping `SileroVADAnalyzer`).
 - Buffers `AudioRawFrame.audio` bytes from speech-start to speech-end.
 - On speech-end, wraps the buffer as a WAV (16-bit mono PCM at the configured sample rate).
 - Calls our `run_stt(audio: bytes)` with the WAV bytes.

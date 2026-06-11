@@ -52,6 +52,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
+from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
@@ -298,6 +299,15 @@ def build_aetheria_voice_pipeline(
     if aiohttp_session is None:
         aiohttp_session = aiohttp.ClientSession()
 
+    vad_analyzer = SileroVADAnalyzer(
+        sample_rate=DEFAULT_SAMPLE_RATE,
+        # Lowered confidence from 0.7 → 0.3 and start_secs 0.2 → 0.1
+        # as diagnostic — if nothing fires at this level, audio isn't
+        # reaching Silero at all; if voice fires, threshold was too
+        # restrictive. Tune back up after we confirm audio path.
+        params=VADParams(confidence=0.3, start_secs=0.1, stop_secs=0.3),
+    )
+
     transport = SmallWebRTCTransport(
         webrtc_connection=webrtc_connection,
         params=TransportParams(
@@ -310,10 +320,6 @@ def build_aetheria_voice_pipeline(
             audio_in_sample_rate=DEFAULT_SAMPLE_RATE,
             audio_out_enabled=True,
             audio_out_10ms_chunks=2,
-            vad_analyzer=SileroVADAnalyzer(
-                sample_rate=DEFAULT_SAMPLE_RATE,
-                params=VADParams(confidence=0.7, start_secs=0.2, stop_secs=0.3),
-            ),
         ),
     )
 
@@ -336,6 +342,7 @@ def build_aetheria_voice_pipeline(
 
     pipeline = Pipeline([
         transport.input(),
+        VADProcessor(vad_analyzer=vad_analyzer),
         stt,
         bridge,
         tts,

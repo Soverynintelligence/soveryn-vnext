@@ -35,6 +35,7 @@ from pipecat.frames.frames import (
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineWorker
+from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
@@ -120,14 +121,16 @@ def test_build_pipeline_constructs_all_processors():
     processors = list(pipeline._processors)
     type_names = [type(p).__name__ for p in processors]
 
+    assert "VADProcessor" in type_names
     assert "ParakeetSTTService" in type_names
     assert "AgentLoopBridge" in type_names
     assert "ElevenLabsHttpTTSService" in type_names
 
+    vad_idx = type_names.index("VADProcessor")
     stt_idx = type_names.index("ParakeetSTTService")
     bridge_idx = type_names.index("AgentLoopBridge")
     tts_idx = type_names.index("ElevenLabsHttpTTSService")
-    assert stt_idx < bridge_idx < tts_idx
+    assert vad_idx < stt_idx < bridge_idx < tts_idx
 
     # Bridge holds the agent_loop + session_id passed at construction
     bridge = processors[bridge_idx]
