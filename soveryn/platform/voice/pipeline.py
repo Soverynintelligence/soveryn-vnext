@@ -224,6 +224,14 @@ class AgentLoopBridge(FrameProcessor):
         loop = asyncio.get_running_loop()
 
         def _producer() -> None:
+            pending_tts = ""
+
+            def _flush_pending() -> None:
+                nonlocal pending_tts
+                if pending_tts.strip():
+                    loop.call_soon_threadsafe(queue.put_nowait, pending_tts)
+                pending_tts = ""
+
             try:
                 for event in self._agent_loop.process_message_stream(
                     self._session_id, user_text,
@@ -231,13 +239,23 @@ class AgentLoopBridge(FrameProcessor):
                     if isinstance(event, TTSTokenEvent):
                         # Already sanitized at source; re-sanitize is a cheap
                         # idempotent safety net in case a future code path
-                        # emits a raw chunk.
+                        # emits a raw chunk. We then buffer tiny pieces into
+                        # phrase-sized chunks so the TTS service does not get
+                        # one-character requests.
                         chunk = sanitize_for_tts(event.text, preserve_outer_whitespace=True)
-                        if chunk.strip():
-                            loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                        if not chunk.strip():
+                            continue
+                        pending_tts += chunk
+                        if (
+                            chunk[0].isspace()
+                            or chunk.rstrip()[-1] in ".!?;:,"
+                            or len(pending_tts.strip()) >= 4
+                        ):
+                            _flush_pending()
             except Exception as exc:  # noqa: BLE001
                 logger.exception("agent_loop bridge producer failed: %s", exc)
             finally:
+                _flush_pending()
                 loop.call_soon_threadsafe(queue.put_nowait, self._QUEUE_SENTINEL)
 
         producer_task = asyncio.create_task(asyncio.to_thread(_producer))

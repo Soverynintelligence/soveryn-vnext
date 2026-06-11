@@ -448,7 +448,7 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    # Got the first chunk before cancellation
+    # Got the first buffered chunk before cancellation
     assert any(f.text == "first" for f in text_frames)
     # Never got the second chunk (the cancellation interrupted the wait)
     assert not any(f.text == "never" for f in text_frames)
