@@ -35,3 +35,6 @@ include = ["soveryn*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+markers = [
+    "integration: tests that hit live services (router, lattice, etc.); opt-in with --run-integration",
+]
