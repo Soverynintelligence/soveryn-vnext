@@ -302,6 +302,12 @@ def build_aetheria_voice_pipeline(
         webrtc_connection=webrtc_connection,
         params=TransportParams(
             audio_in_enabled=True,
+            # Browser sends Opus at 48kHz; SileroVADAnalyzer only handles
+            # 8000 or 16000 Hz. Pipe Pipecat to resample to 16kHz at the
+            # transport input boundary so VAD sees the right rate. Without
+            # this, audio reaches the pipeline at 48kHz, Silero silently
+            # produces no voice activations, and nothing downstream fires.
+            audio_in_sample_rate=DEFAULT_SAMPLE_RATE,
             audio_out_enabled=True,
             audio_out_10ms_chunks=2,
             vad_analyzer=SileroVADAnalyzer(
