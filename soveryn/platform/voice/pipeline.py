@@ -97,6 +97,14 @@ class ParakeetSTTService(SegmentedSTTService):
         aiohttp_session: aiohttp.ClientSession | None = None,
         **kwargs: Any,
     ):
+        # Pipecat's STTSettings requires model + language to be set even
+        # when the upstream STT doesn't honor them (Parakeet is a single-model
+        # server). Without these the service errors at startup with
+        # "STTSettings: model, language NOT_GIVEN" and no audio reaches
+        # run_stt(). Default to en-US Parakeet for documentation; tests
+        # can override via kwargs.
+        kwargs.setdefault("model", "parakeet")
+        kwargs.setdefault("language", "en")
         super().__init__(sample_rate=sample_rate, **kwargs)
         self._url = url.rstrip("/") + "/transcribe"
         self._aiohttp_session = aiohttp_session
