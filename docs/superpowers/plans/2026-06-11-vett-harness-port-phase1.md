@@ -563,7 +563,12 @@ def probe_vett_format_compat(*, router_url: str, model: str) -> FormatProbeResul
             {"role": "system", "content": _HARNESS_SHAPE_SYSTEM},
             {"role": "user", "content": _HARNESS_SHAPE_USER},
         ],
-        "max_tokens": 32,
+        # 256, not 32 — Vett's preset is `reasoning = on` + `reasoning-format = deepseek`,
+        # which routes hidden chain-of-thought into `reasoning_content` BEFORE any
+        # visible `content` is emitted. A small budget gets entirely consumed by
+        # thinking, leaving content="" and finish_reason="length" even when the
+        # format is accepted at parse + dispatch level. Surfaced in Task 3 execution.
+        "max_tokens": 256,
         "temperature": 0.0,
     }
     try:
