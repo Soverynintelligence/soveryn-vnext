@@ -246,10 +246,17 @@ class AgentLoopBridge(FrameProcessor):
                         if not chunk.strip():
                             continue
                         pending_tts += chunk
+                        # Flush at sentence boundaries OR at a buffer threshold
+                        # large enough for prosody coherence. The previous
+                        # `len >= 4` flush was firing on essentially every
+                        # token, which combined with TTS TOKEN-mode aggregation
+                        # produced ~13 ElevenLabs API calls per short reply.
+                        # SENTENCE-level TTS aggregation downstream makes this
+                        # less critical, but a larger bridge buffer still
+                        # reduces frame thrash.
                         if (
-                            chunk[0].isspace()
-                            or chunk.rstrip()[-1] in ".!?;:,"
-                            or len(pending_tts.strip()) >= 4
+                            chunk.rstrip()[-1] in ".!?;:"
+                            or len(pending_tts.strip()) >= 40
                         ):
                             _flush_pending()
             except Exception as exc:  # noqa: BLE001
@@ -357,7 +364,12 @@ def build_aetheria_voice_pipeline(
         api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
         settings=ElevenLabsHttpTTSService.Settings(voice=voice_id),
-        text_aggregation_mode=TextAggregationMode.TOKEN,
+        # SENTENCE aggregation collapses ~13 per-token API calls per short reply
+        # into 1-3 sentence calls. Adds ~200ms first-audio latency but eliminates
+        # the per-chunk prosody cuts that made playback sound "jumpy" and the
+        # per-chunk 200ms API overhead that made total response "slow as
+        # molasses" (observed 2026-06-11 first live voice test).
+        text_aggregation_mode=TextAggregationMode.SENTENCE,
     )
 
     pipeline = Pipeline([
