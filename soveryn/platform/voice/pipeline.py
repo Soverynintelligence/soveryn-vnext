@@ -56,6 +56,7 @@ from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
+from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -319,7 +320,7 @@ def build_aetheria_voice_pipeline(
             # produces no voice activations, and nothing downstream fires.
             audio_in_sample_rate=DEFAULT_SAMPLE_RATE,
             audio_out_enabled=True,
-            audio_out_10ms_chunks=2,
+            audio_out_10ms_chunks=1,
         ),
     )
 
@@ -338,6 +339,7 @@ def build_aetheria_voice_pipeline(
         api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
         settings=ElevenLabsHttpTTSService.Settings(voice=voice_id),
+        text_aggregation_mode=TextAggregationMode.TOKEN,
     )
 
     pipeline = Pipeline([

@@ -39,6 +39,7 @@ from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
+from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
 from soveryn.agents.loop import TTSTokenEvent
@@ -177,6 +178,7 @@ def test_build_pipeline_wires_voice_id_into_tts_service():
     settings = getattr(tts, "_settings", None)
     voice_attr = getattr(settings, "voice", None) or getattr(tts, "_voice_id", None)
     assert voice_attr == "aetheria-voice-xyz"
+    assert getattr(tts, "_text_aggregation_mode", None) == TextAggregationMode.TOKEN
 
 
 # ─────────────────────────────────────────────────────────────────────────────
