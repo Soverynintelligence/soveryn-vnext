@@ -1,0 +1,22 @@
+Harness-1
+Copyright 2026 The Harness-1 Authors (Pengcheng Jiang et al.)
+Original source: https://github.com/pat-jj/harness-1
+
+This product includes software vendored from the Harness-1 project,
+distributed under the Apache License, Version 2.0. The original
+source is preserved verbatim under
+`soveryn/agents/vett/harness/vendor/`.
+
+SOVERYN-side modifications (not part of upstream Harness-1):
+- `soveryn/agents/vett/harness/llm_client.py` — chat-completions
+  inference model targeting llama-server router at :8090 (replaces
+  the upstream Modal/Tinker/OpenAI client defaults).
+- `soveryn/agents/vett/harness/lattice_tools.py` — tool handlers
+  for fan_out_search/search_corpus/read_doc backed by SOVERYN's
+  Synapse lattice (replaces the upstream Chroma corpus backend).
+- `soveryn/agents/vett/harness/run_eval.py` — standalone CLI runner
+  with turn budget, trajectory JSON persistence, and failure-mode
+  telemetry.
+
+No modifications were made to files under
+`soveryn/agents/vett/harness/vendor/`.
