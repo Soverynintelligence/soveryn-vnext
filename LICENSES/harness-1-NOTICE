@@ -20,3 +20,22 @@ Planned SOVERYN-side modifications (added in subsequent tasks of phase 1; will n
 
 No modifications were made to files under
 `soveryn/agents/vett/harness/vendor/`.
+
+Runtime compatibility layer (SOVERYN, outside `vendor/`):
+SOVERYN provides runtime aliases/stubs at module import time so that the
+upstream vendored modules can be imported under SOVERYN's nested package
+path without modification. Specifically:
+  - `sys.modules['harness']` is aliased to the vendored package so
+    upstream's absolute imports (`from harness.X import Y`) resolve.
+  - A fail-closed stub `tinker` module is registered so that vendored
+    modules importing the Thinking Machines SDK at module top can load
+    without the SDK being installed; actual use of any Tinker class
+    raises `RuntimeError` and directs the caller to the supported
+    `SoverynVettInferenceModel` inference path.
+  - A fail-closed stub `datagen` module (with `datagen.search_dataset`
+    submodule) is registered so that vendored modules importing
+    upstream's training-time dataset registry at module top can load
+    without it; phase 1 is eval-only against the Synapse lattice and
+    does not exercise that code path.
+Implementation: `soveryn/agents/vett/harness/_vendor_compat.py`.
+Vendored upstream files under `vendor/` are unmodified.

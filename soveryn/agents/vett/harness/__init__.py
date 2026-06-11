@@ -7,4 +7,14 @@ alongside this __init__.
 
 This package is NOT wired into Vett's normal task surface in
 phase 1. See `docs/superpowers/specs/2026-06-11-vett-harness-port-design.md`.
+
+Runtime compatibility:
+    Upstream vendored files assume the top-level package name `harness`
+    and import the Tinker SDK at module load. SOVERYN aliases `harness`
+    to our vendored package and stubs `tinker` (fail-closed) via the
+    explicit compatibility shim in `_vendor_compat.py`, installed below
+    before any vendor module is touched.
 """
+from soveryn.agents.vett.harness._vendor_compat import install_vendor_compat
+
+install_vendor_compat()
