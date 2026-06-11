@@ -128,13 +128,19 @@
 
             // CRITICAL: BOTH audio AND video transceivers required by SmallWebRTCTransport.
             // (Per docs/superpowers/notes/2026-06-10-pipecat-spike.md Q4.)
-            pc.addTransceiver("audio", { direction: "sendrecv" });
-            pc.addTransceiver("video", { direction: "sendrecv" });
-
-            // Attach mic
-            for (const track of micStream.getAudioTracks()) {
-                pc.addTrack(track, micStream);
+            //
+            // Audio: create the transceiver explicitly and attach the mic track
+            // via replaceTrack on its sender. Do NOT also call pc.addTrack(track) —
+            // that would auto-create a SECOND audio transceiver, leaving one
+            // empty and one with the mic, and Pipecat may subscribe to the
+            // wrong one. Single-transceiver-per-direction is the right shape.
+            const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
+            const micTrack = micStream.getAudioTracks()[0];
+            if (micTrack) {
+                await audioTransceiver.sender.replaceTrack(micTrack);
             }
+            // Video transceiver required even for voice-only sessions
+            pc.addTransceiver("video", { direction: "sendrecv" });
 
             // Handle inbound TTS audio
             pc.ontrack = (event) => {
