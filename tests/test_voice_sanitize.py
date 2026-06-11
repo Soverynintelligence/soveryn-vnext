@@ -100,3 +100,9 @@ def test_preserves_apostrophes_and_em_dashes():
     out = sanitize_for_tts(raw)
     assert "it's" in out.lower()
     assert "—" in out
+
+def test_preserve_outer_whitespace_keeps_chunk_boundaries():
+    raw = "hello   world"
+    out = sanitize_for_tts(raw, preserve_outer_whitespace=True)
+    assert out == "hello world"
+    assert sanitize_for_tts("   ", preserve_outer_whitespace=True) == ""

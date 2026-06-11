@@ -29,9 +29,15 @@ _RE_CONTROL_TOKEN = re.compile(r"<\|[^|]*\|>")
 _RE_WHITESPACE = re.compile(r"\s+")
 
 
-def sanitize_for_tts(text: str) -> str:
+def sanitize_for_tts(text: str, *, preserve_outer_whitespace: bool = False) -> str:
     """Strip thinking markup, control tokens, tool-call JSON, scratchpad
     tags, and emoji from `text`. Return clean prose for TTS.
+
+    When ``preserve_outer_whitespace`` is True, keep leading/trailing
+    whitespace boundaries after sanitization. This is for chunked TTS
+    streams, where token edges need to survive so adjacent chunks don't
+    glue words together. Empty / whitespace-only input still returns
+    ``""``.
 
     Idempotent. Empty input → empty output. Preserves sentence-ending
     punctuation (matters for TTS prosody)."""
@@ -49,5 +55,8 @@ def sanitize_for_tts(text: str) -> str:
     text = _RE_BRACKET_TAG.sub("", text)
     text = _RE_CONTROL_TOKEN.sub("", text)
     text = "".join(c for c in text if unicodedata.category(c)[0] != "S")
-    text = _RE_WHITESPACE.sub(" ", text).strip()
+    text = _RE_WHITESPACE.sub(" ", text)
+    if preserve_outer_whitespace:
+        return "" if not text.strip() else text
+    text = text.strip()
     return text

@@ -832,8 +832,8 @@ class AgentLoop:
                         # subscribe to TTSTokenEvent; chat consumers ignore it.
                         # If sanitization drops everything (pure markup chunk),
                         # we emit nothing for that chunk — TTS never sees noise.
-                        sanitized_chunk = sanitize_for_tts(chunk.delta)
-                        if sanitized_chunk:
+                        sanitized_chunk = sanitize_for_tts(chunk.delta, preserve_outer_whitespace=True)
+                        if sanitized_chunk.strip():
                             yield TTSTokenEvent(text=sanitized_chunk)
                     if chunk.tool_calls_delta:
                         _accumulate_tool_calls(round_tool_calls, chunk.tool_calls_delta)

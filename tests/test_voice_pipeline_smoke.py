@@ -320,7 +320,7 @@ def test_agent_loop_bridge_emits_llm_text_frames_for_each_tts_token_event():
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    assert [f.text for f in text_frames] == ["hello", "world", "."]
+    assert [f.text for f in text_frames] == ["hello", " world", "."]
     assert len(starts) == 1
     assert len(ends) == 1
     # Order: Start ... End

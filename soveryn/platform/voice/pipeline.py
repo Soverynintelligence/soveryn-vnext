@@ -231,8 +231,8 @@ class AgentLoopBridge(FrameProcessor):
                         # Already sanitized at source; re-sanitize is a cheap
                         # idempotent safety net in case a future code path
                         # emits a raw chunk.
-                        chunk = sanitize_for_tts(event.text)
-                        if chunk:
+                        chunk = sanitize_for_tts(event.text, preserve_outer_whitespace=True)
+                        if chunk.strip():
                             loop.call_soon_threadsafe(queue.put_nowait, chunk)
             except Exception as exc:  # noqa: BLE001
                 logger.exception("agent_loop bridge producer failed: %s", exc)

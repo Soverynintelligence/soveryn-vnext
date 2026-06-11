@@ -61,8 +61,8 @@ def test_process_message_stream_emits_tts_token_event_alongside_token_event(conv
     token_events = [e for e in events if isinstance(e, TokenEvent)]
     tts_events = [e for e in events if isinstance(e, TTSTokenEvent)]
     assert [e.delta for e in token_events] == ["hello", " world"]
-    # "hello" sanitizes to "hello"; " world" trims to "world"
-    assert [e.text for e in tts_events] == ["hello", "world"]
+    # Preserve token boundaries so adjacent chunks do not glue words together.
+    assert [e.text for e in tts_events] == ["hello", " world"]
 
     # Final event is still DoneEvent — TTSTokenEvent doesn't displace it
     assert isinstance(events[-1], DoneEvent)
