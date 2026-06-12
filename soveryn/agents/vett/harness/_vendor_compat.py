@@ -171,16 +171,58 @@ def install_vendor_compat() -> None:
     Idempotent: safe to call multiple times. Must be called BEFORE any
     `soveryn.agents.vett.harness.vendor.*` module is imported.
     """
-    # 1. harness alias → our vendored package.
+    # 1. tinker / datagen stubs MUST be installed before any vendor module
+    #    is imported below — vendor/agent.py imports `tinker` at module-load.
+    if "tinker" not in sys.modules:
+        sys.modules["tinker"] = _build_tinker_stub_module()
+    if "datagen" not in sys.modules:
+        sys.modules["datagen"] = _build_datagen_stub_module()
+
+    # 2. harness alias → our vendored package.
     if "harness" not in sys.modules:
-        # Import lazily to avoid touching vendor at module-load of this file.
         from soveryn.agents.vett.harness import vendor as _vendor_pkg
         sys.modules["harness"] = _vendor_pkg
 
-    # 2. tinker stub.
-    if "tinker" not in sys.modules:
-        sys.modules["tinker"] = _build_tinker_stub_module()
-
-    # 3. datagen stub.
-    if "datagen" not in sys.modules:
-        sys.modules["datagen"] = _build_datagen_stub_module()
+    # 3. Pre-bind each vendor submodule under its `harness.<name>` alias so
+    #    a subsequent `from harness.trajectory import Observation` resolves
+    #    to the SAME module object as
+    #    `from soveryn.agents.vett.harness.vendor.trajectory import Observation`.
+    #
+    #    Without this, the first `from harness.trajectory import X` (from
+    #    inside vendored code, e.g. agent.py:47) causes Python's import
+    #    machinery to re-import trajectory.py and register a second copy
+    #    under `sys.modules["harness.trajectory"]`. That second copy
+    #    defines a separate `Observation` class — `isinstance` checks in
+    #    agent.py / trajectory.py then fail against `Observation` instances
+    #    constructed from the `soveryn.agents.vett.harness.vendor.*` path
+    #    (e.g. in run_eval.py's `_build_initial_observation`).
+    #
+    #    Order matters: bind leaf modules (no inter-vendor deps) first so
+    #    that when a higher-level module like `agent.py` imports
+    #    `from harness.trajectory import X`, the alias already points at
+    #    the canonical vendor module.
+    import importlib
+    for _name in (
+        "utils",       # no harness.* deps
+        "rerank",      # deps: config
+        "config",      # no harness.* deps
+        "tools",       # deps: utils, rerank
+        "trajectory",  # deps: utils, tools
+        "prompts",     # no harness.* deps (verify)
+        "tasks",       # deps: tools, trajectory
+        "ultra_core",  # deps: tools, trajectory
+        "agent",       # deps: most of the above
+    ):
+        _vendor_full = f"soveryn.agents.vett.harness.vendor.{_name}"
+        _alias = f"harness.{_name}"
+        if (_alias in sys.modules and _vendor_full in sys.modules
+                and sys.modules[_alias] is sys.modules[_vendor_full]):
+            continue
+        try:
+            _mod = importlib.import_module(_vendor_full)
+        except Exception:
+            # If a vendor module fails to import here, propagate at use
+            # time rather than masking — but don't break the rest of the
+            # alias install.
+            continue
+        sys.modules[_alias] = _mod

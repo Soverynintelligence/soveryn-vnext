@@ -66,3 +66,30 @@ def test_vendor_compat_tinker_stub_imports_succeed_but_fail_on_use():
             f"stub error should direct caller to SoverynVettInferenceModel; got: {e}"
     else:
         raise AssertionError("Tinker stub did not raise when instantiated")
+
+
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+import json
+
+import pytest
+
+
+@pytest.mark.integration
+def test_end_to_end_smoke_task_against_live_services():
+    """The CLI runs the 'smoke' task end-to-end and produces a valid trajectory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "trajectory.json"
+        result = subprocess.run(
+            [sys.executable, "-m", "soveryn.agents.vett.harness.run_eval",
+             "--task", "smoke", "--output", str(out_path),
+             "--max-turns", "3"],
+            capture_output=True, text=True, timeout=120,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert out_path.exists()
+        data = json.loads(out_path.read_text())
+        assert "actions_and_observations" in data
+        assert "[telemetry]" in result.stderr
