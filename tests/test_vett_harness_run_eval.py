@@ -34,3 +34,32 @@ def test_load_task_returns_task_object_for_known_task():
     task = run_eval.load_task("smoke")
     assert task.name == "smoke"
     assert task.query
+
+
+def test_main_persists_trajectory_json_with_fake_harness(monkeypatch):
+    """main() runs the harness against a task and writes a JSON file."""
+    fake_trajectory_dict = {"actions_and_observations": [], "id": "fake-uuid"}
+
+    class _FakeTrajectory:
+        def model_dump(self):
+            return fake_trajectory_dict
+
+    class _FakeAgent:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __call__(self, initial_observation):
+            return _FakeTrajectory()
+
+    monkeypatch.setattr(
+        "soveryn.agents.vett.harness.run_eval._build_agent",
+        lambda args: _FakeAgent(),
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "trajectory.json"
+        rc = run_eval.main(["--task", "smoke", "--output", str(out_path)])
+        assert rc == 0
+        assert out_path.exists()
+        loaded = json.loads(out_path.read_text())
+        assert loaded["id"] == "fake-uuid"

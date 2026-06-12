@@ -37,7 +37,7 @@ Discovery context (see docs/notes/2026-06-11-lattice-discovery.md):
 """
 from __future__ import annotations
 
-from typing import Callable, Iterable, List, Sequence, Tuple
+from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 
 DEFAULT_TOP_K = 5
@@ -76,6 +76,15 @@ class LatticeToolHandlers:
     agent_name
         The agent identifier passed to
         ``LatticeStore.find_nodes_by_embedding``. Defaults to ``"vett"``.
+    layer_filter
+        Optional layer filter forwarded to
+        ``LatticeStore.find_nodes_by_embedding``. ``None`` (the default)
+        scopes searches to the agent's private + global layers and
+        EXCLUDES the shared ``library`` layer. ``"library"`` searches the
+        cross-author library layer only — recommended for phase-1
+        cross-source eval where the corpus is shared reference material.
+        Any other string is passed through verbatim (matches that exact
+        layer name).
     """
 
     def __init__(
@@ -84,16 +93,19 @@ class LatticeToolHandlers:
         lattice,
         embed_fn: Callable[[str], Sequence[float]],
         agent_name: str = _DEFAULT_AGENT,
+        layer_filter: Optional[str] = None,
     ) -> None:
         self._lattice = lattice
         self._embed = embed_fn
         self._agent = agent_name
+        self._layer_filter = layer_filter
 
     def search_corpus(self, *, query: str, top_k: int = DEFAULT_TOP_K) -> str:
         """Embed ``query``, vector-search lattice, format top-``k`` as observation."""
         embedding = self._embed(query)
         results = self._lattice.find_nodes_by_embedding(
             self._agent, embedding, limit=top_k,
+            layer_filter=self._layer_filter,
         )
         # Real API returns iterable of (node, score); we only need (id, content).
         items = [(node.id, node.content) for node, _score in results]
