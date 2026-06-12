@@ -20,6 +20,76 @@ from typing import Any, List
 from soveryn.agents.vett.harness.eval_tasks import get_task, EvalTask
 
 
+DOMINANT_TOOL_FRACTION_THRESHOLD = 0.8
+
+
+def _tool_name(tool: Any) -> str:
+    """Resolve a Tool object's name across two paths.
+
+    The vendored ``Tool`` carries its name at ``tool_schema.name``
+    (vendor/tools.py:266+). Test fakes and any future flat-shape adapters
+    may expose ``.name`` directly. Prefer the vendor path; fall back.
+    Returns ``"unknown"`` only when neither is present.
+    """
+    schema = getattr(tool, "tool_schema", None)
+    if schema is not None:
+        schema_name = getattr(schema, "name", None)
+        if schema_name:
+            return schema_name
+    return getattr(tool, "name", "unknown")
+
+
+def emit_telemetry(
+    trajectory: Any,
+    *,
+    max_turns: int,
+    reached_stop: bool,
+    evidence_promoted: int,
+) -> dict:
+    """Aggregate per-trajectory failure-mode telemetry.
+
+    Returns the dict for testability. The CLI's ``main()`` also prints a
+    one-line stderr summary derived from the same dict.
+
+    Failure-mode fields:
+        - ``turn_cap_hit``: ran out of turn budget without natural stop
+        - ``zero_promotion``: never promoted any evidence to the curated set
+        - ``tool_diversity_collapse``: one tool dominated >80% of calls
+          (e.g., searched forever, never verified)
+        - ``tool_error_count``: count of actions where the tool errored
+          (driven off ``entry.errored``, which the vendored ``Action``
+          does NOT currently expose — defaults to 0 for real trajectories
+          until Task 13 wires a real error signal)
+    """
+    tool_call_counts: dict[str, int] = {}
+    tool_error_count = 0
+    for entry in getattr(trajectory, "actions_and_observations", []) or []:
+        for tool in getattr(entry, "tools", []) or []:
+            name = _tool_name(tool)
+            tool_call_counts[name] = tool_call_counts.get(name, 0) + 1
+        if getattr(entry, "errored", False):
+            tool_error_count += 1
+
+    num_turns = getattr(trajectory, "num_turns", -1)
+    total_calls = sum(tool_call_counts.values())
+    tool_diversity_collapse = (
+        total_calls > 0
+        and max(tool_call_counts.values()) / total_calls > DOMINANT_TOOL_FRACTION_THRESHOLD
+    )
+
+    return {
+        "num_turns": num_turns,
+        "tool_calls": tool_call_counts,
+        "reached_stop": reached_stop,
+        "evidence_promoted": evidence_promoted,
+        # Failure-mode diagnostics
+        "turn_cap_hit": num_turns >= max_turns,
+        "zero_promotion": evidence_promoted == 0,
+        "tool_diversity_collapse": tool_diversity_collapse,
+        "tool_error_count": tool_error_count,
+    }
+
+
 def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="run_eval",
@@ -215,6 +285,34 @@ def main(argv: List[str] | None = None) -> int:
     agent = _build_agent(args)
     initial_observation = _build_initial_observation(task)
     trajectory = agent(initial_observation)
+
+    # Failure-mode telemetry. The reached_stop / evidence_promoted fields
+    # require introspection of the trajectory's terminal state; for phase 1
+    # we use simple defaults that Task 13's eval task verification can
+    # refine. ``stopped_by_tool`` and ``promoted_evidence_ids`` are
+    # SOVERYN-side conventions — the vendored ``Trajectory`` does not
+    # currently expose them (see vendor/trajectory.py:228), so the
+    # ``getattr`` defaults yield ``False`` / ``0`` until Task 13 wires a
+    # real terminal-state signal.
+    reached_stop = bool(getattr(trajectory, "stopped_by_tool", False))
+    evidence_promoted = len(getattr(trajectory, "promoted_evidence_ids", []) or [])
+    summary = emit_telemetry(
+        trajectory,
+        max_turns=args.max_turns,
+        reached_stop=reached_stop,
+        evidence_promoted=evidence_promoted,
+    )
+    print(
+        f"[telemetry] num_turns={summary['num_turns']} "
+        f"tool_calls={summary['tool_calls']} "
+        f"reached_stop={summary['reached_stop']} "
+        f"evidence_promoted={summary['evidence_promoted']} "
+        f"turn_cap_hit={summary['turn_cap_hit']} "
+        f"zero_promotion={summary['zero_promotion']} "
+        f"tool_diversity_collapse={summary['tool_diversity_collapse']} "
+        f"tool_error_count={summary['tool_error_count']}",
+        file=sys.stderr,
+    )
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)

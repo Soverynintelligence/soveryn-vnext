@@ -108,3 +108,97 @@ def test_build_agent_forwards_max_turns_to_vendored_agent(monkeypatch):
         f"_build_agent did not forward --max-turns to vendored Agent. "
         f"captured args={captured['args']!r} kwargs={captured['kwargs']!r}"
     )
+
+
+def test_main_emits_telemetry_to_stderr(monkeypatch, capsys):
+    """Telemetry block is written to stderr after the run."""
+
+    class _FakeTrajectory:
+        actions_and_observations = []
+        @property
+        def num_turns(self): return 3
+        def model_dump(self): return {"actions_and_observations": [], "id": "fake"}
+
+    class _FakeAgent:
+        def __init__(self, *a, **kw): pass
+        def __call__(self, initial_observation): return _FakeTrajectory()
+
+    monkeypatch.setattr(
+        "soveryn.agents.vett.harness.run_eval._build_agent",
+        lambda args: _FakeAgent(),
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_path = Path(tmpdir) / "trajectory.json"
+        rc = run_eval.main(["--task", "smoke", "--output", str(out_path)])
+        captured = capsys.readouterr()
+        assert "[telemetry]" in captured.err
+        assert "num_turns=3" in captured.err
+
+
+def test_telemetry_counts_tool_calls_by_name():
+    """Direct call: telemetry helper aggregates tool-call counts from a trajectory."""
+    from soveryn.agents.vett.harness.run_eval import emit_telemetry
+
+    class _FakeAction:
+        def __init__(self, tool_name, errored=False):
+            self.tools = [type("T", (), {"name": tool_name})()]
+            self.params = [{}]
+            self.errored = errored
+
+    class _FakeTraj:
+        num_turns = 4
+        actions_and_observations = [
+            _FakeAction("search_corpus"),
+            _FakeAction("search_corpus"),
+            _FakeAction("read_doc"),
+            _FakeAction("verify", errored=True),
+        ]
+
+    summary = emit_telemetry(
+        _FakeTraj(),
+        max_turns=20,
+        reached_stop=True,
+        evidence_promoted=2,
+    )
+    assert summary["num_turns"] == 4
+    assert summary["tool_calls"]["search_corpus"] == 2
+    assert summary["tool_calls"]["read_doc"] == 1
+    assert summary["reached_stop"] is True
+    assert summary["evidence_promoted"] == 2
+    # Failure-mode diagnostics
+    assert summary["turn_cap_hit"] is False        # 4 < 20
+    assert summary["zero_promotion"] is False      # promoted_evidence == 2
+    assert summary["tool_diversity_collapse"] is False  # 3 distinct tools
+    assert summary["tool_error_count"] == 1        # one errored action
+
+
+def test_telemetry_flags_turn_cap_hit():
+    """turn_cap_hit fires when num_turns hits max_turns."""
+    from soveryn.agents.vett.harness.run_eval import emit_telemetry
+
+    class _FakeTraj:
+        num_turns = 20
+        actions_and_observations = []
+
+    summary = emit_telemetry(_FakeTraj(), max_turns=20, reached_stop=False, evidence_promoted=0)
+    assert summary["turn_cap_hit"] is True
+    assert summary["zero_promotion"] is True
+
+
+def test_telemetry_flags_tool_diversity_collapse():
+    """tool_diversity_collapse fires when one tool dominates >80% of calls."""
+    from soveryn.agents.vett.harness.run_eval import emit_telemetry
+
+    class _FakeAction:
+        def __init__(self, tool_name):
+            self.tools = [type("T", (), {"name": tool_name})()]
+            self.params = [{}]
+            self.errored = False
+
+    class _FakeTraj:
+        num_turns = 10
+        # 9 search_corpus, 1 verify — search dominates 90%
+        actions_and_observations = [_FakeAction("search_corpus")] * 9 + [_FakeAction("verify")]
+
+    summary = emit_telemetry(_FakeTraj(), max_turns=20, reached_stop=True, evidence_promoted=1)
+    assert summary["tool_diversity_collapse"] is True
