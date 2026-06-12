@@ -1,0 +1,28 @@
+/home/jon-deoliveira/miniconda3/envs/soveryn/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.0.post1)/charset_normalizer (3.4.6) doesn't match a supported version!
+  warnings.warn(
+loaded task: cross_source_link
+[telemetry] num_turns=3 tool_calls={'fan_out_search': 1, 'read_document': 1, 'user_text': 1} reached_stop=True evidence_promoted=0 turn_cap_hit=False zero_promotion=True tool_diversity_collapse=False tool_error_count=0
+wrote trajectory: /home/jon-deoliveira/soveryn_vnext/eval_runs/20260612_142946_harness.json
+	Command being timed: "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.agents.vett.harness.run_eval --task cross_source_link --output /home/jon-deoliveira/soveryn_vnext/eval_runs/20260612_142946_harness.json --max-turns 20 --layer-filter library"
+	User time (seconds): 15.89
+	System time (seconds): 0.40
+	Percent of CPU this job got: 15%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:47.86
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 443416
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 68359
+	Voluntary context switches: 233
+	Involuntary context switches: 165
+	Swaps: 0
+	File system inputs: 16
+	File system outputs: 40
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

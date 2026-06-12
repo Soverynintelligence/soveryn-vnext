@@ -202,3 +202,79 @@ def test_telemetry_flags_tool_diversity_collapse():
 
     summary = emit_telemetry(_FakeTraj(), max_turns=20, reached_stop=True, evidence_promoted=1)
     assert summary["tool_diversity_collapse"] is True
+
+
+def test_telemetry_does_not_flag_diversity_on_trivial_trajectories():
+    """tool_diversity_collapse must NOT fire on 1/1 or 2/2 — a single call
+    or pair trivially clears 80% but isn't a stuck-loop signal."""
+    from soveryn.agents.vett.harness.run_eval import emit_telemetry
+
+    class _FakeAction:
+        def __init__(self, tool_name):
+            self.tools = [type("T", (), {"name": tool_name})()]
+            self.params = [{}]
+            self.errored = False
+
+    class _Single:
+        num_turns = 1
+        actions_and_observations = [_FakeAction("search_corpus")]
+
+    class _Pair:
+        num_turns = 2
+        actions_and_observations = [_FakeAction("search_corpus"), _FakeAction("search_corpus")]
+
+    assert emit_telemetry(_Single(), max_turns=20, reached_stop=True,
+                          evidence_promoted=0)["tool_diversity_collapse"] is False
+    assert emit_telemetry(_Pair(), max_turns=20, reached_stop=True,
+                          evidence_promoted=0)["tool_diversity_collapse"] is False
+
+
+def test_reached_stop_detected_from_terminal_user_text_action():
+    """_trajectory_reached_natural_stop mirrors the vendored agent's
+    natural-stop check: last action's tools are all user_text."""
+    from soveryn.agents.vett.harness.run_eval import (
+        _trajectory_reached_natural_stop,
+    )
+
+    def _action(*tool_names):
+        return type("A", (), {
+            "tools": [
+                type("T", (), {
+                    "tool_schema": type("S", (), {"name": n})(),
+                })()
+                for n in tool_names
+            ],
+            "params": [{}] * len(tool_names),
+            "errored": False,
+        })()
+
+    # Last is all user_text → natural stop.
+    traj_stop = type("Tr", (), {
+        "actions_and_observations": [
+            _action("search_corpus"),
+            _action("user_text"),
+        ],
+    })()
+    assert _trajectory_reached_natural_stop(traj_stop) is True
+
+    # Last has a non-text tool → did NOT naturally stop.
+    traj_no_stop = type("Tr", (), {
+        "actions_and_observations": [
+            _action("search_corpus"),
+            _action("read_document"),
+        ],
+    })()
+    assert _trajectory_reached_natural_stop(traj_no_stop) is False
+
+    # Empty trajectory → not stopped.
+    traj_empty = type("Tr", (), {"actions_and_observations": []})()
+    assert _trajectory_reached_natural_stop(traj_empty) is False
+
+    # Last is an observation (no .tools) → not stopped.
+    traj_obs = type("Tr", (), {
+        "actions_and_observations": [
+            _action("search_corpus"),
+            type("O", (), {})(),
+        ],
+    })()
+    assert _trajectory_reached_natural_stop(traj_obs) is False

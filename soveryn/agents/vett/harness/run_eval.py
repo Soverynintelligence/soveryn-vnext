@@ -21,6 +21,11 @@ from soveryn.agents.vett.harness.eval_tasks import get_task, EvalTask
 
 
 DOMINANT_TOOL_FRACTION_THRESHOLD = 0.8
+# tool_diversity_collapse only fires once enough calls have been made that
+# "dominance" is a meaningful signal. 1/1 and 2/2 trivially clear the 80%
+# bar but don't represent a stuck loop. Three is the smallest count where
+# the ratio actually distinguishes "varied" from "stuck on one tool".
+TOOL_DIVERSITY_MIN_CALLS = 3
 
 
 def _tool_name(tool: Any) -> str:
@@ -72,8 +77,10 @@ def emit_telemetry(
 
     num_turns = getattr(trajectory, "num_turns", -1)
     total_calls = sum(tool_call_counts.values())
+    # Gate on >=3 calls so a single tool call (1/1=100%) or a pair
+    # (2/2=100%) doesn't trip the dominance check on trivial runs.
     tool_diversity_collapse = (
-        total_calls > 0
+        total_calls >= TOOL_DIVERSITY_MIN_CALLS
         and max(tool_call_counts.values()) / total_calls > DOMINANT_TOOL_FRACTION_THRESHOLD
     )
 
@@ -277,6 +284,26 @@ def _build_initial_observation(task: EvalTask) -> Any:
     )
 
 
+def _trajectory_reached_natural_stop(trajectory: Any) -> bool:
+    """True if the trajectory's last entry is an Action consisting only of
+    user_text tool calls (the vendored Agent's natural-stop signal).
+
+    Mirrors vendor/agent.py:960-968 ``_finished_with_user_text``. Reads
+    the serialized shape (tool_schema.name) so it works on both live
+    Trajectory objects and replayed dicts/Pydantic instances.
+    """
+    entries = getattr(trajectory, "actions_and_observations", None) or []
+    if not entries:
+        return False
+    last = entries[-1]
+    # Observations don't have .tools; only Actions do.
+    tools = getattr(last, "tools", None)
+    if not tools:
+        return False
+    # All tools must be user_text for "natural stop".
+    return all(_tool_name(t) == "user_text" for t in tools)
+
+
 def main(argv: List[str] | None = None) -> int:
     args = parse_args(argv if argv is not None else sys.argv[1:])
     task = load_task(args.task)
@@ -286,15 +313,19 @@ def main(argv: List[str] | None = None) -> int:
     initial_observation = _build_initial_observation(task)
     trajectory = agent(initial_observation)
 
-    # Failure-mode telemetry. The reached_stop / evidence_promoted fields
-    # require introspection of the trajectory's terminal state; for phase 1
-    # we use simple defaults that Task 13's eval task verification can
-    # refine. ``stopped_by_tool`` and ``promoted_evidence_ids`` are
-    # SOVERYN-side conventions — the vendored ``Trajectory`` does not
-    # currently expose them (see vendor/trajectory.py:228), so the
-    # ``getattr`` defaults yield ``False`` / ``0`` until Task 13 wires a
-    # real terminal-state signal.
-    reached_stop = bool(getattr(trajectory, "stopped_by_tool", False))
+    # Failure-mode telemetry.
+    #
+    # reached_stop: mirror the vendored Agent's natural-stop check
+    # (vendor/agent.py:960-968) — the agent stops auto-driving when the
+    # last entry is an Action whose tools are ALL UserTextTool. We read
+    # the same shape from the serialized trajectory: last entry has at
+    # least one tool, and every tool's name is "user_text".
+    #
+    # evidence_promoted: SOVERYN-side convention — the vendored
+    # Trajectory has no curated-evidence slot (vendor/trajectory.py:228).
+    # Phase 1 doesn't add one; the field defaults to 0 here and the
+    # writeup scores promotion qualitatively from the trajectory.
+    reached_stop = _trajectory_reached_natural_stop(trajectory)
     evidence_promoted = len(getattr(trajectory, "promoted_evidence_ids", []) or [])
     summary = emit_telemetry(
         trajectory,

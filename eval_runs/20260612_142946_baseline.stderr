@@ -1,0 +1,4 @@
+/home/jon-deoliveira/miniconda3/envs/soveryn/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.0.post1)/charset_normalizer (3.4.6) doesn't match a supported version!
+  warnings.warn(
+session_id=22dedb4c-0406-4aa2-b181-e2bf591aad18
+http_status=200 wall_seconds=127.12
