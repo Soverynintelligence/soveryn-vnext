@@ -526,6 +526,7 @@ class LatticeStore:
         limit: int = DEFAULT_EMBED_LIMIT,
         threshold: float = DEFAULT_EMBED_THRESHOLD,
         layer_filter: str | None = None,
+        include_historical: bool = False,
     ) -> tuple[tuple[Node, float], ...]:
         """Cosine-similarity search. Returns ((node, score), ...) ordered score DESC.
 
@@ -533,7 +534,18 @@ class LatticeStore:
         - `layer_filter=None` → this agent's private/legacy + global, library excluded.
         - `layer_filter='library'` → ONLY library rows (RAG path).
         - `layer_filter` other → that layer only.
+        - `include_historical=False` (default) excludes rows tagged
+          `historical_snapshot` so current-state queries don't surface
+          archival content (e.g., the April 2026 chronicle chunks). Set
+          to `True` to reach back into history deliberately.
         """
+        # Tag-side filter: substring match on the JSON tags column is sufficient
+        # because tag names are not substrings of each other in this lattice's
+        # convention. NULL tags are tolerated via IFNULL.
+        historical_filter = (
+            "" if include_historical
+            else " AND IFNULL(tags, '[]') NOT LIKE '%historical_snapshot%' "
+        )
         with self._conn() as conn:
             if layer_filter is None:
                 rows = conn.execute(
@@ -541,6 +553,7 @@ class LatticeStore:
                     "WHERE embedding IS NOT NULL "
                     "  AND ((agent = ? AND layer != ?) OR layer = ?) "
                     "  AND layer != ? "
+                    + historical_filter +
                     "ORDER BY salience DESC LIMIT 2000",
                     (agent, LAYER_GLOBAL, LAYER_GLOBAL, LAYER_LIBRARY),
                 ).fetchall()
@@ -548,6 +561,7 @@ class LatticeStore:
                 rows = conn.execute(
                     "SELECT * FROM nodes "
                     "WHERE embedding IS NOT NULL AND layer = ? "
+                    + historical_filter +
                     "ORDER BY salience DESC LIMIT 2000",
                     (layer_filter,),
                 ).fetchall()

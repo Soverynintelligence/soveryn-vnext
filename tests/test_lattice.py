@@ -214,6 +214,49 @@ def test_embedding_search_returns_empty_when_nothing_matches(store):
     assert results == ()
 
 
+def test_embedding_search_excludes_historical_by_default(store):
+    """Nodes tagged `historical_snapshot` are excluded from default retrieval."""
+    store.write_node("aetheria", "current",   embedding=(1.0, 0.0))
+    store.write_node("aetheria", "historical", embedding=(1.0, 0.0),
+                     tags=("historical_snapshot",))
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    contents = {n.content for n, _ in results}
+    assert contents == {"current"}, f"historical_snapshot leaked into default: {contents}"
+
+
+def test_embedding_search_includes_historical_when_explicit(store):
+    """include_historical=True reaches back into archival nodes."""
+    store.write_node("aetheria", "current",   embedding=(1.0, 0.0))
+    store.write_node("aetheria", "historical", embedding=(1.0, 0.0),
+                     tags=("historical_snapshot",))
+    results = store.find_nodes_by_embedding(
+        "aetheria", (1.0, 0.0), threshold=0.5, include_historical=True,
+    )
+    contents = {n.content for n, _ in results}
+    assert contents == {"current", "historical"}
+
+
+def test_embedding_search_library_filter_also_respects_historical(store):
+    """Library-layer queries (RAG path) also exclude historical by default."""
+    store.write_node("aetheria", "lib current",     layer=LAYER_LIBRARY, embedding=(1.0, 0.0))
+    store.write_node("aetheria", "lib historical",  layer=LAYER_LIBRARY, embedding=(1.0, 0.0),
+                     tags=("historical_snapshot",))
+    results = store.find_nodes_by_embedding(
+        "aetheria", (1.0, 0.0), threshold=0.5, layer_filter=LAYER_LIBRARY,
+    )
+    contents = {n.content for n, _ in results}
+    assert contents == {"lib current"}, f"historical_snapshot leaked: {contents}"
+
+
+def test_embedding_search_historical_filter_tolerates_null_tags(store):
+    """Nodes with NULL/empty tags aren't accidentally excluded."""
+    store.write_node("aetheria", "no-tags", embedding=(1.0, 0.0))  # tags=None
+    store.write_node("aetheria", "empty-tags", embedding=(1.0, 0.0), tags=())
+    results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
+    contents = {n.content for n, _ in results}
+    assert contents == {"no-tags", "empty-tags"}
+
+
 def test_embedding_search_empty_db_returns_empty(store):
     results = store.find_nodes_by_embedding("aetheria", (1.0, 0.0), threshold=0.5)
     assert results == ()
