@@ -33,3 +33,9 @@ def get_task(name: str) -> EvalTask:
 
 def register_task(task: EvalTask) -> None:
     _REGISTRY[task.name] = task
+
+
+# Trigger registration of phase-1 tasks. Imported at the bottom so the
+# registry primitives above are fully defined before the task modules
+# call ``register_task`` at import time.
+from soveryn.agents.vett.harness.eval_tasks import cross_source_link  # noqa: F401, E402
