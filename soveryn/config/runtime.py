@@ -95,7 +95,14 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
         mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
         role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
-        supports_multi_system_messages=False,  # base 27B template rejects 2nd system message
+        # Flipped to True 2026-06-12: vett-scotty router child now uses
+        # froggeric/Qwen-Fixed-Chat-Templates v20 (configured via
+        # `chat-template-file = ...` in router-presets.ini [vett-scotty]),
+        # which natively honors messages[1:] role=system. Sandbox-verified
+        # + live-verified through router :8090 (multi-system probe returned
+        # "ALL_SURVIVED" exact). The transport adapter `prepare_wire_messages`
+        # becomes a pass-through for this server.
+        supports_multi_system_messages=True,
         model_alias="vett-scotty",
     ),
     ModelServer(
