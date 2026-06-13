@@ -38,16 +38,32 @@ from typing import Any
 
 
 # Tools that ARE retrieval and SHOULD be watched. Anything not on this list
-# is invisible to the steering rack — that way a write-tool like attic_write
+# is invisible to the steering rack — that way a write-tool like edit_file
 # never trips no matter how many times it's invoked.
+#
+# These MUST match production tool names exactly. An earlier version of this
+# list (committed 2026-06-13 with the original Steering Rack) used placeholder
+# names like "search_lattice" and "attic_lookup" that don't exist in
+# production — leaving the breaker effectively unwired against most agent
+# search loops. Confirmed by inventory of registered ToolSpec.name values
+# across soveryn/agents/{aetheria,vett}/ and soveryn/platform/{library,web}/.
 _DEFAULT_WATCHED_TOOLS: frozenset[str] = frozenset({
+    # Aetheria's two lattice search tools (soveryn/agents/aetheria/tools/search.py)
+    "search_lattice_by_embedding",
+    "search_lattice_by_keywords",
+    # Shared library-layer embedding search (soveryn/platform/library/tools.py)
+    # Currently owned by Vett in production; the watched-tool match is by
+    # name, not owner, so it covers any agent that calls it.
+    "search_library",
+    # Vett's web tools (soveryn/platform/web/tools.py)
     "web_search",
-    "fan_out_search",
+    "fetch_url",
+    # Vett-harness tools (soveryn/agents/vett/harness/run_eval.py) — separate
+    # from production /chat but go through the same AgentLoop dispatch when
+    # the harness drives a SoverynVettInferenceModel through a tool loop.
     "search_corpus",
-    "search_lattice",
-    "attic_lookup",
+    "fan_out_search",
     "read_document",
-    "browser_fetch",
 })
 
 

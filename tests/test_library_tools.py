@@ -175,6 +175,58 @@ def test_search_library_rejects_empty_query(lattice_store):
         tool.handler({"query": ""})
 
 
+# ─── Miss Hint integration ──────────────────────────────────────────────────
+
+def test_search_library_attaches_miss_hint_when_empty(lattice_store):
+    """A library-scoped search that finds nothing must surface a miss_hint
+    pointing at the other layers where similar content lives — same
+    contract as Aetheria's lattice search tools."""
+    from soveryn.platform.lattice.legacy import LAYER_GLOBAL
+    # Seed a global-layer node that's lexically matchable. The library
+    # search restricts to library-layer rows, so this won't show up in
+    # results — but it MUST surface in the miss_hint.
+    lattice_store.write_node(
+        "vett", "scotty rename memo tinker 2026 05 02",
+        node_type="fact", layer=LAYER_GLOBAL,
+    )
+    tool = build_search_library_tool(
+        lattice_store=lattice_store, embed_fn=_fake_embed, owner_agent="vett",
+    )
+    result = tool.handler({"query": "scotty rename tinker memo"})
+    assert result["count"] == 0
+    assert result["results"] == []
+    assert "miss_hint" in result
+    assert result["miss_hint"]["layer_counts"][LAYER_GLOBAL] == 1
+
+
+def test_search_library_does_not_attach_miss_hint_on_hit(lattice_store):
+    """Happy path stays clean — no miss_hint when the search actually
+    found library content."""
+    import sqlite3
+    import json as _json
+    # Seed + manually backfill embedding so the search returns it.
+    write_tool = build_write_library_node_tool(
+        lattice_store=lattice_store, owner_agent="vett",
+    )
+    write_tool.handler({"content": "real findable library content"})
+    with sqlite3.connect(str(lattice_store.db_path)) as con:
+        rows = con.execute(
+            "SELECT id, content FROM nodes WHERE layer = ?", (LAYER_LIBRARY,)
+        ).fetchall()
+        for nid, content in rows:
+            emb = _fake_embed(content)
+            con.execute(
+                "UPDATE nodes SET embedding = ? WHERE id = ?",
+                (_json.dumps(list(emb)), nid),
+            )
+    search_tool = build_search_library_tool(
+        lattice_store=lattice_store, embed_fn=_fake_embed, owner_agent="vett",
+    )
+    result = search_tool.handler({"query": "real findable library content"})
+    assert result["count"] >= 1
+    assert "miss_hint" not in result
+
+
 # ─── register_library_tools ─────────────────────────────────────────────────
 
 def test_register_library_tools_registers_both(lattice_store):

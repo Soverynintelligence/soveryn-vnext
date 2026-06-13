@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from soveryn.platform.lattice.legacy import LAYER_LIBRARY, LatticeError, LatticeStore
+from soveryn.platform.lattice.miss_hint import build_miss_hint
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 
 
@@ -154,7 +155,15 @@ def build_search_library_tool(
                 "created_at": node.created_at,
                 "similarity": score,
             })
-        return {"results": rendered, "count": len(rendered)}
+        payload: dict[str, Any] = {"results": rendered, "count": len(rendered)}
+        # Miss Hint — when the library search came up empty, probe the other
+        # layers with a coarse keyword scan so the caller sees where similar
+        # content lives. Mirrors the Aetheria search-tool hook (see
+        # soveryn/agents/aetheria/tools/search.py); same per-layer count
+        # payload shape so consumers can treat both uniformly.
+        if not rendered:
+            payload["miss_hint"] = build_miss_hint(lattice_store, owner_agent, query)
+        return payload
 
     return ToolSpec(
         name="search_library",
