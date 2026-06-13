@@ -1,0 +1,6 @@
+/home/jon-deoliveira/miniconda3/envs/soveryn/lib/python3.11/site-packages/requests/__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.0.post1)/charset_normalizer (3.4.6) doesn't match a supported version!
+  warnings.warn(
+loaded task: cross_source_link
+[warn] turn cap hit — persisting partial trajectory (20 turns)
+[telemetry] num_turns=20 tool_calls={'search_corpus': 18, 'fan_out_search': 1, 'read_document': 1} reached_stop=False evidence_promoted=0 turn_cap_hit=False zero_promotion=True tool_diversity_collapse=True tool_error_count=0
+wrote trajectory: /home/jon-deoliveira/soveryn_vnext/eval_runs/20260613_092043_harness1_eval.json

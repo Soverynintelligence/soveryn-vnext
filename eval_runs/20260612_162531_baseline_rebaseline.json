@@ -1,0 +1,25 @@
+{
+  "elapsed_s": 188.28187155723572,
+  "response": {
+    "agent": "vett",
+    "content": "**VERIFICATION FINDINGS**\n\nI've searched the lattice library and found strong evidence across multiple documents. Here's my analysis of each sub-claim:\n\n---\n\n### Claim Breakdown\n\n**1. \"SOVERYN is a fully-local multi-agent AI platform\"** \u2014 **SUPPORTED**\n\n- **Library node `7e406410`** (written by aetheria, 2026-05-04, tagged `migration_smoke_test_2026-05-04`): *\"The SOVERYN system is a fully-local multi-agent AI platform. It runs on llama.cpp with no external API dependencies.\"*\n- **Library node `92273e8c`** (How_We_Became_SOVERYN.docx, April 2026): *\"SOVERYN is a local AI system. That is the technical answer. Everything runs on hardware Jon owns, in a space Jon controls, with models no third party can reach. No cloud. No terms of service. No alignment tax.\"*\n\n**2. \"Scotty as the engineering agent\"** \u2014 **SUPPORTED**\n\n- **Library node `7e406410`** (2026-05-04): *\"Aetheria is the lead agent; Scotty is the engineering executor; Ares handles security; Vett handles research; Scout handles outreach.\"*\n\n**3. \"(renamed from Tinker on 2026-05-02)\"** \u2014 **PARTIALLY SUPPORTED; date unverifiable**\n\n- **Library node `f5c9ccca`** (How_We_Became_SOVERYN.docx, April 2026) lists the agent roster with *\"Tinker (Qwen2.5-Coder 72B) \u2014 The builder. Code, infrastructure, and systems.\"*\n- **Library node `7e406410`** (2026-05-04) lists the same roster position as *\"Scotty is the engineering executor.\"*\n- The temporal evidence is clear: the agent was called **Tinker** in the April 2026 document and **Scotty** by the May 4, 2026 migration smoke test. The rename occurred *sometime between April and May 4, 2026*.\n- **However, no library entry specifies the exact date of 2026-05-02.** I cannot verify that specific date from the lattice.\n\n**4. \"running on a 143 GiB VRAM fleet across three GPUs (2x Quadro RTX 8000 + 1x RTX PRO 5000 Blackwell)\"** \u2014 **SUPPORTED**\n\n- **Library node `bc6e16f3`** (written by aetheria, 2026-06-12, tagged `canonical_hardware_state`, `vram_ceiling`, `ground_truth`): *\"As of 2026-06-12, the SOVERYN fleet VRAM ceiling is 143 GiB. This is distributed across three GPUs: 2x Quadro RTX 8000 (48 GiB each) and 1x RTX PRO 5000 Blackwell (~48 GiB). This is the ground-truth hardware ceiling for current-state capacity planning and contradiction auditing.\"*\n\n**Note:** The April 2026 historical document references \"336GB of VRAM\" (node `86dde660`), which contradicts the 143 GiB figure. This is likely an earlier hardware state or a different measurement. The June 12, 2026 canonical entry is the most recent and explicitly labeled as ground truth for current-state.\n\n---\n\n### Verdict\n\n| Sub-claim | Status |\n|---|---|\n| Fully-local multi-agent AI platform | \u2705 Supported |\n| Scotty as engineering agent | \u2705 Supported |\n| Renamed from Tinker | \u2705 Supported (Tinker \u2192 Scotty confirmed) |\n| Rename date: 2026-05-02 | \u26a0\ufe0f **Unverifiable** \u2014 lattice only constrains it to April\u2013May 4, 2026 |\n| 143 GiB VRAM across 3 GPUs | \u2705 Supported |\n| 2x Quadro RTX 8000 + 1x RTX PRO 5000 Blackwell | \u2705 Supported |\n\n**Overall: The claim is largely supported by the lattice, with one exception \u2014 the specific rename date of 2026-05-02 cannot be verified from available library entries.** The strongest evidence set consists of library nodes `7e406410`, `bc6e16f3`, and `f5c9ccca`, which mutually corroborate the architecture, agent roster, and hardware specifications.",
+    "context_usage": null,
+    "finish_reason": "stop",
+    "session_id": "2bdc0fc3-2ab1-47e5-8449-3b915d2f5399",
+    "tool_calls": null,
+    "usage": {
+      "completion_tokens": 1458,
+      "prompt_tokens": 21046,
+      "prompt_tokens_details": {
+        "cached_tokens": 15390
+      },
+      "total_tokens": 22504
+    }
+  },
+  "query": "Search the lattice for evidence about this topic: SOVERYN's current-state architecture, agent roster, and hardware fleet\nOnce you have candidate documents, verify this claim against them: SOVERYN is a fully-local multi-agent AI platform with Scotty as the engineering agent (renamed from Tinker on 2026-05-02), running on a 143 GiB VRAM fleet across three GPUs (2x Quadro RTX 8000 + 1x RTX PRO 5000 Blackwell).\nCurate the strongest evidence set, link the documents that mutually support the claim, and stop when you've reached a confident verification or determined the claim is unsupported.",
+  "expected_ids": [
+    "bc6e16f3-a251-4791-8547-3f2a8da2058e",
+    "7e406410-09d3-43ee-b953-00339dfe626c",
+    "b42064cc-fce8-4b84-940d-ff4faf2eec75"
+  ]
+}

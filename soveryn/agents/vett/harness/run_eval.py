@@ -311,7 +311,33 @@ def main(argv: List[str] | None = None) -> int:
 
     agent = _build_agent(args)
     initial_observation = _build_initial_observation(task)
-    trajectory = agent(initial_observation)
+    cap_hit = False
+    try:
+        trajectory = agent(initial_observation)
+    except RuntimeError as e:
+        # Vendored Agent raises this at vendor/agent.py:991 when the trajectory
+        # exceeds max_trajectory_length. Persist whatever was built so the
+        # failure mode is auditable instead of opaque.
+        if "maximum trajectory length" not in str(e):
+            raise
+        cap_hit = True
+        # The vendored Agent doesn't expose the in-flight trajectory
+        # cleanly; try the common attribute names before giving up.
+        traj_attr = (
+            getattr(agent, "_trajectory_builder", None)
+            or getattr(agent, "_trajectory", None)
+            or getattr(agent, "trajectory", None)
+        )
+        if traj_attr is None:
+            raise  # nothing to persist — re-raise
+        # If it's a builder, finalize it into a Trajectory.
+        trajectory = (
+            traj_attr.build() if hasattr(traj_attr, "build") else traj_attr
+        )
+        print(
+            f"[warn] turn cap hit — persisting partial trajectory ({getattr(trajectory, 'num_turns', '?')} turns)",
+            file=sys.stderr,
+        )
 
     # Failure-mode telemetry.
     #
