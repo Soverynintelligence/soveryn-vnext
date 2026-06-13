@@ -200,7 +200,10 @@ def test_history_includes_prior_turns_on_subsequent_calls(conv_store):
     # Extract just the user/assistant roles to verify history accumulation
     # (system is prepended each time, so we skip it for this assertion)
     contents = [m.content for m in second_request.messages if m.role != "system"]
-    assert contents == ["turn-1", "reply-1", "turn-2"]
+    # Prior history (u1, a1) is clean — the temporal splice only touches the
+    # CURRENT user turn. So u1+a1 are exact, and u2 ends with the user text.
+    assert contents[:2] == ["turn-1", "reply-1"]
+    assert contents[2].endswith("turn-2")
 
 
 def test_routing_resolved_once_at_construction(conv_store):
@@ -313,7 +316,8 @@ def test_default_persona_prepends_system_message_first(conv_store):
     assert request.messages[0].role == "system"
     assert request.messages[0].content == AETHERIA_PERSONA
     assert request.messages[1].role == "user"
-    assert request.messages[1].content == "hello"
+    # Temporal splice prefixes the current user turn; user text is the suffix.
+    assert request.messages[1].content.endswith("hello")
 
 
 def test_custom_system_prompt_prepends_when_non_empty(conv_store):
@@ -530,7 +534,8 @@ def test_recall_enabled_calls_embed_and_lattice(conv_store, tmp_path):
     assert "Uncertain context:" in msgs[1].content
     assert "Jon prefers Signal" not in msgs[1].content
     assert msgs[2].role == "user"
-    assert msgs[2].content == "remind me of my notification preference"
+    # Temporal splice prefixes the current user turn; user text is the suffix.
+    assert msgs[2].content.endswith("remind me of my notification preference")
 
 
 
@@ -952,11 +957,15 @@ def test_process_message_with_attachments_splices_image_url_into_current_user_me
     assert history[0].role == "user"
     assert history[0].content == "what's this?"
 
-    # Wire-level current user message is list-content with text + image parts
+    # Wire-level current user message is list-content with text + image parts.
+    # The text part also carries the temporal-context prefix from the splice
+    # ordering (temporal first, then vision wraps it), so we match by suffix.
     sent_user = fake.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, list)
-    assert {"type": "text", "text": "what's this?"} in sent_user.content
+    text_parts = [p for p in sent_user.content if p.get("type") == "text"]
+    assert len(text_parts) == 1
+    assert text_parts[0]["text"].endswith("what's this?")
     assert {"type": "image_url", "image_url": {"url": img_url}} in sent_user.content
 
 
@@ -968,11 +977,12 @@ def test_process_message_without_attachments_unchanged(conv_store):
     loop.process_message(sid, "plain text")
     history = conv_store.load_history(sid)
     assert history[0].content == "plain text"
-    # request messages stay str-typed
+    # request messages stay str-typed; the temporal splice prepends a prefix
+    # to the current user message, but the user text still ends with it.
     sent_user = fake.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, str)
-    assert sent_user.content == "plain text"
+    assert sent_user.content.endswith("plain text")
 
 
 def test_process_message_attachments_on_non_aetheria_agent_raises_before_save(conv_store):
@@ -1006,9 +1016,10 @@ def test_process_message_multiple_attachments_all_spliced(conv_store):
     img_parts = [p for p in sent.content if p.get("type") == "image_url"]
     assert len(img_parts) == 3
     assert [p["image_url"]["url"] for p in img_parts] == list(urls)
-    # Text part still present
+    # Text part still present — also carries the temporal-context prefix
     text_parts = [p for p in sent.content if p.get("type") == "text"]
-    assert text_parts == [{"type": "text", "text": "compare these"}]
+    assert len(text_parts) == 1
+    assert text_parts[0]["text"].endswith("compare these")
 
 
 def test_process_message_empty_attachments_tuple_treated_as_none(conv_store):
@@ -1019,7 +1030,9 @@ def test_process_message_empty_attachments_tuple_treated_as_none(conv_store):
     loop.process_message(sid, "plain", attachments=())
     sent_user = fake.calls[0]["request"].messages[-1]
     assert isinstance(sent_user.content, str)
-    assert sent_user.content == "plain"
+    # Empty attachments still triggers the temporal splice (vision splice is
+    # the only thing skipped); the user text is the suffix.
+    assert sent_user.content.endswith("plain")
 
 
 def test_process_message_attachments_dont_pollute_next_turn_history(conv_store):

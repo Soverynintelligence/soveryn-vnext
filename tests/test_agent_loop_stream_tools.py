@@ -325,7 +325,9 @@ def test_streaming_attachments_ride_every_tool_round(conv_store):
         )
         text_parts = [p for p in last_user.content if p.get("type") == "text"]
         img_parts = [p for p in last_user.content if p.get("type") == "image_url"]
-        assert text_parts == [{"type": "text", "text": "what's this?"}], round_label
+        # Temporal splice prefixes the text part; user text is the suffix.
+        assert len(text_parts) == 1, round_label
+        assert text_parts[0]["text"].endswith("what's this?"), round_label
         assert img_parts == [{"type": "image_url", "image_url": {"url": img_url}}], round_label
 
     assert_user_message_has_image(stream.calls[0]["request"], "round 1")

@@ -348,16 +348,22 @@ def test_stream_with_attachments_splices_image_url_into_current_user_message(con
     assert history[0].role == "user"
     assert history[0].content == "what's this?"
 
-    # Wire-level message list-content with text + image parts
+    # Wire-level message list-content with text + image parts. The text part
+    # also carries the temporal-context prefix from the splice ordering
+    # (temporal first, then vision wraps it), so we match by suffix.
     sent_user = stream.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, list)
-    assert {"type": "text", "text": "what's this?"} in sent_user.content
+    text_parts = [p for p in sent_user.content if p.get("type") == "text"]
+    assert len(text_parts) == 1
+    assert text_parts[0]["text"].endswith("what's this?")
     assert {"type": "image_url", "image_url": {"url": img_url}} in sent_user.content
 
 
 def test_stream_without_attachments_unchanged(conv_store):
-    """Regression: attachments=None preserves prior streaming behavior."""
+    """Regression: attachments=None preserves prior streaming behavior. The
+    temporal splice prepends a prefix to the current user message, but the
+    user text still ends with it."""
     sid = conv_store.new_session("aetheria")
     stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
@@ -365,7 +371,7 @@ def test_stream_without_attachments_unchanged(conv_store):
     sent_user = stream.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, str)
-    assert sent_user.content == "plain text"
+    assert sent_user.content.endswith("plain text")
 
 
 def test_stream_attachments_on_non_aetheria_raises_before_save(conv_store):
@@ -398,5 +404,7 @@ def test_stream_multiple_attachments_all_spliced(conv_store):
     img_parts = [p for p in sent.content if p.get("type") == "image_url"]
     assert len(img_parts) == 3
     assert [p["image_url"]["url"] for p in img_parts] == list(urls)
+    # Text part also carries the temporal-context prefix
     text_parts = [p for p in sent.content if p.get("type") == "text"]
-    assert text_parts == [{"type": "text", "text": "compare these"}]
+    assert len(text_parts) == 1
+    assert text_parts[0]["text"].endswith("compare these")

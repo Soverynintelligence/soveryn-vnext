@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterator
 
@@ -282,8 +283,8 @@ class SessionContextCache:
     recall: dict[str, RecallCacheEntry] = field(default_factory=dict)
 
 
-_RECALL_CACHE_TTL_SECONDS = 30.0
-_RECALL_CACHE_REUSE_TURNS = 3
+_RECALL_CACHE_TTL_SECONDS = 300.0
+_RECALL_CACHE_REUSE_TURNS = 12
 
 
 def _continuity_fingerprint(tails) -> ContinuityFingerprint:
@@ -452,7 +453,7 @@ class AgentLoop:
             return ""
 
     def _build_recall_context(self, session_id: str, user_message: str) -> str:
-        """Build or briefly reuse live recall for a coherent local thread."""
+        """Build or reuse live recall across a coherent local thread."""
         if self.recall_k <= 0:
             return ""
         now = time.monotonic()
@@ -485,6 +486,46 @@ class AgentLoop:
             remaining_reuses=_RECALL_CACHE_REUSE_TURNS,
         )
         return text
+
+    def _build_temporal_context(self, now: datetime | None = None) -> str:
+        """Anchor the agent's sense of "now" against wall-clock time.
+
+        Without this, agents confabulate time-of-day from session pacing
+        (long thread → "it's late," etc.). This injects an explicit
+        timestamp + day-of-week + part-of-day label per turn so the model
+        has ground truth instead of vibe.
+
+        Per-turn freshness by design — no caching. Spliced onto the current
+        user message at request-build time (NOT into the prelude), so the
+        prelude (persona / pinned / soul / identity / recall) stays byte-
+        identical across turns and the KV-cache prefix remains reusable.
+        Mirrors the vision-splice pattern: DB save is text-only, the wire-
+        level user message gets the temporal prefix.
+
+        Part-of-day buckets (24h local time):
+            05:00 – 11:59  morning
+            12:00 – 16:59  afternoon
+            17:00 – 20:59  evening
+            21:00 – 04:59  night
+        """
+        if now is None:
+            now = datetime.now().astimezone()
+        iso = now.isoformat(timespec="seconds")
+        day_of_week = now.strftime("%A")
+        hour = now.hour
+        if 5 <= hour < 12:
+            part = "morning"
+        elif 12 <= hour < 17:
+            part = "afternoon"
+        elif 17 <= hour < 21:
+            part = "evening"
+        else:
+            part = "night"
+        return (
+            f"[Current temporal context: {iso} ({day_of_week}, {part}). "
+            "Time of day matters — anchor your sense of \"now\" against this, "
+            "not against the session's pacing or implied tone.]"
+        )
 
     def _build_identity_context(self) -> str:
         """Identity spine is stable prelude context, independent of the user turn."""
@@ -606,6 +647,21 @@ class AgentLoop:
                 prelude = prelude + (marker,)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
 
+        # Temporal splice — prepend "[Current temporal context: ...]\n\n" to
+        # the current (last) user message's text. Lives on the user turn (NOT
+        # the prelude) so the prelude stays byte-identical across turns and
+        # the KV-cache prefix remains reusable. DB save above is text-only,
+        # mirroring the vision splice pattern below.
+        temporal_context = self._build_temporal_context()
+        last = messages[-1]
+        assert last.role == "user", (
+            "last message must be the current user turn for the temporal splice"
+        )
+        spliced_user_text = f"{temporal_context}\n\n{user_message}"
+        messages = messages[:-1] + (
+            ChatMessage(role="user", content=spliced_user_text),
+        )
+
         # Vision splice — replace the current (last) user message's content
         # with an OpenAI vision-format list when attachments are present.
         # Splice happens AFTER _apply_history_budget so the budgeter (which
@@ -616,7 +672,7 @@ class AgentLoop:
             assert last.role == "user", (
                 "last message must be the current user turn when splicing attachments"
             )
-            current_text = last.content if isinstance(last.content, str) else user_message
+            current_text = last.content if isinstance(last.content, str) else spliced_user_text
             spliced_content: list[dict] = [{"type": "text", "text": current_text}]
             for url in attachments:
                 spliced_content.append({"type": "image_url", "image_url": {"url": url}})
@@ -841,6 +897,18 @@ class AgentLoop:
                 prelude = prelude + (marker,)
         messages = prelude + history_messages
 
+        # Temporal splice — see sync-path note. Lives on the current user
+        # turn so the prelude stays byte-identical across turns.
+        temporal_context = self._build_temporal_context()
+        last = messages[-1]
+        assert last.role == "user", (
+            "last message must be the current user turn for the temporal splice"
+        )
+        spliced_user_text = f"{temporal_context}\n\n{user_message}"
+        messages = messages[:-1] + (
+            ChatMessage(role="user", content=spliced_user_text),
+        )
+
         # Vision splice — replace the current (last) user message's content
         # with an OpenAI vision-format list when attachments are present.
         # Same logic as process_message; happens AFTER _apply_history_budget
@@ -851,7 +919,7 @@ class AgentLoop:
             assert last.role == "user", (
                 "last message must be the current user turn when splicing attachments"
             )
-            current_text = last.content if isinstance(last.content, str) else user_message
+            current_text = last.content if isinstance(last.content, str) else spliced_user_text
             spliced_content: list[dict] = [{"type": "text", "text": current_text}]
             for url in attachments:
                 spliced_content.append({"type": "image_url", "image_url": {"url": url}})
