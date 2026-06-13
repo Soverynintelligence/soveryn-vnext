@@ -7,6 +7,7 @@ from typing import Any
 
 from soveryn.agents.aetheria.tool_results import classify_and_render
 from soveryn.platform.lattice.legacy import LatticeStore
+from soveryn.platform.lattice.miss_hint import build_miss_hint
 from soveryn.platform.tools.registry import ToolSpec
 
 DEFAULT_SEARCH_K = 5
@@ -34,7 +35,14 @@ def build_search_by_embedding_tool(
             threshold=threshold,
         )
         nodes = tuple(node for node, _score in scored_nodes)
-        return classify_and_render(nodes)
+        result = classify_and_render(nodes)
+        # Miss Hint — when the search came up empty (no stateable, no
+        # uncertain rows), probe the other layers with a coarse keyword
+        # scan so the model knows where similar content lives instead
+        # of just rephrasing into the same dry layer.
+        if not result["stateable"] and not result["uncertain_count_by_class"]:
+            result["miss_hint"] = build_miss_hint(store, "aetheria", query)
+        return result
 
     return ToolSpec(
         name="search_lattice_by_embedding",
@@ -83,7 +91,12 @@ def build_search_by_keywords_tool(*, store: LatticeStore) -> ToolSpec:
             if len(nodes_by_id) >= k:
                 break
 
-        return classify_and_render(tuple(nodes_by_id.values()))
+        result = classify_and_render(tuple(nodes_by_id.values()))
+        # Miss Hint on empty — see embedding-tool handler for the why.
+        if not result["stateable"] and not result["uncertain_count_by_class"]:
+            joined_query = " ".join(keywords)
+            result["miss_hint"] = build_miss_hint(store, "aetheria", joined_query)
+        return result
 
     return ToolSpec(
         name="search_lattice_by_keywords",
