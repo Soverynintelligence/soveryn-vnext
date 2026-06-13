@@ -1,0 +1,29 @@
+{
+  "task": "cross_source_link",
+  "query": "Search the lattice for evidence about this topic: SOVERYN's current-state architecture, agent roster, and hardware fleet\nOnce you have candidate documents, verify this claim against them: SOVERYN is a fully-local multi-agent AI platform with Scotty as the engineering agent (renamed from Tinker on 2026-05-02), running on a 143 GiB VRAM fleet across three GPUs (2x Quadro RTX 8000 + 1x RTX PRO 5000 Blackwell).\nCurate the strongest evidence set, link the documents that mutually support the claim, and stop when you've reached a confident verification or determined the claim is unsupported.",
+  "expected_ids": [
+    "bc6e16f3-a251-4791-8547-3f2a8da2058e",
+    "7e406410-09d3-43ee-b953-00339dfe626c",
+    "b42064cc-fce8-4b84-940d-ff4faf2eec75"
+  ],
+  "response": "**Verification Report: SOVERYN Architecture, Agent Roster, and Hardware Fleet**\n\n---\n\n## Evidence Set\n\nTwo library entries directly bear on the claim. Both written by Aetheria.\n\n### Document 1 \u2014 Agent Roster & Platform Nature\n- **ID:** `7e406410-09d3-43ee-b953-00339dfe626c`\n- **Written by:** aetheria\n- **Date:** 2026-05-04T11:10:30\n- **Tags:** `migration_smoke_test_2026-05-04`, `chunk:0`\n- **Content:**\n  > \"The SOVERYN system is a fully-local multi-agent AI platform. It runs on llama.cpp with no external API dependencies. Aetheria is the lead agent; Scotty is the engineering executor; Ares handles security; Vett handles research; Scout handles outreach. The Lattice memory system unifies private, global, and library content.\"\n\n### Document 2 \u2014 Hardware Fleet\n- **ID:** `bc6e16f3-a251-4791-8547-3f2a8da2058e`\n- **Written by:** aetheria\n- **Date:** 2026-06-12T16:14:55\n- **Tags:** `canonical_hardware_state`, `vram_ceiling`, `ground_truth`\n- **Content:**\n  > \"As of 2026-06-12, the SOVERYN fleet VRAM ceiling is 143 GiB. This is distributed across three GPUs: 2x Quadro RTX 8000 (48 GiB each) and 1x RTX PRO 5000 Blackwell (~48 GiB). This is the ground-truth hardware ceiling for current-state capacity planning and contradiction auditing.\"\n\n---\n\n## Claim Assessment \u2014 Sub-claim by Sub-claim\n\n| Sub-claim | Status | Evidence |\n|---|---|---|\n| **SOVERYN is a fully-local multi-agent AI platform** | \u2705 **Verified** | Doc 1, verbatim match. |\n| **Scotty is the engineering agent** | \u2705 **Verified** | Doc 1: \"Scotty is the engineering executor.\" |\n| **Scotty was renamed from Tinker on 2026-05-02** | \u274c **Unsupported** | No lattice library entry documents this rename event. I searched specifically for \"Tinker renamed Scotty\" and \"Tinker rename 2026-05-02\" \u2014 no matching library entries found. This sub-claim cannot be verified from the lattice. |\n| **143 GiB VRAM fleet** | \u2705 **Verified** | Doc 2: \"fleet VRAM ceiling is 143 GiB.\" |\n| **Three GPUs: 2x Quadro RTX 8000 + 1x RTX PRO 5000 Blackwell** | \u2705 **Verified** | Doc 2 matches exactly. |\n\n---\n\n## Conclusion\n\n**The claim is mostly verified, with one exception.**\n\nFour of five sub-claims are directly supported by two mutually consistent library entries written by Aetheria, dated 2026-05-04 and 2026-06-12 respectively. The platform description, agent roles, and hardware specs all align.\n\n**The unsupported element:** The rename of Scotty from Tinker on 2026-05-02. No lattice library entry records this event. The earliest library entry referencing Scotty by name is Doc 1 (2026-05-04), which already calls him \"Scotty\" with no mention of a prior name. This rename event may exist in conversation history or other records, but it is **not present in the verified library layer** I searched.\n\n**Verdict:** Claim is **partially verified** \u2014 4/5 sub-claims confirmed; the Tinker\u2192Scotty rename date is unverified.",
+  "elapsed_s": 112.05,
+  "session_id": "645f5347-0634-4969-8416-3a270b673c48",
+  "tool_calls": null,
+  "finish_reason": "stop",
+  "black_box_jsonl_path": "data/black_box/vett/645f5347-0634-4969-8416-3a270b673c48.jsonl",
+  "scoring": {
+    "literal_coverage": 2,
+    "content_coverage": 3,
+    "literal": {
+      "bc6e16f3-a251-4791-8547-3f2a8da2058e": true,
+      "7e406410-09d3-43ee-b953-00339dfe626c": true,
+      "b42064cc-fce8-4b84-940d-ff4faf2eec75": false
+    },
+    "content": {
+      "bc6e16f3-a251-4791-8547-3f2a8da2058e": true,
+      "7e406410-09d3-43ee-b953-00339dfe626c": true,
+      "b42064cc-fce8-4b84-940d-ff4faf2eec75": true
+    }
+  }
+}
