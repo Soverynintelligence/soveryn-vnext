@@ -29,6 +29,7 @@ from soveryn.agents.loop import AgentLoop, _default_embed
 from soveryn.config.loader import EnvConfig, load_env_config
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.memory.conversation_store import ConversationStore
+from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.tools.registry import ToolRegistry
 
@@ -413,6 +414,12 @@ def create_app(
                 per_session_cap=env.cross_surface_per_session_cap,
             )
 
+        # Black Box recorder — shared across all agents. Each agent's turns
+        # land in <data_root>/black_box/<agent>/<session_id>.jsonl when at
+        # least one tool fires. One-shot answers don't write. See
+        # project_soveryn_black_box.md for the design rationale.
+        black_box = BlackBox(env.data_root / "black_box")
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -421,6 +428,7 @@ def create_app(
             # sharing the registry doesn't leak capability across agents.
             kwargs["tool_registry"] = tool_registry
             kwargs["continuity_config"] = _continuity_for(name)
+            kwargs["black_box"] = black_box
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:

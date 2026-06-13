@@ -48,6 +48,7 @@ from soveryn.inference.llama_server_client import (
 from soveryn.inference.routing import route_for_agent
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
+from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 from soveryn.platform.voice.sanitize import sanitize_for_tts
@@ -296,6 +297,33 @@ def _continuity_fingerprint(tails) -> ContinuityFingerprint:
     return tuple(fp)
 
 
+def _build_observation_entry(tool_call: dict, result_message: ChatMessage) -> dict:
+    """Pack one tool result into the BlackBox observation shape.
+
+    `result_message.content` is the JSON-serialised result from
+    `_tool_result_message` — when the handler raised, it's `{"error": "...",
+    "message": "..."}`. Decoding it lets the recorder count tool errors
+    distinctly from successful invocations.
+    """
+    function = tool_call.get("function") or {}
+    name = str(function.get("name") or "")
+    content = result_message.content if isinstance(result_message.content, str) else ""
+    error: str | None = None
+    if content:
+        try:
+            decoded = json.loads(content)
+        except (TypeError, json.JSONDecodeError):
+            decoded = None
+        if isinstance(decoded, dict) and decoded.get("error"):
+            error = str(decoded["error"])
+    return {
+        "call_id": result_message.tool_call_id or "",
+        "name": name,
+        "content": content,
+        "error": error,
+    }
+
+
 class AgentLoopError(Exception):
     """Raised by AgentLoop on session validation or contract violations."""
 
@@ -332,6 +360,7 @@ class AgentLoop:
         souls_dir: Path | None = None,
         pinned_text: str = "",
         continuity_config: ContinuityConfig | None = None,
+        black_box: BlackBox | None = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -410,6 +439,7 @@ class AgentLoop:
         # helper short-circuits to "" so non-aetheria loops never pay any
         # query cost.
         self.continuity_config = continuity_config
+        self.black_box = black_box
         self.session_context_cache = SessionContextCache()
 
     def _build_continuity_brief(self, session_id: str) -> str:
@@ -681,6 +711,17 @@ class AgentLoop:
             )
 
         # 4. Dispatch chat. Any failure propagates; user turn is already saved.
+        # Black-box recorder — begins now so wall-time covers the full dispatch.
+        # No-op when no tools fire (begin_turn returns a recorder that finalizes
+        # to nothing if record_action is never called).
+        recorder = (
+            self.black_box.begin_turn(
+                session_id=session_id,
+                agent=self.agent_name,
+                user_message=user_message,
+            )
+            if self.black_box is not None else None
+        )
         request = ChatRequest(
             messages=messages,
             model=self.server.model_alias,
@@ -702,15 +743,30 @@ class AgentLoop:
                     raw=response.raw,
                 )
                 break
+            if recorder is not None:
+                recorder.record_action(
+                    round_index=tool_rounds,
+                    tool_calls=list(response.tool_calls),
+                    content=response.content or "",
+                )
             messages = messages + (ChatMessage(
                 role="assistant",
                 content=response.content,
                 tool_calls=response.tool_calls,
             ),)
-            messages = messages + tuple(
+            result_messages = [
                 self._tool_result_message(tool_call)
                 for tool_call in response.tool_calls
-            )
+            ]
+            if recorder is not None:
+                recorder.record_observation(
+                    round_index=tool_rounds,
+                    results=[
+                        _build_observation_entry(tc, rm)
+                        for tc, rm in zip(response.tool_calls, result_messages)
+                    ],
+                )
+            messages = messages + tuple(result_messages)
             request = ChatRequest(
                 messages=messages,
                 model=self.server.model_alias,
@@ -741,12 +797,24 @@ class AgentLoop:
         # Both raise AgentLoopError. The /chat route translates to 500 with
         # the message; the user / dispatcher sees the actual failure mode.
         if response.finish_reason == "tool_round_limit" and not response.content:
+            if recorder is not None:
+                recorder.finalize(
+                    final_content="",
+                    finish_reason="tool_round_limit",
+                    usage=response.usage,
+                )
             raise AgentLoopError(
                 f"tool_round_limit: model exhausted the {self.max_tool_rounds}-round "
                 f"tool budget without emitting visible content. Reduce task scope or "
                 f"raise max_tool_rounds. No assistant turn saved."
             )
         if not response.content and not response.tool_calls:
+            if recorder is not None:
+                recorder.finalize(
+                    final_content="",
+                    finish_reason="empty_generation",
+                    usage=response.usage,
+                )
             raise AgentLoopError(
                 f"empty_generation: model produced no visible content "
                 f"(finish_reason={response.finish_reason}); no assistant turn saved"
@@ -755,6 +823,12 @@ class AgentLoop:
             session_id, self.agent_name, "assistant", response.content,
             finish_reason=response.finish_reason,
         )
+        if recorder is not None:
+            recorder.finalize(
+                final_content=response.content,
+                finish_reason=response.finish_reason,
+                usage=response.usage,
+            )
 
         # 6. Return raw ChatResponse (constraint 3). When a history budget is
         # active, decorate with context_usage so the UI can show pressure.
@@ -931,6 +1005,18 @@ class AgentLoop:
         # next streaming generation, until the model emits a final answer or we
         # hit max_tool_rounds. Mirrors the sync-path semantics in
         # process_message.
+        # Black-box recorder — same lifecycle as sync path; idempotent finalize
+        # at every termination so failures (timeout, stream error, cap hit,
+        # empty generation) all land in the audit trail. No-op when no tools
+        # fire, no-op when black_box=None.
+        recorder = (
+            self.black_box.begin_turn(
+                session_id=session_id,
+                agent=self.agent_name,
+                user_message=user_message,
+            )
+            if self.black_box is not None else None
+        )
         tool_rounds = 0
         final_content_parts: list[str] = []
         final_finish_reason: str | None = None
@@ -976,21 +1062,45 @@ class AgentLoop:
             except LlamaServerTimeout as e:
                 if not first_chunk_seen and tool_rounds == 0:
                     raise  # setup error on first round → route returns 504 JSON
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="".join(round_content_parts),
+                        finish_reason="chat_timeout",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(code="chat_timeout", message=str(e))
                 return
             except LlamaServerError as e:
                 if not first_chunk_seen and tool_rounds == 0:
                     raise  # setup error on first round → route returns 502 JSON
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="".join(round_content_parts),
+                        finish_reason="chat_server_error",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(code="chat_server_error", message=str(e))
                 return
             except Exception as e:
                 if not first_chunk_seen and tool_rounds == 0:
                     raise
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="".join(round_content_parts),
+                        finish_reason="internal_error",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(code="internal_error", message=f"{type(e).__name__}: {e}")
                 return
 
             # ── Round ended. Determine success.
             if round_finish_reason is None:
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="".join(round_content_parts),
+                        finish_reason="incomplete_stream",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(
                     code="incomplete_stream",
                     message="stream closed without finish_reason — no assistant turn saved",
@@ -1017,7 +1127,15 @@ class AgentLoop:
                     tool_calls=list(round_tc_tuple),
                 ),)
 
+                if recorder is not None:
+                    recorder.record_action(
+                        round_index=tool_rounds,
+                        tool_calls=list(round_tc_tuple),
+                        content=round_content,
+                    )
+
                 # Invoke each tool, emit visibility events, append result messages.
+                round_observations: list[dict] = []
                 for tool_call in round_tc_tuple:
                     function = tool_call.get("function") or {}
                     yield ToolCallEvent(
@@ -1032,6 +1150,15 @@ class AgentLoop:
                         content=result_message.content,
                     )
                     messages = messages + (result_message,)
+                    if recorder is not None:
+                        round_observations.append(
+                            _build_observation_entry(tool_call, result_message)
+                        )
+                if recorder is not None and round_observations:
+                    recorder.record_observation(
+                        round_index=tool_rounds,
+                        results=round_observations,
+                    )
 
                 tool_rounds += 1
                 # Re-enter the round loop for the model's next response.
@@ -1046,6 +1173,19 @@ class AgentLoop:
                 # poisoning concern is specifically about saving an empty row.
                 # Tool-only turns aren't persisted in the conversations table
                 # by design (tool_calls are ephemeral plumbing).
+                # Record the action so the audit trail shows what the model
+                # asked for, even though we didn't execute it.
+                if recorder is not None:
+                    recorder.record_action(
+                        round_index=tool_rounds,
+                        tool_calls=list(round_tc_tuple),
+                        content=round_content,
+                    )
+                    recorder.finalize(
+                        final_content=round_content,
+                        finish_reason="no_registry",
+                        usage=final_usage,
+                    )
                 yield DoneEvent(
                     content=round_content,
                     finish_reason=round_finish_reason,
@@ -1078,6 +1218,12 @@ class AgentLoop:
         # comment for the 2026-06-04 evening probe context.
         if not accumulated_content:
             if final_finish_reason == "tool_round_limit":
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="",
+                        finish_reason="tool_round_limit",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(
                     code="tool_round_limit",
                     message=(
@@ -1087,6 +1233,12 @@ class AgentLoop:
                     ),
                 )
             else:
+                if recorder is not None:
+                    recorder.finalize(
+                        final_content="",
+                        finish_reason="empty_generation",
+                        usage=final_usage,
+                    )
                 yield ErrorEvent(
                     code="empty_generation",
                     message=f"model produced no visible content (finish_reason={final_finish_reason}); no assistant turn saved",
@@ -1097,6 +1249,12 @@ class AgentLoop:
             session_id, self.agent_name, "assistant", accumulated_content,
             finish_reason=final_finish_reason or "stop",
         )
+        if recorder is not None:
+            recorder.finalize(
+                final_content=accumulated_content,
+                finish_reason=final_finish_reason or "stop",
+                usage=final_usage,
+            )
 
         yield DoneEvent(
             content=accumulated_content,
