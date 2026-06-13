@@ -31,6 +31,7 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
+from soveryn.platform.steering_rack import SteeringRack
 from soveryn.platform.tools.registry import ToolRegistry
 
 
@@ -420,6 +421,13 @@ def create_app(
         # project_soveryn_black_box.md for the design rationale.
         black_box = BlackBox(env.data_root / "black_box")
 
+        # Steering rack — circuit breaker for repeated near-identical empty
+        # searches. Per Aetheria's Harness-1 verdict: "broken steering rack."
+        # Shared across all agents; defaults (3 consecutive empties, Jaccard
+        # 0.7) match the unit-tested thresholds. Trips surface as synthetic
+        # tool results AND in the Black Box trajectory.
+        steering_rack = SteeringRack()
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -429,6 +437,7 @@ def create_app(
             kwargs["tool_registry"] = tool_registry
             kwargs["continuity_config"] = _continuity_for(name)
             kwargs["black_box"] = black_box
+            kwargs["steering_rack"] = steering_rack
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:

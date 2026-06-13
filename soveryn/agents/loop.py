@@ -50,6 +50,7 @@ from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_embed
 from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
+from soveryn.platform.steering_rack import SteeringRack
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 from soveryn.platform.voice.sanitize import sanitize_for_tts
 
@@ -361,6 +362,7 @@ class AgentLoop:
         pinned_text: str = "",
         continuity_config: ContinuityConfig | None = None,
         black_box: BlackBox | None = None,
+        steering_rack: SteeringRack | None = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -440,6 +442,7 @@ class AgentLoop:
         # query cost.
         self.continuity_config = continuity_config
         self.black_box = black_box
+        self.steering_rack = steering_rack
         self.session_context_cache = SessionContextCache()
 
     def _build_continuity_brief(self, session_id: str) -> str:
@@ -755,7 +758,7 @@ class AgentLoop:
                 tool_calls=response.tool_calls,
             ),)
             result_messages = [
-                self._tool_result_message(tool_call)
+                self._tool_result_message(tool_call, session_id=session_id)
                 for tool_call in response.tool_calls
             ]
             if recorder is not None:
@@ -865,11 +868,34 @@ class AgentLoop:
             "context_window": self.context_window,
         }
 
-    def _tool_result_message(self, tool_call: dict) -> ChatMessage:
+    def _tool_result_message(
+        self, tool_call: dict, *, session_id: str | None = None,
+    ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
         tool_name = str(function.get("name") or "")
         raw_args = function.get("arguments") or "{}"
+        args_text = raw_args if isinstance(raw_args, str) else json.dumps(raw_args, sort_keys=True)
+
+        # ── Steering rack pre-dispatch check.
+        # If the (session, tool) pair is already tripped, short-circuit with
+        # the synthetic error result instead of dispatching. The model sees
+        # the tool result naturally and can adjust. Trip status only matters
+        # when we have a session_id (production has one; some tests don't).
+        if (
+            self.steering_rack is not None
+            and session_id is not None
+            and self.steering_rack.should_short_circuit(
+                session_id=session_id, tool_name=tool_name,
+            )
+        ):
+            result = self.steering_rack.synthetic_error(tool_name=tool_name)
+            return ChatMessage(
+                role="tool",
+                content=json.dumps(result, sort_keys=True),
+                tool_call_id=call_id,
+            )
+
         try:
             args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
         except (TypeError, json.JSONDecodeError) as exc:
@@ -886,9 +912,24 @@ class AgentLoop:
                 # crashes the whole turn. BaseException stays unhandled —
                 # SystemExit / KeyboardInterrupt propagate as intended.
                 result = {"error": type(exc).__name__, "message": str(exc)}
+
+        result_content = json.dumps(result, sort_keys=True)
+
+        # ── Steering rack post-dispatch observe.
+        # observe() handles the watched-tool check internally; opaque tools
+        # never trip per is_empty_result's fall-open semantics. The breaker
+        # may now be tripped — the next dispatch in the loop sees that.
+        if self.steering_rack is not None and session_id is not None:
+            self.steering_rack.observe(
+                session_id=session_id,
+                tool_name=tool_name,
+                args_text=args_text,
+                result_content=result_content,
+            )
+
         return ChatMessage(
             role="tool",
-            content=json.dumps(result, sort_keys=True),
+            content=result_content,
             tool_call_id=call_id,
         )
 
@@ -1143,7 +1184,7 @@ class AgentLoop:
                         name=str(function.get("name") or ""),
                         args=str(function.get("arguments") or ""),
                     )
-                    result_message = self._tool_result_message(tool_call)
+                    result_message = self._tool_result_message(tool_call, session_id=session_id)
                     yield ToolResultEvent(
                         call_id=str(tool_call.get("id") or ""),
                         name=str(function.get("name") or ""),
