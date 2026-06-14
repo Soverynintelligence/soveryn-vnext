@@ -174,12 +174,15 @@ def test_ares_daemon_is_a_process_not_an_agent():
     assert "ares" not in runtime.RETIRED
 
 
-def test_vett_scotty_shared_marked_as_single_system_only():
-    """Base Qwen3.6-27B chat template rejects multiple system messages;
-    vett_scotty_shared MUST be flagged so AgentLoop concatenates the soul."""
+def test_vett_scotty_shared_supports_multi_system_via_fixed_template():
+    """As of 2026-06-12 (commit 8c0726d), vett_scotty_shared uses
+    froggeric/Qwen-Fixed-Chat-Templates v20 (configured in router-presets.ini
+    [vett-scotty] via `chat-template-file`) which natively honors
+    messages[1:] role=system. The transport adapter `prepare_wire_messages`
+    becomes a pass-through. Sandbox + live-verified ('ALL_SURVIVED' probe)."""
     from soveryn.config.runtime import MODEL_SERVERS
     vs = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")
-    assert vs.supports_multi_system_messages is False
+    assert vs.supports_multi_system_messages is True
 
 
 def test_aetheria_primary_does_not_support_multi_system_qwen36_template():
