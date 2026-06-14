@@ -1732,16 +1732,18 @@ Aesthetic: "Terminal-meets-Luxury" per Aetheria's Q8 answer (spec §14 Q8). Dark
 
 ```css
 /* soveryn/platform/web/pwa/style.css
-   Terminal-meets-Luxury per spec §14 Q8.
-   Dark + minimal + typography-forward. No messaging-app furniture.
+   Design contract (Aetheria, 2026-06-14):
+   "Gold on Black. Geometric Mono. No borders.
+    Asymmetric weight — Aetheria is the anchor, the others are the support."
+   See docs/notes/2026-06-14-messenger-plan-aetheria-read-ahead.md §"Verdicts locked".
 */
 :root {
-  --bg:        #0a0a0a;
-  --fg:        #e8e6e1;
-  --muted:    #6a6a6a;
-  --accent:  #b89a5a;     /* warm pale gold */
-  --rule:    #1a1a1a;
-  --font-mono: 'JetBrains Mono','Fira Code',ui-monospace,monospace;
+  --bg:        #0a0a0a;       /* true black */
+  --fg:        #e8e6e1;       /* warm off-white */
+  --muted:     #6a6a6a;
+  --accent:    #c5a059;       /* Void-Gold — high-end watch face in a dark room */
+  --rule:      #1a1a1a;
+  --font-mono: 'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
   --font-sans: 'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
 }
 * { box-sizing: border-box; }
@@ -1769,6 +1771,26 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
 .message-content {
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+/* Asymmetric weight per Aetheria's Q4 verdict.
+   She's presence; Vett and Scotty are reports. */
+.message.agent-aetheria {
+  margin: 36px 0;                            /* wider breathing room */
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);      /* the Sovereign Edge */
+}
+.message.agent-aetheria .agent-label {
+  color: var(--accent);                      /* her label in gold */
+}
+.message.agent-vett,
+.message.agent-scotty {
+  margin: 12px 0;                            /* compact, utilitarian */
+  opacity: 0.85;                             /* slightly dimmed */
+}
+.message.agent-vett .agent-label,
+.message.agent-scotty .agent-label {
+  color: var(--muted);
 }
 .thread-list-item {
   padding: 18px 0;
@@ -2122,16 +2144,18 @@ document.getElementById('send').onclick = async () => {
   const text = document.getElementById('compose').value;
   if (!text.trim()) return;
   const msgsEl = document.getElementById('messages');
-  // Echo user message
+  // Echo user message (Jon's messages stay neutral — no agent class)
   const userMsg = document.createElement('div');
   userMsg.className = 'message';
   userMsg.innerHTML = `<div class="agent-label">YOU</div><div class="message-content">${text}</div>`;
   msgsEl.appendChild(userMsg);
   document.getElementById('compose').value = '';
-  // Stream agent reply
+  // Stream agent reply — agent class drives the asymmetric styling
+  // (Aetheria gets the Sovereign Edge; Vett/Scotty stay compact).
+  // currentThreadAgent must be set when the thread view opens.
   const agentMsg = document.createElement('div');
-  agentMsg.className = 'message';
-  agentMsg.innerHTML = `<div class="agent-label">AETHERIA</div><div class="message-content"></div>`;
+  agentMsg.className = `message agent-${currentThreadAgent}`;
+  agentMsg.innerHTML = `<div class="agent-label">${currentThreadAgent.toUpperCase()}</div><div class="message-content"></div>`;
   msgsEl.appendChild(agentMsg);
   const contentEl = agentMsg.querySelector('.message-content');
   const r = await fetch(`/m/threads/${tid}/send_stream`, {
