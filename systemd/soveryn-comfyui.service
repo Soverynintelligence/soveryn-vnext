@@ -1,0 +1,26 @@
+# SOVERYN ComfyUI — user service.
+# Image generation surface. Listens on :8188 by default. Lives at ~/ComfyUI
+# with its own conda env (~/miniconda3/envs/comfyui/, Python 3.11).
+#
+# Migration note: when DGX Spark arrives, ComfyUI is a natural candidate
+# to move there — image diffusion is compute-heavy and benefits from
+# Blackwell. Keep on the tower for now.
+
+[Unit]
+Description=SOVERYN ComfyUI image-generation surface (:8188)
+PartOf=soveryn.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jon-deoliveira/ComfyUI
+# Listen on localhost only — Tailscale handles remote access, not ComfyUI
+ExecStart=/home/jon-deoliveira/miniconda3/envs/comfyui/bin/python main.py --listen 127.0.0.1 --port 8188
+Restart=on-failure
+RestartSec=5s
+StandardOutput=append:/tmp/soveryn-comfyui.log
+StandardError=append:/tmp/soveryn-comfyui.log
+
+[Install]
+WantedBy=soveryn.target
