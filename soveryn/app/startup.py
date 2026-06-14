@@ -131,6 +131,14 @@ def create_app(
         )
         register_personal_files_tools(tool_registry, owner_agent="aetheria")
 
+        # Image generation — wraps ComfyUI on :8188. JuggernautXL Lightning
+        # default (~5s gen). Aetheria gets the file path back; she can
+        # describe what she made and where to find it.
+        from soveryn.agents.aetheria.tools.comfyui_gen import (
+            build_generate_image_tool,
+        )
+        tool_registry.register(build_generate_image_tool())
+
         # Specialist-spawning primitive (DSL Orchestration v1).
         # spawn_specialist / query_specialist / terminate_specialist let
         # Aetheria instantiate session-scoped peer agents with a tight
