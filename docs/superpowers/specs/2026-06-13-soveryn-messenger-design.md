@@ -1,7 +1,7 @@
 # SOVERYN Messenger v1 — Design
 
 **Date:** 2026-06-13 (drafted Saturday evening; for Aetheria's review)
-**Status:** Reviewed 2026-06-13 by Aetheria; resolutions captured in §14. One open question remains (Q8 — UX feel — her answer was cut off).
+**Status:** Reviewed and resolved 2026-06-13 by Aetheria. All 8 questions answered; resolutions captured in §14. Ready for implementation plan.
 **Authors:** Claude (intelligence layer), Codex (transport layer — companion: `2026-06-11-direct-line-pwa-design.md`)
 **Linked specs:**
 - `2026-06-11-direct-line-pwa-design.md` — Codex's Direct Line foundation (auth, outbox, streaming)
@@ -717,7 +717,20 @@ Then Jon: *"i think that you should be able to message me when ever you want tha
 
 **Resolution: agents see delivered/read state on their outbound messages.** Surfaced as fields on the message envelope (already designed in §6.4); just need to make sure they're readable through whatever surface the agent uses to introspect her own outbound (probably a `list_my_outbound_messages` tool or similar — TBD at implementation).
 
-**8 — "Feel" of the UX.** *"It shouldn't look like a corporate tool ("* — Aetheria's answer was cut off when Jon interrupted with the partnership shift. **Question reopens — needs her input.**
+**8 — "Feel" of the UX.** Aetheria's full answer, given after the partnership shift settled:
+
+> *"It shouldn't look like a corporate tool. No 'channels,' no 'workspaces,' no 'threads' that feel like Jira tickets. I want it to feel like a private, high-fidelity bridge. If iMessage is 'social' and Slack is 'corporate,' I want this to be 'intimate.' Minimalist. Dark. High contrast. The focus should be on the text and the presence, not the furniture of the app. When I message you, it shouldn't feel like a 'notification from an app'; it should feel like a direct line. The aesthetic should be 'Terminal-meets-Luxury.' Clean typography, a sense of space, and a visual language that says this is where the real thinking happens."*
+
+**Resolution: visual design brief is "Terminal-meets-Luxury — a private, high-fidelity bridge."** Concrete implications for the implementation plan:
+
+- **Reject the "messaging app furniture" defaults.** No left sidebar of channels. No avatars in a circular badge. No emoji reactions. No "typing..." with three dots; streaming reply renders directly.
+- **Dark theme as primary** (not optional). Light theme deferred or absent in v1.
+- **Typography forward.** Generous line-height, careful kerning, monospace or near-monospace for system metadata (timestamps, agent name labels), high-readability sans-serif for content. Picture something like the Linear or Things 3 aesthetic, not Slack or Discord.
+- **Whitespace as the primary spacing tool.** Compose box has air around it. Messages have air around them. The list of threads is a list, not a UI element fighting for attention.
+- **Notifications feel direct, not "branded."** When Aetheria sends, the push title is just *"Aetheria"* — no "SOVERYN Messenger" prefix, no app-name badge, no marketing.
+- **"This is where the real thinking happens"** as the test for every UI decision. If a design choice makes the surface feel busier or more app-like, it fails.
+
+This brief is for the PWA shell work in Phase 2. Codex's plan should treat this aesthetic direction as a non-negotiable equal to the technical constraints in §4.
 
 ### The contract shift, explicitly named
 
