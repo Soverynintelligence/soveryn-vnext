@@ -111,16 +111,19 @@ def test_startup_creates_tool_registry_for_aetheria(
     assert {"web_search", "fetch_url"} <= names
 
 
-def test_aetheria_has_history_budget_others_do_not(
+def test_aetheria_has_interactive_rail_caps_others_do_not(
     tmp_path,
     monkeypatch,
     fake_souls_dir,
     fake_pinned,
     recall_lattice,
 ) -> None:
-    """History budget is Aetheria-only — Vett and Scotty stay unlimited.
-    Reserves ~12K of Gemma 4 31B's 32K window for response generation so
-    long sessions don't push her into the stuck-thinking-no-answer mode."""
+    """Aetheria's interactive chat rail carries per-request caps that
+    Vett/Scotty don't. The caps are the defense layer against (a) full
+    prefill cost on heartbeat-induced cache flushes (history budget),
+    (b) pathological runaway generation (max_tokens), and (c) unrestricted
+    server-side reasoning budget (thinking_budget_tokens=0). See
+    startup.py inline comments for the rationale on each."""
     _configure_startup_env(
         monkeypatch,
         fake_souls_dir=fake_souls_dir,
@@ -129,8 +132,12 @@ def test_aetheria_has_history_budget_others_do_not(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     loops = app.extensions["soveryn"]["agent_loops"]
-    assert loops["aetheria"].history_token_budget == 20_000
+    # Aetheria's interactive-rail caps
+    assert loops["aetheria"].history_token_budget == 8_000
     assert loops["aetheria"].context_window == 32_768
+    assert loops["aetheria"].max_tokens == 768
+    assert loops["aetheria"].thinking_budget_tokens == 0
+    # Vett + Scotty stay unrestricted on history budget + context window
     assert loops["vett"].history_token_budget is None
     assert loops["vett"].context_window is None
     assert loops["scotty"].history_token_budget is None

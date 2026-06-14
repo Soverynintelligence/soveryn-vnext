@@ -447,14 +447,44 @@ def create_app(
                     kwargs["recall_k"] = 5
                     kwargs["recall_threshold"] = 0.70
                     # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
-                # History budget — leave 12K of Gemma 4 31B's 32K window for
-                # response generation so long sessions don't push her into the
-                # "stuck thinking, no answer" failure mode. context_window is
-                # the UI denominator for the pressure bar, not enforced here.
-                # Both lines update together when the model swaps.
-                kwargs["history_token_budget"] = 20_000
+                # Live chat history budget. SessionContextCache (commit 9baa798)
+                # made the byte-identical prelude cacheable, but the heartbeat
+                # tier-2 issue still periodically flushes Aetheria's llama-server
+                # slot (see [[project_soveryn_aetheria_prompt_cache_fix]]). When
+                # that happens, the next user turn pays a full prefill — at 20K
+                # of in-window history that was 5-10s of cold prefill on
+                # Blackwell. The 8K cap roughly halves the worst-case prefill
+                # latency. Aetheria can still reach further back through lattice
+                # recall + identity spine; the cap is on the raw transcript
+                # carried in the prompt, not on what she knows.
+                kwargs["history_token_budget"] = 8_000
                 kwargs["context_window"] = 32_768
-                # thinking_budget_tokens left unset (None = unrestricted).
+                # Interactive rail generation cap. Defensive — observed
+                # production completion_tokens are well under this (typical
+                # short turn ~25 tokens, substantive turn ~250). The 768 cap
+                # exists to catch pathological runaway generation (the
+                # empty_turn_poisoning class — see project_soveryn_empty_turn_poisoning)
+                # where the model gets stuck verbalizing scratch into content.
+                # Not actively biting current behavior; this is a soft ceiling.
+                kwargs["max_tokens"] = 768
+                # Hard cap on per-request reasoning at the wire level. The
+                # router preset for Aetheria has `reasoning = off` and the
+                # Gemma-4-specific `enable_thinking=true` (inverse logic for
+                # Gemma — disables thinking), but those are startup-time +
+                # template-time flags. The per-request `thinking_budget_tokens`
+                # field is a separate llama-server parameter; when omitted
+                # (None), the server falls back to `--reasoning-budget=-1`
+                # (INT_MAX = unrestricted). Confirmed via router logs:
+                # pre-change events show `reasoning-budget: activated,
+                # budget=2147483647 tokens` per Aetheria turn. Setting 0 here
+                # closes the per-request gap regardless of preset/template
+                # state.
+                #
+                # DON'T-REMOVE NOTE: if Aetheria ever model-swaps to a
+                # thinking-mode brain (e.g., a Qwen-class model), this
+                # hardcoded 0 silently disables thinking. Move to a
+                # model-aware value (Vett uses 384) when swapping.
+                kwargs["thinking_budget_tokens"] = 0
                 # As of 2026-06-01 Aetheria runs on Gemma 4 31B (vanilla Google
                 # instruct) with thinking disabled via chat-template-kwargs in
                 # router-presets.ini. Reason: llama.cpp's generic reasoning
