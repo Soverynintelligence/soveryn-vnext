@@ -409,6 +409,17 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
   .bubble-text { white-space: pre-wrap; }
+  /* Aetheria-generated images: auto-rendered when she includes the
+     /aetheria/img/<filename> URL in her response. See enhanceBubbleWithImages
+     in the rendering loop below. */
+  .assistant-image {
+    display: block;
+    margin: 8px 0;
+    max-width: 100%;
+    max-height: 480px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
 </style>
 </head>
 <body>
@@ -790,6 +801,44 @@
     txt.textContent += delta;
   }
 
+  // Aetheria-image auto-render. When she calls generate_image, the tool
+  // result returns a URL like `/aetheria/img/aetheria_00001_.png`. She
+  // includes that URL inline in her response. After the bubble is fully
+  // populated (sync done, stream done, or history-load), this scans the
+  // text for matching URLs and replaces each occurrence with an actual
+  // <img> element rendered above the surrounding text. Safe: the URL
+  // pattern matches only the /aetheria/img/ route with a
+  // restricted-character filename.
+  const _AETHERIA_IMG_RE = /\/aetheria\/img\/[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif)/g;
+  function enhanceBubbleWithImages(bubble) {
+    if (!bubble) return;
+    const txt = bubble.querySelector(":scope > .bubble-text");
+    if (!txt) return;
+    const text = txt.textContent || "";
+    if (!_AETHERIA_IMG_RE.test(text)) return;
+    _AETHERIA_IMG_RE.lastIndex = 0;
+    // Split the text on image URLs. Each match becomes an <img>; surrounding
+    // text segments stay as text nodes.
+    txt.innerHTML = "";  // safe — content was textContent, no HTML preserved
+    let lastIdx = 0;
+    let m;
+    while ((m = _AETHERIA_IMG_RE.exec(text)) !== null) {
+      if (m.index > lastIdx) {
+        txt.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+      }
+      const img = document.createElement("img");
+      img.src = m[0];
+      img.className = "assistant-image";
+      img.loading = "lazy";
+      img.alt = "Aetheria-generated image";
+      txt.appendChild(img);
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < text.length) {
+      txt.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+  }
+
   // ─── Session minting ───────────────────────────────────────────────────────
   // Backend requires session_id on every /chat and /chat_stream POST. We mint
   // lazily before the first send (or after new-chat / agent switch).
@@ -888,6 +937,10 @@
               cleared = true;
             }
             updateContextUsage(payload.context_usage);
+            // Aetheria-image auto-render: if she included an image URL,
+            // turn it into an inline <img>. Safe to call always — no-op
+            // when no matching URL is present.
+            enhanceBubbleWithImages(respBubble);
           } else if (payload.type === "error") {
             setBubbleText(respBubble, `error · ${payload.code}: ${payload.message}`);
             return;
@@ -929,6 +982,7 @@
       } else {
         setBubbleText(respBubble, data.content || "");
         updateContextUsage(data.context_usage);
+        enhanceBubbleWithImages(respBubble);
       }
     } catch (e) {
       setBubbleText(respBubble, `error · ${e.message}`);
@@ -945,7 +999,10 @@
       // unknown until the next chat response arrives.
       updateContextUsage(null);
       for (const t of data.turns || []) {
-        if (t.role === "user" || t.role === "assistant") appendBubble(t.role, t.content);
+        if (t.role === "user" || t.role === "assistant") {
+          const b = appendBubble(t.role, t.content);
+          if (t.role === "assistant") enhanceBubbleWithImages(b);
+        }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
     } catch { /* noop */ }

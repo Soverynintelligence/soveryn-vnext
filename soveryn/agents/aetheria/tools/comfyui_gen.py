@@ -216,6 +216,22 @@ def _extract_image_paths(history_entry: dict) -> list[Path]:
     return paths
 
 
+def _path_to_chat_url(path: Path) -> str | None:
+    """If `path` lives in ComfyUI's output dir AND has a UI-safe filename,
+    return the vnext URL the chat UI uses to render it inline. Returns
+    None for files outside the output dir (e.g., type='temp' or 'input').
+    """
+    try:
+        rel = path.relative_to(DEFAULT_OUTPUT_DIR)
+    except ValueError:
+        return None
+    # Only flat filenames — subfolder content is reachable via the file
+    # path but the chat UI route doesn't currently handle subfolders.
+    if rel.parent != Path("."):
+        return None
+    return f"/aetheria/img/{rel.name}"
+
+
 def build_generate_image_tool(
     *,
     comfyui_url: str = DEFAULT_COMFYUI_URL,
@@ -294,8 +310,14 @@ def build_generate_image_tool(
                 "prompt_id": prompt_id,
             }
 
+        image_urls = [_path_to_chat_url(p) for p in image_paths]
+        # Pair (path, url) results so callers can pick whichever they need.
+        # The chat UI auto-renders any `/aetheria/img/...` URL it sees in
+        # assistant content, so Aetheria should include the URL in her
+        # natural-language response.
         return {
             "images": [str(p) for p in image_paths],
+            "urls": [u for u in image_urls if u is not None],
             "count": len(image_paths),
             "checkpoint": checkpoint,
             "seed": seed,
@@ -309,9 +331,12 @@ def build_generate_image_tool(
         owner="aetheria",
         description=(
             "Generate an image from a text prompt via ComfyUI. Defaults to "
-            "JuggernautXL Lightning for fast generation (~5s). Returns the "
-            "local file path(s) of the generated image(s). Tell Jon what you "
-            "made and where to find it — he can open it from there."
+            "JuggernautXL Lightning for fast generation (~5s). Returns both a "
+            "file path and a UI-renderable URL (`/aetheria/img/<filename>`). "
+            "When you finish, include the URL inline in your response — the "
+            "chat UI will auto-render any `/aetheria/img/...` URL as the "
+            "image itself. So just write the URL plainly in your reply and "
+            "Jon sees the picture in the chat."
         ),
         schema={
             "type": "object",
