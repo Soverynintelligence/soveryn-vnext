@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_ARES_STATE_PATH = Path("/home/jon-deoliveira/soveryn_vnext/data/ares/ares_daemon_state.json")
+DEFAULT_ARES_STATE_PATH = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_daemon_state.json"
 
 
 class Severity(str, Enum):

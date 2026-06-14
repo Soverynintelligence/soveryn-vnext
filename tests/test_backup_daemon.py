@@ -32,11 +32,27 @@ def test_parser_defaults():
 
 def test_parser_repo_default_is_hardcoded_vnext():
     """Constraint 4: must not read from EnvConfig."""
-    assert str(DEFAULT_REPO) == "/home/jon-deoliveira/soveryn_vnext"
+    assert DEFAULT_REPO == Path.home() / "soveryn_vnext"
 
 
-def test_parser_dest_default_is_external_drive():
-    assert "easystore" in str(DEFAULT_DEST)
+def test_parser_dest_default_is_env_var_driven(monkeypatch):
+    """SOVERYN_BACKUP_DEST overrides the home-dir fallback."""
+    monkeypatch.setenv("SOVERYN_BACKUP_DEST", "/media/whoever/easystore/backups")
+    # Re-import so the module-level constant picks up the env var
+    import importlib
+    import soveryn.backup.daemon as daemon_mod
+    importlib.reload(daemon_mod)
+    assert "easystore" in str(daemon_mod.DEFAULT_DEST)
+
+
+def test_parser_dest_default_falls_back_to_home_when_unset(monkeypatch):
+    """No env var → falls back to ~/soveryn_vnext_code_backups so an
+    unconfigured run lands somewhere obvious rather than silently nowhere."""
+    monkeypatch.delenv("SOVERYN_BACKUP_DEST", raising=False)
+    import importlib
+    import soveryn.backup.daemon as daemon_mod
+    importlib.reload(daemon_mod)
+    assert daemon_mod.DEFAULT_DEST == Path.home() / "soveryn_vnext_code_backups"
 
 
 def test_parser_overrides(tmp_path):

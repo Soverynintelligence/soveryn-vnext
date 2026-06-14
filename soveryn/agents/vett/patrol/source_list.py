@@ -26,8 +26,8 @@ from typing import Any
 import yaml
 
 
-PATROL_SOURCES_DEFAULT_PATH = Path(
-    "/home/jon-deoliveira/soveryn_vnext/data/vett_patrol_sources.yaml"
+PATROL_SOURCES_DEFAULT_PATH = (
+    Path.home() / "soveryn_vnext" / "data" / "vett_patrol_sources.yaml"
 )
 
 _ALLOWED_KINDS = frozenset({"html", "rss", "atom"})

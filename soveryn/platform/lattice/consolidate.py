@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DEFAULT_LEGACY_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice.db")
-DEFAULT_VNEXT_DB = Path("/home/jon-deoliveira/soveryn_complete/soveryn_memory/lattice_vnext.db")
+DEFAULT_LEGACY_DB = Path.home() / "soveryn_complete" / "soveryn_memory" / "lattice.db"
+DEFAULT_VNEXT_DB = Path.home() / "soveryn_complete" / "soveryn_memory" / "lattice_vnext.db"
 
 
 # Schema statements lifted verbatim from legacy lattice.db (no redesign).

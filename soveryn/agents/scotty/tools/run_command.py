@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
@@ -39,17 +41,18 @@ RUN_COMMAND_MAX_TIMEOUT = 300         # seconds — hard ceiling
 RUN_COMMAND_OUTPUT_MAX_BYTES = 16 * 1024   # 16 KB per stream (stdout + stderr each)
 RUN_COMMAND_MAX_ARGS = 32
 
-PYTHON_BIN = "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python"
+PYTHON_BIN = sys.executable
+_PY_BIN_DIR = Path(sys.executable).parent
 
 # Executable allowlist. The map key is what Scotty passes as `executable`;
 # the value is the resolved absolute path used on the actual subprocess
 # call. New tools added here are NEW capabilities — review carefully.
 ALLOWED_EXECUTABLES: dict[str, str] = {
     "python": PYTHON_BIN,
-    "pytest": "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/pytest",
-    "ruff":   "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/ruff",
-    "black":  "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/black",
-    "mypy":   "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/mypy",
+    "pytest": str(_PY_BIN_DIR / "pytest"),
+    "ruff":   str(_PY_BIN_DIR / "ruff"),
+    "black":  str(_PY_BIN_DIR / "black"),
+    "mypy":   str(_PY_BIN_DIR / "mypy"),
     "git":    "/usr/bin/git",
 }
 
@@ -125,8 +128,8 @@ def build_run_command_tool(*, owner_agent: str) -> ToolSpec:
         # coreutils and run python imports correctly. Inheriting $PATH from the
         # service environment could pick up LD_PRELOAD-style overrides.
         clean_env = {
-            "PATH": "/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/local/bin:/usr/bin:/bin",
-            "HOME": "/home/jon-deoliveira",
+            "PATH": f"{_PY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin",
+            "HOME": str(Path.home()),
             "LANG": os.environ.get("LANG", "C.UTF-8"),
             "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
         }

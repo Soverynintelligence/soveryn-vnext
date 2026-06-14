@@ -19,7 +19,7 @@ from typing import Any, Iterator
 from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
 from soveryn.platform.lattice.types import Entry, Region
 
-DEFAULT_ATTIC_DB_PATH = Path("/home/jon-deoliveira/soveryn_vnext/data/lattice/attic.db")
+DEFAULT_ATTIC_DB_PATH = Path.home() / "soveryn_vnext" / "data" / "lattice" / "attic.db"
 DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
 
 _SCHEMA_SQL = """

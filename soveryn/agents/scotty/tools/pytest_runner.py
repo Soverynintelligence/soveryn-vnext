@@ -24,7 +24,7 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 PYTEST_TIMEOUT_SECONDS = 180         # 3 minutes — full suite ran in ~8s today
 PYTEST_OUTPUT_MAX_BYTES = 16 * 1024  # 16 KB tail of stdout
 TESTS_DIR = (SCOTTY_PROJECT_ROOT / "tests").resolve()
-PYTHON_BIN = "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python"
+PYTHON_BIN = sys.executable
 
 
 def build_run_pytest_tool(*, owner_agent: str) -> ToolSpec:

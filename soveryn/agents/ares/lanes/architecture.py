@@ -23,7 +23,7 @@ RETIRED_AGENTS: frozenset[str] = frozenset({
     "aetheria_public",
 })
 
-DEFAULT_VNEXT_SOVERYN_ROOT = Path("/home/jon-deoliveira/soveryn_vnext/soveryn")
+DEFAULT_VNEXT_SOVERYN_ROOT = Path.home() / "soveryn_vnext" / "soveryn"
 
 
 def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:

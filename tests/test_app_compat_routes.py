@@ -5,6 +5,8 @@ Mirrors the pattern in tests/test_app_chat_routes.py.
 """
 
 import json
+from pathlib import Path
+
 import pytest
 
 from soveryn.agents.loop import AgentLoop
@@ -178,7 +180,7 @@ def test_api_memory_evidence_returns_404(app_state):
 def test_todo_markers_use_ticket_format(tmp_path):
     """Every TODO in routes/compat.py must be TODO(vnext-<slug>) for grep."""
     import re
-    path = "/home/jon-deoliveira/soveryn_vnext/soveryn/app/routes/compat.py"
+    path = str(Path.home() / "soveryn_vnext" / "soveryn" / "app" / "routes" / "compat.py")
     with open(path) as f:
         content = f.read()
     plain_todos = re.findall(r"\bTODO\b(?!\()", content)

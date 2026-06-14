@@ -31,14 +31,18 @@ WEB_SEARCH_DEFAULT_K = 5
 WEB_SEARCH_MAX_K = 20
 
 
-# Per-agent user-agents. Vett identifies himself as the patrolling agent
+# Per-agent user-agents. Vett identifies herself as the patrolling agent
 # so external sources see which sovereign agent is fetching (and have a
 # contact). Aetheria's lighter-weight fetches stay on the generic UA
 # from soveryn.platform.web.fetch.
+#
+# Contact email is the org address. If/when dedicated bot mailboxes get
+# stood up (e.g., vett@soverynintelligence.com or info@soverynintelligence.com),
+# swap the value below — no schema change needed.
 AGENT_USER_AGENTS: dict[str, str] = {
     "vett": (
         "SOVERYN-Vett/1.0 (Sovereign AI Research Agent; "
-        "contact: jon.deoliveira@gmail.com)"
+        "contact: jdeoliveira@soverynintelligence.com)"
     ),
 }
 

@@ -12,7 +12,7 @@ Behavior:
                        `_temporary: true` flag so the situation is obvious.
 
 The bridge reads from `app.config["SOVERYN_LEGACY_TEMPLATES_DIR"]`
-(default `/home/jon-deoliveira/soveryn_complete/templates`). If the
+(default `~/soveryn_complete/templates`). If the
 expected file is missing, returns JSON 503 with code `ui_unavailable` —
 never a Flask stack trace.
 

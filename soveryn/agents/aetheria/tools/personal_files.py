@@ -27,10 +27,10 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 
 AETHERIA_CONTENT_ROOTS: tuple[Path, ...] = (
-    Path("/home/jon-deoliveira/Pictures").resolve(),
-    Path("/home/jon-deoliveira/Desktop").resolve(),
-    Path("/home/jon-deoliveira/Documents").resolve(),
-    Path("/home/jon-deoliveira/Downloads").resolve(),
+    (Path.home() / "Pictures").resolve(),
+    (Path.home() / "Desktop").resolve(),
+    (Path.home() / "Documents").resolve(),
+    (Path.home() / "Downloads").resolve(),
 )
 
 # Caps tuned for "find something to share" not "ingest a whole tree."

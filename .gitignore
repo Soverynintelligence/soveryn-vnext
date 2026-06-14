@@ -24,7 +24,25 @@ Thumbs.db
 
 # Superpowers brainstorm session content (ephemeral)
 .superpowers/
-# Runtime data stores
+# Runtime data stores — live state, not artifacts
 data/lattice/*.db*
 data/ares/
 data/telemetry/
+# Conversation + lattice DBs, pinned memory, salience, .migrated markers.
+# Souls/ IS tracked (character config) — kept via the negation below.
+data/memory/
+!data/memory/souls/
+!data/memory/souls/**
+data/black_box/
+data/subconscious/
+data/voice/
+data/templates_legacy/
+data/router-presets.ini
+
+# Eval stderr capture (debug noise; .json artifacts stay committed)
+eval_runs/*.stderr
+
+# Local environment secrets
+.env
+.env.local
+.env.*.local

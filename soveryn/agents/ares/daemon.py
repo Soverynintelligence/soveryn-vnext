@@ -20,7 +20,7 @@ from soveryn.agents.ares.lanes.network import collect_network_live
 from soveryn.agents.ares.router import AresSinks, default_sinks, route_cleared, route_finding
 from soveryn.platform.bus import SQLiteBus
 
-DEFAULT_ARES_BUS_PATH = Path("/home/jon-deoliveira/soveryn_vnext/data/ares/ares_bus.sqlite3")
+DEFAULT_ARES_BUS_PATH = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_bus.sqlite3"
 Collector = Callable[[], Iterable[AresFinding]]
 Sleep = Callable[[float], None]
 StopRequested = Callable[[], bool]

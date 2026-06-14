@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 
-SCOTTY_PROJECT_ROOT = Path("/home/jon-deoliveira/soveryn_vnext").resolve()
+SCOTTY_PROJECT_ROOT = (Path.home() / "soveryn_vnext").resolve()
 
 
 class PathOutOfBoundsError(ValueError):
