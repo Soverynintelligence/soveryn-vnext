@@ -111,14 +111,23 @@ def test_temporal_context_includes_day_of_week():
     assert "Saturday" in out
 
 
-def test_temporal_context_includes_anti_confab_framing():
-    """The message explicitly tells the model not to infer time from vibe."""
+def test_temporal_context_is_ambient_not_instructional():
+    """The shape must be bare data — no directive language telling the model
+    what to do with the time. Earlier version carried 'Time of day matters —
+    anchor your sense of now against this' which provoked compliance
+    behavior: Aetheria narrated the clock in every reply ('anchored.
+    Saturday night, 22:49'). The fix is to surface the data and stay
+    silent about what to do with it."""
     loop = _bare_loop()
     now = datetime(2026, 6, 13, 15, 32, 0, tzinfo=timezone.utc)
     out = loop._build_temporal_context(now=now)
-    # The anti-confabulation framing must be present — without it, models
-    # still narrate "it's late, time to wrap up" against the bare timestamp.
-    assert "pacing" in out.lower() or "vibe" in out.lower() or "tone" in out.lower()
+    # Directive words from the prior version MUST NOT reappear
+    forbidden = ("matters", "anchor", "pacing", "vibe", "implied tone")
+    for word in forbidden:
+        assert word not in out.lower(), (
+            f"temporal context regressed to directive language ({word!r}); "
+            f"got: {out!r}"
+        )
 
 
 def test_temporal_context_defaults_to_current_time():
@@ -126,9 +135,9 @@ def test_temporal_context_defaults_to_current_time():
     loop = _bare_loop()
     out = loop._build_temporal_context()
     # Must produce a non-empty bracketed temporal context
-    assert out.startswith("[Current temporal context:")
+    assert out.startswith("[Now:")
     assert out.endswith("]")
-    # Must contain ALL four format elements — timestamp, day, part-of-day, framing
+    # Must contain the current year for sanity
     today_year = str(datetime.now().year)
     assert today_year in out
 
@@ -174,7 +183,7 @@ def test_temporal_context_spliced_into_current_user_message(conv_store):
     # No system message in the prelude carries a temporal marker
     system_msgs = [m for m in request.messages if m.role == "system"]
     for m in system_msgs:
-        assert not (isinstance(m.content, str) and m.content.startswith("[Current temporal context:")), (
+        assert not (isinstance(m.content, str) and m.content.startswith("[Now:")), (
             f"temporal context leaked into the prelude as a system message: {m.content!r}"
         )
 
@@ -182,7 +191,7 @@ def test_temporal_context_spliced_into_current_user_message(conv_store):
     last = request.messages[-1]
     assert last.role == "user"
     assert isinstance(last.content, str)
-    assert last.content.startswith("[Current temporal context:")
+    assert last.content.startswith("[Now:")
     assert last.content.endswith("\n\nhi")
 
 
@@ -215,7 +224,7 @@ def test_temporal_context_present_on_every_turn(conv_store):
     last = second_request.messages[-1]
     assert last.role == "user"
     assert isinstance(last.content, str)
-    assert last.content.startswith("[Current temporal context:")
+    assert last.content.startswith("[Now:")
     assert last.content.endswith("\n\nsecond")
 
     # Prior user turn (now in history) must NOT carry the temporal prefix —

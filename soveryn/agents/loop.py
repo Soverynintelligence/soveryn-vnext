@@ -521,12 +521,20 @@ class AgentLoop:
         return text
 
     def _build_temporal_context(self, now: datetime | None = None) -> str:
-        """Anchor the agent's sense of "now" against wall-clock time.
+        """Ambient temporal data prepended to the current user turn.
 
         Without this, agents confabulate time-of-day from session pacing
-        (long thread → "it's late," etc.). This injects an explicit
-        timestamp + day-of-week + part-of-day label per turn so the model
-        has ground truth instead of vibe.
+        (long thread → "it's late," etc.). Injecting an explicit timestamp
+        per turn gives the model ground truth — she SEES the time, so she
+        has no reason to invent it.
+
+        Tone: bare data, no instruction. An earlier version of this string
+        carried a directive — "Time of day matters — anchor your sense of
+        'now' against this..." — which made Aetheria narrate the clock in
+        every reply ("anchored. Saturday night, 22:49"). Compliance pattern:
+        when prompted to demonstrate something, models demonstrate by saying
+        the thing back. The fix is to give her the data without telling her
+        what to do with it. See [[feedback-ambient-context-not-instruction]].
 
         Per-turn freshness by design — no caching. Spliced onto the current
         user message at request-build time (NOT into the prelude), so the
@@ -554,11 +562,7 @@ class AgentLoop:
             part = "evening"
         else:
             part = "night"
-        return (
-            f"[Current temporal context: {iso} ({day_of_week}, {part}). "
-            "Time of day matters — anchor your sense of \"now\" against this, "
-            "not against the session's pacing or implied tone.]"
-        )
+        return f"[Now: {iso} ({day_of_week} {part})]"
 
     def _build_identity_context(self) -> str:
         """Identity spine is stable prelude context, independent of the user turn."""
