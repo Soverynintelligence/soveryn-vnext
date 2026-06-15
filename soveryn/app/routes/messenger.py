@@ -162,6 +162,36 @@ def build_messenger_blueprint(
             ],
         })
 
+    @bp.route("/threads/<thread_id>/messages", methods=["GET"])
+    @auth_required
+    def threads_messages(thread_id: str):
+        """Return the conversation history for a thread.
+
+        Surfaced 2026-06-15 when Jon noticed messages disappeared after
+        re-entering a thread — the PWA had no way to rehydrate. v1 returns
+        the full history; pagination can land later if turn counts explode.
+        """
+        thread = get_thread(messenger_store, thread_id=thread_id)
+        if thread is None:
+            return jsonify({"error": "unknown thread"}), 404
+        try:
+            history = conv_store.load_history(thread.session_id)
+        except Exception as e:
+            return jsonify({"error": f"history load failed: {e}"}), 500
+        return jsonify({
+            "thread_id": thread.thread_id,
+            "agent": thread.agent,
+            "messages": [
+                {
+                    "role": t.role,
+                    "content": t.content,
+                    "timestamp": t.timestamp,
+                    "finish_reason": getattr(t, "finish_reason", None),
+                }
+                for t in history
+            ],
+        })
+
     @bp.route("/threads", methods=["POST"])
     @auth_required
     def threads_create():

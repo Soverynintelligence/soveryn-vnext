@@ -397,6 +397,52 @@ async function renderThreadView($view, { tid, agent }) {
   `;
   const $send = $view.querySelector('#send');
   $send.onclick = () => sendMessage(tid, currentThreadAgent, $view);
+
+  // Rehydrate the thread's prior messages from the server. Fix for the
+  // 2026-06-15 bug Jon flagged: re-entering a thread used to render an
+  // empty list because the client never fetched history.
+  await loadAndRenderHistory(tid, currentThreadAgent, $view);
+}
+
+async function loadAndRenderHistory(tid, currentThreadAgent, $view) {
+  const secret = await loadSecret();
+  if (!secret) return;
+  let data;
+  try {
+    const r = await fetch(`/m/threads/${tid}/messages`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    if (!r.ok) return;
+    data = await r.json();
+  } catch (e) {
+    return; // offline / network blip — just render empty; next send still works
+  }
+  const msgsEl = $view.querySelector('#messages');
+  if (!msgsEl || !data || !data.messages) return;
+  for (const turn of data.messages) {
+    const msg = document.createElement('div');
+    const label = document.createElement('div');
+    label.className = 'agent-label';
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    content.textContent = turn.content || '';
+    if (turn.role === 'user') {
+      // User messages: no agent class (neutral) per spec §14 Q4
+      msg.className = 'message';
+      label.textContent = 'YOU';
+    } else if (turn.role === 'assistant') {
+      // Agent messages: asymmetric weight via agent-class
+      // (Aetheria gets the Sovereign Edge; Vett/Scotty stay compact)
+      msg.className = `message agent-${currentThreadAgent}`;
+      label.textContent = currentThreadAgent.toUpperCase();
+    } else {
+      continue; // skip tool/system turns for the messenger surface
+    }
+    msg.appendChild(label);
+    msg.appendChild(content);
+    msgsEl.appendChild(msg);
+  }
+  msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
 async function sendMessage(tid, currentThreadAgent, $view) {
