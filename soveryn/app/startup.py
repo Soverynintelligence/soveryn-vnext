@@ -569,6 +569,24 @@ def create_app(
             )
             coord_worker.start()
 
+        # Messenger delivery worker — drains m_outbound_queue every 5s,
+        # resolving each pending intent into a conversation turn so the PWA
+        # surfaces deliberate_share messages. Stub-side delivery (vnext);
+        # real Web Push lands on Spark per Phase 4. Daemon thread so it
+        # doesn't keep the process alive on shutdown; run_forever has its
+        # own try/except so errors don't propagate. Gated on
+        # SOVERYN_START_MESSENGER_WORKER (default True) so tests that build
+        # create_app under tmp_path fixtures can opt out if needed.
+        if app.config.setdefault("SOVERYN_START_MESSENGER_WORKER", True):
+            import threading
+            from soveryn.app.messenger.delivery_worker import run_forever
+            threading.Thread(
+                target=run_forever,
+                args=(messenger_store, conv_store),
+                daemon=True,
+                name="messenger-delivery-worker",
+            ).start()
+
     # MessengerStore was constructed earlier (above the agent_loops gate) so
     # it's in scope when deliberate_share is registered for Aetheria + Vett.
     # The same instance flows here into app.extensions for blueprint use.
