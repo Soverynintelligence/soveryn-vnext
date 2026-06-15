@@ -121,6 +121,33 @@ def build_messenger_blueprint(
     @auth_required
     def threads_list():
         out = list_threads(messenger_store, user_id="jon")
+
+        # Last-message preview per thread for the card list. Naive query —
+        # one load_history() per thread, take the final assistant turn. With
+        # the small-N thread count we ship at, this is fine; if the list ever
+        # gets long we can swap in a per-session "last assistant turn" index.
+        def _preview(session_id: str) -> str:
+            try:
+                history = conv_store.load_history(session_id)
+            except Exception:
+                return ""
+            for turn in reversed(history):
+                if turn.role == "assistant" and turn.content:
+                    text = turn.content.strip()
+                    # Single-line, ~120 chars — UI truncates with ellipsis.
+                    text = " ".join(text.split())
+                    if len(text) > 140:
+                        text = text[:137] + "..."
+                    return text
+            # No assistant turn yet — fall back to first user turn if any.
+            for turn in history:
+                if turn.role == "user" and turn.content:
+                    text = " ".join(turn.content.strip().split())
+                    if len(text) > 140:
+                        text = text[:137] + "..."
+                    return text
+            return ""
+
         return jsonify({
             "threads": [
                 {
@@ -129,6 +156,7 @@ def build_messenger_blueprint(
                     "title": t.title,
                     "last_activity": t.last_activity,
                     "muted": t.muted,
+                    "last_message_preview": _preview(t.session_id),
                 }
                 for t in out
             ],
