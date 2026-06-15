@@ -9,8 +9,8 @@ from functools import wraps
 from pathlib import Path as _P
 
 from flask import (
-    Blueprint, Response, request, jsonify, render_template_string,
-    send_from_directory,
+    Blueprint, Response, current_app, request, jsonify,
+    render_template_string, send_from_directory,
 )
 
 from soveryn.agents.loop import (
@@ -303,6 +303,84 @@ def build_messenger_blueprint(
             device_id=request.authed_device.device_id,
         )
         return jsonify({"marked_read": n})
+
+    @bp.route("/voice/agents", methods=["GET"])
+    @auth_required
+    def voice_agents_list():
+        """Which agents have voice characters configured. The PWA gates the
+        call button on this — returns [] when voice is fully disabled (no
+        ELEVENLABS_API_KEY at boot, voice blueprint never registered, etc).
+        """
+        soveryn_ext = current_app.extensions.get("soveryn", {}) or {}
+        voice_state = soveryn_ext.get("voice", {}) or {}
+        return jsonify({"agents": sorted(voice_state.keys())})
+
+    @bp.route("/threads/<thread_id>/voice/offer", methods=["POST"])
+    @auth_required
+    def threads_voice_offer(thread_id: str):
+        """Bind a WebRTC voice call to an existing thread's session_id.
+
+        The point of this route (vs the standalone /voice/<agent>/offer)
+        is continuity: transcribed voice turns land in the same
+        ConversationStore session as the text exchange, so Aetheria's
+        memory of the call and the chat are one stream — not two parallel
+        histories the user has to mentally merge.
+        """
+        # Late import — keep messenger.py cheap to import. Voice deps are
+        # heavy (pipecat/aiortc/onnx) and shouldn't load with the blueprint.
+        from soveryn.app.routes.voice_dispatch import negotiate_and_dispatch_voice
+
+        thread = get_thread(messenger_store, thread_id=thread_id)
+        if thread is None:
+            return jsonify({"error": "unknown thread"}), 404
+
+        soveryn_ext = current_app.extensions.get("soveryn", {}) or {}
+        voice_state = soveryn_ext.get("voice", {}) or {}
+        agent_voice = voice_state.get(thread.agent)
+        if agent_voice is None:
+            return jsonify({
+                "error": f"voice not configured for agent {thread.agent!r}",
+            }), 503
+
+        body = request.get_json(silent=True) or {}
+        sdp = body.get("sdp")
+        sdp_type = body.get("type", "offer")
+        if not isinstance(sdp, str) or not sdp.strip():
+            return jsonify({"error": {
+                "code": "missing_sdp",
+                "message": "sdp field required",
+            }}), 400
+
+        agent_loop = agent_loops.get(thread.agent)
+        if agent_loop is None:
+            return jsonify({
+                "error": f"agent_loop for {thread.agent} not loaded",
+            }), 503
+
+        conv_store_ref = soveryn_ext.get("conv_store", conv_store)
+
+        try:
+            answer = negotiate_and_dispatch_voice(
+                agent_name=thread.agent,
+                agent_loop=agent_loop,
+                conv_store=conv_store_ref,
+                voice_id=agent_voice["voice_id"],
+                elevenlabs_api_key=agent_voice["elevenlabs_api_key"],
+                parakeet_url=agent_voice.get(
+                    "parakeet_url", "http://127.0.0.1:8087",
+                ),
+                sdp=sdp,
+                sdp_type=sdp_type,
+                session_id=thread.session_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"error": {
+                "code": "signaling_failed",
+                "message": f"{type(exc).__name__}: {exc}",
+            }}), 500
+
+        touch_thread(messenger_store, thread_id=thread_id)
+        return jsonify(answer)
 
     # PWA static assets — registered LAST so the catch-all `<path:path>` only
     # picks up requests that didn't match a more-specific route above.
