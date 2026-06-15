@@ -51,9 +51,8 @@ bp = Blueprint(
 logger = logging.getLogger(__name__)
 
 
-# Phase 1: Aetheria only. Phase 1.5 grows this tuple to ("aetheria",
-# "vett", "scotty") once their voice characters are sourced.
-SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria",)
+# Phase 2 (2026-06-15): all three voices clone-locally via F5-TTS.
+SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
 
 
 def _voice_state() -> dict:

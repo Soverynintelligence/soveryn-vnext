@@ -634,35 +634,52 @@ def create_app(
 
 
 def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None:
-    """Wire the voice blueprint when ELEVENLABS_API_KEY is configured.
+    """Wire the voice blueprint for all voice-enabled agents.
 
-    Phase 1: aetheria only. Phase 1.5 grows the per-agent dict as
-    vett + scotty voice characters land. See
-    soveryn/platform/voice/config.py for the VoiceConfig shape.
+    Phase 2 (2026-06-15): F5-TTS is the primary provider — voice is wired
+    whenever ``SOVEREIGN_TTS_PRIMARY=f5tts`` (the default), independent of
+    ElevenLabs configuration. When ``SOVEREIGN_TTS_PRIMARY=elevenlabs``,
+    voice still requires the relevant ElevenLabs key + voice_id.
+
+    Iterates ``VOICE_ENABLED_AGENTS`` from
+    ``soveryn.platform.voice.config`` — currently aetheria, vett, scotty.
     """
     import os
-    from soveryn.platform.voice.config import VoiceConfig
+    from soveryn.platform.voice.config import VOICE_ENABLED_AGENTS, VoiceConfig
 
     voice_config = VoiceConfig.from_env(os.environ)
-    aetheria_character = voice_config.agent_character("aetheria")
+    primary = (os.environ.get("SOVEREIGN_TTS_PRIMARY") or "f5tts").lower().strip()
+    parakeet_url = os.environ.get("SOVERYN_PARAKEET_URL", "http://127.0.0.1:8087")
+
     voice_state: dict[str, dict] = {}
-    if aetheria_character is not None and "aetheria" in agent_loops:
-        voice_state["aetheria"] = {
-            "agent_loop": agent_loops["aetheria"],
-            "voice_id": aetheria_character.elevenlabs_voice_id,
+    for agent_name in VOICE_ENABLED_AGENTS:
+        if agent_name not in agent_loops:
+            continue
+        char = voice_config.agent_character(agent_name)
+        if char is None:
+            continue
+        if primary == "elevenlabs" and (
+            voice_config.elevenlabs_api_key is None
+            or char.elevenlabs_voice_id is None
+        ):
+            # ElevenLabs primary requires both creds + per-agent voice ID
+            continue
+        voice_state[agent_name] = {
+            "agent_loop": agent_loops[agent_name],
+            "voice_id": char.elevenlabs_voice_id,
             "elevenlabs_api_key": voice_config.elevenlabs_api_key,
-            "parakeet_url": os.environ.get(
-                "SOVERYN_PARAKEET_URL", "http://127.0.0.1:8087",
-            ),
+            "parakeet_url": parakeet_url,
         }
+
+    if voice_state:
         app.extensions.setdefault("soveryn", {})["voice"] = voice_state
         from soveryn.app.routes.voice import bp as voice_bp
         app.register_blueprint(voice_bp)
         logger.info("voice enabled for: %s", sorted(voice_state.keys()))
     else:
         logger.info(
-            "voice disabled — ELEVENLABS_API_KEY or "
-            "ELEVENLABS_VOICE_ID_AETHERIA missing"
+            "voice disabled — no voice-enabled agents have a configured provider "
+            "(check SOVEREIGN_TTS_PRIMARY, F5-TTS service, ELEVENLABS_API_KEY)"
         )
 
 
