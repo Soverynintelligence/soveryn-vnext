@@ -17,6 +17,7 @@ from soveryn.agents.signal_bridge.client import (
     InboundMessage,
     SignalCliError,
     parse_envelopes,
+    receive_once,
 )
 from soveryn.agents.signal_bridge.config import SignalBridgeConfig
 from soveryn.agents.signal_bridge.daemon import SignalBridgeDaemon
@@ -648,6 +649,36 @@ def test_send_once_raises_on_nonzero_returncode(monkeypatch):
             body="hi",
             attachments=("/tmp/x.jpg",),
         )
+
+
+def test_receive_once_passes_bounded_signal_cli_receive_timeout(monkeypatch, tmp_path):
+    """signal-cli receive must have its own timeout so the daemon
+    polls predictably instead of relying only on subprocess timeout."""
+    from types import SimpleNamespace
+    from soveryn.agents.signal_bridge import client as client_mod
+
+    monkeypatch.setattr(client_mod, "_SIGNAL_CLI_LOCK_PATH", tmp_path / "lock")
+    seen = {}
+
+    def fake_run(args, *, capture_output, text, timeout):
+        seen["args"] = args
+        seen["timeout"] = timeout
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(client_mod.subprocess, "run", fake_run)
+
+    receive_once(
+        signal_cli_bin="/usr/local/bin/signal-cli",
+        bot_number="+19102489392",
+        timeout_seconds=7,
+    )
+
+    assert seen["args"] == [
+        "/usr/local/bin/signal-cli", "-a", "+19102489392",
+        "--output", "json", "receive", "--timeout", "7",
+        "--max-messages", "10",
+    ]
+    assert seen["timeout"] == 17
 
 
 # ─── signal-cli serializer lock ─────────────────────────────────────────────

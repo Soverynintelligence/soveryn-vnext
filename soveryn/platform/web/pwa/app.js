@@ -463,7 +463,12 @@ async function renderVoiceView($view, { tid, agent }) {
     back();
   };
 
-  await startVoiceCall({ tid, agent });
+  // Fire-and-forget — let the renderer resolve so renderTop can append the
+  // view to the DOM. startVoiceCall's voiceSetState() calls look up #voice-orb
+  // and #voice-status via document.getElementById, which only succeed once
+  // the view is mounted. If we await here, setRemoteDescription resolves
+  // before the view appends and the status sticks at "connecting…".
+  startVoiceCall({ tid, agent });
 }
 
 async function loadAndRenderHistory(tid, currentThreadAgent, $view) {

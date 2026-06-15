@@ -168,10 +168,15 @@ def receive_once(
     *, signal_cli_bin: str, bot_number: str, timeout_seconds: float = 30.0,
 ) -> tuple[InboundMessage, ...]:
     """Drain pending messages from the server. Blocks up to timeout."""
+    cli_timeout = max(1, int(timeout_seconds))
     with _signal_cli_lock():
         result = subprocess.run(
-            [signal_cli_bin, "-a", bot_number, "--output", "json", "receive"],
-            capture_output=True, text=True, timeout=timeout_seconds,
+            [
+                signal_cli_bin, "-a", bot_number, "--output", "json",
+                "receive", "--timeout", str(cli_timeout),
+                "--max-messages", "10",
+            ],
+            capture_output=True, text=True, timeout=cli_timeout + 10,
         )
     if result.returncode != 0:
         raise SignalCliError(

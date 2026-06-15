@@ -170,7 +170,8 @@ def _decode_chunk_to_pcm(audio_bytes: bytes, expected_sr: int) -> bytes:
 
 def build_tts_service(
     *,
-    voice_id: str,
+    agent_name: str,
+    elevenlabs_voice_id: str | None,
     elevenlabs_api_key: str | None,
     aiohttp_session: Any | None = None,
     primary: str | None = None,
@@ -180,6 +181,10 @@ def build_tts_service(
 
     Selection precedence: ``primary`` arg > ``SOVEREIGN_TTS_PRIMARY`` env
     > ``DEFAULT_PRIMARY`` (``"f5tts"``).
+
+    ``agent_name`` is the registry key the local F5-TTS service keys on
+    (e.g. ``"aetheria"``); ``elevenlabs_voice_id`` is the cloud UUID for
+    the fallback provider. Each provider gets the voice_id shape it expects.
 
     ``f5tts_url`` overrides the local service URL; useful for tests.
     ``aiohttp_session`` is accepted for API parity with the previous
@@ -195,14 +200,14 @@ def build_tts_service(
         )
         return ProviderBackedTTSService(
             provider=provider,
-            voice_id=voice_id,
+            voice_id=agent_name,
             sample_rate=F5TTS_SAMPLE_RATE,
         )
 
     if selection == "elevenlabs":
-        if not elevenlabs_api_key:
+        if not elevenlabs_api_key or not elevenlabs_voice_id:
             raise ValueError(
-                "SOVEREIGN_TTS_PRIMARY=elevenlabs requires elevenlabs_api_key"
+                "SOVEREIGN_TTS_PRIMARY=elevenlabs requires elevenlabs_api_key + elevenlabs_voice_id"
             )
         provider = ElevenLabsTTSProvider(
             api_key=elevenlabs_api_key,
@@ -210,7 +215,7 @@ def build_tts_service(
         )
         return ProviderBackedTTSService(
             provider=provider,
-            voice_id=voice_id,
+            voice_id=elevenlabs_voice_id,
             sample_rate=ELEVENLABS_SAMPLE_RATE,
         )
 

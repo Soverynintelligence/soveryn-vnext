@@ -103,6 +103,7 @@ def test_build_pipeline_constructs_all_processors():
         connection = SmallWebRTCConnection()
         return build_aetheria_voice_pipeline(
             agent_loop=agent_loop,
+            agent_name="aetheria",
             voice_id="voice-test-id",
             parakeet_url="http://127.0.0.1:8087",
             elevenlabs_api_key="test-key",
@@ -144,6 +145,7 @@ def test_build_pipeline_passes_parakeet_url_through_to_stt_service():
         connection = SmallWebRTCConnection()
         return build_aetheria_voice_pipeline(
             agent_loop=_FakeAgentLoop(),
+            agent_name="aetheria",
             voice_id="v",
             parakeet_url="http://10.0.0.5:9999",
             elevenlabs_api_key="k",
@@ -170,6 +172,7 @@ def test_build_pipeline_wires_voice_id_into_tts_service():
             connection = SmallWebRTCConnection()
             return build_aetheria_voice_pipeline(
                 agent_loop=_FakeAgentLoop(),
+                agent_name="aetheria",
                 voice_id="aetheria",
                 parakeet_url="http://127.0.0.1:8087",
                 elevenlabs_api_key="k",

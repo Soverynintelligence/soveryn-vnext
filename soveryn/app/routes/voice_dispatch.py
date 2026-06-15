@@ -105,6 +105,7 @@ def negotiate_and_dispatch_voice(
             loop.run_until_complete(run_aetheria_voice_session(
                 webrtc_connection=connection,
                 agent_loop=agent_loop,
+                agent_name=agent_name,
                 session_id=session_id,
                 elevenlabs_api_key=elevenlabs_api_key,
                 voice_id=voice_id,

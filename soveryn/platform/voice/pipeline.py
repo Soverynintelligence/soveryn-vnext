@@ -300,6 +300,7 @@ class AgentLoopBridge(FrameProcessor):
 def build_aetheria_voice_pipeline(
     *,
     agent_loop: AgentLoop,
+    agent_name: str,
     voice_id: str,
     parakeet_url: str,
     elevenlabs_api_key: str,
@@ -364,7 +365,8 @@ def build_aetheria_voice_pipeline(
     # back to the cloud provider without touching code. The wrapper handles
     # sample-rate negotiation; both paths emit TTSAudioRawFrame downstream.
     tts = build_tts_service(
-        voice_id=voice_id,
+        agent_name=agent_name,
+        elevenlabs_voice_id=voice_id,
         elevenlabs_api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
     )
@@ -397,6 +399,7 @@ async def run_aetheria_voice_session(
     *,
     webrtc_connection: SmallWebRTCConnection,
     agent_loop: AgentLoop,
+    agent_name: str,
     session_id: str,
     elevenlabs_api_key: str,
     voice_id: str,
@@ -412,6 +415,7 @@ async def run_aetheria_voice_session(
     """
     _, worker = build_aetheria_voice_pipeline(
         agent_loop=agent_loop,
+        agent_name=agent_name,
         voice_id=voice_id,
         parakeet_url=parakeet_url,
         elevenlabs_api_key=elevenlabs_api_key,

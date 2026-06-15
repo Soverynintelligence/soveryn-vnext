@@ -193,7 +193,8 @@ def test_build_tts_service_defaults_to_f5tts():
     prior = os.environ.pop("SOVEREIGN_TTS_PRIMARY", None)
     try:
         service = build_tts_service(
-            voice_id="aetheria",
+            agent_name="aetheria",
+            elevenlabs_voice_id=None,
             elevenlabs_api_key=None,
         )
         assert service.provider_name == "f5tts"
@@ -208,7 +209,8 @@ def test_build_tts_service_env_selects_elevenlabs():
     os.environ["SOVEREIGN_TTS_PRIMARY"] = "elevenlabs"
     try:
         service = build_tts_service(
-            voice_id="cloud-voice-id",
+            agent_name="aetheria",
+            elevenlabs_voice_id="cloud-voice-id",
             elevenlabs_api_key="sk-test",
         )
         assert service.provider_name == "elevenlabs"
@@ -225,7 +227,11 @@ def test_build_tts_service_elevenlabs_requires_api_key():
     os.environ["SOVEREIGN_TTS_PRIMARY"] = "elevenlabs"
     try:
         with pytest.raises(ValueError, match="elevenlabs_api_key"):
-            build_tts_service(voice_id="v", elevenlabs_api_key=None)
+            build_tts_service(
+                agent_name="aetheria",
+                elevenlabs_voice_id="v",
+                elevenlabs_api_key=None,
+            )
     finally:
         if prior is None:
             os.environ.pop("SOVEREIGN_TTS_PRIMARY", None)
@@ -238,7 +244,8 @@ def test_build_tts_service_explicit_primary_overrides_env():
     os.environ["SOVEREIGN_TTS_PRIMARY"] = "elevenlabs"
     try:
         service = build_tts_service(
-            voice_id="aetheria",
+            agent_name="aetheria",
+            elevenlabs_voice_id=None,
             elevenlabs_api_key=None,
             primary="f5tts",
         )
@@ -252,7 +259,12 @@ def test_build_tts_service_explicit_primary_overrides_env():
 
 def test_build_tts_service_unknown_primary_raises():
     with pytest.raises(ValueError, match="unknown SOVEREIGN_TTS_PRIMARY"):
-        build_tts_service(voice_id="v", elevenlabs_api_key="k", primary="bogus")
+        build_tts_service(
+            agent_name="aetheria",
+            elevenlabs_voice_id="v",
+            elevenlabs_api_key="k",
+            primary="bogus",
+        )
 
 
 def test_default_primary_is_f5tts():
