@@ -54,9 +54,7 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
-from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
@@ -65,6 +63,10 @@ from pipecat.workers.runner import WorkerRunner
 
 from soveryn.agents.loop import AgentLoop, TTSTokenEvent
 from soveryn.platform.voice.sanitize import sanitize_for_tts
+from soveryn.platform.voice.sovereign_tts import (
+    ProviderBackedTTSService,
+    build_tts_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -357,19 +359,14 @@ def build_aetheria_voice_pipeline(
 
     bridge = AgentLoopBridge(agent_loop=agent_loop, session_id=session_id)
 
-    # Pipecat 1.3.0 moved voice selection into a Settings object; the bare
-    # voice_id kwarg still works but emits a DeprecationWarning. Use the
-    # current shape so we're not starting on a deprecated symbol.
-    tts = ElevenLabsHttpTTSService(
-        api_key=elevenlabs_api_key,
+    # TTS provider is selected via SOVEREIGN_TTS_PRIMARY (default "f5tts",
+    # local F5-TTS on :8088). Set SOVEREIGN_TTS_PRIMARY=elevenlabs to roll
+    # back to the cloud provider without touching code. The wrapper handles
+    # sample-rate negotiation; both paths emit TTSAudioRawFrame downstream.
+    tts = build_tts_service(
+        voice_id=voice_id,
+        elevenlabs_api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
-        settings=ElevenLabsHttpTTSService.Settings(voice=voice_id),
-        # SENTENCE aggregation collapses ~13 per-token API calls per short reply
-        # into 1-3 sentence calls. Adds ~200ms first-audio latency but eliminates
-        # the per-chunk prosody cuts that made playback sound "jumpy" and the
-        # per-chunk 200ms API overhead that made total response "slow as
-        # molasses" (observed 2026-06-11 first live voice test).
-        text_aggregation_mode=TextAggregationMode.SENTENCE,
     )
 
     pipeline = Pipeline([

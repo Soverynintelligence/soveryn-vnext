@@ -37,9 +37,7 @@ from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineWorker
 from pipecat.processors.audio.vad_processor import VADProcessor
 from pipecat.processors.frame_processor import FrameDirection
-from pipecat.services.elevenlabs.tts import ElevenLabsHttpTTSService
 from pipecat.services.stt_service import SegmentedSTTService
-from pipecat.services.tts_service import TextAggregationMode
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
 from soveryn.agents.loop import TTSTokenEvent
@@ -49,6 +47,7 @@ from soveryn.platform.voice.pipeline import (
     ParakeetSTTService,
     build_aetheria_voice_pipeline,
 )
+from soveryn.platform.voice.sovereign_tts import ProviderBackedTTSService
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -125,12 +124,12 @@ def test_build_pipeline_constructs_all_processors():
     assert "VADProcessor" in type_names
     assert "ParakeetSTTService" in type_names
     assert "AgentLoopBridge" in type_names
-    assert "ElevenLabsHttpTTSService" in type_names
+    assert "ProviderBackedTTSService" in type_names
 
     vad_idx = type_names.index("VADProcessor")
     stt_idx = type_names.index("ParakeetSTTService")
     bridge_idx = type_names.index("AgentLoopBridge")
-    tts_idx = type_names.index("ElevenLabsHttpTTSService")
+    tts_idx = type_names.index("ProviderBackedTTSService")
     assert vad_idx < stt_idx < bridge_idx < tts_idx
 
     # Bridge holds the agent_loop + session_id passed at construction
@@ -158,27 +157,34 @@ def test_build_pipeline_passes_parakeet_url_through_to_stt_service():
 
 
 def test_build_pipeline_wires_voice_id_into_tts_service():
-    """The configured voice_id reaches ElevenLabsHttpTTSService."""
-    async def _build():
-        connection = SmallWebRTCConnection()
-        return build_aetheria_voice_pipeline(
-            agent_loop=_FakeAgentLoop(),
-            voice_id="aetheria-voice-xyz",
-            parakeet_url="http://127.0.0.1:8087",
-            elevenlabs_api_key="k",
-            session_id="s",
-            webrtc_connection=connection,
-        )
+    """The configured voice_id reaches the provider-backed TTS service.
 
-    pipeline, _ = asyncio.run(_build())
-    tts = next(p for p in pipeline._processors if isinstance(p, ElevenLabsHttpTTSService))
-    # Pipecat 1.3.0 stores the configured voice on tts._settings.voice
-    # (Settings dataclass behind a private attr). Fall back to legacy attrs
-    # for older Pipecat versions in case the upstream API drifts.
-    settings = getattr(tts, "_settings", None)
-    voice_attr = getattr(settings, "voice", None) or getattr(tts, "_voice_id", None)
-    assert voice_attr == "aetheria-voice-xyz"
-    assert getattr(tts, "_text_aggregation_mode", None) == TextAggregationMode.TOKEN
+    The default provider is F5-TTS (SOVEREIGN_TTS_PRIMARY=f5tts); the
+    voice_id selects the server-side voice (e.g. "aetheria").
+    """
+    import os
+    # Force the local provider so the test doesn't depend on env state.
+    prior = os.environ.pop("SOVEREIGN_TTS_PRIMARY", None)
+    try:
+        async def _build():
+            connection = SmallWebRTCConnection()
+            return build_aetheria_voice_pipeline(
+                agent_loop=_FakeAgentLoop(),
+                voice_id="aetheria",
+                parakeet_url="http://127.0.0.1:8087",
+                elevenlabs_api_key="k",
+                session_id="s",
+                webrtc_connection=connection,
+            )
+
+        pipeline, _ = asyncio.run(_build())
+    finally:
+        if prior is not None:
+            os.environ["SOVEREIGN_TTS_PRIMARY"] = prior
+
+    tts = next(p for p in pipeline._processors if isinstance(p, ProviderBackedTTSService))
+    assert tts.voice_id == "aetheria"
+    assert tts.provider_name == "f5tts"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
