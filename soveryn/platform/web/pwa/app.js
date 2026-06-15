@@ -112,7 +112,33 @@ async function renderThread(tid, agent) {
     const secret = await loadSecret();
     const text = document.getElementById('compose').value;
     if (!text.trim()) return;
-    // Fire request; rendering loop lands in Task 13
+    const msgsEl = document.getElementById('messages');
+    // Echo user message (Jon's messages stay neutral — no agent class
+    // per spec §14 Q4; only agent replies carry the asymmetric weight).
+    const userMsg = document.createElement('div');
+    userMsg.className = 'message';
+    const userLabel = document.createElement('div');
+    userLabel.className = 'agent-label';
+    userLabel.textContent = 'YOU';
+    const userContent = document.createElement('div');
+    userContent.className = 'message-content';
+    userContent.textContent = text;
+    userMsg.appendChild(userLabel);
+    userMsg.appendChild(userContent);
+    msgsEl.appendChild(userMsg);
+    document.getElementById('compose').value = '';
+    // Stream agent reply — agent class drives the asymmetric styling
+    // (Aetheria gets the Sovereign Edge; Vett/Scotty stay compact).
+    const agentMsg = document.createElement('div');
+    agentMsg.className = `message agent-${currentThreadAgent}`;
+    const agentLabel = document.createElement('div');
+    agentLabel.className = 'agent-label';
+    agentLabel.textContent = currentThreadAgent.toUpperCase();
+    const contentEl = document.createElement('div');
+    contentEl.className = 'message-content';
+    agentMsg.appendChild(agentLabel);
+    agentMsg.appendChild(contentEl);
+    msgsEl.appendChild(agentMsg);
     const r = await fetch(`/m/threads/${tid}/send_stream`, {
       method: 'POST',
       headers: {
@@ -127,25 +153,37 @@ async function renderThread(tid, agent) {
         client_ts: new Date().toISOString(),
       }),
     });
-    // Stub rendering — Task 13 swaps this for streamed message DOM with
-    // `msg.className = \`message agent-${currentThreadAgent}\`` driving the
-    // Sovereign Edge contract.
-    const msgs = document.getElementById('messages');
-    const msg = document.createElement('div');
-    msg.className = `message agent-${currentThreadAgent}`;
-    const label = document.createElement('div');
-    label.className = 'agent-label';
-    label.textContent = currentThreadAgent.toUpperCase();
-    const content = document.createElement('div');
-    content.className = 'message-content';
-    try {
-      content.textContent = JSON.stringify(await r.json(), null, 2);
-    } catch (e) {
-      content.textContent = await r.text();
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n\n')) !== -1) {
+        const evt = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        if (!evt.startsWith('data: ')) continue;
+        let payload;
+        try {
+          payload = JSON.parse(evt.slice(6));
+        } catch (e) {
+          continue;
+        }
+        if (payload.type === 'token') {
+          contentEl.textContent += payload.delta;
+        } else if (payload.type === 'tool_call') {
+          console.log('tool_call', payload);
+        } else if (payload.type === 'tool_result') {
+          console.log('tool_result', payload);
+        } else if (payload.type === 'done') {
+          // final marker — content already accumulated
+        } else if (payload.type === 'error') {
+          contentEl.textContent += `\n[error: ${payload.message}]`;
+        }
+      }
     }
-    msg.appendChild(label);
-    msg.appendChild(content);
-    msgs.appendChild(msg);
   };
 }
 
