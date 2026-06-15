@@ -26,6 +26,10 @@ Thumbs.db
 .superpowers/
 # Runtime data stores — live state, not artifacts
 data/lattice/*.db*
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
 data/ares/
 data/telemetry/
 # Conversation + lattice DBs, pinned memory, salience, .migrated markers.
