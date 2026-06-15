@@ -432,6 +432,24 @@ def create_app(
         )
         # Scotty: not registered by default. He reports through threads Jon initiates.
 
+        # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
+        # that can emit deliberate_share also get to introspect their own
+        # outbound (delivery + read state) so they can decide whether to
+        # follow up. Scope-locked to the calling agent.
+        from soveryn.agents.messenger_introspect_tool import (
+            build_list_my_outbound_tool,
+        )
+        tool_registry.register(
+            build_list_my_outbound_tool(
+                store=messenger_store, owner_agent="aetheria",
+            )
+        )
+        tool_registry.register(
+            build_list_my_outbound_tool(
+                store=messenger_store, owner_agent="vett",
+            )
+        )
+
         # Aetheria-only dream-recall tools (recent_dreams + search_dreams).
         # NOT auto-injected — she queries her own dream layer when she
         # chooses to look. Restricted to layer='dream' on the nodes table.

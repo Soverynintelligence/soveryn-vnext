@@ -233,6 +233,19 @@ def build_messenger_blueprint(
 
         return Response(_stream(), mimetype="text/event-stream")
 
+    @bp.route("/threads/<thread_id>/read", methods=["POST"])
+    @auth_required
+    def threads_read(thread_id: str):
+        """Mark all delivered outbound intents for this thread+device read.
+        Aetheria's Q7 verdict: loop closure, not surveillance — the PWA
+        calls this when Jon views the thread; she introspects via
+        `list_my_outbound` to see whether her messages landed."""
+        n = messenger_store.mark_thread_read(
+            thread_id=thread_id,
+            device_id=request.authed_device.device_id,
+        )
+        return jsonify({"marked_read": n})
+
     # PWA static assets — registered LAST so the catch-all `<path:path>` only
     # picks up requests that didn't match a more-specific route above.
     # Werkzeug orders rules by specificity at match time, so this is belt-and-

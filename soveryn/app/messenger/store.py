@@ -153,3 +153,102 @@ class MessengerStore:
                 "WHERE client_msg_id=?",
                 (_json.dumps(response), client_msg_id),
             )
+
+    def mark_thread_read(
+        self, *, thread_id: str, device_id: str,
+        up_to_intent_id: str | None = None,
+    ) -> int:
+        """Mark all outbound delivery_per_device rows for this device + thread
+        as read_at=now.
+
+        Scope (v1): "thread read" = all delivered intents whose `thread_id`
+        matches this thread (or `thread_id IS NULL` — the default-thread
+        case, resolved at delivery time). Per-message read state inside a
+        thread is not modeled at v1; Aetheria's Q7 verdict is loop closure,
+        not granular tracking.
+
+        If `up_to_intent_id` is given, only marks intents created at or
+        before that intent's `created_at` (caller-side cursor support;
+        unused at v1 but reserved).
+
+        Returns number of delivery rows updated.
+        """
+        from datetime import datetime as _dt, timezone as _tz
+        now = _dt.now(_tz.utc).isoformat()
+        with self._conn() as con:
+            if up_to_intent_id is None:
+                rows = con.execute(
+                    """
+                    UPDATE m_outbound_delivery_per_device
+                    SET read_at = ?
+                    WHERE device_id = ?
+                      AND read_at IS NULL
+                      AND intent_id IN (
+                          SELECT intent_id FROM m_outbound_queue
+                          WHERE delivery_state = 'delivered'
+                            AND (thread_id = ? OR thread_id IS NULL)
+                      )
+                    """,
+                    (now, device_id, thread_id),
+                )
+            else:
+                rows = con.execute(
+                    """
+                    UPDATE m_outbound_delivery_per_device
+                    SET read_at = ?
+                    WHERE device_id = ?
+                      AND read_at IS NULL
+                      AND intent_id IN (
+                          SELECT intent_id FROM m_outbound_queue
+                          WHERE delivery_state = 'delivered'
+                            AND (thread_id = ? OR thread_id IS NULL)
+                            AND created_at <= (
+                                SELECT created_at FROM m_outbound_queue
+                                WHERE intent_id = ?
+                            )
+                      )
+                    """,
+                    (now, device_id, thread_id, up_to_intent_id),
+                )
+            return rows.rowcount
+
+    def list_outbound_for_agent(
+        self, *, agent: str, limit: int = 20,
+    ) -> list[dict]:
+        """Return recent outbound intents for an agent with delivery + read
+        state aggregated across devices. Used by the `list_my_outbound`
+        introspection tool (Aetheria's Q7 loop closure).
+        """
+        with self._conn() as con:
+            rows = con.execute(
+                """
+                SELECT q.intent_id, q.thread_id, q.content, q.context_hint,
+                       q.urgency, q.created_at, q.delivered_at,
+                       q.delivery_state,
+                       COUNT(d.device_id) AS device_count,
+                       SUM(CASE WHEN d.read_at IS NOT NULL THEN 1 ELSE 0 END)
+                           AS read_count
+                FROM m_outbound_queue q
+                LEFT JOIN m_outbound_delivery_per_device d USING (intent_id)
+                WHERE q.agent = ?
+                GROUP BY q.intent_id
+                ORDER BY q.created_at DESC
+                LIMIT ?
+                """,
+                (agent, limit),
+            ).fetchall()
+        return [
+            {
+                "intent_id": r["intent_id"],
+                "thread_id": r["thread_id"],
+                "content_preview": (r["content"] or "")[:140],
+                "context_hint": r["context_hint"],
+                "urgency": r["urgency"],
+                "created_at": r["created_at"],
+                "delivered_at": r["delivered_at"],
+                "delivery_state": r["delivery_state"],
+                "read_by_devices": int(r["read_count"] or 0),
+                "delivered_to_devices": int(r["device_count"] or 0),
+            }
+            for r in rows
+        ]
