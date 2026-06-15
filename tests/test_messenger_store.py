@@ -35,3 +35,36 @@ def test_outbound_queue_schema(store):
     assert {"intent_id", "user_id", "agent", "thread_id", "content",
             "context_hint", "urgency", "triggered_by", "created_at",
             "delivered_at", "delivery_state"} <= cols
+
+
+def test_idempotency_first_call_records_and_returns_none(store):
+    """First time we see client_msg_id, record it and return None — caller
+    should proceed with the operation."""
+    cached = store.idempotency_lookup_or_record(
+        client_msg_id="abc", thread_id="t1", device_id="d1",
+    )
+    assert cached is None
+
+
+def test_idempotency_second_call_returns_cached(store):
+    """Second call with same client_msg_id returns the cached response —
+    caller should NOT re-process."""
+    store.idempotency_lookup_or_record(
+        client_msg_id="abc", thread_id="t1", device_id="d1",
+    )
+    cached = store.idempotency_lookup_or_record(
+        client_msg_id="abc", thread_id="t1", device_id="d1",
+    )
+    # First record had no response yet; cached is just an empty marker
+    assert cached == {}
+
+
+def test_idempotency_store_response(store):
+    store.idempotency_lookup_or_record(
+        client_msg_id="abc", thread_id="t1", device_id="d1",
+    )
+    store.idempotency_set_response(client_msg_id="abc", response={"ok": True})
+    cached = store.idempotency_lookup_or_record(
+        client_msg_id="abc", thread_id="t1", device_id="d1",
+    )
+    assert cached == {"ok": True}

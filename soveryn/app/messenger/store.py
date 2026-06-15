@@ -114,3 +114,42 @@ class MessengerStore:
         with self._conn() as con:
             rows = con.execute(f"PRAGMA table_info({table})").fetchall()
         return [r["name"] for r in rows]
+
+    def idempotency_lookup_or_record(
+        self, *, client_msg_id: str, thread_id: str, device_id: str,
+    ) -> dict | None:
+        """Returns None if this is the first time we've seen client_msg_id
+        (the caller should proceed). Returns the cached response dict if we've
+        seen it before (the caller should return the cached value without
+        re-processing)."""
+        import json as _json
+        from datetime import datetime as _dt, timezone as _tz
+        with self._conn() as con:
+            row = con.execute(
+                "SELECT response_cache FROM m_message_idempotency WHERE client_msg_id=?",
+                (client_msg_id,),
+            ).fetchone()
+            if row is not None:
+                cached = row["response_cache"]
+                return _json.loads(cached) if cached else {}
+            con.execute(
+                "INSERT INTO m_message_idempotency "
+                "(client_msg_id, thread_id, device_id, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (client_msg_id, thread_id, device_id,
+                 _dt.now(_tz.utc).isoformat()),
+            )
+        return None
+
+    def idempotency_set_response(
+        self, *, client_msg_id: str, response: dict,
+    ) -> None:
+        """Store the response for a previously-recorded client_msg_id so a
+        retry hits the cache instead of re-processing."""
+        import json as _json
+        with self._conn() as con:
+            con.execute(
+                "UPDATE m_message_idempotency SET response_cache=? "
+                "WHERE client_msg_id=?",
+                (_json.dumps(response), client_msg_id),
+            )
