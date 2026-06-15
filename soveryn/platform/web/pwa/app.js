@@ -92,6 +92,26 @@ const AGENT_TAGLINE = {
   scotty:   'Execution + bounded fixes',
 };
 
+// Which agents have voice configured (from /m/voice/agents). Cached for the
+// session — voice config doesn't change between page loads.
+let _voiceAgentsCache = null;
+async function fetchVoiceAgents() {
+  if (_voiceAgentsCache !== null) return _voiceAgentsCache;
+  const secret = await loadSecret();
+  if (!secret) return [];
+  try {
+    const r = await fetch('/m/voice/agents', {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    if (!r.ok) return [];
+    const data = await r.json();
+    _voiceAgentsCache = data.agents || [];
+    return _voiceAgentsCache;
+  } catch (e) {
+    return [];
+  }
+}
+
 // Relative-time helper for thread cards ("2h", "now", "Mon").
 // Falls back to date for >6d.
 function relativeTime(iso) {
@@ -244,6 +264,7 @@ const VIEW_RENDERERS = {
   'thread-list': renderThreadListView,
   'agent-pick':  renderAgentPickView,
   thread:       renderThreadView,
+  voice:        renderVoiceView,
 };
 
 async function renderPairingView($view) {
@@ -380,12 +401,24 @@ async function renderAgentPickView($view) {
 
 async function renderThreadView($view, { tid, agent }) {
   const currentThreadAgent = agent || 'aetheria';
+  const voiceAgents = await fetchVoiceAgents();
+  const canCall = voiceAgents.includes(currentThreadAgent);
   setHeader({
     title: currentThreadAgent.toUpperCase(),
     agent: currentThreadAgent,
     showBack: true,
-    rightHtml: `<span class="agent-dot agent-${currentThreadAgent}" style="margin:0 12px"></span>`,
+    rightHtml:
+      (canCall
+        ? `<button class="call-btn" id="hdr-call" aria-label="Voice call">&#9742;</button>`
+        : '') +
+      `<span class="agent-dot agent-${currentThreadAgent}" style="margin:0 12px"></span>`,
   });
+  if (canCall) {
+    const callBtn = document.getElementById('hdr-call');
+    if (callBtn) callBtn.onclick = () => push({
+      kind: 'voice', params: { tid, agent: currentThreadAgent },
+    });
+  }
   $view.innerHTML = `
     <div id="messages"></div>
     <div class="compose-box">
@@ -402,6 +435,35 @@ async function renderThreadView($view, { tid, agent }) {
   // 2026-06-15 bug Jon flagged: re-entering a thread used to render an
   // empty list because the client never fetched history.
   await loadAndRenderHistory(tid, currentThreadAgent, $view);
+}
+
+async function renderVoiceView($view, { tid, agent }) {
+  setHeader({
+    title: agent.toUpperCase(),
+    agent,
+    showBack: true,
+    rightHtml: '',
+    onBack: async () => {
+      await endVoiceCall();
+      back();
+    },
+  });
+
+  $view.classList.add('voice-view');
+  $view.innerHTML = `
+    <div class="voice-orb" id="voice-orb" data-state="idle"></div>
+    <div class="voice-title">${escapeHtml(agent.toUpperCase())} &mdash; LIVE</div>
+    <div class="voice-status" id="voice-status">connecting&hellip;</div>
+    <div class="voice-error" id="voice-error"></div>
+    <button class="voice-hangup" id="voice-hangup">END CALL</button>
+  `;
+
+  $view.querySelector('#voice-hangup').onclick = async () => {
+    await endVoiceCall();
+    back();
+  };
+
+  await startVoiceCall({ tid, agent });
 }
 
 async function loadAndRenderHistory(tid, currentThreadAgent, $view) {
@@ -635,6 +697,168 @@ function renderInstallBanner(ios) {
       banner.remove();
     };
   }
+}
+
+// --- Voice call lifecycle --------------------------------------------------
+// One voice session at a time. Started by renderVoiceView, torn down on
+// back/end-call. Mirrors voice_client.js but POSTs to the messenger's
+// thread-bound offer route and renders into .voice-orb / #voice-status.
+
+const VOICE_STATE = {
+  IDLE: 'idle', LISTENING: 'listening', HEARING: 'hearing',
+  THINKING: 'thinking', SPEAKING: 'speaking', INTERRUPTED: 'interrupted',
+};
+const VOICE_THRESHOLD = 0.04;
+const VOICE_SILENCE_MS = 800;
+
+let voicePC = null;
+let voiceMicStream = null;
+let voiceAudioCtx = null;
+let voiceOutAnalyser = null;
+let voiceInAnalyser = null;
+let voiceState = VOICE_STATE.IDLE;
+let voiceRAF = null;
+let voiceLastSpokenAt = 0;
+
+function voiceSetState(s) {
+  voiceState = s;
+  const orb = document.getElementById('voice-orb');
+  const st = document.getElementById('voice-status');
+  if (orb) orb.dataset.state = s;
+  if (st) st.textContent = s;
+}
+
+function voiceShowError(msg) {
+  const e = document.getElementById('voice-error');
+  if (!e) return;
+  e.textContent = msg;
+  e.classList.add('visible');
+  setTimeout(() => e.classList.remove('visible'), 5000);
+}
+
+function voiceAmp(an) {
+  const data = new Uint8Array(an.frequencyBinCount);
+  an.getByteTimeDomainData(data);
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = (data[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / data.length);
+}
+
+function voiceTick() {
+  if (!voiceOutAnalyser) return;
+  const orb = document.getElementById('voice-orb');
+  if (!orb) return;  // view torn down
+  const out = voiceAmp(voiceOutAnalyser);
+  const inn = voiceInAnalyser ? voiceAmp(voiceInAnalyser) : 0;
+  const now = performance.now();
+  const userSpeaking = out > VOICE_THRESHOLD;
+  const botSpeaking  = inn > VOICE_THRESHOLD;
+
+  if (botSpeaking && userSpeaking && voiceState === VOICE_STATE.SPEAKING) {
+    voiceSetState(VOICE_STATE.INTERRUPTED);
+    setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+    voiceLastSpokenAt = now;
+  } else if (botSpeaking) {
+    voiceSetState(VOICE_STATE.SPEAKING);
+    const scale = 1.0 + Math.min(0.15, inn * 1.5);
+    orb.style.transform = `scale(${scale})`;
+  } else if (userSpeaking) {
+    voiceSetState(VOICE_STATE.HEARING);
+    voiceLastSpokenAt = now;
+    orb.style.transform = '';
+  } else {
+    if (voiceState === VOICE_STATE.HEARING && now - voiceLastSpokenAt > VOICE_SILENCE_MS) {
+      voiceSetState(VOICE_STATE.THINKING);
+    } else if (voiceState === VOICE_STATE.SPEAKING) {
+      voiceSetState(VOICE_STATE.LISTENING);
+      orb.style.transform = '';
+    } else if (voiceState === VOICE_STATE.THINKING && now - voiceLastSpokenAt > 6000) {
+      voiceSetState(VOICE_STATE.LISTENING);
+    }
+  }
+  voiceRAF = requestAnimationFrame(voiceTick);
+}
+
+async function startVoiceCall({ tid, agent }) {
+  const secret = await loadSecret();
+  try {
+    voiceMicStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
+  } catch (e) {
+    voiceShowError('microphone access denied');
+    return;
+  }
+  voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const outSrc = voiceAudioCtx.createMediaStreamSource(voiceMicStream);
+  voiceOutAnalyser = voiceAudioCtx.createAnalyser();
+  voiceOutAnalyser.fftSize = 256;
+  outSrc.connect(voiceOutAnalyser);
+
+  voicePC = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+  });
+
+  // SmallWebRTCTransport requires both audio AND video transceivers, even
+  // for voice-only sessions. Same pattern as desktop voice_client.js.
+  const audioTransceiver = voicePC.addTransceiver('audio', { direction: 'sendrecv' });
+  const micTrack = voiceMicStream.getAudioTracks()[0];
+  if (micTrack) await audioTransceiver.sender.replaceTrack(micTrack);
+  voicePC.addTransceiver('video', { direction: 'sendrecv' });
+
+  voicePC.ontrack = (ev) => {
+    if (ev.track.kind !== 'audio') return;
+    const stream = new MediaStream([ev.track]);
+    const audioEl = new Audio();
+    audioEl.srcObject = stream;
+    audioEl.autoplay = true;
+    audioEl.play().catch(() => {});
+    voiceInAnalyser = voiceAudioCtx.createAnalyser();
+    voiceInAnalyser.fftSize = 256;
+    voiceAudioCtx.createMediaStreamSource(stream).connect(voiceInAnalyser);
+  };
+
+  try {
+    const offer = await voicePC.createOffer();
+    await voicePC.setLocalDescription(offer);
+    const resp = await fetch(`/m/threads/${tid}/voice/offer`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`signaling failed (${resp.status}): ${txt}`);
+    }
+    const answer = await resp.json();
+    await voicePC.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+    voiceSetState(VOICE_STATE.LISTENING);
+    voiceTick();
+  } catch (e) {
+    console.error('voice start failed:', e);
+    voiceShowError(e.message || 'voice connection failed');
+    await endVoiceCall();
+  }
+}
+
+async function endVoiceCall() {
+  if (voiceRAF) { cancelAnimationFrame(voiceRAF); voiceRAF = null; }
+  if (voicePC) { try { voicePC.close(); } catch (e) {} voicePC = null; }
+  if (voiceMicStream) {
+    for (const t of voiceMicStream.getTracks()) t.stop();
+    voiceMicStream = null;
+  }
+  if (voiceAudioCtx) { try { await voiceAudioCtx.close(); } catch (e) {} voiceAudioCtx = null; }
+  voiceOutAnalyser = null;
+  voiceInAnalyser = null;
+  voiceState = VOICE_STATE.IDLE;
 }
 
 (async function init() {

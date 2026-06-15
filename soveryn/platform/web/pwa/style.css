@@ -369,3 +369,98 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   font-size: 1.4rem;
   padding: 0 6px;
 }
+
+/* ---------------------------------------------------------------------
+ * VOICE VIEW — full-screen orb under Aetheria's design contract.
+ * Recoloring of the original twilight-violet orb (/static/voice/orb.css)
+ * under --accent: #c5a059 so the live call stays inside the Void-Gold
+ * surface. Same five-state machine as the original.
+ * --------------------------------------------------------------------- */
+.voice-view {
+  position: absolute;
+  inset: 0;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.voice-orb {
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #d4b577 0%, #c5a059 60%, #8a6f3a 100%);
+  box-shadow: 0 0 80px rgba(197, 160, 89, 0.4);
+  transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
+}
+.voice-orb[data-state="idle"]      { transform: scale(0.95); opacity: 0.45; }
+.voice-orb[data-state="listening"] { transform: scale(1.0); opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
+.voice-orb[data-state="hearing"]   { transform: scale(1.05); opacity: 1.0; box-shadow: 0 0 120px rgba(197, 160, 89, 0.6); }
+.voice-orb[data-state="thinking"]  { transform: scale(1.0); opacity: 0.9; animation: voice-pulse-think 1.2s ease-in-out infinite; }
+.voice-orb[data-state="speaking"]  { opacity: 1.0; box-shadow: 0 0 160px rgba(197, 160, 89, 0.7); }
+.voice-orb[data-state="interrupted"] { transform: scale(0.85); opacity: 0.6; transition: transform 100ms, opacity 100ms; }
+@keyframes voice-pulse-listen {
+  0%, 100% { transform: scale(1.0); }
+  50%      { transform: scale(1.04); }
+}
+@keyframes voice-pulse-think {
+  0%, 100% { transform: scale(1.0); opacity: 0.85; }
+  50%      { transform: scale(1.02); opacity: 1.0; }
+}
+.voice-title {
+  margin-top: 36px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.voice-status {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  color: rgba(212, 212, 212, 0.6);
+  text-transform: uppercase;
+}
+.voice-hangup {
+  position: absolute;
+  bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  background: transparent;
+  border: 1px solid rgba(197, 160, 89, 0.6);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.25em;
+  padding: 14px 32px;
+  border-radius: 32px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.voice-hangup:active { background: rgba(197, 160, 89, 0.1); }
+.voice-error {
+  position: absolute;
+  bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+  color: #d49696;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+.voice-error.visible { opacity: 1; }
+
+/* Call button in thread header — only rendered when agent has voice. */
+.call-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-right: 4px;
+}
+.call-btn:active { opacity: 0.6; }
