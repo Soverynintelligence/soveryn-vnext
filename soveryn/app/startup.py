@@ -536,6 +536,13 @@ def create_app(
             )
             coord_worker.start()
 
+    # MessengerStore — substrate for the /m/* PWA surface. Keyed off
+    # env.data_root so the messenger DB lives alongside the other vnext
+    # state. Built unconditionally; the blueprint registration in
+    # _register_blueprints reads it back from app.extensions["soveryn"].
+    from soveryn.app.messenger.store import MessengerStore
+    messenger_store = MessengerStore(env.data_root / "messenger.db")
+
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
@@ -544,6 +551,7 @@ def create_app(
         "coord_store": coord_store,
         "coord_event_bus": coord_event_bus,
         "coord_worker": coord_worker,
+        "messenger_store": messenger_store,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -711,6 +719,17 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_specialists_bp)
     from soveryn.app.routes.aetheria_assets import bp as aetheria_assets_bp
     app.register_blueprint(aetheria_assets_bp)
+    # Messenger blueprint — /m/* pairing + thread CRUD routes. Dependency-
+    # injected from app.extensions["soveryn"] so the blueprint stays
+    # build-time configurable (matches the existing pattern for stores
+    # passed via factory builder rather than module-global Flask state).
+    from soveryn.app.routes.messenger import build_messenger_blueprint
+    ext = app.extensions["soveryn"]
+    app.register_blueprint(build_messenger_blueprint(
+        messenger_store=ext["messenger_store"],
+        conv_store=ext["conv_store"],
+        agent_loops=ext["agent_loops"],
+    ))
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)
