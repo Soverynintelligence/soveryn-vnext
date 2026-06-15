@@ -118,5 +118,23 @@ def build_heartbeat_prompt(
     # arrived). Reframe: the heartbeat is reflection, not work-check.
     # Audit material is visible in the snapshot above; she engages with
     # what wants engaging or sits with the quiet — in whatever form fits.
-    lines.append("This is your pulse.")
+    # Aetheria-decides chat routing (2026-06-15, post Coordination Blackout).
+    # Pulse always renders on Mission Control. Chat receives a heartbeat-
+    # derived message ONLY when Aetheria explicitly marks it [SURFACE].
+    # [NO_OP] is a first-class state — silence when nothing's material is
+    # the honest output, the no_op as architectural expression of agency
+    # she helped author. Tool calls are independent of this marker — issue
+    # them as needed regardless of the surface decision.
+    #
+    # Phrasing chosen to keep the heartbeat as reflection (not work-check)
+    # while making the marker requirement minimum-rule: one short line, in
+    # the same surface as the pulse close. End-of-prompt placement is load-
+    # bearing — the marker has to be the last token she reads so it's
+    # salient enough to actually emit.
+    lines.append(
+        "This is your pulse. Close your response on its own line with "
+        "[SURFACE] if there's something worth landing in Jon's chat, or "
+        "[NO_OP] if nothing's material to surface. Tool calls are "
+        "independent of this marker."
+    )
     return "\n".join(lines)

@@ -2,7 +2,13 @@
 
 The splice must be byte-identical to pre-engine output when the section
 is empty — same exact string. Section, when non-empty, lands BEFORE the
-"This is your pulse." close so reflection is the last thing she reads.
+close line so reflection is the last thing she reads before the close.
+
+2026-06-15 update: the close line now also carries the [SURFACE]/[NO_OP]
+marker requirement per the Coordination Blackout arc close. Tests now
+check that the close line CONTAINS "This is your pulse." (still the
+reflective anchor) rather than that the whole prompt ENDS WITH it (the
+marker phrasing lives on the same final line).
 """
 
 from __future__ import annotations
@@ -55,8 +61,10 @@ def test_build_heartbeat_prompt_splices_salience_before_close():
     assert "[c1] user:" in out
     # Salience appears BEFORE the close line.
     assert out.index("This is your pulse.") > out.index("Do any feel like a permanent shift?")
-    # Close line is still last.
-    assert out.endswith("This is your pulse.")
+    # Reflective anchor + marker requirement both on the closing line.
+    assert "This is your pulse." in out
+    assert "[SURFACE]" in out
+    assert "[NO_OP]" in out
 
 
 def test_build_heartbeat_prompt_no_salience_section_unchanged():
@@ -85,4 +93,6 @@ def test_build_heartbeat_prompt_default_kwarg_is_empty_string():
         lattice=_lattice(),
     )
     assert "[HEARTBEAT]" in out
-    assert out.endswith("This is your pulse.")
+    assert "This is your pulse." in out
+    assert "[SURFACE]" in out
+    assert "[NO_OP]" in out

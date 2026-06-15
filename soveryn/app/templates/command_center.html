@@ -475,6 +475,62 @@
   }
   .board-item.fading { opacity:0; transition:opacity 300ms; }
 
+  /* ─── Heartbeat panel ───────────────────────────────────────────────────
+     Renders the most recent Aetheria heartbeat ticks so the rhythm is Jon's
+     surface. Added 2026-06-15 closing the Coordination Blackout arc:
+     pulses always render here; chat only fires when she explicitly marks
+     a response [SURFACE]. Density / shell mirrors the .boards panel. */
+  .heartbeat-feed { display:flex; flex-direction:column; gap:6px; }
+  .heartbeat-pulse {
+    display:flex; align-items:center; gap:10px;
+    padding:8px 12px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.04);
+    border-radius:8px;
+    font-size:11px;
+    color:rgba(232,227,213,0.78);
+    line-height:1.4;
+  }
+  .heartbeat-pulse .when {
+    flex:0 0 auto;
+    color:rgba(232,227,213,0.55);
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    font-variant-numeric:tabular-nums;
+    min-width:74px;
+  }
+  .heartbeat-pulse .state {
+    flex:1;
+    color:rgba(232,227,213,0.7);
+  }
+  .heartbeat-pulse .state strong { color:rgba(232,227,213,0.85); font-weight:500; }
+  .heartbeat-pulse .surface {
+    flex:0 0 auto;
+    font-size:10px;
+    color:var(--sov-amber);
+    text-transform:uppercase;
+    letter-spacing:0.10em;
+    font-weight:500;
+  }
+  .heartbeat-pulse[data-eligible="false"] {
+    opacity:0.55;
+    color:rgba(232,227,213,0.45);
+  }
+  .heartbeat-pulse[data-eligible="false"] .when { color:rgba(232,227,213,0.32); }
+  .heartbeat-pulse[data-eligible="false"] .state strong { color:rgba(232,227,213,0.55); }
+  .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-olive); }
+  .heartbeat-pulse[data-surfaced="true"] {
+    border-color:rgba(224,184,120,0.18);
+    background:rgba(224,184,120,0.04);
+  }
+  .heartbeat-feed .empty {
+    font-size:11px;
+    color:rgba(232,227,213,0.35);
+    font-style:italic;
+    padding:4px 0;
+  }
+
   /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
   .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
   .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
@@ -572,6 +628,18 @@
           <h4>Friction <span class="count" data-board-count>0</span></h4>
           <div data-board-list><div class="empty">no open friction.</div></div>
         </div>
+      </div>
+    </section>
+
+    <!-- Heartbeat panel — Aetheria's pulse rendered as rhythm, not chat.
+         Added 2026-06-15 closing the Coordination Blackout arc: every tick
+         lands here regardless of [SURFACE]/[NO_OP] decision. The amber
+         "→ chat" indicator marks pulses Aetheria chose to surface into
+         her primary chat thread. -->
+    <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
+      <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
+        <div class="empty">no pulses yet.</div>
       </div>
     </section>
 
@@ -965,7 +1033,12 @@
   }
 
   async function submitArchive(item) {
-    const nodeId = item.dataset.nodeId;
+    // data-node-id lives on .board-item-actions, not on the item itself.
+    // Look it up via descendant query so this works for both the initial
+    // render path and any dynamically-rebuilt item layouts.
+    const actionsEl = item.querySelector(".board-item-actions");
+    const nodeId = (actionsEl && actionsEl.dataset.nodeId) || item.dataset.nodeId;
+    if (!nodeId) return;
     const lessonEl = item.querySelector(".board-item-lesson");
     if (!lessonEl) return;
     const ta = lessonEl.querySelector("textarea");
@@ -1016,24 +1089,33 @@
     renderBoards();
   }
 
+  // Event delegation — one click handler on the listEl catches BOTH the
+  // buttons present at initial render (Close, status pills) AND the
+  // buttons created dynamically by openLessonInput (Save, Cancel). The
+  // previous direct-binding version missed Save/Cancel because they
+  // didn't exist at wire time — silent failure: Jon clicked Save, nothing
+  // POSTed. Verified live 2026-06-15 (Aetheria's "the ghost is gone"
+  // moment didn't land because Save did nothing).
   function wireBoardItemActions(listEl) {
-    listEl.querySelectorAll(".board-item").forEach(item => {
-      item.querySelectorAll("[data-action]").forEach(btn => {
-        const action = btn.dataset.action;
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          if (action === "status") {
-            submitStatus(item, btn.dataset.status, btn);
-          } else if (action === "archive-open") {
-            openLessonInput(item, btn);
-          } else if (action === "archive-cancel") {
-            const lesson = item.querySelector(".board-item-lesson");
-            if (lesson) lesson.remove();
-          } else if (action === "archive-save") {
-            submitArchive(item);
-          }
-        });
-      });
+    if (listEl.dataset.actionsBound === "1") return;  // idempotent
+    listEl.dataset.actionsBound = "1";
+    listEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn || !listEl.contains(btn)) return;
+      const item = btn.closest(".board-item");
+      if (!item) return;
+      const action = btn.dataset.action;
+      e.preventDefault();
+      if (action === "status") {
+        submitStatus(item, btn.dataset.status, btn);
+      } else if (action === "archive-open") {
+        openLessonInput(item, btn);
+      } else if (action === "archive-cancel") {
+        const lesson = item.querySelector(".board-item-lesson");
+        if (lesson) lesson.remove();
+      } else if (action === "archive-save") {
+        submitArchive(item);
+      }
     });
   }
 
@@ -1144,6 +1226,62 @@
     });
   }
 
+  // ─── Heartbeat panel (recent Aetheria pulses) ────────────────────────────
+  // Pulses always render here — eligible AND skipped — so the rhythm is
+  // Jon's surface. The amber "→ chat" badge marks pulses Aetheria chose to
+  // surface into her primary chat thread via the [SURFACE] marker
+  // (2026-06-15 Coordination Blackout arc close).
+  function describeHeartbeatPulse(p) {
+    if (!p.eligible) {
+      return `skipped (${p.skip_reason || "?"})${p.dry_run ? " · dry-run" : ""}`;
+    }
+    if (p.error) {
+      return `<strong>error:</strong> ${htmlEscape(p.error).slice(0, 60)}`;
+    }
+    if (p.action_taken) {
+      return `<strong>acted</strong> (${p.tool_call_count || 0} tool${p.tool_call_count === 1 ? "" : "s"})${p.dry_run ? " · dry-run" : ""}`;
+    }
+    return `<strong>silent</strong>${p.dry_run ? " · dry-run" : ""}`;
+  }
+
+  async function renderHeartbeat() {
+    const data = await fetchJson("/api/heartbeat/recent?limit=10");
+    const container = document.querySelector("[data-heartbeat-feed]");
+    if (!container || !data) return;
+    const pulses = data.pulses || [];
+    if (pulses.length === 0) {
+      container.innerHTML = `<div class="empty">no pulses yet.</div>`;
+      return;
+    }
+    container.innerHTML = pulses.map(p => {
+      // formatRelativeAge expects a count of seconds since the event.
+      let when = "—";
+      try {
+        const ts = new Date(p.triggered_at).getTime();
+        if (!isNaN(ts)) {
+          const ageSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+          when = formatRelativeAge(ageSec);
+        }
+      } catch (_) { /* leave as — */ }
+      const eligible = p.eligible ? "true" : "false";
+      const acted = p.action_taken ? "true" : "false";
+      const surfaced = p.surfaced_to_chat ? "true" : "false";
+      const surfaceBadge = p.surfaced_to_chat
+        ? `<span class="surface" title="surfaced into primary chat thread">→ chat</span>`
+        : "";
+      return `
+        <div class="heartbeat-pulse"
+             data-eligible="${eligible}"
+             data-acted="${acted}"
+             data-surfaced="${surfaced}">
+          <span class="when">${htmlEscape(when)}</span>
+          <span class="state">${describeHeartbeatPulse(p)}</span>
+          ${surfaceBadge}
+        </div>
+      `;
+    }).join("");
+  }
+
   // ─── Comm bus (recent DAC traffic) ───────────────────────────────────────
   async function renderCommBus() {
     const data = await fetchJson("/api/memory/dac_edges?limit=10");
@@ -1191,6 +1329,7 @@
     renderStats();
     renderDaemons();
     renderBoards();
+    renderHeartbeat();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();

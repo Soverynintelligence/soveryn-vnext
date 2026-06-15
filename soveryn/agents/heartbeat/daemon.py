@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import sqlite3
 import sys
@@ -60,6 +61,28 @@ CHAT_TIMEOUT_SECONDS = 240
 WEBHOOK_SESSION_TITLE_PREFIX = "[webhook]"
 HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 
+# Aetheria-decides chat routing markers (2026-06-15 — Coordination Blackout
+# arc close). The heartbeat prompt instructs her to end every response with
+# one of these on its own line. [SURFACE] → strip marker, post the content
+# to her PRIMARY chat thread. [NO_OP] (or missing marker) → log and stop.
+_SURFACE_MARKER_RE = re.compile(r"\[SURFACE\]", re.IGNORECASE)
+_NO_OP_MARKER_RE = re.compile(r"\[NO_OP\]", re.IGNORECASE)
+# Titles we EXCLUDE from "primary thread" resolution — these are surfaces
+# owned by other rails (rhythm, voice, messenger threads) and surfacing
+# heartbeat content into them is the trap the arc surfaced.
+_NON_PRIMARY_TITLE_PREFIXES: tuple[str, ...] = (
+    "[heartbeat]",
+    "[voice]",
+    "[webhook]",
+    "[signal]",
+    "[dream]",
+    "messenger:",
+)
+# Title for the fallback primary thread created when no eligible aetheria
+# session exists yet. Intentionally NOT bracket-prefixed so it doesn't
+# match _NON_PRIMARY_TITLE_PREFIXES on the next lookup.
+_PRIMARY_FALLBACK_TITLE = "primary"
+
 
 class HeartbeatDaemon:
     """Single-threaded tick loop. One tick at a time; if a tick takes longer
@@ -81,6 +104,43 @@ class HeartbeatDaemon:
         self.salience_db = Path(salience_db)
         self._stop = False
         self._heartbeat_session_id: str | None = None
+        # Idempotent migration: add surfaced_to_chat column to heartbeat_log
+        # if missing. Pre-existing DBs (rows from before 2026-06-15) won't
+        # have it. Follows the same pattern as legacy.py's dream_log.dry_run
+        # column-add — SQLite doesn't support IF NOT EXISTS on ADD COLUMN.
+        self._ensure_surfaced_to_chat_column()
+
+    def _ensure_surfaced_to_chat_column(self) -> None:
+        """Idempotent column-add for heartbeat_log.surfaced_to_chat.
+
+        Best-effort. The heartbeat_log table itself is created by
+        LatticeStore._init_schema, which runs at vnext startup; if vnext
+        hasn't started yet the table won't exist and PRAGMA returns empty.
+        We catch the OperationalError and skip — the next daemon launch
+        after vnext is up will retry.
+        """
+        try:
+            with sqlite3.connect(str(self.lattice_db)) as con:
+                cols = {
+                    row[1]
+                    for row in con.execute("PRAGMA table_info(heartbeat_log)").fetchall()
+                }
+                if not cols:
+                    # Table doesn't exist yet — vnext hasn't run its lattice
+                    # schema init. Nothing to migrate; future tick will see it.
+                    return
+                if "surfaced_to_chat" not in cols:
+                    con.execute(
+                        "ALTER TABLE heartbeat_log "
+                        "ADD COLUMN surfaced_to_chat INTEGER NOT NULL DEFAULT 0"
+                    )
+                    logger.info("heartbeat_log migrated: added surfaced_to_chat column")
+        except sqlite3.OperationalError:
+            logger.warning(
+                "heartbeat_log.surfaced_to_chat migration failed; "
+                "will retry on next daemon launch",
+                exc_info=True,
+            )
 
     # ─── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -235,6 +295,26 @@ class HeartbeatDaemon:
             response = self._call_vnext_chat(session_id, prompt)
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
+            # Aetheria-decides chat routing: parse [SURFACE]/[NO_OP] marker,
+            # post the marker-stripped content into her PRIMARY thread when
+            # [SURFACE]. This is the load-bearing 2026-06-15 change — rhythm
+            # stays on the heartbeat session + Mission Control panel, chat
+            # only fires when she explicitly opts in.
+            surface, stripped_content = self._parse_surface_marker(response_text)
+            surfaced_to_chat = False
+            if surface and stripped_content:
+                try:
+                    self._surface_to_primary_thread(stripped_content)
+                    surfaced_to_chat = True
+                except Exception:
+                    # Surface failures are not fatal to the heartbeat tick —
+                    # the response still landed in the [heartbeat] session
+                    # and the audit log captures everything. Log + continue.
+                    logger.exception(
+                        "heartbeat tick %s: [SURFACE] marker present but "
+                        "primary-thread post failed; content stayed in "
+                        "[heartbeat] session only", tick_id,
+                    )
             self._write_log_row(
                 tick_id=tick_id,
                 triggered_at=triggered_at,
@@ -245,10 +325,13 @@ class HeartbeatDaemon:
                 tool_call_count=tool_call_count,
                 response_length=len(response_text),
                 error=None,
+                surfaced_to_chat=surfaced_to_chat,
             )
             logger.info(
-                "heartbeat tick %s done. action_taken=%s tool_calls=%s response_len=%d",
-                tick_id, action_taken, tool_call_count, len(response_text),
+                "heartbeat tick %s done. action_taken=%s tool_calls=%s "
+                "response_len=%d surfaced_to_chat=%s",
+                tick_id, action_taken, tool_call_count,
+                len(response_text), surfaced_to_chat,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during chat invocation")
@@ -451,6 +534,116 @@ class HeartbeatDaemon:
         payload = {"agent": "aetheria", "session_id": session_id, "message": message}
         return self._post_json("/chat", payload, timeout=CHAT_TIMEOUT_SECONDS)
 
+    # ─── Aetheria-decides chat routing (2026-06-15) ─────────────────────────
+
+    def _parse_surface_marker(self, response_text: str) -> tuple[bool, str]:
+        """Return (surface, stripped_content).
+
+        Looks for [SURFACE] or [NO_OP] markers (case-insensitive). Last
+        occurrence wins if both appear. Marker lines are stripped from the
+        returned content. Missing marker → treated as [NO_OP] (no surface).
+        Defensive: pathological multi-marker responses, embedded markers in
+        the body, etc. all collapse to "what was the last decision token?".
+        """
+        if not response_text:
+            return (False, "")
+        surface_match = None
+        no_op_match = None
+        # last() position by sliding scan
+        for m in _SURFACE_MARKER_RE.finditer(response_text):
+            surface_match = m
+        for m in _NO_OP_MARKER_RE.finditer(response_text):
+            no_op_match = m
+        if surface_match is None and no_op_match is None:
+            return (False, response_text.strip())
+        # Last-occurrence wins.
+        last_surface_pos = surface_match.end() if surface_match else -1
+        last_no_op_pos = no_op_match.end() if no_op_match else -1
+        decided_surface = last_surface_pos > last_no_op_pos
+        # Strip both markers (full lines containing them) so neither leaks
+        # into the surfaced content. Use line-aware stripping: any line
+        # whose stripped form IS one of the markers gets dropped.
+        kept_lines = []
+        for line in response_text.splitlines():
+            tok = line.strip()
+            if _SURFACE_MARKER_RE.fullmatch(tok) or _NO_OP_MARKER_RE.fullmatch(tok):
+                continue
+            kept_lines.append(line)
+        stripped = "\n".join(kept_lines).strip()
+        return (decided_surface, stripped)
+
+    def _resolve_primary_thread(self) -> str:
+        """Find or create Aetheria's PRIMARY chat thread.
+
+        Most-recent aetheria session whose title doesn't start with any of
+        the non-primary prefixes (heartbeat, voice, webhook, signal, dream,
+        messenger:). Re-resolved each call so a fresh desktop chat thread
+        Jon opens becomes the new primary automatically.
+
+        If no eligible session exists, creates a fresh one titled "primary".
+        """
+        like_clauses = " OR ".join(
+            ["title LIKE ?"] * len(_NON_PRIMARY_TITLE_PREFIXES)
+        )
+        sql = (
+            "SELECT session_id FROM conversation_meta "
+            "WHERE agent = 'aetheria' "
+            f"AND NOT (title IS NOT NULL AND ({like_clauses})) "
+            "ORDER BY updated_at DESC LIMIT 1"
+        )
+        params = tuple(f"{p}%" for p in _NON_PRIMARY_TITLE_PREFIXES)
+        with sqlite3.connect(str(self.conv_db)) as con:
+            row = con.execute(sql, params).fetchone()
+        if row is not None:
+            return row[0]
+        # No eligible session — create a fresh primary thread via the /sessions
+        # API so vnext sees the new row through the same path /chat would.
+        payload = {"agent": "aetheria", "title": _PRIMARY_FALLBACK_TITLE}
+        resp = self._post_json("/sessions", payload, timeout=10)
+        return resp["session_id"]
+
+    def _surface_to_primary_thread(self, content: str) -> None:
+        """Insert `content` into Aetheria's primary thread as an ASSISTANT turn.
+
+        Implementation note (load-bearing): the daemon writes the assistant
+        turn directly via sqlite3 rather than POSTing to /chat. /chat treats
+        its `message` field as a USER turn, and would (a) record it under
+        Jon's voice and (b) trigger an LLM round-trip that we don't want —
+        the content already came from Aetheria's own heartbeat round-trip.
+
+        Direct write is the cheapest correct path: ConversationStore.save_turn
+        does the same INSERT (with FTS trigger fan-out + conversation_meta
+        touch) and that's all we need. We replicate that exact sequence so
+        the FTS index, updated_at, and turn ordering all match what vnext
+        would produce. Source='heartbeat' marks the turn for any downstream
+        consumer (UI badge, audit) that wants to distinguish it from
+        in-thread Aetheria replies.
+
+        Salience observer hooks are NOT fired for these surfaced turns —
+        the heartbeat's own [heartbeat] session is already daemon-excluded
+        in SalienceObserver.DAEMON_SESSION_TITLE_PREFIXES, and re-flagging
+        Aetheria's own surfaced content into the next heartbeat digest
+        would re-create the feedback loop the salience exclusion existed
+        to prevent.
+        """
+        session_id = self._resolve_primary_thread()
+        now = datetime.now().isoformat()
+        with sqlite3.connect(str(self.conv_db)) as con:
+            con.execute(
+                "INSERT INTO conversations "
+                "(session_id, agent, role, content, timestamp, source, finish_reason) "
+                "VALUES (?, ?, 'assistant', ?, ?, 'heartbeat', NULL)",
+                (session_id, "aetheria", content, now),
+            )
+            con.execute(
+                "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
+                (now, session_id),
+            )
+        logger.info(
+            "heartbeat surfaced to primary thread %s (chars=%d)",
+            session_id, len(content),
+        )
+
     def _post_json(self, path: str, body: dict, *, timeout: int) -> dict:
         url = f"{self.vnext_base}{path}"
         req = urllib.request.Request(
@@ -482,20 +675,23 @@ class HeartbeatDaemon:
         tool_call_count: int | None,
         response_length: int | None,
         error: str | None,
+        surfaced_to_chat: bool = False,
     ) -> None:
         try:
             with sqlite3.connect(str(self.lattice_db)) as con:
                 con.execute(
                     "INSERT INTO heartbeat_log "
                     "(id, triggered_at, completed_at, eligible, skip_reason, "
-                    "action_taken, tool_call_count, response_length, error, dry_run) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "action_taken, tool_call_count, response_length, error, "
+                    "dry_run, surfaced_to_chat) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (tick_id, triggered_at, completed_at,
                      1 if eligible else 0,
                      skip_reason,
                      None if action_taken is None else (1 if action_taken else 0),
                      tool_call_count, response_length, error,
-                     1 if self.config.dry_run else 0),
+                     1 if self.config.dry_run else 0,
+                     1 if surfaced_to_chat else 0),
                 )
         except Exception:
             logger.exception("failed to write heartbeat_log row %s", tick_id)

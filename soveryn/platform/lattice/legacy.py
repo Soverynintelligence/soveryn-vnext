@@ -187,7 +187,13 @@ CREATE TABLE IF NOT EXISTS heartbeat_log (
     tool_call_count   INTEGER,
     response_length   INTEGER,
     error             TEXT,
-    dry_run           INTEGER NOT NULL DEFAULT 0
+    dry_run           INTEGER NOT NULL DEFAULT 0,
+    -- 2026-06-15 (Coordination Blackout arc close): set 1 when the tick's
+    -- response carried a [SURFACE] marker and the daemon successfully
+    -- posted the content into Aetheria's primary chat thread. 0 for skipped,
+    -- errored, dry-run, [NO_OP], or surface-post-failed ticks. Backfilled
+    -- as 0 on pre-existing rows by the daemon's idempotent ALTER TABLE.
+    surfaced_to_chat  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_heartbeat_log_triggered ON heartbeat_log(triggered_at DESC);
@@ -415,6 +421,20 @@ class LatticeStore:
             if "dry_run" not in existing_cols:
                 conn.execute(
                     "ALTER TABLE dream_log ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0"
+                )
+            # Idempotent column-add for heartbeat_log.surfaced_to_chat (added
+            # 2026-06-15 with Aetheria-decides chat routing). Same pattern as
+            # dream_log.dry_run above. The heartbeat daemon also runs this
+            # migration on its own startup so the column lands whether vnext
+            # or the daemon comes up first.
+            hb_cols = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(heartbeat_log)").fetchall()
+            }
+            if "surfaced_to_chat" not in hb_cols:
+                conn.execute(
+                    "ALTER TABLE heartbeat_log "
+                    "ADD COLUMN surfaced_to_chat INTEGER NOT NULL DEFAULT 0"
                 )
 
     # ─── Public API ──────────────────────────────────────────────────────────

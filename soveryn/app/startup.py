@@ -797,6 +797,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_memory_bp)
     from soveryn.app.routes.api_coord import bp as api_coord_bp
     app.register_blueprint(api_coord_bp)
+    from soveryn.app.routes.api_heartbeat import bp as api_heartbeat_bp
+    app.register_blueprint(api_heartbeat_bp)
     from soveryn.app.routes.api_specialists import bp as api_specialists_bp
     app.register_blueprint(api_specialists_bp)
     from soveryn.app.routes.aetheria_assets import bp as aetheria_assets_bp
