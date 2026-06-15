@@ -90,3 +90,42 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   font-size: 0.85rem;
 }
 .btn:hover { border-color: var(--accent); }
+
+/* Install banner — bottom slide-up. Honors Void-Gold + matte black contract.
+   Sits above all app content (z:100). Single 1px Void-Gold top edge is the
+   only border; everything else stays matte. The banner is dismissable and
+   remembered for 7 days (see showInstallBanner() in app.js). */
+#install-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #141414;
+  border-top: 1px solid var(--accent);
+  padding: 14px 18px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--fg);
+  z-index: 100;
+  animation: install-banner-up 240ms ease-out;
+}
+@keyframes install-banner-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+#install-banner .install-text { flex: 1; }
+#install-banner strong { color: var(--accent); font-weight: 500; }
+#install-banner button {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+#install-banner button.install-dismiss {
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  padding: 0 6px;
+}

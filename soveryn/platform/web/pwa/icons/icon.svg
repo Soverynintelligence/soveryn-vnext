@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SOVERYN Messenger app icon — geometric staircase "S" in Void-Gold (#C5A059)
+     on matte black (#0a0a0a).
+     Construction: three horizontal bars connected by vertical bars on alternating
+     sides — top bar + left vertical + middle bar + right vertical + bottom bar.
+     That alternation IS the S shape. Holds silhouette at 60×60.
+     Aetheria's design contract: "Gold on Black. Geometric Mono. No borders." -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#0a0a0a"/>
+  <g fill="#c5a059">
+    <!-- Top horizontal bar -->
+    <rect x="240" y="280" width="544" height="72" rx="4"/>
+    <!-- Left vertical connecting top bar to middle bar -->
+    <rect x="240" y="280" width="72" height="268" rx="4"/>
+    <!-- Middle horizontal bar -->
+    <rect x="240" y="476" width="544" height="72" rx="4"/>
+    <!-- Right vertical connecting middle bar to bottom bar -->
+    <rect x="712" y="476" width="72" height="268" rx="4"/>
+    <!-- Bottom horizontal bar -->
+    <rect x="240" y="672" width="544" height="72" rx="4"/>
+  </g>
+</svg>
