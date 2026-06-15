@@ -420,6 +420,136 @@
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
+
+  /* ─── Voice call (in-page) ──────────────────────────────────────────────
+     Call button sits in .chat-header .actions next to persona/export/more.
+     Click → full-screen overlay with a pulsing per-agent orb + END CALL.
+     Backend route is /voice/session/<session_id>/offer; the WebRTC peer
+     binds to the existing chat session so transcribed turns land in the
+     same conversation history. */
+  .chat-header .actions .call-btn[hidden] { display: none; }
+  .chat-header .actions .call-btn {
+    font-size: 15px;
+    line-height: 1;
+  }
+  /* Subtle per-agent hover tint — keeps the action row uniform at rest. */
+  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-olive); background: rgba(148,164,85,0.08); }
+  .chat-header .actions .call-btn[data-agent="vett"]:hover     { color: var(--sov-electric-blue); background: rgba(62,168,232,0.08); }
+  .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: var(--sov-amber); background: rgba(198,154,90,0.08); }
+
+  .voice-overlay {
+    position: fixed; inset: 0;
+    background: rgba(5, 5, 5, 0.92);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .voice-overlay.visible { display: flex; }
+
+  .voice-orb {
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    /* Default = Aetheria's tri-stop spectrum. setAgentForVoice() rewrites
+       this per agent so the orb carries each agent's brand identity. */
+    background: radial-gradient(circle at 35% 35%,
+                  var(--sov-sage) 0%,
+                  var(--sov-gray) 50%,
+                  var(--sov-electric-blue) 100%);
+    box-shadow: 0 0 90px rgba(148, 164, 85, 0.35);
+    transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
+  }
+  .voice-orb[data-agent="aetheria"] {
+    background: radial-gradient(circle at 35% 35%,
+                  var(--sov-sage) 0%,
+                  var(--sov-gray) 50%,
+                  var(--sov-electric-blue) 100%);
+    box-shadow: 0 0 90px rgba(148, 164, 85, 0.35);
+  }
+  .voice-orb[data-agent="vett"] {
+    background: radial-gradient(circle at center,
+                  #4a6488 0%,
+                  var(--sov-deep-blue) 70%);
+    box-shadow: 0 0 90px rgba(62, 168, 232, 0.28);
+  }
+  .voice-orb[data-agent="scotty"] {
+    background: radial-gradient(circle at 35% 35%,
+                  #b8966c 0%,
+                  var(--sov-bronze) 60%,
+                  #5a4628 100%);
+    box-shadow: 0 0 90px rgba(198, 154, 90, 0.35);
+  }
+  .voice-orb[data-state="idle"]        { transform: scale(0.95); opacity: 0.5; }
+  .voice-orb[data-state="listening"]   { transform: scale(1.0);  opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
+  .voice-orb[data-state="hearing"]     { transform: scale(1.05); opacity: 1.0; }
+  .voice-orb[data-state="thinking"]    { transform: scale(1.0);  opacity: 0.9; animation: voice-pulse-think 1.2s ease-in-out infinite; }
+  .voice-orb[data-state="speaking"]    { opacity: 1.0; }
+  .voice-orb[data-state="interrupted"] { transform: scale(0.85); opacity: 0.6; transition: transform 100ms, opacity 100ms; }
+  @keyframes voice-pulse-listen {
+    0%, 100% { transform: scale(1.0); }
+    50%      { transform: scale(1.04); }
+  }
+  @keyframes voice-pulse-think {
+    0%, 100% { transform: scale(1.0); opacity: 0.85; }
+    50%      { transform: scale(1.02); opacity: 1.0; }
+  }
+  .voice-title {
+    margin-top: 36px;
+    font-family: "SF Mono","Menlo",monospace;
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    color: var(--text);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .voice-title[data-agent="aetheria"] { color: var(--sov-olive); }
+  .voice-title[data-agent="vett"]     { color: var(--sov-electric-blue); }
+  .voice-title[data-agent="scotty"]   { color: var(--sov-amber); }
+  .voice-status {
+    margin-top: 8px;
+    font-family: "SF Mono","Menlo",monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: rgba(236, 243, 244, 0.55);
+    text-transform: uppercase;
+  }
+  .voice-error {
+    position: absolute;
+    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    color: #d49696;
+    font-family: "SF Mono","Menlo",monospace;
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .voice-error.visible { opacity: 1; }
+  .voice-hangup {
+    position: absolute;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    border: 1px solid rgba(236, 243, 244, 0.4);
+    color: var(--text);
+    font-family: "SF Mono","Menlo",monospace;
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    padding: 14px 32px;
+    border-radius: 32px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .voice-hangup[data-agent="aetheria"] { border-color: rgba(148,164,85,0.55); color: var(--sov-olive); }
+  .voice-hangup[data-agent="vett"]     { border-color: rgba(62,168,232,0.5);  color: var(--sov-electric-blue); }
+  .voice-hangup[data-agent="scotty"]   { border-color: rgba(198,154,90,0.55); color: var(--sov-amber); }
+  .voice-hangup:hover { background: rgba(255,255,255,0.04); }
+  .voice-hangup:active { background: rgba(255,255,255,0.08); }
+  /* Pre-mounted hidden <audio> for iOS Safari — playback must begin inside
+     the user gesture that starts the call; a pre-mounted element with
+     playsinline lets ontrack assign srcObject without re-triggering policy. */
+  .voice-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -470,11 +600,31 @@
         <div class="sub" data-session-meta>new session</div>
       </div>
       <div class="actions">
+        <button class="call-btn" data-testid="call-btn" data-agent="aetheria"
+                title="Voice call" aria-label="Voice call" hidden>&#9742;</button>
         <button title="Persona inspector" aria-label="Persona">ⓘ</button>
         <button title="Export" aria-label="Export">⤓</button>
         <button title="More" aria-label="More">⋯</button>
       </div>
     </header>
+
+    <!-- Voice call overlay — full-screen modal launched from the call button.
+         Backend route: POST /voice/session/<session_id>/offer (binds to the
+         existing chat session so transcribed voice turns land in the same
+         conversation history rendered above). -->
+    <div class="voice-overlay" data-testid="voice-overlay" role="dialog"
+         aria-modal="true" aria-label="Voice call" aria-hidden="true">
+      <div class="voice-orb" data-testid="voice-orb"
+           data-state="idle" data-agent="aetheria"></div>
+      <div class="voice-title" data-testid="voice-title"
+           data-agent="aetheria">aetheria &mdash; LIVE</div>
+      <div class="voice-status" data-testid="voice-status">connecting&hellip;</div>
+      <div class="voice-error" data-testid="voice-error"></div>
+      <button class="voice-hangup" data-testid="voice-hangup"
+              data-agent="aetheria">END CALL</button>
+      <audio class="voice-audio" data-testid="voice-audio"
+             playsinline autoplay></audio>
+    </div>
 
     <div class="context-banner" data-testid="context-banner" aria-live="polite" aria-atomic="true"></div>
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
@@ -679,6 +829,14 @@
   const elAttachBtn  = () => $('[data-testid="composer-attach"]');
   const elFileInput  = () => $('[data-testid="composer-file-input"]');
   const elAttachRow  = () => $('[data-testid="composer-attachments"]');
+  const elCallBtn        = () => $('[data-testid="call-btn"]');
+  const elVoiceOverlay   = () => $('[data-testid="voice-overlay"]');
+  const elVoiceOrb       = () => $('[data-testid="voice-orb"]');
+  const elVoiceTitle     = () => $('[data-testid="voice-title"]');
+  const elVoiceStatus    = () => $('[data-testid="voice-status"]');
+  const elVoiceError     = () => $('[data-testid="voice-error"]');
+  const elVoiceHangup    = () => $('[data-testid="voice-hangup"]');
+  const elVoiceAudio     = () => $('[data-testid="voice-audio"]');
 
   // ─── Attachments helpers ──────────────────────────────────────────────────
   function renderAttachmentsRow() {
@@ -733,7 +891,46 @@
     if (attachBtn) attachBtn.hidden = name !== "aetheria";
     // Switching off aetheria? Drop any pending attachments.
     if (name !== "aetheria") clearPendingAttachments();
+    // Mirror the agent onto the call button + voice overlay so per-agent
+    // hover tints + orb gradient pick up immediately on switch (idempotent
+    // updates; voice gating is handled separately by updateCallButton).
+    const callBtn = elCallBtn();
+    if (callBtn) callBtn.dataset.agent = name;
+    const orb = elVoiceOrb();
+    if (orb) orb.dataset.agent = name;
+    const vTitle = elVoiceTitle();
+    if (vTitle) {
+      vTitle.dataset.agent = name;
+      vTitle.innerHTML = `${name} &mdash; LIVE`;
+    }
+    const vHang = elVoiceHangup();
+    if (vHang) vHang.dataset.agent = name;
+    updateCallButton();
     loadSessions();
+  }
+
+  // ─── Voice call gating ────────────────────────────────────────────────────
+  // /voice/agents → which agents have voice configured. Cached for the
+  // session — the local TTS/STT stack doesn't change between page loads.
+  let _voiceAgentsCache = null;
+  async function fetchVoiceAgents() {
+    if (_voiceAgentsCache !== null) return _voiceAgentsCache;
+    try {
+      const r = await fetch("/voice/agents");
+      if (!r.ok) { _voiceAgentsCache = []; return _voiceAgentsCache; }
+      const data = await r.json();
+      _voiceAgentsCache = data.agents || [];
+    } catch (e) {
+      _voiceAgentsCache = [];
+    }
+    return _voiceAgentsCache;
+  }
+
+  async function updateCallButton() {
+    const btn = elCallBtn();
+    if (!btn) return;
+    const agents = await fetchVoiceAgents();
+    btn.hidden = !agents.includes(state.agent);
   }
 
   function appendBubble(role, content, opts = {}) {
@@ -1008,6 +1205,225 @@
     } catch { /* noop */ }
   }
 
+  // ─── Voice call lifecycle ─────────────────────────────────────────────────
+  // One call at a time, bound to the current chat session. Backend route:
+  //   POST /voice/session/<session_id>/offer  {sdp, type, agent}
+  // The server binds the WebRTC peer to the SAME session_id the chat is
+  // already using, so transcribed voice turns flow into the conversation
+  // history rendered above. On hangup we reload that history so any new
+  // turns appear without a full page reload. Lifted from the messenger PWA's
+  // app.js (Void-Gold styling stripped — desktop uses per-agent brand tints).
+  const VOICE_STATE = {
+    IDLE: "idle", LISTENING: "listening", HEARING: "hearing",
+    THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted",
+  };
+  const VOICE_THRESHOLD = 0.04;
+  const VOICE_SILENCE_MS = 800;
+  const voice = {
+    pc: null,
+    micStream: null,
+    audioCtx: null,
+    outAnalyser: null,
+    inAnalyser: null,
+    state: VOICE_STATE.IDLE,
+    raf: null,
+    lastSpokenAt: 0,
+    sessionAtStart: null,  // sessionId we called against, so post-hangup reload targets the right thread
+  };
+
+  function voiceSetState(s) {
+    voice.state = s;
+    const orb = elVoiceOrb();
+    const st = elVoiceStatus();
+    if (orb) orb.dataset.state = s;
+    if (st) st.textContent = s;
+  }
+
+  function voiceShowError(msg) {
+    const e = elVoiceError();
+    if (!e) return;
+    e.textContent = msg;
+    e.classList.add("visible");
+    setTimeout(() => e.classList.remove("visible"), 5000);
+  }
+
+  function voiceAmp(an) {
+    const data = new Uint8Array(an.frequencyBinCount);
+    an.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / data.length);
+  }
+
+  function voiceTick() {
+    if (!voice.outAnalyser) return;
+    const orb = elVoiceOrb();
+    if (!orb) return;
+    const out = voiceAmp(voice.outAnalyser);
+    const inn = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    const now = performance.now();
+    const userSpeaking = out > VOICE_THRESHOLD;
+    const botSpeaking  = inn > VOICE_THRESHOLD;
+
+    if (botSpeaking && userSpeaking && voice.state === VOICE_STATE.SPEAKING) {
+      voiceSetState(VOICE_STATE.INTERRUPTED);
+      setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+      voice.lastSpokenAt = now;
+    } else if (botSpeaking) {
+      voiceSetState(VOICE_STATE.SPEAKING);
+      const scale = 1.0 + Math.min(0.15, inn * 1.5);
+      orb.style.transform = `scale(${scale})`;
+    } else if (userSpeaking) {
+      voiceSetState(VOICE_STATE.HEARING);
+      voice.lastSpokenAt = now;
+      orb.style.transform = "";
+    } else {
+      if (voice.state === VOICE_STATE.HEARING && now - voice.lastSpokenAt > VOICE_SILENCE_MS) {
+        voiceSetState(VOICE_STATE.THINKING);
+      } else if (voice.state === VOICE_STATE.SPEAKING) {
+        voiceSetState(VOICE_STATE.LISTENING);
+        orb.style.transform = "";
+      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > 6000) {
+        voiceSetState(VOICE_STATE.LISTENING);
+      }
+    }
+    voice.raf = requestAnimationFrame(voiceTick);
+  }
+
+  function openVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    ov.classList.add("visible");
+    ov.setAttribute("aria-hidden", "false");
+  }
+
+  function closeVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    ov.classList.remove("visible");
+    ov.setAttribute("aria-hidden", "true");
+    // Reset orb to idle so the next call starts from a clean visual state.
+    const orb = elVoiceOrb();
+    if (orb) { orb.dataset.state = "idle"; orb.style.transform = ""; }
+  }
+
+  async function startVoiceCall() {
+    // Need an active session_id — the backend route binds the call to it.
+    // ensureSession() mints one if the user clicks Call before sending text.
+    try {
+      await ensureSession();
+    } catch (e) {
+      voiceShowError(`session error: ${e.message}`);
+      return;
+    }
+    voice.sessionAtStart = state.sessionId;
+    voiceSetState(VOICE_STATE.IDLE);
+    openVoiceOverlay();
+    const status = elVoiceStatus();
+    if (status) status.textContent = "connecting…";
+
+    try {
+      voice.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        video: false,
+      });
+    } catch (e) {
+      voiceShowError("microphone access denied");
+      await endVoiceCall({ reloadHistory: false });
+      return;
+    }
+
+    // AudioContext + mic playback init must happen INSIDE the user gesture
+    // path (the click handler that called us). iOS Safari otherwise leaves
+    // the context in `suspended` state and ontrack-assigned playback fails.
+    voice.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (voice.audioCtx.state === "suspended") {
+      try { await voice.audioCtx.resume(); } catch (e) { /* best effort */ }
+    }
+    const outSrc = voice.audioCtx.createMediaStreamSource(voice.micStream);
+    voice.outAnalyser = voice.audioCtx.createAnalyser();
+    voice.outAnalyser.fftSize = 256;
+    outSrc.connect(voice.outAnalyser);
+
+    voice.pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
+    // SmallWebRTCTransport requires both audio AND video transceivers, even
+    // for voice-only sessions. Same pattern as messenger + voice_client.js.
+    const audioTransceiver = voice.pc.addTransceiver("audio", { direction: "sendrecv" });
+    const micTrack = voice.micStream.getAudioTracks()[0];
+    if (micTrack) await audioTransceiver.sender.replaceTrack(micTrack);
+    voice.pc.addTransceiver("video", { direction: "sendrecv" });
+
+    voice.pc.ontrack = (ev) => {
+      if (ev.track.kind !== "audio") return;
+      const stream = new MediaStream([ev.track]);
+      // Pre-mounted hidden <audio> with playsinline + autoplay; iOS Safari
+      // needs the element to exist in the DOM at gesture time, not be
+      // constructed after the SDP exchange.
+      const audioEl = elVoiceAudio();
+      if (audioEl) {
+        audioEl.srcObject = stream;
+        audioEl.play().catch(() => {});
+      }
+      voice.inAnalyser = voice.audioCtx.createAnalyser();
+      voice.inAnalyser.fftSize = 256;
+      voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+    };
+
+    try {
+      const offer = await voice.pc.createOffer();
+      await voice.pc.setLocalDescription(offer);
+      const resp = await fetch(`/voice/session/${voice.sessionAtStart}/offer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: offer.sdp, type: offer.type, agent: state.agent }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`signaling failed (${resp.status}): ${txt}`);
+      }
+      const answer = await resp.json();
+      await voice.pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+      voiceSetState(VOICE_STATE.LISTENING);
+      voiceTick();
+    } catch (e) {
+      console.error("voice start failed:", e);
+      voiceShowError(e.message || "voice connection failed");
+      await endVoiceCall({ reloadHistory: false });
+    }
+  }
+
+  async function endVoiceCall(opts = {}) {
+    const { reloadHistory = true } = opts;
+    if (voice.raf) { cancelAnimationFrame(voice.raf); voice.raf = null; }
+    if (voice.pc) { try { voice.pc.close(); } catch (e) {} voice.pc = null; }
+    if (voice.micStream) {
+      for (const t of voice.micStream.getTracks()) t.stop();
+      voice.micStream = null;
+    }
+    const audioEl = elVoiceAudio();
+    if (audioEl) { try { audioEl.srcObject = null; } catch (e) {} }
+    if (voice.audioCtx) { try { await voice.audioCtx.close(); } catch (e) {} voice.audioCtx = null; }
+    voice.outAnalyser = null;
+    voice.inAnalyser = null;
+    voice.state = VOICE_STATE.IDLE;
+    closeVoiceOverlay();
+    // Re-fetch the conversation so the voice turns the backend persisted
+    // (user transcripts + assistant utterances) appear in the thread without
+    // a page reload. Only reload if we're still on the same session that was
+    // active when the call started — otherwise we'd clobber a chat the user
+    // navigated to mid-call.
+    if (reloadHistory && voice.sessionAtStart && voice.sessionAtStart === state.sessionId) {
+      try { await loadHistory(state.sessionId); } catch (e) { /* best-effort */ }
+    }
+    voice.sessionAtStart = null;
+  }
+
   // ─── Events ────────────────────────────────────────────────────────────────
   function bindEvents() {
     $$('.agent-pill').forEach(p => {
@@ -1067,6 +1483,27 @@
         fileInput.value = "";  // reset so re-selecting same file works
       });
     }
+
+    // Voice call: click on the header button → open overlay + start call.
+    // Both the click and audio.play() must happen on the same gesture path
+    // for iOS Safari to permit playback later (see startVoiceCall comments).
+    const callBtn = elCallBtn();
+    if (callBtn) {
+      callBtn.addEventListener("click", () => { startVoiceCall(); });
+    }
+    const hangupBtn = elVoiceHangup();
+    if (hangupBtn) {
+      hangupBtn.addEventListener("click", () => { endVoiceCall(); });
+    }
+    // Escape hangs up if a call is active. Cmd/Ctrl+W can't reliably be
+    // intercepted from a tab (browser policy), so Escape is the primary
+    // keyboard exit; ⌘B still toggles the sidebar via the other listener.
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && voice.pc) {
+        e.preventDefault();
+        endVoiceCall();
+      }
+    });
 
     $('[data-testid="new-chat"]').addEventListener("click", () => {
       state.sessionId = null;
