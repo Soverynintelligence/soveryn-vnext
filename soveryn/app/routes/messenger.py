@@ -4,6 +4,7 @@ All routes mounted under /m/*. Auth-gated except /m/pair and /m/pair/<code>;
 admin routes (/m/pair, /m/devices) refuse non-localhost requests.
 """
 from __future__ import annotations
+import json
 from functools import wraps
 from pathlib import Path as _P
 
@@ -215,7 +216,10 @@ def build_messenger_blueprint(
                                "message": event.message}
                 else:
                     continue
-                yield f"data: {jsonify(payload).get_data(as_text=True)}\n\n"
+                # NOTE: use json.dumps, not flask.jsonify — by the time this
+                # generator yields, the request context has been torn down,
+                # and jsonify raises "Working outside of application context".
+                yield f"data: {json.dumps(payload)}\n\n"
             if collected:
                 # Cache the final DoneEvent for idempotent retries.
                 final = {
