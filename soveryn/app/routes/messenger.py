@@ -15,7 +15,8 @@ from soveryn.app.messenger.auth import (
     verify_device_secret, AuthError,
 )
 from soveryn.app.messenger.threads import (
-    create_thread, get_thread, list_threads, set_thread_muted, ThreadError,
+    create_thread, get_thread, list_threads, set_thread_muted,
+    touch_thread, ThreadError,
 )
 from soveryn.memory.conversation_store import ConversationStore
 
@@ -142,5 +143,53 @@ def build_messenger_blueprint(
             "agent": thread.agent,
             "title": thread.title,
         })
+
+    @bp.route("/threads/<thread_id>/send_stream", methods=["POST"])
+    @auth_required
+    def send_stream(thread_id: str):
+        body = request.get_json(silent=True) or {}
+        client_msg_id = body.get("client_msg_id")
+        content = body.get("content", "")
+        agent_in_body = body.get("agent", "")
+        if not client_msg_id or not content:
+            return jsonify({"error": "client_msg_id + content required"}), 400
+
+        thread = get_thread(messenger_store, thread_id=thread_id)
+        if thread is None:
+            return jsonify({"error": "unknown thread"}), 404
+        if thread.agent != agent_in_body:
+            return jsonify({
+                "error": (
+                    f"thread bound to {thread.agent}; client sent {agent_in_body}"
+                )
+            }), 400
+
+        # Idempotency check
+        cached = messenger_store.idempotency_lookup_or_record(
+            client_msg_id=client_msg_id,
+            thread_id=thread_id,
+            device_id=request.authed_device.device_id,
+        )
+        if cached is not None and cached:
+            return jsonify(cached)
+
+        loop = agent_loops.get(thread.agent)
+        if loop is None:
+            return jsonify({
+                "error": f"agent_loop for {thread.agent} not loaded"
+            }), 503
+
+        # Non-streaming v1 path: call process_message and return JSON.
+        # Streaming SSE shape lands in Task 10.
+        response = loop.process_message(thread.session_id, content)
+        payload = {
+            "content": response.content,
+            "finish_reason": response.finish_reason,
+        }
+        messenger_store.idempotency_set_response(
+            client_msg_id=client_msg_id, response=payload,
+        )
+        touch_thread(messenger_store, thread_id=thread_id)
+        return jsonify(payload)
 
     return bp
