@@ -4,16 +4,72 @@
 
 const $app = document.getElementById('app');
 
-// IDB placeholder — full IndexedDB (outbox + secret store) lands in Task 14.
-// For now, secret persistence falls back to localStorage.
+// IndexedDB wrapper — single DB `soveryn` v1, two stores: `secret` (kv) and
+// `outbox` (keyPath: client_msg_id). The outbox is the pre/post-flight bracket
+// around send_stream; the service worker drains it on the `sync` event so
+// retries reuse the same client_msg_id and ride the server's idempotency layer.
 const IDB = {
-  // Reserved namespace; Task 14 wires open()/get()/put()/outbox here.
+  _db: null,
+  async open() {
+    if (this._db) return this._db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('soveryn', 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        db.createObjectStore('secret');
+        db.createObjectStore('outbox', { keyPath: 'client_msg_id' });
+      };
+      req.onsuccess = () => { this._db = req.result; resolve(this._db); };
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async getSecret() {
+    const db = await this.open();
+    return new Promise(res => {
+      const r = db.transaction('secret').objectStore('secret').get('value');
+      r.onsuccess = () => res(r.result || null);
+      r.onerror = () => res(null);
+    });
+  },
+  async setSecret(value) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('secret', 'readwrite');
+      tx.objectStore('secret').put(value, 'value');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async outboxPut(entry) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readwrite');
+      tx.objectStore('outbox').put(entry);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async outboxList() {
+    const db = await this.open();
+    return new Promise(res => {
+      const r = db.transaction('outbox').objectStore('outbox').getAll();
+      r.onsuccess = () => res(r.result || []);
+      r.onerror = () => res([]);
+    });
+  },
+  async outboxDelete(id) {
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('outbox', 'readwrite');
+      tx.objectStore('outbox').delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
 };
 
 async function loadSecret() {
-  // IndexedDB fetch — falls back to null if not paired
-  // (Full IDB implementation in Task 14)
-  return localStorage.getItem('soveryn_device_secret');
+  return await IDB.getSecret();
 }
 
 async function fetchThreads(secret) {
@@ -40,7 +96,7 @@ function renderPairingScreen() {
     });
     const j = await r.json();
     if (j.error) { alert(j.error); return; }
-    localStorage.setItem('soveryn_device_secret', j.secret);
+    await IDB.setSecret(j.secret);
     location.reload();
   };
 }
@@ -139,20 +195,45 @@ async function renderThread(tid, agent) {
     agentMsg.appendChild(agentLabel);
     agentMsg.appendChild(contentEl);
     msgsEl.appendChild(agentMsg);
-    const r = await fetch(`/m/threads/${tid}/send_stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type':'application/json',
-        'Authorization': `Bearer ${secret}`,
-      },
-      body: JSON.stringify({
-        client_msg_id: crypto.randomUUID(),
-        agent: currentThreadAgent,
-        content: text,
-        device_id: '',
-        client_ts: new Date().toISOString(),
-      }),
+    // Outbox bracket — write entry BEFORE the fetch so a network failure
+    // mid-flight leaves a durable record. Body is pre-serialized JSON so the
+    // service worker can pass it straight through to fetch() on retry; headers
+    // are a plain object (not a Headers instance) so they survive IDB
+    // round-trip cleanly.
+    const client_msg_id = crypto.randomUUID();
+    const url = `/m/threads/${tid}/send_stream`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${secret}`,
+    };
+    const body = JSON.stringify({
+      client_msg_id,
+      agent: currentThreadAgent,
+      content: text,
+      device_id: '',
+      client_ts: new Date().toISOString(),
     });
+    await IDB.outboxPut({ client_msg_id, url, headers, body });
+    let r;
+    try {
+      r = await fetch(url, { method: 'POST', headers, body });
+    } catch (netErr) {
+      // Network failure — entry stays in outbox. Register a background-sync
+      // so the SW drains it once connectivity returns. Server idempotency
+      // (Task 6) makes the same client_msg_id replay safe.
+      contentEl.textContent = '[queued for retry — offline]';
+      if ('serviceWorker' in navigator && 'SyncManager' in self) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.sync.register('soveryn-outbox-drain');
+        } catch (e) { /* sync register best-effort */ }
+      }
+      return;
+    }
+    if (!r.ok) {
+      contentEl.textContent += `\n[error: HTTP ${r.status}]`;
+      return;
+    }
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -184,7 +265,17 @@ async function renderThread(tid, agent) {
         }
       }
     }
+    // Stream completed successfully — clear the outbox entry.
+    await IDB.outboxDelete(client_msg_id);
   };
+}
+
+// Register the service worker so its `sync` listener can drain the outbox
+// when the browser sees connectivity return. Best-effort — Firefox lacks
+// Background Sync; in that case the SW still installs and the next manual
+// send replays from the outbox via the regular send flow.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/m/pwa/service_worker.js').catch(() => {});
 }
 
 (async function init() {
