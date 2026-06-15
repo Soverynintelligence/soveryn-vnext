@@ -82,6 +82,15 @@ def create_app(
     coord_store = None
     coord_event_bus = None
     coord_worker = None
+
+    # MessengerStore — substrate for the /m/* PWA surface AND for the
+    # deliberate_share tool (registered below for Aetheria + Vett). Built
+    # ahead of tool registration so the tool factories can capture a live
+    # store handle; the same instance is stashed in app.extensions["soveryn"]
+    # for the blueprint at the bottom of create_app.
+    from soveryn.app.messenger.store import MessengerStore
+    messenger_store = MessengerStore(env.data_root / "messenger.db")
+
     if agent_loops is None:
         # Pinned memory is Aetheria-only by design — it's her relationship
         # substrate (facts about Jon, the project, her continuity). Vett and
@@ -399,6 +408,30 @@ def create_app(
                     owner_agent="aetheria",
                 )
 
+        # deliberate_share — Aetheria + Vett can initiate an unprompted
+        # message into Jon's Messenger inbox. Built on Task 16's tool factory;
+        # the personas (Task 17) frame restraint as a held value, not a rule.
+        #
+        # Aetheria — uncapped per partnership contract.
+        # See project_soveryn_partnership_contract_2026_06_13 in maintainer memory.
+        # DO NOT silently re-add a substrate rate limit — that's a partnership
+        # regression, not a safety improvement.
+        from soveryn.agents.messenger_tool import build_deliberate_share_tool
+        tool_registry.register(
+            build_deliberate_share_tool(
+                store=messenger_store, owner_agent="aetheria",
+                rate_limit_per_hour=None,
+            )
+        )
+        # Vett — Colleague tier; substrate enforces a 2/hour cap.
+        tool_registry.register(
+            build_deliberate_share_tool(
+                store=messenger_store, owner_agent="vett",
+                rate_limit_per_hour=2,
+            )
+        )
+        # Scotty: not registered by default. He reports through threads Jon initiates.
+
         # Aetheria-only dream-recall tools (recent_dreams + search_dreams).
         # NOT auto-injected — she queries her own dream layer when she
         # chooses to look. Restricted to layer='dream' on the nodes table.
@@ -536,13 +569,9 @@ def create_app(
             )
             coord_worker.start()
 
-    # MessengerStore — substrate for the /m/* PWA surface. Keyed off
-    # env.data_root so the messenger DB lives alongside the other vnext
-    # state. Built unconditionally; the blueprint registration in
-    # _register_blueprints reads it back from app.extensions["soveryn"].
-    from soveryn.app.messenger.store import MessengerStore
-    messenger_store = MessengerStore(env.data_root / "messenger.db")
-
+    # MessengerStore was constructed earlier (above the agent_loops gate) so
+    # it's in scope when deliberate_share is registered for Aetheria + Vett.
+    # The same instance flows here into app.extensions for blueprint use.
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
