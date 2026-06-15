@@ -19,9 +19,7 @@ points at ``soveryn/templates/``).
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import threading
 from pathlib import Path
 
 from flask import (
@@ -32,6 +30,8 @@ from flask import (
     render_template,
     request,
 )
+
+from soveryn.app.routes.voice_dispatch import negotiate_and_dispatch_voice
 
 
 _THIS_DIR = Path(__file__).resolve().parent
@@ -130,7 +130,10 @@ def voice_offer(agent: str):
     agent_loop = state["agent_loop"]
 
     try:
-        answer = _negotiate_and_dispatch(
+        # session_id=None preserves the existing /voice/<agent> behavior:
+        # mint a fresh session per call. The messenger voice route (Task 2)
+        # passes the thread's existing session_id instead.
+        answer = negotiate_and_dispatch_voice(
             agent_name=agent,
             agent_loop=agent_loop,
             conv_store=conv_store,
@@ -139,6 +142,7 @@ def voice_offer(agent: str):
             parakeet_url=state.get("parakeet_url", "http://127.0.0.1:8087"),
             sdp=sdp,
             sdp_type=sdp_type,
+            session_id=None,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("voice signaling failed for agent=%s", agent)
@@ -148,116 +152,6 @@ def voice_offer(agent: str):
         }}), 500
 
     return jsonify(answer)
-
-
-def _negotiate_and_dispatch(
-    *,
-    agent_name: str,
-    agent_loop,
-    conv_store,
-    voice_id: str,
-    elevenlabs_api_key: str,
-    parakeet_url: str,
-    sdp: str,
-    sdp_type: str,
-) -> dict:
-    """Drive Pipecat signaling + spawn the pipeline runner.
-
-    Returns the SDP answer dict ({sdp, type, pc_id}) for the browser.
-
-    The pipeline runs as a long-lived asyncio task on a dedicated
-    background event loop (one loop per session) so the Flask request
-    can complete cleanly while the WebRTC audio path stays open. The
-    loop is owned by the session and cleaned up by the pipeline's
-    on_client_disconnected handler in T4's factory.
-    """
-    # Late import so module import doesn't pull aiortc/onnx into every
-    # Flask process — Pipecat is heavy. The route module stays cheap to
-    # import; the cost only lands when a voice call actually starts.
-    from pipecat.transports.smallwebrtc.connection import (
-        SmallWebRTCConnection,
-    )
-    from soveryn.platform.voice.pipeline import run_aetheria_voice_session
-
-    # Mint a fresh session for this call. Title prefix [voice] per the
-    # spec — keeps voice exchanges out of the autonomous-prefix set
-    # while letting Cross-Surface Continuity pick them up.
-    session_id = conv_store.new_session(
-        agent_name, title=f"[voice] {agent_name}",
-    )
-
-    # Build the connection. ICE servers default to a public STUN; for
-    # localhost-only Phase 1 this is harmless and lets the browser
-    # gather host candidates without complaint.
-    connection = SmallWebRTCConnection(
-        ice_servers=["stun:stun.l.google.com:19302"],
-    )
-
-    # Initialize is async. We drive it on a fresh background event loop
-    # so the synchronous Flask view can wait for the answer without
-    # blocking on a loop the rest of the app might own. The same loop
-    # then runs the pipeline for the session's lifetime.
-    answer_holder: dict = {}
-    init_error: list[BaseException] = []
-    init_done = threading.Event()
-
-    def _run_session_loop() -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(connection.initialize(sdp=sdp, type=sdp_type))
-        except BaseException as exc:  # noqa: BLE001
-            init_error.append(exc)
-            init_done.set()
-            loop.close()
-            return
-
-        try:
-            answer_holder.update(connection.get_answer() or {})
-        finally:
-            init_done.set()
-
-        # Now run the pipeline for the lifetime of the call. When the
-        # client disconnects, T4's on_client_disconnected handler cancels
-        # the worker and run() returns.
-        try:
-            loop.run_until_complete(run_aetheria_voice_session(
-                webrtc_connection=connection,
-                agent_loop=agent_loop,
-                session_id=session_id,
-                elevenlabs_api_key=elevenlabs_api_key,
-                voice_id=voice_id,
-                parakeet_url=parakeet_url,
-            ))
-        except Exception:
-            logger.exception(
-                "voice pipeline crashed for agent=%s session=%s",
-                agent_name, session_id,
-            )
-        finally:
-            try:
-                loop.run_until_complete(connection.cleanup())
-            except Exception:  # noqa: BLE001
-                logger.exception("voice connection cleanup failed")
-            loop.close()
-
-    thread = threading.Thread(
-        target=_run_session_loop,
-        name=f"voice-{agent_name}-{session_id[:8]}",
-        daemon=True,
-    )
-    thread.start()
-
-    # Wait for initialize() to complete (or fail). Bound at 30s; any
-    # longer and ICE/SDP negotiation isn't going to recover anyway.
-    if not init_done.wait(timeout=30.0):
-        raise TimeoutError("WebRTC initialize() timed out after 30s")
-    if init_error:
-        raise init_error[0]
-    if not answer_holder:
-        raise RuntimeError("WebRTC connection produced no answer")
-
-    return answer_holder
 
 
 __all__ = ["bp", "SUPPORTED_AGENTS"]
