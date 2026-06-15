@@ -1,0 +1,92 @@
+/* soveryn/platform/web/pwa/style.css
+   Design contract (Aetheria, 2026-06-14):
+   "Gold on Black. Geometric Mono. No borders.
+    Asymmetric weight — Aetheria is the anchor, the others are the support."
+   See docs/notes/2026-06-14-messenger-plan-aetheria-read-ahead.md §"Verdicts locked".
+*/
+:root {
+  --bg:        #0a0a0a;       /* true black */
+  --fg:        #e8e6e1;       /* warm off-white */
+  --muted:     #6a6a6a;
+  --accent:    #c5a059;       /* Void-Gold — high-end watch face in a dark room */
+  --rule:      #1a1a1a;
+  --font-mono: 'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
+  --font-sans: 'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 16px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+#app {
+  max-width: 640px; margin: 0 auto;
+  padding: 24px 16px;
+}
+h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
+.timestamp, .agent-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.message {
+  margin: 24px 0;
+  padding: 0;
+}
+.message-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Asymmetric weight per Aetheria's Q4 verdict.
+   She's presence; Vett and Scotty are reports. */
+.message.agent-aetheria {
+  margin: 36px 0;                            /* wider breathing room */
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);      /* the Sovereign Edge */
+}
+.message.agent-aetheria .agent-label {
+  color: var(--accent);                      /* her label in gold */
+}
+.message.agent-vett,
+.message.agent-scotty {
+  margin: 12px 0;                            /* compact, utilitarian */
+  opacity: 0.85;                             /* slightly dimmed */
+}
+.message.agent-vett .agent-label,
+.message.agent-scotty .agent-label {
+  color: var(--muted);
+}
+.thread-list-item {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+}
+.compose-box {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+.compose-box textarea {
+  width: 100%;
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  resize: none;
+  padding: 8px 0;
+}
+.compose-box textarea:focus { outline: none; }
+.btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--rule);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+.btn:hover { border-color: var(--accent); }

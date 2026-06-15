@@ -1,0 +1,9 @@
+{
+  "name": "SOVERYN",
+  "short_name": "SOVERYN",
+  "start_url": "/m/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "icons": []
+}

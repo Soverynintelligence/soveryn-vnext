@@ -5,7 +5,12 @@ admin routes (/m/pair, /m/devices) refuse non-localhost requests.
 """
 from __future__ import annotations
 from functools import wraps
-from flask import Blueprint, Response, request, jsonify, render_template_string
+from pathlib import Path as _P
+
+from flask import (
+    Blueprint, Response, request, jsonify, render_template_string,
+    send_from_directory,
+)
 
 from soveryn.agents.loop import (
     DoneEvent, ErrorEvent, TokenEvent, ToolCallEvent, ToolResultEvent,
@@ -223,5 +228,22 @@ def build_messenger_blueprint(
             touch_thread(messenger_store, thread_id=thread_id)
 
         return Response(_stream(), mimetype="text/event-stream")
+
+    # PWA static assets — registered LAST so the catch-all `<path:path>` only
+    # picks up requests that didn't match a more-specific route above.
+    # Werkzeug orders rules by specificity at match time, so this is belt-and-
+    # braces, not strictly required for correctness.
+    _PWA_DIR = _P(__file__).resolve().parent.parent.parent / "platform" / "web" / "pwa"
+
+    @bp.route("/pwa/<path:path>", methods=["GET"])
+    def pwa_static(path: str):
+        return send_from_directory(str(_PWA_DIR), path)
+
+    @bp.route("/", methods=["GET"])
+    @bp.route("/<path:path>", methods=["GET"])
+    def pwa_assets(path: str = ""):
+        if not path or path.endswith("/"):
+            path = "index.html"
+        return send_from_directory(str(_PWA_DIR), path)
 
     return bp
