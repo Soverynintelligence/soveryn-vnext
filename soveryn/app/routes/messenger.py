@@ -5,8 +5,11 @@ admin routes (/m/pair, /m/devices) refuse non-localhost requests.
 """
 from __future__ import annotations
 from functools import wraps
-from flask import Blueprint, request, jsonify, render_template_string
+from flask import Blueprint, Response, request, jsonify, render_template_string
 
+from soveryn.agents.loop import (
+    DoneEvent, ErrorEvent, TokenEvent, ToolCallEvent, ToolResultEvent,
+)
 from soveryn.app.messenger.store import MessengerStore
 from soveryn.app.messenger.pairing import (
     mint_pairing_token, claim_pairing_token, PairingError,
@@ -179,17 +182,46 @@ def build_messenger_blueprint(
                 "error": f"agent_loop for {thread.agent} not loaded"
             }), 503
 
-        # Non-streaming v1 path: call process_message and return JSON.
-        # Streaming SSE shape lands in Task 10.
-        response = loop.process_message(thread.session_id, content)
-        payload = {
-            "content": response.content,
-            "finish_reason": response.finish_reason,
-        }
-        messenger_store.idempotency_set_response(
-            client_msg_id=client_msg_id, response=payload,
-        )
-        touch_thread(messenger_store, thread_id=thread_id)
-        return jsonify(payload)
+        def _stream():
+            collected = []
+            for event in loop.process_message_stream(thread.session_id, content):
+                if isinstance(event, TokenEvent):
+                    payload = {"type": "token", "delta": event.delta}
+                elif isinstance(event, ToolCallEvent):
+                    payload = {"type": "tool_call",
+                               "call_id": event.call_id,
+                               "name": event.name,
+                               "args": event.args}
+                elif isinstance(event, ToolResultEvent):
+                    payload = {"type": "tool_result",
+                               "call_id": event.call_id,
+                               "name": event.name,
+                               "content": event.content}
+                elif isinstance(event, DoneEvent):
+                    payload = {
+                        "type": "done",
+                        "content": event.content,
+                        "finish_reason": event.finish_reason,
+                    }
+                    collected.append(event)
+                elif isinstance(event, ErrorEvent):
+                    payload = {"type": "error",
+                               "code": event.code,
+                               "message": event.message}
+                else:
+                    continue
+                yield f"data: {jsonify(payload).get_data(as_text=True)}\n\n"
+            if collected:
+                # Cache the final DoneEvent for idempotent retries.
+                final = {
+                    "content": collected[-1].content,
+                    "finish_reason": collected[-1].finish_reason,
+                }
+                messenger_store.idempotency_set_response(
+                    client_msg_id=client_msg_id, response=final,
+                )
+            touch_thread(messenger_store, thread_id=thread_id)
+
+        return Response(_stream(), mimetype="text/event-stream")
 
     return bp
