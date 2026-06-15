@@ -408,6 +408,73 @@
   }
   .board-col .empty { font-size:11px; color:rgba(232,227,213,0.35); font-style:italic; }
 
+  /* ─── Board-item action affordances ──────────────────────────────────────
+     Quiet bottom-row toolbar. Closes the read-only loop Aetheria surfaced in
+     the 2026-06-15 Coordination Blackout: Jon can see board items but had no
+     buttons to transition or archive from the view he was looking at. */
+  .board-item-actions {
+    display:flex; gap:6px; flex-wrap:wrap;
+    margin-top:8px; padding-top:6px;
+    border-top:1px solid rgba(225,210,170,0.05);
+    font-size:10px;
+    opacity:0.5;
+    transition:opacity 150ms;
+  }
+  .board-item:hover .board-item-actions { opacity:0.85; }
+  .board-item-actions .spacer { flex:1; }
+  .board-item-action {
+    background:transparent;
+    border:1px solid rgba(225,210,170,0.10);
+    color:rgba(232,227,213,0.6);
+    padding:2px 8px;
+    border-radius:8px;
+    cursor:pointer;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.10em;
+    font-family:inherit;
+    line-height:1.4;
+  }
+  .board-item-action:hover { color:var(--text); border-color:rgba(225,210,170,0.20); }
+  .board-item-action.active {
+    color:var(--sov-amber);
+    border-color:rgba(224,184,120,0.3);
+    background:rgba(224,184,120,0.04);
+    cursor:default;
+  }
+  .board-item-action.active:hover { color:var(--sov-amber); }
+  .board-item-action[disabled] { opacity:0.4; cursor:wait; }
+  .board-item-action.danger:hover { color:#d4a8a8; border-color:rgba(212,168,168,0.3); }
+  .board-item-lesson {
+    margin-top:6px; padding-top:6px;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .board-item-lesson textarea {
+    background:rgba(0,0,0,0.2);
+    border:1px solid rgba(225,210,170,0.10);
+    color:var(--text);
+    font-family:inherit;
+    font-size:11px;
+    padding:6px 8px;
+    border-radius:6px;
+    resize:vertical;
+    min-height:50px;
+    line-height:1.4;
+  }
+  .board-item-lesson textarea:focus {
+    outline:none;
+    border-color:rgba(224,184,120,0.35);
+  }
+  .board-item-lesson .row { display:flex; gap:6px; justify-content:flex-end; align-items:center; }
+  .board-item-lesson .err {
+    flex:1;
+    font-size:10px;
+    color:#d4a8a8;
+    text-transform:none;
+    letter-spacing:0;
+  }
+  .board-item.fading { opacity:0; transition:opacity 300ms; }
+
   /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
   .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
   .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
@@ -797,6 +864,41 @@
   }
 
   // ─── Boards panel ─────────────────────────────────────────────────────────
+  // Status pills only on Blueprint per the spec — Signal and Friction live
+  // their lifecycle as Open → Archived only (state machine in
+  // soveryn/platform/coordination/types.py:VALID_TRANSITIONS still permits
+  // Refining/Ready on any board, but conventionally only Blueprint uses them).
+  const BOARD_PILL_STATES = ["Open", "Refining", "Ready"];
+
+  function htmlEscape(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  function renderBoardItemActions(boardName, item) {
+    const id = htmlEscape(item.id);
+    const current = item.status || "Open";
+    let pillsHtml = "";
+    if (boardName === "blueprint") {
+      pillsHtml = BOARD_PILL_STATES.map(s => {
+        const isActive = s === current;
+        const cls = isActive ? "board-item-action active" : "board-item-action";
+        const attrs = isActive
+          ? `data-status="${s}" disabled`
+          : `data-status="${s}"`;
+        return `<button class="${cls}" data-action="status" ${attrs}>${s}</button>`;
+      }).join("");
+    }
+    return `
+      <div class="board-item-actions" data-node-id="${id}">
+        ${pillsHtml}
+        <span class="spacer"></span>
+        <button class="board-item-action danger" data-action="archive-open">Close</button>
+      </div>
+    `;
+  }
+
   function renderBoardColumn(boardName, board) {
     const col = document.querySelector(`.board-col[data-board="${boardName}"]`);
     if (!col) return;
@@ -814,14 +916,125 @@
       return;
     }
     listEl.innerHTML = items.map(it => `
-      <div class="board-item">
+      <div class="board-item" data-node-id="${htmlEscape(it.id)}" data-board="${boardName}">
         <div class="head">
-          <span class="who" data-agent="${it.agent || ""}">${it.agent || "?"}${it.owner && it.owner !== it.agent ? ` → ${it.owner}` : ""}</span>
-          <span>${it.status || ""}</span>
+          <span class="who" data-agent="${htmlEscape(it.agent)}">${htmlEscape(it.agent || "?")}${it.owner && it.owner !== it.agent ? ` → ${htmlEscape(it.owner)}` : ""}</span>
+          <span>${htmlEscape(it.status || "")}</span>
         </div>
-        <div class="body">${(it.content_head || "").replace(/[<>]/g, c => ({"<":"&lt;",">":"&gt;"})[c])}</div>
+        <div class="body">${htmlEscape(it.content_head || "")}</div>
+        ${renderBoardItemActions(boardName, it)}
       </div>
     `).join("");
+    wireBoardItemActions(listEl);
+  }
+
+  // ─── Board-item action wiring ────────────────────────────────────────────
+  async function postCoordAction(url, body) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      let data = null;
+      try { data = await r.json(); } catch (_) {}
+      if (!r.ok) {
+        return { ok: false, error: (data && data.error) || `HTTP ${r.status}` };
+      }
+      return { ok: true, data };
+    } catch (e) {
+      return { ok: false, error: e.message || "network error" };
+    }
+  }
+
+  function openLessonInput(item, danger) {
+    if (item.querySelector(".board-item-lesson")) return;
+    const lesson = document.createElement("div");
+    lesson.className = "board-item-lesson";
+    lesson.innerHTML = `
+      <textarea placeholder="why is this resolved? a paired Lesson Learned node is written so the resolution stays recallable."></textarea>
+      <div class="row">
+        <span class="err" data-lesson-err></span>
+        <button class="board-item-action" data-action="archive-cancel">Cancel</button>
+        <button class="board-item-action active" data-action="archive-save">Save</button>
+      </div>
+    `;
+    item.appendChild(lesson);
+    const ta = lesson.querySelector("textarea");
+    if (ta) ta.focus();
+  }
+
+  async function submitArchive(item) {
+    const nodeId = item.dataset.nodeId;
+    const lessonEl = item.querySelector(".board-item-lesson");
+    if (!lessonEl) return;
+    const ta = lessonEl.querySelector("textarea");
+    const errEl = lessonEl.querySelector("[data-lesson-err]");
+    const saveBtn = lessonEl.querySelector('[data-action="archive-save"]');
+    const cancelBtn = lessonEl.querySelector('[data-action="archive-cancel"]');
+    const lesson = (ta && ta.value || "").trim();
+    if (errEl) errEl.textContent = "";
+    if (!lesson) {
+      if (errEl) errEl.textContent = "lesson is required";
+      if (ta) ta.focus();
+      return;
+    }
+    if (saveBtn) saveBtn.setAttribute("disabled", "");
+    if (cancelBtn) cancelBtn.setAttribute("disabled", "");
+    const res = await postCoordAction(`/api/coord/${encodeURIComponent(nodeId)}/archive`, { lesson });
+    if (!res.ok) {
+      if (errEl) errEl.textContent = res.error;
+      if (saveBtn) saveBtn.removeAttribute("disabled");
+      if (cancelBtn) cancelBtn.removeAttribute("disabled");
+      return;
+    }
+    item.classList.add("fading");
+    setTimeout(() => { renderBoards(); }, 320);
+  }
+
+  async function submitStatus(item, newStatus, btn) {
+    const nodeId = item.dataset.nodeId;
+    if (btn) btn.setAttribute("disabled", "");
+    const res = await postCoordAction(`/api/coord/${encodeURIComponent(nodeId)}/status`, { status: newStatus });
+    if (!res.ok) {
+      // Surface the error in a transient inline note so Jon sees why an
+      // invalid transition was rejected (e.g. Open → Ready isn't allowed).
+      let note = item.querySelector("[data-status-err]");
+      if (!note) {
+        note = document.createElement("div");
+        note.setAttribute("data-status-err", "");
+        note.style.cssText = "font-size:10px;color:#d4a8a8;margin-top:4px;";
+        const actions = item.querySelector(".board-item-actions");
+        if (actions) actions.insertAdjacentElement("afterend", note);
+        else item.appendChild(note);
+      }
+      note.textContent = res.error;
+      if (btn) btn.removeAttribute("disabled");
+      setTimeout(() => { if (note && note.parentNode) note.parentNode.removeChild(note); }, 4000);
+      return;
+    }
+    renderBoards();
+  }
+
+  function wireBoardItemActions(listEl) {
+    listEl.querySelectorAll(".board-item").forEach(item => {
+      item.querySelectorAll("[data-action]").forEach(btn => {
+        const action = btn.dataset.action;
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (action === "status") {
+            submitStatus(item, btn.dataset.status, btn);
+          } else if (action === "archive-open") {
+            openLessonInput(item, btn);
+          } else if (action === "archive-cancel") {
+            const lesson = item.querySelector(".board-item-lesson");
+            if (lesson) lesson.remove();
+          } else if (action === "archive-save") {
+            submitArchive(item);
+          }
+        });
+      });
+    });
   }
 
   async function renderBoards() {
