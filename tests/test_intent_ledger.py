@@ -57,6 +57,10 @@ def test_record_intent_writes_mark_node_and_triggered_by_edge(tmp_path):
     assert mark.content == "That result is genuinely beautiful."
     # stance lives in the intent column; full grammar in provenance.
     assert mark.intent == "marking-delight"
+    assert mark.provenance["why"] == intent.why
+    assert mark.provenance["stance"] == "marking-delight"
+    assert mark.provenance["trigger"] == trigger  # resolved node id, not raw input
+    assert mark.provenance["channel"] == "async"
 
     edges = _edges(db)
     assert len(edges) == 1
@@ -81,3 +85,4 @@ def test_record_intent_materializes_anchor_when_trigger_is_live(tmp_path):
     anchor = store.get_node(trigger_id)
     assert anchor.type == TRIGGER_ANCHOR_TYPE
     assert len(_edges(db)) == 1
+    assert trigger_id != intent.trigger  # resolve_trigger generated a new node id, not raw prose

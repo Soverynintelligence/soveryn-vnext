@@ -69,7 +69,7 @@ def record_intent(
     )
     edge_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
-    with store._conn() as conn:
+    with store._conn() as conn:  # noqa: SLF001 — package-internal helper
         conn.execute(
             "INSERT INTO edges "
             "(id, source_id, target_id, relationship, strength, bidirectional, "
