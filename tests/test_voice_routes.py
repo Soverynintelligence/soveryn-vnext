@@ -97,10 +97,17 @@ def app_with_voice(
 def app_without_voice(
     tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path,
 ):
-    """Boot create_app() WITHOUT ELEVENLABS_API_KEY so the voice blueprint
-    is skipped."""
+    """Boot create_app() with voice genuinely disabled.
+
+    Phase 2 (F5-TTS): dropping ELEVENLABS_API_KEY alone is no longer enough to
+    disable voice — F5-TTS is the default primary and doesn't need ElevenLabs
+    creds.  To force the no-voice path we must ALSO set SOVEREIGN_TTS_PRIMARY
+    to 'elevenlabs', which makes the ElevenLabs key + voice_id both mandatory;
+    with neither present, voice_state stays empty and the blueprint is skipped.
+    """
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     monkeypatch.delenv("ELEVENLABS_VOICE_ID_AETHERIA", raising=False)
+    monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "elevenlabs")
     _configure_env(
         monkeypatch,
         fake_souls_dir=fake_souls_dir,
@@ -142,9 +149,10 @@ def test_voice_aetheria_room_renders(app_with_voice):
 
 
 def test_voice_unconfigured_agent_404(app_with_voice):
-    """Vett isn't a SUPPORTED_AGENTS member in Phase 1."""
+    """Agents not in SUPPORTED_AGENTS (aetheria/vett/scotty) get 404.
+    Phase 2 (F5-TTS): vett and scotty are now supported; use 'ares' instead."""
     client = app_with_voice.test_client()
-    rv = client.get("/voice/vett")
+    rv = client.get("/voice/ares")
     assert rv.status_code == 404
 
 
@@ -176,9 +184,11 @@ def test_voice_offer_rejects_empty_sdp_string(app_with_voice):
 
 
 def test_voice_offer_rejects_unknown_agent(app_with_voice):
+    """POST /voice/<unknown>/offer for an agent not in SUPPORTED_AGENTS returns 404.
+    Phase 2 (F5-TTS): scotty is now supported; use 'nobody' instead."""
     client = app_with_voice.test_client()
     rv = client.post(
-        "/voice/scotty/offer",
+        "/voice/nobody/offer",
         json={"sdp": "v=0\r\n", "type": "offer"},
     )
     assert rv.status_code == 404

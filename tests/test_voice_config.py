@@ -27,9 +27,10 @@ def test_voice_config_returns_none_for_unconfigured_agent():
         "ELEVENLABS_API_KEY": "key",
         "ELEVENLABS_VOICE_ID_AETHERIA": "voice-aetheria-id",
     })
-    # Scotty has no voice character wired yet in Phase 1
-    assert cfg.agent_character("scotty") is None
-    assert cfg.agent_character("vett") is None
+    # Agents not in VOICE_ENABLED_AGENTS (aetheria/vett/scotty) get None.
+    # Phase 2 (F5-TTS): all three named agents are now voice-enabled.
+    assert cfg.agent_character("ares") is None
+    assert cfg.agent_character("heartbeat") is None
 
 
 def test_env_config_has_voice_fields():
@@ -55,17 +56,26 @@ def test_voice_root_explicit_env_override_wins():
     assert cfg.voice_root == Path("/other/voice/path")
 
 
-def test_aetheria_character_is_none_when_api_key_missing():
+def test_aetheria_character_present_without_api_key_under_f5tts():
+    """Phase 2 (F5-TTS): agent character is returned even without ELEVENLABS_API_KEY.
+    F5-TTS keys on agent name, not ElevenLabs creds. elevenlabs_voice_id
+    reflects the configured ElevenLabs voice ID (for the fallback path)."""
     cfg = VoiceConfig.from_env({
         "ELEVENLABS_VOICE_ID_AETHERIA": "voice-id",
-        # no API key
+        # no API key — voice still works via F5-TTS
     })
-    assert cfg.agent_character("aetheria") is None
+    char = cfg.agent_character("aetheria")
+    assert char is not None
+    assert char.elevenlabs_voice_id == "voice-id"
 
 
-def test_aetheria_character_is_none_when_voice_id_missing():
+def test_aetheria_character_present_with_elevenlabs_voice_id_none():
+    """Phase 2 (F5-TTS): a character is returned even when no ElevenLabs voice ID
+    is set. elevenlabs_voice_id is None (F5-TTS doesn't need it)."""
     cfg = VoiceConfig.from_env({
         "ELEVENLABS_API_KEY": "key",
-        # no voice id
+        # no voice id — still voice-enabled via F5-TTS
     })
-    assert cfg.agent_character("aetheria") is None
+    char = cfg.agent_character("aetheria")
+    assert char is not None
+    assert char.elevenlabs_voice_id is None

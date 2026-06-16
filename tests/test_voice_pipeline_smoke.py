@@ -303,8 +303,12 @@ def test_parakeet_stt_service_is_segmented_stt_subclass():
 
 def test_agent_loop_bridge_emits_llm_text_frames_for_each_tts_token_event():
     """Bridge consumes a TranscriptionFrame, runs the AgentLoop generator,
-    and emits one LLMTextFrame per TTSTokenEvent — bracketed by
-    LLMFullResponseStartFrame and LLMFullResponseEndFrame."""
+    and emits aggregated LLMTextFrame(s) via sentence-level aggregation —
+    bracketed by LLMFullResponseStartFrame and LLMFullResponseEndFrame.
+
+    Commit fa68d05 (2026-06-15): TTS uses SENTENCE aggregation, so tokens
+    are buffered until a sentence terminator is seen.  The three tokens
+    "hello", " world", "." flush together as one frame "hello world."."""
 
     async def _run():
         agent_loop = _FakeAgentLoop(events=[
@@ -325,13 +329,14 @@ def test_agent_loop_bridge_emits_llm_text_frames_for_each_tts_token_event():
     # AgentLoop was called with the transcribed user utterance
     assert agent_loop.calls == [("sid-1", "user utterance")]
 
-    # Captured: response wrapper Start, three LLMTextFrames in order, response End.
+    # Captured: response wrapper Start, one aggregated LLMTextFrame, response End.
+    # Sentence aggregation flushes "hello" + " world" + "." as one frame.
     frame_types = [type(f).__name__ for f, _ in captured]
     text_frames = [f for f, _ in captured if isinstance(f, LLMTextFrame)]
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    assert [f.text for f in text_frames] == ["hello", " world", "."]
+    assert [f.text for f in text_frames] == ["hello world."]
     assert len(starts) == 1
     assert len(ends) == 1
     # Order: Start ... End
@@ -408,17 +413,23 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     """When _run_turn's asyncio.Task is cancelled mid-turn, an
     LLMFullResponseEndFrame is still emitted so the downstream TTS service
     can drop pending audio cleanly. Mimics the real interruption path where
-    process_frame -> _cancel_inflight cancels the task."""
+    process_frame -> _cancel_inflight cancels the task.
+
+    Sentence aggregation note (fa68d05): the bridge only flushes a frame at
+    sentence boundaries (or when the buffer hits 40 chars).  The pre-cancel
+    chunk must end with a sentence terminator so it flushes BEFORE cancellation;
+    otherwise it stays buffered and the wait loop never fires."""
 
     async def _run():
-        # Slow generator: emits one chunk, then blocks until externally signaled
-        # cancelled. We cancel the task partway through and assert the End
-        # frame still fires from the finally block.
+        # Slow generator: emits one complete sentence, then blocks until
+        # externally signalled cancelled. We cancel the task partway through
+        # and assert the End frame still fires from the finally block.
         cancel_signal = {"cancel": False}
 
         class _SlowAgentLoop:
             def process_message_stream(self, session_id, user_message, **kwargs):
-                yield TTSTokenEvent(text="first")
+                # "first." ends with "." → flushes immediately under sentence aggregation
+                yield TTSTokenEvent(text="first.")
                 # Spin until the test signals cancel
                 deadline = time.monotonic() + 5.0
                 while time.monotonic() < deadline:
@@ -457,8 +468,8 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    # Got the first buffered chunk before cancellation
-    assert any(f.text == "first" for f in text_frames)
+    # Got the first sentence before cancellation (flushed at "." boundary)
+    assert any(f.text == "first." for f in text_frames)
     # Never got the second chunk (the cancellation interrupted the wait)
     assert not any(f.text == "never" for f in text_frames)
     # Start + End wrappers both fired (End emitted in the finally block)

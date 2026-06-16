@@ -576,11 +576,20 @@ def test_recall_cutover_includes_identity_spine_and_does_not_leak_channel_b_cont
 
     loop.process_message(sid, "what do you remember about yourself?")
 
-    recall_message = fake_chat.calls[0]["request"].messages[1].content
-    assert "Stateable recall:" in recall_message
-    assert "From older reviewed notes, I carry presence over performance is part of my identity" in recall_message
-    assert "Uncertain context:" in recall_message
-    assert raw_claim not in recall_message
+    msgs = fake_chat.calls[0]["request"].messages
+    # loop.py now builds identity spine and scored recall as SEPARATE system
+    # messages: msg[1] = identity context ("Stateable recall:" + identity
+    # nodes); msg[2] = scored recall ("Uncertain context:" + class-only render).
+    # Verify the intended contract across all system messages rather than a
+    # single index.
+    system_contents = "\n".join(
+        m.content for m in msgs if m.role == "system"
+    )
+    assert "Stateable recall:" in system_contents
+    assert "From older reviewed notes, I carry presence over performance is part of my identity" in system_contents
+    assert "Uncertain context:" in system_contents
+    # Channel-B raw verbatim text must NOT appear anywhere
+    assert raw_claim not in system_contents
 
 def test_recall_zero_matches_omits_recall_system_message(conv_store, tmp_path):
     """If no nodes meet threshold → no recall system message at all."""
