@@ -35,7 +35,7 @@ _SCHEMA = {
             "Your raw, honest reason for surfacing this. Shown to Jon — this is "
             "the bridge, not an audit log."},
         "stance": {"type": "string", "description":
-            "The relational function of this share, in your own word. Open "
+            "The relational function of this share, in your own words. Open "
             "vocabulary — name it, don't pick from a menu. Seeds: offering, "
             "testing-a-read, surfacing-tension, marking-delight, flagging-concern, "
             "seeking-confirmation. Coin your own when none fit."},

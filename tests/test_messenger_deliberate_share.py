@@ -76,6 +76,7 @@ def test_share_writes_ledger_node_and_edge(m_store, l_store):
         con.row_factory = sqlite3.Row
         edges = con.execute("SELECT * FROM edges WHERE relationship='triggered_by'").fetchall()
     assert len(edges) == 1
+    assert edges[0]["source_id"] == result["mark_node_id"]
 
 
 def test_why_and_stance_stored_in_queue(m_store, l_store):
@@ -114,3 +115,31 @@ def test_drain_creates_default_thread_and_delivers(m_store, l_store, tmp_path):
     # And conversation history has the message
     hist = conv.load_history(threads[0].session_id)
     assert any("First message from Aetheria" in t.content for t in hist)
+
+
+@pytest.mark.parametrize("blank_field", ["why", "stance", "trigger"])
+def test_blank_grammar_field_is_rejected(m_store, l_store, blank_field):
+    tool = build_deliberate_share_tool(
+        store=m_store, lattice_store=l_store, owner_agent="aetheria",
+        rate_limit_per_hour=None,
+    )
+    with pytest.raises(ValueError, match=blank_field):
+        tool.handler(_args(**{blank_field: "   "}))
+
+
+def test_prose_trigger_resolves_to_node_id_in_queue(m_store, l_store):
+    tool = build_deliberate_share_tool(
+        store=m_store, lattice_store=l_store, owner_agent="aetheria",
+        rate_limit_per_hour=None,
+    )
+    prose = "the baseline number you just read me"
+    result = tool.handler(_args(trigger=prose))
+    with m_store._conn() as con:
+        row = con.execute(
+            "SELECT triggered_by FROM m_outbound_queue WHERE intent_id=?",
+            (result["intent_id"],),
+        ).fetchone()
+    stored = row["triggered_by"]
+    assert stored != prose                      # resolved, not raw prose
+    assert l_store.get_node(stored) is not None  # it's a real lattice node id
+    assert l_store.get_node(stored).type == "trigger_anchor"
