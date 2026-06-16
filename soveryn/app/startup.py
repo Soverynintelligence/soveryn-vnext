@@ -416,20 +416,23 @@ def create_app(
         # See project_soveryn_partnership_contract_2026_06_13 in maintainer memory.
         # DO NOT silently re-add a substrate rate limit — that's a partnership
         # regression, not a safety improvement.
-        from soveryn.agents.messenger_tool import build_deliberate_share_tool
-        tool_registry.register(
-            build_deliberate_share_tool(
-                store=messenger_store, owner_agent="aetheria",
-                rate_limit_per_hour=None,
+        if recall_lattice is not None:
+            from soveryn.agents.messenger_tool import build_deliberate_share_tool
+            tool_registry.register(
+                build_deliberate_share_tool(
+                    store=messenger_store, owner_agent="aetheria",
+                    lattice_store=recall_lattice,
+                    rate_limit_per_hour=None,
+                )
             )
-        )
-        # Vett — Colleague tier; substrate enforces a 2/hour cap.
-        tool_registry.register(
-            build_deliberate_share_tool(
-                store=messenger_store, owner_agent="vett",
-                rate_limit_per_hour=2,
+            # Vett — Colleague tier; substrate enforces a 2/hour cap.
+            tool_registry.register(
+                build_deliberate_share_tool(
+                    store=messenger_store, owner_agent="vett",
+                    lattice_store=recall_lattice,
+                    rate_limit_per_hour=2,
+                )
             )
-        )
         # Scotty: not registered by default. He reports through threads Jon initiates.
 
         # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
