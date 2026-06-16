@@ -705,19 +705,6 @@
     el.classList.add("visible");
   }
 
-  // ─── History grouping ─────────────────────────────────────────────────────
-  const HISTORY_BUCKETS = ["Today", "Yesterday", "Previous 7 days", "Previous 30 days", "Older"];
-
-  function bucketFor(updatedAt) {
-    const now = new Date();
-    const then = new Date(updatedAt);
-    const days = Math.floor((now - then) / (1000 * 60 * 60 * 24));
-    if (days < 1) return "Today";
-    if (days < 2) return "Yesterday";
-    if (days < 7) return "Previous 7 days";
-    if (days < 30) return "Previous 30 days";
-    return "Older";
-  }
 
   async function loadSessions() {
     const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
@@ -727,57 +714,85 @@
     renderHistory();
   }
 
+  // Sidebar grouping by rail/type (OCD-friendly): human Conversations first +
+  // always open; machine rails grouped + collapsible (collapsed by default so
+  // the sidebar stays legible). Category derived from the session title prefix.
+  const RAIL_GROUPS = ["Conversations", "Mobile", "Signal", "Heartbeat", "Webhook", "System"];
+  const expandedRails = new Set();  // survives re-renders; Conversations is implicitly always open
+  function railFor(title) {
+    const t = (title || "").trim();
+    if (!t.startsWith("[")) return "Conversations";
+    if (t.startsWith("[m]")) return "Mobile";
+    if (t.startsWith("[signal]")) return "Signal";
+    if (t.startsWith("[heartbeat]")) return "Heartbeat";
+    if (t.startsWith("[webhook]")) return "Webhook";
+    return "System";  // [direct:…], [specialist…], eval/test sessions, anything else bracketed
+  }
+
+  function sessionLink(s) {
+    const a = document.createElement("a");
+    a.href = `/chat/${s.session_id}`;
+    if (s.session_id === state.sessionId) a.className = "active";
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = AGENT_DOT_COLORS[s.agent] || "var(--sov-bronze)";
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = s.title || "(untitled)";
+    const del = document.createElement("button");
+    del.className = "del-session";
+    del.type = "button";
+    del.title = "Delete this session";
+    del.setAttribute("aria-label", `Delete session ${s.title || s.session_id}`);
+    del.textContent = "×";
+    del.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (!confirm(`Delete "${s.title || s.session_id.slice(0,8)}"? This cannot be undone.`)) return;
+      const r = await fetch(`/sessions/${s.session_id}`, { method: "DELETE" });
+      if (!r.ok) { alert(`delete failed: ${r.status}`); return; }
+      if (s.session_id === state.sessionId) {
+        state.sessionId = null;
+        elThread().innerHTML = "";
+        elSessionMeta().textContent = "new session";
+        window.history.replaceState({}, "", `/chat?agent=${state.agent}`);
+      }
+      loadSessions();
+    });
+    a.appendChild(dot);
+    a.appendChild(label);
+    a.appendChild(del);
+    return a;
+  }
+
   function renderHistory() {
     const grouped = {};
-    for (const b of HISTORY_BUCKETS) grouped[b] = [];
+    for (const g of RAIL_GROUPS) grouped[g] = [];
     const q = (document.querySelector('[data-testid="search"]').value || "").toLowerCase();
     for (const s of state.sessions) {
       if (q && !(s.title || "").toLowerCase().includes(q)) continue;
-      grouped[bucketFor(s.updated_at)].push(s);
+      grouped[railFor(s.title)].push(s);
     }
     const host = elHistory();
     host.innerHTML = "";
-    for (const bucket of HISTORY_BUCKETS) {
-      const items = grouped[bucket];
+    const searching = !!q;  // when searching, expand all so matches aren't hidden in collapsed groups
+    for (const group of RAIL_GROUPS) {
+      const items = grouped[group];
       if (!items.length) continue;
+      const isConversations = group === "Conversations";
+      const open = isConversations || searching || expandedRails.has(group);
       const h = document.createElement("h4");
-      h.textContent = bucket;
-      host.appendChild(h);
-      for (const s of items) {
-        const a = document.createElement("a");
-        a.href = `/chat/${s.session_id}`;
-        if (s.session_id === state.sessionId) a.className = "active";
-        const dot = document.createElement("span");
-        dot.className = "dot";
-        dot.style.background = AGENT_DOT_COLORS[s.agent] || "var(--sov-bronze)";
-        const label = document.createElement("span");
-        label.className = "label";
-        label.textContent = s.title || "(untitled)";
-        const del = document.createElement("button");
-        del.className = "del-session";
-        del.type = "button";
-        del.title = "Delete this session";
-        del.setAttribute("aria-label", `Delete session ${s.title || s.session_id}`);
-        del.textContent = "×";
-        del.addEventListener("click", async (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (!confirm(`Delete "${s.title || s.session_id.slice(0,8)}"? This cannot be undone.`)) return;
-          const r = await fetch(`/sessions/${s.session_id}`, { method: "DELETE" });
-          if (!r.ok) { alert(`delete failed: ${r.status}`); return; }
-          if (s.session_id === state.sessionId) {
-            state.sessionId = null;
-            elThread().innerHTML = "";
-            elSessionMeta().textContent = "new session";
-            window.history.replaceState({}, "", `/chat?agent=${state.agent}`);
-          }
-          loadSessions();
+      h.textContent = isConversations ? group : `${open ? "▾" : "▸"} ${group} (${items.length})`;
+      if (!isConversations) {
+        h.style.cursor = "pointer";
+        h.addEventListener("click", () => {
+          if (expandedRails.has(group)) expandedRails.delete(group);
+          else expandedRails.add(group);
+          renderHistory();
         });
-        a.appendChild(dot);
-        a.appendChild(label);
-        a.appendChild(del);
-        host.appendChild(a);
       }
+      host.appendChild(h);
+      if (open) for (const s of items) host.appendChild(sessionLink(s));
     }
   }
 
@@ -1433,6 +1448,7 @@
         elThread().innerHTML = "";
         elSessionMeta().textContent = "new session";
         window.history.replaceState({}, "", "/chat");
+        resumeLatestThread();  // walk into this agent's ongoing room (if any)
       });
     });
 
@@ -1573,6 +1589,31 @@
     });
   }
 
+  // ─── Resume latest per-agent thread ─────────────────────────────────────────
+  // Default landing: open the most-recent HUMAN thread for the current agent
+  // instead of cold-starting a blank session — so she keeps the continuous
+  // thread ("holding the thread"), per-rail / per-agent. Rail + automated
+  // sessions (titles starting with "[" — [signal] [m] [heartbeat] [direct:…]
+  // [specialist…] [webhook] …) are skipped so we never land in another rail's
+  // session. PURELY NON-DESTRUCTIVE: only chooses which existing session to
+  // open; never creates or deletes. Falls back to lazy-mint (sessionId stays
+  // null) if the agent has no prior human thread.
+  async function resumeLatestThread() {
+    try {
+      const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
+      if (!r.ok) return;
+      const data = await r.json();
+      const latest = (data.sessions || []).find(
+        s => !(s.title || "").trim().startsWith("[")
+      );
+      if (!latest) return;
+      state.sessionId = latest.session_id;
+      window.history.replaceState({}, "", `/chat/${latest.session_id}`);
+      elSessionMeta().textContent = latest.title || latest.session_id.slice(0, 8);
+      await loadHistory(latest.session_id);
+    } catch (e) { /* best-effort; lazy-mint remains the fallback */ }
+  }
+
   // ─── Boot ──────────────────────────────────────────────────────────────────
   function boot() {
     initSidebar();
@@ -1583,6 +1624,7 @@
     bindEvents();
     loadSessions();
     if (sessionId) loadHistory(sessionId);
+    else resumeLatestThread();
   }
   document.addEventListener("DOMContentLoaded", boot);
 })();
