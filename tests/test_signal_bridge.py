@@ -678,7 +678,7 @@ def test_receive_once_passes_bounded_signal_cli_receive_timeout(monkeypatch, tmp
         "--output", "json", "receive", "--timeout", "7",
         "--max-messages", "10",
     ]
-    assert seen["timeout"] == 17
+    assert seen["timeout"] == 67  # cli_timeout(7) + 60 buffer (native signal-cli processing headroom)
 
 
 # ─── signal-cli serializer lock ─────────────────────────────────────────────

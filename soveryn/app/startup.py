@@ -433,6 +433,13 @@ def create_app(
                     rate_limit_per_hour=2,
                 )
             )
+            # mark_share — Aetheria's LIVE in-conversation intent mark (spec §3,
+            # the second surface of the intent grammar): same record_intent core
+            # as deliberate_share, channel="live", no delivery fields.
+            from soveryn.agents.aetheria.intent_mark import build_mark_share_tool
+            tool_registry.register(
+                build_mark_share_tool(lattice_store=recall_lattice, owner_agent="aetheria")
+            )
         # Scotty: not registered by default. He reports through threads Jon initiates.
 
         # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents

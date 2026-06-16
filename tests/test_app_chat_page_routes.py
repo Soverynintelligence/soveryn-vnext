@@ -115,10 +115,11 @@ def test_chat_page_posts_to_chat_sync(client):
     assert '"/chat"' in body or "'/chat'" in body
 
 
-def test_chat_page_groups_history_by_date(client):
+def test_chat_page_groups_history_by_rail(client):
     body = client.get("/chat").data.decode("utf-8")
-    # The grouping logic uses these labels
-    for label in ("Today", "Yesterday", "Previous 7 days"):
+    # Sidebar groups sessions by rail/type (replaced the old date buckets):
+    # Conversations (human) + collapsible machine rails.
+    for label in ("Conversations", "Mobile", "Signal", "Heartbeat", "Webhook", "System"):
         assert label in body
 
 

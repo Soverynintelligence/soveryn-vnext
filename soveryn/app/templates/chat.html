@@ -283,6 +283,8 @@
     border-top:1px dashed rgba(255,255,255,0.05);
   }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
+  /* Live intent mark (mark_share): reads as a deliberate note, not a data tool. */
+  .tool-strip .tool-result.intent-mark { color:var(--sov-olive); opacity:0.95; font-style:italic; }
   .bubble .thinking-placeholder {
     color:rgba(236,243,244,0.45);
     font-style:italic;
@@ -1139,7 +1141,19 @@
             if (strip) {
               const resultLine = strip.querySelector(".tool-result");
               resultLine.classList.remove("pending");
-              resultLine.textContent = truncateResult(payload.content);
+              // Live intent mark (mark_share): render the why/stance cleanly
+              // instead of raw JSON. Guarded — any non-grammar result falls
+              // straight through to the normal rendering.
+              let intentRendered = false;
+              try {
+                const r = JSON.parse(payload.content);
+                if (r && r.why && r.stance) {
+                  resultLine.classList.add("intent-mark");
+                  resultLine.textContent = `✶ ${r.stance} — ${r.why}`;
+                  intentRendered = true;
+                }
+              } catch (e) { /* not a JSON grammar result → normal render */ }
+              if (!intentRendered) resultLine.textContent = truncateResult(payload.content);
             }
             elThread().scrollTop = elThread().scrollHeight;
           } else if (payload.type === "done") {
