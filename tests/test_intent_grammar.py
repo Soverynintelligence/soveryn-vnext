@@ -1,6 +1,7 @@
 """DeliberateShareIntent — the why/stance/trigger grammar value object."""
 from __future__ import annotations
 import pytest
+from dataclasses import FrozenInstanceError
 
 from soveryn.platform.intent.grammar import DeliberateShareIntent
 
@@ -11,10 +12,10 @@ def test_valid_intent_constructs_and_is_frozen():
         stance="surfacing-tension",
         trigger="node-abc-123",
     )
-    assert intent.why.startswith("This baseline")
+    assert intent.why == "This baseline result changes how I read the whole arc."
     assert intent.stance == "surfacing-tension"
     assert intent.trigger == "node-abc-123"
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         intent.stance = "offering"  # frozen
 
 
