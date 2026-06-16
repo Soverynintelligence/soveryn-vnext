@@ -153,4 +153,67 @@ def voice_offer(agent: str):
     return jsonify(answer)
 
 
+@bp.get("/voice/agents")
+def voice_agents_list():
+    """Which agents have voice configured. Localhost-only (mirror the /chat
+    cookie-less surface). The messenger has its own auth-gated variant at
+    ``GET /m/voice/agents`` for the PWA. Same payload shape so client code
+    in both surfaces can share a parser."""
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        abort(403, description="voice/agents requires localhost")
+    return jsonify({"agents": sorted(_voice_state().keys())})
+
+
+@bp.post("/voice/session/<session_id>/offer")
+def voice_session_offer(session_id: str):
+    """WebRTC offer that binds the call to an EXISTING session_id (the
+    desktop /chat surface uses this so voice turns land in the same
+    conversation as text). Localhost-gated for the same reason — the
+    /chat UI itself isn't auth-walled, and the funnel only exposes /m.
+
+    Body: {"sdp", "type", "agent"}. Agent must match an agent in
+    voice_state (i.e. has F5-TTS or ElevenLabs configured)."""
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        abort(403, description="voice/session requires localhost")
+
+    body = request.get_json(silent=True) or {}
+    sdp = body.get("sdp")
+    sdp_type = body.get("type", "offer")
+    agent = (body.get("agent") or "").lower().strip()
+
+    if agent not in SUPPORTED_AGENTS:
+        return jsonify({"error": f"unknown agent {agent!r}"}), 400
+    state = _voice_state().get(agent)
+    if state is None:
+        return jsonify({
+            "error": f"voice for {agent!r} not initialized",
+        }), 503
+    if not isinstance(sdp, str) or not sdp.strip():
+        return jsonify({"error": "sdp field required"}), 400
+
+    conv_store = current_app.extensions["soveryn"]["conv_store"]
+    agent_loop = state["agent_loop"]
+
+    try:
+        answer = negotiate_and_dispatch_voice(
+            agent_name=agent,
+            agent_loop=agent_loop,
+            conv_store=conv_store,
+            voice_id=state["voice_id"],
+            elevenlabs_api_key=state["elevenlabs_api_key"],
+            parakeet_url=state.get("parakeet_url", "http://127.0.0.1:8087"),
+            sdp=sdp,
+            sdp_type=sdp_type,
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "voice/session offer failed agent=%s session=%s",
+            agent, session_id,
+        )
+        return jsonify({"error": f"signaling failed: {type(exc).__name__}: {exc}"}), 500
+
+    return jsonify(answer)
+
+
 __all__ = ["bp", "SUPPORTED_AGENTS"]
