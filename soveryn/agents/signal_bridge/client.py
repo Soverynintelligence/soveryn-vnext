@@ -176,7 +176,14 @@ def receive_once(
                 "receive", "--timeout", str(cli_timeout),
                 "--max-messages", "10",
             ],
-            capture_output=True, text=True, timeout=cli_timeout + 10,
+            # Generous wall-clock buffer over the signal-cli --timeout: the
+            # native signal-cli build can spend well over 10s processing a
+            # cycle that actually receives a message (decrypt + session +
+            # ack), and a too-tight subprocess timeout kills it mid-process —
+            # the message gets acked to the server (double-check on the
+            # sender) but never returned to the bridge, so it's silently
+            # dropped. 60s headroom covers observed native-build processing.
+            capture_output=True, text=True, timeout=cli_timeout + 60,
         )
     if result.returncode != 0:
         raise SignalCliError(
