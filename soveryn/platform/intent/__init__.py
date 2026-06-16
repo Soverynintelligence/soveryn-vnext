@@ -8,5 +8,6 @@ break. See docs/superpowers/specs/2026-06-16-deliberate-share-intent-grammar-des
 """
 
 from soveryn.platform.intent.grammar import DeliberateShareIntent
+from soveryn.platform.intent.ledger import record_intent, resolve_trigger
 
-__all__ = ["DeliberateShareIntent"]
+__all__ = ["DeliberateShareIntent", "record_intent", "resolve_trigger"]
