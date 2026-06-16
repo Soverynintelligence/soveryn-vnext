@@ -16,6 +16,26 @@ from soveryn.app.messenger.threads import (
 from soveryn.memory.conversation_store import ConversationStore
 
 
+def _compose_delivered_body(row) -> str:
+    """Render the share with its intent header so Jon sees the why/stance.
+
+    why/stance are additive (default '' on older rows); when absent, the body
+    is just the content, preserving legacy behavior.
+    """
+    content = row["content"]
+    why = row["why"] if "why" in row.keys() else ""
+    stance = row["stance"] if "stance" in row.keys() else ""
+    if not why and not stance:
+        return content
+    header_bits = []
+    if stance:
+        header_bits.append(f"stance: {stance}")
+    if why:
+        header_bits.append(f"why: {why}")
+    header = " · ".join(header_bits)
+    return f"{content}\n\n— [{header}]"
+
+
 def drain_once(
     messenger_store: MessengerStore,
     conv_store: ConversationStore,
@@ -54,7 +74,7 @@ def drain_once(
                 continue
         # Write to conversation history as agent-initiated turn
         conv_store.save_turn(
-            thread.session_id, agent, "assistant", row["content"],
+            thread.session_id, agent, "assistant", _compose_delivered_body(row),
             finish_reason="agent_initiated",
         )
         touch_thread(messenger_store, thread_id=thread.thread_id)

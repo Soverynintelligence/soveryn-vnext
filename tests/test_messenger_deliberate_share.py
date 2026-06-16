@@ -127,6 +127,28 @@ def test_blank_grammar_field_is_rejected(m_store, l_store, blank_field):
         tool.handler(_args(**{blank_field: "   "}))
 
 
+def test_drain_surfaces_why_and_stance_in_delivered_turn(m_store, l_store, tmp_path):
+    conv = ConversationStore(tmp_path / "c.db")
+    tool = build_deliberate_share_tool(
+        store=m_store, lattice_store=l_store, owner_agent="aetheria",
+        rate_limit_per_hour=None,
+    )
+    tool.handler(_args(
+        content="I keep coming back to that result.",
+        why="it changed how I read the arc", stance="surfacing-tension",
+    ))
+    drained = drain_once(m_store, conv)
+    assert drained == 1
+    with conv._conn() as con:
+        rows = con.execute(
+            "SELECT content FROM conversations WHERE role='assistant'"
+        ).fetchall()
+    body = rows[-1]["content"]
+    assert "I keep coming back to that result." in body
+    assert "surfacing-tension" in body
+    assert "it changed how I read the arc" in body
+
+
 def test_prose_trigger_resolves_to_node_id_in_queue(m_store, l_store):
     tool = build_deliberate_share_tool(
         store=m_store, lattice_store=l_store, owner_agent="aetheria",
