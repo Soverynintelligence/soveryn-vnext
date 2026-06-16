@@ -59,3 +59,14 @@ def test_message_envelope_marks_by_user_or_agent():
         context_hint=None, urgency=None,
     )
     assert e.by == "user"
+
+
+def test_outbound_intent_carries_why_and_stance():
+    intent = OutboundIntent(
+        intent_id="i1", agent="aetheria", thread_id=None,
+        content="body", context_hint="hint", urgency="routine",
+        triggered_by="node-1", created_at="2026-06-16T00:00:00",
+        why="the honest reason", stance="offering",
+    )
+    assert intent.why == "the honest reason"
+    assert intent.stance == "offering"

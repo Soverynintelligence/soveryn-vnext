@@ -68,3 +68,28 @@ def test_idempotency_store_response(store):
         client_msg_id="abc", thread_id="t1", device_id="d1",
     )
     assert cached == {"ok": True}
+
+
+def test_outbound_queue_has_why_and_stance_columns(tmp_path):
+    from soveryn.app.messenger.store import MessengerStore
+    store = MessengerStore(tmp_path / "m.db")
+    cols = set(store.column_names("m_outbound_queue"))
+    assert {"why", "stance"} <= cols
+
+
+def test_outbound_queue_migration_is_idempotent_on_existing_db(tmp_path):
+    """A pre-existing queue table without why/stance gains the columns."""
+    import sqlite3
+    from soveryn.app.messenger.store import MessengerStore
+    db = tmp_path / "old.db"
+    with sqlite3.connect(str(db)) as con:
+        con.execute(
+            "CREATE TABLE m_outbound_queue ("
+            "intent_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent TEXT NOT NULL, "
+            "thread_id TEXT, content TEXT NOT NULL, context_hint TEXT NOT NULL, "
+            "urgency TEXT NOT NULL, triggered_by TEXT NOT NULL, created_at TEXT NOT NULL, "
+            "delivered_at TEXT, delivery_state TEXT NOT NULL DEFAULT 'pending')"
+        )
+    store = MessengerStore(db)  # init must add columns without error
+    cols = set(store.column_names("m_outbound_queue"))
+    assert {"why", "stance"} <= cols

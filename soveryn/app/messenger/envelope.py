@@ -34,8 +34,10 @@ class OutboundIntent:
     content: str
     context_hint: str          # short push-preview, <=100 chars
     urgency: str
-    triggered_by: str          # internal audit field (NOT shown to Jon)
+    triggered_by: str          # resolved trigger node id (ledger anchor)
     created_at: str
+    why: str = ""              # honest reason — shown to Jon
+    stance: str = ""           # relational function (open vocabulary) — shown to Jon
 
     def __post_init__(self) -> None:
         if self.urgency not in _VALID_URGENCIES:

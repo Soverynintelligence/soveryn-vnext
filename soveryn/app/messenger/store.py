@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS m_outbound_queue (
     context_hint   TEXT NOT NULL,
     urgency        TEXT NOT NULL,
     triggered_by   TEXT NOT NULL,
+    why            TEXT NOT NULL DEFAULT '',
+    stance         TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL,
     delivered_at   TEXT,
     delivery_state TEXT NOT NULL DEFAULT 'pending'
@@ -96,6 +98,20 @@ class MessengerStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._conn() as con:
             con.executescript(_SCHEMA)
+        self._migrate_outbound_intent_columns()
+
+    def _migrate_outbound_intent_columns(self) -> None:
+        """Idempotently add why/stance to m_outbound_queue on older DBs."""
+        existing = set(self.column_names("m_outbound_queue"))
+        with self._conn() as con:
+            if "why" not in existing:
+                con.execute(
+                    "ALTER TABLE m_outbound_queue ADD COLUMN why TEXT NOT NULL DEFAULT ''"
+                )
+            if "stance" not in existing:
+                con.execute(
+                    "ALTER TABLE m_outbound_queue ADD COLUMN stance TEXT NOT NULL DEFAULT ''"
+                )
 
     def _conn(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self.db_path))
