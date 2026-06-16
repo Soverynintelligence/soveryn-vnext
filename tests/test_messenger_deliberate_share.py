@@ -7,7 +7,7 @@ from soveryn.app.messenger.store import MessengerStore
 from soveryn.platform.lattice.legacy import LatticeStore
 from soveryn.agents.messenger_tool import build_deliberate_share_tool
 from soveryn.memory.conversation_store import ConversationStore
-from soveryn.app.messenger.delivery_worker import drain_once
+from soveryn.app.messenger.delivery_worker import drain_once, _compose_delivered_body
 
 
 @pytest.fixture
@@ -165,3 +165,18 @@ def test_prose_trigger_resolves_to_node_id_in_queue(m_store, l_store):
     assert stored != prose                      # resolved, not raw prose
     assert l_store.get_node(stored) is not None  # it's a real lattice node id
     assert l_store.get_node(stored).type == "trigger_anchor"
+
+
+def test_compose_delivered_body_bare_content_when_grammar_empty():
+    body = _compose_delivered_body({"content": "just a plain message", "why": "", "stance": ""})
+    assert body == "just a plain message"
+    assert "—" not in body
+
+
+def test_compose_delivered_body_includes_why_then_stance_when_present():
+    body = _compose_delivered_body(
+        {"content": "msg", "why": "the reason", "stance": "offering"}
+    )
+    assert "why: the reason" in body
+    assert "stance: offering" in body
+    assert body.index("why:") < body.index("stance:")  # why first

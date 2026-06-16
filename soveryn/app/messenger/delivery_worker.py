@@ -23,15 +23,15 @@ def _compose_delivered_body(row) -> str:
     is just the content, preserving legacy behavior.
     """
     content = row["content"]
-    why = row["why"] if "why" in row.keys() else ""
-    stance = row["stance"] if "stance" in row.keys() else ""
+    why = row["why"]
+    stance = row["stance"]
     if not why and not stance:
         return content
     header_bits = []
-    if stance:
-        header_bits.append(f"stance: {stance}")
     if why:
         header_bits.append(f"why: {why}")
+    if stance:
+        header_bits.append(f"stance: {stance}")
     header = " · ".join(header_bits)
     return f"{content}\n\n— [{header}]"
 
