@@ -231,6 +231,74 @@ def _estimate_message_tokens(msg: ChatMessage) -> int:
     return text_tokens + image_tokens + _PER_MESSAGE_OVERHEAD_TOKENS
 
 
+# Room reserved below context_window for the model's response + estimator
+# slack when fitting the tool loop. The history budgeter handles prior turns;
+# this handles the CURRENT turn's tool-result accumulation, which it can't.
+_CONTEXT_SAFETY_MARGIN_TOKENS = 2048
+
+
+def _fit_tool_loop_messages(
+    messages: tuple[ChatMessage, ...], budget: int
+) -> tuple[ChatMessage, ...]:
+    """Bound in-turn tool-result accumulation so the prompt fits `budget`.
+
+    Each tool round appends an assistant(tool_calls) message + its tool
+    results. A research dive that reads many files in one turn can blow the
+    context window (HTTP 400 exceed_context_size) — the history budgeter only
+    trims PRIOR turns, never the current turn's growing tool results.
+
+    Strategy (pairing-safe): preserve the prelude through the last user turn,
+    then drop the OLDEST complete tool-round groups (assistant-with-tool_calls
+    + its paired tool messages) until the estimate fits. If a single remaining
+    round still exceeds budget, size that round's tool-result contents down to
+    fit. Never orphans a tool result from its assistant tool_call.
+    """
+    est = lambda ms: sum(_estimate_message_tokens(m) for m in ms)
+    if est(messages) <= budget:
+        return messages
+    msgs = list(messages)
+    user_idxs = [i for i, m in enumerate(msgs) if m.role == "user"]
+    if not user_idxs:
+        return messages  # no anchor to preserve; leave it (server will reject)
+    cut = user_idxs[-1] + 1
+    head, tail = msgs[:cut], msgs[cut:]
+    groups: list[list[ChatMessage]] = []
+    for m in tail:
+        if m.role == "assistant" and m.tool_calls:
+            groups.append([m])
+        elif groups:
+            groups[-1].append(m)
+        else:
+            groups.append([m])  # defensive: orphan tail (shouldn't happen)
+    flat = lambda gs: [x for g in gs for x in g]
+    while len(groups) > 1 and est(head + flat(groups)) > budget:
+        groups.pop(0)
+    if est(head + flat(groups)) <= budget:
+        return tuple(head + flat(groups))
+    # One round alone still exceeds budget: size its tool results down to fit.
+    last = groups[-1]
+    nonresult = [m for m in last if m.role != "tool"]
+    results = [m for m in last if m.role == "tool"]
+    note = "\n[…tool result truncated to fit context…]"
+    note_tokens = _estimate_tokens(note)
+    avail = budget - est(head) - est(nonresult)
+    per = max(8, avail // max(1, len(results)))
+    sized: list[ChatMessage] = []
+    for m in results:
+        if isinstance(m.content, str) and _estimate_message_tokens(m) > per:
+            # leave room within `per` for the per-message overhead + the note
+            keep = max(0, (per - _PER_MESSAGE_OVERHEAD_TOKENS - note_tokens) * 4)
+            sized.append(ChatMessage(
+                role="tool",
+                content=m.content[:keep] + note,
+                tool_call_id=m.tool_call_id,
+                tool_calls=m.tool_calls,
+            ))
+        else:
+            sized.append(m)
+    return tuple(head + nonresult + sized)
+
+
 def _apply_history_budget(
     prelude: tuple[ChatMessage, ...],
     history: tuple[ChatMessage, ...],
@@ -620,6 +688,15 @@ class AgentLoop:
                     continue
                 raise
 
+    def _fit(self, messages: tuple[ChatMessage, ...]) -> tuple[ChatMessage, ...]:
+        """Trim the message list to fit the server context window before a
+        call, bounding the current turn's tool-result accumulation. No-op when
+        context_window is unset (tests) or the messages already fit."""
+        if self.context_window is None:
+            return messages
+        budget = max(1, self.context_window - self.max_tokens - _CONTEXT_SAFETY_MARGIN_TOKENS)
+        return _fit_tool_loop_messages(messages, budget)
+
     def process_message(
         self,
         session_id: str,
@@ -761,6 +838,7 @@ class AgentLoop:
             )
             if self.black_box is not None else None
         )
+        messages = self._fit(messages)
         request = ChatRequest(
             messages=messages,
             model=self.server.model_alias,
@@ -806,6 +884,7 @@ class AgentLoop:
                     ],
                 )
             messages = messages + tuple(result_messages)
+            messages = self._fit(messages)
             request = ChatRequest(
                 messages=messages,
                 model=self.server.model_alias,
