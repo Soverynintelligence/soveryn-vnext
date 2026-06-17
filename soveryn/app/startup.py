@@ -515,6 +515,18 @@ def create_app(
             kwargs["continuity_config"] = _continuity_for(name)
             kwargs["black_box"] = black_box
             kwargs["steering_rack"] = steering_rack
+            # 32K-context llama-server slots across the fleet (Aetheria solo;
+            # Vett+Scotty on the shared vett-scotty server). Give every loop the
+            # server window + a raw-transcript cap so it trims history to fit
+            # BEFORE send. Without this, an agent reading large files (Vett
+            # gained read_file 2026-06-17) accumulates tool output until the
+            # server hard-rejects the prompt (HTTP 400 exceed_context_size_error
+            # — observed for Vett mid-read 2026-06-17). The cap is on transcript
+            # carried in the prompt, not on what the agent knows (lattice/library
+            # recall still reaches further). Aetheria's block re-asserts the same
+            # two values below — harmless, same values.
+            kwargs["context_window"] = 32_768
+            kwargs["history_token_budget"] = 8_000
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 if recall_lattice is not None:

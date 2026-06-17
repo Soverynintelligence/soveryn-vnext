@@ -118,11 +118,12 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     fake_pinned,
     recall_lattice,
 ) -> None:
-    """Aetheria's interactive chat rail carries per-request caps that
-    Vett/Scotty don't. The caps are the defense layer against (a) full
-    prefill cost on heartbeat-induced cache flushes (history budget),
-    (b) pathological runaway generation (max_tokens), and (c) unrestricted
-    server-side reasoning budget (thinking_budget_tokens=0). See
+    """Context window + history budget are fleet-wide (all three run on
+    32K-context servers, so every loop must trim transcript to fit before
+    send — added 2026-06-17 after Vett's read_file reads overflowed the
+    shared vett-scotty server). The *generation* caps stay Aetheria-
+    interactive-only: (b) pathological runaway generation (max_tokens=768),
+    and (c) server-side reasoning budget (thinking_budget_tokens=0). See
     startup.py inline comments for the rationale on each."""
     _configure_startup_env(
         monkeypatch,
@@ -132,16 +133,16 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     loops = app.extensions["soveryn"]["agent_loops"]
-    # Aetheria's interactive-rail caps
-    assert loops["aetheria"].history_token_budget == 8_000
-    assert loops["aetheria"].context_window == 32_768
+    # Context window + history budget are fleet-wide: every loop trims
+    # transcript to fit the 32K server window before send.
+    for agent in ("aetheria", "vett", "scotty"):
+        assert loops[agent].context_window == 32_768, agent
+        assert loops[agent].history_token_budget == 8_000, agent
+    # The generation caps stay Aetheria-interactive-only.
     assert loops["aetheria"].max_tokens == 768
     assert loops["aetheria"].thinking_budget_tokens == 0
-    # Vett + Scotty stay unrestricted on history budget + context window
-    assert loops["vett"].history_token_budget is None
-    assert loops["vett"].context_window is None
-    assert loops["scotty"].history_token_budget is None
-    assert loops["scotty"].context_window is None
+    assert loops["vett"].max_tokens != 768
+    assert loops["scotty"].max_tokens != 768
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(

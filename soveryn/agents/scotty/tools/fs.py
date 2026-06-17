@@ -13,7 +13,10 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 
 # Caps — small enough to avoid context exhaustion, large enough to be useful.
-READ_FILE_MAX_BYTES = 100 * 1024            # 100 KB
+# 40 KB ≈ ~10K tokens: a single read fits inside the 32K server window
+# alongside the ~13K base prompt + 8K history budget (see startup
+# context_window wiring). Larger files return truncated=True; read in parts.
+READ_FILE_MAX_BYTES = 40 * 1024             # 40 KB
 LIST_DIRECTORY_MAX_ENTRIES = 200
 
 
