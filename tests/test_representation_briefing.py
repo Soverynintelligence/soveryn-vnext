@@ -27,8 +27,8 @@ def test_build_briefing_returns_turns_and_prior_conclusions(tmp_path):
 
     # Write a session with two turns for the owner agent
     session_id = conv_store.new_session(OWNER, title="test session")
-    conv_store.save_turn(session_id, OWNER, "user", "What motivates Jon?")
-    conv_store.save_turn(session_id, OWNER, "assistant", "He values directness.")
+    conv_store.save_turn(session_id, OWNER, "user", "What is it that motivates Jon, day to day?")
+    conv_store.save_turn(session_id, OWNER, "assistant", "He consistently values directness over comfort.")
 
     # Write one existing conclusion node for this subject
     conclusion_node_id = lattice_store.write_node(
@@ -51,8 +51,11 @@ def test_build_briefing_returns_turns_and_prior_conclusions(tmp_path):
     # ── Assertions ────────────────────────────────────────────────────────────
     # Turn contents should appear in briefing_text with [node:...] prefixes
     assert "[node:" in briefing_text, "briefing_text should contain [node:...] prefixes"
-    assert "What motivates Jon?" in briefing_text, "user turn content should be in briefing_text"
-    assert "He values directness." in briefing_text, "assistant turn content should be in briefing_text"
+    assert "What is it that motivates Jon, day to day?" in briefing_text, "user turn content should be in briefing_text"
+    assert "He consistently values directness over comfort." in briefing_text, "assistant turn content should be in briefing_text"
+    # Turns are labelled by IDENTITY (gate fix 2026-06-17), not generic user/assistant
+    assert "Jon:" in briefing_text and "Aetheria:" in briefing_text, "turns should be identity-labelled"
+    assert "user:" not in briefing_text and "assistant:" not in briefing_text, "no generic role labels"
 
     # Prior conclusion should appear with its node id
     assert conclusion_node_id in prior_conclusions_text, (
@@ -82,8 +85,8 @@ def test_build_briefing_caps_turns(tmp_path):
 
     session_id = conv_store.new_session(OWNER)
     for i in range(10):
-        conv_store.save_turn(session_id, OWNER, "user", f"question {i}")
-        conv_store.save_turn(session_id, OWNER, "assistant", f"answer {i}")
+        conv_store.save_turn(session_id, OWNER, "user", f"substantive question number {i} about the work")
+        conv_store.save_turn(session_id, OWNER, "assistant", f"a thorough answer number {i} with real detail")
 
     briefing_text, _, source_node_ids = build_briefing(
         conv_store,

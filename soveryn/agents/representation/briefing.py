@@ -52,6 +52,21 @@ def _is_autonomous(title: str | None) -> bool:
     return any(lower.startswith(p.lower()) for p in _AUTONOMOUS_PREFIXES)
 
 
+# Significance gate (gate finding 2026-06-17): bare greetings/acks ("evening",
+# "i know", "thanks") yield trivial conclusions. Skip turns shorter than this so
+# the briefing skews toward substance. Crude but honest; tune via the dry run.
+_MIN_TURN_CHARS = 20
+
+
+def _speaker(role: str, *, subject: str, owner_agent: str) -> str:
+    """Label turns by IDENTITY, not generic user/assistant (gate finding
+    2026-06-17: the E4B misattributed 'Aetheria: Evening, Jon' as the user
+    addressing the assistant). The reasoner must know which lines are the
+    subject's and which are the agent's."""
+    name = subject if role == "user" else owner_agent
+    return name[:1].upper() + name[1:] if name else role
+
+
 def build_briefing(
     conv_store: ConversationStore,
     lattice_store: LatticeStore,
@@ -101,6 +116,8 @@ def build_briefing(
         for idx, turn in enumerate(history):
             if turn.role not in ("user", "assistant"):
                 continue
+            if len((turn.content or "").strip()) < _MIN_TURN_CHARS:
+                continue  # significance gate — skip bare greetings/acks
             turn_id = f"turn:{session.session_id}:{idx}"
             all_turns.append((turn_id, turn.role, turn.content))
 
@@ -119,7 +136,8 @@ def build_briefing(
     briefing_lines: list[str] = []
     turn_ids: list[str] = []
     for turn_id, role, content in capped:
-        briefing_lines.append(f"[node:{turn_id}] {role}: {content}")
+        speaker = _speaker(role, subject=subject, owner_agent=owner_agent)
+        briefing_lines.append(f"[node:{turn_id}] {speaker}: {content}")
         turn_ids.append(turn_id)
 
     briefing_text = "\n".join(briefing_lines)
