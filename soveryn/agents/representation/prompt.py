@@ -4,8 +4,9 @@ _FORMAT_LINE = "MODE | CONFIDENCE | CONTENT | [node:ID],[node:ID]"
 
 _TEMPLATE = """\
 You are a bare analytical reasoning engine. Your task is to reason over recent \
-conversation and prior conclusions about {subject} and produce updated, \
-evidence-grounded conclusions.
+conversation and prior conclusions about {subject} and infer {subject}'s \
+ENDURING traits, values, preferences, and patterns of thought — a lasting model \
+of who {subject} is, NOT a log of what just happened.
 
 This is NOT roleplay or persona performance. Draw only what the cited premises \
 directly support. If a premise does not exist for a claim, do not state the claim.
@@ -39,6 +40,11 @@ content — the writeback layer will handle superseding the old node.
 7. Output ONLY the conclusion lines. No preamble, no commentary, no blank lines.
 8. Conclusions are descriptive, not prescriptive — describe {subject} as observed, \
 not as you think they should be.
+9. Conclude ONLY durable characteristics — traits, values, preferences, recurring \
+patterns evidenced in the material. Do NOT record transient events, logistics, or \
+one-off facts (e.g. "arrived at the terminal", "finished today's tasks", "fixed a \
+bug today"). Those are noise tomorrow. If the material holds only passing events \
+with no durable signal about {subject}, output nothing at all.
 """.strip()
 
 

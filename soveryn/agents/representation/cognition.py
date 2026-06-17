@@ -35,7 +35,10 @@ def _default_chat_fn(prompt: str, cognition_url: str) -> str:
     payload = {
         "messages": [{"role": "user", "content": prompt}],
         "model": "dream",
-        "temperature": 0.7,
+        # Low temperature: representation reasoning should be steady/repeatable,
+        # not creative. (Gate finding 2026-06-17: temp 0.7 gave 0 conclusions on
+        # one call, 3 on the next from identical input.)
+        "temperature": 0.3,
         "max_tokens": 2048,
     }
     body = json.dumps(payload).encode()
