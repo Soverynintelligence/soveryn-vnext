@@ -26,6 +26,7 @@ turn-processing time.
 
 from __future__ import annotations
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -58,6 +59,13 @@ from soveryn.platform.voice.sanitize import sanitize_for_tts
 ChatFn = Callable[..., ChatResponse]
 EmbedFn = Callable[[str], tuple[float, ...]]
 StreamFn = Callable[..., Iterator[StreamChunk]]
+
+# Bounded retry for the narrow, known-intermittent failure where the server
+# rejects the MODEL's own malformed tool-call JSON (HTTP 500 "Failed to parse
+# tool call arguments"). With temperature > 0 a resend almost always yields
+# valid JSON. Observed 2026-06-17: Qwen3.6 on the shared vett-scotty server
+# occasionally truncates tool-call args under heavy read_file use.
+_TOOLCALL_PARSE_MAX_ATTEMPTS = 3
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -588,6 +596,30 @@ class AgentLoop:
             })
         return tuple(schemas)
 
+    def _chat(self, request: ChatRequest) -> ChatResponse:
+        """Invoke the model, retrying ONLY the narrow, known-intermittent
+        failure where the server rejects the model's own malformed tool-call
+        JSON (HTTP 500 'Failed to parse tool call arguments'). With temperature
+        > 0 a resend almost always yields valid JSON. Every other error — real
+        4xx/5xx, timeouts — propagates immediately, unretried. One bad tool
+        call from the model shouldn't surface as a user-facing error."""
+        attempt = 0
+        while True:
+            try:
+                return self.chat_fn(
+                    request, self.server, timeout=self.chat_timeout_seconds
+                )
+            except LlamaServerError as exc:
+                attempt += 1
+                retryable = exc.status_code == 500 and "parse tool call" in str(exc).lower()
+                if retryable and attempt < _TOOLCALL_PARSE_MAX_ATTEMPTS:
+                    logging.getLogger(__name__).warning(
+                        "%s emitted malformed tool-call JSON (attempt %d/%d); resending",
+                        self.server.model_alias, attempt, _TOOLCALL_PARSE_MAX_ATTEMPTS,
+                    )
+                    continue
+                raise
+
     def process_message(
         self,
         session_id: str,
@@ -737,7 +769,7 @@ class AgentLoop:
             tools=self._tool_schemas() or None,
             thinking_budget_tokens=self.thinking_budget_tokens,
         )
-        response = self.chat_fn(request, self.server, timeout=self.chat_timeout_seconds)
+        response = self._chat(request)
 
         tool_rounds = 0
         while response.tool_calls and self.tool_registry is not None:
@@ -782,7 +814,7 @@ class AgentLoop:
                 tools=self._tool_schemas() or None,
                 thinking_budget_tokens=self.thinking_budget_tokens,
             )
-            response = self.chat_fn(request, self.server, timeout=self.chat_timeout_seconds)
+            response = self._chat(request)
             tool_rounds += 1
 
         # 5. Save assistant turn from response.content ONLY (constraint 4).
