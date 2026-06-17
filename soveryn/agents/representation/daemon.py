@@ -11,12 +11,14 @@ Run as: `python -m soveryn.agents.representation`.
 """
 from __future__ import annotations
 
+import json
 import logging
 import signal
 import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.representation.briefing import build_briefing
@@ -60,12 +62,16 @@ class RepresentationDaemon:
         chat_fn: Callable[[str, str], str] | None,
         embed_fn: Callable[[str], tuple[float, ...]] | None,
         config: RepresentationConfig,
+        dryrun_log_path: Path | None = None,
     ) -> None:
         self.conv_store = conv_store
         self.lattice_store = lattice_store
         self.chat_fn = chat_fn
         self.embed_fn = embed_fn
         self.config = config
+        # Structured review artifact (one JSONL line per tick with conclusions).
+        # None in tests → no file side effect. __main__ wires the real path.
+        self.dryrun_log_path = dryrun_log_path
         self._stop = False
         # Advances to `now` on every eligible tick. None = never run.
         self._last_run_at: datetime | None = None
@@ -154,6 +160,11 @@ class RepresentationDaemon:
             chat_fn=self.chat_fn,
         )
 
+        # Review artifact — record what this tick concluded (the dry-run log
+        # Vett + Aetheria inspect) BEFORE writeback, so it's captured whether
+        # or not writes are live.
+        self._record_dryrun(run_id=run_id, now=now, conclusions=conclusions)
+
         written = write_conclusions(
             self.lattice_store,
             conclusions,
@@ -179,6 +190,35 @@ class RepresentationDaemon:
             "conclusion_count": len(conclusions),
             "written": written,
         }
+
+    def _record_dryrun(self, *, run_id: str, now: datetime, conclusions: list) -> None:
+        """The dry-run review artifact for Vett/Aetheria: log each would-write
+        conclusion at INFO, and (if a path is set) append one JSONL line per
+        tick. Best-effort — never crashes the tick."""
+        for c in conclusions:
+            logger.info(
+                "representation would-write [%s | %s] %s :: premises=%s",
+                c.mode, c.confidence, c.content, list(c.premises),
+            )
+        if not self.dryrun_log_path or not conclusions:
+            return
+        try:
+            record = {
+                "ts": now.isoformat(),
+                "run_id": run_id,
+                "dry_run": self.config.dry_run,
+                "subject": self.config.subject,
+                "conclusions": [
+                    {"mode": c.mode, "confidence": c.confidence,
+                     "content": c.content, "premises": list(c.premises)}
+                    for c in conclusions
+                ],
+            }
+            self.dryrun_log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.dryrun_log_path, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record) + "\n")
+        except Exception:
+            logger.exception("representation: failed to append dry-run artifact")
 
     # ─── State queries (via injected stores) ────────────────────────────────
 

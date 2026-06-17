@@ -204,3 +204,44 @@ def test_second_tick_no_new_turns_skipped(tmp_path):
     summary2 = daemon._do_tick(now=t2)
     assert summary2["eligible"] is False
     assert call_count["n"] == 1  # no additional cognition call
+
+
+# ── Test E: dry-run artifact (the review log for Vett/Aetheria) ───────────────
+
+def test_dryrun_artifact_records_conclusions(tmp_path):
+    """An eligible tick appends one JSONL record with each would-write conclusion."""
+    import json as _json
+    lattice_store = LatticeStore(tmp_path / "lattice.db")
+    conv_store = ConversationStore(tmp_path / "conv.db")
+    _seed_turns(conv_store, "aetheria", 3)
+    artifact = tmp_path / "dry.jsonl"
+    daemon = RepresentationDaemon(
+        conv_store=conv_store, lattice_store=lattice_store,
+        chat_fn=lambda p, u: _valid_conclusion_line(),
+        embed_fn=_fake_embed, config=_make_config(min_turns=1, dry_run=True),
+        dryrun_log_path=artifact,
+    )
+    daemon._do_tick(now=datetime(2026, 6, 17, 12, 0, 0))
+    assert artifact.exists(), "dry-run artifact should be created"
+    lines = artifact.read_text().strip().splitlines()
+    assert len(lines) == 1
+    rec = _json.loads(lines[0])
+    assert rec["dry_run"] is True and rec["subject"] == "jon"
+    c = rec["conclusions"][0]
+    assert c["content"] == "Jon values autonomy and self-determination."
+    assert c["mode"] == "deductive"
+    assert c["premises"] == ["turn:abc:0"]
+
+
+def test_no_artifact_when_path_none(tmp_path):
+    """dryrun_log_path=None (the test default) writes no file and never raises."""
+    lattice_store = LatticeStore(tmp_path / "lattice.db")
+    conv_store = ConversationStore(tmp_path / "conv.db")
+    _seed_turns(conv_store, "aetheria", 3)
+    daemon = RepresentationDaemon(
+        conv_store=conv_store, lattice_store=lattice_store,
+        chat_fn=lambda p, u: _valid_conclusion_line(),
+        embed_fn=_fake_embed, config=_make_config(min_turns=1, dry_run=True),
+    )
+    daemon._do_tick(now=datetime(2026, 6, 17, 12, 0, 0))  # must not raise
+    assert not (tmp_path / "dry.jsonl").exists()

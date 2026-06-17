@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
 DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_DRYRUN_LOG = Path.home() / "soveryn_vnext" / "data" / "memory" / "representation_dryrun.jsonl"
 
 
 def _main() -> int:
@@ -53,12 +54,15 @@ def _main() -> int:
             "Conclusion nodes will be written without embeddings."
         )
 
+    dryrun_log_path = Path(os.environ.get("SOVERYN_REPR_DRYRUN_LOG", DEFAULT_DRYRUN_LOG))
+
     daemon = RepresentationDaemon(
         conv_store=conv_store,
         lattice_store=lattice_store,
         chat_fn=None,   # uses _default_chat_fn (cognition surface) inside cognition.py
         embed_fn=embed_fn,
         config=config,
+        dryrun_log_path=dryrun_log_path,
     )
 
     daemon.run()
