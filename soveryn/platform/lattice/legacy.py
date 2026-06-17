@@ -568,14 +568,22 @@ class LatticeStore:
         )
         with self._conn() as conn:
             if layer_filter is None:
+                # Visibility (Jon 2026-06-17): an agent recalls its OWN nodes
+                # (any layer) PLUS every OTHER agent's nodes EXCEPT their
+                # private. The only exclusions are other-agents' private and
+                # the dream layer (internal consolidation scratch, never for
+                # conversational recall). This replaced the old
+                # `(own non-global) OR (anyone's global)` filter, which hid
+                # every other agent's coordination/lattice work and excluded
+                # library entirely — the cause of the 2026-06-17 FCC miss.
                 rows = conn.execute(
                     "SELECT * FROM nodes "
                     "WHERE embedding IS NOT NULL "
-                    "  AND ((agent = ? AND layer != ?) OR layer = ?) "
-                    "  AND layer != ? "
+                    "  AND NOT (agent != ? AND layer = ?) "   # other agents' private: hidden
+                    "  AND layer != ? "                        # dream: never recalled
                     + historical_filter +
                     "ORDER BY salience DESC LIMIT 2000",
-                    (agent, LAYER_GLOBAL, LAYER_GLOBAL, LAYER_LIBRARY),
+                    (agent, LAYER_PRIVATE, LAYER_DREAM),
                 ).fetchall()
             else:
                 rows = conn.execute(
