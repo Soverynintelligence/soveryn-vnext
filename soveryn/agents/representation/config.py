@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 DEFAULT_TICK_SECONDS = 900
 DEFAULT_TURNS_PER_BRIEFING = 20
+DEFAULT_MIN_TURNS = 4
 
 def _b(raw, default=True):
     if raw is None or raw == "": return default
@@ -15,6 +16,7 @@ class RepresentationConfig:
     enabled: bool = True
     tick_interval_seconds: int = DEFAULT_TICK_SECONDS
     turns_per_briefing: int = DEFAULT_TURNS_PER_BRIEFING
+    min_turns: int = DEFAULT_MIN_TURNS
     dry_run: bool = True
     subject: str = "jon"
     cognition_url: str = "http://127.0.0.1:8089"
@@ -26,6 +28,7 @@ class RepresentationConfig:
             enabled=_b(env.get("SOVERYN_REPR_ENABLED"), True),
             tick_interval_seconds=_i(env.get("SOVERYN_REPR_TICK_SECONDS"), DEFAULT_TICK_SECONDS),
             turns_per_briefing=_i(env.get("SOVERYN_REPR_TURNS"), DEFAULT_TURNS_PER_BRIEFING),
+            min_turns=_i(env.get("SOVERYN_REPR_MIN_TURNS"), DEFAULT_MIN_TURNS),
             dry_run=_b(env.get("SOVERYN_REPR_DRY_RUN"), True),
             subject=env.get("SOVERYN_REPR_SUBJECT", "jon"),
             cognition_url=env.get("SOVERYN_REPR_COGNITION_URL", "http://127.0.0.1:8089"),
