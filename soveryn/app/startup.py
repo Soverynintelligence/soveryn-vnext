@@ -229,7 +229,7 @@ def create_app(
             # agent_loops are built) drains the bus and dispatches per the
             # routing rules.
             coord_event_bus = InMemoryEventBus()
-            coord_store = CoordinationStore(env.lattice_db, event_bus=coord_event_bus)
+            coord_store = CoordinationStore(env.lattice_db, event_bus=coord_event_bus, embed_fn=_default_embed)
             for agent_name in ("aetheria", "vett", "scotty"):
                 register_coord_tools(
                     tool_registry,

@@ -26,10 +26,24 @@ def build_write_library_node_tool(
     *,
     lattice_store: LatticeStore,
     owner_agent: str,
+    embed_fn=None,
 ) -> ToolSpec:
     """Tool for writing a node to the library layer. Available to all three
     agents — the library is shared reference material; attribution survives
-    via the agent column."""
+    via the agent column.
+
+    embed_fn (optional): when provided (prod wires nomic-embed), the node is
+    embedded on write so it's recallable by every agent's semantic recall.
+    None in tests → unembedded (no HTTP). Best-effort: embed failure never
+    blocks the write."""
+
+    def _maybe_embed(text):
+        if embed_fn is None or not text:
+            return None
+        try:
+            return tuple(embed_fn(text[:8000]))
+        except Exception:
+            return None
 
     def handler(args: Mapping[str, Any]) -> Any:
         content = args.get("content", "")
@@ -46,6 +60,7 @@ def build_write_library_node_tool(
                 layer=LAYER_LIBRARY,
                 intensity=WRITE_LIBRARY_INTENSITY,
                 tags=tuple(tags_arg) if tags_arg else None,
+                embedding=_maybe_embed(content.strip()),
                 provenance={
                     "source": "library_write",
                     "written_by": owner_agent,
@@ -216,7 +231,7 @@ def register_library_tools(
 ) -> None:
     """Register both library tools for one agent. Same tools, owner-keyed."""
     registry.register(build_write_library_node_tool(
-        lattice_store=lattice_store, owner_agent=owner_agent,
+        lattice_store=lattice_store, owner_agent=owner_agent, embed_fn=embed_fn,
     ))
     registry.register(build_search_library_tool(
         lattice_store=lattice_store, embed_fn=embed_fn, owner_agent=owner_agent,

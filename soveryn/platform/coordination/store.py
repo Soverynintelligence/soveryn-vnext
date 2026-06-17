@@ -52,10 +52,26 @@ class CoordinationStore:
         timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS,
         *,
         event_bus: EventBus | None = None,
+        embed_fn=None,
     ) -> None:
         self.db_path = Path(db_path)
         self.timeout_seconds = timeout_seconds
         self.event_bus: EventBus = event_bus or NullEventBus()
+        # Optional embedder. When set (prod wires nomic-embed), coordination
+        # nodes are embedded on write so they're recallable by every agent's
+        # semantic recall. None in tests → nodes written unembedded (no HTTP).
+        # Best-effort: an embed failure never blocks the write.
+        self._embed_fn = embed_fn
+
+    def _maybe_embed(self, text: str) -> str | None:
+        """Embed `text` to a JSON vector string, or None (no embedder / empty /
+        failure). Best-effort — coordination writes must never fail on embed."""
+        if self._embed_fn is None or not text:
+            return None
+        try:
+            return json.dumps(list(self._embed_fn(text[:8000])))
+        except Exception:
+            return None
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -146,14 +162,15 @@ class CoordinationStore:
             "lattice_ref": lattice_ref,
             "archived_lesson_id": None,
         }
+        embedding_json = self._maybe_embed(content.strip())
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO nodes (id, type, layer, agent, content, "
                 "intensity, salience, access_count, tags, created_at, "
                 "updated_at, embedding, intent, provenance) "
-                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, NULL, NULL, ?)",
+                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, ?, NULL, ?)",
                 (node_id, COORDINATION_NODE_TYPE, owner, content.strip(),
-                 now, now, json.dumps(provenance, sort_keys=True)),
+                 now, now, embedding_json, json.dumps(provenance, sort_keys=True)),
             )
         # If this node references an existing lattice node, log that as the
         # initial cross-reference so the source<->target link enters the table
