@@ -308,6 +308,25 @@ CREATE TABLE IF NOT EXISTS dream_log (
 
 CREATE INDEX IF NOT EXISTS idx_dream_log_ran_at ON dream_log(ran_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dream_log_agent  ON dream_log(agent);
+
+-- Representation daemon supersede audit log. One row per conclusion that
+-- explicitly supersedes an older conclusion node. Written by writeback.py
+-- write_conclusions when supersedes mapping is non-empty. Purely additive —
+-- no FK constraints so archived nodes don't break the audit trail.
+CREATE TABLE IF NOT EXISTS representation_log (
+    id               TEXT PRIMARY KEY,
+    old_id           TEXT,
+    new_id           TEXT NOT NULL,
+    old_content_head TEXT,
+    new_content_head TEXT NOT NULL,
+    driving_premises TEXT NOT NULL,   -- JSON list of premise tokens
+    confidence_from  TEXT,
+    confidence_to    TEXT NOT NULL,
+    run_id           TEXT NOT NULL,
+    created_at       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_representation_log_created ON representation_log(created_at DESC);
 """
 
 

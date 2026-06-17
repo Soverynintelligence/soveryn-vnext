@@ -5,6 +5,17 @@ from dataclasses import dataclass
 _VALID_MODES = {"deductive", "inductive", "abductive"}
 _NODE_RE = re.compile(r"\[node:([^\]]+)\]")
 
+_CONFIDENCE_RANK = {
+    "confident": 3,
+    "fairly confident": 2,
+    "tentative": 1,
+    "low confidence": 1,
+}
+
+
+def confidence_rank(phrase: str) -> int:
+    return _CONFIDENCE_RANK.get((phrase or "").strip().lower(), 1)
+
 @dataclass(frozen=True)
 class Conclusion:
     mode: str
