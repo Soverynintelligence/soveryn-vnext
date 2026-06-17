@@ -312,6 +312,14 @@ def create_app(
         # git/pytest tools — those are Scotty's executor surface, not hers.
         tool_registry.register(build_read_file_tool(owner_agent="aetheria"))
         tool_registry.register(build_list_directory_tool(owner_agent="aetheria"))
+        # Vett gets read_file + list_directory too (2026-06-17): as the research
+        # and verification agent she was assessing SOVERYN against external
+        # frameworks using only her tool surface as a proxy for the
+        # architecture — a category error (she flagged it herself). Read-only,
+        # same vnext-repo allow-list as Scotty/Aetheria; no write/exec/git. She
+        # cannot research improvements to a system she cannot read.
+        tool_registry.register(build_read_file_tool(owner_agent="vett"))
+        tool_registry.register(build_list_directory_tool(owner_agent="vett"))
 
         # Library layer tools — shared write surface for verified reference
         # material (per the 2026-06-02 design discussion, "Option B": passive
