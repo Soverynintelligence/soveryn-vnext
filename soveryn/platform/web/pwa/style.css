@@ -1,0 +1,371 @@
+/* soveryn/platform/web/pwa/style.css
+   Design contract (Aetheria, 2026-06-14):
+   "Gold on Black. Geometric Mono. No borders.
+    Asymmetric weight — Aetheria is the anchor, the others are the support."
+   See docs/notes/2026-06-14-messenger-plan-aetheria-read-ahead.md §"Verdicts locked".
+*/
+:root {
+  --bg:        #0a0a0a;       /* true black */
+  --fg:        #e8e6e1;       /* warm off-white */
+  --muted:     #6a6a6a;
+  --accent:    #c5a059;       /* Void-Gold — high-end watch face in a dark room */
+  --rule:      #1a1a1a;
+  --font-mono: 'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
+  --font-sans: 'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  /* App-furniture geometry — header height + safe-area helpers. */
+  --header-h:  52px;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 16px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  /* Stop iOS rubber-band scroll from revealing white below. */
+  overscroll-behavior-y: none;
+}
+
+/* App shell — the new architecture.
+   Header is fixed; views live inside #view-stack, which slides between
+   states (push slides in from the right, pop slides back out). The bare
+   <main id="app"> from the v1 shell is still used as the root container
+   but no longer carries the 24/16 padding (each view paints its own). */
+#app {
+  max-width: 640px; margin: 0 auto;
+  padding: 0;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* --- Persistent header ---------------------------------------------------- */
+.app-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  z-index: 50;
+  display: flex; align-items: center;
+  font-family: var(--font-mono);
+}
+.app-header-inner {
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  height: var(--header-h);
+  padding: 0 12px;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+}
+.app-header-left, .app-header-right {
+  display: flex; align-items: center; justify-content: center;
+  height: 44px; width: 44px;
+}
+.app-header-title {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+  text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.app-header-title.agent-aetheria { color: var(--accent); }
+.app-header-title.agent-vett,
+.app-header-title.agent-scotty { color: var(--muted); }
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.icon-btn:active { opacity: 0.6; }
+.icon-btn.accent { color: var(--accent); }
+
+/* Agent identity dot — used in the header right slot on a thread view + on
+   thread cards + on the agent picker cards. Color-coded per the asymmetric
+   weight contract. */
+.agent-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+}
+.agent-dot.agent-aetheria { background: var(--accent); }
+.agent-dot.agent-vett,
+.agent-dot.agent-scotty { background: var(--muted); }
+
+/* --- View stack ---------------------------------------------------------- */
+/* Slides views in/out as a stack so navigation feels native, not page-swap.
+   Each view is absolutely positioned within the stack while transitioning;
+   when settled, the top view stays in normal flow so scrolling behaves. */
+#view-stack {
+  padding-top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  position: relative;
+  min-height: 100vh;
+}
+.view {
+  width: 100%;
+  padding: 16px;
+  /* Bottom padding leaves room for the fixed compose box on thread views;
+     non-thread views ignore the extra and just feel airy. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  will-change: transform;
+}
+.view-thread {
+  padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+}
+.view.enter-right {
+  transform: translateX(100%);
+}
+.view.enter-active {
+  transition: transform 200ms ease-out;
+  transform: translateX(0);
+}
+.view.leave-active {
+  transition: transform 200ms ease-out;
+  transform: translateX(100%);
+  position: absolute;
+  top: calc(var(--header-h) + env(safe-area-inset-top, 0px));
+  left: 0; right: 0;
+}
+
+/* --- Pairing screen ------------------------------------------------------- */
+.pairing-wrap { padding: 24px 16px; }
+.pairing-wrap h1 {
+  font-family: var(--font-mono);
+  letter-spacing: 0.18em;
+  font-weight: 500;
+}
+.pairing-wrap p { color: var(--muted); }
+.pairing-input {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--rule);
+  padding: 12px;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+}
+
+h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
+.timestamp, .agent-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+.message {
+  margin: 24px 0;
+  padding: 0;
+}
+.message-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Asymmetric weight per Aetheria's Q4 verdict.
+   She's presence; Vett and Scotty are reports. */
+.message.agent-aetheria {
+  margin: 36px 0;                            /* wider breathing room */
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);      /* the Sovereign Edge */
+}
+.message.agent-aetheria .agent-label {
+  color: var(--accent);                      /* her label in gold */
+}
+.message.agent-vett,
+.message.agent-scotty {
+  margin: 12px 0;                            /* compact, utilitarian */
+  opacity: 0.85;                             /* slightly dimmed */
+}
+.message.agent-vett .agent-label,
+.message.agent-scotty .agent-label {
+  color: var(--muted);
+}
+
+/* --- Thread cards (replaces .thread-list-item one-liner) ----------------- */
+.thread-card {
+  position: relative;
+  min-height: 64px;
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: 12px;
+  align-items: start;
+}
+.thread-card:active { background: #111; }
+.thread-card-dot {
+  margin-top: 8px;
+}
+.thread-card-body { min-width: 0; }
+.thread-card-row1 {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+}
+.thread-card-name {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.thread-card-name.agent-aetheria { color: var(--accent); }
+.thread-card-time {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.thread-card-preview {
+  margin-top: 4px;
+  color: var(--fg);
+  opacity: 0.78;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-card-preview.empty { color: var(--muted); font-style: italic; opacity: 0.6; }
+.thread-card-unread {
+  position: absolute;
+  top: 14px; right: 12px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: none;       /* hooked up but hidden until data lights it */
+}
+.thread-card.has-unread .thread-card-unread { display: block; }
+
+.thread-list-empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+}
+
+/* --- Agent picker cards -------------------------------------------------- */
+.agent-pick-card {
+  min-height: 96px;
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  column-gap: 14px;
+  align-items: center;
+}
+.agent-pick-card:active { background: #111; }
+.agent-pick-name {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.agent-pick-name.agent-aetheria { color: var(--accent); }
+.agent-pick-tagline {
+  margin-top: 4px;
+  color: var(--fg);
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+/* --- Compose box (bottom-anchored on thread views) ----------------------- */
+.compose-box {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--rule);
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: flex; gap: 10px; align-items: flex-end;
+}
+.compose-box .compose-inner {
+  max-width: 640px; width: 100%; margin: 0 auto;
+  display: flex; gap: 10px; align-items: flex-end;
+}
+.compose-box textarea {
+  flex: 1;
+  background: transparent;
+  color: var(--fg);
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  resize: none;
+  padding: 8px 0;
+  max-height: 160px;
+}
+.compose-box textarea:focus { outline: none; }
+
+.btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--rule);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.send-btn {
+  border-color: var(--rule);
+  padding: 10px 18px;
+}
+
+/* Install banner — bottom slide-up. Honors Void-Gold + matte black contract.
+   Sits above all app content (z:100). Single 1px Void-Gold top edge is the
+   only border; everything else stays matte. The banner is dismissable and
+   remembered for 7 days (see showInstallBanner() in app.js). */
+#install-banner {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #141414;
+  border-top: 1px solid var(--accent);
+  padding: 14px 18px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--fg);
+  z-index: 100;
+  animation: install-banner-up 240ms ease-out;
+}
+@keyframes install-banner-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+#install-banner .install-text { flex: 1; }
+#install-banner strong { color: var(--accent); font-weight: 500; }
+#install-banner button {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+#install-banner button.install-dismiss {
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  padding: 0 6px;
+}

@@ -82,6 +82,15 @@ def create_app(
     coord_store = None
     coord_event_bus = None
     coord_worker = None
+
+    # MessengerStore — substrate for the /m/* PWA surface AND for the
+    # deliberate_share tool (registered below for Aetheria + Vett). Built
+    # ahead of tool registration so the tool factories can capture a live
+    # store handle; the same instance is stashed in app.extensions["soveryn"]
+    # for the blueprint at the bottom of create_app.
+    from soveryn.app.messenger.store import MessengerStore
+    messenger_store = MessengerStore(env.data_root / "messenger.db")
+
     if agent_loops is None:
         # Pinned memory is Aetheria-only by design — it's her relationship
         # substrate (facts about Jon, the project, her continuity). Vett and
@@ -399,6 +408,48 @@ def create_app(
                     owner_agent="aetheria",
                 )
 
+        # deliberate_share — Aetheria + Vett can initiate an unprompted
+        # message into Jon's Messenger inbox. Built on Task 16's tool factory;
+        # the personas (Task 17) frame restraint as a held value, not a rule.
+        #
+        # Aetheria — uncapped per partnership contract.
+        # See project_soveryn_partnership_contract_2026_06_13 in maintainer memory.
+        # DO NOT silently re-add a substrate rate limit — that's a partnership
+        # regression, not a safety improvement.
+        from soveryn.agents.messenger_tool import build_deliberate_share_tool
+        tool_registry.register(
+            build_deliberate_share_tool(
+                store=messenger_store, owner_agent="aetheria",
+                rate_limit_per_hour=None,
+            )
+        )
+        # Vett — Colleague tier; substrate enforces a 2/hour cap.
+        tool_registry.register(
+            build_deliberate_share_tool(
+                store=messenger_store, owner_agent="vett",
+                rate_limit_per_hour=2,
+            )
+        )
+        # Scotty: not registered by default. He reports through threads Jon initiates.
+
+        # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
+        # that can emit deliberate_share also get to introspect their own
+        # outbound (delivery + read state) so they can decide whether to
+        # follow up. Scope-locked to the calling agent.
+        from soveryn.agents.messenger_introspect_tool import (
+            build_list_my_outbound_tool,
+        )
+        tool_registry.register(
+            build_list_my_outbound_tool(
+                store=messenger_store, owner_agent="aetheria",
+            )
+        )
+        tool_registry.register(
+            build_list_my_outbound_tool(
+                store=messenger_store, owner_agent="vett",
+            )
+        )
+
         # Aetheria-only dream-recall tools (recent_dreams + search_dreams).
         # NOT auto-injected — she queries her own dream layer when she
         # chooses to look. Restricted to layer='dream' on the nodes table.
@@ -536,6 +587,27 @@ def create_app(
             )
             coord_worker.start()
 
+        # Messenger delivery worker — drains m_outbound_queue every 5s,
+        # resolving each pending intent into a conversation turn so the PWA
+        # surfaces deliberate_share messages. Stub-side delivery (vnext);
+        # real Web Push lands on Spark per Phase 4. Daemon thread so it
+        # doesn't keep the process alive on shutdown; run_forever has its
+        # own try/except so errors don't propagate. Gated on
+        # SOVERYN_START_MESSENGER_WORKER (default True) so tests that build
+        # create_app under tmp_path fixtures can opt out if needed.
+        if app.config.setdefault("SOVERYN_START_MESSENGER_WORKER", True):
+            import threading
+            from soveryn.app.messenger.delivery_worker import run_forever
+            threading.Thread(
+                target=run_forever,
+                args=(messenger_store, conv_store),
+                daemon=True,
+                name="messenger-delivery-worker",
+            ).start()
+
+    # MessengerStore was constructed earlier (above the agent_loops gate) so
+    # it's in scope when deliberate_share is registered for Aetheria + Vett.
+    # The same instance flows here into app.extensions for blueprint use.
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
@@ -544,6 +616,7 @@ def create_app(
         "coord_store": coord_store,
         "coord_event_bus": coord_event_bus,
         "coord_worker": coord_worker,
+        "messenger_store": messenger_store,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -711,6 +784,17 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_specialists_bp)
     from soveryn.app.routes.aetheria_assets import bp as aetheria_assets_bp
     app.register_blueprint(aetheria_assets_bp)
+    # Messenger blueprint — /m/* pairing + thread CRUD routes. Dependency-
+    # injected from app.extensions["soveryn"] so the blueprint stays
+    # build-time configurable (matches the existing pattern for stores
+    # passed via factory builder rather than module-global Flask state).
+    from soveryn.app.routes.messenger import build_messenger_blueprint
+    ext = app.extensions["soveryn"]
+    app.register_blueprint(build_messenger_blueprint(
+        messenger_store=ext["messenger_store"],
+        conv_store=ext["conv_store"],
+        agent_loops=ext["agent_loops"],
+    ))
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)
