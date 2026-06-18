@@ -661,10 +661,16 @@ def create_app(
     # app.extensions["soveryn"]["document_store"] if they want document
     # routes to function — or the blueprint will raise KeyError, which is
     # intentional (fail-fast).
-    document_store = None
-    if agent_loops is None:
-        # _document_store was created inside the gate above; re-expose it here.
+    # _document_store is created inside the build block above, which REASSIGNS
+    # `agent_loops` (None -> built dict) — so re-checking `agent_loops is None`
+    # here is always False after a build and left document_store None in
+    # production (bug, 2026-06-18). Guard on the name instead: present -> the
+    # build block ran (production); absent -> agent_loops was injected and the
+    # build was skipped (tests inject their own document_store).
+    try:
         document_store = _document_store  # type: ignore[name-defined]
+    except NameError:
+        document_store = None
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,

@@ -138,6 +138,12 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     loops = app.extensions["soveryn"]["agent_loops"]
+    # Regression (2026-06-18): the build block reassigns agent_loops, so the old
+    # `if agent_loops is None` re-expose check never fired on the production
+    # build and left document_store None → /documents routes 500'd. The
+    # production build path MUST expose a live document_store.
+    from soveryn.platform.documents.store import DocumentStore
+    assert isinstance(app.extensions["soveryn"]["document_store"], DocumentStore)
     # Context window + history budget are fleet-wide: every loop trims
     # transcript to fit the 32K server window before send.
     for agent in ("aetheria", "vett", "scotty"):
