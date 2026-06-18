@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Documents</title>
+<style>
+  :root {
+    --sov-canvas:#050505;
+    --sov-olive:#94a455;
+    --sov-bronze:#8a6e3f;
+    --sov-deep-blue:#1f2c44;
+    --sov-electric-blue:#3ea8e8;
+    --sov-sage:#8a9a4d;
+    --sov-amber:#e0b878;
+    --text:#e8e3d5;
+    --glass-bg:rgba(18,16,12,0.40);
+    --glass-border:rgba(225,210,170,0.10);
+    --glass-blur:blur(30px) saturate(140%);
+    --r-lg:22px;
+    --r-md:14px;
+    --r-sm:10px;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+  }
+  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+  html,body { background:var(--sov-canvas); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
+
+  body::before {
+    content:"";
+    position:fixed; inset:0;
+    background:url("/static/logo.png") no-repeat center center;
+    background-size:160vmin auto;
+    opacity:0.50;
+    pointer-events:none;
+    z-index:0;
+  }
+  .page { position:relative; z-index:1; max-width:1280px; margin:0 auto; padding:32px 40px 64px; display:flex; flex-direction:column; gap:24px; }
+
+  a { color:inherit; text-decoration:none; }
+  button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
+
+  header.top {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 4px 24px;
+  }
+  header.top .brand-text { display:flex; flex-direction:column; gap:6px; }
+  header.top .wordmark { color:var(--sov-bronze); font-weight:600; letter-spacing:0.32em; font-size:18px; }
+  header.top .tagline { color:rgba(232,227,213,0.55); font-size:10px; letter-spacing:0.28em; text-transform:uppercase; }
+  header.top .tagline .dot { color:var(--sov-olive); margin:0 6px; }
+  header.top .nav-links { display:flex; gap:16px; align-items:center; font-size:12px; color:rgba(232,227,213,0.55); }
+  header.top .nav-links a:hover { color:var(--text); }
+  header.top .nav-links .active { color:var(--sov-olive); }
+
+  .panel {
+    background:var(--glass-bg);
+    backdrop-filter:var(--glass-blur);
+    -webkit-backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-border);
+    border-radius:var(--r-lg);
+    padding:24px 28px;
+  }
+
+  .panel-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:18px;
+  }
+  .panel-title {
+    font-size:11px; color:rgba(236,243,244,0.45);
+    text-transform:uppercase; letter-spacing:0.12em;
+  }
+  .panel-count { font-size:11px; color:rgba(236,243,244,0.35); }
+
+  .filter-row {
+    display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap;
+  }
+  .filter-row select, .filter-row input[type="text"] {
+    background:rgba(255,255,255,0.04); color:var(--text);
+    border:1px solid rgba(255,255,255,0.08); border-radius:6px;
+    padding:6px 10px; font-size:12px; font-family:inherit; outline:none;
+  }
+  .filter-row select:focus, .filter-row input[type="text"]:focus {
+    border-color:rgba(148,164,85,0.5);
+  }
+  .filter-row input[type="text"]::placeholder { color:rgba(236,243,244,0.35); }
+
+  .doc-list { display:flex; flex-direction:column; gap:10px; }
+
+  .doc-item {
+    display:flex; align-items:center; gap:16px;
+    padding:14px 16px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.05);
+    border-radius:var(--r-md);
+    cursor:pointer;
+    transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .doc-item:hover { border-color:rgba(148,164,85,0.25); background:rgba(255,255,255,0.04); }
+  .doc-item.active { border-color:rgba(148,164,85,0.5); background:rgba(148,164,85,0.06); }
+
+  .doc-item .agent-disc {
+    width:32px; height:32px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:600; letter-spacing:0.06em;
+    text-transform:uppercase;
+  }
+  .doc-item[data-agent="aetheria"] .agent-disc { background:linear-gradient(135deg,var(--sov-olive),var(--sov-sage)); }
+  .doc-item[data-agent="vett"]     .agent-disc { background:linear-gradient(135deg,var(--sov-deep-blue),#2c3d5c); }
+  .doc-item[data-agent="scotty"]   .agent-disc { background:linear-gradient(135deg,#b8945a,#5a4628); }
+
+  .doc-item .doc-meta { flex:1; min-width:0; }
+  .doc-item .doc-title { font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .doc-item .doc-sub { font-size:11px; color:rgba(236,243,244,0.45); margin-top:3px; }
+  .doc-item .doc-sub .status { text-transform:uppercase; letter-spacing:0.08em; font-size:10px; }
+  .doc-item .doc-sub .status[data-status="draft"]     { color:var(--sov-amber); }
+  .doc-item .doc-sub .status[data-status="final"]     { color:var(--sov-olive); }
+  .doc-item .doc-sub .status[data-status="archived"]  { color:rgba(236,243,244,0.3); }
+
+  .doc-item .download-group { display:flex; gap:6px; flex-shrink:0; }
+  .dl-btn {
+    padding:5px 10px; border-radius:6px; font-size:11px;
+    border:1px solid rgba(255,255,255,0.08);
+    color:rgba(236,243,244,0.6);
+    transition:border-color 0.12s ease, color 0.12s ease;
+  }
+  .dl-btn:hover { border-color:rgba(148,164,85,0.4); color:var(--sov-olive); }
+
+  /* Empty state */
+  .empty-state { padding:32px 0; text-align:center; color:rgba(236,243,244,0.3); font-style:italic; }
+
+  /* ─── Viewer panel ───────────────────────────────────────────────────────── */
+  .layout { display:grid; grid-template-columns:1fr 1.8fr; gap:16px; align-items:start; }
+  @media (max-width:900px) { .layout { grid-template-columns:1fr; } }
+
+  .viewer-panel { position:sticky; top:24px; }
+  .viewer-panel .viewer-placeholder {
+    padding:48px 24px; text-align:center;
+    color:rgba(236,243,244,0.25); font-style:italic;
+  }
+  .viewer-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+  .viewer-header .viewer-title { font-size:16px; font-weight:500; line-height:1.35; }
+  .viewer-header .viewer-meta { font-size:11px; color:rgba(236,243,244,0.45); margin-top:4px; }
+  .viewer-header .viewer-downloads { display:flex; gap:6px; flex-shrink:0; }
+
+  .doc-content {
+    max-height:60vh; overflow-y:auto; padding-right:4px;
+    font-size:13px; line-height:1.65; color:rgba(236,243,244,0.85);
+  }
+  .doc-content h1 { font-size:18px; font-weight:600; margin:0 0 12px; color:var(--text); }
+  .doc-content h2 { font-size:15px; font-weight:600; margin:16px 0 8px; color:var(--text); }
+  .doc-content h3 { font-size:13px; font-weight:600; margin:12px 0 6px; color:var(--text); }
+  .doc-content p  { margin:6px 0; }
+  .doc-content ul, .doc-content ol { margin:6px 0 6px 18px; }
+  .doc-content li { margin:2px 0; }
+  .doc-content pre { background:rgba(255,255,255,0.04); padding:10px 14px; border-radius:6px; font-size:12px; overflow-x:auto; }
+  .doc-content code { font-size:12px; background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:3px; }
+  .doc-content pre code { background:none; padding:0; }
+  .doc-content blockquote { border-left:3px solid rgba(148,164,85,0.4); padding:4px 12px; margin:8px 0; color:rgba(236,243,244,0.6); }
+  .doc-content table { border-collapse:collapse; width:100%; font-size:12px; margin:10px 0; }
+  .doc-content th, .doc-content td { border:1px solid rgba(255,255,255,0.08); padding:6px 10px; text-align:left; }
+  .doc-content th { background:rgba(255,255,255,0.04); }
+
+  .loading-spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(148,164,85,0.2); border-top-color:var(--sov-olive); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:8px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="top">
+    <div class="brand-text">
+      <div class="wordmark">SOVERYN</div>
+      <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
+    </div>
+    <nav class="nav-links">
+      <a href="/">Command Center</a>
+      <a href="/chat">Chat</a>
+      <a href="/m">Messages</a>
+      <a href="/documents" class="active">Documents</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+
+    <!-- ─── List panel ────────────────────────────────────────────────────── -->
+    <section class="panel" id="list-panel">
+      <div class="panel-header">
+        <span class="panel-title">Agent Documents</span>
+        <span class="panel-count" id="doc-count">—</span>
+      </div>
+
+      <div class="filter-row">
+        <select id="agent-filter">
+          <option value="">All agents</option>
+          <option value="aetheria">Aetheria</option>
+          <option value="vett">Vett</option>
+        </select>
+        <select id="status-filter">
+          <option value="">All statuses</option>
+          <option value="draft">Draft</option>
+          <option value="final">Final</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+
+      <div class="doc-list" id="doc-list">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </section>
+
+    <!-- ─── Viewer panel ──────────────────────────────────────────────────── -->
+    <section class="panel viewer-panel" id="viewer-panel">
+      <div class="viewer-placeholder" id="viewer-placeholder">
+        Select a document to view its content.
+      </div>
+      <div id="viewer-body" style="display:none">
+        <div class="viewer-header">
+          <div>
+            <div class="viewer-title" id="viewer-title"></div>
+            <div class="viewer-meta" id="viewer-meta"></div>
+          </div>
+          <div class="viewer-downloads" id="viewer-downloads"></div>
+        </div>
+        <div class="doc-content" id="viewer-content"></div>
+      </div>
+    </section>
+
+  </div>
+
+</div>
+
+<script>
+// ─── Tiny markdown renderer (no external deps) ────────────────────────────
+// Covers headings, bold, italic, code, links, blockquote, lists, paragraphs.
+// For full fidelity, we delegate to the server /download?fmt=html.
+function renderMarkdown(md) {
+  // Escape HTML entities first so raw HTML in docs isn't executed
+  let s = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Fenced code blocks
+  s = s.replace(/```[\s\S]*?```/g, m => {
+    const inner = m.slice(3, -3).replace(/^\w*\n/, '');
+    return `<pre><code>${inner}</code></pre>`;
+  });
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Headings
+  s = s.replace(/^######\s+(.*)$/gm, '<h6>$1</h6>');
+  s = s.replace(/^#####\s+(.*)$/gm, '<h5>$1</h5>');
+  s = s.replace(/^####\s+(.*)$/gm, '<h4>$1</h4>');
+  s = s.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
+  s = s.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
+  // Blockquote
+  s = s.replace(/^&gt;\s+(.*)$/gm, '<blockquote>$1</blockquote>');
+  // Bold + italic
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // Links
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // Unordered lists
+  s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, m => {
+    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^[-*]\s+/, '')}</li>`).join('');
+    return `<ul>${items}</ul>`;
+  });
+  // Ordered lists
+  s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, m => {
+    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^\d+\.\s+/, '')}</li>`).join('');
+    return `<ol>${items}</ol>`;
+  });
+  // Paragraphs (double newline → <p>)
+  s = s.replace(/\n{2,}/g, '</p><p>');
+  s = '<p>' + s + '</p>';
+  // Clean up stray empty paras
+  s = s.replace(/<p>\s*<\/p>/g, '');
+  return s;
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let allDocs = [];
+let activeDocId = null;
+
+// ─── Fetch helpers ───────────────────────────────────────────────────────────
+async function fetchDocs(agent, status) {
+  const params = new URLSearchParams();
+  if (agent)  params.set('agent', agent);
+  if (status) params.set('status', status);
+  const url = '/api/documents' + (params.toString() ? '?' + params.toString() : '');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch documents: ' + res.status);
+  return (await res.json()).documents;
+}
+
+async function fetchDoc(id) {
+  const res = await fetch('/api/documents/' + encodeURIComponent(id));
+  if (!res.ok) throw new Error('Failed to fetch document ' + id);
+  return res.json();
+}
+
+// ─── Render list ─────────────────────────────────────────────────────────────
+function renderList(docs) {
+  allDocs = docs;
+  const list = document.getElementById('doc-list');
+  const count = document.getElementById('doc-count');
+  count.textContent = docs.length + ' doc' + (docs.length !== 1 ? 's' : '');
+
+  if (!docs.length) {
+    list.innerHTML = '<div class="empty-state">No documents yet.</div>';
+    return;
+  }
+
+  list.innerHTML = docs.map(d => {
+    const when = relativeTime(d.updated_at);
+    const agentInitial = d.agent ? d.agent[0].toUpperCase() : '?';
+    return `
+      <div class="doc-item${d.id === activeDocId ? ' active' : ''}"
+           data-id="${esc(d.id)}" data-agent="${esc(d.agent)}"
+           role="button" tabindex="0" aria-label="View ${esc(d.title)}">
+        <div class="agent-disc">${agentInitial}</div>
+        <div class="doc-meta">
+          <div class="doc-title">${esc(d.title)}</div>
+          <div class="doc-sub">
+            ${esc(d.agent)}
+            &nbsp;·&nbsp;
+            <span class="status" data-status="${esc(d.status)}">${esc(d.status)}</span>
+            &nbsp;·&nbsp;${when}
+          </div>
+        </div>
+        <div class="download-group">
+          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=md"
+             download title="Download Markdown" onclick="event.stopPropagation()">md</a>
+          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=html"
+             download title="Download HTML" onclick="event.stopPropagation()">html</a>
+          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=pdf"
+             download title="Download PDF" onclick="event.stopPropagation()">pdf</a>
+          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=docx"
+             download title="Download DOCX" onclick="event.stopPropagation()">docx</a>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Click handlers
+  list.querySelectorAll('.doc-item').forEach(el => {
+    const open = () => openDoc(el.dataset.id);
+    el.addEventListener('click', open);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open(); });
+  });
+}
+
+// ─── Open doc viewer ─────────────────────────────────────────────────────────
+async function openDoc(id) {
+  activeDocId = id;
+  // Mark active in list
+  document.querySelectorAll('.doc-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === id));
+
+  const placeholder = document.getElementById('viewer-placeholder');
+  const viewerBody  = document.getElementById('viewer-body');
+  placeholder.innerHTML = '<span class="loading-spinner"></span> Loading…';
+  placeholder.style.display = '';
+  viewerBody.style.display = 'none';
+
+  try {
+    const doc = await fetchDoc(id);
+    document.getElementById('viewer-title').textContent = doc.title;
+    document.getElementById('viewer-meta').textContent =
+      doc.agent + ' · ' + doc.status + ' · ' + relativeTime(doc.updated_at);
+    document.getElementById('viewer-downloads').innerHTML =
+      ['md','html','pdf','docx'].map(fmt =>
+        `<a class="dl-btn" href="/documents/${esc(doc.id)}/download?fmt=${fmt}" download>${fmt}</a>`
+      ).join('');
+    document.getElementById('viewer-content').innerHTML = renderMarkdown(doc.content || '');
+    placeholder.style.display = 'none';
+    viewerBody.style.display = '';
+  } catch (err) {
+    placeholder.innerHTML = '<span style="color:rgba(236,243,244,0.4)">Failed to load document.</span>';
+    console.error(err);
+  }
+}
+
+// ─── Filter wiring ───────────────────────────────────────────────────────────
+async function reload() {
+  const agent  = document.getElementById('agent-filter').value;
+  const status = document.getElementById('status-filter').value;
+  try {
+    const docs = await fetchDocs(agent, status);
+    renderList(docs);
+  } catch (err) {
+    document.getElementById('doc-list').innerHTML =
+      '<div class="empty-state">Failed to load documents.</div>';
+    console.error(err);
+  }
+}
+
+document.getElementById('agent-filter').addEventListener('change', reload);
+document.getElementById('status-filter').addEventListener('change', reload);
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function relativeTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return Math.round(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
+  return Math.round(diff / 86400) + 'd ago';
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+reload();
+</script>
+</body>
+</html>

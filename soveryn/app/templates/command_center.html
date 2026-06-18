@@ -84,6 +84,12 @@
     text-transform:uppercase;
   }
   header.top .tagline .dot { color:var(--sov-olive); margin:0 6px; }
+  header.top .nav-links {
+    display:flex; gap:16px; align-items:center;
+    font-size:12px; color:rgba(232,227,213,0.55);
+  }
+  header.top .nav-links a:hover { color:var(--text); }
+
   header.top .status-pill {
     display:flex; align-items:center; gap:8px;
     padding:6px 12px; border-radius:14px;
@@ -561,6 +567,11 @@
         <div class="wordmark">SOVERYN</div>
         <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
       </div>
+      <nav class="nav-links">
+        <a href="/chat">Chat</a>
+        <a href="/m">Messages</a>
+        <a href="/documents">Documents</a>
+      </nav>
       <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
     </header>
 

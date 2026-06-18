@@ -653,6 +653,18 @@ def create_app(
     # MessengerStore was constructed earlier (above the agent_loops gate) so
     # it's in scope when deliberate_share is registered for Aetheria + Vett.
     # The same instance flows here into app.extensions for blueprint use.
+    #
+    # document_store — shared DocumentStore for D4 API routes. Same instance
+    # that was handed to register_document_tools above (inside the
+    # agent_loops is None gate). When agent_loops is injected externally
+    # (test fixtures), the caller is responsible for injecting
+    # app.extensions["soveryn"]["document_store"] if they want document
+    # routes to function — or the blueprint will raise KeyError, which is
+    # intentional (fail-fast).
+    document_store = None
+    if agent_loops is None:
+        # _document_store was created inside the gate above; re-expose it here.
+        document_store = _document_store  # type: ignore[name-defined]
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
@@ -662,6 +674,7 @@ def create_app(
         "coord_event_bus": coord_event_bus,
         "coord_worker": coord_worker,
         "messenger_store": messenger_store,
+        "document_store": document_store,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -859,6 +872,8 @@ def _register_blueprints(app: Flask) -> None:
         conv_store=ext["conv_store"],
         agent_loops=ext["agent_loops"],
     ))
+    from soveryn.app.routes.documents import bp as documents_bp
+    app.register_blueprint(documents_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)
