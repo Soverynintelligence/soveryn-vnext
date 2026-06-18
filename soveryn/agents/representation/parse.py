@@ -34,6 +34,13 @@ def parse_conclusions(raw: str) -> list[Conclusion]:
         premises = tuple(_NODE_RE.findall(prem_field))
         if mode not in _VALID_MODES or not content or not premises:
             continue  # premise-less or malformed → dropped
+        # Induction generalizes from REPEATED evidence — a one-instance
+        # "pattern" is the over-extraction bug (gate 2026-06-18: a single
+        # "watching the news" turn → "Jon is interested in current events").
+        # Require >=2 distinct premises for an inductive conclusion. Deductive
+        # / abductive single-premise reads are logically valid and kept.
+        if mode == "inductive" and len(premises) < 2:
+            continue
         out.append(Conclusion(mode=mode, confidence=confidence,
                               content=content, premises=premises))
     return out
