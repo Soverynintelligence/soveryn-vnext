@@ -58,3 +58,9 @@ def test_known_process_still_precise():
     assert ok == []
     bad = collect_listeners('LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("nc",pid=900,fd=3))\n', allow_list=_allow())
     assert len(bad) == 1 and bad[0].severity == Severity.EMERGENCY
+
+
+def test_ss_command_privileged_vs_plain():
+    from soveryn.agents.ares.lanes.network import ss_listeners_command
+    assert ss_listeners_command(privileged=False) == ["ss", "-H", "-tlnp"]
+    assert ss_listeners_command(privileged=True) == ["sudo", "-n", "ss", "-H", "-tlnp"]

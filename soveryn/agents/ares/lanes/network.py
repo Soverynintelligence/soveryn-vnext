@@ -263,8 +263,21 @@ def _parse_name_list(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def ss_listeners_command() -> list[str]:
-    return ["ss", "-H", "-tlnp"]
+def _ss_sudo_enabled(env: dict[str, str] | None = None) -> bool:
+    env = env or os.environ
+    return env.get("ARES_NET_SS_SUDO", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def ss_listeners_command(*, privileged: bool | None = None) -> list[str]:
+    """`ss -H -tlnp`. Privileged (sudo -n) so Ares can read the PROCESS owning
+    each socket — unprivileged ss shows the port but not the process, so Ares
+    can't tell sshd from malware. `sudo -n` never prompts; if the NOPASSWD
+    sudoers rule isn't present it fails fast and the caller falls back to plain
+    ss (process-blind, but detection keeps working)."""
+    if privileged is None:
+        privileged = _ss_sudo_enabled()
+    base = ["ss", "-H", "-tlnp"]
+    return ["sudo", "-n", *base] if privileged else base
 
 
 def collect_network_live(
@@ -276,20 +289,34 @@ def collect_network_live(
 
     allow_list = allow_list or NetworkAllowList.from_env()
     expected = expected or ExpectedServices.from_env()
+
+    def _run(cmd: list[str]) -> str:
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT, timeout=15)
+
+    _ss_errors = (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError)
+    privileged = _ss_sudo_enabled()
     try:
-        output = subprocess.check_output(
-            ss_listeners_command(),
-            text=True,
-            stderr=subprocess.STDOUT,
-            timeout=15,
-        )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        return [AresFinding(
-            "network.collector",
-            Severity.WARNING,
-            {"reason": f"ss-invocation-failed: {type(exc).__name__}: {exc}"},
-            key="ss-invocation",
-        )]
+        output = _run(ss_listeners_command(privileged=privileged))
+    except _ss_errors as exc:
+        if privileged:
+            # NOPASSWD sudoers rule for ss not present yet (or sudo failed) —
+            # fall back to plain, unprivileged ss so detection keeps running
+            # (process-blind until the sudoers line is added).
+            try:
+                output = _run(ss_listeners_command(privileged=False))
+            except _ss_errors as exc2:
+                return [AresFinding(
+                    "network.collector", Severity.WARNING,
+                    {"reason": f"ss-invocation-failed: {type(exc2).__name__}: {exc2}"},
+                    key="ss-invocation",
+                )]
+        else:
+            return [AresFinding(
+                "network.collector",
+                Severity.WARNING,
+                {"reason": f"ss-invocation-failed: {type(exc).__name__}: {exc}"},
+                key="ss-invocation",
+            )]
     listeners = collect_listeners(output, allow_list=allow_list)
     presence = collect_service_presence(output, expected=expected)
     return listeners + presence
