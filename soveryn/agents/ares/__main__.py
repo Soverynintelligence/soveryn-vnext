@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import signal
 from dataclasses import dataclass
 
@@ -117,6 +118,12 @@ def main(
     daemon_factory=build_daemon,
     signal_installer=_install_signal_handlers,
 ) -> int:
+    # Configure logging so the audit trail (finding transitions) reaches the
+    # service log. Without this Ares ran for days with an empty log.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     return run(
         parse_args(argv),
         daemon_factory=daemon_factory,

@@ -7,13 +7,14 @@ through the Ares severity router.
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from soveryn.agents.ares import signal_sender
-from soveryn.agents.ares.findings import AresFinding, FindingTracker
+from soveryn.agents.ares.findings import AresFinding, FindingTracker, Severity
 from soveryn.agents.ares.lanes.architecture import collect_architecture_live
 from soveryn.agents.ares.lanes.hardware import collect_cpu_live, collect_drives_live, collect_gpu_live
 from soveryn.agents.ares.lanes.network import collect_network_live
@@ -21,6 +22,17 @@ from soveryn.agents.ares.router import AresSinks, default_sinks, route_cleared, 
 from soveryn.platform.bus import SQLiteBus
 
 DEFAULT_ARES_BUS_PATH = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_bus.sqlite3"
+
+logger = logging.getLogger(__name__)
+# Severity → logging level for the audit trail (so journald/log severity
+# mirrors finding severity; EMERGENCY shows as a CRITICAL log line).
+_LOG_LEVEL = {
+    Severity.INFO: logging.INFO,
+    Severity.WARNING: logging.WARNING,
+    Severity.CRITICAL: logging.ERROR,
+    Severity.EMERGENCY: logging.CRITICAL,
+}
+
 Collector = Callable[[], Iterable[AresFinding]]
 Sleep = Callable[[float], None]
 StopRequested = Callable[[], bool]
@@ -57,6 +69,21 @@ class AresDaemonSurface:
             findings.extend(tuple(collector()))
 
         result = self.tracker.update(tuple(findings))
+        # Audit trail: log lifecycle transitions only (not every scan), at a
+        # logging level mirroring finding severity. Without this Ares ran for
+        # days with an empty log — findings detected into the void (2026-06-18).
+        for event in result.active:
+            if event.is_new:
+                f = event.finding
+                sev = getattr(f.severity, "value", f.severity)
+                logger.log(
+                    _LOG_LEVEL.get(f.severity, logging.INFO),
+                    "ares finding APPEARED [%s] %s %s", sev, f.finding_type, f.evidence,
+                )
+        for event in result.cleared:
+            f = event.finding
+            sev = getattr(f.severity, "value", f.severity)
+            logger.info("ares finding CLEARED [%s] %s", sev, f.finding_type)
         if result.active or result.cleared:
             sinks = self._routed_sinks()
             for event in result.active:
