@@ -18,6 +18,36 @@ def is_loopback_address(bind: str) -> bool:
         return False
 
 
+# Tailscale's address space: CGNAT 100.64.0.0/10 (IPv4) + the tailnet ULA
+# fd7a:115c:a1e0::/48 (IPv6). A listener on these is reachable only by devices
+# in Jon's own tailnet — a private trust boundary, NOT the public internet.
+# Flagging these EMERGENCY (as the bare non-loopback rule did) buried real
+# exposures in false alarms. Recorded as INFO instead: visible on review, no
+# phone-buzzing alert. Override via ARES_NET_TAILNET_RANGES.
+_DEFAULT_TAILNET_RANGES = "100.64.0.0/10,fd7a:115c:a1e0::/48"
+
+
+def _parse_networks(value: str) -> tuple:
+    nets = []
+    for raw in value.split(","):
+        part = raw.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            continue
+    return tuple(nets)
+
+
+def is_tailnet_address(bind: str, networks: tuple) -> bool:
+    try:
+        ip = ipaddress.ip_address(bind.split("%", 1)[0])
+    except ValueError:
+        return False
+    return any(ip in net for net in networks)
+
+
 @dataclass(frozen=True)
 class NetworkAllowList:
     """Ports and loopback process names allowed to listen, split by bind class."""
@@ -25,6 +55,7 @@ class NetworkAllowList:
     loopback_ports: frozenset[int] = field(default_factory=frozenset)
     loopback_process_names: frozenset[str] = field(default_factory=frozenset)
     public_ports: frozenset[tuple[int, str]] = field(default_factory=frozenset)
+    tailnet_networks: tuple = field(default_factory=tuple)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "NetworkAllowList":
@@ -42,7 +73,24 @@ class NetworkAllowList:
                 "ARES_NET_PUBLIC_ALLOWLIST",
                 "22:sshd",
             ))),
+            tailnet_networks=_parse_networks(env.get(
+                "ARES_NET_TAILNET_RANGES",
+                _DEFAULT_TAILNET_RANGES,
+            )),
         )
+
+    def public_allows(self, port: int, process: str) -> bool:
+        """Is this genuinely-public listener allowlisted? Exact (port, process)
+        match when the process is known; falls back to port-only when the
+        process is unreadable (Ares runs unprivileged → ss shows no process —
+        see the process-blindness gap). Port-only is weaker but still catches a
+        NEW unallowlisted public port; it just can't verify which process owns
+        a known one."""
+        if (port, process) in self.public_ports:
+            return True
+        if not process:
+            return port in {p for (p, _) in self.public_ports}
+        return False
 
 
 @dataclass(frozen=True)
@@ -171,7 +219,20 @@ def _classify(
             {"bind_address": bind_address, "port": port, "process": process},
             key=f"{bind_address}:{port}:{process}",
         )
-    if (port, process) in allow_list.public_ports:
+    # Tailnet: private trust boundary (reachable only inside Jon's tailnet).
+    # Record it (INFO) so a new/unexpected tailnet listener is visible on
+    # review, but never EMERGENCY — it is not a public exposure.
+    if is_tailnet_address(bind_address, allow_list.tailnet_networks):
+        if allow_list.public_allows(port, process):
+            return None
+        return AresFinding(
+            "network.tailnet_listener",
+            Severity.INFO,
+            {"bind_address": bind_address, "port": port, "process": process},
+            key=f"tailnet:{bind_address}:{port}:{process}",
+        )
+    # Genuinely public bind (0.0.0.0, ::, or a real public IP).
+    if allow_list.public_allows(port, process):
         return None
     return AresFinding(
         "network.public_listener_unallowlisted",
