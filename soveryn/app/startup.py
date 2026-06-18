@@ -398,6 +398,21 @@ def create_app(
                 lattice_db_path=env.lattice_db,
             )
 
+        # Document tools — Aetheria + Vett only; Scotty is not a document author.
+        # One shared DocumentStore (documents_vnext.db in the memory dir) so
+        # both agents operate on the same deliverable space. Attribution is
+        # preserved via the agent column on each row. Jon can download any
+        # document as md/html/pdf/docx via the D4 API routes (pending).
+        from soveryn.platform.documents.store import DocumentStore as _DocumentStore
+        from soveryn.platform.documents.tools import register_document_tools as _register_document_tools
+        _document_store = _DocumentStore(env.data_root / "memory" / "documents_vnext.db")
+        for _doc_agent in ("aetheria", "vett"):
+            _register_document_tools(
+                tool_registry,
+                store=_document_store,
+                owner_agent=_doc_agent,
+            )
+
         # Aetheria-initiated signal_send — the outbound half of her Direct
         # Line. Bridge daemon handles inbound → response; this tool lets her
         # send WITHOUT a prior inbound (heartbeat-driven thoughts, alerts,

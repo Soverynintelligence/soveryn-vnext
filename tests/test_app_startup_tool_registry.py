@@ -109,6 +109,11 @@ def test_startup_creates_tool_registry_for_aetheria(
     # trafilatura content extraction). Aetheria + Vett only; Scotty's
     # surface stays mechanical/local.
     assert {"web_search", "fetch_url"} <= names
+    # Document tools (D3, 2026-06-18 — deliverable document create/list/read/update;
+    # shared space across Aetheria + Vett; Scotty is not a document author).
+    assert {
+        "create_document", "list_documents", "read_document", "update_document",
+    } <= names
 
 
 def test_aetheria_has_interactive_rail_caps_others_do_not(
@@ -196,6 +201,11 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     dream_tools = {"recent_dreams", "search_dreams"}
     # Web tools are Aetheria+Vett only (sovereign metasearch + content fetch).
     web_tools = {"web_search", "fetch_url"}
+    # Document tools (D3, 2026-06-18) — Aetheria + Vett only; Scotty is not
+    # a document author (bounded mechanical surface, not deliverable production).
+    document_tools = {
+        "create_document", "list_documents", "read_document", "update_document",
+    }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
         names = {schema["function"]["name"] for schema in loop._tool_schemas()}
@@ -213,6 +223,10 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # Scotty is deliberately denied web tools — local-host surface only.
             assert names.isdisjoint(web_tools), \
                 f"scotty sees web tools (should not): {names & web_tools}"
+            # Scotty is NOT a document author — deliverable tools are
+            # Aetheria + Vett only.
+            assert names.isdisjoint(document_tools), \
+                f"scotty sees document tools (should not): {names & document_tools}"
         else:
             # Vett DOES get read-only repo inspection (read_file + list_directory)
             # as of 2026-06-17 — she researches improvements against the real
@@ -225,5 +239,8 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # Vett DOES get web tools.
             assert web_tools <= names, \
                 f"vett missing web tools: {web_tools - names}"
+            # Vett DOES get document tools (D3, 2026-06-18).
+            assert document_tools <= names, \
+                f"vett missing document tools: {document_tools - names}"
         assert names.isdisjoint(dream_tools), \
             f"{agent} sees dream tools (should not): {names & dream_tools}"
