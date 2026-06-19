@@ -281,6 +281,15 @@ def create_app(
                 build_direct_message_agent_tool(
                     owner_agent="aetheria",
                     edge_writer=edge_writer,
+                    # The default 240s client timeout gives up before Vett's
+                    # full directive turn completes — a real research directive
+                    # ("Hardware Moat audit", 2026-06-19) ran 288s before its
+                    # own 504. A directive turn is a tool LOOP (up to 8 rounds),
+                    # each round's LLM call now budgeted at 300s (Vett's
+                    # chat_timeout_seconds above), so the whole turn can run
+                    # well past any single call. 600s lets the heavy turn land
+                    # instead of the client cancelling mid-flight.
+                    dispatch_timeout_seconds=600.0,
                 )
             )
             # Peers' upward channel — same tool builder, different owner per
@@ -606,6 +615,20 @@ def create_app(
                 # cap researching philanthropy funding venues. Bumped to 8 so
                 # he can work through 3-5 sources per turn without cutoff.
                 kwargs["max_tool_rounds"] = 8
+                # Per-LLM-call timeout. The fleet default (120s) is sized for
+                # quick interactive turns; Vett's work is the opposite — deep
+                # multi-tool research at large context, where a single synthesis
+                # generation legitimately runs past two minutes. Root-caused
+                # 2026-06-19: an Aetheria→Vett directive ("Hardware Moat audit")
+                # 504'd because Vett's final generation exceeded the 120s
+                # per-call ceiling (LlamaServerTimeout → chat returns 504 →
+                # direct_message_agent saw dispatch_failed; from Aetheria's side,
+                # "she can't message Vett"). 300s gives her heavy generation room
+                # without holding the human rail's hangs that long (this is
+                # Vett-scoped, not fleet-wide). The companion fix is the higher
+                # dispatch_timeout_seconds on direct_message_agent below — the
+                # full multi-round turn can exceed any single call's budget.
+                kwargs["chat_timeout_seconds"] = 300.0
                 # Vett runs on Qwen3.6-27B which has thinking-mode enabled
                 # natively. Without a budget, his hidden reasoning can eat
                 # the entire max_tokens output budget before he emits any
