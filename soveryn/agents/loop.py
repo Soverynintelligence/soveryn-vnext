@@ -561,8 +561,20 @@ class AgentLoop:
             # block. Bare data, never instruction.
             active_focus = ""
             if self.coord_store is not None:
-                from soveryn.platform.continuity.active_focus import render_active_focus
-                active_focus = render_active_focus(self.coord_store.list_nodes())
+                from soveryn.platform.continuity.active_focus import (
+                    derive_dispatch_states,
+                    render_active_focus,
+                )
+                # Hand-off truth per node — whether a directive was actually
+                # fired to a peer (and how far it got), so an Aetheria-owned
+                # Open node reads as "sent to vett, awaiting reply" instead of
+                # being mistaken for never-dispatched (the 2026-06-19
+                # confabulation gap).
+                dispatch_states = derive_dispatch_states(self.conv_store)
+                active_focus = render_active_focus(
+                    self.coord_store.list_nodes(),
+                    dispatch_states=dispatch_states,
+                )
             fingerprint: ContinuityFingerprint = (
                 _continuity_fingerprint(tails),
                 active_focus,
