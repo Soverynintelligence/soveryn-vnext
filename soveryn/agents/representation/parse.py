@@ -34,12 +34,16 @@ def parse_conclusions(raw: str) -> list[Conclusion]:
         premises = tuple(_NODE_RE.findall(prem_field))
         if mode not in _VALID_MODES or not content or not premises:
             continue  # premise-less or malformed → dropped
-        # Induction generalizes from REPEATED evidence — a one-instance
-        # "pattern" is the over-extraction bug (gate 2026-06-18: a single
-        # "watching the news" turn → "Jon is interested in current events").
-        # Require >=2 distinct premises for an inductive conclusion. Deductive
-        # / abductive single-premise reads are logically valid and kept.
-        if mode == "inductive" and len(premises) < 2:
+        # A DURABLE trait must be corroborated across turns — require >=2
+        # distinct premises for EVERY conclusion, any mode. Originally this
+        # gated only inductive (gate 2026-06-18: "watching the news" once →
+        # "interested in current events"); but the model then relabeled
+        # single-turn generalizations as "deductive" to slip through (gate
+        # 2026-06-19: 3/4 conclusions were single-premise deductive episodic
+        # restatements like "Jon seeks confirmation of daily objectives" from
+        # one "are we done?"). A one-turn read is a moment, not a trait; if a
+        # value is real it recurs and earns a second premise.
+        if len(premises) < 2:
             continue
         out.append(Conclusion(mode=mode, confidence=confidence,
                               content=content, premises=premises))

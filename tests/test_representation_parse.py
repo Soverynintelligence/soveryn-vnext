@@ -8,30 +8,33 @@ def test_parses_valid_lines_and_drops_premiseless():
         "garbage line with no pipes\n"
     )
     out = parse_conclusions(raw)
-    assert len(out) == 2
+    # Only the multi-premise abductive survives — single-premise (any mode) and
+    # premise-less are dropped (>=2-premise-for-all rule, gate 2026-06-19).
+    assert len(out) == 1
     assert out[0] == Conclusion(mode="abductive", confidence="fairly confident",
                                 content="Jon prefers the sharp honest read",
                                 premises=("a1", "b2"))
-    assert out[1].premises == ("c3",)  # deductive single-premise is valid → kept
 
 
-def test_inductive_requires_two_premises():
-    """Induction generalizes from repeated evidence — a single-premise inductive
-    'pattern' is the over-extraction bug (gate 2026-06-18). Drop it; keep
-    multi-premise inductions and single-premise deductive/abductive."""
+def test_two_premises_required_for_every_mode():
+    """A durable trait needs corroboration across turns — >=2 premises for
+    EVERY mode (gate 2026-06-19). Originally inductive-only; the model dodged it
+    by relabeling single-turn generalizations as 'deductive'. Single-premise of
+    ANY mode is now dropped; only multi-premise survives."""
     raw = (
-        "inductive | confident | Jon is interested in current events | [node:a1]\n"          # 1 premise → DROP
-        "inductive | confident | Jon works in long focused sessions | [node:a1],[node:b2]\n"  # 2 premises → keep
-        "deductive | confident | Jon said he is feeling good | [node:c3]\n"                    # deductive 1 → keep
-        "abductive | confident | Jon is likely winding down | [node:d4]\n"                     # abductive 1 → keep
+        "inductive | confident | Jon is interested in current events | [node:a1]\n"           # 1 → DROP
+        "deductive | confident | Jon seeks confirmation of daily objectives | [node:c3]\n"     # 1 → DROP (the dodge)
+        "abductive | confident | Jon is likely winding down | [node:d4]\n"                     # 1 → DROP
+        "inductive | confident | Jon consistently values task completion | [node:a1],[node:b2]\n"  # 2 → keep
+        "deductive | confident | Jon repeatedly directs work toward closure | [node:e5],[node:f6]\n"  # 2 → keep
     )
     out = parse_conclusions(raw)
     contents = [c.content for c in out]
-    assert "Jon is interested in current events" not in contents  # single-premise inductive dropped
-    assert "Jon works in long focused sessions" in contents       # multi-premise inductive kept
-    assert "Jon said he is feeling good" in contents              # deductive single-premise kept
-    assert "Jon is likely winding down" in contents               # abductive single-premise kept
-    assert len(out) == 3
+    assert contents == [
+        "Jon consistently values task completion",
+        "Jon repeatedly directs work toward closure",
+    ]
+    assert all(len(c.premises) >= 2 for c in out)
 
 def test_invalid_mode_dropped():
     assert parse_conclusions("vibes | sure | x | [node:a]") == []

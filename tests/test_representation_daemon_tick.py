@@ -23,8 +23,9 @@ def _fake_embed(text: str) -> tuple[float, ...]:
 
 
 def _valid_conclusion_line() -> str:
-    """One well-formed conclusion line from the parser's expected format."""
-    return "deductive | confident | Jon values autonomy and self-determination. | [node:turn:abc:0]"
+    """One well-formed conclusion line — needs >=2 premises to survive the
+    parser's durable-trait rule (gate 2026-06-19)."""
+    return "deductive | confident | Jon values autonomy and self-determination. | [node:turn:abc:0],[node:turn:abc:2]"
 
 
 def _node_count(db_path: Path) -> int:
@@ -230,7 +231,7 @@ def test_dryrun_artifact_records_conclusions(tmp_path):
     c = rec["conclusions"][0]
     assert c["content"] == "Jon values autonomy and self-determination."
     assert c["mode"] == "deductive"
-    assert c["premises"] == ["turn:abc:0"]
+    assert c["premises"] == ["turn:abc:0", "turn:abc:2"]
 
 
 def test_no_artifact_when_path_none(tmp_path):

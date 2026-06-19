@@ -9,7 +9,8 @@ from soveryn.agents.representation.parse import Conclusion
 
 def test_runs_and_parses():
     fake = lambda prompt, url: (
-        "abductive | fairly confident | Jon prefers honesty | [node:t1]\n"
+        "abductive | fairly confident | Jon prefers honesty | [node:t1],[node:t2]\n"
+        "abductive | sure | single-premise dropped | [node:t1]\n"
         "deductive | sure | premise-less dropped | \n"
     )
     out = run_representation_pass(
@@ -19,7 +20,8 @@ def test_runs_and_parses():
         cognition_url="http://x",
         chat_fn=fake,
     )
-    assert out == [Conclusion("abductive", "fairly confident", "Jon prefers honesty", ("t1",))]
+    # Only the >=2-premise line survives (single-premise + premise-less dropped).
+    assert out == [Conclusion("abductive", "fairly confident", "Jon prefers honesty", ("t1", "t2"))]
 
 
 def test_best_effort_on_error():

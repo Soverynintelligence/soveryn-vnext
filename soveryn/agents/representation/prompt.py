@@ -45,12 +45,13 @@ patterns evidenced in the material. Do NOT record transient events, logistics, o
 one-off facts (e.g. "arrived at the terminal", "finished today's tasks", "fixed a \
 bug today"). Those are noise tomorrow. If the material holds only passing events \
 with no durable signal about {subject}, output nothing at all.
-10. DO NOT generalise a standing trait from a SINGLE remark. An inductive \
-conclusion requires at least TWO distinct premises showing a repeated pattern — \
-one casual mention is not a pattern (e.g. a single "watching the news" is NOT \
-"interested in current events"; one "feeling good" is NOT a trait). If you have \
-only one premise, state nothing rather than reach. Inductive lines citing fewer \
-than two premises will be discarded.
+10. EVERY conclusion — any mode — must cite at least TWO distinct premises \
+showing the trait across more than one turn. A trait seen once is a moment, not \
+a trait (a single "watching the news" is NOT "interested in current events"; one \
+"are we done?" is NOT "seeks confirmation of objectives"). Do NOT relabel a \
+one-turn generalisation as "deductive" to dodge this. If you have only one \
+premise for something, say nothing rather than reach. Lines citing fewer than \
+two premises are discarded regardless of mode.
 11. Avoid hollow traits that would be true of almost anyone (e.g. "values success", \
 "prefers to relax when not working"). Only conclude what is DISTINCTIVE about \
 {subject}. A bland true-of-everyone statement is not worth recording.
