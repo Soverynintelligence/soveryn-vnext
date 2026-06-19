@@ -553,6 +553,12 @@ def create_app(
             kwargs["history_token_budget"] = 8_000
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
+                # Active Focus block: Aetheria carries awareness of the work in
+                # flight across the coordination boards, folded into her
+                # cross-surface continuity brief (loop._build_continuity_brief).
+                # Aetheria-only — the active-state half of the 2026-06-19
+                # continuity work. None-safe (no boards → no block).
+                kwargs["coord_store"] = coord_store
                 if recall_lattice is not None:
                     kwargs["lattice_store"] = recall_lattice
                     if identity_spine_lattice is not None:

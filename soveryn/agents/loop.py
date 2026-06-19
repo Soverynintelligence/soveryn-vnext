@@ -338,7 +338,13 @@ def _apply_history_budget(
     return tuple(kept), marker, dropped
 
 
-ContinuityFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | None], ...]], ...]
+ContinuityTailFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | None], ...]], ...]
+# Full continuity fingerprint = the cross-session tails AND the Active Focus
+# block. Folding the rendered active-focus string in means a change to the
+# coordination boards (new directive, status flip, archive) invalidates the
+# cache exactly the same way a new session tail does — the brief never goes
+# stale relative to the work actually in flight.
+ContinuityFingerprint = tuple[ContinuityTailFingerprint, str]
 
 
 @dataclass(frozen=True)
@@ -365,7 +371,7 @@ _RECALL_CACHE_TTL_SECONDS = 300.0
 _RECALL_CACHE_REUSE_TURNS = 12
 
 
-def _continuity_fingerprint(tails) -> ContinuityFingerprint:
+def _continuity_fingerprint(tails) -> ContinuityTailFingerprint:
     """Fingerprint the underlying cross-session activity, not render time."""
     fp = []
     for tail in tails:
@@ -437,6 +443,7 @@ class AgentLoop:
         souls_dir: Path | None = None,
         pinned_text: str = "",
         continuity_config: ContinuityConfig | None = None,
+        coord_store: "CoordinationStore | None" = None,
         black_box: BlackBox | None = None,
         steering_rack: SteeringRack | None = None,
     ) -> None:
@@ -517,6 +524,9 @@ class AgentLoop:
         # helper short-circuits to "" so non-aetheria loops never pay any
         # query cost.
         self.continuity_config = continuity_config
+        # Coordination store for the Active Focus block (Aetheria-only, derived
+        # on-read in _build_continuity_brief). None = no active-focus context.
+        self.coord_store = coord_store
         self.black_box = black_box
         self.steering_rack = steering_rack
         self.session_context_cache = SessionContextCache()
@@ -544,11 +554,25 @@ class AgentLoop:
                 current_session_id=session_id,
                 config=self.continuity_config,
             )
-            fingerprint = _continuity_fingerprint(tails)
+            # Active Focus — the work currently in flight across the coordination
+            # boards, derived on-read (no LLM, no separate cache; the render is
+            # as fresh as the boards). Folded into the same system message as
+            # the recent-activity brief so the continuity context arrives as one
+            # block. Bare data, never instruction.
+            active_focus = ""
+            if self.coord_store is not None:
+                from soveryn.platform.continuity.active_focus import render_active_focus
+                active_focus = render_active_focus(self.coord_store.list_nodes())
+            fingerprint: ContinuityFingerprint = (
+                _continuity_fingerprint(tails),
+                active_focus,
+            )
             cached = self.session_context_cache.continuity.get(session_id)
             if cached is not None and cached.fingerprint == fingerprint:
                 return cached.text
             text = build_recent_activity_brief(tails, config=self.continuity_config)
+            if active_focus:
+                text = f"{text}\n\n{active_focus}" if text else active_focus
             self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(
                 fingerprint=fingerprint,
                 text=text,

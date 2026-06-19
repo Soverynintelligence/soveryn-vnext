@@ -108,6 +108,7 @@ def _make_loop(
     continuity_config: ContinuityConfig | None = None,
     pinned_text: str = "PINNED",
     soul_text: str = "",
+    coord_store=None,
 ) -> AgentLoop:
     return AgentLoop(
         agent_name=agent,
@@ -118,6 +119,7 @@ def _make_loop(
         pinned_text=pinned_text,
         soul_text=soul_text,
         continuity_config=continuity_config,
+        coord_store=coord_store,
     )
 
 
@@ -353,3 +355,94 @@ def test_agent_loop_signal_session_appears_in_brief(conv_store):
     assert signal_title in brief
     assert "reach me here later" in brief
     assert "I will hold the thread" in brief
+
+
+# ─── 11. Active Focus block surfaces the coordination boards ─────────────────
+
+def _coord_store(tmp_path):
+    from soveryn.platform.lattice.legacy import LatticeStore
+    from soveryn.platform.coordination.store import CoordinationStore
+    db = tmp_path / "coord.db"
+    LatticeStore(db)
+    return CoordinationStore(db)
+
+
+def test_agent_loop_injects_active_focus_from_coord_boards(conv_store, tmp_path):
+    from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
+    from soveryn.platform.coordination.types import CoordBoard
+
+    current = conv_store.new_session("aetheria", title="ui chat")
+    store = _coord_store(tmp_path)
+    store.create_node(
+        board=CoordBoard.BLUEPRINT, owner="aetheria",
+        content="Hardware Moat audit: Quadro vs Blackwell vLLM optimization",
+    )
+
+    fake = _CapturingChat()
+    loop = _make_loop(
+        conv_store,
+        chat_fn=fake,
+        continuity_config=ContinuityConfig(enabled=True, window_hours=24),
+        coord_store=store,
+    )
+    loop.process_message(current, "hi")
+
+    systems = _system_contents(fake.calls[0]["request"])
+    assert any(AF_HEADER in s for s in systems), (
+        f"expected ACTIVE FOCUS block; got {systems!r}"
+    )
+    assert any("Hardware Moat audit" in s for s in systems)
+
+
+def test_agent_loop_no_active_focus_without_coord_store(conv_store):
+    from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
+
+    current = conv_store.new_session("aetheria", title="ui chat")
+    _seed_signal_session(conv_store)
+
+    fake = _CapturingChat()
+    loop = _make_loop(
+        conv_store,
+        chat_fn=fake,
+        continuity_config=ContinuityConfig(enabled=True, window_hours=24),
+        coord_store=None,
+    )
+    loop.process_message(current, "hi")
+
+    systems = _system_contents(fake.calls[0]["request"])
+    assert not any(AF_HEADER in s for s in systems)
+
+
+def test_agent_loop_active_focus_cache_invalidates_on_board_change(conv_store, tmp_path):
+    """A new coord node must appear on the NEXT turn — the continuity cache is
+    fingerprinted on the active-focus render, so a board change busts it."""
+    from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
+    from soveryn.platform.coordination.types import CoordBoard
+
+    current = conv_store.new_session("aetheria", title="ui chat")
+    store = _coord_store(tmp_path)
+
+    fake = _CapturingChat()
+    loop = _make_loop(
+        conv_store,
+        chat_fn=fake,
+        continuity_config=ContinuityConfig(enabled=True, window_hours=24),
+        coord_store=store,
+    )
+
+    # Turn 1: empty boards → no active focus block.
+    loop.process_message(current, "first")
+    systems_1 = _system_contents(fake.calls[0]["request"])
+    assert not any(AF_HEADER in s for s in systems_1)
+
+    # A new directive lands on the boards between turns.
+    store.create_node(
+        board=CoordBoard.SIGNAL, owner="vett",
+        content="New EU sovereign-AI funding window opened",
+    )
+
+    # Turn 2: cache is busted by the changed render → block appears.
+    loop.process_message(current, "second")
+    systems_2 = _system_contents(fake.calls[1]["request"])
+    assert any(AF_HEADER in s for s in systems_2)
+    assert any("EU sovereign-AI funding" in s for s in systems_2)
