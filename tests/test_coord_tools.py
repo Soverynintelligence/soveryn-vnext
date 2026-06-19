@@ -128,3 +128,31 @@ def test_request_direction_for_vett(coord_store, event_bus):
     assert len(events) == 1
     assert events[0].actor_agent == "vett"
     assert events[0].payload["requester_agent"] == "vett"
+
+
+def test_request_direction_persists_to_coord_event_log(coord_store, event_bus):
+    """NEEDS_DIRECTION must land in the coord_event_log delivery ledger — before
+    2026-06-19 it only hit the in-memory bus, so a peer could never tell if the
+    message was sent/received."""
+    import sqlite3
+    node = coord_store.create_node(
+        board=CoordBoard.BLUEPRINT, owner="vett", content="which venue first?",
+    )
+    tool = build_request_direction_tool(
+        store=coord_store, event_bus=event_bus, owner_agent="vett",
+    )
+    result = tool.handler({
+        "node_id": node.id,
+        "context_summary": "two funding windows, limited time",
+        "options_considered": ["EU first", "UK first"],
+    })
+    with sqlite3.connect(coord_store.db_path) as conn:
+        rows = conn.execute(
+            "SELECT actor_agent, node_id FROM coord_event_log "
+            "WHERE kind='needs_direction'",
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == "vett"
+    assert rows[0][1] == node.id
+    # The same event still reached the bus (event id matches the ledger).
+    assert result["needs_direction_event_id"]

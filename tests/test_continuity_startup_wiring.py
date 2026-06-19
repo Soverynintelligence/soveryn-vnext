@@ -127,9 +127,15 @@ def test_aetheria_agent_loop_gets_continuity_config(
     assert cfg.per_session_cap == 275
 
 
-def test_vett_agent_loop_does_not_get_continuity_config(
+def test_vett_agent_loop_gets_continuity_config_and_coord_store(
     tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path,
 ):
+    """Vett now gets an ENABLED continuity_config + a coord_store so her Active
+    Focus block renders (board awareness + her send/receive state). The first
+    gate in _build_continuity_brief returns "" without an enabled config — this
+    is the production-path regression that the loop unit tests missed (they
+    injected the config directly). Cross-session tails stay Aetheria-only; that
+    behavioral split is verified in test_continuity_loop_integration."""
     _configure_env(
         monkeypatch,
         fake_souls_dir=fake_souls_dir,
@@ -138,7 +144,9 @@ def test_vett_agent_loop_does_not_get_continuity_config(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     vett = app.extensions["soveryn"]["agent_loops"]["vett"]
-    assert vett.continuity_config is None
+    assert vett.continuity_config is not None
+    assert vett.continuity_config.enabled is True
+    assert vett.coord_store is not None
 
 
 def test_scotty_agent_loop_does_not_get_continuity_config(

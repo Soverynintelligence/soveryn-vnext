@@ -55,21 +55,28 @@ def test_cap_limits_output(tmp_path):
 
 # ─── dispatch-state suffix ───────────────────────────────────────────────────
 
-def test_aetheria_owned_node_without_directive_reads_not_yet_dispatched(tmp_path):
+def test_self_owned_node_without_directive_reads_not_yet_dispatched(tmp_path):
     store = _store(tmp_path)
     store.create_node(board=CoordBoard.BLUEPRINT, owner="aetheria", content="my plan")
-    out = render_active_focus(store.list_nodes())
+    out = render_active_focus(store.list_nodes(), self_agent="aetheria")
     assert "not yet dispatched" in out
 
 
-def test_peer_owned_node_gets_no_dispatch_suffix(tmp_path):
+def test_other_owned_node_gets_no_dispatch_suffix(tmp_path):
     store = _store(tmp_path)
     store.create_node(board=CoordBoard.SIGNAL, owner="vett", content="vett's signal")
-    out = render_active_focus(store.list_nodes())
-    # Peer-owned nodes aren't Aetheria's to dispatch — no suffix, no false
-    # "not yet dispatched" noise.
+    # Viewer is Aetheria; the node is Vett's — not hers to dispatch, so no
+    # suffix and no false "not yet dispatched" noise.
+    out = render_active_focus(store.list_nodes(), self_agent="aetheria")
     assert "not yet dispatched" not in out
     assert "sent to" not in out
+
+
+def test_no_self_agent_means_no_not_yet_dispatched_default(tmp_path):
+    store = _store(tmp_path)
+    store.create_node(board=CoordBoard.BLUEPRINT, owner="aetheria", content="my plan")
+    out = render_active_focus(store.list_nodes())  # no self_agent
+    assert "not yet dispatched" not in out
 
 
 def test_dispatch_state_label_overrides_default(tmp_path):

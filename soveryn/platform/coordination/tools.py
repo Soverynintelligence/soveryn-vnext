@@ -537,19 +537,25 @@ def build_request_direction_tool(
         if node is None:
             return {"error": "unknown_node", "node_id": node_id}
 
-        event = CoordEvent(
-            id=str(uuid.uuid4()),
+        # Route through the store's _emit so the event lands in the
+        # coord_event_log delivery ledger (not just the in-memory bus) — its
+        # presence + the worker-filled triggered_agents are how the requester
+        # learns the message was sent AND received. Before 2026-06-19 this
+        # built an event and emitted to the bus directly, so NEEDS_DIRECTION
+        # never appeared in the ledger and a peer could never tell. bus=event_bus
+        # preserves this tool's own bus handle (the store may carry a different
+        # or null bus).
+        event = store._emit(
             kind=CoordEventKind.NEEDS_DIRECTION,
             node_id=node_id.strip(),
             actor_agent=owner_agent,
-            timestamp=datetime.now().isoformat(),
             payload={
                 "context_summary": context_summary.strip(),
                 "options_considered": list(options_considered),
                 "requester_agent": owner_agent,
             },
+            bus=event_bus,
         )
-        event_bus.emit(event)
         return {
             "needs_direction_event_id": event.id,
             "node_id": node_id.strip(),

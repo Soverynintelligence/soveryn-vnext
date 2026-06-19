@@ -540,20 +540,26 @@ class AgentLoop:
         """
         if self.continuity_config is None or not self.continuity_config.enabled:
             return ""
-        if self.agent_name != "aetheria":
+        # Cross-session tails (multi-rail conversation continuity) stay
+        # Aetheria-only. Active Focus (board awareness) also goes to any agent
+        # wired with a coord_store — Vett, so she can see what's in flight and
+        # whether her own messages up to the hub were received.
+        is_aetheria = self.agent_name == "aetheria"
+        if not is_aetheria and self.coord_store is None:
             return ""
         try:
             session = self.conv_store.get_session(session_id)
             if session is not None and self.continuity_config.session_is_autonomous(session.title):
                 return ""
-            from soveryn.platform.continuity.store import recent_cross_session_tails
-            from soveryn.platform.continuity.brief import build_recent_activity_brief
-            tails = recent_cross_session_tails(
-                self.conv_store,
-                agent=self.agent_name,
-                current_session_id=session_id,
-                config=self.continuity_config,
-            )
+            tails = ()
+            if is_aetheria:
+                from soveryn.platform.continuity.store import recent_cross_session_tails
+                tails = recent_cross_session_tails(
+                    self.conv_store,
+                    agent=self.agent_name,
+                    current_session_id=session_id,
+                    config=self.continuity_config,
+                )
             # Active Focus — the work currently in flight across the coordination
             # boards, derived on-read (no LLM, no separate cache; the render is
             # as fresh as the boards). Folded into the same system message as
@@ -565,15 +571,23 @@ class AgentLoop:
                     derive_dispatch_states,
                     render_active_focus,
                 )
-                # Hand-off truth per node — whether a directive was actually
-                # fired to a peer (and how far it got), so an Aetheria-owned
-                # Open node reads as "sent to vett, awaiting reply" instead of
-                # being mistaken for never-dispatched (the 2026-06-19
-                # confabulation gap).
-                dispatch_states = derive_dispatch_states(self.conv_store)
+                # Communication truth per node, from THIS agent's perspective:
+                #   Aetheria → her outbound directives (sent to vett, awaiting/
+                #     replied), read from the [direct:] sessions.
+                #   a peer → her messages up to the hub (sent to aetheria,
+                #     received), read from the coord_event_log ledger.
+                # So an owned Open node reads as actually-dispatched instead of
+                # being mistaken for never-handed-off (the 2026-06-19 gap).
+                if is_aetheria:
+                    dispatch_states = derive_dispatch_states(self.conv_store)
+                else:
+                    dispatch_states = self.coord_store.delivery_states_for_actor(
+                        self.agent_name
+                    )
                 active_focus = render_active_focus(
                     self.coord_store.list_nodes(),
                     dispatch_states=dispatch_states,
+                    self_agent=self.agent_name,
                 )
             fingerprint: ContinuityFingerprint = (
                 _continuity_fingerprint(tails),
@@ -582,7 +596,10 @@ class AgentLoop:
             cached = self.session_context_cache.continuity.get(session_id)
             if cached is not None and cached.fingerprint == fingerprint:
                 return cached.text
-            text = build_recent_activity_brief(tails, config=self.continuity_config)
+            text = ""
+            if tails:
+                from soveryn.platform.continuity.brief import build_recent_activity_brief
+                text = build_recent_activity_brief(tails, config=self.continuity_config)
             if active_focus:
                 text = f"{text}\n\n{active_focus}" if text else active_focus
             self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(

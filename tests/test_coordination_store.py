@@ -342,3 +342,33 @@ def test_provenance_survives_round_trip_through_db(store):
     assert got.status == CoordStatus.OPEN
     assert got.owner == "scotty"
     assert got.lattice_ref == ref
+
+
+# ─── delivery_states_for_actor (the receipt mirror) ──────────────────────────
+
+def test_delivery_states_for_actor_reflects_triggered_agents(store):
+    """A node Vett created and that reached Aetheria reads 'received'; one not
+    yet routed reads 'not yet received'; a routing error reads 'delivery failed'."""
+    import sqlite3 as _sq
+    received = store.create_node(board=CoordBoard.SIGNAL, owner="vett", content="lead A")
+    pending = store.create_node(board=CoordBoard.SIGNAL, owner="vett", content="lead B")
+    errored = store.create_node(board=CoordBoard.SIGNAL, owner="vett", content="lead C")
+    # create_node logs node_created rows with triggered_agents=NULL; simulate the
+    # worker filling them in post-routing.
+    with _sq.connect(store.db_path) as conn:
+        conn.execute("UPDATE coord_event_log SET triggered_agents='aetheria' WHERE node_id=?", (received.id,))
+        conn.execute("UPDATE coord_event_log SET triggered_agents='aetheria=ERROR:AgentLoopError' WHERE node_id=?", (errored.id,))
+        # pending left NULL
+
+    states = store.delivery_states_for_actor("vett")
+    assert states[received.id] == "sent to aetheria, received"
+    assert states[pending.id] == "sent, not yet received"
+    assert states[errored.id] == "sent to aetheria, delivery failed"
+
+
+def test_delivery_states_only_includes_this_actor(store):
+    mine = store.create_node(board=CoordBoard.SIGNAL, owner="vett", content="vett node")
+    store.create_node(board=CoordBoard.BLUEPRINT, owner="aetheria", content="aetheria node")
+    states = store.delivery_states_for_actor("vett")
+    assert mine.id in states
+    assert len(states) == 1  # aetheria's node not in vett's outbound view

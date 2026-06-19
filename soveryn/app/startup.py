@@ -507,7 +507,16 @@ def create_app(
         # Cross-Surface Continuity (Aetheria only). Env knobs flow through
         # EnvConfig; peer agents pass through with None.
         def _continuity_for(agent_name: str) -> ContinuityConfig | None:
-            if agent_name != "aetheria":
+            # Aetheria + Vett both get an enabled config so the continuity brief
+            # RUNS. What each receives diverges inside _build_continuity_brief:
+            # Aetheria gets cross-session tails + Active Focus; Vett gets ONLY
+            # Active Focus (board awareness + her own send/receive state) — the
+            # tails are Aetheria's multi-rail thing. Without an enabled config
+            # here, the brief's first gate returns "" and Vett's Active Focus
+            # never renders (the live gap behind "Vett can't see what she sent
+            # up", caught 2026-06-19 — unit tests injected the config directly
+            # and missed it). Scotty stays None (bounded executor, no board view).
+            if agent_name not in ("aetheria", "vett"):
                 return None
             return ContinuityConfig(
                 enabled=env.cross_surface_enabled,
@@ -621,6 +630,13 @@ def create_app(
                 # cap researching philanthropy funding venues. Bumped to 8 so
                 # he can work through 3-5 sources per turn without cutoff.
                 kwargs["max_tool_rounds"] = 8
+                # Vett gets the Active Focus block too (2026-06-19): board
+                # awareness so she researches against what's actually in flight,
+                # plus delivery state of her own messages up to Aetheria
+                # (sent/received), read from the coord_event_log ledger. Her
+                # cross-session tails stay off — that's Aetheria's multi-rail
+                # continuity, not Vett's.
+                kwargs["coord_store"] = coord_store
                 # Per-LLM-call timeout. The fleet default (120s) is sized for
                 # quick interactive turns; Vett's work is the opposite — deep
                 # multi-tool research at large context, where a single synthesis

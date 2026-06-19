@@ -446,3 +446,61 @@ def test_agent_loop_active_focus_cache_invalidates_on_board_change(conv_store, t
     systems_2 = _system_contents(fake.calls[1]["request"])
     assert any(AF_HEADER in s for s in systems_2)
     assert any("EU sovereign-AI funding" in s for s in systems_2)
+
+
+# ─── 12. Vett gets Active Focus (board awareness), not cross-session tails ────
+
+def test_vett_gets_active_focus_but_not_cross_session_tails(conv_store, tmp_path):
+    from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
+    from soveryn.platform.coordination.types import CoordBoard
+
+    current = conv_store.new_session("vett", title="vett research")
+    # A peer (signal-like) session exists — Aetheria would surface it; Vett must NOT.
+    _seed_signal_session(conv_store, agent="vett", title="[signal] vett other")
+    store = _coord_store(tmp_path)
+    store.create_node(board=CoordBoard.BLUEPRINT, owner="vett",
+                      content="DeerFlow architecture comparison")
+
+    fake = _CapturingChat()
+    loop = _make_loop(
+        conv_store, agent="vett", chat_fn=fake, pinned_text="",
+        continuity_config=ContinuityConfig(enabled=True, window_hours=24),
+        coord_store=store,
+    )
+    loop.process_message(current, "hi")
+
+    systems = _system_contents(fake.calls[0]["request"])
+    assert any(AF_HEADER in s for s in systems), "Vett should get Active Focus"
+    assert any("DeerFlow architecture" in s for s in systems)
+    # Cross-session recent-activity brief (Aetheria's multi-rail thing) stays off.
+    assert not any(BLOCK_HEADER in s for s in systems), (
+        "Vett must NOT get cross-session tails"
+    )
+
+
+def test_vett_active_focus_shows_her_delivery_state_to_aetheria(conv_store, tmp_path):
+    """Vett's own node reads 'sent to aetheria, received' once the ledger shows
+    Aetheria was triggered — the receipt mirror of Aetheria's dispatch view."""
+    import sqlite3
+    from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
+    from soveryn.platform.coordination.types import CoordBoard
+
+    current = conv_store.new_session("vett", title="vett research")
+    store = _coord_store(tmp_path)
+    n = store.create_node(board=CoordBoard.SIGNAL, owner="vett",
+                          content="new EU funding lead")
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute("UPDATE coord_event_log SET triggered_agents='aetheria' WHERE node_id=?", (n.id,))
+
+    fake = _CapturingChat()
+    loop = _make_loop(
+        conv_store, agent="vett", chat_fn=fake, pinned_text="",
+        continuity_config=ContinuityConfig(enabled=True, window_hours=24),
+        coord_store=store,
+    )
+    loop.process_message(current, "hi")
+
+    systems = _system_contents(fake.calls[0]["request"])
+    block = next((s for s in systems if AF_HEADER in s), None)
+    assert block is not None
+    assert "sent to aetheria, received" in block

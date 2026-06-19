@@ -587,14 +587,23 @@ class CoordinationStore:
         node_id: str,
         actor_agent: str,
         payload: dict,
-    ) -> None:
+        bus=None,
+    ) -> "CoordEvent":
         """Construct a CoordEvent + log it to coord_event_log + push to the
-        event bus. Called after the relevant DB write has committed.
+        event bus. Called after the relevant DB write has committed. Returns
+        the constructed event so callers can surface its id.
 
         Chain depth + parent_event_id are pulled from the thread-local set
         by the dispatcher when an agent is running under a webhook
         invocation. Outside webhook context, chain_depth=0 and
         parent_event_id=None (user-triggered actions).
+
+        `bus` overrides the store's own event bus for this emission — used by
+        the request_direction tool, which carries its own bus handle but must
+        still land in the coord_event_log ledger (its events were silently
+        unlogged before 2026-06-19: it built an event and emitted to its bus
+        directly, bypassing this method, so NEEDS_DIRECTION never appeared in
+        the delivery ledger and a peer could never tell if it was received).
         """
         chain = get_active_chain()
         chain_depth = (chain.chain_depth + 1) if chain else 0
@@ -624,13 +633,61 @@ class CoordinationStore:
                 exc_info=True,
             )
         # Bus emission is best-effort.
+        target_bus = bus if bus is not None else self.event_bus
         try:
-            self.event_bus.emit(event)
+            target_bus.emit(event)
         except Exception:
             import logging
             logging.getLogger(__name__).warning(
                 "event bus failed to accept event %s", event.id, exc_info=True,
             )
+        return event
+
+    def delivery_states_for_actor(self, actor: str) -> dict[str, str]:
+        """Map node_id → a short delivery-state label for events THIS actor
+        emitted, read off coord_event_log. The perspective-mirror of the
+        sender-side dispatch states: it answers "did my message to the hub
+        actually get there?" — the truth a peer otherwise can't see.
+
+        State comes from `triggered_agents`, which the coord worker fills in
+        after routing: NULL/empty = sent but not yet delivered; a plain agent
+        list = received by them; an `=ERROR:` marker = delivery failed. Newest
+        event per node wins.
+        """
+        states: dict[str, str] = {}
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT node_id, triggered_agents FROM coord_event_log "
+                "WHERE actor_agent = ? ORDER BY created_at DESC",
+                (actor,),
+            ).fetchall()
+        for row in rows:
+            node_id = row["node_id"]
+            if node_id in states:
+                continue  # newest already recorded
+            states[node_id] = _delivery_label(row["triggered_agents"])
+        return states
+
+
+# ─── Delivery-state labelling ───────────────────────────────────────────────
+
+def _delivery_label(triggered_agents: str | None) -> str:
+    """Turn a coord_event_log `triggered_agents` value into a short label.
+
+    NULL/empty   → the worker hasn't routed/delivered it yet.
+    `=ERROR:`    → routing reached the agent but the invocation failed.
+    plain list   → received by those agents.
+    """
+    raw = (triggered_agents or "").strip()
+    if not raw:
+        return "sent, not yet received"
+    if "ERROR" in raw:
+        # e.g. "scotty=ERROR:AgentLoopError" — name the agent, drop the trace.
+        who = raw.split("=", 1)[0].strip() or "peer"
+        return f"sent to {who}, delivery failed"
+    # e.g. "aetheria" or "aetheria,scotty"
+    who = ", ".join(part.split("=", 1)[0].strip() for part in raw.split(",") if part.strip())
+    return f"sent to {who}, received"
 
 
 # ─── Row mapping helpers ────────────────────────────────────────────────────

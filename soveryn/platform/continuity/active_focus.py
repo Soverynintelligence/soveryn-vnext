@@ -73,6 +73,7 @@ def render_active_focus(
     *,
     cap: int = DEFAULT_CAP,
     dispatch_states: Mapping[str, str] | None = None,
+    self_agent: str | None = None,
 ) -> str:
     """Render non-archived coordination nodes as the ACTIVE FOCUS block.
 
@@ -80,10 +81,14 @@ def render_active_focus(
     archive-excluded, ordered created_at ASC). We show the most-recent `cap`,
     newest first. Empty input → "" (the block simply doesn't appear).
 
-    `dispatch_states` (coord_id → label, from `derive_dispatch_states`) adds a
-    hand-off truth suffix per node: the recorded state when a directive was
-    fired, or "not yet dispatched" for an Aetheria-owned node with no directive
-    session. Peer-owned nodes get no suffix — they aren't hers to dispatch.
+    `dispatch_states` (coord_id → label) adds a per-node communication-truth
+    suffix, computed from the VIEWER'S perspective:
+      - Aetheria's view: her outbound directives (sent to vett, awaiting/replied)
+      - a peer's view: their messages up to the hub (sent to aetheria, received)
+    `self_agent` is the viewing agent: a node it OWNS with no recorded state
+    reads "not yet dispatched". Nodes owned by others get no suffix — they
+    aren't the viewer's to dispatch, so a "not dispatched" line would be noise
+    (and was the raw material for the 2026-06-19 confabulation).
     """
     active = list(nodes)[::-1][:cap]
     if not active:
@@ -94,7 +99,7 @@ def render_active_focus(
         state = states.get(getattr(n, "id", None))
         if state:
             suffix = f" — {state}"
-        elif _value(getattr(n, "owner", "")) == "aetheria":
+        elif self_agent and _value(getattr(n, "owner", "")) == self_agent:
             suffix = " — not yet dispatched"
         else:
             suffix = ""
