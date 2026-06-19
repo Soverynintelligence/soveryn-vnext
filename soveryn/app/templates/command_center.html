@@ -8,30 +8,41 @@
   :root {
     /* SOVERYN palette — mirrors chat.html. Anchored to the new logo
        (organic + electric duality, bronze trunk as bridge). */
-    --sov-canvas:#050505;          /* near-black */
-    --sov-olive:#94a455;           /* primary brand — leaves */
-    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Scotty + trunk) — deep brown, not orange */
+    /* Gold-on-obsidian (mirrors chat.html). Aetheria's art direction
+       2026-06-19: matte charcoal material, weathered brushed gold metalwork,
+       solid slabs (no glassmorphism), blue/status as the only glow. */
+    --sov-canvas:#0a0a0b;          /* matte charcoal-black material base */
+    --sov-gold:#b8954a;            /* primary accent — weathered metallic gold */
+    --sov-gold-bright:#d4b46a;     /* gentle gold highlight */
+    --sov-gold-deep:#6e5526;       /* gold shadow / edge */
+    --gold-sheen:linear-gradient(115deg,#a8843c 0%,#cdac5e 40%,#dcbd72 49%,#c2a256 60%,#8a6f34 100%);
+    --sov-olive:#94a455;           /* (retained) */
+    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (patina) */
+    --sov-maroon:#9c3543;          /* Scotty — engineering maroon (Star Trek red-shirt) */
+    --sov-maroon-bright:#bd4f5b;
+    --maroon-sheen:linear-gradient(135deg,#bd4f5b,#9c3543 55%,#5e2029);
     --sov-deep-blue:#1f2c44;       /* Vett */
-    --sov-electric-blue:#3ea8e8;   /* Aetheria gradient stop / phosphor */
-    --sov-sage:#8a9a4d;            /* Aetheria gradient start */
-    --sov-gray:#9a988a;            /* Aetheria gradient middle */
-    --sov-amber:#e0b878;           /* soft accent */
-    --text:#e8e3d5;                /* warm cream */
+    --sov-electric-blue:#3ea8e8;   /* Aetheria phosphor — a GLOW signal */
+    --sov-sage:#8a9a4d;
+    --sov-gray:#9a988a;
+    --sov-amber:#e0b878;
+    --text:#f3efe5;                /* high-contrast warm white */
+    --text-dim:rgba(243,239,229,0.60);
 
     /* Legacy aliases — historic refs in this template still resolve. */
     --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:var(--sov-bronze);
+    --leaf:var(--sov-gold);
     --slate:#2a4459;
-    --node:var(--sov-deep-blue);
+    --node:var(--sov-gold);
     --bronze:var(--sov-bronze);
-    --gold:var(--sov-bronze);
+    --gold:var(--sov-gold);
 
-    /* Translucent so the ambient logo bg shows through panels, not just
-       around them. Blur bumped to keep text readable under the see-through. */
-    --glass-bg:rgba(18,16,12,0.40);
-    --glass-border:rgba(225,210,170,0.10);
-    --glass-blur:blur(30px) saturate(140%);
+    /* Solid obsidian slabs, razor-thin gold hairline, minimal blur — the
+       floating-glass panels Aetheria flagged become heavy slabs. */
+    --glass-bg:rgba(16,16,19,0.92);
+    --glass-border:rgba(184,149,74,0.30);
+    --glass-blur:blur(3px) saturate(105%);
     --r-lg:22px;
     --r-md:14px;
     --r-sm:10px;
@@ -48,9 +59,16 @@
   body::before {
     content:"";
     position:fixed; inset:0;
-    background:url("/static/logo.png") no-repeat center center;
-    background-size:160vmin auto;
-    opacity:0.50;
+    background:#0a0a0b url("/static/logo-metal.png") no-repeat center center;
+    background-size:cover;
+    opacity:0.55;
+    pointer-events:none;
+    z-index:0;
+  }
+  body::after {
+    content:"";
+    position:fixed; inset:0;
+    background:radial-gradient(120% 90% at 50% 45%, transparent 28%, rgba(10,10,11,0.68) 100%);
     pointer-events:none;
     z-index:0;
   }
@@ -71,7 +89,7 @@
   header.top .brand-logo {
     width:72px; height:72px;
     object-fit:contain;
-    filter:drop-shadow(0 0 18px rgba(148,164,85,0.18));
+    filter:drop-shadow(0 0 18px rgba(184,149,74,0.18));
   }
   header.top .brand-text { display:flex; flex-direction:column; gap:6px; }
   header.top .wordmark {
@@ -83,7 +101,7 @@
     font-size:10px; letter-spacing:0.28em;
     text-transform:uppercase;
   }
-  header.top .tagline .dot { color:var(--sov-olive); margin:0 6px; }
+  header.top .tagline .dot { color:var(--sov-gold); margin:0 6px; }
   header.top .nav-links {
     display:flex; gap:16px; align-items:center;
     font-size:12px; color:rgba(232,227,213,0.55);
@@ -99,7 +117,7 @@
     border:1px solid var(--glass-border);
     font-size:11px; color:rgba(232,227,213,0.7);
   }
-  header.top .status-pill .dot { width:8px; height:8px; border-radius:50%; background:var(--sov-olive); box-shadow:0 0 8px var(--sov-olive); }
+  header.top .status-pill .dot { width:8px; height:8px; border-radius:50%; background:var(--sov-electric-blue); box-shadow:0 0 8px var(--sov-electric-blue); }
 
   .panel {
     background:var(--glass-bg);
@@ -112,6 +130,24 @@
 
   .greeting h1 { font-size:28px; font-weight:500; letter-spacing:-0.01em; }
   .greeting p { margin-top:8px; color:rgba(236,243,244,0.7); line-height:1.55; font-size:14px; }
+
+  /* Hero — the carved medallion as the centerpiece (Screen 2 of the concept).
+     The medallion is a crisp foreground element carrying the blue node-glow +
+     a faint gold ground-glow; the greeting reads beneath it. */
+  .hero {
+    display:flex; flex-direction:column; align-items:center;
+    gap:20px; padding:28px 0 20px; text-align:center;
+  }
+  .hero .medallion {
+    width:340px; height:340px; max-width:64vw; aspect-ratio:1;
+    background:url("/static/logo-metal.png") no-repeat center center;
+    background-size:contain;
+    filter:
+      drop-shadow(0 0 46px rgba(62,168,232,0.22))   /* blue node-glow */
+      drop-shadow(0 0 16px rgba(184,149,74,0.16));   /* gold ground-glow */
+  }
+  .hero .greeting-text h1 { font-size:34px; font-weight:500; letter-spacing:-0.01em; }
+  .hero .greeting-text p { margin-top:8px; color:var(--text-dim); line-height:1.55; font-size:14px; max-width:600px; margin-left:auto; margin-right:auto; }
 
   .agent-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   .agent-card {
@@ -141,8 +177,8 @@
      central voice; the SOVERYN brand color is hers). Vett = deep blue,
      Scotty = bronze. The pulse-ring `color` inherits each signature hue. */
   .agent-card[data-agent="aetheria"] .disc {
-    background:linear-gradient(135deg, var(--sov-olive), var(--sov-sage));
-    color:var(--sov-olive);
+    background:var(--gold-sheen);
+    color:var(--sov-gold);
   }
   .agent-card[data-agent="vett"] .disc {
     background:linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c);
@@ -150,8 +186,8 @@
   }
   .agent-card[data-agent="scotty"] .disc {
     /* Gold highlight → dark patina, like an old worn bronze shield. */
-    background:linear-gradient(135deg, #b8945a, #5a4628);
-    color:var(--sov-bronze);
+    background:var(--maroon-sheen);
+    color:var(--sov-maroon);
   }
   .agent-card .body { flex:1; min-width:0; }
   .agent-card .name { font-size:14px; font-weight:500; }
@@ -182,7 +218,7 @@
     color:rgba(236,243,244,0.35);
   }
   .library-filters select:focus, .library-filters input[type="text"]:focus {
-    border-color:rgba(148,164,85,0.5);
+    border-color:rgba(184,149,74,0.5);
   }
 
   /* Specialists + Comm bus row — twin panels side by side. */
@@ -208,7 +244,7 @@
   }
   .specialist-item .info { min-width:0; }
   .specialist-item .info .name {
-    font-size:13px; font-weight:500; color:var(--sov-olive);
+    font-size:13px; font-weight:500; color:var(--sov-gold);
     margin-bottom:4px;
   }
   .specialist-item .info .meta {
@@ -261,17 +297,17 @@
   .commbus-item .head .arrow {
     font-family:ui-monospace,monospace; font-size:13px; line-height:1;
   }
-  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-olive); }
+  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-gold); }
   .commbus-item[data-rel="direct_query"]   .head .arrow { color:var(--sov-electric-blue); }
   .commbus-item .head .sender, .commbus-item .head .target {
     font-weight:500; color:rgba(236,243,244,0.75);
   }
-  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-olive); }
+  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-gold); }
   .commbus-item[data-sender="vett"]     .head .sender { color:var(--sov-electric-blue); }
-  .commbus-item[data-sender="scotty"]   .head .sender { color:var(--sov-bronze); }
-  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-olive); }
+  .commbus-item[data-sender="scotty"]   .head .sender { color:var(--sov-maroon); }
+  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-gold); }
   .commbus-item[data-target="vett"]     .head .target { color:var(--sov-electric-blue); }
-  .commbus-item[data-target="scotty"]   .head .target { color:var(--sov-bronze); }
+  .commbus-item[data-target="scotty"]   .head .target { color:var(--sov-maroon); }
   .commbus-item .head .age {
     margin-left:auto; font-variant-numeric:tabular-nums;
     color:rgba(236,243,244,0.4);
@@ -297,18 +333,18 @@
     color:rgba(236,243,244,0.35); font-style:italic;
     background:none; border-left-color:transparent; padding:8px 0;
   }
-  .library-item[data-agent="aetheria"] { border-left-color:var(--sov-olive); }
+  .library-item[data-agent="aetheria"] { border-left-color:var(--sov-gold); }
   .library-item[data-agent="vett"]     { border-left-color:var(--sov-electric-blue); }
-  .library-item[data-agent="scotty"]   { border-left-color:var(--sov-bronze); }
+  .library-item[data-agent="scotty"]   { border-left-color:var(--sov-maroon); }
   .library-item .head {
     display:flex; gap:10px; align-items:baseline;
     font-size:10px; text-transform:uppercase; letter-spacing:0.10em;
     margin-bottom:4px;
   }
   .library-item .head .who { font-weight:500; }
-  .library-item[data-agent="aetheria"] .head .who { color:var(--sov-olive); }
+  .library-item[data-agent="aetheria"] .head .who { color:var(--sov-gold); }
   .library-item[data-agent="vett"]     .head .who { color:var(--sov-electric-blue); }
-  .library-item[data-agent="scotty"]   .head .who { color:var(--sov-bronze); }
+  .library-item[data-agent="scotty"]   .head .who { color:var(--sov-maroon); }
   .library-item .head .ts { color:rgba(236,243,244,0.4); font-variant-numeric:tabular-nums; }
   .library-item .head .tags {
     display:flex; gap:4px; flex-wrap:wrap; margin-left:auto;
@@ -322,13 +358,13 @@
   .activity-feed { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:4px; }
   .activity-item { font-size:13px; color:rgba(236,243,244,0.78); line-height:1.5; }
   .activity-item .who { font-weight:500; }
-  .activity-item .who[data-agent="aetheria"] { color:var(--sov-olive); }
+  .activity-item .who[data-agent="aetheria"] { color:var(--sov-gold); }
   .activity-item .who[data-agent="vett"]     { color:var(--sov-electric-blue); }
-  .activity-item .who[data-agent="scotty"]   { color:var(--sov-bronze); }
+  .activity-item .who[data-agent="scotty"]   { color:var(--sov-maroon); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
   .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
-  .sparkline .bar { flex:1; background:var(--sov-olive); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+  .sparkline .bar { flex:1; background:var(--sov-gold); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
 
   .gpu-bars { display:flex; flex-direction:column; gap:10px; }
   .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
@@ -347,8 +383,8 @@
   }
   .attention .empty { color:rgba(236,243,244,0.35); font-style:italic; }
 
-  a.agent-card:focus-visible { outline:2px solid var(--sov-olive); outline-offset:4px; border-radius:var(--r-lg); }
-  button:focus-visible { outline:2px solid var(--sov-olive); outline-offset:2px; }
+  a.agent-card:focus-visible { outline:2px solid var(--sov-gold); outline-offset:4px; border-radius:var(--r-lg); }
+  button:focus-visible { outline:2px solid var(--sov-gold); outline-offset:2px; }
 
   /* ─── Daemon status strip ─────────────────────────────────────────────── */
   .daemon-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
@@ -367,7 +403,7 @@
     background:rgba(232,227,213,0.25);
   }
   .daemon-card[data-status="active"] .label .dot {
-    background:var(--sov-olive); box-shadow:0 0 8px rgba(148,164,85,0.5);
+    background:var(--sov-gold); box-shadow:0 0 8px rgba(184,149,74,0.5);
   }
   .daemon-card[data-status="stale"]  .label .dot { background:#d4a827; box-shadow:0 0 8px rgba(212,168,39,0.45); }
   .daemon-card[data-status="quiet"]  .label .dot { background:rgba(232,227,213,0.35); }
@@ -385,8 +421,8 @@
     display:flex; align-items:center; justify-content:space-between;
   }
   .board-col h4 .count {
-    color:var(--sov-olive); font-weight:600; font-size:11px;
-    background:rgba(148,164,85,0.10); padding:2px 8px; border-radius:10px;
+    color:var(--sov-gold); font-weight:600; font-size:11px;
+    background:rgba(184,149,74,0.10); padding:2px 8px; border-radius:10px;
     letter-spacing:0;
   }
   .board-col[data-board="blueprint"] h4 .count { color:var(--sov-bronze); background:rgba(198,154,90,0.10); }
@@ -405,9 +441,9 @@
     font-size:10px; color:rgba(232,227,213,0.5); margin-bottom:4px;
     text-transform:uppercase; letter-spacing:0.08em;
   }
-  .board-item .head .who                       { color:var(--sov-olive); }
+  .board-item .head .who                       { color:var(--sov-gold); }
   .board-item .head .who[data-agent="vett"]   { color:var(--sov-electric-blue); }
-  .board-item .head .who[data-agent="scotty"] { color:var(--sov-bronze); }
+  .board-item .head .who[data-agent="scotty"] { color:var(--sov-maroon); }
   .board-item .body {
     overflow:hidden; text-overflow:ellipsis;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
@@ -525,7 +561,7 @@
   }
   .heartbeat-pulse[data-eligible="false"] .when { color:rgba(232,227,213,0.32); }
   .heartbeat-pulse[data-eligible="false"] .state strong { color:rgba(232,227,213,0.55); }
-  .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-olive); }
+  .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-gold); }
   .heartbeat-pulse[data-surfaced="true"] {
     border-color:rgba(224,184,120,0.18);
     background:rgba(224,184,120,0.04);
@@ -540,20 +576,20 @@
   /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
   .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
   .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
-  .topology .node[data-status="alive"] rect { stroke:var(--sov-olive); stroke-width:1.5; }
+  .topology .node[data-status="alive"] rect { stroke:var(--sov-electric-blue); stroke-width:1.5; }
   .topology .node[data-status="pending"] rect { stroke-dasharray:4 3; stroke:rgba(232,227,213,0.25); }
   .topology .node text { fill:var(--text); font-size:11px; font-weight:500; }
   .topology .node .role { fill:rgba(232,227,213,0.45); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; font-weight:400; }
-  .topology .node .dot[data-status="alive"]   { fill:var(--sov-olive); }
+  .topology .node .dot[data-status="alive"]   { fill:var(--sov-electric-blue); }
   .topology .node .dot[data-status="pending"] { fill:rgba(232,227,213,0.25); }
   .topology .link {
     stroke:rgba(225,210,170,0.18); stroke-width:1; fill:none;
   }
-  .topology .link[data-status="active"]  { stroke:var(--sov-olive); stroke-opacity:0.6; }
+  .topology .link[data-status="active"]  { stroke:var(--sov-electric-blue); stroke-opacity:0.6; }
   .topology .link[data-status="pending"] { stroke-dasharray:5 4; }
   .topology .link-label { font-size:9px; fill:rgba(232,227,213,0.4); letter-spacing:0.06em; text-transform:uppercase; }
   .topology .legend { margin-top:14px; font-size:10px; color:rgba(232,227,213,0.45); text-align:center; letter-spacing:0.06em; text-transform:uppercase; }
-  .topology .legend .live { color:var(--sov-olive); }
+  .topology .legend .live { color:var(--sov-electric-blue); }
   .topology .legend .pending { color:rgba(232,227,213,0.55); }
 </style>
 </head>

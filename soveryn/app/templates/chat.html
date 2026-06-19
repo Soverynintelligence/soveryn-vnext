@@ -13,30 +13,45 @@
          Vett     → deep background blue (cosmic depth)
          Scotty   → bronze (the structural trunk; forged executor) */
 
-    /* Brand tokens */
-    --sov-canvas:#050505;          /* near-black — editorial weight, retains depth for glass panels */
-    --sov-olive:#94a455;           /* primary brand — the leaves */
-    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Scotty + trunk) — deep brown, not orange */
+    /* Brand tokens — gold-on-obsidian, per Aetheria's art direction
+       (2026-06-19). The interface should feel like a monument / piece of
+       high-end hardware, not a themed website: matte charcoal as a MATERIAL,
+       weathered brushed gold as machined metalwork (NOT bright/flashy),
+       solid obsidian slabs (no glassmorphism). Blue + status signals are the
+       ONLY things that glow — gold stays matte and structural. */
+    --sov-canvas:#0a0a0b;          /* matte charcoal-black material base */
+    --sov-gold:#b8954a;            /* primary accent — weathered metallic gold (SOVERYN-lettering tone) */
+    --sov-gold-bright:#d4b46a;     /* gentle gold highlight (not flashy) */
+    --sov-gold-deep:#6e5526;       /* gold shadow / edge */
+    --gold-sheen:linear-gradient(115deg,#a8843c 0%,#cdac5e 40%,#dcbd72 49%,#c2a256 60%,#8a6f34 100%); /* brushed-metal streak */
+    --sov-olive:#94a455;           /* (retained) */
+    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Jon's avatar / patina) */
+    --sov-maroon:#9c3543;          /* Scotty — engineering maroon (Star Trek red-shirt) */
+    --sov-maroon-bright:#bd4f5b;   /* maroon highlight */
+    --maroon-sheen:linear-gradient(135deg,#bd4f5b,#9c3543 55%,#5e2029); /* engineering disc */
     --sov-deep-blue:#1f2c44;       /* Vett */
-    --sov-electric-blue:#3ea8e8;   /* Aetheria gradient stop / phosphor */
+    --sov-electric-blue:#3ea8e8;   /* Aetheria phosphor — a GLOW signal */
     --sov-sage:#8a9a4d;            /* Aetheria gradient start */
     --sov-gray:#9a988a;            /* Aetheria gradient middle */
-    --sov-amber:#e0b878;           /* soft accent / focus rings */
-    --text:#e8e3d5;                /* warm cream */
+    --sov-amber:#e0b878;           /* soft accent */
+    --text:#f3efe5;                /* high-contrast warm white — pops on obsidian */
+    --text-dim:rgba(243,239,229,0.60); /* secondary text, lifted out of muddy gray */
 
     /* Legacy aliases — old token names map into the new palette. */
     --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:var(--sov-bronze);
+    --leaf:var(--sov-gold);
     --slate:#2a4459;
-    --node:var(--sov-deep-blue);
+    --node:var(--sov-gold);        /* focus rings → gold */
     --bronze:var(--sov-bronze);
-    --gold:var(--sov-bronze);
+    --gold:var(--sov-gold);
 
-    /* Glass + structure */
-    --glass-bg:rgba(18,16,12,0.68);          /* warm dark glass */
-    --glass-border:rgba(225,210,170,0.07);   /* faint warm border */
-    --glass-blur:blur(22px) saturate(140%);
+    /* Structure — solid obsidian slabs with a razor-thin gold hairline.
+       Glassmorphism killed: panels are near-opaque, blur minimal so the
+       grain material reads through the edges rather than a frosted blur. */
+    --glass-bg:rgba(16,16,19,0.92);          /* solid matte obsidian slab */
+    --glass-border:rgba(184,149,74,0.30);    /* 1px weathered-gold hairline */
+    --glass-blur:blur(3px) saturate(105%);
     --r-lg:22px;
     --r-md:14px;
     --r-sm:10px;
@@ -45,16 +60,26 @@
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
 
-  /* Brand presence — the tree-of-life mark (cropped, no wordmark) as
-     ambient page bg. Same treatment as mission control; sidebar's
-     "SOVERYN" already carries the typographic identity here. Fixed +
-     pointer-events:none so it never intercepts clicks or scrolls. */
+  /* Material, not wallpaper. Per Aetheria: the background should be a
+     textured charcoal grain that makes the screen feel like a physical
+     object — not a celestial picture sitting under the UI. A fine fractal-
+     noise grain over the obsidian base, with a faint gold breath at the top
+     edge for depth. Fixed + pointer-events:none so it never intercepts. */
   body::before {
     content:"";
     position:fixed; inset:0;
-    background:url("/static/logo-mark.png") no-repeat center center;
-    background-size:200vmin auto;
-    opacity:0.40;
+    background:#0a0a0b url("/static/logo-metal.png") no-repeat center center;
+    background-size:cover;
+    opacity:0.55;
+    pointer-events:none;
+    z-index:0;
+  }
+  /* Soft vignette so the carved medallion sinks into the frame edges and the
+     UI panels read cleanly over it. */
+  body::after {
+    content:"";
+    position:fixed; inset:0;
+    background:radial-gradient(110% 85% at 50% 50%, transparent 45%, rgba(10,10,11,0.55) 100%);
     pointer-events:none;
     z-index:0;
   }
@@ -104,20 +129,28 @@
   .sidebar-toggle:hover { background:rgba(255,255,255,0.05); color:var(--text); }
   body.sidebar-collapsed .sidebar-toggle { transform:rotate(180deg); }
   .brand { display:flex; justify-content:space-between; align-items:center; padding:4px 6px 12px; }
-  .brand .wordmark { font-weight:600; letter-spacing:0.18em; color:var(--gold); font-size:13px; }
-  .brand .home { color:rgba(236,243,244,0.55); font-size:11px; text-decoration:none; }
+  /* Wordmark — brushed metal, like the SOVERYN lettering on the mark. */
+  .brand .wordmark {
+    font-weight:600; letter-spacing:0.18em; font-size:13px;
+    background:var(--gold-sheen);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .brand .home { color:var(--text-dim); font-size:11px; text-decoration:none; }
   .brand .home:hover { color:var(--text); }
 
-  /* Brand olive — the SOVERYN action button. */
+  /* The SOVERYN action — sharp, high-contrast brushed gold (Aetheria's call:
+     the New Conversation button is the boldest gold element). Dark text on
+     machined metal. */
   .new-chat {
-    background:linear-gradient(180deg,rgba(148,164,85,0.18),rgba(148,164,85,0.08));
-    border:1px solid rgba(148,164,85,0.4);
-    color:var(--text);
+    background:var(--gold-sheen);
+    border:1px solid var(--sov-gold-deep);
+    color:#17120a;
     padding:10px 14px; border-radius:var(--r-md);
-    font-size:13px; font-weight:500;
+    font-size:13px; font-weight:600;
     text-align:left;
+    transition:filter 0.14s ease;
   }
-  .new-chat:hover { border-color:rgba(148,164,85,0.65); }
+  .new-chat:hover { filter:brightness(1.08); }
 
   .agent-pills { display:flex; gap:6px; }
   .agent-pill {
@@ -136,7 +169,7 @@
   /* Per-agent pressed border colors match each agent's signature hue. */
   .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(154,152,138,0.55); }
   .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(62,168,232,0.5); }
-  .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(198,154,90,0.55); }
+  .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(156,53,67,0.6); }
 
   .search input {
     width:100%; padding:8px 12px; border-radius:var(--r-sm);
@@ -144,21 +177,21 @@
     border:1px solid var(--glass-border);
     color:var(--text); font-size:12px; outline:none;
   }
-  .search input:focus { border-color:rgba(148,164,85,0.5); }
+  .search input:focus { border-color:rgba(184,149,74,0.55); }
 
   .history { flex:1; overflow-y:auto; padding-right:4px; }
-  .history h4 { font-size:10px; color:rgba(236,243,244,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
+  .history h4 { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
   .history a {
     display:flex; align-items:center; gap:8px;
     padding:7px 8px; border-radius:8px;
-    color:rgba(236,243,244,0.82); text-decoration:none;
+    color:rgba(243,239,229,0.78); text-decoration:none;
     font-size:12px;
     border-left:2px solid transparent;
   }
   .history a:hover { background:rgba(255,255,255,0.04); }
   .history a:hover .del-session { opacity:0.55; }
-  /* Active session uses the brand olive — this is the SOVERYN-flagged row. */
-  .history a.active { background:rgba(148,164,85,0.10); border-left-color:var(--sov-olive); color:var(--text); }
+  /* Active session — gold-flagged row (the active highlight Aetheria called for). */
+  .history a.active { background:rgba(184,149,74,0.12); border-left-color:var(--sov-gold); color:var(--text); }
   .history .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .history .label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .history .del-session {
@@ -215,13 +248,14 @@
     backdrop-filter:var(--glass-blur);
     -webkit-backdrop-filter:var(--glass-blur);
   }
-  /* Default disc = Aetheria's olive (overridden by JS per agent).
-     The brand color is hers since she's the central voice. */
+  /* Default disc = Aetheria's brushed gold (overridden by JS per agent).
+     The brand color is hers since she's the central voice — and the brand
+     is gold. */
   .chat-header .disc {
     width:32px; height:32px; border-radius:50%;
-    background:linear-gradient(135deg, var(--sov-olive), var(--sov-sage));
+    background:var(--gold-sheen);
     flex-shrink:0;
-    box-shadow:inset 0 0 0 1px rgba(232,227,213,0.06), 0 0 14px rgba(148,164,85,0.15);
+    box-shadow:inset 0 0 0 1px rgba(212,180,106,0.25);
   }
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
@@ -243,21 +277,21 @@
     font-size:14px; line-height:1.55;
     white-space:pre-wrap; word-wrap:break-word;
   }
-  /* User bubble: brand olive at low intensity. */
+  /* User bubble: a gold-hairlined obsidian slab (gold message-bubble border). */
   .bubble.user {
     align-self:flex-end;
-    background:rgba(148,164,85,0.16);
-    border:1px solid rgba(148,164,85,0.30);
+    background:rgba(184,149,74,0.10);
+    border:1px solid rgba(184,149,74,0.34);
     border-bottom-right-radius:4px;
   }
   /* Aetheria's bubble — dropped to 0.40 alpha so the tree bg reads through
      comparably to the user bubble (which is olive at 0.16). Sidebar/header/
      composer panels stay at the original 0.68 — they're chrome, not content. */
+  /* Assistant bubble — a solid obsidian slab with a gold hairline. No
+     translucency (Aetheria: "heavy slabs of obsidian," not floating glass). */
   .bubble.assistant {
     align-self:flex-start;
-    background:rgba(18,16,12,0.40);
-    backdrop-filter:var(--glass-blur);
-    -webkit-backdrop-filter:var(--glass-blur);
+    background:rgba(18,18,21,0.96);
     border:1px solid var(--glass-border);
     border-bottom-left-radius:4px;
   }
@@ -275,7 +309,7 @@
     white-space:pre-wrap; word-wrap:break-word;
   }
   /* Tool name in bronze — Scotty's color, signature of "agent used a tool." */
-  .tool-strip .tool-name { color:var(--sov-bronze); }
+  .tool-strip .tool-name { color:var(--sov-maroon-bright); }
   .tool-strip .tool-result {
     color:rgba(236,243,244,0.5);
     margin-top:3px;
@@ -327,10 +361,11 @@
     padding:6px 10px; border-radius:14px;
     background:rgba(255,255,255,0.04);
   }
-  /* Send button — brand olive (the SOVERYN action). */
+  /* Send button — brushed gold (the SOVERYN action). */
   .composer .send {
     width:32px; height:32px; border-radius:50%;
-    background:var(--sov-olive); color:#0d0a07;
+    background:var(--gold-sheen); color:#17120a;
+    border:1px solid var(--sov-gold-deep);
     display:flex; align-items:center; justify-content:center;
     font-weight:700;
   }
@@ -435,9 +470,9 @@
     line-height: 1;
   }
   /* Subtle per-agent hover tint — keeps the action row uniform at rest. */
-  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-olive); background: rgba(148,164,85,0.08); }
+  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-gold); background: rgba(184,149,74,0.10); }
   .chat-header .actions .call-btn[data-agent="vett"]:hover     { color: var(--sov-electric-blue); background: rgba(62,168,232,0.08); }
-  .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: var(--sov-amber); background: rgba(198,154,90,0.08); }
+  .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: var(--sov-maroon-bright); background: rgba(156,53,67,0.10); }
 
   .voice-overlay {
     position: fixed; inset: 0;
@@ -464,10 +499,10 @@
   }
   .voice-orb[data-agent="aetheria"] {
     background: radial-gradient(circle at 35% 35%,
-                  var(--sov-sage) 0%,
-                  var(--sov-gray) 50%,
-                  var(--sov-electric-blue) 100%);
-    box-shadow: 0 0 90px rgba(148, 164, 85, 0.35);
+                  var(--sov-gold-bright) 0%,
+                  var(--sov-gold) 50%,
+                  var(--sov-gold-deep) 100%);
+    box-shadow: 0 0 90px rgba(184, 149, 74, 0.40);
   }
   .voice-orb[data-agent="vett"] {
     background: radial-gradient(circle at center,
@@ -477,10 +512,10 @@
   }
   .voice-orb[data-agent="scotty"] {
     background: radial-gradient(circle at 35% 35%,
-                  #b8966c 0%,
-                  var(--sov-bronze) 60%,
-                  #5a4628 100%);
-    box-shadow: 0 0 90px rgba(198, 154, 90, 0.35);
+                  var(--sov-maroon-bright) 0%,
+                  var(--sov-maroon) 60%,
+                  #4a181f 100%);
+    box-shadow: 0 0 90px rgba(156, 53, 67, 0.35);
   }
   .voice-orb[data-state="idle"]        { transform: scale(0.95); opacity: 0.5; }
   .voice-orb[data-state="listening"]   { transform: scale(1.0);  opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
@@ -505,9 +540,9 @@
     text-transform: uppercase;
     opacity: 0.85;
   }
-  .voice-title[data-agent="aetheria"] { color: var(--sov-olive); }
+  .voice-title[data-agent="aetheria"] { color: var(--sov-gold); }
   .voice-title[data-agent="vett"]     { color: var(--sov-electric-blue); }
-  .voice-title[data-agent="scotty"]   { color: var(--sov-amber); }
+  .voice-title[data-agent="scotty"]   { color: var(--sov-maroon-bright); }
   .voice-status {
     margin-top: 8px;
     font-family: "SF Mono","Menlo",monospace;
@@ -543,9 +578,9 @@
     text-transform: uppercase;
     transition: background 0.12s ease, border-color 0.12s ease;
   }
-  .voice-hangup[data-agent="aetheria"] { border-color: rgba(148,164,85,0.55); color: var(--sov-olive); }
+  .voice-hangup[data-agent="aetheria"] { border-color: rgba(184,149,74,0.55); color: var(--sov-gold); }
   .voice-hangup[data-agent="vett"]     { border-color: rgba(62,168,232,0.5);  color: var(--sov-electric-blue); }
-  .voice-hangup[data-agent="scotty"]   { border-color: rgba(198,154,90,0.55); color: var(--sov-amber); }
+  .voice-hangup[data-agent="scotty"]   { border-color: rgba(156,53,67,0.55); color: var(--sov-maroon-bright); }
   .voice-hangup:hover { background: rgba(255,255,255,0.04); }
   .voice-hangup:active { background: rgba(255,255,255,0.08); }
   /* Pre-mounted hidden <audio> for iOS Safari — playback must begin inside
@@ -653,15 +688,15 @@
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
   // depth without complicating the identity.
   const AGENT_COLORS = {
-    aetheria: "linear-gradient(135deg, var(--sov-olive), var(--sov-sage))",
+    aetheria: "var(--gold-sheen)",                              /* primary voice → brushed SOVERYN gold */
     vett:     "linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c)",
-    scotty:   "linear-gradient(135deg, #b8945a, #5a4628)",  /* gold highlight → dark patina, like worn bronze */
+    scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
-    aetheria: "var(--sov-olive)",
+    aetheria: "var(--sov-gold)",
     vett:     "var(--sov-deep-blue)",
-    scotty:   "var(--sov-bronze)",
+    scotty:   "var(--sov-maroon)",
   };
 
   // ─── Attachments config ───────────────────────────────────────────────────
