@@ -17,6 +17,7 @@ UNITS=(
   soveryn-vnext.service
   soveryn-ares.service
   soveryn.target
+  soveryn-cognition-instance.service
 )
 
 MODE="${1:-}"

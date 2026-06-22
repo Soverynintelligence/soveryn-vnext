@@ -1,0 +1,54 @@
+# SOVERYN Cognition Instance — user service.
+# Aetheria's full Gemma 4 31B on a dedicated llama-server instance at :8091.
+# Alias "aetheria-cognition" — distinct from the main router's "aetheria" slot
+# so cognition jobs (dream cycles, internal deliberation) can be dispatched
+# without contending with live chat traffic on Blackwell.
+#
+# Hardware gate: this unit requires a free Quadro. CUDA device is set to CUDA1
+# (where vett-scotty currently pins in the router). That Quadro is freed when
+# the DGX Spark arrives and vett-scotty migrates to Spark.
+#
+# IMPORTANT — --device id must be confirmed at hardware bring-up.
+# At Spark bring-up: re-verify which physical CUDA id the freed Quadro appears
+# as and update the --device flag accordingly before starting this unit.
+#
+# LD_LIBRARY_PATH: HEAD llama.cpp was built against CUDA 13.1. The system
+# driver is 570, which only ships libcuda.so 12.x. The cuda-compat shim in
+# the cuda131 conda env forwards the 13.1 calls to the 570 driver. Don't
+# remove this env line — the server will fail to initialize CUDA without it.
+# (Copied verbatim from soveryn-router.service, same HEAD binary.)
+#
+# Model: google_gemma-4-31B-it-Q8_0.gguf (same weights as the main router
+# [aetheria] slot). Full Q8 for maximum quality on cognition tasks.
+#
+# Context: 32K — matches the router's aetheria slot.
+
+[Unit]
+Description=SOVERYN Cognition Instance (Gemma 4 31B Q8 :8091, aetheria-cognition)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+Environment="LD_LIBRARY_PATH=/home/jon-deoliveira/miniconda3/envs/cuda131/cuda-compat:/home/jon-deoliveira/miniconda3/envs/cuda131/lib"
+ExecStart=/home/jon-deoliveira/llama.cpp_head/build/bin/llama-server \
+  --model /mnt/soveryn_models/GGUF/google_gemma-4-31B-it-Q8_0.gguf \
+  --mmproj /mnt/soveryn_models/GGUF/mmproj-google_gemma-4-31B-it-bf16.gguf \
+  --alias aetheria-cognition \
+  --host 127.0.0.1 --port 8091 \
+  --ctx-size 32768 \
+  --n-gpu-layers 99 \
+  --device CUDA1 \
+  --jinja \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  --flash-attn on \
+  --parallel 1 \
+  --reasoning off
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+StandardOutput=append:/tmp/soveryn-cognition-instance.log
+StandardError=append:/tmp/soveryn-cognition-instance.log
+
+[Install]
+WantedBy=soveryn.target
