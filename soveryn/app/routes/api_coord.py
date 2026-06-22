@@ -167,3 +167,57 @@ def api_coord_archive(node_id: str):
         "status": node.status.value,
         "archived_lesson_id": node.archived_lesson_id,
     }), 200
+
+
+@bp.post("/api/coord")
+def api_coord_create():
+    """Create a new coordination node (Open). Mission Control's human
+    board-create surface — board creation otherwise only happens agent-side
+    via tool dispatch.
+
+    Body: {"board": "Signal"|"Blueprint"|"Friction", "content": "...",
+           "owner": "jon" (default), "notify": true (default),
+           "lattice_ref": null}
+
+    notify=true routes the item to the board's destination agents like the
+    agent-driven path (Signal->Aetheria triage, Blueprint->Aetheria review +
+    owner). notify=false PARKS it: the node lands on the board but emits no
+    event, so no agent is auto-triggered — use it to stage a spec quietly."""
+    _require_localhost()
+    from soveryn.platform.coordination.types import CoordBoard
+    from soveryn.platform.coordination.store import CoordinationError
+
+    body = request.get_json(silent=True) or {}
+    raw_board = (body.get("board") or "").strip()
+    content = (body.get("content") or "").strip()
+    owner = (body.get("owner") or "jon").strip() or "jon"
+    notify = bool(body.get("notify", True))
+    lattice_ref = body.get("lattice_ref")
+
+    if not content:
+        return jsonify({"error": "content field required (non-empty)"}), 400
+    try:
+        board = CoordBoard(raw_board)
+    except ValueError:
+        return jsonify({
+            "error": f"unknown board {raw_board!r}",
+            "allowed": [b.value for b in CoordBoard],
+        }), 400
+
+    store = _coord_store()
+    try:
+        node = store.create_node(
+            board=board, owner=owner, content=content,
+            lattice_ref=lattice_ref, notify=notify,
+        )
+    except CoordinationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": f"{type(exc).__name__}: {exc}"}), 500
+    return jsonify({
+        "id": node.id,
+        "board": node.board.value,
+        "status": node.status.value,
+        "owner": node.owner,
+        "notified": notify,
+    }), 201

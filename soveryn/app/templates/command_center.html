@@ -661,7 +661,29 @@
 
     <!-- Coordination Boards panel — live state of the work surface. -->
     <section class="panel" data-testid="boards-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Boards</h3>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+        <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:0;">Boards</h3>
+        <span style="flex:1;"></span>
+        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
+      </div>
+      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:14px;">
+        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
+          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="Signal">Signal</option>
+            <option value="Blueprint">Blueprint</option>
+            <option value="Friction">Friction</option>
+          </select>
+          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" data-board-create-notify checked> notify team
+          </label>
+        </div>
+        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
+        <div class="row">
+          <span class="err" data-board-create-err></span>
+          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
+          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
+        </div>
+      </form>
       <div class="boards">
         <div class="board-col" data-board="signal">
           <h4>Signal <span class="count" data-board-count>0</span></h4>
@@ -1174,6 +1196,42 @@
     renderBoardColumn("friction", data.friction);
   }
 
+  // Human board-create — Jon opens a board item from Mission Control. notify
+  // checked = routes to the board's agents (a note to the team); unchecked =
+  // parks it quietly (no agent triggered). Mirrors the agent-driven create.
+  function wireBoardCreate() {
+    const toggle = document.querySelector("[data-board-new-toggle]");
+    const form = document.querySelector("[data-board-create]");
+    if (!toggle || !form || form.dataset.bound === "1") return;
+    form.dataset.bound = "1";
+    const contentEl = form.querySelector("[data-board-create-content]");
+    const boardEl = form.querySelector("[data-board-create-board]");
+    const notifyEl = form.querySelector("[data-board-create-notify]");
+    const errEl = form.querySelector("[data-board-create-err]");
+    const submitBtn = form.querySelector("[data-board-create-submit]");
+    toggle.addEventListener("click", () => {
+      form.hidden = !form.hidden;
+      if (!form.hidden) contentEl.focus();
+    });
+    form.querySelector("[data-board-create-cancel]").addEventListener("click", () => {
+      form.hidden = true; contentEl.value = ""; errEl.textContent = "";
+    });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errEl.textContent = "";
+      const content = contentEl.value.trim();
+      if (!content) { errEl.textContent = "content required"; return; }
+      submitBtn.disabled = true;
+      const res = await postCoordAction("/api/coord", {
+        board: boardEl.value, content, notify: notifyEl.checked,
+      });
+      submitBtn.disabled = false;
+      if (!res.ok) { errEl.textContent = res.error || "failed"; return; }
+      contentEl.value = ""; form.hidden = true;
+      renderBoards();
+    });
+  }
+
   // ─── Library writes feed ──────────────────────────────────────────────────
   async function renderLibraryWrites() {
     const agentSel = document.querySelector("[data-library-agent-filter]");
@@ -1394,6 +1452,7 @@
         debounceTimer = setTimeout(renderLibraryWrites, 250);
       });
     }
+    wireBoardCreate();
     refreshAll();
     setInterval(refreshAll, 10000);  // poll every 10s
   });

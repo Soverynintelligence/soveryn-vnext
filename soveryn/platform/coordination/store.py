@@ -149,8 +149,17 @@ class CoordinationStore:
         owner: str,
         content: str,
         lattice_ref: str | None = None,
+        notify: bool = True,
     ) -> CoordinationNode:
-        """Create a new Coordination Node in the Open state."""
+        """Create a new Coordination Node in the Open state.
+
+        notify=True (default) emits NODE_CREATED so the webhook router can
+        route the item to its destination agent(s) — the agent-driven path.
+        notify=False skips emission entirely: the node is persisted and
+        visible on the board, but no event is logged and no agent is
+        triggered. Used by Mission Control's human "park quietly" path so
+        Jon can stage a spec without auto-dispatching anyone.
+        """
         if not content or not content.strip():
             raise CoordinationError("content must be non-empty")
         node_id = str(uuid.uuid4())
@@ -182,17 +191,18 @@ class CoordinationStore:
             content=content.strip(), lattice_ref=lattice_ref,
             archived_lesson_id=None, created_at=now, updated_at=now,
         )
-        self._emit(
-            kind=CoordEventKind.NODE_CREATED,
-            node_id=node_id,
-            actor_agent=owner,
-            payload={
-                "board": board.value,
-                "owner": owner,
-                "lattice_ref": lattice_ref,
-                "content_head": content.strip()[:200],
-            },
-        )
+        if notify:
+            self._emit(
+                kind=CoordEventKind.NODE_CREATED,
+                node_id=node_id,
+                actor_agent=owner,
+                payload={
+                    "board": board.value,
+                    "owner": owner,
+                    "lattice_ref": lattice_ref,
+                    "content_head": content.strip()[:200],
+                },
+            )
         return created
 
     def update_status(

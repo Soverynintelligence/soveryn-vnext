@@ -372,3 +372,34 @@ def test_delivery_states_only_includes_this_actor(store):
     states = store.delivery_states_for_actor("vett")
     assert mine.id in states
     assert len(states) == 1  # aetheria's node not in vett's outbound view
+
+
+# ─── notify flag: quiet "park" create (Mission Control human path) ───────────
+
+def test_create_node_notify_false_skips_event(store):
+    """notify=False parks an item on the board WITHOUT emitting a routable
+    event, so the webhook router never sees it and no agent is triggered.
+    The node itself is still persisted and visible on the board."""
+    node = store.create_node(
+        board=CoordBoard.BLUEPRINT, owner="jon",
+        content="park this spec until the hardware lands", notify=False,
+    )
+    with sqlite3.connect(str(store.db_path)) as conn:
+        rows = conn.execute(
+            "SELECT id FROM coord_event_log WHERE node_id = ?", (node.id,)
+        ).fetchall()
+    assert rows == []                            # no event → no routing → no trigger
+    assert store.get_node(node.id) is not None   # node still parked on the board
+
+
+def test_create_node_notify_true_emits_event_by_default(store):
+    """Default (notify=True) still emits NODE_CREATED — the existing
+    agent-driven create path must be unchanged."""
+    node = store.create_node(
+        board=CoordBoard.SIGNAL, owner="jon", content="note to the team",
+    )
+    with sqlite3.connect(str(store.db_path)) as conn:
+        rows = conn.execute(
+            "SELECT kind FROM coord_event_log WHERE node_id = ?", (node.id,)
+        ).fetchall()
+    assert ("node_created",) in rows
