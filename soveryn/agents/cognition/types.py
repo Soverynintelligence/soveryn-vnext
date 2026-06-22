@@ -87,6 +87,7 @@ class ReflectionMemory:
     text: str
     scope: str                   # "manner" | "value" | "unsure"
     citations: tuple[str, ...]
+    jon_originated: bool
     created_at: str
 
 

@@ -154,6 +154,7 @@ class CognitionStore:
             text=obs.text,
             scope=obs.scope,
             citations=obs.citations,
+            jon_originated=obs.jon_originated,
             created_at=row["created_at"],
         )
 
@@ -173,6 +174,7 @@ class CognitionStore:
                 text=row["content"],
                 scope=prov.get("scope", "unsure"),
                 citations=tuple(prov.get("citations") or []),
+                jon_originated=bool(prov.get("jon_originated", False)),
                 created_at=row["created_at"],
             ))
         return results

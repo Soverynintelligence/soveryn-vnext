@@ -279,3 +279,57 @@ def test_public_write_note_version_cannot_bypass_isolation(store):
     """write_note_version always goes through _write."""
     nv = store.write_note_version("safe note")  # must NOT raise
     assert nv.id is not None
+
+
+# ─── 4. jon_originated round-trip via ReflectionMemory field ────────────────
+
+def test_jon_originated_true_survives_list_reflections(store):
+    """jon_originated=True written via write_reflection must come back on the
+    ReflectionMemory object returned by list_reflections (gate-layer requirement)."""
+    obs = CandidateObservation(
+        text="Jon flags hedges as noise",
+        scope="manner",
+        citations=("turn-001",),
+        jon_originated=True,
+    )
+    mem = store.write_reflection(obs)
+    results = store.list_reflections()
+    match = next(m for m in results if m.id == mem.id)
+    assert match.jon_originated is True
+
+
+def test_jon_originated_false_survives_list_reflections(store):
+    """jon_originated=False (agent-self-originated) must also round-trip correctly."""
+    obs = CandidateObservation(
+        text="Agent self-assessment — not from Jon",
+        scope="unsure",
+        citations=("turn-002",),
+        jon_originated=False,
+    )
+    mem = store.write_reflection(obs)
+    results = store.list_reflections()
+    match = next(m for m in results if m.id == mem.id)
+    assert match.jon_originated is False
+
+
+def test_jon_originated_distinguishes_two_reflections(store):
+    """Two reflections with opposite jon_originated values must each carry the
+    correct value after a single list_reflections() call."""
+    obs_jon = CandidateObservation(
+        text="From Jon's words",
+        scope="manner",
+        citations=("turn-010",),
+        jon_originated=True,
+    )
+    obs_agent = CandidateObservation(
+        text="From agent's own output",
+        scope="unsure",
+        citations=("turn-011",),
+        jon_originated=False,
+    )
+    mem_jon = store.write_reflection(obs_jon)
+    mem_agent = store.write_reflection(obs_agent)
+    results = store.list_reflections()
+    by_id = {m.id: m for m in results}
+    assert by_id[mem_jon.id].jon_originated is True
+    assert by_id[mem_agent.id].jon_originated is False
