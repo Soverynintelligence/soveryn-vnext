@@ -1,5 +1,14 @@
 """One-shot consolidation: copy legacy lattice.db tables into lattice_vnext.db.
 
+OBSOLETE (as of 2026-06-22): this migration already ran (consolidation
+complete 2026-06-01; lattice_vnext.db is the single source of truth) and the
+legacy soveryn_complete tree it read from has since been archived + removed
+(tarball under /mnt/soveryn_models/archive/). The DEFAULT_* paths below no
+longer resolve on disk. Retained as a historical record of how the
+consolidation was performed; not imported by anything live. If ever needed
+again, restore the legacy DB from the archive and pass explicit --legacy /
+--vnext paths.
+
 Goal: collapse the dual-DB scheme (vnext writes go to lattice_vnext.db, recall
 reads from lattice.db) into a single source of truth. After this runs, vnext's
 lattice_vnext.db holds everything: legacy nodes + edges + dream_log +
@@ -30,6 +39,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+# NOTE: these point at the now-archived legacy tree and no longer resolve on
+# disk (see the OBSOLETE note above). Left as-is to document the original
+# source layout; pass explicit --legacy/--vnext if the tool is ever rerun.
 DEFAULT_LEGACY_DB = Path.home() / "soveryn_complete" / "soveryn_memory" / "lattice.db"
 DEFAULT_VNEXT_DB = Path.home() / "soveryn_complete" / "soveryn_memory" / "lattice_vnext.db"
 

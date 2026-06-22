@@ -50,7 +50,7 @@ class ModelServer:
     Phase 7 (2026-05-26) — router cutover: all four MODEL_SERVERS now share
     port 8090. `name` remains the logical preset identity inside vNext;
     `model_alias` is the router-facing identifier sent in the OpenAI `model`
-    field. The router's preset .ini (soveryn_complete/router-presets.ini)
+    field. The router's preset .ini (soveryn_vnext/runtime/router-presets.ini)
     has both the alias and the model basename registered, so both resolve.
     """
     name: str                       # logical identity, e.g. "aetheria_primary"
@@ -76,7 +76,7 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         port=8090,
         # Gemma 4 31B + its mmproj. Swapped off Qwen3.6-35B-A3B on
         # 2026-06-01 — see project_soveryn_aetheria_gemma4.md. The router
-        # preset at ~/soveryn_complete/router-presets.ini [aetheria] is
+        # preset at ~/soveryn_vnext/runtime/router-presets.ini [aetheria] is
         # what actually loads the model; this metadata only needs to
         # agree with the preset.
         model_path=MODEL_ROOT / "google_gemma-4-31B-it-Q8_0.gguf",

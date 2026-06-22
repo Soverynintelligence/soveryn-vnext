@@ -12,7 +12,8 @@ Behavior:
                        `_temporary: true` flag so the situation is obvious.
 
 The bridge reads from `app.config["SOVERYN_LEGACY_TEMPLATES_DIR"]`
-(default `~/soveryn_complete/templates`). If the
+(default `~/soveryn_vnext/data/templates_legacy`; the original
+soveryn_complete/templates tree was archived 2026-06-22). If the
 expected file is missing, returns JSON 503 with code `ui_unavailable` —
 never a Flask stack trace.
 

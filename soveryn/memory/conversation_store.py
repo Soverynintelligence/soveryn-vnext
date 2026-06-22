@@ -1,7 +1,7 @@
 """SOVERYN vNext — conversation store adapter.
 
 Path-injected SQLite store mirroring production conversations.db schema
-(soveryn_complete/soveryn_memory/conversations.db). Includes FTS5 virtual
+(vNext default data/memory/conversations_vnext.db). Includes FTS5 virtual
 table and triggers — production depends on these.
 
 Path is injected per Jon constraint 2: no module-level DB connection.
