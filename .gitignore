@@ -50,3 +50,6 @@ eval_runs/*.stderr
 .env
 .env.local
 .env.*.local
+
+# Runtime data backups (created by scripts/backup_soveryn.sh — large, local-only)
+backups/
