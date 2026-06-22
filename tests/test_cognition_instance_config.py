@@ -111,3 +111,49 @@ def test_cognition_instance_unit_hosts_on_loopback():
     assert "--host 127.0.0.1" in execstart, (
         f"ExecStart must bind to loopback 127.0.0.1"
     )
+
+
+# ─── Task 2: endpoint config + decoupling guard ───────────────────────────────
+
+import importlib
+import inspect
+
+from soveryn.config import loader as _loader
+
+
+def test_cognition_instance_url_default():
+    """runtime.COGNITION_INSTANCE_URL must default to http://127.0.0.1:8091."""
+    from soveryn.config import runtime
+    assert hasattr(runtime, "COGNITION_INSTANCE_URL"), (
+        "runtime.COGNITION_INSTANCE_URL is not defined"
+    )
+    assert runtime.COGNITION_INSTANCE_URL == "http://127.0.0.1:8091"
+
+
+def test_cognition_instance_url_env_override():
+    """SOVERYN_COGNITION_INSTANCE_URL env var must override the default."""
+    custom = "http://127.0.0.1:9999"
+    cfg = _loader.load_env_config({"SOVERYN_COGNITION_INSTANCE_URL": custom})
+    assert cfg.cognition_instance_url == custom
+
+
+def test_cognition_instance_url_env_default_when_absent():
+    """When SOVERYN_COGNITION_INSTANCE_URL is absent, loader must use the runtime default."""
+    cfg = _loader.load_env_config({})
+    assert cfg.cognition_instance_url == "http://127.0.0.1:8091"
+
+
+def test_chat_route_does_not_import_cognition_daemon():
+    """Regression guard: the foreground chat route must NOT import
+    soveryn.agents.cognition — that package does not exist yet and foreground
+    must never depend on it (decoupling guarantee).
+
+    Implemented as a static source-text check so it remains fast and does not
+    import the nonexistent package.
+    """
+    chat_module = importlib.import_module("soveryn.app.routes.chat")
+    source = inspect.getsource(chat_module)
+    assert "soveryn.agents.cognition" not in source, (
+        "chat route imports soveryn.agents.cognition — "
+        "foreground chat path must be independent of the cognition daemon"
+    )

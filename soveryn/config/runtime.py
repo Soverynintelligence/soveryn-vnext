@@ -211,6 +211,11 @@ RUNTIME_SERVICES: tuple[RuntimeService, ...] = (
 #: Flask app port for vNext during side-by-side validation. Production is :5000.
 APP_PORT: int = 5001
 
+#: Dedicated cognition llama-server instance (Gemma 4 E4B on its own port).
+#: Background-only — the foreground chat path must never import or depend on it.
+#: Override via SOVERYN_COGNITION_INSTANCE_URL env var (handled in loader.py).
+COGNITION_INSTANCE_URL: str = "http://127.0.0.1:8091"
+
 
 #: Embedding endpoint URL derived from MODEL_SERVERS (convenience).
 def embeddings_url() -> str:

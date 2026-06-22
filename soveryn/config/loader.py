@@ -107,6 +107,7 @@ class EnvConfig:
     elevenlabs_api_key: str | None
     elevenlabs_voice_id_aetheria: str | None
     voice_root: Path
+    cognition_instance_url: str
 
 
 class EnvConfigError(ValueError):
@@ -195,4 +196,5 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         elevenlabs_voice_id_aetheria=env.get("ELEVENLABS_VOICE_ID_AETHERIA") or None,
         voice_root=_parse_path("SOVERYN_VOICE_ROOT", env.get("SOVERYN_VOICE_ROOT"),
                                default=_default_voice_root(data_root)),
+        cognition_instance_url=env.get("SOVERYN_COGNITION_INSTANCE_URL") or runtime.COGNITION_INSTANCE_URL,
     )
