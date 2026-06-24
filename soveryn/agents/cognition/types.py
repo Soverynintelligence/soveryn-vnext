@@ -43,6 +43,29 @@ class CognitionWriteError(Exception):
     """
 
 
+# ─── Conversation turn ───────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class Turn:
+    """A single conversation turn fed into the reflection pipeline.
+
+    turn_id:
+      Stable identifier for this turn; used as citation keys in
+      CandidateObservation.citations so provenance is traceable back to
+      exact exchanges.
+
+    role:
+      "user" or "assistant" (matches llama-server / OpenAI convention).
+
+    content:
+      The raw text of the turn.
+    """
+
+    turn_id: str
+    role: str
+    content: str
+
+
 # ─── Pre-gate observation ────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
