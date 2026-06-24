@@ -427,3 +427,71 @@ class TestPromptContent:
         )
         full_prompt = captured.get("system", "") + captured.get("user", "")
         assert "AGENT_NAME_TOKEN" in full_prompt
+
+
+# ─── Markdown-fenced JSON → parsed correctly ─────────────────────────────────
+
+class TestMarkdownFencedJSON:
+    """reflect() strips markdown code fences before parsing JSON.
+
+    Real LLMs commonly wrap JSON in ```json ... ``` or ``` ... ``` even when
+    instructed not to.  Silently returning [] (the old behaviour) was a
+    zero-observations failure in production.
+    """
+
+    def test_json_fenced_with_language_tag_parsed(self):
+        """```json\\n[...]\\n``` → one CandidateObservation."""
+        fenced = (
+            "```json\n"
+            '[{"text":"x","scope":"manner","citations":["t1"],"jon_originated":true}]\n'
+            "```"
+        )
+        result = reflect(
+            agent="aetheria",
+            turns=_turns(("user", "hi")),
+            prior_note="",
+            chat_fn=_chat_fn_returning_raw(fenced),
+        )
+        assert len(result) == 1
+        assert result[0].text == "x"
+        assert result[0].scope == "manner"
+        assert result[0].citations == ("t1",)
+        assert result[0].jon_originated is True
+
+    def test_json_fenced_bare_backticks_parsed(self):
+        """``` (no language tag) \\n[...]\\n``` → one CandidateObservation."""
+        fenced = (
+            "```\n"
+            '[{"text":"y","scope":"value","citations":["t2"],"jon_originated":false}]\n'
+            "```"
+        )
+        result = reflect(
+            agent="aetheria",
+            turns=_turns(("user", "hi")),
+            prior_note="",
+            chat_fn=_chat_fn_returning_raw(fenced),
+        )
+        assert len(result) == 1
+        assert result[0].text == "y"
+        assert result[0].scope == "value"
+        assert result[0].citations == ("t2",)
+        assert result[0].jon_originated is False
+
+
+# ─── chat_fn raises → returns [], does not propagate ─────────────────────────
+
+class TestChatFnRaises:
+    """reflect() catches exceptions from chat_fn and returns []."""
+
+    def test_chat_fn_exception_returns_empty_list(self):
+        """When chat_fn raises, reflect() returns [] without propagating."""
+        def _exploding_fn(system: str, user: str) -> str:
+            raise RuntimeError("model server unreachable")
+
+        result = reflect(
+            agent="aetheria",
+            turns=_turns(("user", "hi")),
+            prior_note="",
+            chat_fn=_exploding_fn,
+        )
+        assert result == []

@@ -227,6 +227,19 @@ def reflect(
         log.debug("reflect: empty response from chat_fn; returning []")
         return []
 
+    # Strip markdown code fences that LLMs commonly emit around JSON
+    # (```json ... ``` or ``` ... ```), then fall through to json.loads.
+    stripped = raw.strip()
+    if stripped.startswith("```"):
+        # Drop the opening fence line (```json or ```)
+        first_newline = stripped.find("\n")
+        if first_newline != -1:
+            stripped = stripped[first_newline + 1:]
+        # Drop the closing ``` if present
+        if stripped.rstrip().endswith("```"):
+            stripped = stripped.rstrip()[:-3].rstrip()
+        raw = stripped
+
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
