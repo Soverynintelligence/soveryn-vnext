@@ -146,6 +146,15 @@
 ## Bake-in rollout (operational, not a code task)
 At launch, run in **propose mode** (manner changes surfaced, applied on Jon's nod). Graduate to autonomous self-apply after **N consecutive deep cycles with zero self-applies Jon would have vetoed** — N agreed at launch. The Mission Control view stays on permanently; only the approval requirement is temporary.
 
+## Enhancements — LLM-Wiki pattern (added 2026-06-24, fold in at the noted phase)
+
+From Karpathy's LLM-Wiki pattern (see memory `reference_karpathy_llm_wiki`). Two additions, each attaches to an existing phase — build them WITH that phase, not as a separate effort:
+
+- **E1 — "Lint" maintenance pass (attaches to Phase 2, the deep-tier daemon).** A periodic cognition maintenance op over the lattice + note: scan for contradictions (build on the existing `contradiction_flags` table), orphan nodes (no links), stale/superseded claims (newer evidence overrides), and missing cross-references; flag/report by severity, and where safe, repair under the same write-isolation + gate rules (never silent value edits). This is the rigorous version of Karpathy's "lint the wiki" — our gate is the guard his pattern lacks. Test: seeded contradictions/orphans are detected; repairs respect write-isolation.
+- **E2 — Human-readable entity/concept summary pages (attaches to Phase 4 / engine).** Generate markdown summary pages (entities, concepts) layered over the lattice graph — the inspectable "wiki view" of the lattice, surfaced in the Mission Control cognition view and written into the `.soul`/data tree as plain markdown (sovereignty-as-readable-asset). Test: pages generate from seeded lattice; regenerate (not append) to stay current.
+
+These also feed the portable-persona product (the `.soul` LLM-Wiki layer). Keep them scoped to manner/identity + knowledge the engine already owns — same fence.
+
 ## Self-review notes
 - Spec coverage: Infra (Ph1), pipeline/cadence/note/injection (Ph2), three guards + negative tests (Ph3), view/API/purge/audit + bake-in (Ph4). Agent-parameterization is in the `reflect(agent, ...)` / `NoteStore(agent)` signatures so Vett reuses it.
 - Phase 1 is execution-ready; Phases 2–4 carry file structure, interfaces, task list, and the load-bearing tests, with per-step code finalized against live signatures at build time (deliberate — hardware-gated, codebase will evolve). Flag any phase to fully detail now.
