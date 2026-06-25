@@ -82,6 +82,7 @@ def create_app(
     coord_store = None
     coord_event_bus = None
     coord_worker = None
+    cognition_store = None
 
     # MessengerStore — substrate for the /m/* PWA surface AND for the
     # deliberate_share tool (registered below for Aetheria + Vett). Built
@@ -230,6 +231,11 @@ def create_app(
             # routing rules.
             coord_event_bus = InMemoryEventBus()
             coord_store = CoordinationStore(env.lattice_db, event_bus=coord_event_bus, embed_fn=_default_embed)
+
+            # Cognition store — same gate as coord_store (requires lattice_db).
+            from soveryn.agents.cognition.store import CognitionStore
+            cognition_store = CognitionStore(env.lattice_db)
+
             for agent_name in ("aetheria", "vett", "scotty"):
                 register_coord_tools(
                     tool_registry,
@@ -726,6 +732,7 @@ def create_app(
         "coord_worker": coord_worker,
         "messenger_store": messenger_store,
         "document_store": document_store,
+        "cognition_store": cognition_store,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -906,6 +913,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_memory_bp)
     from soveryn.app.routes.api_coord import bp as api_coord_bp
     app.register_blueprint(api_coord_bp)
+    from soveryn.app.routes.api_cognition import bp as api_cognition_bp
+    app.register_blueprint(api_cognition_bp)
     from soveryn.app.routes.api_heartbeat import bp as api_heartbeat_bp
     app.register_blueprint(api_heartbeat_bp)
     from soveryn.app.routes.api_specialists import bp as api_specialists_bp
