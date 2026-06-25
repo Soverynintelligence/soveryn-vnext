@@ -281,7 +281,27 @@ def test_public_write_note_version_cannot_bypass_isolation(store):
     assert nv.id is not None
 
 
-# ─── 4. jon_originated round-trip via ReflectionMemory field ────────────────
+# ─── 4. current_note_id() — returns id of most-recent note version ──────────
+
+def test_current_note_id_returns_none_when_no_notes(store):
+    """current_note_id() returns None when no note version has been written."""
+    assert store.current_note_id() is None
+
+
+def test_current_note_id_returns_id_after_single_write(store):
+    """current_note_id() returns the id of the single written version."""
+    nv = store.write_note_version("first note")
+    assert store.current_note_id() == nv.id
+
+
+def test_current_note_id_returns_newer_id_after_two_writes(store):
+    """Write two note versions → current_note_id() returns the newer one's id."""
+    store.write_note_version("version one")
+    v2 = store.write_note_version("version two")
+    assert store.current_note_id() == v2.id
+
+
+# ─── 5. jon_originated round-trip via ReflectionMemory field ────────────────
 
 def test_jon_originated_true_survives_list_reflections(store):
     """jon_originated=True written via write_reflection must come back on the

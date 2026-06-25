@@ -201,32 +201,15 @@ def distill(
     Returns
     -------
     NoteVersion | None
-        The newly written NoteVersion, or the existing one if memories was
-        empty and a prior version exists, or None if memories was empty and
-        no prior version exists.
+        The newly written NoteVersion, or None if memories was empty (no
+        write occurs in that case regardless of whether a prior version exists).
     """
-    # Empty memories → nothing to synthesize; return current version as-is.
+    # Empty memories → nothing to synthesize; skip write entirely.
     if not memories:
-        current = store.current_note()
-        if current is None:
-            return None
-        # Find the most-recent NoteVersion to return (we don't write a new one)
-        # We only have current_note() returning content — reconstruct a minimal
-        # NoteVersion by writing nothing and fetching from the nodes table via
-        # a private read. Instead, we go through the public API: if there's
-        # content, there must be a NoteVersion; we can't return a full
-        # NoteVersion without its id. Return None here signals "no change" to
-        # callers who only check current_note(); the contract says to skip the
-        # write, which is the critical invariant.
-        # For test compatibility we return None when empty (the test asserts
-        # on store.current_note(), not the return value for this path).
         return None
 
     # Determine the id of the current note version for supersedes linkage.
-    # We need the id, not just the content — fetch from the store's nodes table
-    # via a lightweight direct read (CognitionStore exposes current_note()
-    # content only; we need the id from the DB directly).
-    supersedes_id: str | None = _current_note_id(store)
+    supersedes_id: str | None = store.current_note_id()
 
     # Call the model
     system, user = _build_prompts(agent, memories, max_lines)
@@ -250,32 +233,3 @@ def distill(
     note = store.write_note_version(content, supersedes=supersedes_id)
     return note
 
-
-# ─── Private helper: fetch current note id ───────────────────────────────────
-
-def _current_note_id(store: CognitionStore) -> str | None:
-    """Return the id of the most-recently written note version, or None.
-
-    CognitionStore.current_note() only returns content, not the full
-    NoteVersion.  We reach into the underlying SQLite DB via the same
-    _conn() context manager pattern to get the id.
-
-    This is intentionally minimal — it only reads a single row and does
-    not bypass any write-isolation guard.
-    """
-    from soveryn.agents.cognition.types import COGNITION_NOTE_NODE_TYPE
-    import sqlite3
-
-    try:
-        with store._conn() as conn:
-            row = conn.execute(
-                "SELECT id FROM nodes WHERE type = ? "
-                "ORDER BY created_at DESC LIMIT 1",
-                (COGNITION_NOTE_NODE_TYPE,),
-            ).fetchone()
-        if row is None:
-            return None
-        return row["id"]
-    except Exception:
-        log.exception("distill: failed to fetch current note id; supersedes=None")
-        return None

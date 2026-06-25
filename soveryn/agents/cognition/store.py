@@ -225,3 +225,20 @@ class CognitionStore:
         if row is None:
             return None
         return row["content"]
+
+    def current_note_id(self) -> str | None:
+        """Return the id of the most-recently written note version.
+
+        Returns None if no note version has been written yet.
+        Ordering uses created_at DESC — the last write wins (same as
+        current_note()).
+        """
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM nodes WHERE type = ? "
+                "ORDER BY created_at DESC LIMIT 1",
+                (COGNITION_NOTE_NODE_TYPE,),
+            ).fetchone()
+        if row is None:
+            return None
+        return row["id"]
