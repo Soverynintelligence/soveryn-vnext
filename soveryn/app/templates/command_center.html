@@ -573,6 +573,53 @@
     padding:4px 0;
   }
 
+  /* ─── Cognition panel ──────────────────────────────────────────────────── */
+  /* Sense-of-Us note + recent reflections. Read-only display; mirrors the
+     .heartbeat-panel density: section header, a prose block for the note,
+     then a compact list for reflections. No controls — revert/purge later. */
+  .cognition-note {
+    padding:12px 14px;
+    background:rgba(255,255,255,0.025);
+    border-left:3px solid var(--sov-electric-blue);
+    border-radius:0 6px 6px 0;
+    font-size:13px; color:rgba(232,227,213,0.85);
+    line-height:1.6;
+    margin-bottom:16px;
+  }
+  .cognition-note[data-empty] {
+    color:rgba(232,227,213,0.35); font-style:italic;
+    background:none; border-left-color:transparent;
+    padding:4px 0; margin-bottom:12px;
+  }
+  .cognition-feed { display:flex; flex-direction:column; gap:8px; }
+  .cognition-item {
+    padding:10px 14px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.04);
+    border-radius:8px;
+    font-size:12px; color:rgba(232,227,213,0.82);
+    line-height:1.5;
+  }
+  .cognition-item[data-empty] {
+    background:none; border:none; padding:4px 0;
+    color:rgba(232,227,213,0.35); font-style:italic;
+  }
+  .cognition-item .head {
+    display:flex; gap:8px; align-items:baseline;
+    font-size:10px; text-transform:uppercase; letter-spacing:0.10em;
+    color:rgba(232,227,213,0.5); margin-bottom:4px;
+  }
+  .cognition-item .head .scope {
+    color:var(--sov-electric-blue); font-weight:500;
+  }
+  .cognition-item .head .scope[data-scope="value"]  { color:var(--sov-gold); }
+  .cognition-item .head .scope[data-scope="manner"] { color:var(--sov-electric-blue); }
+  .cognition-item .head .scope[data-scope="unsure"] { color:rgba(232,227,213,0.45); }
+  .cognition-item .head .jon-badge {
+    color:var(--sov-amber); font-size:9px; letter-spacing:0.06em;
+  }
+  .cognition-item .body { color:rgba(232,227,213,0.82); }
+
   /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
   .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
   .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
@@ -709,6 +756,22 @@
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
       <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
         <div class="empty">no pulses yet.</div>
+      </div>
+    </section>
+
+    <!-- Cognition panel — Aetheria's Sense-of-Us note + recent reflections.
+         Read-only display (Phase 4.2). Revert/purge controls come later.
+         Data from /api/cognition/note and /api/cognition/reflections. -->
+    <section class="panel" data-testid="cognition-panel" data-cognition-panel>
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
+      <div class="cognition-note" data-cognition-note data-empty
+           aria-label="Aetheria's current Sense-of-Us note">
+        no note yet — the cognition engine hasn't run
+      </div>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:8px;">Recent reflections</div>
+      <div class="cognition-feed" data-cognition-feed aria-live="polite" aria-label="Recent cognition reflections">
+        <div class="cognition-item" data-empty>no reflections yet.</div>
       </div>
     </section>
 
@@ -1424,6 +1487,59 @@
     }).join("");
   }
 
+  // ─── Cognition panel (Sense-of-Us note + recent reflections) ────────────
+  // Endpoints: GET /api/cognition/note → {content, id}
+  //            GET /api/cognition/reflections?limit=N → [{id, text, scope,
+  //              citations, jon_originated, created_at}, …]
+  // Read-only — no controls. fetchJson returns null on 404/network error;
+  // both branches gracefully degrade to the empty-state markup.
+  async function renderCognition() {
+    const [noteData, reflData] = await Promise.all([
+      fetchJson("/api/cognition/note"),
+      fetchJson("/api/cognition/reflections?limit=10"),
+    ]);
+
+    // ── Sense-of-Us note ──
+    const noteEl = document.querySelector("[data-cognition-note]");
+    if (noteEl) {
+      const content = noteData && noteData.content && noteData.content.trim();
+      if (content) {
+        noteEl.textContent = content;
+        noteEl.removeAttribute("data-empty");
+      } else {
+        noteEl.textContent = "no note yet — the cognition engine hasn't run";
+        noteEl.setAttribute("data-empty", "");
+      }
+    }
+
+    // ── Recent reflections ──
+    const feedEl = document.querySelector("[data-cognition-feed]");
+    if (!feedEl) return;
+    const reflections = (reflData && Array.isArray(reflData)) ? reflData
+                      : (reflData && Array.isArray(reflData.reflections)) ? reflData.reflections
+                      : [];
+    if (reflections.length === 0) {
+      feedEl.innerHTML = `<div class="cognition-item" data-empty>no reflections yet.</div>`;
+      return;
+    }
+    feedEl.innerHTML = reflections.map(r => {
+      const scope = htmlEscape(r.scope || "unsure");
+      const text  = htmlEscape(r.text  || "");
+      const jonBadge = r.jon_originated
+        ? `<span class="jon-badge" title="originated from Jon">Jon</span>`
+        : "";
+      return `
+        <div class="cognition-item">
+          <div class="head">
+            <span class="scope" data-scope="${scope}">${scope}</span>
+            ${jonBadge}
+          </div>
+          <div class="body">${text}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
   function refreshAll() {
     renderGreeting();
@@ -1435,6 +1551,7 @@
     renderDaemons();
     renderBoards();
     renderHeartbeat();
+    renderCognition();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();
