@@ -36,6 +36,18 @@ A small standalone compliance service + basic UI + notification delivery. Reuses
 5. **Basic UI** — the station's compliance calendar (obligation, due date, status, **CFR citation per item**), the profile form, alert settings. Deliberately minimal — the value is the alerts + cited items, not a slick app. Multi-surface reach (laptop/mobile) via the notification rails + a simple web view.
 6. **(Phase 2) Generative layer — document drafting/generation + cited regs Q&A.** The headline "paralegal" capability. Driven by the engine: for a computed obligation, fill **its** FCC-standard template/form with the station's profile + provided facts → a **DRAFT document** the licensee reviews, edits, and files. Every generated doc: carries its CFR citation(s), is stamped **"DRAFT — for licensee review,"** and is **never auto-filed or auto-submitted.** This is document *preparation* (paralegal filling a form), not legal advice — the attorney read must bound *which* documents are safe to auto-draft, the required disclaimers, and the prep/advice line. Also: cited regs Q&A ("what does §X require?" → answer + citation). Runs on the swappable brain (cloud-test on public regs + sample data / sovereign Spark for real client data). Out of MVP, but the immediate next phase built directly on the deadline engine.
 
+## Station-type dimension (Christian-radio refinement, 2026-06-25, from Vett)
+
+Station TYPE gates the rule set — central for this client (Christian radio skews **NCE**). Three declarative additions (no new engine logic):
+- **`station_type` on StationProfile:** `commercial | NCE | LPFM`.
+- **`applies_to` on each Rule:** the set of station types it binds (e.g. quarterly I/P → all; some rules NCE-only or commercial-only).
+- **Engine filters rules by `profile.station_type`** before computing the schedule.
+
+Domain model to encode + verify (provisional → golden-test → `# VERIFY vs CFR` → attorney read — Vett's research, not yet authoritative):
+- **NCE vs commercial:** renewal form differs (Vett: 303 commercial / 302 NCE — confirm vs modern LMS Form 2100 schedules); NCE **not** required to file 395-B / 396; ownership 323 (commercial) vs 323-E (NCE).
+- **Political (the high-fine area):** NCE stations **cannot accept paid political ads** and **cannot endorse federal candidates**; commercial must follow lowest-unit-rate + equal-opportunity (§315) + political file (§73.1943, logs all candidate appearances incl. unpaid). Equal-time triggers on candidate appearances.
+- **Phase-2 knowledge base:** Vett's `/forms` content + political-content RAG = the regs-Q&A / drafting layer (LLM-Wiki style), NOT the MVP deterministic engine.
+
 ## Data flow
 
 profile entered (UI) → **deadline engine** computes the cited schedule → UI shows the compliance calendar → **notification layer** fires escalating alerts as each date approaches → owner acts/acknowledges → *(phase 2)* owner asks "what does this obligation need?" → brain answers with citation / drafts the filing → owner reviews & files.
