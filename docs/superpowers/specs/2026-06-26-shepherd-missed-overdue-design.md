@@ -35,7 +35,9 @@ acks loaded from `ObligationStatusStore` → `compute_schedule(profile, ALL_RULE
 
 - Unknown station on `/address` or `/reopen` → friendly 404 (same as existing routes). Don't create an ack for a station with no profile.
 - Store failure → never 500 the calendar render; the deterministic schedule (without the overlay) is still shown. (Acks are additive — a missing overlay degrades to "everything past-due shows as overdue," never a crash.)
+- **Degradation fails SAFE + is surfaced (not silent):** a down/erroring ack store means items show as **overdue/missed**, NOT falsely "Done" — over-alert, never false-clear, the correct direction for a compliance tool. AND the calendar surfaces an **"ack status temporarily unavailable"** indicator so the owner understands why nothing shows as filed (rather than silently seeing everything red). The route catches the store error, renders the deterministic schedule, and sets the flag.
 - The engine remains pure/deterministic; no I/O, no ack dependency.
+- **Time is date-only:** `due_date` and `today` are calendar dates (matching the CFR's date-only deadlines); overdue = `due_date < today`. `today` is the server's local date — correct for the **on-site sovereign appliance** (the box is at the station). No datetime/UTC-boundary handling needed at this scope; revisit only if Shepherd is ever cloud-hosted across multiple timezones.
 
 ## Testing
 
