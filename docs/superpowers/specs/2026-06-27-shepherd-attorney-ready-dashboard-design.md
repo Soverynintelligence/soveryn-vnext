@@ -7,7 +7,7 @@
 
 ## Decisions (from brainstorming)
 
-- **Four separate boxes:** **Past Due** (action zone), **Upcoming** (next ~90 days), **Future Filings** (beyond 90 days, within the 365-day horizon), **Done** (filed, muted). The 90-day Upcoming/Future split is the default, tunable.
+- **Four separate boxes:** **Past Due** (action zone), **Upcoming** (next ~90 days), **Future Filings** (beyond 90 days, within the 365-day horizon), **Done** (filed, muted). The Upcoming/Future split is a **global env var `SHEPHERD_UPCOMING_THRESHOLD_DAYS` (default 90)**; per-station tuning is YAGNI/later.
 - **Plain language across all boxes** (not just chat): each item shows its **plain name + a one-line "what it is"**; the CFR **citation is a small verification anchor, NOT the identifier**. The owner doesn't think in "§73.3526."
 - **Attorney-ready packet** = ONE downloadable document (cover summary of overdue items + each stamped draft). New status **`ready_for_review`**.
 
@@ -25,12 +25,15 @@ Bucketing uses the existing engine `status` (`overdue`/`upcoming`/`done`) plus a
 
 ## Part 2 — Attorney-ready flow (in the Past Due box)
 
-- **Status lifecycle gains `ready_for_review`:** `draft → generated → edited → ready_for_review → filed`. `POST /draft/<cs>/<rid>/<due>/ready` marks a generated/edited draft ready (and back via reopen/edit). The Past Due item shows "✓ drafted — ready for attorney" once ready.
+- **Status lifecycle gains `ready_for_review`:** `draft → generated → edited → ready_for_review → filed`. `POST /draft/<cs>/<rid>/<due>/ready` marks a generated/edited draft ready. **Reopen-to-edit is an explicit transition: `ready_for_review → edited`** — clicking Edit on a ready draft moves it back to `edited` (the existing `/edit` route accepts a `ready_for_review` draft and sets status `edited`); filing still goes `ready_for_review → filed` via `/address`. The Past Due item shows "✓ drafted — ready for attorney" once ready.
 - **Packet builder** (`shepherd/packet.py`, **pure, NO LLM**): `build_attorney_packet(profile, ready_drafts, overdue_items) -> str`:
   - a **cover page**: station identity, today's date, a heading **"FOR LICENSEE & ATTORNEY REVIEW — DRAFT, NOT FILED,"** and the list of overdue obligations being addressed (plain name + due date + citation, from the engine).
   - then **each ready draft's full stamped text** (each already carries its own DRAFT stamp + citation from the generator).
   - Deterministic concatenation — **honest by construction**: no new generation, no new fabrication surface.
-- **Route + UI:** `GET /packet/<call_sign>` gathers all `ready_for_review` drafts (`list_ready_drafts`) + the overdue summary → builds the packet → downloads as text/markdown. The Past Due box header button "Download attorney packet · N ready" (disabled when N=0). Gated on `DRAFTING_ENABLED`.
+- **Routes + UI:**
+  - `GET /packet/<call_sign>` — the **full packet**: gathers all `ready_for_review` drafts (`list_ready_drafts`) + the overdue summary → cover + all stamped drafts → download (text/markdown). Past Due box header button "Download attorney packet · N ready" (disabled when N=0).
+  - `GET /packet/<call_sign>/<rule_id>/<due_date>` — **single-draft download**: serves just that draft's stored `draft_text` (no cover — the attorney doesn't need one for a single filing). **The "NOT FILED — requires licensee & attorney review" guard is preserved automatically: `draft_text` already carries the generator's code-enforced stamp.** A per-item "Download for attorney" link sits next to each ready/generated draft.
+  - Both gated on `DRAFTING_ENABLED`.
 
 ## The UPL line (held)
 
@@ -57,17 +60,17 @@ overdue items (Past Due box) → "Draft this filing" (owner supplies that quarte
 
 ## Testing
 
-- **Bucketing:** an overdue item → Past Due; days_out ≤ 90 → Upcoming; days_out > 90 → Future; filed → Done (boundary at 90 tested).
+- **Bucketing:** an overdue item → Past Due; days_out ≤ threshold → Upcoming; days_out > threshold → Future; filed → Done. Boundary tested at the default 90; a test sets `SHEPHERD_UPCOMING_THRESHOLD_DAYS` to a different value and confirms the split moves.
 - **Plain language:** each rendered item shows the plain name + "what it is"; citation present but not the headline.
-- **Status:** `mark_draft_ready` transitions generated/edited → ready_for_review; `list_ready_drafts` returns only ready ones.
+- **Status:** `mark_draft_ready` transitions generated/edited → ready_for_review; `list_ready_drafts` returns only ready ones; **`/edit` on a `ready_for_review` draft → `edited` (reopen-to-edit)**.
 - **Packet builder (pure):** cover lists the overdue items (plain name + citation + due date); includes each ready draft's stamped text + the "NOT FILED / attorney review" heading; deterministic; empty-ready → a clear "no drafts ready" packet (or the route disables download).
-- **Route:** `GET /packet/<call_sign>` gated (404 when `DRAFTING_ENABLED` off); gathers ready drafts; downloads.
+- **Routes:** `GET /packet/<call_sign>` (full) and `GET /packet/<call_sign>/<rule_id>/<due_date>` (single) both gated (404 when `DRAFTING_ENABLED` off); the single-draft download contains the code-enforced "NOT FILED" stamp; the full packet gathers ready drafts + cover.
 - Honesty: no fabricated content anywhere in the packet (it only assembles existing drafts + engine facts).
 
 ## Scope / out of scope
 
-- **In:** the four-box navigable dashboard (plain language); the `ready_for_review` status + mark-ready; the pure packet builder + download route; per-rule plain_name/what_it_is.
-- **Out (later / YAGNI):** PDF packet (text/markdown first); email-the-packet-to-attorney (reuses SOVERYN delivery later); per-station tunable Upcoming/Future threshold (90-day default for now); other filing types in the packet (only Q I/P is drafted today); the agent's deeper plain-language tuning (separate noted refinement — the agent should *route* the owner to "draft → mark ready → download packet," but its full prompt/grounding rework is its own slice).
+- **In:** the four-box navigable dashboard (plain language; `SHEPHERD_UPCOMING_THRESHOLD_DAYS` global env, default 90); the `ready_for_review` status + mark-ready + reopen-to-edit; the pure packet builder; **both the full packet and the single-draft download routes**; per-rule plain_name/what_it_is.
+- **Out (later / YAGNI):** PDF packet (text/markdown first); email-the-packet-to-attorney (reuses SOVERYN delivery later); **per-station** tunable threshold (the global env var ships in v1); other filing types in the packet (only Q I/P is drafted today); the agent's deeper plain-language tuning (separate noted refinement — the agent should *route* the owner to "draft → mark ready → download packet," but its full prompt/grounding rework is its own slice).
 
 ## Dependencies / gates
 
