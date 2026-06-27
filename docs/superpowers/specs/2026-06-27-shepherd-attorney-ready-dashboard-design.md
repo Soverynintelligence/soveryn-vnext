@@ -27,7 +27,7 @@ Bucketing uses the existing engine `status` (`overdue`/`upcoming`/`done`) plus a
 
 - **Status lifecycle gains `ready_for_review`:** `draft → generated → edited → ready_for_review → filed`. `POST /draft/<cs>/<rid>/<due>/ready` marks a generated/edited draft ready. **Reopen-to-edit is an explicit transition: `ready_for_review → edited`** — clicking Edit on a ready draft moves it back to `edited` (the existing `/edit` route accepts a `ready_for_review` draft and sets status `edited`); filing still goes `ready_for_review → filed` via `/address`. The Past Due item shows "✓ drafted — ready for attorney" once ready.
 - **Packet builder** (`shepherd/packet.py`, **pure, NO LLM**): `build_attorney_packet(profile, ready_drafts, overdue_items) -> str`:
-  - a **cover page**: station identity, today's date, a heading **"FOR LICENSEE & ATTORNEY REVIEW — DRAFT, NOT FILED,"** and the list of overdue obligations being addressed (plain name + due date + citation, from the engine).
+  - a **cover page** with TWO sections (computed from the `overdue_items` ∖ `ready_drafts` delta): **"Addressed in this packet"** — the ready drafts enclosed (plain name + due date + citation); and **"Still outstanding (no draft yet)"** — overdue obligations the owner has NOT yet drafted/marked ready, so neither the attorney nor the owner mistakes the packet for "everything handled." Plus station identity, today's date, and the heading **"FOR LICENSEE & ATTORNEY REVIEW — DRAFT, NOT FILED."** All from the deterministic engine.
   - then **each ready draft's full stamped text** (each already carries its own DRAFT stamp + citation from the generator).
   - Deterministic concatenation — **honest by construction**: no new generation, no new fabrication surface.
 - **Routes + UI:**
@@ -55,7 +55,7 @@ overdue items (Past Due box) → "Draft this filing" (owner supplies that quarte
 
 ## Error handling
 
-- No ready drafts → packet button disabled / "nothing ready yet"; gated on `DRAFTING_ENABLED`.
+- **Empty packet — decided (not ambiguous):** when N=0 ready drafts, the **download button is disabled**; a direct call to `GET /packet/<call_sign>` with zero ready drafts returns **404** (never generate an empty packet). Gated on `DRAFTING_ENABLED`.
 - The packet path is deterministic (no LLM) → no generation failure mode. Unknown station → 404. Additive: none of this affects the deterministic schedule/lifecycle.
 
 ## Testing
@@ -63,7 +63,8 @@ overdue items (Past Due box) → "Draft this filing" (owner supplies that quarte
 - **Bucketing:** an overdue item → Past Due; days_out ≤ threshold → Upcoming; days_out > threshold → Future; filed → Done. Boundary tested at the default 90; a test sets `SHEPHERD_UPCOMING_THRESHOLD_DAYS` to a different value and confirms the split moves.
 - **Plain language:** each rendered item shows the plain name + "what it is"; citation present but not the headline.
 - **Status:** `mark_draft_ready` transitions generated/edited → ready_for_review; `list_ready_drafts` returns only ready ones; **`/edit` on a `ready_for_review` draft → `edited` (reopen-to-edit)**.
-- **Packet builder (pure):** cover lists the overdue items (plain name + citation + due date); includes each ready draft's stamped text + the "NOT FILED / attorney review" heading; deterministic; empty-ready → a clear "no drafts ready" packet (or the route disables download).
+- **Packet builder (pure):** cover has both sections — "Addressed in this packet" (the ready drafts) AND "Still outstanding" (overdue items with no ready draft; a test with 3-of-5 ready confirms the other 2 appear under outstanding); includes each ready draft's stamped text + the "NOT FILED / attorney review" heading; deterministic.
+- **Empty packet:** `GET /packet/<call_sign>` with zero ready drafts → 404 (no empty packet generated).
 - **Routes:** `GET /packet/<call_sign>` (full) and `GET /packet/<call_sign>/<rule_id>/<due_date>` (single) both gated (404 when `DRAFTING_ENABLED` off); the single-draft download contains the code-enforced "NOT FILED" stamp; the full packet gathers ready drafts + cover.
 - Honesty: no fabricated content anywhere in the packet (it only assembles existing drafts + engine facts).
 
