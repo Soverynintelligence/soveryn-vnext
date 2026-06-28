@@ -18,7 +18,7 @@ This is the same discipline as the rest of the day's work ([[feedback_determinis
 
 ### 1. Sector mechanic → make it a progression tree (option A)
 Today `unlocked_sectors`/`requires_sector` are half-wired: sectors get unlocked but gate nothing, and `jury_rig_aux_generator.requires_sector="engineering"` is never enforced and "engineering" is never unlockable.
-- **Enforce** `requires_sector` in `engine.execute_action`: an action whose `requires_sector` is not in `state["unlocked_sectors"]` is blocked (raise `SandboxError`).
+- **Enforce** `requires_sector` in `engine.execute_action`: an action whose `requires_sector` is not in `state["unlocked_sectors"]` is blocked with a specific, actionable message — `SandboxError(f"action {action_id} requires sector {sector} (not unlocked)")` — so she knows what to research.
 - **Unlock sectors as achievements:** add `unlocks_sector: str | None` to `ResearchRule`; engineering research **unlocks the `engineering` sector** (not just reveals the action). Research → unlock sector → high-tier action becomes usable.
 - **Surface honestly:** `_render_action` reflects sector-lock in `available` + a `sector_locked`/`requires_sector` field, so `list_actions` doesn't show a gated action as freely available.
 - **Why (Aetheria):** turns "click buttons until you win" into strategic expansion — it forces prioritization.
@@ -33,6 +33,7 @@ Today `risk_tolerance` is tracked + clamped but nothing reads or moves it.
 Today `reason/regret/lesson` are written empty and nothing ever fills or reads them. This is the piece that makes it a gym.
 - **Deterministic trigger (engine):** after an action, the engine sets a `pending_reflection` when a trigger fires — every `REFLECT_INTERVAL` cycles, OR on a major event (a sector unlock, a resource crash/critical, or run end). The trigger is engine-computed (a fact), not model-judged.
 - **Forced, not optional:** while `pending_reflection` is set, further `execute_action` is **blocked** (`SandboxError: "reflection required"`) until she reflects. This structurally forces the post-game review Aetheria asked for.
+- **Run-end is the most important reflection (ordering — Aetheria's catch):** if a critical resource crashes and the run ends, the engine sets `pending_reflection={"trigger": "run_end", …}` as part of the run-end transition — *after* `_check_run_end` flips `status="ended"`, in the same path, so the death trigger is never lost. Critically, `sandbox_reflect` is **exempt from the "run has ended" block**: it is the one and only action allowed on an ended run while a reflection is pending, so the death post-mortem (the most valuable lesson) is always captured. `execute_action` stays blocked on an ended run; only the final reflection gets through. After it's recorded, `pending_reflection` clears and the run remains ended.
 - **The reflection itself (Aetheria, generative):** a new write tool `sandbox_reflect(reason, regret, lesson, run_id?)` records her reflection against the pending trigger — appended to a `reflections` record in run state AND back-filling the relevant `decision_log` entry's slots — then clears `pending_reflection`. She authors `reason/regret/lesson`; the engine never authors them (they stay "her meaning," per the boundary).
 - **Read-back (optimize next run):** `sandbox_get_lessons(run_id?)` returns her prior reflections so she can carry pattern-knowledge forward — *within the gym's provenance only.*
 - **Engine=facts, she=meaning:** the prompt that drives her reflection says "review the decision_log: what worked, what failed, what's the lesson?" — operating on the engine's recorded *deltas*. Facts deterministic; interpretation hers; both sandbox-local.
@@ -52,13 +53,16 @@ Once 1–3 are wired, tune the resource economy so the run is **not trivially su
 ## Error handling
 - Reflecting with no `pending_reflection` → a clear `ToolArgError`, no-op (no fabricated reflection).
 - Acting while reflection is pending → blocked with the "reflection required" message (the forcing mechanism, not an error to swallow).
+- `sandbox_reflect` is allowed when a reflection is pending **regardless of run status** (active or ended) — it is exempt from the "run has ended" block so the death post-mortem is captured; every other action stays blocked on an ended run.
+- A blocked `requires_sector` action returns the actionable message naming the sector to research (above).
 - Empty/malformed reflection fields → validated at the tool boundary (non-empty `lesson` at minimum); the engine never auto-fills them.
 - `normalize_state` keeps pre-existing runs (without the new fields) loadable.
 
 ## Testing
 - **Sectors:** a `requires_sector` action is blocked before its sector is unlocked and usable after the unlocking research completes; `list_actions` shows it locked then available.
 - **Risk tolerance:** a risky success raises it, a crash lowers it, clamped 0–10; perception notes change at the thresholds.
-- **Reflection loop:** a trigger sets `pending_reflection`; `execute_action` is blocked until `sandbox_reflect` is called; `sandbox_reflect` records the reflection + clears the gate + back-fills the log slot; `sandbox_get_lessons` returns prior reflections; run-end forces a final reflection.
+- **Reflection loop:** a trigger sets `pending_reflection`; `execute_action` is blocked until `sandbox_reflect` is called; `sandbox_reflect` records the reflection + clears the gate + back-fills the log slot; `sandbox_get_lessons` returns prior reflections.
+- **Run-end reflection (the ordering test):** drive a critical resource to crash → assert `status=="ended"` AND `pending_reflection` is set with `trigger=="run_end"`; assert `execute_action` raises "run has ended" but `sandbox_reflect` **succeeds** on the ended run and records the final lesson; after it, `pending_reflection` is cleared and status stays ended.
 - **Provenance seam (the critical test):** after a full play+reflect cycle, assert **nothing** was written to the cognition store / Lattice — reflections live only in sandbox run state. This test is the boundary's teeth.
 - **Tools:** new tools registered for Aetheria only (not Vett/Scotty); engine-backed, no live model in tests.
 - Determinism preserved (same seed + action+reflection sequence → identical state).
