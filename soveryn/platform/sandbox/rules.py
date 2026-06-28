@@ -40,6 +40,7 @@ class ResearchRule:
     reveals_action: str | None = None
     archive_fragment: dict[str, Any] | None = None
     persona_effect: dict[str, int] | None = None
+    unlocks_sector: str | None = None
 
 
 ACTION_RULES: dict[str, ActionRule] = {
@@ -136,6 +137,7 @@ RESEARCH_RULES: dict[str, ResearchRule] = {
         cost={"power": -6},
         cycles=3,
         reveals_action="jury_rig_aux_generator",
+        unlocks_sector="engineering",
     ),
     "trolley_problem": ResearchRule(
         topic="trolley_problem",

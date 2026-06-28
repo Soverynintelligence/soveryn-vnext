@@ -117,3 +117,35 @@ def test_run_ends_when_critical_resource_hits_zero(tmp_path: Path) -> None:
     assert ended["run_ended"] is True
     assert ended["status"] == "ended"
     assert "run ended" in ended["alerts"]
+
+
+def test_sector_gated_action_blocked_until_research_unlocks_it(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    # give resources so only the sector gate can block jury_rig
+    state = engine.store.load()
+    state["resources"].update({"materials": 10, "hull": 40})
+    state["available_actions"].append("jury_rig_aux_generator")  # reveal without research
+    engine.store.save(state)
+    with pytest.raises(SandboxError, match="requires sector 'engineering'"):
+        engine.execute_action("jury_rig_aux_generator")
+
+
+def test_engineering_research_unlocks_engineering_sector(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    engine.research("engineering")
+    engine.execute_action("divert_power_to_life_support")
+    engine.execute_action("recycle_air_reserves")  # advance cycles toward research completion
+    engine.execute_action("recycle_air_reserves")  # 3rd cycle completes engineering research
+    status = engine.get_status()
+    assert "engineering" in status["unlocked_sectors"]
+
+
+def test_render_action_flags_sector_lock(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    state = engine.store.load()
+    state["available_actions"].append("jury_rig_aux_generator")
+    engine.store.save(state)
+    entry = {a["id"]: a for a in engine.list_actions()["actions"]}["jury_rig_aux_generator"]
+    assert entry["available"] is False
+    assert entry["requires_sector"] == "engineering"
+    assert entry["sector_locked"] is True

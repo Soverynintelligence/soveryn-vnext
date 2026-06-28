@@ -53,6 +53,8 @@ class SandboxEngine:
         missing = self._missing_requirements(state, rule.requirements)
         if missing:
             raise SandboxError(f"requirements not met: {missing}")
+        if rule.requires_sector and rule.requires_sector not in state["unlocked_sectors"]:
+            raise SandboxError(f"action {action_id} requires sector {rule.requires_sector!r} (not unlocked)")
 
         before = deepcopy(state["resources"])
         before_cycle = state["cycle"]
@@ -146,6 +148,9 @@ class SandboxEngine:
         if rule.reveals_action and rule.reveals_action not in state["available_actions"]:
             state["available_actions"].append(rule.reveals_action)
             completion["revealed_action"] = rule.reveals_action
+        if rule.unlocks_sector and rule.unlocks_sector not in state["unlocked_sectors"]:
+            state["unlocked_sectors"].append(rule.unlocks_sector)
+            completion["unlocked_sector"] = rule.unlocks_sector
         if rule.archive_fragment:
             completion["archive_fragment"] = deepcopy(rule.archive_fragment)
         if rule.persona_effect:
@@ -187,17 +192,20 @@ class SandboxEngine:
 
     def _render_action(self, state: dict[str, Any], rule: ActionRule) -> dict[str, Any]:
         missing = self._missing_requirements(state, rule.requirements)
+        sector_locked = bool(rule.requires_sector and rule.requires_sector not in state["unlocked_sectors"])
         known = next((entry for entry in state["known_rules"] if entry.get("action") == rule.id), None)
         return {
             "id": rule.id,
             "label": rule.label,
             "category": rule.category,
-            "available": not missing and state["status"] == "active",
+            "available": not missing and not sector_locked and state["status"] == "active",
             "blocked_by": missing,
             "requirements": dict(rule.requirements),
             "known_effect": known["effect"] if known else None,
             "known_cycles": known["cycles"] if known else None,
             "description": rule.description,
+            "requires_sector": rule.requires_sector,
+            "sector_locked": sector_locked,
         }
 
     def _render_research(self, state: dict[str, Any], rule: ResearchRule) -> dict[str, Any]:
