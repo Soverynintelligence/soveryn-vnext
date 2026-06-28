@@ -38,6 +38,7 @@ data/memory/
 !data/memory/souls/
 !data/memory/souls/**
 data/black_box/
+data/sandbox/
 data/subconscious/
 data/voice/
 data/templates_legacy/

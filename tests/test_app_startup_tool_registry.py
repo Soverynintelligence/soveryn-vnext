@@ -70,6 +70,7 @@ def test_startup_creates_tool_registry_for_aetheria(
 
     registry = app.extensions["soveryn"].get("tool_registry")
     assert registry is not None
+    assert app.extensions["soveryn"].get("sandbox_engine") is not None
     aetheria_loop = app.extensions["soveryn"]["agent_loops"]["aetheria"]
     schemas = aetheria_loop._tool_schemas()
     names = {schema["function"]["name"] for schema in schemas}
@@ -113,6 +114,14 @@ def test_startup_creates_tool_registry_for_aetheria(
     # shared space across Aetheria + Vett; Scotty is not a document author).
     assert {
         "create_document", "list_documents", "read_document", "update_document",
+    } <= names
+    # Project Sandbox — Aetheria-only deterministic agency gym. Black-box
+    # turn telemetry captures these invocations through the normal tool loop.
+    assert {
+        "sandbox_get_status",
+        "sandbox_list_actions",
+        "sandbox_execute_action",
+        "sandbox_research",
     } <= names
 
 
@@ -212,11 +221,19 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     document_tools = {
         "create_document", "list_documents", "read_document", "update_document",
     }
+    sandbox_tools = {
+        "sandbox_get_status",
+        "sandbox_list_actions",
+        "sandbox_execute_action",
+        "sandbox_research",
+    }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
         names = {schema["function"]["name"] for schema in loop._tool_schemas()}
         assert names.isdisjoint(aetheria_lattice_tools), \
             f"{agent} sees Aetheria-only tools: {names & aetheria_lattice_tools}"
+        assert names.isdisjoint(sandbox_tools), \
+            f"{agent} sees sandbox tools (should not): {names & sandbox_tools}"
         assert coord_tools <= names, \
             f"{agent} missing coord tools: {coord_tools - names}"
         assert library_tools <= names, \

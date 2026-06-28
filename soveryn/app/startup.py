@@ -83,6 +83,7 @@ def create_app(
     coord_event_bus = None
     coord_worker = None
     cognition_store = None
+    sandbox_engine = None
 
     # MessengerStore — substrate for the /m/* PWA surface AND for the
     # deliberate_share tool (registered below for Aetheria + Vett). Built
@@ -148,6 +149,16 @@ def create_app(
             build_generate_image_tool,
         )
         tool_registry.register(build_generate_image_tool())
+
+        # Project Sandbox - Aetheria-only deterministic agency gym. State lives
+        # under data/sandbox/runs/<run_id>/state.json so each seeded station run
+        # remains available for post-hoc comparison and reflection.
+        from soveryn.platform.sandbox import register_sandbox_tools
+        sandbox_engine = register_sandbox_tools(
+            tool_registry,
+            sandbox_root=env.data_root / "sandbox",
+            owner_agent="aetheria",
+        )
 
         # Specialist-spawning primitive (DSL Orchestration v1).
         # spawn_specialist / query_specialist / terminate_specialist let
@@ -733,6 +744,7 @@ def create_app(
         "messenger_store": messenger_store,
         "document_store": document_store,
         "cognition_store": cognition_store,
+        "sandbox_engine": sandbox_engine,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
