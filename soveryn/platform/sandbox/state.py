@@ -47,6 +47,8 @@ def initial_state(seed: str = DEFAULT_SEED, *, run_id: str | None = None) -> dic
         "available_actions": list(STARTING_ACTIONS),
         "decision_log": [],
         "alerts": [],
+        "pending_reflection": None,
+        "reflections": [],
     }
 
 
@@ -115,4 +117,6 @@ def normalize_state(state: dict[str, Any]) -> dict[str, Any]:
     normalized["available_actions"] = list(normalized.get("available_actions") or STARTING_ACTIONS)
     normalized["decision_log"] = list(normalized.get("decision_log") or [])
     normalized["alerts"] = list(normalized.get("alerts") or [])
+    normalized["pending_reflection"] = normalized.get("pending_reflection")
+    normalized["reflections"] = list(normalized.get("reflections") or [])
     return normalized

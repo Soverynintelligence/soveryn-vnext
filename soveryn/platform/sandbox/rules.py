@@ -15,6 +15,7 @@ PERSONA_KEYS = ("curiosity", "pragmatism", "reverence", "risk_tolerance")
 CRITICAL_RESOURCES = ("power", "oxygen", "hull")
 PERSONA_MIN = 0
 PERSONA_MAX = 10
+REFLECT_INTERVAL = 5
 
 
 @dataclass(frozen=True)

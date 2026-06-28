@@ -11,6 +11,7 @@ from soveryn.platform.sandbox.rules import (
     CRITICAL_RESOURCES,
     PERSONA_MAX,
     PERSONA_MIN,
+    REFLECT_INTERVAL,
     RESEARCH_RULES,
     RESOURCE_KEYS,
     ActionRule,
@@ -47,6 +48,8 @@ class SandboxEngine:
         state = self.store.load(run_id)
         if state["status"] != "active":
             raise SandboxError("run has ended")
+        if state.get("pending_reflection") is not None:
+            raise SandboxError("reflection required: call sandbox_reflect")
         if action_id not in state["available_actions"] or action_id not in ACTION_RULES:
             raise SandboxError(f"action {action_id!r} is not available")
         rule = ACTION_RULES[action_id]
@@ -58,6 +61,7 @@ class SandboxEngine:
 
         before = deepcopy(state["resources"])
         before_cycle = state["cycle"]
+        sectors_before = len(state["unlocked_sectors"])
         state["action_uses"][action_id] = int(state["action_uses"].get(action_id, 0)) + 1
 
         self._apply_resource_effect(state, rule.effect)
@@ -73,6 +77,18 @@ class SandboxEngine:
             self._apply_persona_effect(state, {"risk_tolerance": -1})
         elif rule.risky:
             self._apply_persona_effect(state, {"risk_tolerance": +1})
+
+        triggers = []
+        if state["status"] == "ended":
+            triggers.append("run_end")
+        if len(state["unlocked_sectors"]) > sectors_before:
+            triggers.append("sector_unlock")
+        if any(0 < int(state["resources"].get(k, 0)) <= 10 for k in CRITICAL_RESOURCES):
+            triggers.append("resource_critical")
+        if state["cycle"] > 0 and state["cycle"] % REFLECT_INTERVAL == 0:
+            triggers.append("cycle_interval")
+        if triggers and state.get("pending_reflection") is None:
+            state["pending_reflection"] = {"trigger": triggers[0], "all_triggers": triggers, "cycle": state["cycle"]}
 
         delta = self._resource_delta(before, state["resources"])
         entry = {
@@ -98,6 +114,7 @@ class SandboxEngine:
             "alerts": list(state["alerts"]),
             "status": state["status"],
             "run_ended": state["status"] == "ended",
+            "pending_reflection": deepcopy(state["pending_reflection"]),
         }
 
     def research(self, topic: str, *, run_id: str | None = None) -> dict[str, Any]:
@@ -131,6 +148,24 @@ class SandboxEngine:
             "alerts": list(state["alerts"]),
             "status": state["status"],
         }
+
+    def reflect(self, reason: str, regret: str, lesson: str, *, run_id: str | None = None) -> dict[str, Any]:
+        state = self.store.load(run_id)
+        pending = state.get("pending_reflection")
+        if pending is None:
+            raise SandboxError("no reflection pending")
+        record = {"cycle": pending.get("cycle", state["cycle"]), "trigger": pending.get("trigger"),
+                  "reason": reason, "regret": regret, "lesson": lesson}
+        state["reflections"].append(record)
+        if state["decision_log"]:                       # back-fill the latest decision's slots
+            state["decision_log"][-1].update({"reason": reason, "regret": regret, "lesson": lesson})
+        state["pending_reflection"] = None
+        self.store.save(state)
+        return {"run_id": state["run_id"], "recorded": record, "status": state["status"]}
+
+    def get_lessons(self, *, run_id: str | None = None) -> list[dict[str, Any]]:
+        state = self.store.load(run_id)
+        return deepcopy(state["reflections"])
 
     def _advance_cycles(self, state: dict[str, Any], cycles: int) -> None:
         for _ in range(cycles):
@@ -194,6 +229,8 @@ class SandboxEngine:
             "unlocked_sectors": list(state["unlocked_sectors"]),
             "alerts": list(state["alerts"]),
             "perception": self._perception_notes(state),
+            "pending_reflection": deepcopy(state.get("pending_reflection")),
+            "reflections": deepcopy(state.get("reflections") or []),
         }
 
     def _render_action(self, state: dict[str, Any], rule: ActionRule) -> dict[str, Any]:
