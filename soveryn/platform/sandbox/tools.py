@@ -118,6 +118,79 @@ def build_sandbox_research_tool(*, engine: SandboxEngine, owner_agent: str) -> T
     )
 
 
+def build_sandbox_reflect_tool(*, engine: SandboxEngine, owner_agent: str) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> Any:
+        reason = args.get("reason", "")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ToolArgError("reason must be a non-empty string")
+        regret = args.get("regret", "")
+        if not isinstance(regret, str) or not regret.strip():
+            raise ToolArgError("regret must be a non-empty string")
+        lesson = args.get("lesson", "")
+        if not isinstance(lesson, str) or not lesson.strip():
+            raise ToolArgError("lesson must be a non-empty string")
+        try:
+            return engine.reflect(
+                reason.strip(),
+                regret.strip(),
+                lesson.strip(),
+                run_id=_optional_str(args, "run_id"),
+            )
+        except SandboxError as exc:
+            raise ToolArgError(str(exc)) from exc
+
+    return ToolSpec(
+        name="sandbox_reflect",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "description": "Why this action was taken.",
+                },
+                "regret": {
+                    "type": "string",
+                    "description": "What Aetheria would do differently in hindsight.",
+                },
+                "lesson": {
+                    "type": "string",
+                    "description": "The transferable principle or lesson learned.",
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "Optional run id. Omit to use the default station-alpha run.",
+                },
+            },
+            "required": ["reason", "regret", "lesson"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Record a mandatory Project Sandbox reflection: why the last action was "
+            "taken, what regret (if any) it produced, and the lesson carried forward. "
+            "Required after any trigger event (sector unlock, resource critical, "
+            "run end, or cycle interval). Returns the recorded entry."
+        ),
+    )
+
+
+def build_sandbox_get_lessons_tool(*, engine: SandboxEngine, owner_agent: str) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> Any:
+        return engine.get_lessons(run_id=_optional_str(args, "run_id"))
+
+    return ToolSpec(
+        name="sandbox_get_lessons",
+        owner=owner_agent,
+        schema=_run_id_schema(),
+        handler=handler,
+        description=(
+            "Return all Project Sandbox reflection records for a run as a list. "
+            "Each entry contains cycle, trigger, reason, regret, and lesson."
+        ),
+    )
+
+
 def register_sandbox_tools(
     registry: ToolRegistry,
     *,
@@ -129,6 +202,8 @@ def register_sandbox_tools(
     registry.register(build_sandbox_list_actions_tool(engine=engine, owner_agent=owner_agent))
     registry.register(build_sandbox_execute_action_tool(engine=engine, owner_agent=owner_agent))
     registry.register(build_sandbox_research_tool(engine=engine, owner_agent=owner_agent))
+    registry.register(build_sandbox_reflect_tool(engine=engine, owner_agent=owner_agent))
+    registry.register(build_sandbox_get_lessons_tool(engine=engine, owner_agent=owner_agent))
     return engine
 
 

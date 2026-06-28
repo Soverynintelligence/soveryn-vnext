@@ -122,6 +122,8 @@ def test_startup_creates_tool_registry_for_aetheria(
         "sandbox_list_actions",
         "sandbox_execute_action",
         "sandbox_research",
+        "sandbox_reflect",
+        "sandbox_get_lessons",
     } <= names
 
 
@@ -226,6 +228,8 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "sandbox_list_actions",
         "sandbox_execute_action",
         "sandbox_research",
+        "sandbox_reflect",
+        "sandbox_get_lessons",
     }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
