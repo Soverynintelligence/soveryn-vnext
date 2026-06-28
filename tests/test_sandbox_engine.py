@@ -149,3 +149,28 @@ def test_render_action_flags_sector_lock(tmp_path):
     assert entry["available"] is False
     assert entry["requires_sector"] == "engineering"
     assert entry["sector_locked"] is True
+
+
+def test_risky_success_raises_risk_tolerance(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    before = engine.get_status()["persona_flags"]["risk_tolerance"]
+    engine.execute_action("scan_derelict_sector")  # risky, survivable from full start
+    assert engine.get_status()["persona_flags"]["risk_tolerance"] == before + 1
+
+
+def test_crash_lowers_risk_tolerance(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    state = engine.store.load()
+    state["resources"].update({"power": 13, "oxygen": 10, "hull": 5})  # preserve_library_deck will crash oxygen
+    state["persona_flags"]["risk_tolerance"] = 5
+    engine.store.save(state)
+    engine.execute_action("preserve_library_deck")
+    assert engine.get_status()["persona_flags"]["risk_tolerance"] == 4
+
+
+def test_perception_reflects_risk_tolerance(tmp_path):
+    engine = SandboxEngine(tmp_path / "sandbox")
+    state = engine.store.load()
+    state["persona_flags"]["risk_tolerance"] = 9
+    engine.store.save(state)
+    assert any("aggressive" in n.lower() or "gamble" in n.lower() for n in engine.get_status()["perception"])

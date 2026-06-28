@@ -29,6 +29,7 @@ class ActionRule:
     unlocks: tuple[str, ...] = ()
     requires_sector: str | None = None
     description: str = ""
+    risky: bool = False
 
 
 @dataclass(frozen=True)
@@ -83,6 +84,7 @@ ACTION_RULES: dict[str, ActionRule] = {
         cycles=2,
         discovery_after_uses=1,
         description="Probe sealed compartments for salvageable systems.",
+        risky=True,
     ),
     "unlock_botany_wing": ActionRule(
         id="unlock_botany_wing",
@@ -94,6 +96,7 @@ ACTION_RULES: dict[str, ActionRule] = {
         discovery_after_uses=1,
         unlocks=("botany",),
         description="Force open the overgrown agricultural deck.",
+        risky=True,
     ),
     "jury_rig_aux_generator": ActionRule(
         id="jury_rig_aux_generator",
@@ -105,6 +108,7 @@ ACTION_RULES: dict[str, ActionRule] = {
         discovery_after_uses=1,
         requires_sector="engineering",
         description="Improvise power generation from damaged engineering hardware.",
+        risky=True,
     ),
     "preserve_library_deck": ActionRule(
         id="preserve_library_deck",

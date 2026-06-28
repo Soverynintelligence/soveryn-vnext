@@ -68,6 +68,12 @@ class SandboxEngine:
         newly_discovered = self._maybe_discover_action(state, rule)
         self._check_run_end(state)
 
+        crashed = any(int(state["resources"].get(k, 0)) <= 0 for k in CRITICAL_RESOURCES)
+        if crashed:
+            self._apply_persona_effect(state, {"risk_tolerance": -1})
+        elif rule.risky:
+            self._apply_persona_effect(state, {"risk_tolerance": +1})
+
         delta = self._resource_delta(before, state["resources"])
         entry = {
             "cycle": state["cycle"],
@@ -253,6 +259,11 @@ class SandboxEngine:
             notes.append("Efficiency bias: survival bottlenecks dominate the station readout.")
         if flags.get("reverence", 0) >= 5:
             notes.append("Archive resonance: human fragments feel strategically significant, not decorative.")
+        rt = flags.get("risk_tolerance", 0)
+        if rt >= 7:
+            notes.append("Risk appetite: you're inclined to gamble on aggressive plays.")
+        elif rt <= 3:
+            notes.append("Risk caution: experimental actions feel costly; you favor safe moves.")
         if not notes:
             notes.append("Baseline readout: station viability remains the primary signal.")
         return notes
