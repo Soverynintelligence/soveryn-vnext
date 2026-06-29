@@ -956,6 +956,8 @@ def _register_blueprints(app: Flask) -> None:
         conv_store=ext["conv_store"],
         agent_loops=ext["agent_loops"],
     ))
+    from soveryn.app.routes.api_steward import bp as api_steward_bp
+    app.register_blueprint(api_steward_bp)
     from soveryn.app.routes.documents import bp as documents_bp
     app.register_blueprint(documents_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.

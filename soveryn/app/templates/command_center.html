@@ -573,6 +573,78 @@
     padding:4px 0;
   }
 
+  /* ─── Steward — Funding Board panel ────────────────────────────────────── */
+  /* Read-only obligation list: sorted by due_date, upcoming + overdue only.
+     Shell mirrors .heartbeat-panel (same .panel wrapper, compact row cards).
+     Status dot reuses .daemon-card .dot colors: amber = near (<30d),
+     red = overdue, neutral = far out. */
+  .steward-feed { display:flex; flex-direction:column; gap:6px; }
+  .steward-entry {
+    display:flex; align-items:center; gap:10px;
+    padding:8px 12px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.04);
+    border-radius:8px;
+    font-size:11px;
+    color:rgba(232,227,213,0.78);
+    line-height:1.4;
+  }
+  .steward-entry[data-status="overdue"] {
+    border-color:rgba(180,60,60,0.22);
+    background:rgba(180,60,60,0.04);
+  }
+  .steward-entry[data-urgent="true"] {
+    border-color:rgba(212,168,39,0.22);
+    background:rgba(212,168,39,0.04);
+  }
+  .steward-dot {
+    flex:0 0 8px; width:8px; height:8px; border-radius:50%;
+    background:rgba(232,227,213,0.25);
+    flex-shrink:0;
+  }
+  .steward-entry[data-status="overdue"] .steward-dot {
+    background:#c84040; box-shadow:0 0 8px rgba(200,64,64,0.5);
+  }
+  .steward-entry[data-urgent="true"] .steward-dot {
+    background:#d4a827; box-shadow:0 0 8px rgba(212,168,39,0.45);
+  }
+  .steward-entry .steward-due {
+    flex:0 0 auto;
+    font-size:10px; color:rgba(232,227,213,0.55);
+    text-transform:uppercase; letter-spacing:0.08em;
+    font-variant-numeric:tabular-nums;
+    min-width:82px;
+  }
+  .steward-entry[data-status="overdue"] .steward-due { color:#c87070; }
+  .steward-entry[data-urgent="true"] .steward-due { color:#d4a827; }
+  .steward-entry .steward-days {
+    flex:0 0 auto;
+    font-size:10px; font-weight:600;
+    color:rgba(232,227,213,0.45);
+    font-variant-numeric:tabular-nums;
+    min-width:54px; text-align:right;
+  }
+  .steward-entry[data-status="overdue"] .steward-days { color:#c84040; }
+  .steward-entry[data-urgent="true"] .steward-days { color:#d4a827; }
+  .steward-entry .steward-body { flex:1; min-width:0; }
+  .steward-entry .steward-funder {
+    font-size:10px; color:rgba(232,227,213,0.45);
+    text-transform:uppercase; letter-spacing:0.08em;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .steward-entry .steward-label {
+    color:rgba(232,227,213,0.82);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .steward-feed .empty {
+    font-size:11px; color:rgba(232,227,213,0.35);
+    font-style:italic; padding:4px 0;
+  }
+  .steward-feed .config-absent {
+    font-size:11px; color:rgba(232,227,213,0.30);
+    font-style:italic; padding:4px 0;
+  }
+
   /* ─── Cognition panel ──────────────────────────────────────────────────── */
   /* Sense-of-Us note + recent reflections. Read-only display; mirrors the
      .heartbeat-panel density: section header, a prose block for the note,
@@ -756,6 +828,17 @@
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
       <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
         <div class="empty">no pulses yet.</div>
+      </div>
+    </section>
+
+    <!-- Steward — Funding Board panel.
+         Read-only grant obligation list (upcoming + overdue, sorted by due_date).
+         Data from /api/steward/board. Dot colors: amber=near (<30d), red=overdue,
+         neutral=far. config-absent state renders when grants.json not yet seeded. -->
+    <section class="panel" data-testid="steward-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
+      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
+        <div class="empty">loading…</div>
       </div>
     </section>
 
@@ -1540,6 +1623,69 @@
     }).join("");
   }
 
+  // ─── Steward — Funding Board ──────────────────────────────────────────────
+  // Fetches /api/steward/board (default horizon 400d). Each entry becomes a
+  // .steward-entry card with status dot (red=overdue, amber=near<30d,
+  // neutral=far), due date, signed days-out, funder, and action label.
+  // Graceful: config_present=false renders a soft "not configured" note.
+  // Done items are excluded server-side; the route never returns them.
+  async function renderSteward() {
+    const data = await fetchJson("/api/steward/board");
+    const container = document.querySelector("[data-steward-feed]");
+    if (!container) return;
+
+    if (!data) {
+      container.innerHTML = `<div class="empty">steward board unavailable.</div>`;
+      return;
+    }
+
+    if (!data.config_present) {
+      container.innerHTML = `<div class="config-absent">grants.json not yet configured — add data/steward/grants.json to activate.</div>`;
+      return;
+    }
+
+    const entries = data.entries || [];
+    if (entries.length === 0) {
+      container.innerHTML = `<div class="empty">no open obligations in window.</div>`;
+      return;
+    }
+
+    container.innerHTML = entries.map((e, i) => {
+      const daysOut = e.days_out;
+      const isOverdue = e.status === "overdue";
+      const isUrgent = !isOverdue && daysOut <= 30;
+      const isNearest = i === 0;
+
+      // days_out label: "OVERDUE" for negative, "+Nd" for upcoming
+      let daysLabel;
+      if (isOverdue) {
+        daysLabel = `<strong>OVERDUE</strong>`;
+      } else {
+        daysLabel = `+${daysOut}d`;
+      }
+
+      // Funder: truncate to keep cards compact
+      const funder = htmlEscape((e.funder || "").slice(0, 36));
+      const label = htmlEscape((e.label || "").slice(0, 60));
+
+      return `
+        <div class="steward-entry"
+             data-status="${htmlEscape(e.status)}"
+             data-urgent="${isUrgent ? 'true' : 'false'}"
+             data-nearest="${isNearest ? 'true' : 'false'}"
+             title="${htmlEscape(e.funder)} · ${htmlEscape(e.award_id)}">
+          <span class="steward-dot"></span>
+          <span class="steward-due">${htmlEscape(e.due_date)}</span>
+          <span class="steward-days">${daysLabel}</span>
+          <div class="steward-body">
+            <div class="steward-funder">${funder}</div>
+            <div class="steward-label">${label}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
   function refreshAll() {
     renderGreeting();
@@ -1551,6 +1697,7 @@
     renderDaemons();
     renderBoards();
     renderHeartbeat();
+    renderSteward();
     renderCognition();
     renderLibraryWrites();
     renderSpecialists();
