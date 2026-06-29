@@ -123,11 +123,11 @@ def build_grant_status_tool(
         try:
             grants = load_grants(grants_config_path)
         except FileNotFoundError:
-            return {"award_id": award_id, "obligations": []}
+            return {"award_id": award_id, "obligations": [], "next_deadline": None}
 
         matching = [g for g in grants if g.award_id == award_id]
         if not matching:
-            return {"award_id": award_id, "obligations": []}
+            return {"award_id": award_id, "obligations": [], "next_deadline": None}
 
         store = SubmissionStore(submissions_path)
         submissions = store.all()
