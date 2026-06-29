@@ -618,7 +618,7 @@ class HeartbeatDaemon:
             active_rows = []
             for r in coord_rows:
                 try:
-                    prov = __import__("json").loads(r["provenance"] or "{}")
+                    prov = json.loads(r["provenance"] or "{}")
                 except Exception:
                     prov = {}
                 if prov.get("status") in ("Open", "Refining"):

@@ -100,6 +100,30 @@ class TestExtractDates:
         assert date(2027, 6, 1) in results
         assert date(2026, 6, 1) not in results
 
+    # ── Ordinal suffix tests — prove existing behavior, guard against regression ──
+    # These document that ordinal suffixes (st/nd/rd/th) already parse correctly.
+    # A future maintainer who sees the verbal regex and thinks "it doesn't handle
+    # ordinals" should look here first before touching the regex.
+
+    def test_ordinal_th_grant_deadline(self):
+        """'June 30th' (th suffix) must parse to date(2026,6,30).
+        now=date(2026,6,25) so 30th is 5 days away — not rolled."""
+        results = extract_dates("NC grant due June 30th for filing", date(2026, 6, 25))
+        assert date(2026, 6, 30) in results
+
+    def test_ordinal_rd_upcoming(self):
+        """'June 3rd' (rd suffix) must parse to date(2026,6,3).
+        now=date(2026,6,1) so 3rd is 2 days away — not rolled."""
+        results = extract_dates("filing by June 3rd", date(2026, 6, 1))
+        assert date(2026, 6, 3) in results
+
+    def test_ordinal_st_in_mixed_text(self):
+        """'June 21st' (st suffix) must parse to date(2026,6,21).
+        'the 21st...' preamble must not confuse the parser.
+        now=date(2026,6,15) so 21st is 6 days away — not rolled."""
+        results = extract_dates("the 21st... June 21st", date(2026, 6, 15))
+        assert date(2026, 6, 21) in results
+
 
 # ── Regex bridge / _build_dated_items tests ─────────────────────────────────
 

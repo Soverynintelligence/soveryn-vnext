@@ -13,10 +13,18 @@ Roll-forward rule for ambiguous (year-less) dates:
   If the resolved date is more than ROLL_THRESHOLD_DAYS in the past,
   roll to the next calendar year so "June 30" near that date reads
   as "upcoming" rather than "360 days overdue".
+
+Known limitations (defer — acceptable for English-first month-day/ISO nodes):
+  (a) Ordinal + explicit year ("June 30th, 2026") loses the explicit year
+      because _VERBAL_RE's opt_year group doesn't tolerate the ordinal suffix
+      between the day digits and the year; falls back to year-resolution.
+  (b) Day-first European format ("30 June 2026") can misparse — the verbal
+      regex expects month-name before the day number.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date, timedelta
 from typing import Any
@@ -198,8 +206,6 @@ def build_dated_items(
         dated_items parameter:
           {"ref": str, "detail": str, "date": date, "fuzzy": bool}
     """
-    import json as _json
-
     items: list[dict] = []
 
     for row in rows:
@@ -212,7 +218,7 @@ def build_dated_items(
             continue
 
         try:
-            prov = _json.loads(prov_raw)
+            prov = json.loads(prov_raw)
         except (ValueError, TypeError):
             prov = {}
 
