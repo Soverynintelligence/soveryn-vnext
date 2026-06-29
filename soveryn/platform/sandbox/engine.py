@@ -121,6 +121,8 @@ class SandboxEngine:
         state = self.store.load(run_id)
         if state["status"] != "active":
             raise SandboxError("run has ended")
+        if state.get("pending_reflection") is not None:
+            raise SandboxError("reflection required: call sandbox_reflect")
         if state["active_research"] is not None:
             raise SandboxError("research is already in flight")
         if topic not in RESEARCH_RULES:

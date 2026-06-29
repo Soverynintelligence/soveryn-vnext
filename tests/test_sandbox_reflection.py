@@ -12,6 +12,16 @@ def test_trigger_sets_pending_and_blocks_further_actions(tmp_path):
     with pytest.raises(SandboxError, match="reflection required"):
         engine.execute_action("recycle_air_reserves")
 
+def test_research_also_blocked_while_reflection_pending(tmp_path):
+    # The forced reflection must be ABSOLUTE — research() can't be used to move
+    # past a pending reflection any more than execute_action can.
+    engine = SandboxEngine(tmp_path / "sandbox")
+    state = engine.store.load(); state["resources"].update({"power": 60, "hull": 60}); engine.store.save(state)
+    engine.execute_action("unlock_botany_wing")  # sector unlock → pending_reflection
+    assert engine.get_status().get("pending_reflection") is not None
+    with pytest.raises(SandboxError, match="reflection required"):
+        engine.research("engineering")
+
 def test_reflect_records_clears_and_backfills(tmp_path):
     engine = SandboxEngine(tmp_path / "sandbox")
     state = engine.store.load(); state["resources"].update({"power": 60, "hull": 60}); engine.store.save(state)
