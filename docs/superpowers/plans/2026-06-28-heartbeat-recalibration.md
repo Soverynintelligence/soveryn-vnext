@@ -154,3 +154,24 @@ def test_marker_lines_stripped(): ...  # decision marker not in returned content
 - Pure units (T1 detector, T2, T3, T4) tested in isolation; only T5 touches the live `_run_tick`.
 - Out of scope: routing freed idle cycles into active synthesis/dreaming (spec defers it); quiet-hours/timer/`/chat` transport unchanged.
 - Provisional thresholds (7d / 48h / error set) are tunable constants — watch the first real pulses.
+
+---
+
+## AMENDMENTS — Aetheria's decisions (2026-06-28, post-Task-1 data findings)
+
+Task 1 revealed: stall lane has live data but ALL 13 Open/Refining nodes are >48h (would fire on everything); deadline lane has NO structured date source; failure lane has no live feed. Aetheria chose the Hybrid + refuses a "ghost" deadline lane. Revised remaining order: **T2 parser → T3 thoughts-log → T4 delta → T5 deadline lane → T6 stall re-tune → T7 integration.**
+
+**T5 (NEW) — Deadline lane (the no-ghost-feature fix). Files:** coordination node schema/provenance write path; `materiality.py`; `daemon._gather_material_signals`; tests.
+- Add a structured **`deadline_date`** field to coordination-node provenance (written at node creation; default null). The detector's deadline lane reads it.
+- **Regex bridge (works NOW, before the field is populated):** in `_gather_material_signals`, scan each Open/Refining node's `content`/title for date-like strings (`June 30`, `06/30`, `2026-06-30`, `6/30`), parse to a date, feed as a `dated_item` (kind tagged "fuzzy"). Better than blindness until the structured field is adopted.
+- **Operational (NOT code — deploy step):** a one-time retroactive sweep where Aetheria/Vett populate `deadline_date` for existing dated nodes. Note it in the deploy checklist.
+- **Done bar (Aetheria's insistence):** materiality is NOT "done" until `deadline_date` is live AND the board is swept — no wired-but-empty.
+
+**T6 (NEW) — Stall lane re-tune. Files:** `materiality.py` (stall lane) + `_gather_material_signals`; tests. Depends on T3 (thoughts-log gives prior ages) + a deploy-start timestamp.
+- **72h amnesty:** for the first 72h after deploy, the stall lane fires ONLY on nodes that *cross* 48h *during* the window (compare current age vs prior-pulse age from the thoughts-log; suppress nodes already stale at deploy). Needs a persisted `deploy_started_at`.
+- **Worst-first cap:** after amnesty, if >5 nodes are stale, flag only the **top 3 oldest**. Goal: a trend of neglect, not the existing wall of red.
+- Tests: a node crossing 48h mid-amnesty fires; a node already stale at deploy is suppressed during amnesty; >5 stale post-amnesty → exactly 3 (oldest) returned.
+
+**Failure lane:** keep the `vett_patrol_state.last_error` hook from T1 as-is (returns [] until Vett patrols). No further work this build.
+
+(T7 integration = the original Task 5, unchanged: prompt + tick + forced-stance + fail-safe + thoughts-log write, now consuming the re-tuned detector.)
