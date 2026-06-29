@@ -68,9 +68,11 @@ HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 # Aetheria-decides chat routing markers (2026-06-15 — Coordination Blackout
 # arc close). The heartbeat prompt instructs her to end every response with
 # one of these on its own line. [SURFACE] → strip marker, post the content
-# to her PRIMARY chat thread. [NO_OP] (or missing marker) → log and stop.
+# to her PRIMARY chat thread. [ACCEPT_RISK] → acknowledge the risk, log and
+# stop (does not surface). [NO_OP] (or missing marker) → log and stop.
 _SURFACE_MARKER_RE = re.compile(r"\[SURFACE\]", re.IGNORECASE)
 _NO_OP_MARKER_RE = re.compile(r"\[NO_OP\]", re.IGNORECASE)
+_ACCEPT_RISK_MARKER_RE = re.compile(r"\[ACCEPT_RISK\]", re.IGNORECASE)
 # Titles we EXCLUDE from "primary thread" resolution — these are surfaces
 # owned by other rails (rhythm, voice, messenger threads) and surfacing
 # heartbeat content into them is the trap the arc surfaced.
@@ -86,6 +88,64 @@ _NON_PRIMARY_TITLE_PREFIXES: tuple[str, ...] = (
 # session exists yet. Intentionally NOT bracket-prefixed so it doesn't
 # match _NON_PRIMARY_TITLE_PREFIXES on the next lookup.
 _PRIMARY_FALLBACK_TITLE = "primary"
+
+# ── All three routing markers, used by _parse_stance ──────────────────────
+_ALL_MARKER_RES: tuple[tuple[str, object], ...] = (
+    ("SURFACE", _SURFACE_MARKER_RE),
+    ("ACCEPT_RISK", _ACCEPT_RISK_MARKER_RE),
+    ("NO_OP", _NO_OP_MARKER_RE),
+)
+
+
+def _parse_stance(response_text: str) -> tuple[str, str]:
+    """Return (decision, stripped_content) for a three-way heartbeat stance.
+
+    decision ∈ {"SURFACE", "ACCEPT_RISK", "NO_OP"}.
+
+    Rules:
+    - Scan for [SURFACE], [ACCEPT_RISK], [NO_OP] (case-insensitive).
+    - Last occurrence across all three markers wins.
+    - Missing all markers → "NO_OP".
+    - Marker lines are stripped from the returned content: any line whose
+      stripped form fullmatches one of the three markers is dropped.
+    - Empty input → ("NO_OP", "").
+    """
+    if not response_text:
+        return ("NO_OP", "")
+
+    # Find last occurrence of each marker.
+    last_pos: dict[str, int] = {}
+    for decision, pattern in _ALL_MARKER_RES:
+        for m in pattern.finditer(response_text):
+            last_pos[decision] = m.end()
+
+    if not last_pos:
+        return ("NO_OP", response_text.strip())
+
+    # The decision with the highest last-occurrence position wins.
+    decided = max(last_pos, key=lambda d: last_pos[d])
+
+    # Strip any line whose stripped form fullmatches a marker (all three).
+    kept_lines = []
+    for line in response_text.splitlines():
+        tok = line.strip()
+        if any(pattern.fullmatch(tok) for _, pattern in _ALL_MARKER_RES):
+            continue
+        kept_lines.append(line)
+
+    stripped = "\n".join(kept_lines).strip()
+    return (decided, stripped)
+
+
+def _parse_surface_marker(response_text: str) -> tuple[bool, str]:
+    """Module-level convenience wrapper around _parse_stance.
+
+    Returns (surface, stripped_content): surface=True only for [SURFACE].
+    [ACCEPT_RISK], [NO_OP], and missing marker all return surface=False.
+    Kept at module level so callers and tests can import it directly.
+    """
+    decision, stripped = _parse_stance(response_text)
+    return (decision == "SURFACE", stripped)
 
 
 class HeartbeatDaemon:
@@ -627,38 +687,12 @@ class HeartbeatDaemon:
     def _parse_surface_marker(self, response_text: str) -> tuple[bool, str]:
         """Return (surface, stripped_content).
 
-        Looks for [SURFACE] or [NO_OP] markers (case-insensitive). Last
-        occurrence wins if both appear. Marker lines are stripped from the
-        returned content. Missing marker → treated as [NO_OP] (no surface).
-        Defensive: pathological multi-marker responses, embedded markers in
-        the body, etc. all collapse to "what was the last decision token?".
+        Thin wrapper around the module-level _parse_stance() for backward
+        compatibility. Only [SURFACE] maps to surface=True; [ACCEPT_RISK]
+        and [NO_OP] (and missing marker) all return surface=False.
         """
-        if not response_text:
-            return (False, "")
-        surface_match = None
-        no_op_match = None
-        # last() position by sliding scan
-        for m in _SURFACE_MARKER_RE.finditer(response_text):
-            surface_match = m
-        for m in _NO_OP_MARKER_RE.finditer(response_text):
-            no_op_match = m
-        if surface_match is None and no_op_match is None:
-            return (False, response_text.strip())
-        # Last-occurrence wins.
-        last_surface_pos = surface_match.end() if surface_match else -1
-        last_no_op_pos = no_op_match.end() if no_op_match else -1
-        decided_surface = last_surface_pos > last_no_op_pos
-        # Strip both markers (full lines containing them) so neither leaks
-        # into the surfaced content. Use line-aware stripping: any line
-        # whose stripped form IS one of the markers gets dropped.
-        kept_lines = []
-        for line in response_text.splitlines():
-            tok = line.strip()
-            if _SURFACE_MARKER_RE.fullmatch(tok) or _NO_OP_MARKER_RE.fullmatch(tok):
-                continue
-            kept_lines.append(line)
-        stripped = "\n".join(kept_lines).strip()
-        return (decided_surface, stripped)
+        decision, stripped = _parse_stance(response_text)
+        return (decision == "SURFACE", stripped)
 
     def _resolve_primary_thread(self) -> str:
         """Find or create Aetheria's PRIMARY chat thread.
