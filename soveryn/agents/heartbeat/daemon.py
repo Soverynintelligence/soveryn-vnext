@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
     detect_materiality,
@@ -599,14 +600,40 @@ class HeartbeatDaemon:
         error_items: list[dict] = []
         stall_items: list[dict] = []
 
-        # ── Deadline items ────────────────────────────────────────────────────
-        # GAP: no date/deadline field exists in the current schema.
-        # dated_items stays [] until a date field is added to provenance or
-        # a separate deadlines table is created.
+        # ── Deadline items — regex bridge (Task 5) ────────────────────────────
+        # Scan Open/Refining coordination nodes for date-like strings in their
+        # content text.  build_dated_items supports both regex-extracted dates
+        # (fuzzy=True) and structured provenance["deadline_date"] (fuzzy=False,
+        # takes precedence over regex for that node).
+        # The write path for deadline_date is a separate follow-up; for now we
+        # just read it if present.
+        try:
+            with sqlite3.connect(str(self.lattice_db)) as con:
+                con.row_factory = sqlite3.Row
+                coord_rows = con.execute(
+                    "SELECT id, content, updated_at, provenance FROM nodes "
+                    "WHERE type = 'coordination'"
+                ).fetchall()
+            # Filter to Open/Refining only (same set the stall lane scans)
+            active_rows = []
+            for r in coord_rows:
+                try:
+                    prov = __import__("json").loads(r["provenance"] or "{}")
+                except Exception:
+                    prov = {}
+                if prov.get("status") in ("Open", "Refining"):
+                    active_rows.append(r)
+            dated_items = build_dated_items(active_rows, now.date())
+        except Exception:
+            logger.exception(
+                "heartbeat: _gather_material_signals deadline scan failed; "
+                "returning [] for deadline lane"
+            )
+            dated_items = []
 
         # ── Error items ───────────────────────────────────────────────────────
         # GAP: no clean system-failure signal source in current schema.
-        # Candidate for Task 5: vett_patrol_state.last_error (currently empty).
+        # Candidate: vett_patrol_state.last_error (currently empty).
         # fact-node content contains error-adjacent text but it's inbox relay
         # text, not machine-actionable system errors.
 

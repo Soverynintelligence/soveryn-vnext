@@ -10,7 +10,7 @@ detection logic.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 # ── Tunable thresholds ────────────────────────────────────────────────────────
@@ -62,12 +62,17 @@ def detect_materiality(
     results: list[MaterialSignal] = []
 
     # ── Deadlines ────────────────────────────────────────────────────────────
+    # Normalise to date for comparison: accept both datetime and date objects
+    # in item["date"] so the regex bridge (which produces date objects) and
+    # any future structured-datetime path both work without special-casing.
+    now_date: date = now.date() if isinstance(now, datetime) else now
     for item in dated_items:
-        date: datetime = item["date"]
-        if date < now:
+        raw_date = item["date"]
+        item_date: date = raw_date.date() if isinstance(raw_date, datetime) else raw_date
+        if item_date < now_date:
             # Past — don't surface as upcoming deadline
             continue
-        days_away = (date - now).days
+        days_away = (item_date - now_date).days
         if days_away <= MATERIAL_DEADLINE_DAYS:
             results.append(MaterialSignal(
                 kind="deadline",
