@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.agents.heartbeat.date_extract import build_dated_items
+from soveryn.agents.heartbeat.delta import compute_delta
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
     detect_materiality,
@@ -36,6 +37,7 @@ from soveryn.agents.heartbeat.prompt import (
     LatticeSnapshot,
     build_heartbeat_prompt,
 )
+from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
 from soveryn.agents.heartbeat.trigger import (
     HeartbeatConfig,
     SkipReason,
@@ -51,6 +53,7 @@ DEFAULT_VNEXT_BASE = "http://127.0.0.1:5001"
 DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
 DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
 DEFAULT_SALIENCE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "salience_vnext.db"
+DEFAULT_THOUGHTS_LOG = Path.home() / "soveryn_vnext" / "data" / "heartbeat_thoughts.jsonl"
 # Sentinel file for T6 stall amnesty deploy clock.  Written once on first
 # heartbeat tick after deploy; subsequent ticks read it to compute
 # hours_since_deploy for the amnesty/worst-first logic in detect_materiality.
@@ -168,6 +171,7 @@ class HeartbeatDaemon:
         conv_db: Path = DEFAULT_CONV_DB,
         salience_db: Path = DEFAULT_SALIENCE_DB,
         deploy_sentinel: Path | None = None,
+        thoughts_log_path: Path | None = None,
     ) -> None:
         self.config = config
         self.vnext_base = vnext_base.rstrip("/")
@@ -181,6 +185,13 @@ class HeartbeatDaemon:
             Path(deploy_sentinel) if deploy_sentinel is not None
             else DEFAULT_DEPLOY_SENTINEL
         )
+        # T7 thoughts-log: append-only JSONL pulse record. Injectable for test
+        # isolation; defaults to DEFAULT_THOUGHTS_LOG in production.
+        _tlog_path = (
+            Path(thoughts_log_path) if thoughts_log_path is not None
+            else DEFAULT_THOUGHTS_LOG
+        )
+        self._thoughts_log = ThoughtsLog(_tlog_path)
         self._stop = False
         self._heartbeat_session_id: str | None = None
         # Idempotent migration: add surfaced_to_chat column to heartbeat_log
@@ -329,12 +340,45 @@ class HeartbeatDaemon:
             salience_section = _gather_salience(
                 self.salience_db, since=since_for_salience,
             )
+            # T7: gather material signals + compute delta vs prior pulse.
             material_signals = self._gather_material_signals(now)
+            # Build the current snapshot for delta framing (shape documented
+            # in delta.py module docstring — board counts + material_signals
+            # + lattice).  This dict is also persisted in the thoughts-log
+            # record so compute_delta can read it as prev_snapshot next pulse
+            # (load-bearing contract: don't drop the "snapshot" key from the
+            # ThoughtsLog record below).
+            current_snapshot: dict = {
+                "board": {
+                    "open_signal_count": board.open_signal_count,
+                    "open_blueprint_count": board.open_blueprint_count,
+                    "ready_blueprint_count": board.ready_blueprint_count,
+                    "open_friction_count": board.open_friction_count,
+                    "stalled_blueprint_count": board.stalled_blueprint_count,
+                    "blocked_blueprint_count": board.blocked_blueprint_count,
+                    "oldest_open_signal_age_minutes": board.oldest_open_signal_age_minutes,
+                    "oldest_open_blueprint_title": board.oldest_open_blueprint_title,
+                    "oldest_open_blueprint_age_hours": board.oldest_open_blueprint_age_hours,
+                },
+                "material_signals": [
+                    {"kind": s.kind, "ref": s.ref, "detail": s.detail}
+                    for s in material_signals
+                ],
+                "lattice": {
+                    "new_node_count_recent_window": lattice.new_node_count_recent_window,
+                    "recent_window_minutes": lattice.recent_window_minutes,
+                    "new_contradiction_flag_count": lattice.new_contradiction_flag_count,
+                },
+            }
+            prev_record = self._thoughts_log.last()
+            delta = compute_delta(current_snapshot, prev_record)
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
                 lattice=lattice,
                 salience_section=salience_section,
+                material_signals=material_signals,
+                delta=delta,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")
@@ -375,26 +419,103 @@ class HeartbeatDaemon:
             response = self._call_vnext_chat(session_id, prompt)
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
-            # Aetheria-decides chat routing: parse [SURFACE]/[NO_OP] marker,
-            # post the marker-stripped content into her PRIMARY thread when
-            # [SURFACE]. This is the load-bearing 2026-06-15 change — rhythm
-            # stays on the heartbeat session + Mission Control panel, chat
-            # only fires when she explicitly opts in.
-            surface, stripped_content = self._parse_surface_marker(response_text)
+
+            # T7: forced-stance enforcement.
+            # Use _parse_stance (three-way) instead of _parse_surface_marker.
+            # decision ∈ {SURFACE, ACCEPT_RISK, NO_OP}
+            decision, stripped_content = _parse_stance(response_text)
             surfaced_to_chat = False
-            if surface and stripped_content:
-                try:
-                    self._surface_to_primary_thread(stripped_content)
-                    surfaced_to_chat = True
-                except Exception:
-                    # Surface failures are not fatal to the heartbeat tick —
-                    # the response still landed in the [heartbeat] session
-                    # and the audit log captures everything. Log + continue.
-                    logger.exception(
-                        "heartbeat tick %s: [SURFACE] marker present but "
-                        "primary-thread post failed; content stayed in "
-                        "[heartbeat] session only", tick_id,
+            thoughts_rationale = stripped_content[:500] if stripped_content else ""
+            violation_note: str | None = None
+
+            if material_signals:
+                # Material present — [NO_OP] (or missing marker) is a
+                # protocol violation → fail-safe: warn + surface daemon summary.
+                if decision == "SURFACE":
+                    # Explicit surface on material signal — honour it.
+                    if stripped_content:
+                        try:
+                            self._surface_to_primary_thread(stripped_content)
+                            surfaced_to_chat = True
+                        except Exception:
+                            logger.exception(
+                                "heartbeat tick %s: [SURFACE] on material but "
+                                "primary-thread post failed; content stayed in "
+                                "[heartbeat] session only", tick_id,
+                            )
+                elif decision == "ACCEPT_RISK":
+                    # Acknowledged risk — do NOT surface; record justification.
+                    logger.info(
+                        "heartbeat tick %s: material signals present, "
+                        "Aetheria chose [ACCEPT_RISK]. Justification logged.",
+                        tick_id,
                     )
+                    # surfaced_to_chat stays False
+                else:
+                    # NO_OP or missing marker on material — fail-safe.
+                    _sig_summary = "; ".join(
+                        f"{s.kind}:{s.ref}" for s in material_signals
+                    )
+                    logger.warning(
+                        "heartbeat tick %s: protocol violation — material signals "
+                        "present but response carried [NO_OP] or no marker. "
+                        "Fail-safe: surfacing daemon-built material summary. "
+                        "Signals: %s", tick_id, _sig_summary,
+                    )
+                    violation_note = "fail-safe: NO_OP on material signals"
+                    _failsafe_content = (
+                        f"[Heartbeat fail-safe] Material signals flagged this pulse "
+                        f"but were not addressed: {_sig_summary}"
+                    )
+                    try:
+                        self._surface_to_primary_thread(_failsafe_content)
+                        surfaced_to_chat = True
+                    except Exception:
+                        logger.exception(
+                            "heartbeat tick %s: fail-safe surface also failed; "
+                            "material signals not escalated", tick_id,
+                        )
+            else:
+                # No material — normal routing: SURFACE surfaces, NO_OP silences.
+                if decision == "SURFACE" and stripped_content:
+                    try:
+                        self._surface_to_primary_thread(stripped_content)
+                        surfaced_to_chat = True
+                    except Exception:
+                        logger.exception(
+                            "heartbeat tick %s: [SURFACE] marker present but "
+                            "primary-thread post failed; content stayed in "
+                            "[heartbeat] session only", tick_id,
+                        )
+                # ACCEPT_RISK on non-material: treated as silence (no surface).
+                # NO_OP on non-material: valid silence.
+
+            # T7: append a ThoughtsLog record every pulse.
+            # The "snapshot" key is LOAD-BEARING — compute_delta reads
+            # prev_record["snapshot"] on the next pulse. Do not rename or drop it.
+            try:
+                _tlog_record: dict = {
+                    "pulse_id": tick_id,
+                    "ts": now.isoformat(),
+                    "snapshot": current_snapshot,
+                    "material_signals": [
+                        {"kind": s.kind, "ref": s.ref, "detail": s.detail}
+                        for s in material_signals
+                    ],
+                    "delta": delta,
+                    "decision": decision,
+                    "rationale": thoughts_rationale,
+                    "surfaced": surfaced_to_chat,
+                }
+                if violation_note is not None:
+                    _tlog_record["violation"] = violation_note
+                self._thoughts_log.append(_tlog_record)
+            except Exception:
+                logger.exception(
+                    "heartbeat tick %s: thoughts-log write failed; "
+                    "continuing (best-effort)", tick_id,
+                )
+
             self._write_log_row(
                 tick_id=tick_id,
                 triggered_at=triggered_at,
@@ -409,9 +530,9 @@ class HeartbeatDaemon:
             )
             logger.info(
                 "heartbeat tick %s done. action_taken=%s tool_calls=%s "
-                "response_len=%d surfaced_to_chat=%s",
+                "response_len=%d surfaced_to_chat=%s decision=%s",
                 tick_id, action_taken, tool_call_count,
-                len(response_text), surfaced_to_chat,
+                len(response_text), surfaced_to_chat, decision,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during chat invocation")
