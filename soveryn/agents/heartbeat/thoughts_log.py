@@ -5,11 +5,22 @@ Each record written by :class:`ThoughtsLog` has the shape::
     {
         "pulse_id":         str,   # unique identifier for the pulse
         "ts":               str,   # ISO-8601 wall-clock timestamp
+        "snapshot":         dict,  # LOAD-BEARING — board counts + material_signals
+                                   # + lattice fields captured this pulse.
+                                   # compute_delta reads prev_record["snapshot"]
+                                   # on the next pulse to detect board changes;
+                                   # dropping or renaming this key breaks the
+                                   # delta round-trip contract.
         "material_signals": list,  # signals that crossed the materiality threshold
         "delta":            dict,  # what changed relative to the previous pulse
         "decision":         str,   # SURFACE | ACCEPT_RISK | NO_OP
         "rationale":        str,   # one-line reason for the decision
         "surfaced":         bool,  # True if the pulse was promoted to Aetheria
+        "violation":        str,   # OPTIONAL — present only when the daemon
+                                   # detected a protocol violation (e.g. NO_OP
+                                   # on material signals, or bare [SURFACE] with
+                                   # empty content on material). Records the
+                                   # fail-safe action taken.
     }
 
 Records are persisted as JSONL (one JSON object per line) so the file can be

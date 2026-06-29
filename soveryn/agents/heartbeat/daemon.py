@@ -443,6 +443,32 @@ class HeartbeatDaemon:
                                 "primary-thread post failed; content stayed in "
                                 "[heartbeat] session only", tick_id,
                             )
+                    else:
+                        # Bare [SURFACE] with no prose on a material pulse.
+                        # stripped_content is empty after marker removal — the
+                        # material fact would be silently dropped. Escalate to
+                        # the same fail-safe as the NO_OP branch.
+                        _sig_summary = "; ".join(
+                            f"{s.kind}:{s.ref}" for s in material_signals
+                        )
+                        logger.warning(
+                            "heartbeat tick %s: [SURFACE] on material pulse but "
+                            "empty content; fail-safe surfacing material summary. "
+                            "Signals: %s", tick_id, _sig_summary,
+                        )
+                        violation_note = "fail-safe: bare [SURFACE] with empty content on material signals"
+                        _failsafe_content = (
+                            f"[Heartbeat fail-safe] Material signals flagged this pulse "
+                            f"but were not addressed: {_sig_summary}"
+                        )
+                        try:
+                            self._surface_to_primary_thread(_failsafe_content)
+                            surfaced_to_chat = True
+                        except Exception:
+                            logger.exception(
+                                "heartbeat tick %s: fail-safe surface also failed; "
+                                "material signals not escalated", tick_id,
+                            )
                 elif decision == "ACCEPT_RISK":
                     # Acknowledged risk — do NOT surface; record justification.
                     logger.info(

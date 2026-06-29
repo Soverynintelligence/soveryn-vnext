@@ -615,3 +615,115 @@ class TestPromptMaterialSignalsRendering:
         assert "objective" in lower or "pattern" in lower or "ambient" in lower, (
             f"Expected confidence-tiering note (Objective/Pattern/Ambient) in prompt"
         )
+
+
+# ── Test 8: material + bare [SURFACE] (no prose) → fail-safe, not silent drop ──
+
+
+class TestMaterialBareSurfaceFailSafe:
+    """material pulse + model emits bare [SURFACE] with NO prose.
+
+    _parse_stance strips the marker leaving stripped_content == "".
+    Before the fix, the material+SURFACE branch fell through silently
+    because the `if stripped_content:` guard blocked everything — the
+    material fact was dropped with no warning and no surface call.
+
+    After the fix the daemon must:
+      1. Detect the empty-content SURFACE on a material pulse.
+      2. Log a warning (same class as the NO_OP fail-safe).
+      3. Surface the daemon-built _failsafe_content material summary
+         (non-empty) via _surface_to_primary_thread.
+      4. Set surfaced_to_chat=True.
+      5. Record a violation/note in the thoughts-log record.
+    """
+
+    def test_surface_called_with_nonempty_content(self, tmp_path):
+        """_surface_to_primary_thread IS called with non-empty material summary."""
+        tlog_path = tmp_path / "thoughts.jsonl"
+        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
+            _run_tick_with_fakes(
+                d,
+                model_response="[SURFACE]",  # bare marker — no prose
+                material_signals=_ONE_MATERIAL,
+            )
+            mock_surface.assert_called_once()
+            call_args = mock_surface.call_args[0]
+            assert call_args[0], (
+                "_surface_to_primary_thread must be called with non-empty content "
+                "(the daemon-built material summary), not an empty string"
+            )
+
+    def test_surfaced_to_chat_is_true(self, tmp_path):
+        """surfaced_to_chat=True is recorded in heartbeat_log."""
+        tlog_path = tmp_path / "thoughts.jsonl"
+        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+        with patch.object(d, "_surface_to_primary_thread"):
+            _run_tick_with_fakes(
+                d,
+                model_response="[SURFACE]",
+                material_signals=_ONE_MATERIAL,
+            )
+
+        # Verify surfaced_to_chat=1 in heartbeat_log.
+        import sqlite3
+        with sqlite3.connect(str(d.lattice_db)) as con:
+            row = con.execute(
+                "SELECT surfaced_to_chat FROM heartbeat_log ORDER BY triggered_at DESC LIMIT 1"
+            ).fetchone()
+        assert row is not None
+        assert row[0] == 1, (
+            f"Expected surfaced_to_chat=1 in heartbeat_log for bare-SURFACE on "
+            f"material pulse, got {row[0]}"
+        )
+
+    def test_thoughts_log_notes_violation(self, tmp_path):
+        """thoughts-log record notes the violation (bare SURFACE on material)."""
+        tlog_path = tmp_path / "thoughts.jsonl"
+        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+        with patch.object(d, "_surface_to_primary_thread"):
+            _run_tick_with_fakes(
+                d,
+                model_response="[SURFACE]",
+                material_signals=_ONE_MATERIAL,
+            )
+
+        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+        rec = ThoughtsLog(tlog_path).last()
+        assert rec is not None
+        record_str = json.dumps(rec).lower()
+        assert (
+            "violation" in record_str
+            or "fail_safe" in record_str
+            or "failsafe" in record_str
+            or "fail-safe" in record_str
+        ), (
+            f"Expected thoughts-log to record the violation for bare-SURFACE on "
+            f"material pulse, got: {rec}"
+        )
+
+    def test_warning_logged_for_bare_surface_on_material(self, tmp_path, caplog):
+        """logger.warning is emitted when bare [SURFACE] appears on a material pulse."""
+        tlog_path = tmp_path / "thoughts.jsonl"
+        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+        with (
+            patch.object(d, "_surface_to_primary_thread"),
+            caplog.at_level(logging.WARNING, logger="soveryn.agents.heartbeat.daemon"),
+        ):
+            _run_tick_with_fakes(
+                d,
+                model_response="[SURFACE]",
+                material_signals=_ONE_MATERIAL,
+            )
+
+        warning_msgs = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+        assert any(
+            "surface" in msg.lower() and ("empty" in msg.lower() or "fail-safe" in msg.lower() or "material" in msg.lower())
+            for msg in warning_msgs
+        ), (
+            f"Expected a warning about bare [SURFACE] on material pulse, got: {warning_msgs}"
+        )
