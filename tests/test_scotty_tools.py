@@ -111,6 +111,36 @@ def test_read_file_truncates_oversized(tmp_path, monkeypatch):
             test_file.unlink()
 
 
+# ─── custom root (Vett's wider "view outside soveryn" scope) ─────────────────
+
+def test_read_file_honors_custom_root(tmp_path):
+    # A tool built with a wider root reads files outside the default vnext
+    # project root — this is Vett's "view outside SOVERYN" capability.
+    target = tmp_path / "outside.txt"
+    target.write_text("visible from custom root")
+    tool = build_read_file_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(target)})
+    assert result["content"] == "visible from custom root"
+
+
+def test_read_file_custom_root_still_fences(tmp_path):
+    # The custom root is still a fence: paths outside it are rejected.
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    tool = build_read_file_tool(owner_agent="vett", root=inner)
+    with pytest.raises(ToolArgError, match="outside"):
+        tool.handler({"path": str(tmp_path / "sibling.txt")})
+
+
+def test_list_directory_honors_custom_root(tmp_path):
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "sub").mkdir()
+    tool = build_list_directory_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(tmp_path)})
+    names = {e["name"] for e in result["entries"]}
+    assert {"a.txt", "sub"} <= names
+
+
 # ─── list_directory ─────────────────────────────────────────────────────────
 
 def test_list_directory_returns_sorted_entries():

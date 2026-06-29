@@ -354,10 +354,16 @@ def create_app(
         # and verification agent she was assessing SOVERYN against external
         # frameworks using only her tool surface as a proxy for the
         # architecture — a category error (she flagged it herself). Read-only,
-        # same vnext-repo allow-list as Scotty/Aetheria; no write/exec/git. She
-        # cannot research improvements to a system she cannot read.
-        tool_registry.register(build_read_file_tool(owner_agent="vett"))
-        tool_registry.register(build_list_directory_tool(owner_agent="vett"))
+        # no write/exec/git. Fenced to Jon's HOME dir (not just the vnext repo)
+        # so she can view across all SOVERYN projects; Aetheria/Scotty stay
+        # vnext-repo only (least privilege). She cannot research improvements to
+        # a system she cannot read.
+        tool_registry.register(
+            build_read_file_tool(owner_agent="vett", root=Path.home())
+        )
+        tool_registry.register(
+            build_list_directory_tool(owner_agent="vett", root=Path.home())
+        )
 
         # Library layer tools — shared write surface for verified reference
         # material (per the 2026-06-02 design discussion, "Option B": passive

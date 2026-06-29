@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import (
     PathOutOfBoundsError,
+    SCOTTY_PROJECT_ROOT,
     resolve_within_root,
 )
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
@@ -20,15 +22,22 @@ READ_FILE_MAX_BYTES = 40 * 1024             # 40 KB
 LIST_DIRECTORY_MAX_ENTRIES = 200
 
 
-def build_read_file_tool(*, owner_agent: str) -> ToolSpec:
-    """Bounded file read. Returns up to READ_FILE_MAX_BYTES of text."""
+def build_read_file_tool(
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
+) -> ToolSpec:
+    """Bounded file read. Returns up to READ_FILE_MAX_BYTES of text.
+
+    `root` fences every read; defaults to the vnext repo. Vett is
+    registered with a wider root (the home directory) so she can view
+    files across all SOVERYN projects, not just the vnext repo.
+    """
 
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path", "")
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_root(path_arg, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
@@ -82,15 +91,18 @@ def build_read_file_tool(*, owner_agent: str) -> ToolSpec:
     )
 
 
-def build_list_directory_tool(*, owner_agent: str) -> ToolSpec:
-    """Bounded directory listing."""
+def build_list_directory_tool(
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
+) -> ToolSpec:
+    """Bounded directory listing. `root` fences every listing; defaults to
+    the vnext repo. Vett gets a wider root (home) for cross-project view."""
 
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path", ".")
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_root(path_arg, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
