@@ -125,6 +125,13 @@ def test_startup_creates_tool_registry_for_aetheria(
         "sandbox_reflect",
         "sandbox_get_lessons",
     } <= names
+    # Steward grant-compliance tools — Aetheria + Vett (not Scotty).
+    assert {
+        "grant_deadlines",
+        "grant_status",
+        "list_grants",
+        "grant_submit",
+    } <= names
 
 
 def test_aetheria_has_interactive_rail_caps_others_do_not(
@@ -231,6 +238,12 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "sandbox_reflect",
         "sandbox_get_lessons",
     }
+    steward_tools = {
+        "grant_deadlines",
+        "grant_status",
+        "list_grants",
+        "grant_submit",
+    }
     for agent in ("vett", "scotty"):
         loop = app.extensions["soveryn"]["agent_loops"][agent]
         names = {schema["function"]["name"] for schema in loop._tool_schemas()}
@@ -254,6 +267,10 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # Aetheria + Vett only.
             assert names.isdisjoint(document_tools), \
                 f"scotty sees document tools (should not): {names & document_tools}"
+            # Scotty is NOT a grant-compliance surface — steward tools are
+            # Aetheria + Vett only.
+            assert names.isdisjoint(steward_tools), \
+                f"scotty sees steward tools (should not): {names & steward_tools}"
         else:
             # Vett DOES get read-only repo inspection (read_file + list_directory)
             # as of 2026-06-17 — she researches improvements against the real
@@ -269,5 +286,8 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # Vett DOES get document tools (D3, 2026-06-18).
             assert document_tools <= names, \
                 f"vett missing document tools: {document_tools - names}"
+            # Vett DOES get steward grant-compliance tools.
+            assert steward_tools <= names, \
+                f"vett missing steward tools: {steward_tools - names}"
         assert names.isdisjoint(dream_tools), \
             f"{agent} sees dream tools (should not): {names & dream_tools}"

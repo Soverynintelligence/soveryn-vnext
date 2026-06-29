@@ -160,6 +160,18 @@ def create_app(
             owner_agent="aetheria",
         )
 
+        # Steward — grant-compliance tools (deadlines/status/list/submit).
+        # Registered for Aetheria + Vett (oversight surface; not Scotty).
+        # Config lives under data/steward/ which is .gitignored — Jon populates
+        # grants.json from real award letters. Graceful: read tools return empty
+        # if grants.json does not yet exist, so startup is safe before first use.
+        from soveryn.platform.steward.tools import register_steward_tools
+        register_steward_tools(
+            tool_registry,
+            grants_config_path=str(env.data_root / "steward" / "grants.json"),
+            submissions_path=str(env.data_root / "steward" / "submissions.json"),
+        )
+
         # Specialist-spawning primitive (DSL Orchestration v1).
         # spawn_specialist / query_specialist / terminate_specialist let
         # Aetheria instantiate session-scoped peer agents with a tight
