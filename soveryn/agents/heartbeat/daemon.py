@@ -25,6 +25,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from soveryn.agents.heartbeat.materiality import (
+    MaterialSignal,
+    detect_materiality,
+)
 from soveryn.agents.heartbeat.prompt import (
     BoardSnapshot,
     LatticeSnapshot,
@@ -250,6 +254,7 @@ class HeartbeatDaemon:
             salience_section = _gather_salience(
                 self.salience_db, since=since_for_salience,
             )
+            material_signals = self._gather_material_signals(now)
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -507,6 +512,89 @@ class HeartbeatDaemon:
             recent_window_minutes=LATTICE_WINDOW_MINUTES,
             new_contradiction_flag_count=int(contradictions),
         )
+
+    def _gather_material_signals(self, now: datetime) -> list[MaterialSignal]:
+        """Query real data sources and call detect_materiality.
+
+        Best-effort: any per-source exception is swallowed and logged so a
+        transient DB error never kills the heartbeat tick. Returns [] on
+        total failure.
+
+        DATA SOURCE STATUS (as of 2026-06-28 schema audit):
+          deadline items: [] — NO queryable source. The `nodes` schema and
+            coordination provenance JSON have no deadline/date field (only
+            created_at/updated_at). Task 5 needs to add a date field or find
+            an alternative source before this lane can produce real signals.
+          error items:    [] — NO clean queryable source. `fact` nodes contain
+            some error-adjacent text (Jon's inbox relays), but these are NOT
+            actionable system failures. `vett_patrol_state.last_error` exists
+            but is empty in production. `coord_event_log` has no error-kind
+            events. Task 5 should consider vett_patrol_state.last_error as the
+            real hook once Vett is actively patrolling.
+          stall items:    REAL — coordination nodes with type='coordination' and
+            Open/Refining status carry `updated_at`; age is computable. Stall
+            signals are live and accurate.
+        """
+        dated_items: list[dict] = []
+        error_items: list[dict] = []
+        stall_items: list[dict] = []
+
+        # ── Deadline items ────────────────────────────────────────────────────
+        # GAP: no date/deadline field exists in the current schema.
+        # dated_items stays [] until a date field is added to provenance or
+        # a separate deadlines table is created.
+
+        # ── Error items ───────────────────────────────────────────────────────
+        # GAP: no clean system-failure signal source in current schema.
+        # Candidate for Task 5: vett_patrol_state.last_error (currently empty).
+        # fact-node content contains error-adjacent text but it's inbox relay
+        # text, not machine-actionable system errors.
+
+        # ── Stall items ───────────────────────────────────────────────────────
+        try:
+            with sqlite3.connect(str(self.lattice_db)) as con:
+                con.row_factory = sqlite3.Row
+                rows = con.execute(
+                    "SELECT id, content, updated_at, provenance FROM nodes "
+                    "WHERE type = 'coordination'"
+                ).fetchall()
+            for r in rows:
+                prov = json.loads(r["provenance"] or "{}")
+                status = prov.get("status")
+                if status not in ("Open", "Refining"):
+                    continue
+                try:
+                    age_hours = (
+                        now - datetime.fromisoformat(r["updated_at"])
+                    ).total_seconds() / 3600
+                except (ValueError, TypeError):
+                    continue
+                first_line = (r["content"] or "").split("\n", 1)[0]
+                ref = first_line[:80] or r["id"]
+                stall_items.append({
+                    "ref": ref,
+                    "status": status,
+                    "age_hours": age_hours,
+                })
+        except Exception:
+            logger.exception(
+                "heartbeat: _gather_material_signals stall query failed; "
+                "returning [] for stall lane"
+            )
+
+        try:
+            return detect_materiality(
+                dated_items=dated_items,
+                error_items=error_items,
+                stall_items=stall_items,
+                now=now,
+            )
+        except Exception:
+            logger.exception(
+                "heartbeat: detect_materiality raised unexpectedly; "
+                "returning [] for material_signals"
+            )
+            return []
 
     # ─── Session + vnext invocation ─────────────────────────────────────────
 
