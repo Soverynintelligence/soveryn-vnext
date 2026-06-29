@@ -37,7 +37,7 @@ def build_grant_deadlines_tool(
     submissions_path: str,
     owner_agent: str,
 ) -> ToolSpec:
-    def handler(args: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         raw_window = args.get("window_days", 90)
         try:
             window_days = int(raw_window)
@@ -49,7 +49,12 @@ def build_grant_deadlines_tool(
         try:
             grants = load_grants(grants_config_path)
         except FileNotFoundError:
-            return []
+            return {
+                "config_present": False,
+                "grants_tracked": 0,
+                "window_days": window_days,
+                "deadlines": [],
+            }
 
         store = SubmissionStore(submissions_path)
         submissions = store.all()
@@ -63,7 +68,7 @@ def build_grant_deadlines_tool(
         obligations = apply_submissions(obligations, submissions)
 
         # Filter out done — only upcoming/overdue shown in this view
-        return [
+        deadlines = [
             {
                 "award_id": ob.award_id,
                 "funder": ob.funder,
@@ -75,6 +80,12 @@ def build_grant_deadlines_tool(
             for ob in obligations
             if ob.status != "done"
         ]
+        return {
+            "config_present": True,
+            "grants_tracked": len(grants),
+            "window_days": window_days,
+            "deadlines": deadlines,
+        }
 
     return ToolSpec(
         name="grant_deadlines",
@@ -123,11 +134,21 @@ def build_grant_status_tool(
         try:
             grants = load_grants(grants_config_path)
         except FileNotFoundError:
-            return {"award_id": award_id, "obligations": [], "next_deadline": None}
+            return {
+                "config_present": False,
+                "award_id": award_id,
+                "obligations": [],
+                "next_deadline": None,
+            }
 
         matching = [g for g in grants if g.award_id == award_id]
         if not matching:
-            return {"award_id": award_id, "obligations": [], "next_deadline": None}
+            return {
+                "config_present": True,
+                "award_id": award_id,
+                "obligations": [],
+                "next_deadline": None,
+            }
 
         store = SubmissionStore(submissions_path)
         submissions = store.all()
@@ -147,6 +168,7 @@ def build_grant_status_tool(
             next_deadline = min(upcoming, key=lambda ob: ob.due_date).due_date.isoformat()
 
         return {
+            "config_present": True,
             "award_id": award_id,
             "obligations": [
                 {
@@ -192,23 +214,27 @@ def build_list_grants_tool(
     grants_config_path: str,
     owner_agent: str,
 ) -> ToolSpec:
-    def handler(args: Mapping[str, Any]) -> list[dict[str, Any]]:
+    def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         try:
             grants = load_grants(grants_config_path)
         except FileNotFoundError:
-            return []
+            return {"config_present": False, "grants_tracked": 0, "grants": []}
 
-        return [
-            {
-                "award_id": g.award_id,
-                "funder": g.funder,
-                "title": g.title,
-                "period_start": g.period_start.isoformat(),
-                "period_end": g.period_end.isoformat(),
-                "cadence": g.reporting_cadence,
-            }
-            for g in grants
-        ]
+        return {
+            "config_present": True,
+            "grants_tracked": len(grants),
+            "grants": [
+                {
+                    "award_id": g.award_id,
+                    "funder": g.funder,
+                    "title": g.title,
+                    "period_start": g.period_start.isoformat(),
+                    "period_end": g.period_end.isoformat(),
+                    "cadence": g.reporting_cadence,
+                }
+                for g in grants
+            ],
+        }
 
     return ToolSpec(
         name="list_grants",
