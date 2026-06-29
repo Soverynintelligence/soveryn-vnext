@@ -37,6 +37,7 @@ data/telemetry/
 data/memory/
 !data/memory/souls/
 !data/memory/souls/**
+data/aetheria_heartbeat_thoughts*
 data/black_box/
 data/sandbox/
 data/steward/

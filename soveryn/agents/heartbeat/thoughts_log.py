@@ -1,0 +1,58 @@
+"""Append-only JSONL pulse black box for heartbeat pulses.
+
+Each record written by :class:`ThoughtsLog` has the shape::
+
+    {
+        "pulse_id":         str,   # unique identifier for the pulse
+        "ts":               str,   # ISO-8601 wall-clock timestamp
+        "material_signals": list,  # signals that crossed the materiality threshold
+        "delta":            dict,  # what changed relative to the previous pulse
+        "decision":         str,   # SURFACE | ACCEPT_RISK | NO_OP
+        "rationale":        str,   # one-line reason for the decision
+        "surfaced":         bool,  # True if the pulse was promoted to Aetheria
+    }
+
+Records are persisted as JSONL (one JSON object per line) so the file can be
+tailed, grepped, and streamed without any additional tooling.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+class ThoughtsLog:
+    """Append-only JSONL log of heartbeat pulse records."""
+
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+
+    # ------------------------------------------------------------------
+    # Write
+    # ------------------------------------------------------------------
+
+    def append(self, record: dict) -> None:
+        """Append *record* as a single JSON line.
+
+        Creates the parent directory if it does not already exist (best-effort).
+        """
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with self._path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, default=str) + "\n")
+
+    # ------------------------------------------------------------------
+    # Read
+    # ------------------------------------------------------------------
+
+    def last(self) -> dict | None:
+        """Return the final non-empty record, or ``None`` if absent/empty."""
+        if not self._path.exists():
+            return None
+        with self._path.open("r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+        for line in reversed(lines):
+            stripped = line.strip()
+            if stripped:
+                return json.loads(stripped)
+        return None
