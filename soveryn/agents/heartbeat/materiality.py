@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 
 # ── Tunable thresholds ────────────────────────────────────────────────────────
@@ -24,6 +25,12 @@ MATERIAL_ERROR_TOKENS = (   # tune
     "ConnectionTimeout",
     "FAILED",
 )
+
+# ── Stall re-tune constants (T6) ─────────────────────────────────────────────
+
+STALL_AMNESTY_HOURS = 72        # tune — amnesty window after deploy
+STALL_WORST_FIRST_CAP = 3       # tune — max stalls returned post-amnesty when board is large
+STALL_WORST_FIRST_TRIGGER = 5   # tune — cap only kicks in when stale count exceeds this
 
 
 # ── Output type ───────────────────────────────────────────────────────────────
@@ -41,6 +48,36 @@ class MaterialSignal:
     detail: str
 
 
+# ── Deploy clock (impure — filesystem; quarantined here) ─────────────────────
+
+def get_deploy_started_at(path: Path | str, now: datetime) -> datetime:
+    """Read-or-create the deploy-start sentinel file.
+
+    First call: writes `now` as an ISO-8601 string and returns it.
+    Subsequent calls: reads and returns the persisted timestamp unchanged.
+
+    The sentinel file is the ONLY impure bit in the stall re-tune logic.
+    All stall amnesty/cap logic in detect_materiality is pure (injected
+    `hours_since_deploy`); the gather layer calls this once and injects
+    the computed float.
+
+    Args:
+        path: Path to the sentinel file (e.g. data/heartbeat_deploy_started_at).
+        now:  Current time — used only on first call to initialise the sentinel.
+
+    Returns:
+        The persisted deploy-start datetime (naive, no timezone).
+    """
+    p = Path(path)
+    if p.exists():
+        raw = p.read_text().strip()
+        return datetime.fromisoformat(raw)
+    # First call — write and return now.
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(now.isoformat())
+    return now
+
+
 # ── Pure detector ─────────────────────────────────────────────────────────────
 
 def detect_materiality(
@@ -49,6 +86,7 @@ def detect_materiality(
     error_items: list[dict[str, Any]],
     stall_items: list[dict[str, Any]],
     now: datetime,
+    hours_since_deploy: float | None = None,
 ) -> list[MaterialSignal]:
     """Return every MaterialSignal that crosses a materiality threshold.
 
@@ -57,7 +95,24 @@ def detect_materiality(
       error_items: [{"ref": str, "text": str}, ...]
       stall_items: [{"ref": str, "status": str, "age_hours": float}, ...]
 
-    Deterministic: `now` is injected; no wall-clock inside.
+    Stall lane behaviour (T6 re-tune):
+      hours_since_deploy=None (default) → legacy mode: all >48h stalls flagged,
+        no cap. Keeps Task 1 tests green and preserves backward compat for callers
+        that don't pass the deploy clock yet.
+
+      hours_since_deploy < STALL_AMNESTY_HOURS (72h) → amnesty window:
+        only flag stalls that CROSSED 48h *during* the window.
+        Formula: age_hours > 48 AND (age_hours - hours_since_deploy) < 48
+        Suppresses everything already stale at deploy so the board doesn't
+        immediately light up red on every pulse.
+
+      hours_since_deploy >= STALL_AMNESTY_HOURS → post-amnesty:
+        all >48h stalls flagged, BUT if count > STALL_WORST_FIRST_TRIGGER (5)
+        return only the STALL_WORST_FIRST_CAP (3) oldest (sorted age desc).
+        Gives Aetheria a trend signal, not a wall of red.
+
+    Deterministic: `now` and `hours_since_deploy` are injected; no wall-clock
+    or filesystem access inside this function.
     """
     results: list[MaterialSignal] = []
 
@@ -93,17 +148,54 @@ def detect_materiality(
                 break  # one signal per item, first matching token wins
 
     # ── Stalls ────────────────────────────────────────────────────────────────
+    candidate_stalls: list[dict[str, Any]] = []
     for item in stall_items:
-        if item.get("status") in ("Open", "Refining"):
-            age: float = item.get("age_hours", 0)
-            if age > MATERIAL_STALL_HOURS:
-                results.append(MaterialSignal(
-                    kind="stall",
-                    ref=item["ref"],
-                    detail=(
-                        f"status={item['status']} for "
-                        f"{int(age)}h (threshold={MATERIAL_STALL_HOURS}h)"
-                    ),
-                ))
+        if item.get("status") not in ("Open", "Refining"):
+            continue
+        age: float = item.get("age_hours", 0)
+        if age <= MATERIAL_STALL_HOURS:
+            # Sub-threshold — never a stall regardless of mode.
+            continue
+
+        if hours_since_deploy is None:
+            # Legacy mode: no deploy clock → flag every >48h stall unchanged.
+            candidate_stalls.append(item)
+        elif hours_since_deploy < STALL_AMNESTY_HOURS:
+            # Amnesty window: only nodes that CROSSED 48h during this window.
+            # Age at deploy time = age_hours - hours_since_deploy.
+            # "Crossed" means it was <48h at deploy, i.e. (age - hsd) < 48.
+            age_at_deploy = age - hours_since_deploy
+            if age_at_deploy < MATERIAL_STALL_HOURS:
+                # Newly crossed — flag it.
+                candidate_stalls.append(item)
+            # else: already stale at deploy — suppress.
+        else:
+            # Post-amnesty: flag all >48h stalls (worst-first cap applied below).
+            candidate_stalls.append(item)
+
+    # Apply worst-first cap post-amnesty when too many stalls exist.
+    # (In legacy/amnesty mode candidate_stalls may also be large, but the
+    # cap only applies when hours_since_deploy >= STALL_AMNESTY_HOURS.)
+    if (
+        hours_since_deploy is not None
+        and hours_since_deploy >= STALL_AMNESTY_HOURS
+        and len(candidate_stalls) > STALL_WORST_FIRST_TRIGGER
+    ):
+        candidate_stalls = sorted(
+            candidate_stalls,
+            key=lambda x: x.get("age_hours", 0),
+            reverse=True,
+        )[:STALL_WORST_FIRST_CAP]
+
+    for item in candidate_stalls:
+        age = item.get("age_hours", 0)
+        results.append(MaterialSignal(
+            kind="stall",
+            ref=item["ref"],
+            detail=(
+                f"status={item['status']} for "
+                f"{int(age)}h (threshold={MATERIAL_STALL_HOURS}h)"
+            ),
+        ))
 
     return results

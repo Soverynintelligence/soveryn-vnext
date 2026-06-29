@@ -29,6 +29,7 @@ from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
     detect_materiality,
+    get_deploy_started_at,
 )
 from soveryn.agents.heartbeat.prompt import (
     BoardSnapshot,
@@ -50,6 +51,11 @@ DEFAULT_VNEXT_BASE = "http://127.0.0.1:5001"
 DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
 DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
 DEFAULT_SALIENCE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "salience_vnext.db"
+# Sentinel file for T6 stall amnesty deploy clock.  Written once on first
+# heartbeat tick after deploy; subsequent ticks read it to compute
+# hours_since_deploy for the amnesty/worst-first logic in detect_materiality.
+# Path is gitignored (data/heartbeat_deploy_started_at).
+DEFAULT_DEPLOY_SENTINEL = Path.home() / "soveryn_vnext" / "data" / "heartbeat_deploy_started_at"
 
 # Window of lattice activity to summarise in the brief (separate from the
 # interval/backoff knobs since this is a *content* knob not a *timing* knob).
@@ -161,12 +167,20 @@ class HeartbeatDaemon:
         lattice_db: Path = DEFAULT_LATTICE_DB,
         conv_db: Path = DEFAULT_CONV_DB,
         salience_db: Path = DEFAULT_SALIENCE_DB,
+        deploy_sentinel: Path | None = None,
     ) -> None:
         self.config = config
         self.vnext_base = vnext_base.rstrip("/")
         self.lattice_db = Path(lattice_db)
         self.conv_db = Path(conv_db)
         self.salience_db = Path(salience_db)
+        # T6 stall amnesty: sentinel file path for deploy clock.
+        # Defaults to DEFAULT_DEPLOY_SENTINEL (data/heartbeat_deploy_started_at)
+        # when None; injectable for test isolation (pass tmp_path / "...").
+        self.deploy_sentinel: Path = (
+            Path(deploy_sentinel) if deploy_sentinel is not None
+            else DEFAULT_DEPLOY_SENTINEL
+        )
         self._stop = False
         self._heartbeat_session_id: str | None = None
         # Idempotent migration: add surfaced_to_chat column to heartbeat_log
@@ -669,12 +683,26 @@ class HeartbeatDaemon:
                 "returning [] for stall lane"
             )
 
+        # ── Deploy clock → hours_since_deploy for stall amnesty (T6) ─────────
+        # Best-effort: if the sentinel read/write fails, fall back to None
+        # (legacy stall behavior — all >48h stalls flagged, no amnesty).
+        hours_since_deploy: float | None = None
+        try:
+            deploy_started_at = get_deploy_started_at(self.deploy_sentinel, now)
+            hours_since_deploy = (now - deploy_started_at).total_seconds() / 3600
+        except Exception:
+            logger.exception(
+                "heartbeat: deploy-clock sentinel read/write failed; "
+                "falling back to legacy stall behavior (hours_since_deploy=None)"
+            )
+
         try:
             return detect_materiality(
                 dated_items=dated_items,
                 error_items=error_items,
                 stall_items=stall_items,
                 now=now,
+                hours_since_deploy=hours_since_deploy,
             )
         except Exception:
             logger.exception(

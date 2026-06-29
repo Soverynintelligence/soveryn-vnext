@@ -38,6 +38,7 @@ data/memory/
 !data/memory/souls/
 !data/memory/souls/**
 data/aetheria_heartbeat_thoughts*
+data/heartbeat_deploy_started_at
 data/black_box/
 data/sandbox/
 data/steward/

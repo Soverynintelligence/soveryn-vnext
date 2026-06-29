@@ -272,6 +272,9 @@ def _make_daemon(tmp_path: Path, nodes: list[dict]) -> HeartbeatDaemon:
         lattice_db=lattice_db,
         conv_db=conv_db,
         salience_db=salience_db,
+        # Route the T6 deploy-sentinel into tmp_path so tests are isolated
+        # from the real data/heartbeat_deploy_started_at file.
+        deploy_sentinel=tmp_path / "heartbeat_deploy_started_at",
     )
 
 
@@ -363,7 +366,12 @@ class TestGatherMaterialSignalsDeadlineLane:
         assert deadline_sigs == [], "Archived nodes should be skipped"
 
     def test_existing_stall_detection_still_works(self, tmp_path):
-        """Existing stall detection must remain green alongside deadline lane."""
+        """Existing stall detection must remain green alongside deadline lane.
+
+        Post-T6: the deploy sentinel must be pre-seeded past the 72h amnesty
+        window so a 60h-old stall is properly flagged (post-amnesty, normal
+        worst-first cap path, 1 node < 5 trigger so no cap).
+        """
         stale_time = (NOW_DT - timedelta(hours=60)).isoformat()
         node = {
             "id": "coord-stall",
@@ -372,6 +380,9 @@ class TestGatherMaterialSignalsDeadlineLane:
             "updated_at": stale_time,
             "provenance": {"status": "Open", "board": "Blueprint"},
         }
+        # Pre-seed the sentinel 100h before NOW_DT so amnesty is expired.
+        sentinel_path = tmp_path / "heartbeat_deploy_started_at"
+        sentinel_path.write_text((NOW_DT - timedelta(hours=100)).isoformat())
         daemon = _make_daemon(tmp_path, [node])
         signals = daemon._gather_material_signals(NOW_DT)
         stall_sigs = [s for s in signals if s.kind == "stall"]
