@@ -28,3 +28,4 @@ Thumbs.db
 data/lattice/*.db*
 data/ares/
 data/telemetry/
+data/steward/
