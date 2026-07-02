@@ -174,6 +174,10 @@ rolling the gate out to other agents; SMS/other surfaces.
    asymmetry is deliberate: a wasted verify beats a confident lie.
 3. **Detector is a floor, not a ceiling.** It catches the high-signal spec/hardware class — the
    actual failure — not every possible false statement. This is honest scope, not a claim of
-   completeness. The v2 self-policing trigger is what raises the ceiling.
+   completeness. The v2 self-policing trigger adds coverage of a **different** failure class
+   (genuine-unknown/wobbly answers) — but it does **not** retire v1: semantic entropy is blind to
+   *stable confident-wrong* claims (the Intel-board class), which only the v1 claim-shape gate and,
+   later, activation probes catch. v1 and v2 run together, permanently. See the self-policing scope
+   doc for the full argument.
 4. **Public repo.** vnext is public. `system_probe` reads the *live* host — it hardcodes **no**
    machine specs into the doc or code. No private data enters the repo.

@@ -28,6 +28,23 @@ reflective process catches the fast one; you don't "just know" you're guessing e
 building that separate monitor. That is the raising of a trustworthy mind, not a restraint bolted onto
 it.
 
+## v1 and v2 are complementary layers, not a ladder
+
+**Correction to an earlier framing:** the heuristic gate (v1) and the self-policing signal (v2) are
+**not** "cheap stopgap → better replacement." They catch **different failure classes**, and you want
+both running permanently:
+
+- **v1 (claim-shape gate)** fires on *"verifiable claim + no source consulted this turn"* —
+  **regardless of how confident the model is.** So it catches **stable confident-wrong**: a strong
+  false belief the model states flatly and would repeat identically every time (e.g. "the ROMED8-2T
+  is Intel"). This is the *dangerous* class — confident and false.
+- **v2 (semantic entropy et al.)** catches *"the model genuinely doesn't know and is flailing"* — the
+  wobbly-unknown class, where answers diverge across samples.
+
+Critically, **v2 is blind to the exact failure that started this work** (see the limitation under
+approach #1). So v2 never retires v1. The gate spec's phrase "v2 raises the ceiling" is corrected
+here: v2 *adds a second class of coverage*; v1 remains load-bearing for the confident-wrong class.
+
 ## Three approaches (tractability-ordered; measure before committing)
 
 ### 1. Semantic entropy / self-consistency — **recommended first**
@@ -35,18 +52,28 @@ it.
 compute entropy over the clusters. A fact the model actually knows returns **stable** (one cluster,
 low entropy); a confabulation **wobbles** (many clusters, high entropy). High entropy → flag.
 
-- **Why first:** no weight surgery, no labeled training data, published and validated (Farquhar/Kuhn,
-  *Nature* 2024). Works on any model behind an OpenAI-shape endpoint — including the router-served
-  vanilla Qwen Vett already runs.
+- **Why first:** no weight surgery, no labeled training data, and a published research basis
+  (semantic entropy for hallucination detection — *Farquhar/Kuhn et al., Nature 2024*). **⚠ Citation
+  from memory — verify before this is load-bearing** (same rule as Vett: an unverified reference is
+  itself an unsourced claim). Works on any model behind an OpenAI-shape endpoint — including the
+  router-served vanilla Qwen Vett already runs.
 - **Cost:** N× inference per gated question (N≈5–10). Real on a compute-constrained box — so it fires
   **only when the cheap v1 detector already flagged risk**, not on every token. v1 heuristic = cheap
   pre-filter; semantic entropy = the confirming signal. They compose.
 - **Mechanism sketch:** `SemanticEntropySignal.assess()` → resample the drafted answer's core claim N
   times at moderate temperature → cluster (embedding cosine via the existing nomic-embed backend, or
   an NLI-style equivalence check) → entropy over cluster masses → `risky = entropy > threshold`.
+- **⚠ Critical limitation — stable confident-wrong.** Semantic entropy measures *inconsistency*, so
+  it only flags what the model is *uncertain* about. A **stable false belief** — one the model states
+  flatly and repeats identically across all N samples — produces **low** entropy and is **waved
+  through** as confident-therefore-fine. The Intel-board error is plausibly exactly this class. So
+  semantic entropy is **blind to the most dangerous confab** (confident and false); that class is
+  covered by the v1 claim-shape gate and, eventually, activation probes (#3) — not by this signal.
+  Do not let its sophistication disguise this hole.
 - **Open question to MEASURE first:** on *your* model, does semantic entropy actually separate
-  confab from recall on a labeled hardware/spec set? Build the measurement harness before the
-  production signal. (Verification-standard discipline: measure, don't assume.)
+  confab from recall on a labeled hardware/spec set — and how much of your real confab is the
+  stable-wrong class it *can't* catch? Build the measurement harness before the production signal.
+  (Verification-standard discipline: measure, don't assume.)
 
 ### 2. Logprob / entropy signal — cheap, weaker alone
 **Idea:** low token-probability / high per-token entropy correlates (noisily) with hallucination.
