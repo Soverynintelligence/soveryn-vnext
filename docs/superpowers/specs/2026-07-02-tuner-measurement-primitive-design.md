@@ -26,7 +26,7 @@ Candidate = {
 }
 
 Measurement = {
-  status:   "ok" | "oom" | "load_failed" | "hung" | "garbage",
+  status:   "ok" | "oom" | "load_failed" | "hung" | "garbage" | "hardware_error",
   tok_s:    float | None,           # only when status == ok
   peak_vram: dict[int,int],         # per-device peak MiB, polled during the run
   detail:   str,                    # the deciding error string / reason (for debugging)
@@ -39,12 +39,13 @@ Measurement = {
 2. **Launch.** Spawn `llama-server` with the candidate translated to flags, on a scratch port, using the **same binary + cuda-compat `LD_LIBRARY_PATH`** production uses (`~/miniconda3/envs/cuda131/cuda-compat:.../lib` — without it, CUDA init fails; we hit this). Capture stderr to a log.
 3. **Load watchdog.** Poll for `"server is listening"` up to `LOAD_TIMEOUT`. On timeout/exit, classify from the log:
    - `oom` ← `"cudaMalloc failed: out of memory"` / `"failed to allocate CUDA buffer"` (verbatim what the 235B threw on GPU2).
+   - `hardware_error` ← Xid errors / rising ECC error counts (nvidia-smi/pynvml), `"has fallen off the bus"`, CUDA `"an illegal memory access"` / `"unspecified launch failure"` / `"device-side assert"`, or a thermal-throttle flag. **Distinct from `oom`/`load_failed` because the fault is the *silicon*, not the config** — the right response is to flag the *device* (and skip it in the search), not mark the config bad. Real risk on the aging Turing Quadros. Checked at load AND during generation.
    - `load_failed` ← `"CUDA driver version is insufficient"` (env miss), unknown-arg errors (the bare `-fa` value error), `"failed to load model"`, non-zero exit.
    - `hung` ← still running, never listened, no error string.
 4. **Benchmark.** If listening, send a **fixed prompt** (a short, known-answerable question) with a **generation watchdog** (`GEN_TIMEOUT`): if zero tokens arrive in the window → `hung` (the same class as the download-hang, which happens on inference too). Poll `pynvml` per-device throughout for `peak_vram`.
 5. **Output sanity → `garbage`.** v1 heuristics catch obvious broken output: empty, **degenerate repetition** (token/n-gram looping), or **language/format bleed** (we literally saw Chinese + planning-preamble on the raw-completion 235B). *Full quality-regression detection ("subtly worse") is explicitly deferred* — v1 catches broken, not dull.
 6. **`ok`.** Listened + coherent-enough output → record `tok_s` from the response timings + `peak_vram`.
-7. **Teardown — GUARANTEED clean.** Kill the server, then **poll until its processes are dead AND target-device VRAM is released** before returning. This is non-negotiable: the router-orphan incident (2026-07-02) proved this rig leaves orphan processes holding VRAM, and a leaked candidate silently **false-OOMs** the next one, corrupting the search.
+7. **Teardown — GUARANTEED clean, but BOUNDED.** Kill the server, then **poll (up to `TEARDOWN_TIMEOUT` ≈ 30s) until its processes are dead AND target-device VRAM is released** before returning. The clean-slate guarantee is non-negotiable: the router-orphan incident (2026-07-02) proved this rig leaves orphan processes holding VRAM, and a leaked candidate silently **false-OOMs** the next one, corrupting the search. But the poll MUST be bounded — if VRAM is never released within `TEARDOWN_TIMEOUT` (true zombie, or another process grabbed it), **log a warning and return anyway** rather than hanging the tuner forever (we've been bitten by unbounded hangs enough this project — the download, the router backend). The dirty state then **fails safe forward**: the *next* measurement's precondition (step 1) sees the contamination and refuses, instead of the tuner hanging in place.
 
 ## Failure modes are grounded in real incidents (not theory)
 
@@ -54,7 +55,8 @@ Measurement = {
 | `oom` | 235B even-split OOM on GPU2 | `cudaMalloc failed: out of memory` |
 | `hung` | overnight download hang (process alive, 0 progress) | load + generation timeouts |
 | `garbage` | Chinese/planning-preamble bleed on raw completion | empty / repetition / language-bleed heuristics |
-| (teardown) | parakeet orphan + router-orphan holding GPU2 | poll-until-VRAM-released between runs |
+| `hardware_error` | anticipated — aging Turing Quadros | Xid/ECC (nvidia-smi), "fallen off the bus", illegal-memory-access, thermal throttle |
+| (teardown) | parakeet orphan + router-orphan holding GPU2 | **bounded** poll (`TEARDOWN_TIMEOUT`) until VRAM released, else warn + fail-safe-forward |
 
 ## The deliverable that PROVES it's bulletproof
 
@@ -78,4 +80,4 @@ This test *is* the hardening. It's the thing that de-risks the customer story, b
 2. The analytical cost model (bottleneck prediction on heterogeneous silicon) — the research part + the paper. Worthless until measurement is trustworthy; comes last.
 
 ## Project constraint (load-bearing, non-technical)
-**Timebox: a few evenings.** This primitive is genuinely worth building (SOVERYN needs it for its own rack), but it is exactly the absorbing technical problem that can eat the weeks that should close the Shepherd sale. If it stretches toward weeks, that's the signal the fun build is crowding out the valuable sale. **Shepherd-buddy-says-yes stays the higher-value event.** Build the primitive, ship the self-test, stop.
+**Timebox: HARD STOP — July 10, 2026.** This primitive is genuinely worth building (SOVERYN needs it for its own rack), but it is exactly the absorbing technical problem that can eat the weeks that should close the Shepherd sale. "A few evenings" is how "a few weeks" gets smuggled in — so the line is a date, not a vibe: **if the self-test isn't green by July 10, park it and return to Shepherd. No extensions.** Shepherd-buddy-says-yes stays the higher-value event. Build the primitive, ship the self-test, stop.
