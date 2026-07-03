@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import subprocess
 import threading
 import time
@@ -121,9 +122,13 @@ class _RealHandle:
         return "".join(self._stderr_buf)
 
     def wait_listen(self, timeout):
+        # Poll the HTTP port, NOT a stderr log string: the log message changed
+        # across llama.cpp versions ("server is listening" -> "listening on http")
+        # and grepping it silently mis-detects newer builds as hung. The open port
+        # is the version-agnostic readiness signal.
         t0 = time.time()
         while time.time() - t0 < timeout:
-            if "server is listening" in self.stderr:
+            if _port_open("127.0.0.1", self._port):
                 return True
             if self._proc.poll() is not None:
                 return False
@@ -185,6 +190,16 @@ class _RealHandle:
             except Exception:
                 return True   # can't verify -> don't hang
             time.sleep(1)
+        return False
+
+
+def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    """True if a TCP connection to host:port succeeds — a version-agnostic
+    'server is ready' signal (no dependence on a specific stderr log message)."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
         return False
 
 

@@ -43,3 +43,18 @@ def test_measure_always_tears_down():
     h = FakeHandle(listened=False, stderr="whatever")
     measure(_cand(), devices=[0], launcher=_launcher(h))
     assert h.killed
+
+
+def test_port_open_detects_listening_socket_version_agnostic():
+    # readiness is the open port, not a log string (which changed across llama.cpp versions)
+    import socket
+    from soveryn.platform.tuner.measure import _port_open
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    s.listen(1)
+    port = s.getsockname()[1]
+    try:
+        assert _port_open("127.0.0.1", port) is True
+    finally:
+        s.close()
+    assert _port_open("127.0.0.1", port) is False
