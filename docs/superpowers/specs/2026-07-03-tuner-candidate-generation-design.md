@@ -41,6 +41,8 @@ class Device:
     backend: str        # "cuda" (v1) | future: "vulkan" | "rocm" | "rpc"
     name: str           # e.g. "NVIDIA RTX PRO 5000 Blackwell"
     vram_bytes: int
+    pci_bus_id: str     # e.g. "0000:45:00.0" — captured for Layer 3 topology reasoning
+                        # (NOT used by the Layer-2 generator; see the topology note under generate.py)
 
 @dataclass(frozen=True)
 class Rig:
@@ -51,8 +53,13 @@ def probe_rig() -> Rig            # builds a Rig from the live machine
 ```
 - `Rig`/`Device` are **pure data** — the generator's input, so the rule logic is unit-testable with
   no GPU.
-- `probe_rig()` is the only hardware-touching bit. v1 reads `nvidia-smi` (CUDA devices) + `free`
-  (RAM). Extensible later to `rocminfo` / `vulkaninfo` for AMD — additive, no change to `Rig`'s shape.
+- `probe_rig()` is the only hardware-touching bit. v1 uses **`pynvml`** (already a dependency —
+  `measure.py` imports it for VRAM/ECC telemetry) for CUDA devices + their VRAM + bus IDs, and `free`
+  for RAM. Using pynvml (not regex over `nvidia-smi` text) is more robust across driver versions and
+  costs nothing new. Extensible later to `rocminfo` / `vulkaninfo` for AMD — additive, no change to
+  `Rig`'s shape.
+- `pci_bus_id` is **captured but unused in Layer 2** — it exists so Layer 3's cost model can reason
+  about PCIe topology (root complex / generation) later. The dumb generator must NOT use it.
 - Device identity is **backend-aware from line one** (`backend` + `index`), so a future AMD device is
   just another `Device` with `backend="vulkan"` (or `"rocm"`).
 
@@ -79,10 +86,19 @@ def generate_candidates(model_file: str, rig: Rig) -> list[Candidate]
 Rules (v1, CUDA devices only since the probe finds only CUDA today — but written against `rig.devices`
 generically, so mixed-backend rigs would naturally yield backend-appropriate candidates later):
 1. **All-devices, even split, no offload** — if `footprint` plausibly fits total VRAM.
-2. **Minimal-sufficient subset** — if it fits on the largest single device, or that device + one more,
-   emit those (fewer devices = less cross-device overhead when sufficient).
-3. **Expert-offload (`-ot exps=CPU`), all devices** — ALWAYS emitted (the reliable big-MoE path;
-   harmless-and-loses if the model is dense).
+2. **A SPREAD of device subsets that fit** — not just the VRAM-minimal one. Emit every single device
+   that fits alone (e.g. Blackwell-only), plus sensible pairs, plus all-devices. **This is the correct
+   answer to the topology concern:** the Blackwell (PCIe 5.0) alone may beat a Turing-split (PCIe 3.0)
+   even with less total VRAM — so we *measure* both and let the winner emerge. We do NOT make the
+   generator topology-aware (that would smuggle Layer-3 cost-model reasoning into the dumb generator,
+   violating the founding principle). The generator stays dumb; it just emits the topology-relevant
+   options so measurement can decide. Cap the spread (e.g. ≤ ~6 candidates total) to bound search time.
+3. **Expert-offload (`-ot exps=CPU`), all devices** — emitted for the big-model path (attention on GPU,
+   experts in RAM; how the 235B/M3 run). **Correct mechanism note:** `-ot` matches a *tensor-name
+   pattern*; a dense model has no `*exps*` tensors, so this flag is a **no-op** on dense models — it is
+   *not* extra overhead, it's simply a **redundant duplicate** of candidate #1 (one wasted ~60s run).
+   v1 accepts that waste (dumb). Cheap future dedup: read the GGUF expert-count and skip this on dense
+   models — deferred, not gold-plated here.
 4. **One KV-quant variant** (`cache_type_k/v = "q8_0"`) of the winner-shaped config — buys VRAM/context.
 
 The **fit heuristic is deliberately crude**: `footprint * HEADROOM + FIXED_OVERHEAD ≤ vram`. It only
@@ -122,6 +138,12 @@ def run_search(candidates, *, devices, measure_fn=measure) -> SearchResult
 a model, it reports the best config (and *why* the others lost). v1 **reports**, it does not
 auto-apply to the router.
 
+**The search is a blocking operation** — sequential launches, each ~30–90s (load + benchmark +
+teardown), so a ~6-candidate run is several minutes. The CLI **prints per-candidate progress as it
+goes** (`[2/6] measuring cuda: CUDA0,CUDA2 -ot exps=CPU … ok 9.4 tok/s`) so it's never a silent
+multi-minute hang. (This is the same class of "don't let a long operation look stalled" we care about
+elsewhere.)
+
 ## Data flow
 `model_file` → footprint (stat shards) + `probe_rig()` → `generate_candidates()` → list[Candidate] →
 `run_search()` (each through `measure()`, sequential, clean teardown between) → `SearchResult` (ranked
@@ -129,8 +151,10 @@ auto-apply to the router.
 
 ## Testing (the proof it works)
 - **`test_tuner_generate.py`** (offline): feed a synthetic `Rig` + a footprint → assert the spread
-  (fits → all-GPU + subset present; big → offload always present; a KV-quant variant present; every
-  emitted candidate's `device_map` matches its `backend`).
+  (fits → all-GPU **plus a subset spread**: every single device that fits alone, sensible pairs;
+  big → offload always present; a KV-quant variant present; total candidates capped; every emitted
+  candidate's `device_map` matches its `backend`). Assert the generator **ignores `pci_bus_id`**
+  (topology is not a Layer-2 input — same output regardless of bus IDs).
 - **`test_tuner_search.py`** (offline, fake `measure_fn`): max-tok_s-among-ok wins; `winner=None` when
   all fail; a candidate whose `measure_fn` *raises* is recorded and the search continues; ranking order
   (ok desc, then failures).
