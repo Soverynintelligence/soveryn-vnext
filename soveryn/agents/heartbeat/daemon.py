@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import signal
 import sqlite3
 import sys
@@ -75,14 +74,6 @@ CHAT_TIMEOUT_SECONDS = 240
 WEBHOOK_SESSION_TITLE_PREFIX = "[webhook]"
 HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 
-# Aetheria-decides chat routing markers (2026-06-15 — Coordination Blackout
-# arc close). The heartbeat prompt instructs her to end every response with
-# one of these on its own line. [SURFACE] → strip marker, post the content
-# to her PRIMARY chat thread. [ACCEPT_RISK] → acknowledge the risk, log and
-# stop (does not surface). [NO_OP] (or missing marker) → log and stop.
-_SURFACE_MARKER_RE = re.compile(r"\[SURFACE\]", re.IGNORECASE)
-_NO_OP_MARKER_RE = re.compile(r"\[NO_OP\]", re.IGNORECASE)
-_ACCEPT_RISK_MARKER_RE = re.compile(r"\[ACCEPT_RISK\]", re.IGNORECASE)
 # Titles we EXCLUDE from "primary thread" resolution — these are surfaces
 # owned by other rails (rhythm, voice, messenger threads) and surfacing
 # heartbeat content into them is the trap the arc surfaced.
@@ -98,65 +89,6 @@ _NON_PRIMARY_TITLE_PREFIXES: tuple[str, ...] = (
 # session exists yet. Intentionally NOT bracket-prefixed so it doesn't
 # match _NON_PRIMARY_TITLE_PREFIXES on the next lookup.
 _PRIMARY_FALLBACK_TITLE = "primary"
-
-# ── All three routing markers, used by _parse_stance ──────────────────────
-_ALL_MARKER_RES: tuple[tuple[str, object], ...] = (
-    ("SURFACE", _SURFACE_MARKER_RE),
-    ("ACCEPT_RISK", _ACCEPT_RISK_MARKER_RE),
-    ("NO_OP", _NO_OP_MARKER_RE),
-)
-
-
-def _parse_stance(response_text: str) -> tuple[str, str]:
-    """Return (decision, stripped_content) for a three-way heartbeat stance.
-
-    decision ∈ {"SURFACE", "ACCEPT_RISK", "NO_OP"}.
-
-    Rules:
-    - Scan for [SURFACE], [ACCEPT_RISK], [NO_OP] (case-insensitive).
-    - Last occurrence across all three markers wins.
-    - Missing all markers → "NO_OP".
-    - Marker lines are stripped from the returned content: any line whose
-      stripped form fullmatches one of the three markers is dropped.
-    - Empty input → ("NO_OP", "").
-    """
-    if not response_text:
-        return ("NO_OP", "")
-
-    # Find last occurrence of each marker.
-    last_pos: dict[str, int] = {}
-    for decision, pattern in _ALL_MARKER_RES:
-        for m in pattern.finditer(response_text):
-            last_pos[decision] = m.end()
-
-    if not last_pos:
-        return ("NO_OP", response_text.strip())
-
-    # The decision with the highest last-occurrence position wins.
-    decided = max(last_pos, key=lambda d: last_pos[d])
-
-    # Strip any line whose stripped form fullmatches a marker (all three).
-    kept_lines = []
-    for line in response_text.splitlines():
-        tok = line.strip()
-        if any(pattern.fullmatch(tok) for _, pattern in _ALL_MARKER_RES):
-            continue
-        kept_lines.append(line)
-
-    stripped = "\n".join(kept_lines).strip()
-    return (decided, stripped)
-
-
-def _parse_surface_marker(response_text: str) -> tuple[bool, str]:
-    """Module-level convenience wrapper around _parse_stance.
-
-    Returns (surface, stripped_content): surface=True only for [SURFACE].
-    [ACCEPT_RISK], [NO_OP], and missing marker all return surface=False.
-    Kept at module level so callers and tests can import it directly.
-    """
-    decision, stripped = _parse_stance(response_text)
-    return (decision == "SURFACE", stripped)
-
 
 class HeartbeatDaemon:
     """Single-threaded tick loop. One tick at a time; if a tick takes longer
@@ -420,101 +352,21 @@ class HeartbeatDaemon:
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
 
-            # T7: forced-stance enforcement.
-            # Use _parse_stance (three-way) instead of _parse_surface_marker.
-            # decision ∈ {SURFACE, ACCEPT_RISK, NO_OP}
-            decision, stripped_content = _parse_stance(response_text)
+            # Freed pulse: her whole response is her note. No markers, no forced
+            # surfacing. A non-empty note lands in her primary thread (reaches Jon +
+            # the tile); a pure-quiet pulse (empty note) surfaces nothing. Material
+            # signals stay visible on the Mission Control tile regardless.
+            note = (response_text or "").strip()
             surfaced_to_chat = False
-            thoughts_rationale = stripped_content[:500] if stripped_content else ""
-            violation_note: str | None = None
-
-            if material_signals:
-                # Material present — [NO_OP] (or missing marker) is a
-                # protocol violation → fail-safe: warn + surface daemon summary.
-                if decision == "SURFACE":
-                    # Explicit surface on material signal — honour it.
-                    if stripped_content:
-                        try:
-                            self._surface_to_primary_thread(stripped_content)
-                            surfaced_to_chat = True
-                        except Exception:
-                            logger.exception(
-                                "heartbeat tick %s: [SURFACE] on material but "
-                                "primary-thread post failed; content stayed in "
-                                "[heartbeat] session only", tick_id,
-                            )
-                    else:
-                        # Bare [SURFACE] with no prose on a material pulse.
-                        # stripped_content is empty after marker removal — the
-                        # material fact would be silently dropped. Escalate to
-                        # the same fail-safe as the NO_OP branch.
-                        _sig_summary = "; ".join(
-                            f"{s.kind}:{s.ref}" for s in material_signals
-                        )
-                        logger.warning(
-                            "heartbeat tick %s: [SURFACE] on material pulse but "
-                            "empty content; fail-safe surfacing material summary. "
-                            "Signals: %s", tick_id, _sig_summary,
-                        )
-                        violation_note = "fail-safe: bare [SURFACE] with empty content on material signals"
-                        _failsafe_content = (
-                            f"[Heartbeat fail-safe] Material signals flagged this pulse "
-                            f"but were not addressed: {_sig_summary}"
-                        )
-                        try:
-                            self._surface_to_primary_thread(_failsafe_content)
-                            surfaced_to_chat = True
-                        except Exception:
-                            logger.exception(
-                                "heartbeat tick %s: fail-safe surface also failed; "
-                                "material signals not escalated", tick_id,
-                            )
-                elif decision == "ACCEPT_RISK":
-                    # Acknowledged risk — do NOT surface; record justification.
-                    logger.info(
-                        "heartbeat tick %s: material signals present, "
-                        "Aetheria chose [ACCEPT_RISK]. Justification logged.",
-                        tick_id,
+            if note:
+                try:
+                    self._surface_to_primary_thread(note)
+                    surfaced_to_chat = True
+                except Exception:
+                    logger.exception(
+                        "heartbeat tick %s: note surface failed; note stayed in "
+                        "[heartbeat] session only", tick_id,
                     )
-                    # surfaced_to_chat stays False
-                else:
-                    # NO_OP or missing marker on material — fail-safe.
-                    _sig_summary = "; ".join(
-                        f"{s.kind}:{s.ref}" for s in material_signals
-                    )
-                    logger.warning(
-                        "heartbeat tick %s: protocol violation — material signals "
-                        "present but response carried [NO_OP] or no marker. "
-                        "Fail-safe: surfacing daemon-built material summary. "
-                        "Signals: %s", tick_id, _sig_summary,
-                    )
-                    violation_note = "fail-safe: NO_OP on material signals"
-                    _failsafe_content = (
-                        f"[Heartbeat fail-safe] Material signals flagged this pulse "
-                        f"but were not addressed: {_sig_summary}"
-                    )
-                    try:
-                        self._surface_to_primary_thread(_failsafe_content)
-                        surfaced_to_chat = True
-                    except Exception:
-                        logger.exception(
-                            "heartbeat tick %s: fail-safe surface also failed; "
-                            "material signals not escalated", tick_id,
-                        )
-            else:
-                # No material — normal routing: SURFACE surfaces, NO_OP silences.
-                if decision == "SURFACE" and stripped_content:
-                    try:
-                        self._surface_to_primary_thread(stripped_content)
-                        surfaced_to_chat = True
-                    except Exception:
-                        logger.exception(
-                            "heartbeat tick %s: [SURFACE] marker present but "
-                            "primary-thread post failed; content stayed in "
-                            "[heartbeat] session only", tick_id,
-                        )
-                # ACCEPT_RISK on non-material: treated as silence (no surface).
-                # NO_OP on non-material: valid silence.
 
             # T7: append a ThoughtsLog record every pulse.
             # The "snapshot" key is LOAD-BEARING — compute_delta reads
@@ -523,18 +375,16 @@ class HeartbeatDaemon:
                 _tlog_record: dict = {
                     "pulse_id": tick_id,
                     "ts": now.isoformat(),
-                    "snapshot": current_snapshot,
+                    "snapshot": current_snapshot,          # LOAD-BEARING: compute_delta reads this
                     "material_signals": [
                         {"kind": s.kind, "ref": s.ref, "detail": s.detail}
                         for s in material_signals
                     ],
                     "delta": delta,
-                    "decision": decision,
-                    "rationale": thoughts_rationale,
+                    "note": note,
+                    "tool_calls": tool_call_count,
                     "surfaced": surfaced_to_chat,
                 }
-                if violation_note is not None:
-                    _tlog_record["violation"] = violation_note
                 self._thoughts_log.append(_tlog_record)
             except Exception:
                 logger.exception(
@@ -556,9 +406,9 @@ class HeartbeatDaemon:
             )
             logger.info(
                 "heartbeat tick %s done. action_taken=%s tool_calls=%s "
-                "response_len=%d surfaced_to_chat=%s decision=%s",
+                "response_len=%d surfaced_to_chat=%s note_len=%d",
                 tick_id, action_taken, tool_call_count,
-                len(response_text), surfaced_to_chat, decision,
+                len(response_text), surfaced_to_chat, len(note),
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during chat invocation")
@@ -883,18 +733,6 @@ class HeartbeatDaemon:
     def _call_vnext_chat(self, session_id: str, message: str) -> dict:
         payload = {"agent": "aetheria", "session_id": session_id, "message": message}
         return self._post_json("/chat", payload, timeout=CHAT_TIMEOUT_SECONDS)
-
-    # ─── Aetheria-decides chat routing (2026-06-15) ─────────────────────────
-
-    def _parse_surface_marker(self, response_text: str) -> tuple[bool, str]:
-        """Return (surface, stripped_content).
-
-        Thin wrapper around the module-level _parse_stance() for backward
-        compatibility. Only [SURFACE] maps to surface=True; [ACCEPT_RISK]
-        and [NO_OP] (and missing marker) all return surface=False.
-        """
-        decision, stripped = _parse_stance(response_text)
-        return (decision == "SURFACE", stripped)
 
     def _resolve_primary_thread(self) -> str:
         """Find or create Aetheria's PRIMARY chat thread.

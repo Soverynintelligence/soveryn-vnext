@@ -1,16 +1,12 @@
-"""Task 7 (original Task 5) Integration tests — prompt + tick wiring +
-forced stance + fail-safe + thoughts-log + delta round-trip.
+"""Integration tests — prompt + tick wiring + note-capture + thoughts-log +
+delta round-trip.
 
 Covers:
-1. material + [SURFACE]       → _surface_to_primary_thread called; thoughts-log
-                                 decision=SURFACE; record has "snapshot" key.
-2. material + [ACCEPT_RISK]   → NOT surfaced; thoughts-log decision=ACCEPT_RISK
-                                 with justification.
-3. material + [NO_OP]         → fail-safe: warning logged AND material summary
-                                 surfaced; thoughts-log notes the violation.
-4. non-material + [NO_OP]     → not surfaced (valid silence).
-5. zero-delta                 → built prompt contains "Environment static" single-line.
-6. round-trip contract        → second pulse reads first's "snapshot" via compute_delta.
+1. non-empty response → _surface_to_primary_thread called with the note.
+2. empty response → not surfaced.
+3. thoughts-log written every pulse with note/tool_calls/surfaced/snapshot.
+4. zero-delta → "Environment static" in prompt.
+5. round-trip contract → second pulse reads first's "snapshot" via compute_delta.
 
 Test strategy: fake _call_vnext_chat and _surface_to_primary_thread like the
 existing daemon tests (patch.object).  Deploy sentinel pre-seeded 100h before
@@ -132,321 +128,215 @@ def _run_tick_with_fakes(
         )
 
 
-# ── Test 1: material + [SURFACE] ──────────────────────────────────────────────
+# ── Test 1: non-empty note → surfaces to primary thread ───────────────────────
 
 
-class TestMaterialSurface:
-    def test_surface_to_primary_thread_called(self, tmp_path):
-        """material + [SURFACE] → _surface_to_primary_thread is called."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+def test_note_pulse_surfaces_the_note(tmp_path):
+    """Non-empty response → _surface_to_primary_thread called with the note."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-            _run_tick_with_fakes(
-                d,
-                model_response="The stall is critical.\n[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-            mock_surface.assert_called_once()
-
-    def test_thoughts_log_decision_is_surface(self, tmp_path):
-        """material + [SURFACE] → thoughts-log record decision=SURFACE."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Stall is blocking progress.\n[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None, "Expected a thoughts-log record to be written"
-        assert rec["decision"] == "SURFACE"
-
-    def test_thoughts_log_record_has_snapshot_key(self, tmp_path):
-        """thoughts-log record must include 'snapshot' key (compute_delta contract)."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Something important.\n[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None
-        assert "snapshot" in rec, (
-            "'snapshot' key missing from thoughts-log record — "
-            "compute_delta reads prev_record['snapshot'] on the next pulse; "
-            "this is a load-bearing contract."
+    note_text = "I looked into the stalled blueprint and found a blocker."
+    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
+        _run_tick_with_fakes(
+            d,
+            model_response=note_text,
+            material_signals=_ONE_MATERIAL,
         )
+        mock_surface.assert_called_once_with(note_text)
 
 
-# ── Test 2: material + [ACCEPT_RISK] ─────────────────────────────────────────
+def test_note_pulse_thoughts_log_surfaced_true(tmp_path):
+    """Non-empty note → thoughts-log record has surfaced=True."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-
-class TestMaterialAcceptRisk:
-    def test_not_surfaced_on_accept_risk(self, tmp_path):
-        """material + [ACCEPT_RISK] → _surface_to_primary_thread NOT called."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-            _run_tick_with_fakes(
-                d,
-                model_response="I acknowledge the stall risk.\n[ACCEPT_RISK] Deferring until tomorrow.",
-                material_signals=_ONE_MATERIAL,
-            )
-            mock_surface.assert_not_called()
-
-    def test_thoughts_log_decision_is_accept_risk(self, tmp_path):
-        """material + [ACCEPT_RISK] → thoughts-log decision=ACCEPT_RISK."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Stall acknowledged.\n[ACCEPT_RISK] Will address Monday.",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None
-        assert rec["decision"] == "ACCEPT_RISK"
-
-    def test_thoughts_log_records_justification(self, tmp_path):
-        """material + [ACCEPT_RISK] → rationale in thoughts-log is non-empty."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Stall acknowledged.\n[ACCEPT_RISK] Will address Monday.",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None
-        assert rec.get("rationale"), "Rationale should be non-empty for ACCEPT_RISK"
-
-
-# ── Test 3: material + [NO_OP] → fail-safe ────────────────────────────────────
-
-
-class TestMaterialNoOpFailSafe:
-    def test_warning_logged_on_protocol_violation(self, tmp_path, caplog):
-        """material + [NO_OP] → logger.warning about protocol violation."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with (
-            patch.object(d, "_surface_to_primary_thread"),
-            caplog.at_level(logging.WARNING, logger="soveryn.agents.heartbeat.daemon"),
-        ):
-            _run_tick_with_fakes(
-                d,
-                model_response="Nothing to see here.\n[NO_OP]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        # A WARNING must have been emitted by the daemon logger.
-        warning_msgs = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any("violation" in msg.lower() or "protocol" in msg.lower() or "fail-safe" in msg.lower()
-                   for msg in warning_msgs), (
-            f"Expected a protocol-violation warning, got: {warning_msgs}"
-        )
-
-    def test_material_summary_surfaced_as_failsafe(self, tmp_path):
-        """material + [NO_OP] → _surface_to_primary_thread IS called (fail-safe)."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-            _run_tick_with_fakes(
-                d,
-                model_response="Nothing to surface.\n[NO_OP]",
-                material_signals=_ONE_MATERIAL,
-            )
-            mock_surface.assert_called_once()
-
-    def test_thoughts_log_notes_violation(self, tmp_path):
-        """material + [NO_OP] → thoughts-log record notes the violation."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Silence.\n[NO_OP]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None
-        # The record should note the violation somehow — either in decision,
-        # rationale, or a dedicated field.
-        record_str = json.dumps(rec).lower()
-        assert "violation" in record_str or "fail_safe" in record_str or "failsafe" in record_str or "fail-safe" in record_str, (
-            f"Expected thoughts-log to record the violation, got: {rec}"
-        )
-
-
-# ── Test 4: non-material + [NO_OP] → valid silence ───────────────────────────
-
-
-class TestNonMaterialNoOp:
-    def test_not_surfaced_when_no_material(self, tmp_path):
-        """non-material + [NO_OP] → _surface_to_primary_thread NOT called."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-            _run_tick_with_fakes(
-                d,
-                model_response="Board looks stable.\n[NO_OP]",
-                material_signals=[],  # no material signals
-            )
-            mock_surface.assert_not_called()
-
-    def test_thoughts_log_written_even_for_no_op(self, tmp_path):
-        """thoughts-log is written every pulse regardless of decision."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Quiet.\n[NO_OP]",
-                material_signals=[],
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None, "ThoughtsLog must be written even for NO_OP"
-
-
-# ── Test 5: zero-delta → "Environment static" single-line in prompt ───────────
-
-
-class TestZeroDeltaPrompt:
-    def test_static_environment_instruction_in_prompt(self, tmp_path):
-        """When current snapshot == prev snapshot, prompt must include
-        'Environment static. No new signals.' and NOT ask to re-summarize."""
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
-
-        # Build a snapshot identical to what the daemon would produce.
-        # We seed the thoughts-log with an identical prior record.
-        tlog_path = tmp_path / "thoughts.jsonl"
-        tlog = ThoughtsLog(tlog_path)
-
-        # A representative snapshot (board all-zero, no material signals, quiet lattice).
-        prior_snapshot = {
-            "board": {
-                "open_signal_count": 0,
-                "open_blueprint_count": 2,
-                "ready_blueprint_count": 0,
-                "open_friction_count": 0,
-                "stalled_blueprint_count": 0,
-                "blocked_blueprint_count": 0,
-                "oldest_open_signal_age_minutes": None,
-                "oldest_open_blueprint_title": "Some Blueprint",
-                "oldest_open_blueprint_age_hours": 10,
-            },
-            "material_signals": [],
-            "lattice": {
-                "new_node_count_recent_window": 0,
-                "recent_window_minutes": 60,
-                "new_contradiction_flag_count": 0,
-            },
-        }
-        # Seed the thoughts-log with a prior record holding this snapshot.
-        tlog.append({
-            "pulse_id": "prev-001",
-            "ts": "2026-06-22T13:00:00",
-            "snapshot": prior_snapshot,
-            "material_signals": [],
-            "delta": {"changed": False, "items": []},
-            "decision": "NO_OP",
-            "rationale": "nothing to surface",
-            "surfaced": False,
-        })
-
-        # Now build the prompt as the daemon would, with the same snapshot
-        # and delta={"changed": False, "items": []}.
-        board = BoardSnapshot(
-            open_signal_count=0,
-            open_blueprint_count=2,
-            ready_blueprint_count=0,
-            open_friction_count=0,
-            stalled_blueprint_count=0,
-            blocked_blueprint_count=0,
-            oldest_open_signal_age_minutes=None,
-            oldest_open_blueprint_title="Some Blueprint",
-            oldest_open_blueprint_age_hours=10,
-        )
-        lattice = LatticeSnapshot(
-            new_node_count_recent_window=0,
-            recent_window_minutes=60,
-            new_contradiction_flag_count=0,
-        )
-        prompt = build_heartbeat_prompt(
-            minutes_since_last_heartbeat=60,
-            board=board,
-            lattice=lattice,
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="Checked the lattice — nothing alarming.",
             material_signals=[],
-            delta={"changed": False, "items": []},
-        )
-        assert "Environment static" in prompt, (
-            f"Expected 'Environment static' in prompt when delta.changed=False, "
-            f"got:\n{prompt}"
-        )
-        assert "No new signals" in prompt, (
-            f"Expected 'No new signals' in prompt when delta.changed=False"
         )
 
-    def test_no_static_instruction_when_delta_changed(self, tmp_path):
-        """When delta.changed=True, the static-environment line must NOT appear."""
-        from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    assert rec["surfaced"] is True
+    assert rec["note"] == "Checked the lattice — nothing alarming."
 
-        board = BoardSnapshot(
-            open_signal_count=1,
-            open_blueprint_count=2,
-            ready_blueprint_count=0,
-            open_friction_count=0,
-            stalled_blueprint_count=0,
-            blocked_blueprint_count=0,
-            oldest_open_signal_age_minutes=None,
-            oldest_open_blueprint_title=None,
-            oldest_open_blueprint_age_hours=None,
-        )
-        lattice = LatticeSnapshot(
-            new_node_count_recent_window=3,
-            recent_window_minutes=60,
-            new_contradiction_flag_count=0,
-        )
-        prompt = build_heartbeat_prompt(
-            minutes_since_last_heartbeat=60,
-            board=board,
-            lattice=lattice,
+
+# ── Test 2: empty note → nothing surfaced ─────────────────────────────────────
+
+
+def test_empty_note_pulse_surfaces_nothing(tmp_path):
+    """Empty response → _surface_to_primary_thread NOT called."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
+        _run_tick_with_fakes(
+            d,
+            model_response="",
             material_signals=[],
-            delta={"changed": True, "items": ["open signal count changed: 0 → 1"]},
         )
-        assert "Environment static" not in prompt
+        mock_surface.assert_not_called()
 
 
-# ── Test 6: snapshot round-trip — second pulse reads first's snapshot ──────────
+def test_empty_note_with_material_surfaces_nothing(tmp_path):
+    """Empty response even with material signals → NOT surfaced (no fail-safe)."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
+        _run_tick_with_fakes(
+            d,
+            model_response="",
+            material_signals=_ONE_MATERIAL,
+        )
+        mock_surface.assert_not_called()
+
+
+def test_empty_note_thoughts_log_surfaced_false(tmp_path):
+    """Empty response → thoughts-log has surfaced=False."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="   \n  ",
+            material_signals=[],
+        )
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    assert rec["surfaced"] is False
+    assert rec["note"] == ""
+
+
+# ── Test 3: thoughts-log record schema ────────────────────────────────────────
+
+
+def test_thoughts_log_written_every_pulse(tmp_path):
+    """thoughts-log is written every pulse regardless of note content."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="",
+            material_signals=[],
+        )
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None, "ThoughtsLog must be written every pulse"
+
+
+def test_thoughts_log_record_has_required_keys(tmp_path):
+    """thoughts-log record has note/tool_calls/surfaced/snapshot/material_signals/delta/ts/pulse_id."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="Something worth noting.",
+            material_signals=_ONE_MATERIAL,
+        )
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    for key in ("pulse_id", "ts", "snapshot", "material_signals", "delta", "note", "tool_calls", "surfaced"):
+        assert key in rec, f"thoughts-log record missing required key: {key!r}"
+
+
+def test_thoughts_log_record_has_snapshot_key(tmp_path):
+    """thoughts-log record must include 'snapshot' key (compute_delta contract)."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="Something important.",
+            material_signals=_ONE_MATERIAL,
+        )
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    assert "snapshot" in rec, (
+        "'snapshot' key missing from thoughts-log record — "
+        "compute_delta reads prev_record['snapshot'] on the next pulse; "
+        "this is a load-bearing contract."
+    )
+
+
+def test_thoughts_log_no_decision_or_violation_fields(tmp_path):
+    """New contract: 'decision', 'rationale', 'violation' are NOT in the record."""
+    tlog_path = tmp_path / "thoughts.jsonl"
+    d = _make_daemon(tmp_path, thoughts_path=tlog_path)
+
+    with patch.object(d, "_surface_to_primary_thread"):
+        _run_tick_with_fakes(
+            d,
+            model_response="Pulled on a thread.",
+            material_signals=[],
+        )
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    assert "decision" not in rec, "Old 'decision' field must be removed from thoughts-log"
+    assert "rationale" not in rec, "Old 'rationale' field must be removed from thoughts-log"
+    assert "violation" not in rec, "Old 'violation' field must be removed from thoughts-log"
+
+
+# ── Test 4: prompt still renders with delta=False (signature compat) ──────────
+
+
+def test_prompt_accepts_zero_delta_without_crashing(tmp_path):
+    """Freed prompt: delta is accepted for signature compat but no longer
+    short-circuits the output. Passing delta.changed=False should not crash
+    and should still produce a freed invitation."""
+    from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
+
+    board = BoardSnapshot(
+        open_signal_count=0,
+        open_blueprint_count=2,
+        ready_blueprint_count=0,
+        open_friction_count=0,
+        stalled_blueprint_count=0,
+        blocked_blueprint_count=0,
+        oldest_open_signal_age_minutes=None,
+        oldest_open_blueprint_title="Some Blueprint",
+        oldest_open_blueprint_age_hours=10,
+    )
+    lattice = LatticeSnapshot(
+        new_node_count_recent_window=0,
+        recent_window_minutes=60,
+        new_contradiction_flag_count=0,
+    )
+    prompt = build_heartbeat_prompt(
+        minutes_since_last_heartbeat=60,
+        board=board,
+        lattice=lattice,
+        material_signals=[],
+        delta={"changed": False, "items": []},
+    )
+    # Freed contract: orientation context always present, no short-circuit
+    assert "[HEARTBEAT]" in prompt
+    assert "This is your time" in prompt
+    assert "Where things stand" in prompt
+    # "Environment static" short-circuit is GONE in the freed prompt
+    assert "Environment static" not in prompt
+
+
+# ── Test 5: snapshot round-trip — second pulse reads first's snapshot ──────────
 
 
 class TestSnapshotRoundTrip:
@@ -465,11 +355,11 @@ class TestSnapshotRoundTrip:
         tlog_path = tmp_path / "thoughts.jsonl"
         d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-        # Pulse 1 — model says SURFACE, board has 2 open blueprints.
+        # Pulse 1 — model leaves a note, board has 2 open blueprints.
         with patch.object(d, "_surface_to_primary_thread"):
             _run_tick_with_fakes(
                 d,
-                model_response="Something important.\n[SURFACE]",
+                model_response="Something important.",
                 material_signals=[],
             )
 
@@ -505,7 +395,7 @@ class TestSnapshotRoundTrip:
         with patch.object(d, "_surface_to_primary_thread"):
             _run_tick_with_fakes(
                 d,
-                model_response="OK.\n[NO_OP]",
+                model_response="",
                 material_signals=[],
             )
 
@@ -528,11 +418,11 @@ class TestSnapshotRoundTrip:
         assert any("signal" in item.lower() for item in delta2["items"])
 
 
-# ── Test 7: prompt material_signals rendering ─────────────────────────────────
+# ── Test 6: prompt material_signals rendering ─────────────────────────────────
 
 
 class TestPromptMaterialSignalsRendering:
-    """Directly test build_heartbeat_prompt with the new kwargs."""
+    """Directly test build_heartbeat_prompt with material_signals kwarg."""
 
     def _board(self) -> BoardSnapshot:
         return BoardSnapshot(
@@ -555,7 +445,7 @@ class TestPromptMaterialSignalsRendering:
         )
 
     def test_material_signals_render_in_prompt(self):
-        """When material_signals non-empty, their details appear prominently."""
+        """When material_signals non-empty, their details appear in the prompt."""
         from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
         signals = [
             MaterialSignal(kind="stall", ref="MyBlueprint", detail="status=Open for 60h"),
@@ -570,8 +460,8 @@ class TestPromptMaterialSignalsRendering:
         assert "MyBlueprint" in prompt
         assert "60h" in prompt
 
-    def test_material_no_op_disabled_framing_in_prompt(self):
-        """With material signals, prompt says [NO_OP] is disabled."""
+    def test_material_signals_render_as_orientation_not_forced(self):
+        """Material signals appear as orientation context, not a forced directive."""
         from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
         signals = [
             MaterialSignal(kind="deadline", ref="NC-Grant", detail="due in 2 days"),
@@ -583,147 +473,7 @@ class TestPromptMaterialSignalsRendering:
             material_signals=signals,
             delta={"changed": True, "items": ["new deadline signal"]},
         )
-        # NO_OP must be disabled when material signals are present
-        assert "NO_OP" in prompt
-        assert "disabled" in prompt.lower() or "MATERIAL" in prompt
-
-    def test_non_material_retains_no_op_allowed_framing(self):
-        """Without material signals, [NO_OP] is still a valid option."""
-        from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
-        prompt = build_heartbeat_prompt(
-            minutes_since_last_heartbeat=30,
-            board=self._board(),
-            lattice=self._lattice(),
-            material_signals=[],
-            delta={"changed": False, "items": []},
-        )
-        assert "[NO_OP]" in prompt
-
-    def test_confidence_tiering_note_in_non_material_prompt(self):
-        """Non-material prompt should include confidence tiering guidance:
-        Objective→surface / Pattern≥3-nodes→surface / Ambient→thoughts-log."""
-        from soveryn.agents.heartbeat.prompt import build_heartbeat_prompt
-        prompt = build_heartbeat_prompt(
-            minutes_since_last_heartbeat=30,
-            board=self._board(),
-            lattice=self._lattice(),
-            material_signals=[],
-            delta={"changed": True, "items": ["board changed"]},
-        )
-        # Tiering note should reference the three tiers
-        lower = prompt.lower()
-        assert "objective" in lower or "pattern" in lower or "ambient" in lower, (
-            f"Expected confidence-tiering note (Objective/Pattern/Ambient) in prompt"
-        )
-
-
-# ── Test 8: material + bare [SURFACE] (no prose) → fail-safe, not silent drop ──
-
-
-class TestMaterialBareSurfaceFailSafe:
-    """material pulse + model emits bare [SURFACE] with NO prose.
-
-    _parse_stance strips the marker leaving stripped_content == "".
-    Before the fix, the material+SURFACE branch fell through silently
-    because the `if stripped_content:` guard blocked everything — the
-    material fact was dropped with no warning and no surface call.
-
-    After the fix the daemon must:
-      1. Detect the empty-content SURFACE on a material pulse.
-      2. Log a warning (same class as the NO_OP fail-safe).
-      3. Surface the daemon-built _failsafe_content material summary
-         (non-empty) via _surface_to_primary_thread.
-      4. Set surfaced_to_chat=True.
-      5. Record a violation/note in the thoughts-log record.
-    """
-
-    def test_surface_called_with_nonempty_content(self, tmp_path):
-        """_surface_to_primary_thread IS called with non-empty material summary."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-            _run_tick_with_fakes(
-                d,
-                model_response="[SURFACE]",  # bare marker — no prose
-                material_signals=_ONE_MATERIAL,
-            )
-            mock_surface.assert_called_once()
-            call_args = mock_surface.call_args[0]
-            assert call_args[0], (
-                "_surface_to_primary_thread must be called with non-empty content "
-                "(the daemon-built material summary), not an empty string"
-            )
-
-    def test_surfaced_to_chat_is_true(self, tmp_path):
-        """surfaced_to_chat=True is recorded in heartbeat_log."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        # Verify surfaced_to_chat=1 in heartbeat_log.
-        import sqlite3
-        with sqlite3.connect(str(d.lattice_db)) as con:
-            row = con.execute(
-                "SELECT surfaced_to_chat FROM heartbeat_log ORDER BY triggered_at DESC LIMIT 1"
-            ).fetchone()
-        assert row is not None
-        assert row[0] == 1, (
-            f"Expected surfaced_to_chat=1 in heartbeat_log for bare-SURFACE on "
-            f"material pulse, got {row[0]}"
-        )
-
-    def test_thoughts_log_notes_violation(self, tmp_path):
-        """thoughts-log record notes the violation (bare SURFACE on material)."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-        rec = ThoughtsLog(tlog_path).last()
-        assert rec is not None
-        record_str = json.dumps(rec).lower()
-        assert (
-            "violation" in record_str
-            or "fail_safe" in record_str
-            or "failsafe" in record_str
-            or "fail-safe" in record_str
-        ), (
-            f"Expected thoughts-log to record the violation for bare-SURFACE on "
-            f"material pulse, got: {rec}"
-        )
-
-    def test_warning_logged_for_bare_surface_on_material(self, tmp_path, caplog):
-        """logger.warning is emitted when bare [SURFACE] appears on a material pulse."""
-        tlog_path = tmp_path / "thoughts.jsonl"
-        d = _make_daemon(tmp_path, thoughts_path=tlog_path)
-
-        with (
-            patch.object(d, "_surface_to_primary_thread"),
-            caplog.at_level(logging.WARNING, logger="soveryn.agents.heartbeat.daemon"),
-        ):
-            _run_tick_with_fakes(
-                d,
-                model_response="[SURFACE]",
-                material_signals=_ONE_MATERIAL,
-            )
-
-        warning_msgs = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any(
-            "surface" in msg.lower() and ("empty" in msg.lower() or "fail-safe" in msg.lower() or "material" in msg.lower())
-            for msg in warning_msgs
-        ), (
-            f"Expected a warning about bare [SURFACE] on material pulse, got: {warning_msgs}"
-        )
+        # Freed prompt: material signals are visible but NO_OP is not disabled
+        assert "NC-Grant" in prompt
+        assert "disabled" not in prompt.lower()
+        assert "[NO_OP]" not in prompt

@@ -10,10 +10,11 @@ def _make_record(n: int) -> dict:
     return {
         "pulse_id": f"pulse-{n}",
         "ts": f"2026-06-22T0{n}:00:00Z",
+        "snapshot": {"board": {}, "material_signals": [], "lattice": {}},
         "material_signals": [f"signal-{n}"],
         "delta": {"change": n},
-        "decision": "SURFACE" if n % 2 == 0 else "NO_OP",
-        "rationale": f"reason {n}",
+        "note": f"note {n}" if n % 2 == 0 else "",
+        "tool_calls": n,
         "surfaced": n % 2 == 0,
     }
 

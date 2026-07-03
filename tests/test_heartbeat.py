@@ -202,7 +202,7 @@ def test_prompt_surfaces_oldest_open_blueprint_by_name():
         lattice=_lattice(),
     )
     assert "Cognitive Shift Detector v1" in prompt
-    assert "49h old" in prompt
+    assert "49h" in prompt
 
 
 def test_prompt_omits_oldest_blueprint_line_when_title_absent():
@@ -235,7 +235,7 @@ def test_prompt_handles_first_tick_with_no_prior_heartbeat():
     p = build_heartbeat_prompt(
         minutes_since_last_heartbeat=None, board=_board(), lattice=_lattice(),
     )
-    assert "First tick since daemon startup" in p
+    assert "First pulse since daemon startup" in p
 
 
 def test_prompt_includes_quantitative_board_state():
@@ -253,22 +253,18 @@ def test_prompt_includes_quantitative_board_state():
         lattice=_lattice(new_node_count_recent_window=12),
     )
     # All the numbers Aetheria can act on are present.
-    assert "Signal: 3 open" in p
-    assert "oldest: 180 min" in p
-    assert "Blueprint: 2 open / 1 Ready" in p
+    assert "Signals: 3 open" in p
+    assert "oldest 180 min" in p
+    assert "Blueprints: 2 open / 1 ready" in p
     assert "1 stalled" in p
     assert "1 blocked" in p
     assert "Friction: 1 open" in p
     assert "12 new nodes" in p
 
 
-def test_prompt_uses_reflective_close_not_action_menu():
-    """The heartbeat reframed 2026-06-04: the close used to prescribe
-    "audit/sift/silence" as a three-option menu with a literal "nothing
-    right now" silence template, which produced 24 verbatim-identical
-    ticks across ~12h. The reflective frame drops the action menu and
-    the silence template; context still surfaces audit-worthy state
-    above but doesn't direct her at it."""
+def test_prompt_uses_freed_invitation_not_action_menu():
+    """The heartbeat reframed 2026-07-03: no action menu, no do-nothing bench,
+    no marker machinery. Her whole response is her note; full toolset available."""
     p = build_heartbeat_prompt(
         minutes_since_last_heartbeat=30, board=_board(), lattice=_lattice(),
     )
@@ -277,8 +273,11 @@ def test_prompt_uses_reflective_close_not_action_menu():
     assert "Sift the lattice" not in p
     assert "Stay silent" not in p
     assert "nothing right now" not in p
-    # New reflective close present.
-    assert "This is your pulse" in p
+    assert "[SURFACE]" not in p
+    assert "[NO_OP]" not in p
+    # Freed invitation present.
+    assert "This is your time" in p
+    assert "None of it is off-limits" in p
 
 
 def test_prompt_has_no_scratchpad_or_control_markup():
