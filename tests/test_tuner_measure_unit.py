@@ -18,7 +18,7 @@ class FakeHandle:
     def wait_vram_released(self, devices, timeout): self.vram_waited = True; return True
 
 def _launcher(handle):
-    def make(args, env): return handle
+    def make(binary, args, env): return handle
     return make
 
 def test_measure_ok():

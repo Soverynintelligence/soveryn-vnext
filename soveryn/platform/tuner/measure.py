@@ -24,7 +24,19 @@ from soveryn.platform.tuner.result import RunOutcome, Measurement, classify
 log = logging.getLogger(__name__)
 
 FIXED_PROMPT = "In one short sentence: what is the capital of France?"
-_BINARY = os.path.expanduser("~/llama.cpp_head/build/bin/llama-server")
+_BACKEND_BINARY = {
+    "cuda": os.path.expanduser("~/llama.cpp_head/build/bin/llama-server"),
+}
+
+
+def _resolve_binary(backend: str) -> str:
+    """Map a candidate's backend to its llama-server binary. No silent fallback."""
+    try:
+        return _BACKEND_BINARY[backend]
+    except KeyError:
+        raise ValueError(
+            f"unknown backend {backend!r}; known: {sorted(_BACKEND_BINARY)}"
+        )
 _CUDA_COMPAT = ("/home/jon-deoliveira/miniconda3/envs/cuda131/cuda-compat:"
                 "/home/jon-deoliveira/miniconda3/envs/cuda131/lib")
 
@@ -41,7 +53,8 @@ def measure(candidate: Candidate, *, devices: list[int], port: int = 8199,
             teardown_timeout: float = 30, launcher=None) -> Measurement:
     launcher = launcher or _real_launcher
     args = to_llama_server_args(candidate, host="127.0.0.1", port=port)
-    h = launcher(args, _cuda_compat_env())
+    binary = _resolve_binary(candidate.backend)
+    h = launcher(binary, args, _cuda_compat_env())
     try:
         listened = h.wait_listen(load_timeout)
         n_tokens, out_text, tok_s, peak = 0, "", 0.0, {}
@@ -64,7 +77,7 @@ def measure(candidate: Candidate, *, devices: list[int], port: int = 8199,
 class _RealHandle:
     """Real llama-server subprocess + pynvml telemetry. Hardened by the rig self-test."""
 
-    def __init__(self, args, env, port):
+    def __init__(self, binary, args, env, port):
         import pynvml
         self._nvml = pynvml
         pynvml.nvmlInit()
@@ -74,7 +87,7 @@ class _RealHandle:
         self._stderr_buf: list[str] = []
         self._sampling = True
         self._proc = subprocess.Popen(
-            [_BINARY] + args, env=env,
+            [binary] + args, env=env,
             stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, bufsize=1)
         threading.Thread(target=self._read_stderr, daemon=True).start()
         threading.Thread(target=self._sample_vram, daemon=True).start()
@@ -173,6 +186,6 @@ class _RealHandle:
         return False
 
 
-def _real_launcher(args, env):
+def _real_launcher(binary, args, env):
     port = int(args[args.index("--port") + 1])
-    return _RealHandle(args, env, port)
+    return _RealHandle(binary, args, env, port)

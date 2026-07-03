@@ -27,3 +27,20 @@ def test_expert_offload_flag():
 def test_flash_attn_off_is_explicit():
     args = to_llama_server_args(_cand(flash_attn=False), host="127.0.0.1", port=1)
     assert args[args.index("-fa")+1] == "off"
+
+
+def test_candidate_backend_defaults_to_cuda():
+    from soveryn.platform.tuner.candidate import Candidate
+    c = Candidate(
+        model_file="/m.gguf", device_map="CUDA0", ngl=99, ctx_size=4096,
+        cache_type_k="f16", cache_type_v="f16", flash_attn=True,
+    )
+    assert c.backend == "cuda"
+
+
+def test_resolve_binary_known_and_unknown():
+    from soveryn.platform.tuner.measure import _resolve_binary
+    assert _resolve_binary("cuda").endswith("llama-server")
+    import pytest
+    with pytest.raises(ValueError):
+        _resolve_binary("vulkan")

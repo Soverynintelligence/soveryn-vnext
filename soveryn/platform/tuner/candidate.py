@@ -18,6 +18,7 @@ class Candidate:
     flash_attn: bool
     tensor_split: str | None = None
     ot_offload: str | None = None
+    backend: str = "cuda"      # which build/backend launches this config (quant-like: a field, not a constant)
 
 
 def to_llama_server_args(c: Candidate, *, host: str, port: int) -> list[str]:
