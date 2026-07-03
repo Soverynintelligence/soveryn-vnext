@@ -1,14 +1,8 @@
-"""Tests for build_heartbeat_prompt's salience_section splice.
+"""Tests for build_heartbeat_prompt — freed prompt contract.
 
-The splice must be byte-identical to pre-engine output when the section
-is empty — same exact string. Section, when non-empty, lands BEFORE the
-close line so reflection is the last thing she reads before the close.
-
-2026-06-15 update: the close line now also carries the [SURFACE]/[NO_OP]
-marker requirement per the Coordination Blackout arc close. Tests now
-check that the close line CONTAINS "This is your pulse." (still the
-reflective anchor) rather than that the whole prompt ENDS WITH it (the
-marker phrasing lives on the same final line).
+Aetheria's heartbeat is her own time: full toolset, real latitude,
+no do-nothing bench, no marker machinery. These tests assert the
+freed invitation contract introduced in the 2026-07-03 plan.
 """
 
 from __future__ import annotations
@@ -42,57 +36,24 @@ def _lattice() -> LatticeSnapshot:
     )
 
 
-def test_build_heartbeat_prompt_splices_salience_before_close():
-    sal = (
-        "2 moments resonated since the last heartbeat. "
-        "Do any feel like a permanent shift?\n"
-        "\n"
-        "- [c1] user: \"locked\"\n"
-        "  Marker: \"locked\"\n"
-    )
-    out = build_heartbeat_prompt(
-        minutes_since_last_heartbeat=30,
-        board=_board(),
-        lattice=_lattice(),
-        salience_section=sal,
-    )
-    # Section content present.
-    assert "Do any feel like a permanent shift?" in out
-    assert "[c1] user:" in out
-    # Salience appears BEFORE the close line.
-    assert out.index("This is your pulse.") > out.index("Do any feel like a permanent shift?")
-    # Reflective anchor + marker requirement both on the closing line.
-    assert "This is your pulse." in out
-    assert "[SURFACE]" in out
-    assert "[NO_OP]" in out
+def test_prompt_is_freed_not_marker_gated():
+    p = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(), lattice=_lattice())
+    # no marker machinery
+    assert "[SURFACE]" not in p and "[NO_OP]" not in p and "[ACCEPT_RISK]" not in p
+    assert "plain text only" not in p.lower()
+    assert "permission to do nothing" not in p.lower()
+    # the freed invitation
+    assert "This is your time" in p
+    assert "None of it is off-limits" in p
+    assert "leave a short note" in p.lower()
+    # context still present (orientation)
+    assert "Where things stand" in p
+    assert "[HEARTBEAT]" in p
 
 
-def test_build_heartbeat_prompt_no_salience_section_unchanged():
-    """Empty salience_section must produce byte-identical output to
-    omitting the kwarg entirely. No leading/trailing whitespace drift,
-    no extra blank lines — pre-engine baseline preserved exactly."""
-    out_default = build_heartbeat_prompt(
-        minutes_since_last_heartbeat=30,
-        board=_board(),
-        lattice=_lattice(),
-    )
-    out_empty = build_heartbeat_prompt(
-        minutes_since_last_heartbeat=30,
-        board=_board(),
-        lattice=_lattice(),
-        salience_section="",
-    )
-    assert out_default == out_empty
-
-
-def test_build_heartbeat_prompt_default_kwarg_is_empty_string():
-    """Calling without salience_section is fine — default is ""."""
-    out = build_heartbeat_prompt(
-        minutes_since_last_heartbeat=None,
-        board=_board(),
-        lattice=_lattice(),
-    )
-    assert "[HEARTBEAT]" in out
-    assert "This is your pulse." in out
-    assert "[SURFACE]" in out
-    assert "[NO_OP]" in out
+def test_material_signals_render_as_orientation_not_forced():
+    sigs = [{"kind": "deadline", "ref": "Funding", "detail": "July 10 due in 7 days"}]
+    p = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                               lattice=_lattice(), material_signals=sigs)
+    assert "[DEADLINE] Funding: July 10 due in 7 days" in p
+    assert "disabled" not in p.lower()          # no [NO_OP]-disabled framing

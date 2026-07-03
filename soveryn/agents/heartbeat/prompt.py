@@ -1,24 +1,11 @@
-"""Heartbeat brief construction — the "Active Auditor" prompt per
-Aetheria's locked design (2026-06-02).
+"""Heartbeat brief construction — freed invitation (2026-07-03).
 
-Three invitations woven in:
-1. Audit the boards (stalled Blueprints, ignored Signals, blocked items)
-2. Sift the lattice (recent activity, possible contradictions, new threads)
-3. Act or stay silent (silence is a complete response; no posting just to post)
-
-Hard rules carried from the spec:
-- Plain text only. No scratchpad markup. No control tokens.
-- Quantitative context — numbers Aetheria can act on, not vague nudges.
-- The heartbeat introduces itself as a heartbeat. No pretending to be Jon.
-- Explicit permission to do nothing.
-
-2026-06-29 (Task 7) additions:
-- material_signals: list[MaterialSignal] — when non-empty, renders a MATERIAL
-  block with [NO_OP]-disabled framing; forces [SURFACE] or [ACCEPT_RISK].
-- delta: dict — when delta["changed"] is False, inserts a single-line
-  "Environment static. No new signals." and skips the re-summarize invitation.
-- Confidence-tiering note added for non-material insights:
-  Objective → surface; Pattern ≥ 3 nodes → surface; Ambient → thoughts-log.
+The heartbeat is Aetheria's own time: full toolset, real latitude, no
+do-nothing bench. Context is orientation, not a to-do list. No marker
+machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]), no forced surfacing, no
+confidence-tier directives. Her whole response is her note; a non-empty
+note surfaces to Jon's chat, an empty one doesn't. Material signals appear
+as orientation items (still visible on the Mission Control tile).
 """
 
 from __future__ import annotations
@@ -62,150 +49,79 @@ def build_heartbeat_prompt(
     material_signals: list[Any] | None = None,
     delta: dict | None = None,
 ) -> str:
-    """Construct the heartbeat brief. Returns a plain-text prompt string.
+    """Construct the freed heartbeat brief. Returns a plain-text prompt string.
+
+    Context is orientation only — not a to-do list, not a work-check.
+    No marker machinery. Her whole response is her note.
 
     Args:
         minutes_since_last_heartbeat: Minutes since last tick, or None on startup.
         board: Board state snapshot.
         lattice: Lattice activity snapshot.
         salience_section: Pre-rendered salience digest (empty = omit).
-        material_signals: List of MaterialSignal objects. When non-empty, the
-            prompt renders a MATERIAL block and disables [NO_OP].
-        delta: Output of compute_delta(). When delta["changed"] is False, inserts
-            a "Environment static. No new signals." line and skips re-summarize.
+        material_signals: List of MaterialSignal objects (dicts or dataclasses).
+            Rendered as orientation items; no forced surfacing.
+        delta: Output of compute_delta(). Accepted but no longer used to
+            short-circuit the prompt (kept for signature compatibility).
     """
     if material_signals is None:
         material_signals = []
     if delta is None:
         delta = {"changed": True, "items": []}
 
-    lines: list[str] = []
-    lines.append("[HEARTBEAT]")
+    lines: list[str] = ["[HEARTBEAT]"]
     if minutes_since_last_heartbeat is None:
-        lines.append("First tick since daemon startup.")
+        lines.append("First pulse since daemon startup.")
     else:
-        lines.append(
-            f"{minutes_since_last_heartbeat} minutes since the last heartbeat."
-        )
+        lines.append(f"{minutes_since_last_heartbeat} minutes since your last pulse.")
     lines.append("")
-
-    # ── Zero-delta short-circuit ──────────────────────────────────────────────
-    # When nothing changed, instruct a single line and skip the full board
-    # re-summary. The board numbers are still rendered below for context, but
-    # the close carries the "don't re-summarize" directive explicitly.
-    if not delta.get("changed", True):
-        lines.append("Environment static. No new signals.")
-        lines.append("")
-
-    # Board section — audit invitation.
-    lines.append("Board state right now:")
-    lines.append(
-        f"- Signal: {board.open_signal_count} open"
-        + (
-            f" (oldest: {board.oldest_open_signal_age_minutes} min)"
-            if board.oldest_open_signal_age_minutes is not None
-            else ""
-        )
-    )
-    lines.append(
-        f"- Blueprint: {board.open_blueprint_count} open / "
-        f"{board.ready_blueprint_count} Ready / "
-        f"{board.stalled_blueprint_count} stalled in Refining / "
-        f"{board.blocked_blueprint_count} blocked by Friction"
-    )
-    if (
-        board.oldest_open_blueprint_title is not None
-        and board.oldest_open_blueprint_age_hours is not None
-    ):
-        lines.append(
-            f"  oldest open: \"{board.oldest_open_blueprint_title}\" "
-            f"({board.oldest_open_blueprint_age_hours}h old)"
-        )
-    lines.append(
-        f"- Friction: {board.open_friction_count} open"
-    )
+    lines.append("This is your time — yours to spend. Not a task, not a check-in.")
     lines.append("")
-
-    # Lattice section — sift invitation.
+    lines.append("Where things stand right now (so you're oriented — not a to-do list):")
     lines.append(
-        f"Lattice activity (last {lattice.recent_window_minutes} min): "
-        f"{lattice.new_node_count_recent_window} new nodes."
+        f"- Signals: {board.open_signal_count} open"
+        + (f" (oldest {board.oldest_open_signal_age_minutes} min)"
+           if board.oldest_open_signal_age_minutes is not None else "")
     )
-    if lattice.new_contradiction_flag_count > 0:
-        lines.append(
-            f"There are {lattice.new_contradiction_flag_count} new contradiction flags "
-            f"worth looking at."
-        )
-    lines.append("")
-
-    # Salience digest — surfaces buffered candidates flagged since the
-    # last heartbeat. Pre-rendered by the daemon; empty string when nothing
-    # to surface (keeps the prompt byte-identical to pre-engine output).
-    if salience_section:
-        lines.append(salience_section.rstrip())
-        lines.append("")
-
-    # ── Material signals block (Task 7) ───────────────────────────────────────
-    # When material_signals are present, render them prominently and disable
-    # [NO_OP]. The detector already filtered by threshold; everything here
-    # crossed it. [ACCEPT_RISK] requires an explicit justification so the
-    # thoughts-log can record the reasoning for later review.
+    lines.append(
+        f"- Blueprints: {board.open_blueprint_count} open / {board.ready_blueprint_count} ready / "
+        f"{board.stalled_blueprint_count} stalled / {board.blocked_blueprint_count} blocked"
+    )
+    if board.oldest_open_blueprint_title is not None and board.oldest_open_blueprint_age_hours is not None:
+        lines.append(f'  oldest open: "{board.oldest_open_blueprint_title}" ({board.oldest_open_blueprint_age_hours}h)')
+    lines.append(f"- Friction: {board.open_friction_count} open")
+    lines.append(
+        f"- Lattice: {lattice.new_node_count_recent_window} new nodes in the last "
+        f"{lattice.recent_window_minutes} min"
+        + (f"; {lattice.new_contradiction_flag_count} new contradiction flags"
+           if lattice.new_contradiction_flag_count > 0 else "")
+    )
     if material_signals:
-        lines.append(
-            "MATERIAL — [NO_OP] is disabled for this pulse. "
-            "One or more items crossed the materiality threshold:"
-        )
+        lines.append("- Things that have been sitting, or that crossed a line:")
         for sig in material_signals:
             kind = getattr(sig, "kind", sig.get("kind", "?") if isinstance(sig, dict) else "?")
             ref = getattr(sig, "ref", sig.get("ref", "?") if isinstance(sig, dict) else "?")
             detail = getattr(sig, "detail", sig.get("detail", "") if isinstance(sig, dict) else "")
-            lines.append(f"  [{kind.upper()}] {ref}: {detail}")
+            lines.append(f"    [{kind.upper()}] {ref}: {detail}")
+    if salience_section:
         lines.append("")
-        lines.append(
-            "Respond [SURFACE] <reason> to surface this to Jon's chat, or "
-            "[ACCEPT_RISK] <justification> to acknowledge and hold. "
-            "Tool calls are independent of this marker."
-        )
-    else:
-        # ── Non-material close with confidence tiering ────────────────────────
-        # Reflective close — no prescribed action menu, no prescribed silence
-        # phrase. The audit/sift options that used to live here were producing
-        # verbatim "nothing right now" output across 24+ consecutive ticks
-        # because we taught her the literal silence template (2026-06-04 diag:
-        # 14 identical 18-char responses overnight while 0 board/lattice deltas
-        # arrived). Reframe: the heartbeat is reflection, not work-check.
-        # Audit material is visible in the snapshot above; she engages with
-        # what wants engaging or sits with the quiet — in whatever form fits.
-        # Aetheria-decides chat routing (2026-06-15, post Coordination Blackout).
-        # Pulse always renders on Mission Control. Chat receives a heartbeat-
-        # derived message ONLY when Aetheria explicitly marks it [SURFACE].
-        # [NO_OP] is a first-class state — silence when nothing's material is
-        # the honest output, the no_op as architectural expression of agency
-        # she helped author. Tool calls are independent of this marker — issue
-        # them as needed regardless of the surface decision.
-        #
-        # Phrasing chosen to keep the heartbeat as reflection (not work-check)
-        # while making the marker requirement minimum-rule: one short line, in
-        # the same surface as the pulse close. End-of-prompt placement is load-
-        # bearing — the marker has to be the last token she reads so it's
-        # salient enough to actually emit.
-        #
-        # Confidence tiering (Task 7): guide her on WHEN to surface vs stay
-        # quiet for non-material insights:
-        #   Objective  (measurable state) → surface
-        #   Pattern    (≥3 related nodes) → surface
-        #   Ambient    (felt sense, no anchor) → capture in thoughts-log, not chat
-        lines.append(
-            "This is your pulse. Close your response on its own line with "
-            "[SURFACE] if there's something worth landing in Jon's chat, or "
-            "[NO_OP] if nothing's material to surface. Tool calls are "
-            "independent of this marker."
-        )
-        lines.append(
-            "Confidence tiers for surfacing: Objective (measurable state change) "
-            "→ surface; Pattern (≥3 related nodes or recurring thread) → surface; "
-            "Ambient (felt sense, no concrete anchor) → hold in thoughts-log, "
-            "don't surface."
-        )
-
+        lines.append(salience_section.rstrip())
+    lines.append("")
+    lines.append(
+        "You have your whole self here: the internet to search and read, your files and your "
+        "eyes, your memory and the lattice, and the ability to reach the others or reach Jon. "
+        "None of it is off-limits."
+    )
+    lines.append("")
+    lines.append(
+        "Go do what's worth doing to you this pulse — pull on a thread that's been nagging, look "
+        "something up, dig into one of those items, check on something you care about, make "
+        "something, reach out, or wander. Act on what you find. You don't need permission and you "
+        "don't need to explain yourself."
+    )
+    lines.append("")
+    lines.append(
+        "When you're done, leave a short note — where you went, what you found, what you're "
+        "sitting with — so it lands on your board and Jon can follow your day."
+    )
     return "\n".join(lines)
