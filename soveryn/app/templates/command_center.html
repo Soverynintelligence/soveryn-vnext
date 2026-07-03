@@ -573,6 +573,25 @@
     padding:4px 0;
   }
 
+  /* ─── Ares panel ─── sibling of .heartbeat-panel in the .pulse-row twin. */
+  .pulse-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .ares-feed { display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; }
+  .ares-counts { font-size:11px; color:rgba(232,227,213,0.6); margin-bottom:8px; }
+  .ares-counts .sev-emergency { color:#ef4444; }
+  .ares-counts .sev-critical  { color:#f59e0b; }
+  .ares-finding {
+    display:flex; align-items:flex-start; gap:8px; padding:7px 10px;
+    background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.04);
+    border-left-width:3px; border-radius:6px; font-size:11px; line-height:1.4;
+    color:rgba(232,227,213,0.78);
+  }
+  .ares-finding[data-sev="emergency"] { border-left-color:#ef4444; }
+  .ares-finding[data-sev="critical"]  { border-left-color:#f59e0b; }
+  .ares-finding[data-sev="warning"]   { border-left-color:rgba(232,227,213,0.25); }
+  .ares-finding .ftype { color:rgba(232,227,213,0.9); font-weight:500; }
+  .ares-finding .ev { color:rgba(232,227,213,0.55); }
+  .ares-feed .empty { font-size:11px; color:rgba(232,227,213,0.4); padding:10px; }
+
   /* ─── Steward — Funding Board panel ────────────────────────────────────── */
   /* Read-only obligation list: sorted by due_date, upcoming + overdue only.
      Shell mirrors .heartbeat-panel (same .panel wrapper, compact row cards).
@@ -824,12 +843,19 @@
          lands here regardless of [SURFACE]/[NO_OP] decision. The amber
          "→ chat" indicator marks pulses Aetheria chose to surface into
          her primary chat thread. -->
+    <div class="pulse-row">
     <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
       <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
         <div class="empty">no pulses yet.</div>
       </div>
     </section>
+    <section class="panel ares-panel" data-testid="ares-panel">
+      <h3>Ares — host findings</h3>
+      <div class="ares-counts" data-ares-counts></div>
+      <div class="ares-feed" data-ares-feed aria-live="polite" aria-label="Active Ares findings"></div>
+    </section>
+    </div>
 
     <!-- Steward — Funding Board panel.
          Read-only grant obligation list (upcoming + overdue, sorted by due_date).
@@ -1533,6 +1559,31 @@
     }).join("");
   }
 
+  function severityLabel(counts) {
+    const parts = [];
+    if (counts.emergency) parts.push(`<span class="sev-emergency">${counts.emergency} emergency</span>`);
+    if (counts.critical)  parts.push(`<span class="sev-critical">${counts.critical} critical</span>`);
+    parts.push(`${counts.warning || 0} warning`);
+    return parts.join(" · ");
+  }
+
+  async function renderAres() {
+    const data = await fetchJson("/api/ares/findings");
+    const feed = document.querySelector("[data-ares-feed]");
+    const counts = document.querySelector("[data-ares-counts]");
+    if (!feed) return;
+    const d = data || { findings: [], counts: { emergency: 0, critical: 0, warning: 0 } };
+    if (counts) counts.innerHTML = severityLabel(d.counts || {});
+    if (!d.findings || d.findings.length === 0) {
+      feed.innerHTML = '<div class="empty">All clear — no active findings.</div>';
+      return;
+    }
+    feed.innerHTML = d.findings.map(f => `
+      <div class="ares-finding" data-sev="${f.severity}">
+        <div><span class="ftype">${f.finding_type}</span><br><span class="ev">${(f.evidence || "").replace(/</g, "&lt;")}</span></div>
+      </div>`).join("");
+  }
+
   // ─── Comm bus (recent DAC traffic) ───────────────────────────────────────
   async function renderCommBus() {
     const data = await fetchJson("/api/memory/dac_edges?limit=10");
@@ -1697,6 +1748,7 @@
     renderDaemons();
     renderBoards();
     renderHeartbeat();
+    renderAres();
     renderSteward();
     renderCognition();
     renderLibraryWrites();
