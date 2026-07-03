@@ -37,6 +37,8 @@ def _resolve_binary(backend: str) -> str:
         raise ValueError(
             f"unknown backend {backend!r}; known: {sorted(_BACKEND_BINARY)}"
         )
+
+
 _CUDA_COMPAT = ("/home/jon-deoliveira/miniconda3/envs/cuda131/cuda-compat:"
                 "/home/jon-deoliveira/miniconda3/envs/cuda131/lib")
 

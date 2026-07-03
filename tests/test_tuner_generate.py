@@ -35,6 +35,12 @@ def _write_model(tmp_path, gb):
     return str(p)
 
 
+def test_generate_empty_rig_returns_empty(tmp_path):
+    # a rig with no devices yields no candidates (total function — never a phantom --device "" launch)
+    empty = Rig(devices=(), total_ram_bytes=256 * GB)
+    assert generate_candidates(_write_model(tmp_path, 10), empty) == []
+
+
 def test_generate_spread_for_fitting_model(tmp_path, monkeypatch):
     import soveryn.platform.tuner.generate as g
     monkeypatch.setattr(g, "model_footprint", lambda _f: 10 * GB)  # fits everything

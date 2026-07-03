@@ -43,6 +43,8 @@ def _candidate(model_file, indices, *, ot=None, ck="f16", cv="f16") -> Candidate
 
 
 def generate_candidates(model_file: str, rig: Rig) -> list[Candidate]:
+    if not rig.devices:
+        return []                       # no devices -> no candidates (total function; no phantom launches)
     fp = model_footprint(model_file)
     # largest-VRAM device first, so the topology-relevant single (e.g. Blackwell) leads the spread
     devs = sorted(rig.devices, key=lambda d: d.vram_bytes, reverse=True)
