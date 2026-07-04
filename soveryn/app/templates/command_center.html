@@ -522,7 +522,7 @@
      surface. Added 2026-06-15 closing the Coordination Blackout arc:
      pulses always render here; chat only fires when she explicitly marks
      a response [SURFACE]. Density / shell mirrors the .boards panel. */
-  .heartbeat-feed { display:flex; flex-direction:column; gap:6px; }
+  .heartbeat-feed { display:flex; flex-direction:column; gap:6px; max-height:340px; overflow-y:auto; }
   .heartbeat-pulse {
     display:flex; align-items:center; gap:10px;
     padding:8px 12px;
@@ -1522,7 +1522,7 @@
   }
 
   async function renderHeartbeat() {
-    const data = await fetchJson("/api/heartbeat/recent?limit=10");
+    const data = await fetchJson("/api/heartbeat/recent?limit=48");
     const container = document.querySelector("[data-heartbeat-feed]");
     if (!container || !data) return;
     const pulses = data.pulses || [];
