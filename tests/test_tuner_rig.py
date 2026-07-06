@@ -10,12 +10,17 @@ def test_probe_rig_builds_from_injected_readers():
             (0, "NVIDIA RTX PRO 5000 Blackwell", 48 * GB, "0000:45:00.0"),
             (1, "Quadro RTX 8000", 48 * GB, "0000:01:00.0"),
         ]
-    rig = probe_rig(devices_reader=devs, ram_reader=lambda: 256 * GB)
+    # occupancy_reader keyed by device index -> (used_vram_bytes, compute_procs)
+    occ = lambda: {0: (40 * GB, 2), 1: (0, 0)}
+    rig = probe_rig(devices_reader=devs, ram_reader=lambda: 256 * GB, occupancy_reader=occ)
     assert rig.total_ram_bytes == 256 * GB
     assert len(rig.devices) == 2
     d0 = rig.devices[0]
     assert (d0.index, d0.backend, d0.name, d0.vram_bytes, d0.pci_bus_id) == (
         0, "cuda", "NVIDIA RTX PRO 5000 Blackwell", 48 * GB, "0000:45:00.0")
+    # occupancy merges onto the right device; missing entries default to free
+    assert (d0.used_vram_bytes, d0.compute_procs) == (40 * GB, 2)
+    assert (rig.devices[1].used_vram_bytes, rig.devices[1].compute_procs) == (0, 0)
 
 
 def test_rig_and_device_are_frozen():

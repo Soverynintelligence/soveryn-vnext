@@ -6,7 +6,7 @@ Reports the winning config; does NOT auto-apply it to the router.
 from __future__ import annotations
 import sys
 
-from soveryn.platform.tuner.rig import probe_rig
+from soveryn.platform.tuner.rig import probe_rig, select_rig
 from soveryn.platform.tuner.generate import generate_candidates, model_footprint
 from soveryn.platform.tuner.search import run_search, SearchResult
 
@@ -31,11 +31,19 @@ def _progress(i: int, n: int, cand) -> None:
 
 def main(argv=None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
-    if not argv:
-        print("usage: python -m soveryn.platform.tuner <model_file>", file=sys.stderr)
+    allow_occupied = "--allow-occupied" in argv
+    positional = [a for a in argv if not a.startswith("--")]
+    if not positional:
+        print("usage: python -m soveryn.platform.tuner [--allow-occupied] <model_file>",
+              file=sys.stderr)
         return 2
-    model_file = argv[0]
+    model_file = positional[0]
     rig = probe_rig()
+    rig, note = select_rig(rig, allow_occupied=allow_occupied)
+    if note:
+        print(note, file=sys.stderr, flush=True)
+    if rig is None:
+        return 3  # refused: GPUs occupied by the live fleet
     fp = model_footprint(model_file)
     print(f"model footprint: {fp / 1e9:.1f} GB | devices: {len(rig.devices)} | "
           f"RAM: {rig.total_ram_bytes / 1e9:.0f} GB", flush=True)
