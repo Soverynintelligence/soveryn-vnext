@@ -23,11 +23,13 @@ def _env(app_port=5001, lattice_db="/tmp/lattice_vnext.db", conv_db="/tmp/conv_v
          souls_dir="/tmp/souls", pinned_memory_path="/tmp/pinned_memory.md",
          recall_lattice_db="/tmp/recall_lattice.db",
          salience_db="/tmp/salience_vnext.db",
-         data_root="/tmp/test-data"):
+         data_root="/tmp/test-data",
+         cognition_instance_url="http://127.0.0.1:8089"):
     return EnvConfig(
         app_port=app_port,
         model_root=Path("/tmp/models"),
         health_timeout_seconds=2.0,
+        cognition_instance_url=cognition_instance_url,
         lattice_db=Path(lattice_db),
         conversations_db=Path(conv_db),
         souls_dir=Path(souls_dir),
