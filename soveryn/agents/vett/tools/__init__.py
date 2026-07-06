@@ -10,10 +10,16 @@ from soveryn.agents.vett.tools.patrol_sources import (
     build_read_patrol_sources_tool,
     register_vett_patrol_tools,
 )
+from soveryn.agents.vett.tools.pdf import (
+    build_convert_to_pdf_tool,
+    register_vett_pdf_tools,
+)
 
 
 __all__ = [
     "build_mark_source_visited_tool",
     "build_read_patrol_sources_tool",
     "register_vett_patrol_tools",
+    "build_convert_to_pdf_tool",
+    "register_vett_pdf_tools",
 ]

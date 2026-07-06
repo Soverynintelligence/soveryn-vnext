@@ -442,6 +442,12 @@ def create_app(
                 lattice_db_path=env.lattice_db,
             )
 
+        # Vett's file->PDF converter. Deterministic file-in/file-out so she
+        # calls a converter instead of regenerating document content into a
+        # tool call (which truncates on long docs). No lattice dependency.
+        from soveryn.agents.vett.tools import register_vett_pdf_tools
+        register_vett_pdf_tools(tool_registry)
+
         # Document tools — Aetheria + Vett only; Scotty is not a document author.
         # One shared DocumentStore (documents_vnext.db in the memory dir) so
         # both agents operate on the same deliverable space. Attribution is
