@@ -145,7 +145,7 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     32K-context servers, so every loop must trim transcript to fit before
     send — added 2026-06-17 after Vett's read_file reads overflowed the
     shared vett-scotty server). The *generation* caps stay Aetheria-
-    interactive-only: (b) pathological runaway generation (max_tokens=768),
+    interactive-only: (b) pathological runaway generation (max_tokens == 8192),
     and (c) server-side reasoning budget (thinking_budget_tokens=0). See
     startup.py inline comments for the rationale on each."""
     _configure_startup_env(
@@ -168,10 +168,10 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
         assert loops[agent].context_window == 32_768, agent
         assert loops[agent].history_token_budget == 8_000, agent
     # The generation caps stay Aetheria-interactive-only.
-    assert loops["aetheria"].max_tokens == 768
+    assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
-    assert loops["vett"].max_tokens != 768
-    assert loops["scotty"].max_tokens != 768
+    assert loops["vett"].max_tokens == 8192
+    assert loops["scotty"].max_tokens == 8192
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(
