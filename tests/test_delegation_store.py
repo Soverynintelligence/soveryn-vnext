@@ -40,3 +40,13 @@ def test_list_by_status(tmp_path):
     s.set_status(b, "executing"); s.set_status(b, "in_review")
     ids = [t.id for t in s.list_tasks(status="in_review")]
     assert ids == [b] and a not in ids
+
+def test_intermediate_illegal_transitions_blocked(tmp_path):
+    s = _s(tmp_path)
+    tid = s.create_task(dispatched_by="aetheria", objective="o", scope="s", acceptance="a")
+    with pytest.raises(IllegalTransition):
+        s.set_status(tid, "in_review")   # skipped executing
+    tid2 = s.create_task(dispatched_by="aetheria", objective="o", scope="s", acceptance="a")
+    s.set_status(tid2, "executing")
+    with pytest.raises(IllegalTransition):
+        s.set_status(tid2, "landed")     # skipped in_review
