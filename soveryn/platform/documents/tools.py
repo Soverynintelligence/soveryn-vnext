@@ -274,7 +274,11 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
                     "description": (
                         "Replacement Markdown body for the document. Omit to "
                         "leave the current content unchanged. This replaces the "
-                        "entire body — include everything you want to preserve."
+                        "entire body — include everything you want to preserve. "
+                        "For a LONG document, do NOT rewrite the whole body here "
+                        "(it can exceed the output limit and fail) — use "
+                        "append_to_document to add a section or replace_in_document "
+                        "to change one passage instead."
                     ),
                 },
                 "status": {
@@ -302,6 +306,111 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
 
 
 # ---------------------------------------------------------------------------
+# build_append_to_document_tool / build_replace_in_document_tool
+# ---------------------------------------------------------------------------
+# Delta edits: the tool-call argument carries only the NEW section or the one
+# changed passage — never the whole (growing) document. Fix for the 2026-07-06
+# truncation ("missing closing quote") where re-emitting a full ~4KB body into
+# an update_document call exceeded the output-token budget and the tool failed.
+
+def build_append_to_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolSpec:
+    """Append a new section to a document; only the new text is sent."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        doc_id = args.get("id", "")
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            raise ToolArgError("id must be a non-empty string")
+        text = args.get("text", "")
+        if not isinstance(text, str) or not text.strip():
+            raise ToolArgError("text must be a non-empty string")
+        if not store.append_to_document(doc_id.strip(), text):
+            raise ToolArgError(f"Document {doc_id!r} not found")
+        return {"id": doc_id.strip(), "appended": True}
+
+    return ToolSpec(
+        name="append_to_document",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "UUID of the document to append to."},
+                "text": {
+                    "type": "string",
+                    "description": (
+                        "The new Markdown text to add to the END of the document. "
+                        "Send ONLY this new section — never the whole document."
+                    ),
+                },
+            },
+            "required": ["id", "text"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Add a new section to the END of an existing document. You send ONLY "
+            "the new text, not the whole document — so it works no matter how long "
+            "the document already is. PREFER this over update_document to grow a "
+            "document: rewriting a long body in one call can exceed the output "
+            "limit and fail."
+        ),
+    )
+
+
+def build_replace_in_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolSpec:
+    """Replace one exact passage in a document; only the passage is sent."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        doc_id = args.get("id", "")
+        if not isinstance(doc_id, str) or not doc_id.strip():
+            raise ToolArgError("id must be a non-empty string")
+        old = args.get("old_text", "")
+        new = args.get("new_text", "")
+        if not isinstance(old, str) or not old:
+            raise ToolArgError("old_text must be a non-empty string")
+        if not isinstance(new, str):
+            raise ToolArgError("new_text must be a string")
+        status = store.replace_in_document(doc_id.strip(), old, new)
+        if status == "missing":
+            raise ToolArgError(f"Document {doc_id!r} not found")
+        if status == "not_present":
+            raise ToolArgError("old_text was not found — copy it exactly, including whitespace")
+        if status == "ambiguous":
+            raise ToolArgError(
+                "old_text appears more than once — include more surrounding "
+                "context so it uniquely identifies one passage"
+            )
+        return {"id": doc_id.strip(), "replaced": True}
+
+    return ToolSpec(
+        name="replace_in_document",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "description": "UUID of the document to edit."},
+                "old_text": {
+                    "type": "string",
+                    "description": (
+                        "The exact passage to replace — must appear exactly once. "
+                        "Send only this passage, not the whole document."
+                    ),
+                },
+                "new_text": {"type": "string", "description": "The replacement text."},
+            },
+            "required": ["id", "old_text", "new_text"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Edit a document by replacing one specific passage. Send only the exact "
+            "old passage and its replacement — never the whole document. old_text "
+            "must match exactly and appear exactly once. PREFER this over "
+            "update_document for targeted edits to a long document."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # register_document_tools
 # ---------------------------------------------------------------------------
 
@@ -311,7 +420,7 @@ def register_document_tools(
     store: DocumentStore,
     owner_agent: str,
 ) -> None:
-    """Register all four document tools for one agent.
+    """Register all document tools for one agent.
 
     Call once per agent that should have document capability (aetheria, vett).
     The underlying ``store`` is shared — multiple calls with different
@@ -321,3 +430,5 @@ def register_document_tools(
     registry.register(build_list_documents_tool(store=store, owner_agent=owner_agent))
     registry.register(build_read_document_tool(store=store, owner_agent=owner_agent))
     registry.register(build_update_document_tool(store=store, owner_agent=owner_agent))
+    registry.register(build_append_to_document_tool(store=store, owner_agent=owner_agent))
+    registry.register(build_replace_in_document_tool(store=store, owner_agent=owner_agent))

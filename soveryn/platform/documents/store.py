@@ -202,3 +202,35 @@ class DocumentStore:
         with self._conn() as conn:
             cur = conn.execute(sql, params)
         return cur.rowcount > 0
+
+    def append_to_document(self, doc_id: str, text: str) -> bool:
+        """Append text to the END of a document's content, with clean
+        paragraph separation. Only the NEW text is passed — the caller never
+        re-sends the whole body, so this works no matter how large the
+        document already is. Returns True if the document existed.
+        """
+        doc = self.get_document(doc_id)
+        if doc is None:
+            return False
+        addition = text.strip("\n")
+        base = doc.content.rstrip()
+        new_content = (base + "\n\n" + addition) if base else addition
+        return self.update_document(doc_id, content=new_content)
+
+    def replace_in_document(self, doc_id: str, old: str, new: str) -> str:
+        """Replace the single occurrence of ``old`` with ``new`` in a
+        document's content. Only the changed passage is passed. Returns a
+        status: 'ok', 'missing' (no such document), 'not_present' (``old``
+        not found), or 'ambiguous' (``old`` occurs more than once — the
+        caller must supply more surrounding context to disambiguate).
+        """
+        doc = self.get_document(doc_id)
+        if doc is None:
+            return "missing"
+        occurrences = doc.content.count(old)
+        if occurrences == 0:
+            return "not_present"
+        if occurrences > 1:
+            return "ambiguous"
+        self.update_document(doc_id, content=doc.content.replace(old, new, 1))
+        return "ok"
