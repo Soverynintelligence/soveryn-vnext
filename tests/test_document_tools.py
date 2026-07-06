@@ -249,13 +249,21 @@ def test_update_document_title(vett_registry, store):
     assert doc.title == "Updated Title"
 
 
-def test_update_document_content(vett_registry, store):
+def test_update_document_rejects_content(vett_registry, store):
+    """Body rewrites are closed on update_document — the truncation-prone path."""
     created = _invoke(vett_registry, "vett", "create_document",
                       title="Title", content="original body")
-    _invoke(vett_registry, "vett", "update_document",
-            id=created["id"], content="revised body")
-    doc = store.get_document(created["id"])
-    assert doc.content == "revised body"
+    with pytest.raises(ToolArgError):
+        _invoke(vett_registry, "vett", "update_document",
+                id=created["id"], content="revised body")
+
+
+def test_replace_in_document_edits_body(vett_registry, store):
+    created = _invoke(vett_registry, "vett", "create_document",
+                      title="Title", content="original body")
+    _invoke(vett_registry, "vett", "replace_in_document",
+            id=created["id"], old_text="original", new_text="revised")
+    assert store.get_document(created["id"]).content == "revised body"
 
 
 def test_update_document_status(vett_registry, store):
@@ -267,15 +275,14 @@ def test_update_document_status(vett_registry, store):
     assert doc.status == "final"
 
 
-def test_update_document_cross_agent(both_registry, store):
-    """Aetheria can update vett's document (collaborative editing)."""
+def test_document_cross_agent_body_edit(both_registry, store):
+    """Aetheria can edit vett's document body via append (collaborative)."""
     vett_doc = _invoke(both_registry, "vett", "create_document",
                        title="Joint Draft", content="vett's draft")
-    result = _invoke(both_registry, "aetheria", "update_document",
-                     id=vett_doc["id"], content="aetheria's revision")
-    assert result["updated"] is True
+    _invoke(both_registry, "aetheria", "append_to_document",
+            id=vett_doc["id"], text="aetheria's addition")
     doc = store.get_document(vett_doc["id"])
-    assert doc.content == "aetheria's revision"
+    assert "vett's draft" in doc.content and "aetheria's addition" in doc.content
 
 
 def test_update_document_returns_id(vett_registry):

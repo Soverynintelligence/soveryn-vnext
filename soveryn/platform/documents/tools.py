@@ -216,10 +216,13 @@ def build_read_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolS
 # ---------------------------------------------------------------------------
 
 def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolSpec:
-    """Tool that edits any document's title, content, or status.
+    """Tool that edits a document's title or lifecycle status.
 
-    At least one of ``title``, ``content``, or ``status`` must be supplied.
-    Passing none of them is a ToolArgError — there is nothing to update.
+    Body/content edits go through append_to_document / replace_in_document —
+    update_document intentionally does NOT rewrite the body. Re-emitting a
+    long body into a tool call truncated past the output-token budget and
+    failed (2026-07-06), so that path is closed here by design. At least one
+    of title/status must be supplied.
     """
 
     def handler(args: Mapping[str, Any]) -> Any:
@@ -227,30 +230,24 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
         if not isinstance(doc_id, str) or not doc_id.strip():
             raise ToolArgError("id must be a non-empty string")
 
-        title = args.get("title")
-        content = args.get("content")
-        status = args.get("status")
-
-        # Require at least one update field
-        if title is None and content is None and status is None:
+        # Body rewrites are not allowed here — steer to the delta-edit tools.
+        if args.get("content") is not None:
             raise ToolArgError(
-                "At least one of 'title', 'content', or 'status' must be provided"
+                "update_document does not edit body text. Use append_to_document "
+                "to add a section, or replace_in_document to change a passage. "
+                "update_document only changes title and status."
             )
 
-        # Verify document exists before attempting the update
+        title = args.get("title")
+        status = args.get("status")
+        if title is None and status is None:
+            raise ToolArgError("At least one of 'title' or 'status' must be provided")
+
         if store.get_document(doc_id.strip()) is None:
             raise ToolArgError(f"Document {doc_id!r} not found")
 
-        updated = store.update_document(
-            doc_id.strip(),
-            title=title,
-            content=content,
-            status=status,
-        )
-        return {
-            "id": doc_id.strip(),
-            "updated": updated,
-        }
+        updated = store.update_document(doc_id.strip(), title=title, status=status)
+        return {"id": doc_id.strip(), "updated": updated}
 
     return ToolSpec(
         name="update_document",
@@ -265,28 +262,14 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
                 "title": {
                     "type": "string",
                     "description": (
-                        "New title for the document. Omit to leave the current "
-                        "title unchanged."
-                    ),
-                },
-                "content": {
-                    "type": "string",
-                    "description": (
-                        "Replacement Markdown body for the document. Omit to "
-                        "leave the current content unchanged. This replaces the "
-                        "entire body — include everything you want to preserve. "
-                        "For a LONG document, do NOT rewrite the whole body here "
-                        "(it can exceed the output limit and fail) — use "
-                        "append_to_document to add a section or replace_in_document "
-                        "to change one passage instead."
+                        "New title for the document. Omit to leave it unchanged."
                     ),
                 },
                 "status": {
                     "type": "string",
                     "description": (
-                        "New lifecycle status. Use 'draft' while working, "
-                        "'final' when the document is ready for Jon to download, "
-                        "'archived' to retire a document without deleting it."
+                        "New lifecycle status: 'draft' while working, 'final' when "
+                        "ready for Jon to download, 'archived' to retire it."
                     ),
                 },
             },
@@ -295,12 +278,10 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
         },
         handler=handler,
         description=(
-            "Edit an existing deliverable document's title, content, or lifecycle "
-            "status. Any agent can edit any document — this is a collaborative "
-            "shared workspace. Supply at least one of title, content, or status; "
-            "the updated_at timestamp is bumped automatically. Returns "
-            "{id, updated: bool}. ToolArgError if the document is not found or if "
-            "no update fields are provided."
+            "Change a document's TITLE or lifecycle STATUS (draft/final/archived). "
+            "It does NOT edit the body — to change content, use append_to_document "
+            "(add a section) or replace_in_document (change a passage). Supply at "
+            "least one of title or status. Returns {id, updated: bool}."
         ),
     )
 
