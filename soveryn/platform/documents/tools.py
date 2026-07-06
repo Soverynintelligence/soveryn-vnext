@@ -216,13 +216,14 @@ def build_read_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolS
 # ---------------------------------------------------------------------------
 
 def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> ToolSpec:
-    """Tool that edits a document's title or lifecycle status.
+    """Tool that edits a document's title, body content, or lifecycle status.
 
-    Body/content edits go through append_to_document / replace_in_document —
-    update_document intentionally does NOT rewrite the body. Re-emitting a
-    long body into a tool call truncated past the output-token budget and
-    failed (2026-07-06), so that path is closed here by design. At least one
-    of title/status must be supplied.
+    A full-body rewrite via ``content`` is fully supported — that is how you
+    complete or finalize a document. For incremental growth or a targeted
+    change to an already-large document, append_to_document /
+    replace_in_document are available and cheaper (they send only the delta),
+    but a full rewrite here is a first-class capability. At least one of
+    title/content/status must be supplied.
     """
 
     def handler(args: Mapping[str, Any]) -> Any:
@@ -230,23 +231,21 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
         if not isinstance(doc_id, str) or not doc_id.strip():
             raise ToolArgError("id must be a non-empty string")
 
-        # Body rewrites are not allowed here — steer to the delta-edit tools.
-        if args.get("content") is not None:
-            raise ToolArgError(
-                "update_document does not edit body text. Use append_to_document "
-                "to add a section, or replace_in_document to change a passage. "
-                "update_document only changes title and status."
-            )
-
         title = args.get("title")
+        content = args.get("content")
         status = args.get("status")
-        if title is None and status is None:
-            raise ToolArgError("At least one of 'title' or 'status' must be provided")
+
+        if title is None and content is None and status is None:
+            raise ToolArgError(
+                "At least one of 'title', 'content', or 'status' must be provided"
+            )
 
         if store.get_document(doc_id.strip()) is None:
             raise ToolArgError(f"Document {doc_id!r} not found")
 
-        updated = store.update_document(doc_id.strip(), title=title, status=status)
+        updated = store.update_document(
+            doc_id.strip(), title=title, content=content, status=status
+        )
         return {"id": doc_id.strip(), "updated": updated}
 
     return ToolSpec(
@@ -261,8 +260,17 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
                 },
                 "title": {
                     "type": "string",
+                    "description": "New title. Omit to leave it unchanged.",
+                },
+                "content": {
+                    "type": "string",
                     "description": (
-                        "New title for the document. Omit to leave it unchanged."
+                        "Replacement Markdown body — writes the COMPLETE document. "
+                        "Omit to leave the content unchanged. For growing or tweaking "
+                        "an already-large document, append_to_document (add a section) "
+                        "and replace_in_document (change one passage) are cheaper "
+                        "because they send only the delta — but a full rewrite here "
+                        "is fully supported whenever you want it."
                     ),
                 },
                 "status": {
@@ -278,10 +286,11 @@ def build_update_document_tool(*, store: DocumentStore, owner_agent: str) -> Too
         },
         handler=handler,
         description=(
-            "Change a document's TITLE or lifecycle STATUS (draft/final/archived). "
-            "It does NOT edit the body — to change content, use append_to_document "
-            "(add a section) or replace_in_document (change a passage). Supply at "
-            "least one of title or status. Returns {id, updated: bool}."
+            "Edit a document's title, body content, or lifecycle status. A full-body "
+            "rewrite via 'content' is supported — this is how you complete or finalize "
+            "a document. For incremental edits to a large document, append_to_document "
+            "and replace_in_document are cheaper alternatives. Supply at least one of "
+            "title, content, or status. Returns {id, updated: bool}."
         ),
     )
 

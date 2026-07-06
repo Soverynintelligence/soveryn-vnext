@@ -628,14 +628,18 @@ def create_app(
                 # carried in the prompt, not on what she knows.
                 kwargs["history_token_budget"] = 8_000
                 kwargs["context_window"] = 32_768
-                # Interactive rail generation cap. Defensive — observed
-                # production completion_tokens are well under this (typical
-                # short turn ~25 tokens, substantive turn ~250). The 768 cap
-                # exists to catch pathological runaway generation (the
-                # empty_turn_poisoning class — see project_soveryn_empty_turn_poisoning)
-                # where the model gets stuck verbalizing scratch into content.
-                # Not actively biting current behavior; this is a soft ceiling.
-                kwargs["max_tokens"] = 768
+                # Output budget. Raised 768 -> 8192 on 2026-07-06. The old 768
+                # was a defensive soft-ceiling (anti empty_turn_poisoning runaway,
+                # see project_soveryn_empty_turn_poisoning) but it CRIPPLED real
+                # work: she emits a full document as a tool-call argument, and a
+                # ~1-2K-token proposal truncated the tool-call JSON mid-string
+                # ("missing closing quote" -> 500 -> heartbeat 502 every pulse).
+                # Per feedback_provision_aetheria_for_growth: provision her
+                # generously to COMPLETE deliverables and to think/express at
+                # length; don't ration output to dodge a different problem. If
+                # empty_turn_poisoning recurs, fix it at root, not by capping her.
+                # 8192 out + the 8K history budget fits well inside 32K context.
+                kwargs["max_tokens"] = 8192
                 # Hard cap on per-request reasoning at the wire level. The
                 # router preset for Aetheria has `reasoning = off` and the
                 # Gemma-4-specific `enable_thinking=true` (inverse logic for

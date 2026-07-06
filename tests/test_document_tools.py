@@ -249,13 +249,13 @@ def test_update_document_title(vett_registry, store):
     assert doc.title == "Updated Title"
 
 
-def test_update_document_rejects_content(vett_registry, store):
-    """Body rewrites are closed on update_document — the truncation-prone path."""
+def test_update_document_content(vett_registry, store):
+    """Full-body rewrite via update_document is a first-class capability."""
     created = _invoke(vett_registry, "vett", "create_document",
                       title="Title", content="original body")
-    with pytest.raises(ToolArgError):
-        _invoke(vett_registry, "vett", "update_document",
-                id=created["id"], content="revised body")
+    _invoke(vett_registry, "vett", "update_document",
+            id=created["id"], content="revised body")
+    assert store.get_document(created["id"]).content == "revised body"
 
 
 def test_replace_in_document_edits_body(vett_registry, store):
