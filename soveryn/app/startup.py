@@ -172,6 +172,19 @@ def create_app(
             submissions_path=str(env.data_root / "steward" / "submissions.json"),
         )
 
+        # Delegation tools — Aetheria's rail for handing bounded implementation
+        # tasks to Scotty (dispatch_task + task_status). The DelegationStore is
+        # wired into app.extensions["soveryn"] so the /api/delegation/* routes
+        # and the background worker can share the same live instance.
+        from soveryn.platform.delegation.store import DelegationStore
+        from soveryn.platform.delegation.tools import register_delegation_tools
+        delegation_store = DelegationStore(env.data_root / "delegation.db")
+        register_delegation_tools(
+            tool_registry,
+            store=delegation_store,
+            owner_agent="aetheria",
+        )
+
         # Specialist-spawning primitive (DSL Orchestration v1).
         # spawn_specialist / query_specialist / terminate_specialist let
         # Aetheria instantiate session-scoped peer agents with a tight
@@ -740,6 +753,57 @@ def create_app(
                 name="messenger-delivery-worker",
             ).start()
 
+        # Delegation background worker — drains dispatched tasks every 5s,
+        # calling execute_task for each (engine drives worktree isolation,
+        # Scotty's bounded loop, acceptance gate, diff + commit). SERIAL by
+        # design (git worktrees + a live repo tolerate no concurrent writers).
+        # Daemon thread so it doesn't keep the process alive on shutdown.
+        # Gated on SOVERYN_START_DELEGATION_WORKER (default True) so tests
+        # that build create_app under tmp_path fixtures can opt out.
+        if app.config.setdefault("SOVERYN_START_DELEGATION_WORKER", True):
+            import threading as _threading
+            from soveryn.platform.delegation.worker import run_forever as _delegation_run_forever
+            from soveryn.platform.delegation.scotty_runner import scotty_run as _scotty_run
+            from soveryn.platform.delegation.engine import execute_task as _execute_task
+            from soveryn.platform.delegation.engine import execute_task  # noqa: F401 (used in lambda)
+
+            def _run_acceptance_in_worktree(worktree_path: str, acceptance: str) -> tuple[bool, str]:
+                """Run the acceptance command inside the worktree via subprocess."""
+                import subprocess
+                import sys
+                try:
+                    result = subprocess.run(
+                        acceptance.split(),
+                        cwd=worktree_path,
+                        capture_output=True,
+                        text=True,
+                        timeout=300,
+                        env={
+                            "PATH": f"{__import__('pathlib').Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin",
+                            "HOME": str(__import__('pathlib').Path.home()),
+                            "PYTHONPATH": str(__import__('pathlib').Path(worktree_path)),
+                        },
+                    )
+                    return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
+                except Exception as exc:
+                    return False, str(exc)
+
+            _delegation_repo_root = str(
+                __import__('pathlib').Path.home() / "soveryn_vnext"
+            )
+            _threading.Thread(
+                target=_delegation_run_forever,
+                kwargs={
+                    "execute_fn": _execute_task,
+                    "repo_root": _delegation_repo_root,
+                    "scotty_run": _scotty_run,
+                    "run_acceptance": _run_acceptance_in_worktree,
+                },
+                args=(delegation_store,),
+                daemon=True,
+                name="delegation-worker",
+            ).start()
+
     # MessengerStore was constructed earlier (above the agent_loops gate) so
     # it's in scope when deliberate_share is registered for Aetheria + Vett.
     # The same instance flows here into app.extensions for blueprint use.
@@ -761,6 +825,19 @@ def create_app(
         document_store = _document_store  # type: ignore[name-defined]
     except NameError:
         document_store = None
+    # delegation_store is constructed inside the build block above. When
+    # agent_loops is injected externally (test fixtures), delegation_store is
+    # absent — tests inject their own into app.extensions if needed.
+    try:
+        _ds = delegation_store  # type: ignore[name-defined]
+    except NameError:
+        _ds = None
+    from soveryn.platform.delegation.worktree import (
+        merge_worktree as _merge_worktree,
+        remove_worktree as _remove_worktree,
+    )
+    import os as _os
+    _repo_root = _os.path.expanduser("~/soveryn_vnext")
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
@@ -773,6 +850,12 @@ def create_app(
         "document_store": document_store,
         "cognition_store": cognition_store,
         "sandbox_engine": sandbox_engine,
+        # Delegation subsystem keys (Task 8)
+        # These are read by /api/delegation/* routes and the worker.
+        "delegation_store": _ds,
+        "merge_fn": _merge_worktree,
+        "remove_fn": _remove_worktree,
+        "repo_root": _repo_root,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
