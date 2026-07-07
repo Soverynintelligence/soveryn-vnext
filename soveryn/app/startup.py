@@ -758,9 +758,13 @@ def create_app(
         # Scotty's bounded loop, acceptance gate, diff + commit). SERIAL by
         # design (git worktrees + a live repo tolerate no concurrent writers).
         # Daemon thread so it doesn't keep the process alive on shutdown.
-        # Gated on SOVERYN_START_DELEGATION_WORKER (default True) so tests
-        # that build create_app under tmp_path fixtures can opt out.
-        if app.config.setdefault("SOVERYN_START_DELEGATION_WORKER", True):
+        # DEFAULT OFF (2026-07-07): the worker stays inert until Scotty's WRITE
+        # tools (edit_file/run_command/git_*/run_pytest) are pinned to the task
+        # worktree instead of the live repo root. Until that isolation is
+        # complete, a dispatched task would let Scotty edit the LIVE tree — the
+        # exact damage this design prevents. Enable via SOVERYN_START_DELEGATION_WORKER
+        # only after the tool-worktree-pinning follow-up lands.
+        if app.config.setdefault("SOVERYN_START_DELEGATION_WORKER", False):
             import threading as _threading
             from soveryn.platform.delegation.worker import run_forever as _delegation_run_forever
             from soveryn.platform.delegation.scotty_runner import scotty_run as _scotty_run
