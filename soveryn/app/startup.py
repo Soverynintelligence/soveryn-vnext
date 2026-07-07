@@ -461,6 +461,16 @@ def create_app(
         from soveryn.agents.vett.tools import register_vett_pdf_tools
         register_vett_pdf_tools(tool_registry)
 
+        # Vett's read-only git-awareness tools (git_status/git_log/git_diff).
+        # She can read a file's content; these let her verify WHERE it lives in
+        # the repo — branch, dirty/clean, staged/modified/untracked, history,
+        # working diff. Read-only by construction (no mutating subcommand); the
+        # default repo is the vnext tree, overridable per-call by a path arg.
+        # default_repo_root=None → the tool falls back to ~/soveryn_vnext (the
+        # same repo path delegation uses); a per-call path arg overrides it.
+        from soveryn.agents.vett.tools import register_vett_git_tools
+        register_vett_git_tools(tool_registry)
+
         # Document tools — Aetheria + Vett only; Scotty is not a document author.
         # One shared DocumentStore (documents_vnext.db in the memory dir) so
         # both agents operate on the same deliverable space. Attribution is

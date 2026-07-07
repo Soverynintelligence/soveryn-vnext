@@ -215,10 +215,18 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     }
     # read_file + list_directory are read-only inspection tools shared by all
     # three agents (Vett gained them 2026-06-17 so she can research improvements
-    # against the real system, not her own tool surface). git/pytest remain
-    # Scotty's executor-only surface.
+    # against the real system, not her own tool surface). Read-only git
+    # observation (git_status/git_diff/git_log) is likewise shared — Vett gained
+    # her own read-only git tools 2026-07-07 so she can verify not just what a
+    # file says but WHERE it lives in the repo.
     read_only_fs_tools = {"read_file", "list_directory"}
-    scotty_executor_tools = {"git_status", "git_diff", "run_pytest"}
+    # Vett's read-only git-awareness surface (distinct from, and safe unlike,
+    # Scotty's mutating executor tools below).
+    vett_git_tools = {"git_status", "git_log", "git_diff"}
+    # The genuinely dangerous surface Vett must NEVER have: mutation + code
+    # execution. This is the real executor boundary — NOT the read-only git
+    # observers, which only report state.
+    scotty_executor_tools = {"edit_file", "git_restore_file", "run_command", "run_pytest"}
     # Library tools are owned by each agent (shared write surface).
     library_tools = {"write_library_node", "search_library"}
     # Dream tools are Aetheria-only — Vett and Scotty don't dream.
@@ -277,9 +285,14 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             # system, not a proxy of her tool surface.
             assert read_only_fs_tools <= names, \
                 f"vett missing read-only fs tools: {read_only_fs_tools - names}"
-            # But Vett must NOT see Scotty's executor surface (git/pytest).
+            # Vett DOES get read-only git awareness (2026-07-07) — status/log/diff.
+            assert vett_git_tools <= names, \
+                f"vett missing read-only git tools: {vett_git_tools - names}"
+            # But Vett must NEVER get the mutating/execution surface (edit_file,
+            # git_restore_file, run_command, run_pytest). Read-only git is fine;
+            # changing files or running code is not.
             assert names.isdisjoint(scotty_executor_tools), \
-                f"vett sees Scotty executor tools: {names & scotty_executor_tools}"
+                f"vett sees Scotty executor/mutation tools: {names & scotty_executor_tools}"
             # Vett DOES get web tools.
             assert web_tools <= names, \
                 f"vett missing web tools: {web_tools - names}"

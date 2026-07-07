@@ -14,6 +14,12 @@ from soveryn.agents.vett.tools.pdf import (
     build_convert_to_pdf_tool,
     register_vett_pdf_tools,
 )
+from soveryn.agents.vett.tools.git import (
+    build_git_status_tool,
+    build_git_log_tool,
+    build_git_diff_tool,
+    register_vett_git_tools,
+)
 
 
 __all__ = [
@@ -22,4 +28,8 @@ __all__ = [
     "register_vett_patrol_tools",
     "build_convert_to_pdf_tool",
     "register_vett_pdf_tools",
+    "build_git_status_tool",
+    "build_git_log_tool",
+    "build_git_diff_tool",
+    "register_vett_git_tools",
 ]
