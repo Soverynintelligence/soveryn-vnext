@@ -8,41 +8,19 @@ live repo), runs ONE bounded-turn task directing Scotty to accomplish
 ``objective`` within ``scope``, enforces the wall-clock cap, and returns a
 short summary string of what Scotty did.
 
-Live vs stubbed status
-----------------------
-LIVE:
-  - ConversationStore (tmp DB, fresh per invocation)
-  - AgentLoop construction with all standard Scotty kwargs
-  - ToolRegistry with worktree-pinned variants of all mechanical tools
-  - Wall-clock cap enforcement via threading.Thread join with timeout
-  - Full process_message round-trip to the real Scotty llama-server
-
-STUBBED / INCOMPLETE:
-  - The worktree-pinned tools for edit_file, run_command, git_status,
-    git_diff, git_restore_file, and run_pytest cannot simply accept a
-    ``cwd`` parameter because the existing tool factories hardcode
-    SCOTTY_PROJECT_ROOT in their closures (module-level constant, not an
-    arg). Until those factories are refactored to accept ``root`` / ``cwd``
-    parameters (a clean Task-N+1 job), the tools registered here use the
-    LIVE repo root as their path anchor, NOT the worktree. This means:
-      • read_file / list_directory: pinned to worktree_path (LIVE — these
-        accept a ``root`` parameter already).
-      • edit_file: uses SCOTTY_PROJECT_ROOT (STUBBED — edits land in the
-        live repo, not the worktree). In production the engine wraps Scotty
-        in an isolated worktree precisely so this is safe, but the path
-        anchor is wrong.
-      • run_command, git_status, git_diff, git_restore_file: cwd is
-        SCOTTY_PROJECT_ROOT (STUBBED).
-      • run_pytest: runs against the live tests/ dir (STUBBED).
-    The worker tests use FAKE scotty_run (injected seam) so these stubs
-    do not affect the test suite. The first-slice acceptance test (manual,
-    post-Task-8) will exercise the real path.
-
-  PREFERRED FIX (Task-N+1): add ``root: Path = SCOTTY_PROJECT_ROOT`` and
-  ``cwd: Path = SCOTTY_PROJECT_ROOT`` parameters to build_edit_file_tool,
-  build_run_command_tool, build_git_status_tool, build_git_diff_tool,
-  build_git_restore_file_tool, and build_run_pytest_tool. Then this
-  scotty_runner can pass worktree_path for all of them.
+Isolation
+---------
+ALL of Scotty's tools are pinned to ``worktree_path``:
+  - read_file / list_directory: ``root=worktree`` (read-only inspection).
+  - edit_file / git_status / git_diff / git_restore_file: ``root=worktree``
+    (writes + git ops resolve under the worktree; paths escaping it are
+    rejected by resolve_within_root).
+  - run_command / run_pytest: ``root=worktree`` — cwd is the worktree AND
+    PYTHONPATH=worktree, so any ``python``/``pytest`` invocation imports the
+    worktree's code, not the editable-installed live tree.
+There is no path by which a delegation run touches the live repo: the engine
+creates the worktree, this runner pins every tool to it, and the human approve
+gate is the only thing that merges the branch back.
 
 Wall-clock cap
 --------------
@@ -61,6 +39,38 @@ import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def build_worktree_tool_registry(worktree: Path):
+    """Build a ToolRegistry whose every Scotty tool is pinned to *worktree*.
+
+    Extracted so the isolation wiring is testable without a live llama-server:
+    all write/exec tools resolve paths, run subprocesses, and set PYTHONPATH
+    against *worktree*, never SCOTTY_PROJECT_ROOT.
+    """
+    from soveryn.platform.tools.registry import ToolRegistry
+    from soveryn.agents.scotty.tools import (
+        build_read_file_tool,
+        build_list_directory_tool,
+        build_edit_file_tool,
+        build_run_command_tool,
+        build_git_status_tool,
+        build_git_diff_tool,
+        build_git_restore_file_tool,
+        build_run_pytest_tool,
+    )
+
+    worktree = Path(worktree).resolve()
+    registry = ToolRegistry()
+    registry.register(build_read_file_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_list_directory_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_edit_file_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_run_command_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_git_status_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_git_diff_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_git_restore_file_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_run_pytest_tool(owner_agent="scotty", root=worktree))
+    return registry
 
 
 def scotty_run(
@@ -123,41 +133,13 @@ def scotty_run(
             def _run() -> None:
                 try:
                     from soveryn.memory.conversation_store import ConversationStore
-                    from soveryn.platform.tools.registry import ToolRegistry
                     from soveryn.agents.loop import AgentLoop
-                    from soveryn.agents.scotty.tools import (
-                        build_read_file_tool,
-                        build_list_directory_tool,
-                        build_edit_file_tool,
-                        build_run_command_tool,
-                        build_git_status_tool,
-                        build_git_diff_tool,
-                        build_git_restore_file_tool,
-                        build_run_pytest_tool,
-                    )
 
                     # Temporary conversation store for this isolated run
                     conv_store = ConversationStore(conv_db_path)
 
-                    # Build a worktree-aware tool registry for Scotty.
-                    # read_file and list_directory accept a ``root`` parameter
-                    # and are fully pinned to the worktree.
-                    # All other tools use SCOTTY_PROJECT_ROOT in their closures
-                    # (see module docstring for the stub note + preferred fix).
-                    registry = ToolRegistry()
-                    registry.register(build_read_file_tool(
-                        owner_agent="scotty", root=worktree
-                    ))
-                    registry.register(build_list_directory_tool(
-                        owner_agent="scotty", root=worktree
-                    ))
-                    # Write/exec tools — STUBBED path anchor (see module docstring)
-                    registry.register(build_edit_file_tool(owner_agent="scotty"))
-                    registry.register(build_run_command_tool(owner_agent="scotty"))
-                    registry.register(build_git_status_tool(owner_agent="scotty"))
-                    registry.register(build_git_diff_tool(owner_agent="scotty"))
-                    registry.register(build_git_restore_file_tool(owner_agent="scotty"))
-                    registry.register(build_run_pytest_tool(owner_agent="scotty"))
+                    # Every Scotty tool pinned to the worktree — no live-repo path.
+                    registry = build_worktree_tool_registry(worktree)
 
                     # Build AgentLoop. soul_text="" skips soul loading so we
                     # don't require the souls dir to exist. system_prompt=None
