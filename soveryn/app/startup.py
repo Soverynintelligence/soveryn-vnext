@@ -769,7 +769,6 @@ def create_app(
             from soveryn.platform.delegation.worker import run_forever as _delegation_run_forever
             from soveryn.platform.delegation.scotty_runner import scotty_run as _scotty_run
             from soveryn.platform.delegation.engine import execute_task as _execute_task
-            from soveryn.platform.delegation.engine import execute_task  # noqa: F401 (used in lambda)
 
             def _run_acceptance_in_worktree(worktree_path: str, acceptance: str) -> tuple[bool, str]:
                 """Run the acceptance command inside the worktree via subprocess."""
