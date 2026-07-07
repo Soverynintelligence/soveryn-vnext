@@ -978,6 +978,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_steward_bp)
     from soveryn.app.routes.documents import bp as documents_bp
     app.register_blueprint(documents_bp)
+    from soveryn.app.routes.delegation import bp as delegation_bp
+    app.register_blueprint(delegation_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
     app.register_blueprint(ui_bp)
