@@ -329,3 +329,36 @@ class TestReject:
             json={"feedback": "nope"},
         )
         assert resp.status_code == 404
+
+
+# ─── Review follow-up: honest-approve + reject guard ─────────────────────────
+
+def test_approve_set_status_failure_returns_500_not_false_landed(in_review_task):
+    """If recording 'landed' fails after a successful merge, approve must NOT
+    claim landed (honesty), and must NOT remove the worktree."""
+    app = _make_app(tasks=[in_review_task], merge_result=(True, "Merged"))
+    store = app._test_store
+    orig = store.set_status
+    def flaky(task_id, status):
+        if status == "landed":
+            raise RuntimeError("db write failed")
+        return orig(task_id, status)
+    store.set_status = flaky
+    with app.test_client() as c:
+        resp = c.post("/api/delegation/task-abc/approve")
+    assert resp.status_code == 500
+    body = resp.get_json()
+    assert body["ok"] is False and body["status"] == "unknown"
+    assert app._test_remove_calls == []          # worktree left for manual check
+
+
+def test_reject_non_in_review_returns_409():
+    """A landed (or any non-in_review) task cannot be rejected."""
+    landed = FakeTask(id="task-landed", status="landed")
+    app = _make_app(tasks=[landed])
+    with app.test_client() as c:
+        resp = c.post("/api/delegation/task-landed/reject", json={"feedback": "no"})
+    assert resp.status_code == 409
+    assert resp.get_json()["ok"] is False
+    assert landed.status == "landed"             # unchanged
+    assert app._test_remove_calls == []

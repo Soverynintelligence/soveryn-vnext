@@ -156,14 +156,25 @@ def delegation_approve(task_id: str):
         # Conflict: leave status as in_review, do NOT remove the worktree.
         return jsonify({"ok": False, "message": msg}), 409
 
-    # Merge succeeded — land it.
+    # Merge succeeded — record 'landed'. If recording fails, tell the TRUTH:
+    # the merge is already in main but the status is uncertain. Returning a
+    # false {ok:true, landed} here would be exactly the state/report divergence
+    # this whole feature exists to prevent. Leave the worktree in place for the
+    # manual check rather than cleaning up under an unknown state.
     try:
         store.set_status(task_id, "landed")
     except Exception:
         logger.exception("approve: set_status(landed) failed for %s", task_id)
-        # Still attempt worktree cleanup; re-raise would leave the tree dangling.
+        return jsonify({
+            "ok": False,
+            "status": "unknown",
+            "message": (
+                "Merge succeeded but recording 'landed' failed — the change is "
+                "in main; the task status is uncertain. Check manually."
+            ),
+        }), 500
 
-    # Cleanup worktree after successful merge.
+    # Cleanup worktree only after 'landed' is recorded.
     worktree_path = task.worktree_path or ""
     try:
         remove_fn = _get_remove_fn()
@@ -191,6 +202,14 @@ def delegation_reject(task_id: str):
     task = store.get_task(task_id)
     if task is None:
         return jsonify({"ok": False, "message": f"Task {task_id!r} not found"}), 404
+
+    # Only a proposal under review can be rejected. Guard against flipping a
+    # landed/failed/dispatched task to 'rejected' (a landed task is live in main).
+    if task.status != "in_review":
+        return jsonify({
+            "ok": False,
+            "message": f"Task {task_id!r} is '{task.status}', not 'in_review'; cannot reject",
+        }), 409
 
     body = request.get_json(silent=True) or {}
     feedback = body.get("feedback", "")
