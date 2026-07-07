@@ -73,12 +73,45 @@ def run_forever(
 
     repo_root = str(repo_root)
 
+    # Crash recovery: any task left in 'executing' belongs to a previous process
+    # that died mid-run (the worker is serial + single). Its worktree state is
+    # unknown and unresumable, so mark it failed rather than leave it stranded.
+    _recover_stale_executing(store)
+
     while True:
         _drain(store, execute_fn=execute_fn, repo_root=repo_root,
                scotty_run=scotty_run, run_acceptance=run_acceptance)
         if _run_once_and_stop:
             return
         time.sleep(poll_seconds)
+
+
+def _recover_stale_executing(store: DelegationStore) -> int:
+    """Mark any task stuck in 'executing' as failed (stale after a crash).
+
+    Returns the number of tasks recovered. Best-effort: a store error on one
+    task is logged and does not stop the sweep or the worker.
+    """
+    recovered = 0
+    try:
+        stale = store.list_tasks(status="executing")
+    except Exception:
+        logger.exception("delegation worker: could not list stale 'executing' tasks")
+        return 0
+    for task in stale:
+        try:
+            store.set_status(task.id, "failed")
+            logger.warning(
+                "delegation worker: recovered stale 'executing' task %s → failed "
+                "(worktree %s may need manual cleanup)",
+                task.id, getattr(task, "worktree_path", None) or "?",
+            )
+            recovered += 1
+        except Exception:
+            logger.exception(
+                "delegation worker: could not fail stale task %s", task.id
+            )
+    return recovered
 
 
 def _drain(

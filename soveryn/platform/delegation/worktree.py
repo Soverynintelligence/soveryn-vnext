@@ -73,16 +73,44 @@ def worktree_diff(worktree_path: Path | str) -> str:
     return _git(wt, "diff", "--cached")
 
 
-def merge_worktree(repo_root: Path | str, branch: str) -> tuple[bool, str]:
+def current_branch(repo_root: Path | str) -> str:
+    """Return the checked-out branch name of *repo_root* (empty on detached/err)."""
+    try:
+        out = _git(repo_root, "rev-parse", "--abbrev-ref", "HEAD").strip()
+    except subprocess.CalledProcessError:
+        return ""
+    return "" if out == "HEAD" else out
+
+
+def merge_worktree(
+    repo_root: Path | str, branch: str, *, into: str | None = "main"
+) -> tuple[bool, str]:
     """Attempt a no-ff merge of *branch* into the current branch of *repo_root*.
+
+    Safety guard: when *into* is set (default ``"main"``), the merge is REFUSED
+    unless *repo_root* is actually on that branch. This prevents landing Scotty's
+    task branch onto whatever branch the live repo happens to be sitting on — a
+    stray feature branch, a detached HEAD — instead of the intended integration
+    branch. Pass ``into=None`` to merge into the current branch unconditionally
+    (used by tests).
 
     Returns
     -------
     (True, git_output)   on success.
-    (False, message)     on conflict or any git error; best-effort abort so
-                         the repo is not left mid-merge.
+    (False, message)     on wrong-branch refusal, conflict, or any git error;
+                         best-effort abort so the repo is not left mid-merge.
     """
     repo_root = Path(repo_root).resolve()
+
+    if into is not None:
+        cur = current_branch(repo_root)
+        if cur != into:
+            msg = (
+                f"refusing to merge {branch!r}: repo is on {cur or '(detached)'!r}, "
+                f"not the integration branch {into!r}. Check out {into!r} first."
+            )
+            logger.warning("merge_worktree: %s", msg)
+            return False, msg
 
     try:
         output = _git(repo_root, "merge", "--no-ff", "--no-edit", branch)

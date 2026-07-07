@@ -779,27 +779,9 @@ def create_app(
             from soveryn.platform.delegation.worker import run_forever as _delegation_run_forever
             from soveryn.platform.delegation.scotty_runner import scotty_run as _scotty_run
             from soveryn.platform.delegation.engine import execute_task as _execute_task
-
-            def _run_acceptance_in_worktree(worktree_path: str, acceptance: str) -> tuple[bool, str]:
-                """Run the acceptance command inside the worktree via subprocess."""
-                import subprocess
-                import sys
-                try:
-                    result = subprocess.run(
-                        acceptance.split(),
-                        cwd=worktree_path,
-                        capture_output=True,
-                        text=True,
-                        timeout=300,
-                        env={
-                            "PATH": f"{__import__('pathlib').Path(sys.executable).parent}:/usr/local/bin:/usr/bin:/bin",
-                            "HOME": str(__import__('pathlib').Path.home()),
-                            "PYTHONPATH": str(__import__('pathlib').Path(worktree_path)),
-                        },
-                    )
-                    return result.returncode == 0, (result.stdout or "") + (result.stderr or "")
-                except Exception as exc:
-                    return False, str(exc)
+            from soveryn.platform.delegation.acceptance import (
+                run_acceptance_in_worktree as _run_acceptance_in_worktree,
+            )
 
             _delegation_repo_root = str(
                 __import__('pathlib').Path.home() / "soveryn_vnext"
