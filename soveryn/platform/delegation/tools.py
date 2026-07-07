@@ -121,6 +121,75 @@ def build_dispatch_task_tool(
 
 
 # ---------------------------------------------------------------------------
+# build_task_status_tool
+# ---------------------------------------------------------------------------
+
+_OPEN_STATUSES: frozenset[str] = frozenset({"dispatched", "executing", "in_review"})
+
+
+def build_task_status_tool(
+    *,
+    store: DelegationStore,
+    owner_agent: str = "aetheria",
+) -> ToolSpec:
+    """Tool that lets Aetheria check the real status of a dispatched task.
+
+    Call with a task_id to get one task's full status info, or with no args
+    to list all open (non-terminal) tasks.  This is the grounding tool that
+    prevents Aetheria from reporting a task as done before it has landed.
+    """
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        task_id = args.get("task_id")
+
+        if task_id is not None:
+            # Single-task lookup
+            task = store.get_task(task_id)
+            if task is None:
+                return {"error": "not_found", "task_id": task_id}
+            return {
+                "id": task.id,
+                "status": task.status,
+                "objective": task.objective,
+                "summary": task.summary,
+                "review_feedback": task.review_feedback,
+            }
+
+        # No task_id → list open (non-terminal) tasks, newest-first
+        all_tasks = store.list_tasks()
+        return [
+            {"id": t.id, "status": t.status, "objective": t.objective}
+            for t in all_tasks
+            if t.status in _OPEN_STATUSES
+        ]
+
+    return ToolSpec(
+        name="task_status",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": (
+                        "The task id returned by dispatch_task. "
+                        "Omit to list all your open tasks instead."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Check the real status of a task you dispatched "
+            "(dispatched → executing → in_review → landed/rejected/failed). "
+            "Call with a task_id for one task, or with no args to list your open tasks. "
+            "Use this to report truthfully — a task is only done when its status is 'landed'."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # register_delegation_tools
 # ---------------------------------------------------------------------------
 
@@ -135,3 +204,4 @@ def register_delegation_tools(
     Call once for the agent that owns the delegation surface (Aetheria).
     """
     registry.register(build_dispatch_task_tool(store=store, owner_agent=owner_agent))
+    registry.register(build_task_status_tool(store=store, owner_agent=owner_agent))
