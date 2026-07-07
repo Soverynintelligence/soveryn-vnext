@@ -103,7 +103,13 @@ def execute_task(
         store.set_status(task_id, "executing")
     except Exception:
         logger.exception("engine: could not transition task %s to executing", task_id)
-        return  # nothing to clean up yet
+        # Do NOT strand the task in 'dispatched' — best-effort terminal status
+        # so a task always lands somewhere final (dispatched->failed is legal).
+        try:
+            store.set_status(task_id, "failed")
+        except Exception:
+            logger.exception("engine: could not set failed status for task %s", task_id)
+        return  # no worktree created yet — nothing to clean up
 
     # ── Phase 2–7: main flow with exception guard ─────────────────────────────
     try:

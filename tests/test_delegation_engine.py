@@ -343,9 +343,39 @@ class TestExceptionHandling:
             make_worktree=_fake_make_worktree(),
             diff_fn=_fake_diff_fn(),
             commit_fn=_fake_commit_fn(),
+            remove_worktree=_fake_remove_worktree(),  # hermetic — no real git
         )
 
         assert store.get_task(tid).status == "failed"
+
+    def test_set_status_executing_failure_lands_failed(self, tmp_path):
+        # If the first transition (->executing) fails, the task must NOT be
+        # stranded in 'dispatched' — best-effort land it in 'failed'.
+        store = _store(tmp_path)
+        tid = _task(store)
+        real_set = store.set_status
+        calls: list[str] = []
+
+        def flaky(task_id, status):
+            calls.append(status)
+            if status == "executing":
+                raise RuntimeError("db hiccup on executing")
+            return real_set(task_id, status)
+
+        store.set_status = flaky  # type: ignore[method-assign]
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=_fake_remove_worktree(),
+        )
+        assert store.get_task(tid).status == "failed"   # not stranded
+        assert calls == ["executing", "failed"]         # tried, fell back
 
     def test_scotty_run_raises_no_exception_escapes(self, tmp_path):
         store = _store(tmp_path)
