@@ -23,9 +23,11 @@ git_restore_file to roll back.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import (
+    SCOTTY_PROJECT_ROOT,
     PathOutOfBoundsError,
     resolve_within_root,
 )
@@ -36,8 +38,13 @@ EDIT_FILE_MAX_BYTES = 256 * 1024     # 256 KB — post-edit content size cap
 OLD_STRING_MIN_LEN = 1                # at least one char; uniqueness check does the rest
 
 
-def build_edit_file_tool(*, owner_agent: str) -> ToolSpec:
-    """Bounded write via unique old_string → new_string substitution."""
+def build_edit_file_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+    """Bounded write via unique old_string → new_string substitution.
+
+    ``root`` bounds every path: writes resolve under it and paths escaping it are
+    rejected. Defaults to the live repo; delegated execution passes the task
+    worktree so Scotty's edits land in isolation, never the live tree.
+    """
 
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path", "")
@@ -53,7 +60,7 @@ def build_edit_file_tool(*, owner_agent: str) -> ToolSpec:
             raise ToolArgError("old_string and new_string are identical — no-op edit refused")
 
         try:
-            resolved = resolve_within_root(path_arg, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:

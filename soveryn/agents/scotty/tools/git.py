@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import (
@@ -33,12 +34,12 @@ GIT_DIFF_MAX_LINES = 800
 GIT_DIFF_MAX_BYTES = 80 * 1024
 
 
-def _run_git(*args: str) -> tuple[int, str, str]:
-    """Run a git command, capture stdout/stderr/returncode. Raises on timeout
-    so the tool handler can convert it to a ToolArgError."""
+def _run_git(root: Path, *args: str) -> tuple[int, str, str]:
+    """Run a git command with cwd=root, capturing stdout/stderr/returncode.
+    Raises on timeout so the tool handler can convert it to a ToolArgError."""
     result = subprocess.run(
         ["git", *args],
-        cwd=str(SCOTTY_PROJECT_ROOT),
+        cwd=str(root),
         capture_output=True,
         text=True,
         timeout=GIT_TIMEOUT_SECONDS,
@@ -46,12 +47,14 @@ def _run_git(*args: str) -> tuple[int, str, str]:
     return result.returncode, result.stdout, result.stderr
 
 
-def build_git_status_tool(*, owner_agent: str) -> ToolSpec:
-    """Porcelain-format git status of the vnext repo."""
+def build_git_status_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+    """Porcelain-format git status of the repo at ``root`` (default: live repo;
+    delegated execution passes the task worktree)."""
+    root = Path(root)
 
     def handler(args: Mapping[str, Any]) -> Any:
         try:
-            rc, out, err = _run_git("status", "--porcelain=v1", "--branch")
+            rc, out, err = _run_git(root, "status", "--porcelain=v1", "--branch")
         except subprocess.TimeoutExpired:
             raise ToolArgError(f"git status timed out after {GIT_TIMEOUT_SECONDS}s")
         if rc != 0:
@@ -64,7 +67,7 @@ def build_git_status_tool(*, owner_agent: str) -> ToolSpec:
             "changes": change_lines,
             "change_count": len(change_lines),
             "clean": len(change_lines) == 0,
-            "cwd": str(SCOTTY_PROJECT_ROOT),
+            "cwd": str(root),
         }
 
     return ToolSpec(
@@ -84,8 +87,9 @@ def build_git_status_tool(*, owner_agent: str) -> ToolSpec:
     )
 
 
-def build_git_diff_tool(*, owner_agent: str) -> ToolSpec:
-    """Capped diff of unstaged or staged changes."""
+def build_git_diff_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+    """Capped diff of unstaged or staged changes in the repo at ``root``."""
+    root = Path(root)
 
     def handler(args: Mapping[str, Any]) -> Any:
         staged = bool(args.get("staged", False))
@@ -93,7 +97,7 @@ def build_git_diff_tool(*, owner_agent: str) -> ToolSpec:
         if staged:
             git_args.append("--cached")
         try:
-            rc, out, err = _run_git(*git_args)
+            rc, out, err = _run_git(root, *git_args)
         except subprocess.TimeoutExpired:
             raise ToolArgError(f"git diff timed out after {GIT_TIMEOUT_SECONDS}s")
         if rc != 0:
@@ -146,7 +150,7 @@ def build_git_diff_tool(*, owner_agent: str) -> ToolSpec:
     )
 
 
-def build_git_restore_file_tool(*, owner_agent: str) -> ToolSpec:
+def build_git_restore_file_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
     """Discard unstaged changes to a single tracked file (rollback for edit_file).
 
     Behavior: runs `git restore <path>`, which resets the working-tree copy of
@@ -157,24 +161,26 @@ def build_git_restore_file_tool(*, owner_agent: str) -> ToolSpec:
     tracked by git. Path must resolve under SCOTTY_PROJECT_ROOT.
     """
 
+    root = Path(root)
+
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path", "")
         if not isinstance(path_arg, str) or not path_arg.strip():
             raise ToolArgError("path must be a non-empty string")
         try:
-            resolved = resolve_within_root(path_arg, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
             raise ToolArgError(str(e))
         if not resolved.is_file():
             raise ToolArgError(f"path {path_arg!r} is not a regular file")
-        rel_path = str(resolved.relative_to(SCOTTY_PROJECT_ROOT))
+        rel_path = str(resolved.relative_to(root))
 
         # Verify the file is tracked. `git ls-files --error-unmatch <path>`
         # exits nonzero if the path isn't tracked.
         try:
-            rc, _, err = _run_git("ls-files", "--error-unmatch", rel_path)
+            rc, _, err = _run_git(root, "ls-files", "--error-unmatch", rel_path)
         except subprocess.TimeoutExpired:
             raise ToolArgError(f"git ls-files timed out after {GIT_TIMEOUT_SECONDS}s")
         if rc != 0:
@@ -186,7 +192,7 @@ def build_git_restore_file_tool(*, owner_agent: str) -> ToolSpec:
         # Refuse if there are staged changes for this path. `git diff --cached
         # --name-only -- <path>` outputs the path iff it has staged changes.
         try:
-            rc, out, err = _run_git("diff", "--cached", "--name-only", "--", rel_path)
+            rc, out, err = _run_git(root, "diff", "--cached", "--name-only", "--", rel_path)
         except subprocess.TimeoutExpired:
             raise ToolArgError(f"git diff timed out after {GIT_TIMEOUT_SECONDS}s")
         if rc != 0:
@@ -200,7 +206,7 @@ def build_git_restore_file_tool(*, owner_agent: str) -> ToolSpec:
 
         # Do the actual restore.
         try:
-            rc, out, err = _run_git("restore", "--", rel_path)
+            rc, out, err = _run_git(root, "restore", "--", rel_path)
         except subprocess.TimeoutExpired:
             raise ToolArgError(f"git restore timed out after {GIT_TIMEOUT_SECONDS}s")
         if rc != 0:

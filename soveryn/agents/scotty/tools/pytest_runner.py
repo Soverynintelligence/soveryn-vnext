@@ -8,9 +8,11 @@ plus the tail of stdout for diagnosis.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import (
@@ -23,11 +25,12 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 PYTEST_TIMEOUT_SECONDS = 180         # 3 minutes — full suite ran in ~8s today
 PYTEST_OUTPUT_MAX_BYTES = 16 * 1024  # 16 KB tail of stdout
-TESTS_DIR = (SCOTTY_PROJECT_ROOT / "tests").resolve()
 PYTHON_BIN = sys.executable
 
 
-def build_run_pytest_tool(*, owner_agent: str) -> ToolSpec:
+def build_run_pytest_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+    root = Path(root).resolve()
+    tests_dir = (root / "tests").resolve()
 
     def handler(args: Mapping[str, Any]) -> Any:
         target_arg = args.get("target", "tests/")
@@ -40,31 +43,39 @@ def build_run_pytest_tool(*, owner_agent: str) -> ToolSpec:
         else:
             path_part, selector = target_arg, ""
         try:
-            resolved_path = resolve_within_root(path_part, must_exist=True)
+            resolved_path = resolve_within_root(path_part, root=root, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
             raise ToolArgError(str(e))
         # Constrain to tests/ specifically — Scotty doesn't run arbitrary modules.
         try:
-            resolved_path.relative_to(TESTS_DIR)
+            resolved_path.relative_to(tests_dir)
         except ValueError:
             raise ToolArgError(
                 f"target {target_arg!r} must be under tests/; resolved to "
-                f"{resolved_path} which is outside {TESTS_DIR}"
+                f"{resolved_path} which is outside {tests_dir}"
             )
         # Reassemble target with selector for pytest if one was provided.
         pytest_target = f"{resolved_path}::{selector}" if selector else str(resolved_path)
         # `resolved_target` is the path component, exposed in the result for clarity.
         resolved_target = resolved_path
 
+        # Import isolation: PYTHONPATH=root so pytest imports the code under root
+        # (the worktree), shadowing the editable-installed live tree. The finder
+        # is appended to sys.meta_path, so a front-of-path PYTHONPATH wins.
+        env = dict(os.environ)
+        existing_pp = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{root}{os.pathsep}{existing_pp}" if existing_pp else str(root)
+
         try:
             result = subprocess.run(
                 [PYTHON_BIN, "-m", "pytest", pytest_target, "-q", "--tb=line"],
-                cwd=str(SCOTTY_PROJECT_ROOT),
+                cwd=str(root),
                 capture_output=True,
                 text=True,
                 timeout=PYTEST_TIMEOUT_SECONDS,
+                env=env,
             )
         except subprocess.TimeoutExpired:
             raise ToolArgError(

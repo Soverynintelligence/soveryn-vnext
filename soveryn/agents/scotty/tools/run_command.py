@@ -71,8 +71,16 @@ READ_ONLY_GIT_SUBCOMMANDS: frozenset[str] = frozenset({
 FORBIDDEN_PYTHON_FIRST_ARGS: frozenset[str] = frozenset({"-c", "--command"})
 
 
-def build_run_command_tool(*, owner_agent: str) -> ToolSpec:
-    """Bounded subprocess wrapping ALLOWED_EXECUTABLES with structured I/O."""
+def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+    """Bounded subprocess wrapping ALLOWED_EXECUTABLES with structured I/O.
+
+    ``root`` is the subprocess cwd AND the PYTHONPATH anchor — so a ``python -m``
+    / ``pytest`` invocation imports the code under ``root`` (the setuptools
+    editable finder is appended to sys.meta_path, so a front-of-path PYTHONPATH
+    shadows the live install; verified empirically). Defaults to the live repo;
+    delegated execution passes the task worktree.
+    """
+    root = Path(root)
 
     def handler(args: Mapping[str, Any]) -> Any:
         executable = args.get("executable", "")
@@ -132,12 +140,15 @@ def build_run_command_tool(*, owner_agent: str) -> ToolSpec:
             "HOME": str(Path.home()),
             "LANG": os.environ.get("LANG", "C.UTF-8"),
             "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
+            # Import isolation: code under root shadows the editable-installed
+            # live tree (finder is appended to meta_path, so PYTHONPATH wins).
+            "PYTHONPATH": str(root),
         }
 
         try:
             result = subprocess.run(
                 [resolved_executable, *argv],
-                cwd=str(SCOTTY_PROJECT_ROOT),
+                cwd=str(root),
                 capture_output=True,
                 text=True,
                 timeout=timeout,
