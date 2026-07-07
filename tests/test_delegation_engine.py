@@ -1,0 +1,433 @@
+"""Tests for soveryn.platform.delegation.engine.execute_task.
+
+Uses a real DelegationStore (tmp_path SQLite) and fully injected fakes for all
+git/Scotty seams — no real worktrees, no network.
+"""
+from __future__ import annotations
+
+import pytest
+
+from soveryn.platform.delegation.store import DelegationStore
+from soveryn.platform.delegation.engine import execute_task
+
+
+# ─── Helpers / Fakes ─────────────────────────────────────────────────────────
+
+def _store(tmp_path) -> DelegationStore:
+    return DelegationStore(tmp_path / "deleg.db")
+
+
+def _task(store: DelegationStore, *, objective="add docstring", scope="soveryn/x.py",
+          acceptance="pytest tests/test_x.py") -> str:
+    return store.create_task(
+        dispatched_by="aetheria",
+        objective=objective,
+        scope=scope,
+        acceptance=acceptance,
+    )
+
+
+def _fake_make_worktree(worktree_path: str = "/tmp/fake-wt", branch: str = "task/fake"):
+    """Returns an injectable make_worktree that records its calls."""
+    calls: list[tuple] = []
+
+    def make_worktree(repo_root, task_id):
+        calls.append((repo_root, task_id))
+        return worktree_path, branch
+
+    make_worktree.calls = calls  # type: ignore[attr-defined]
+    return make_worktree
+
+
+def _fake_remove_worktree():
+    """Returns an injectable remove_worktree that records calls without side effects."""
+    calls: list[tuple] = []
+
+    def remove_worktree(repo_root, worktree_path, branch):
+        calls.append((repo_root, worktree_path, branch))
+
+    remove_worktree.calls = calls  # type: ignore[attr-defined]
+    return remove_worktree
+
+
+def _fake_scotty_run(summary: str = "done"):
+    calls: list[tuple] = []
+
+    def scotty_run(worktree_path, objective, scope):
+        calls.append((worktree_path, objective, scope))
+        return summary
+
+    scotty_run.calls = calls  # type: ignore[attr-defined]
+    return scotty_run
+
+
+def _fake_diff_fn(diff: str = "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"):
+    calls: list[str] = []
+
+    def diff_fn(worktree_path):
+        calls.append(worktree_path)
+        return diff
+
+    diff_fn.calls = calls  # type: ignore[attr-defined]
+    return diff_fn
+
+
+def _fake_run_acceptance(passed: bool = True, output: str = "1 passed"):
+    calls: list[tuple] = []
+
+    def run_acceptance(worktree_path, acceptance):
+        calls.append((worktree_path, acceptance))
+        return passed, output
+
+    run_acceptance.calls = calls  # type: ignore[attr-defined]
+    return run_acceptance
+
+
+def _fake_commit_fn():
+    calls: list[tuple] = []
+
+    def commit_fn(worktree_path, branch, message):
+        calls.append((worktree_path, branch, message))
+
+    commit_fn.calls = calls  # type: ignore[attr-defined]
+    return commit_fn
+
+
+# ─── Tests ───────────────────────────────────────────────────────────────────
+
+class TestGreenPath:
+    """Acceptance tests pass → task ends in_review with all data stored."""
+
+    def test_final_status_is_in_review(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "in_review"
+
+    def test_result_fields_stored(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+        diff = "--- a\n+++ b"
+        summary = "added the docstring"
+        output = "2 passed"
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(summary=summary),
+            run_acceptance=_fake_run_acceptance(passed=True, output=output),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(diff=diff),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        t = store.get_task(tid)
+        assert t.diff == diff
+        assert t.test_output == output
+        assert t.summary == summary
+
+    def test_commit_fn_called_on_green(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store, objective="my-objective")
+        commit = _fake_commit_fn()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(branch="task/mybranch"),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=commit,
+        )
+
+        assert len(commit.calls) == 1
+        wt, branch, message = commit.calls[0]
+        assert branch == "task/mybranch"
+        assert tid in message
+
+    def test_execution_stored_worktree_and_branch(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+        wt_path = "/tmp/my-wt-path"
+        branch = "task/abc123"
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(worktree_path=wt_path, branch=branch),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        t = store.get_task(tid)
+        assert t.worktree_path == wt_path
+        assert t.branch == branch
+
+    def test_worktree_retained_on_green(self, tmp_path):
+        """On success the worktree must NOT be removed (approve-time merge needs it)."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        remove = _fake_remove_worktree()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=remove,
+        )
+
+        assert len(remove.calls) == 0
+
+    def test_status_sequence_executing_then_in_review(self, tmp_path):
+        """Verify the status goes dispatched → executing → in_review (no skip)."""
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        # Status starts at dispatched
+        assert store.get_task(tid).status == "dispatched"
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        # If we got to in_review, the executing → in_review transition fired
+        # (the store guards it — if executing was skipped it would have raised)
+        assert store.get_task(tid).status == "in_review"
+
+
+class TestRedPath:
+    """Acceptance tests fail → task ends failed; diff+output still recorded; no commit."""
+
+    def test_final_status_is_failed(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False, output="FAILED"),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "failed"
+
+    def test_diff_and_output_still_recorded_on_red(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+        diff = "--- a\n+++ b"
+        output = "FAILED assertion"
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False, output=output),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(diff=diff),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        t = store.get_task(tid)
+        assert t.diff == diff
+        assert t.test_output == output
+        assert t.summary == "acceptance tests failed"
+
+    def test_commit_fn_not_called_on_red(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+        commit = _fake_commit_fn()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=commit,
+        )
+
+        assert len(commit.calls) == 0
+
+    def test_no_in_review_on_red(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        # in_review must never appear
+        assert store.get_task(tid).status == "failed"
+
+    def test_worktree_removed_on_red(self, tmp_path):
+        """On failure the worktree should be cleaned up (best-effort)."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        remove = _fake_remove_worktree()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False),
+            make_worktree=_fake_make_worktree(worktree_path="/tmp/fake-wt", branch="task/fake"),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=remove,
+        )
+
+        assert len(remove.calls) == 1
+
+
+class TestExceptionHandling:
+    """Any exception → task lands in failed; nothing escapes execute_task."""
+
+    def test_scotty_run_raises_task_fails(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        def boom_scotty(wt, obj, scope):
+            raise RuntimeError("scotty exploded")
+
+        # Must not propagate
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=boom_scotty,
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "failed"
+
+    def test_scotty_run_raises_no_exception_escapes(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        def boom_scotty(wt, obj, scope):
+            raise ValueError("fatal")
+
+        # execute_task itself must NOT raise
+        try:
+            execute_task(
+                tid,
+                store=store,
+                repo_root="/fake/repo",
+                scotty_run=boom_scotty,
+                run_acceptance=_fake_run_acceptance(),
+                make_worktree=_fake_make_worktree(),
+                diff_fn=_fake_diff_fn(),
+                commit_fn=_fake_commit_fn(),
+            )
+        except Exception as exc:
+            pytest.fail(f"execute_task raised unexpectedly: {exc}")
+
+    def test_run_acceptance_raises_task_fails(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        def boom_accept(wt, acceptance):
+            raise RuntimeError("acceptance tool crashed")
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=boom_accept,
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "failed"
+
+    def test_make_worktree_raises_task_fails(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+
+        def boom_wt(repo_root, task_id):
+            raise OSError("no disk space")
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(),
+            make_worktree=boom_wt,
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "failed"
+
+    def test_worktree_cleanup_on_exception(self, tmp_path):
+        """Exception mid-flow should still trigger worktree cleanup."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        remove = _fake_remove_worktree()
+
+        def boom_scotty(wt, obj, scope):
+            raise RuntimeError("boom")
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=boom_scotty,
+            run_acceptance=_fake_run_acceptance(),
+            make_worktree=_fake_make_worktree(worktree_path="/tmp/fake-wt", branch="task/fake"),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=remove,
+        )
+
+        assert len(remove.calls) == 1
