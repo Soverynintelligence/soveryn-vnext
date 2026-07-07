@@ -132,6 +132,11 @@ def test_startup_creates_tool_registry_for_aetheria(
         "list_grants",
         "grant_submit",
     } <= names
+    # Delegation tools — Aetheria directs Scotty via dispatch_task and checks
+    # honest state via task_status. Registered unconditionally (independent of
+    # the worker on/off flag): with the worker off a dispatched task simply
+    # waits in 'dispatched' until the worker drains it.
+    assert {"dispatch_task", "task_status"} <= names
 
 
 def test_aetheria_has_interactive_rail_caps_others_do_not(
