@@ -711,6 +711,62 @@
   }
   .cognition-item .body { color:rgba(232,227,213,0.82); }
 
+  /* ─── Scotty Approvals panel ─── sibling of .cognition panel in the twin row */
+  /* Mirrors .pulse-row / .ares-panel styling: same grid wrapper, card-per-task
+     with diff in a scrollable <pre>, Approve/Reject action buttons. */
+  .cognition-approvals-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .scotty-approvals-feed { display:flex; flex-direction:column; gap:10px; max-height:420px; overflow-y:auto; }
+  .scotty-proposal {
+    padding:12px 14px;
+    background:rgba(255,255,255,0.025);
+    border:1px solid rgba(255,255,255,0.04);
+    border-left:3px solid var(--sov-amber, #d4a827);
+    border-radius:0 6px 6px 0;
+    font-size:12px; color:rgba(232,227,213,0.82);
+    line-height:1.5;
+  }
+  .scotty-proposal .sp-objective {
+    font-size:11px; font-weight:600; color:rgba(232,227,213,0.95);
+    margin-bottom:4px;
+  }
+  .scotty-proposal .sp-summary {
+    font-size:11px; color:rgba(232,227,213,0.65);
+    margin-bottom:8px;
+  }
+  .scotty-proposal .sp-diff {
+    font-family:monospace; font-size:10px; line-height:1.45;
+    background:rgba(0,0,0,0.22); border-radius:4px;
+    padding:8px 10px; max-height:140px; overflow-y:auto;
+    color:rgba(232,227,213,0.70); white-space:pre; tab-size:2;
+    margin-bottom:6px;
+  }
+  .scotty-proposal .sp-tests {
+    font-size:10px; color:#4ade80; margin-bottom:8px;
+    font-family:monospace;
+  }
+  .scotty-proposal .sp-actions { display:flex; gap:8px; }
+  .scotty-proposal .sp-approve, .scotty-proposal .sp-reject {
+    padding:4px 12px; border-radius:4px; font-size:11px;
+    font-weight:600; cursor:pointer; border:none; letter-spacing:0.04em;
+  }
+  .scotty-proposal .sp-approve {
+    background:rgba(74,222,128,0.15); color:#4ade80;
+    border:1px solid rgba(74,222,128,0.3);
+  }
+  .scotty-proposal .sp-approve:hover { background:rgba(74,222,128,0.25); }
+  .scotty-proposal .sp-reject {
+    background:rgba(239,68,68,0.10); color:#f87171;
+    border:1px solid rgba(239,68,68,0.25);
+  }
+  .scotty-proposal .sp-reject:hover { background:rgba(239,68,68,0.20); }
+  .scotty-proposal .sp-notice {
+    margin-top:6px; font-size:10px; color:var(--sov-amber, #d4a827);
+    font-style:italic;
+  }
+  .scotty-approvals-feed .empty {
+    font-size:11px; color:rgba(232,227,213,0.4); padding:10px; font-style:italic;
+  }
+
   /* ─── Topology (Spark-ready scaffold) ──────────────────────────────────── */
   .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
   .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
@@ -868,9 +924,11 @@
       </div>
     </section>
 
-    <!-- Cognition panel — Aetheria's Sense-of-Us note + recent reflections.
-         Read-only display (Phase 4.2). Revert/purge controls come later.
-         Data from /api/cognition/note and /api/cognition/reflections. -->
+    <!-- Cognition + Scotty Approvals — twin-column row.
+         Left: Aetheria's Sense-of-Us note + recent reflections (read-only, Phase 4.2).
+         Right: Scotty proposals awaiting Jon's Approve/Reject (Task 6).
+         Data: /api/cognition/* and /api/delegation/pending. -->
+    <div class="cognition-approvals-row">
     <section class="panel" data-testid="cognition-panel" data-cognition-panel>
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
       <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
@@ -883,6 +941,13 @@
         <div class="cognition-item" data-empty>no reflections yet.</div>
       </div>
     </section>
+    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
+      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
+        <div class="empty">No proposals awaiting review.</div>
+      </div>
+    </section>
+    </div>
 
     <section class="bottom-row">
       <div class="panel activity" data-testid="activity-feed">
@@ -1674,6 +1739,91 @@
     }).join("");
   }
 
+  // ─── Scotty Approvals ─────────────────────────────────────────────────────
+  // Fetches /api/delegation/pending — tasks in "in_review" status.
+  // Renders one card per task: objective, summary, diff (scrollable pre),
+  // test_output (green), Approve and Reject buttons.
+  // Approve → POST /api/delegation/<id>/approve, shows restart_hint on success.
+  // Reject  → prompts for feedback, POST /api/delegation/<id>/reject {feedback}.
+  // 409 conflict on approve → shows the server message without removing the card.
+  // Empty state: "No proposals awaiting review."
+  async function renderScottyApprovals() {
+    const feed = document.querySelector("[data-scotty-approvals-feed]");
+    if (!feed) return;
+    const data = await fetchJson("/api/delegation/pending");
+    const tasks = Array.isArray(data) ? data : [];
+    if (tasks.length === 0) {
+      feed.innerHTML = '<div class="empty">No proposals awaiting review.</div>';
+      return;
+    }
+    feed.innerHTML = tasks.map(t => {
+      const esc = (s) => String(s || "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+      return `
+        <div class="scotty-proposal" data-task-id="${esc(t.id)}">
+          <div class="sp-objective">${esc(t.objective)}</div>
+          <div class="sp-summary">${esc(t.summary)}</div>
+          <pre class="sp-diff">${esc(t.diff)}</pre>
+          <div class="sp-tests">${esc(t.test_output)}</div>
+          <div class="sp-actions">
+            <button class="sp-approve" data-task-id="${esc(t.id)}">Approve</button>
+            <button class="sp-reject"  data-task-id="${esc(t.id)}">Reject</button>
+          </div>
+          <div class="sp-notice" style="display:none"></div>
+        </div>`;
+    }).join("");
+
+    // Wire approve buttons
+    feed.querySelectorAll(".sp-approve").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const taskId = btn.dataset.taskId;
+        const card = feed.querySelector(`.scotty-proposal[data-task-id="${taskId}"]`);
+        const notice = card && card.querySelector(".sp-notice");
+        try {
+          const res = await fetch(`/api/delegation/${taskId}/approve`, { method: "POST" });
+          if (res.status === 409) {
+            const body = await res.json().catch(() => ({}));
+            if (notice) { notice.textContent = body.message || "Conflict — could not approve."; notice.style.display = ""; }
+          } else if (res.ok) {
+            const body = await res.json().catch(() => ({}));
+            if (body.restart_hint && notice) { notice.textContent = body.restart_hint; notice.style.display = ""; }
+            setTimeout(renderScottyApprovals, 1200);
+          } else {
+            if (notice) { notice.textContent = "Approval failed — check logs."; notice.style.display = ""; }
+          }
+        } catch (e) {
+          if (notice) { notice.textContent = "Network error."; notice.style.display = ""; }
+        }
+      });
+    });
+
+    // Wire reject buttons
+    feed.querySelectorAll(".sp-reject").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const taskId = btn.dataset.taskId;
+        const feedback = window.prompt("Rejection feedback for Scotty:");
+        if (feedback === null) return; // cancelled
+        const card = feed.querySelector(`.scotty-proposal[data-task-id="${taskId}"]`);
+        const notice = card && card.querySelector(".sp-notice");
+        try {
+          const res = await fetch(`/api/delegation/${taskId}/reject`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ feedback }),
+          });
+          if (res.ok) {
+            renderScottyApprovals();
+          } else {
+            if (notice) { notice.textContent = "Rejection failed — check logs."; notice.style.display = ""; }
+          }
+        } catch (e) {
+          if (notice) { notice.textContent = "Network error."; notice.style.display = ""; }
+        }
+      });
+    });
+  }
+
   // ─── Steward — Funding Board ──────────────────────────────────────────────
   // Fetches /api/steward/board (default horizon 400d). Each entry becomes a
   // .steward-entry card with status dot (red=overdue, amber=near<30d,
@@ -1751,6 +1901,7 @@
     renderAres();
     renderSteward();
     renderCognition();
+    renderScottyApprovals();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();
