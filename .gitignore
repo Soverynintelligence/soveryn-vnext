@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
+# Delegation: Scotty's throwaway execution worktrees (created under
+# .worktrees/<task_id> by the delegation engine; never committed).
+.worktrees/
+
 # Virtualenvs
 .venv/
 venv/

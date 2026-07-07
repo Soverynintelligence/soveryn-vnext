@@ -18,6 +18,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -44,23 +45,27 @@ def run_acceptance_in_worktree(
         return False, "acceptance command is empty"
 
     pybin_dir = Path(sys.executable).parent
-    env = {
-        "PATH": f"{pybin_dir}:/usr/local/bin:/usr/bin:/bin",
-        "HOME": str(Path.home()),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
-        # Import isolation: the worktree's code shadows the live editable install.
-        "PYTHONPATH": str(Path(worktree_path)),
-    }
+    # Throwaway HOME so code executed during acceptance (pytest collects and runs
+    # the worktree's Python, which Scotty writes) writes caches/dotfiles to a temp
+    # dir, not the real user HOME. Reduces the blast radius of the executed code.
     try:
-        result = subprocess.run(
-            argv,
-            cwd=worktree_path,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-        )
+        with tempfile.TemporaryDirectory(prefix="acc_home_") as throwaway_home:
+            env = {
+                "PATH": f"{pybin_dir}:/usr/local/bin:/usr/bin:/bin",
+                "HOME": throwaway_home,
+                "LANG": os.environ.get("LANG", "C.UTF-8"),
+                "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
+                # Import isolation: the worktree's code shadows the live editable install.
+                "PYTHONPATH": str(Path(worktree_path)),
+            }
+            result = subprocess.run(
+                argv,
+                cwd=worktree_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+            )
     except subprocess.TimeoutExpired:
         return False, f"acceptance command exceeded {timeout}s and was killed"
     except Exception as exc:  # noqa: BLE001 — never propagate into the engine

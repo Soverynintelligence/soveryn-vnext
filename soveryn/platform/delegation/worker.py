@@ -75,8 +75,9 @@ def run_forever(
 
     # Crash recovery: any task left in 'executing' belongs to a previous process
     # that died mid-run (the worker is serial + single). Its worktree state is
-    # unknown and unresumable, so mark it failed rather than leave it stranded.
-    _recover_stale_executing(store)
+    # unknown and unresumable, so mark it failed rather than leave it stranded,
+    # and clean up its orphaned worktree/branch.
+    _recover_stale_executing(store, repo_root=repo_root)
 
     while True:
         _drain(store, execute_fn=execute_fn, repo_root=repo_root,
@@ -86,11 +87,12 @@ def run_forever(
         time.sleep(poll_seconds)
 
 
-def _recover_stale_executing(store: DelegationStore) -> int:
-    """Mark any task stuck in 'executing' as failed (stale after a crash).
+def _recover_stale_executing(store: DelegationStore, *, repo_root: str | Path | None = None) -> int:
+    """Mark any task stuck in 'executing' as failed (stale after a crash), and
+    best-effort clean up its orphaned worktree/branch.
 
-    Returns the number of tasks recovered. Best-effort: a store error on one
-    task is logged and does not stop the sweep or the worker.
+    Returns the number of tasks recovered. Best-effort throughout: a store or git
+    error on one task is logged and does not stop the sweep or the worker.
     """
     recovered = 0
     try:
@@ -101,15 +103,34 @@ def _recover_stale_executing(store: DelegationStore) -> int:
     for task in stale:
         try:
             store.set_status(task.id, "failed")
-            logger.warning(
-                "delegation worker: recovered stale 'executing' task %s → failed "
-                "(worktree %s may need manual cleanup)",
-                task.id, getattr(task, "worktree_path", None) or "?",
-            )
             recovered += 1
         except Exception:
             logger.exception(
                 "delegation worker: could not fail stale task %s", task.id
+            )
+            continue
+        # Best-effort worktree/branch cleanup so orphans don't accumulate in the
+        # live repo (they'd otherwise show as untracked and pin dead branches).
+        wt_path = getattr(task, "worktree_path", None)
+        branch = getattr(task, "branch", None)
+        if repo_root and wt_path and branch:
+            try:
+                from soveryn.platform.delegation.worktree import remove_worktree
+                remove_worktree(repo_root, wt_path, branch)
+                logger.warning(
+                    "delegation worker: recovered stale task %s → failed, worktree cleaned",
+                    task.id,
+                )
+            except Exception:
+                logger.exception(
+                    "delegation worker: stale task %s failed; worktree %s needs manual cleanup",
+                    task.id, wt_path,
+                )
+        else:
+            logger.warning(
+                "delegation worker: recovered stale 'executing' task %s → failed "
+                "(worktree %s may need manual cleanup)",
+                task.id, wt_path or "?",
             )
     return recovered
 

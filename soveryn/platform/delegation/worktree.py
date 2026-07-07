@@ -12,9 +12,18 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Serializes operations that mutate the LIVE repo's shared git state (worktree
+# add/remove/prune + merge). The approve route (a Flask request thread) can call
+# merge_worktree while the delegation worker thread is calling create_worktree /
+# remove_worktree; without this lock those race on .git/worktrees and refs.
+# Commit happens inside a worktree's own index (different working tree) and is
+# not covered here — git's own index.lock guards the object store.
+_REPO_GIT_LOCK = threading.Lock()
 
 
 def _git(repo_root: Path | str, *args: str) -> str:
@@ -49,7 +58,8 @@ def create_worktree(repo_root: Path | str, task_id: str) -> tuple[str, str]:
     # Ensure parent exists (git won't create it for us when using sub-dirs)
     wt_path.parent.mkdir(parents=True, exist_ok=True)
 
-    _git(repo_root, "worktree", "add", str(wt_path), "-b", branch, "HEAD")
+    with _REPO_GIT_LOCK:
+        _git(repo_root, "worktree", "add", str(wt_path), "-b", branch, "HEAD")
 
     logger.debug("created worktree %s on branch %s", wt_path, branch)
     return str(wt_path), branch
@@ -102,35 +112,36 @@ def merge_worktree(
     """
     repo_root = Path(repo_root).resolve()
 
-    if into is not None:
-        cur = current_branch(repo_root)
-        if cur != into:
-            msg = (
-                f"refusing to merge {branch!r}: repo is on {cur or '(detached)'!r}, "
-                f"not the integration branch {into!r}. Check out {into!r} first."
-            )
-            logger.warning("merge_worktree: %s", msg)
-            return False, msg
+    with _REPO_GIT_LOCK:
+        if into is not None:
+            cur = current_branch(repo_root)
+            if cur != into:
+                msg = (
+                    f"refusing to merge {branch!r}: repo is on {cur or '(detached)'!r}, "
+                    f"not the integration branch {into!r}. Check out {into!r} first."
+                )
+                logger.warning("merge_worktree: %s", msg)
+                return False, msg
 
-    try:
-        output = _git(repo_root, "merge", "--no-ff", "--no-edit", branch)
-        logger.debug("merge succeeded: %s", output.strip())
-        return True, output
-    except subprocess.CalledProcessError as exc:
-        message = exc.stderr or exc.stdout or str(exc)
-        logger.warning("merge failed (%s), aborting: %s", branch, message)
-
-        # Best-effort abort — swallow errors so we don't mask the original.
         try:
-            subprocess.run(
-                ["git", "-C", str(repo_root), "merge", "--abort"],
-                capture_output=True,
-                text=True,
-            )
-        except Exception:
-            pass
+            output = _git(repo_root, "merge", "--no-ff", "--no-edit", branch)
+            logger.debug("merge succeeded: %s", output.strip())
+            return True, output
+        except subprocess.CalledProcessError as exc:
+            message = exc.stderr or exc.stdout or str(exc)
+            logger.warning("merge failed (%s), aborting: %s", branch, message)
 
-        return False, message.strip()
+            # Best-effort abort — swallow errors so we don't mask the original.
+            try:
+                subprocess.run(
+                    ["git", "-C", str(repo_root), "merge", "--abort"],
+                    capture_output=True,
+                    text=True,
+                )
+            except Exception:
+                pass
+
+            return False, message.strip()
 
 
 def remove_worktree(
@@ -152,21 +163,22 @@ def remove_worktree(
     """
     repo_root = Path(repo_root).resolve()
 
-    try:
-        _git(repo_root, "worktree", "remove", "--force", str(worktree_path))
-        logger.debug("removed worktree %s", worktree_path)
-    except subprocess.CalledProcessError as exc:
-        logger.error("failed to remove worktree %s: %s", worktree_path, exc.stderr)
-        # Not re-raised — carry on with branch delete + prune.
-
-    if delete_branch:
+    with _REPO_GIT_LOCK:
         try:
-            _git(repo_root, "branch", "-D", branch)
-            logger.debug("deleted branch %s", branch)
+            _git(repo_root, "worktree", "remove", "--force", str(worktree_path))
+            logger.debug("removed worktree %s", worktree_path)
         except subprocess.CalledProcessError as exc:
-            logger.warning("could not delete branch %s: %s", branch, exc.stderr)
+            logger.error("failed to remove worktree %s: %s", worktree_path, exc.stderr)
+            # Not re-raised — carry on with branch delete + prune.
 
-    try:
-        _git(repo_root, "worktree", "prune")
-    except subprocess.CalledProcessError as exc:
-        logger.warning("worktree prune failed: %s", exc.stderr)
+        if delete_branch:
+            try:
+                _git(repo_root, "branch", "-D", branch)
+                logger.debug("deleted branch %s", branch)
+            except subprocess.CalledProcessError as exc:
+                logger.warning("could not delete branch %s: %s", branch, exc.stderr)
+
+        try:
+            _git(repo_root, "worktree", "prune")
+        except subprocess.CalledProcessError as exc:
+            logger.warning("worktree prune failed: %s", exc.stderr)

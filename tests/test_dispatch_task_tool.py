@@ -124,16 +124,19 @@ def test_valid_dispatch_python_m_acceptance(store):
     assert result["status"] == "dispatched"
 
 
-def test_valid_dispatch_dotslash_acceptance(store):
-    """./script.sh is a valid acceptance command prefix."""
+def test_dispatch_dotslash_acceptance_now_rejected(store):
+    """'./script' is NO LONGER allowed — acceptance runs as a real subprocess and
+    a bare script prefix would execute any (Scotty-written) file in the worktree.
+    Only pytest / python -m entrypoints are permitted."""
     from soveryn.platform.delegation.tools import build_dispatch_task_tool
+    from soveryn.platform.tools.registry import ToolArgError
     tool = build_dispatch_task_tool(store=store)
-    result = tool.handler({
-        "objective": "Run integration check",
-        "scope": "soveryn/integration/",
-        "acceptance": "./run_checks.sh",
-    })
-    assert result["status"] == "dispatched"
+    with pytest.raises(ToolArgError):
+        tool.handler({
+            "objective": "Run integration check",
+            "scope": "soveryn/integration/",
+            "acceptance": "./run_checks.sh",
+        })
 
 
 # ---------------------------------------------------------------------------

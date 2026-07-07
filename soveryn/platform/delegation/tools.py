@@ -6,7 +6,10 @@ implementation task to Scotty.
 The tool enforces three hard constraints at invocation time:
   1. All three fields (objective, scope, acceptance) must be non-empty strings.
   2. The acceptance criterion must be a runnable test/check command, identified
-     by a required prefix: ``pytest``, ``python -m``, or ``./``.
+     by a required prefix: ``pytest`` or ``python -m``. A bare ``./script``
+     prefix is deliberately NOT allowed — acceptance runs as a real subprocess,
+     and letting it execute any file in the worktree (which Scotty writes) is a
+     broader code-execution surface than a test invocation.
 
 These are gates, not suggestions.  An acceptance criterion that is ambiguous
 prose ("looks good", "echo done") will not pass.  If Aetheria cannot express
@@ -21,8 +24,11 @@ from typing import Any
 from soveryn.platform.delegation.store import DelegationStore
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 
-# Prefixes that identify a runnable test / check command.
-_ACCEPTANCE_PREFIXES = ("pytest", "python -m", "./")
+# Prefixes that identify a runnable test / check command. "./script" is
+# intentionally excluded: acceptance runs as a real subprocess and a bare
+# script prefix would let it execute ANY file in the worktree (which Scotty
+# writes). Constrain the entrypoint to a known interpreter/test runner.
+_ACCEPTANCE_PREFIXES = ("pytest", "python -m")
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +65,7 @@ def build_dispatch_task_tool(
         if not any(acceptance.strip().startswith(p) for p in _ACCEPTANCE_PREFIXES):
             raise ToolArgError(
                 "acceptance must be a test/check command starting with "
-                "'pytest', 'python -m', or './' — "
+                "'pytest' or 'python -m' — "
                 f"got: {acceptance!r}"
             )
 
@@ -99,8 +105,8 @@ def build_dispatch_task_tool(
                     "type": "string",
                     "description": (
                         "A concrete, runnable test or check command that must pass "
-                        "for the task to be considered done. Must start with 'pytest', "
-                        "'python -m', or './'. Prose like 'looks good' is not accepted. "
+                        "for the task to be considered done. Must start with 'pytest' "
+                        "or 'python -m'. Prose like 'looks good' is not accepted. "
                         "Example: 'pytest tests/test_fetcher.py -q --tb=short'."
                     ),
                 },
@@ -114,8 +120,8 @@ def build_dispatch_task_tool(
             "worktree, is tested, and comes back as a proposal for Jon to review — "
             "nothing goes live until approved. Returns a task_id; check task_status "
             "for progress. This ACTUALLY runs; do not say a task is done until its "
-            "status is 'landed'. Supply a concrete test command (pytest / python -m / "
-            "./script) as the acceptance criterion — vague prose is rejected."
+            "status is 'landed'. Supply a concrete test command (pytest / python -m) "
+            "as the acceptance criterion — vague prose is rejected."
         ),
     )
 

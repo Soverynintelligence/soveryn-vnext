@@ -274,3 +274,22 @@ def test_allowed_executables_contains_expected_set():
     assert set(ALLOWED_EXECUTABLES) == {
         "python", "pytest", "ruff", "black", "mypy", "git",
     }
+
+
+# ─── run_command: git config is read-only (Task-9 hardening) ─────────────────
+
+def test_run_command_git_config_write_rejected():
+    from soveryn.agents.scotty.tools import build_run_command_tool
+    from soveryn.platform.tools.registry import ToolArgError
+    tool = build_run_command_tool(owner_agent="scotty")
+    with pytest.raises(ToolArgError):
+        tool.handler({"executable": "git", "args": ["config", "user.name", "attacker"]})
+
+
+def test_run_command_git_config_read_allowed():
+    from soveryn.agents.scotty.tools import build_run_command_tool
+    tool = build_run_command_tool(owner_agent="scotty")
+    out = tool.handler({"executable": "git", "args": ["config", "--get", "core.bare"]})
+    # --get is permitted; returncode may be non-zero if the key is unset, but the
+    # guard must not have rejected it (we get a structured result, not a raise).
+    assert "returncode" in out

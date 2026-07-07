@@ -117,6 +117,16 @@ def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
                     f"Use git_status / git_diff / git_restore_file for the "
                     f"supported write-side primitives."
                 )
+            # `git config` without a read flag WRITES config — constrain it to
+            # the read forms so this stays a read-only surface as advertised.
+            if argv[0] == "config":
+                read_flags = {"--get", "--get-all", "--get-regexp", "--list", "-l"}
+                if not any(a in read_flags for a in argv[1:]):
+                    raise ToolArgError(
+                        "git config via run_command is read-only: pass one of "
+                        "--get / --get-all / --get-regexp / --list. Writing config "
+                        "is not permitted."
+                    )
         if executable == "python":
             if argv and argv[0] in FORBIDDEN_PYTHON_FIRST_ARGS:
                 raise ToolArgError(
