@@ -51,15 +51,15 @@ Aetheria consumes candidate cards from the board (via the coordination tools she
 - She may decline a candidate (no draft) — declining is a valid, silent outcome (ownership of silence).
 - Honesty tools apply: her grounding/verification path runs on drafts exactly as in chat; no unverifiable factual claim ships in a draft without provenance.
 
-### 3. Approval queue — surfaced through the messenger
-Drafts land in an **approval queue** that Jon reviews from his messenger (`soveryn/app/messenger/`, `soveryn/app/routes/messenger.py`) — the durable surface he already uses, reachable from his phone. Each queued item shows: the draft, its kind, its provenance, and (for replies) the tweet it answers with a link.
+### 3. Approval queue — surfaced through Signal (decided 2026-07-09)
+Drafts land in an **approval queue** that Jon reviews over **Signal** — reusing the existing Signal bot ([[project_soveryn_signal_bot]], the same channel Ares alerts flow through). Chosen over the messenger PWA so Jon approves from his phone, away from the desk ([[project_soveryn_presence_is_continuity]]). The daemon sends each queued draft as a Signal message showing: the draft text, its kind, its provenance, and (for replies) a link to the tweet it answers.
 
-Jon can, per item:
-- **Approve** → the item is handed to the publisher.
-- **Edit** → Jon's edited text is what publishes; the edit is logged as voice signal.
-- **Reject** → nothing publishes; the rejection (and reason, if given) is logged as voice signal.
+Jon replies to act, per item (bias to safety — anything not clearly an approve is treated as *not yet approved*):
+- **`y` / `approve`** → the item is handed to the publisher.
+- **corrected text** (any substantive reply that isn't an approve/reject token) → Jon's text is what publishes; the edit is logged as voice signal.
+- **`n` / `reject`** → nothing publishes; the rejection (and reason, if given) is logged as voice signal.
 
-No item leaves the queue to X without an explicit approve/edit-approve. A queue item is inert data until Jon acts.
+No item reaches X without an explicit approve or edit-approve. A queue item is inert data until Jon acts. Because drafts arrive asynchronously over Signal, each carries a short id so a reply can be matched to the right pending draft (mirrors the Signal bot's existing message-correlation).
 
 ### 4. Publisher — `soveryn/agents/presence/publisher.py`
 On approval only: posts the approved text to @Soveryn_AI via the X Pro **write** endpoint (original tweet, or reply-to the target tweet_id for replies). Records the resulting tweet_id back onto the board / into the seen-store so a reply we posted is not later re-ingested as a fresh mention to answer. Rate-limit aware; a publish failure surfaces back to the queue as "failed to post — retry?" (never a silent drop, never a silent double-post).
@@ -107,7 +107,7 @@ Every approve / edit / reject is logged with the original draft, the final text 
   - Tool registry — `soveryn/platform/tools/registry.py` (register the approval-queue / draft tools for Aetheria).
 
 ## Open decisions to confirm (before the plan)
-1. **@Soveryn_AI current state.** Existing account with followers/bio, or fresh? Affects only the bio/transparency setup, not the architecture. (Jon to confirm.)
-2. **Approval-queue surface location.** A dedicated messenger thread for the approval queue vs. a small approvals view in the PWA. Recommend a **dedicated messenger thread** for v1 (reuses everything, works from his phone, zero new UI). Confirm.
+1. **@Soveryn_AI current state.** RESOLVED 2026-07-09 → **live/existing** account. No creation needed; remaining setup is the developer App (Read+Write) + OAuth creds in env, and ensuring the bio transparently states it's an AI.
+2. **Approval-queue surface location.** RESOLVED 2026-07-09 → **Signal** (existing Signal bot), so Jon approves from his phone away from the desk. Reply grammar: `y`/`approve`, `n`/`reject`, or corrected text = edit-approve. See Component 3.
 3. **Niche term set.** Start with a small curated list (sovereign/local AI, open models, AI honesty/confabulation, AI companions) + @Soveryn_AI mentions; tune from what salience surfaces. Confirm the seed list when we plan.
 4. **X client: official SDK vs thin httpx wrappers.** Recommend thin wrappers over the two or three endpoints we actually use (fewer deps, full control, matches how the stack avoids heavy SDKs). Confirm.
