@@ -326,12 +326,14 @@ def create_app(
                     # The default 240s client timeout gives up before Vett's
                     # full directive turn completes — a real research directive
                     # ("Hardware Moat audit", 2026-06-19) ran 288s before its
-                    # own 504. A directive turn is a tool LOOP (up to 8 rounds),
-                    # each round's LLM call now budgeted at 300s (Vett's
-                    # chat_timeout_seconds above), so the whole turn can run
-                    # well past any single call. 600s lets the heavy turn land
-                    # instead of the client cancelling mid-flight.
-                    dispatch_timeout_seconds=600.0,
+                    # own 504. A directive turn is a tool LOOP (up to 16 rounds
+                    # as of 2026-07-09), each round's LLM call now budgeted at
+                    # 300s (Vett's chat_timeout_seconds above), so the whole turn
+                    # can run well past any single call. 1200s lets the heavy
+                    # 16-round turn land instead of the client cancelling
+                    # mid-flight. Coupled with max_tool_rounds=16 below — the two
+                    # caps move together or the turn dies on whichever is lower.
+                    dispatch_timeout_seconds=1200.0,
                 )
             )
             # Peers' upward channel — same tool builder, different owner per
@@ -697,7 +699,12 @@ def create_app(
                 # ceiling. Confirmed live 2026-06-04 evening — he tripped the
                 # cap researching philanthropy funding venues. Bumped to 8 so
                 # he can work through 3-5 sources per turn without cutoff.
-                kwargs["max_tool_rounds"] = 8
+                # 2026-07-09: 8 still not enough — deeper research directives
+                # exhaust the round budget and return tool_round_limit (surfaces
+                # to Jon as a timeout). Bumped to 16 (~7-10 sources). Coupled
+                # with the dispatch_timeout_seconds bump to 1200s above — raising
+                # rounds without the wall-clock just moves the wall.
+                kwargs["max_tool_rounds"] = 16
                 # Vett gets the Active Focus block too (2026-06-19): board
                 # awareness so she researches against what's actually in flight,
                 # plus delivery state of her own messages up to Aetheria
