@@ -10,7 +10,7 @@ _TWEETS_URL = "https://api.twitter.com/2/tweets"
 _ENV_VARS = (
     "X_BEARER_TOKEN",
     "X_API_KEY",
-    "X_API_KEY_SECRET",
+    "X_API_SECRET",
     "X_ACCESS_TOKEN",
     "X_ACCESS_TOKEN_SECRET",
 )
@@ -46,7 +46,7 @@ class XClient:
             bearer=values["X_BEARER_TOKEN"],
             oauth=(
                 values["X_API_KEY"],
-                values["X_API_KEY_SECRET"],
+                values["X_API_SECRET"],
                 values["X_ACCESS_TOKEN"],
                 values["X_ACCESS_TOKEN_SECRET"],
             ),
