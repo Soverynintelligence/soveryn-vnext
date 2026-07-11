@@ -290,3 +290,193 @@ def test_publish_failure_returns_friendly_error_dict(staged, trust_path):
     result = spec.handler({"text": "will fail"})
     assert result["status"] == "error"
     assert "X API is down" in result["message"]
+
+
+# ---------------------------------------------------------------------------
+# Finding 1 — TTL expiry must be wired into post_to_x, or a never-answered
+# staged post locks out all future posts forever.
+# ---------------------------------------------------------------------------
+
+
+class MutableNow:
+    """A mutable now_fn so a test can advance the clock mid-test."""
+
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __call__(self) -> str:
+        return self.value
+
+
+def test_stale_staged_post_expires_and_unblocks_new_post(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 0)
+    now = MutableNow("2026-07-01T00:00:00")
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=now,
+    )
+    first = spec.handler({"text": "old stale draft"})
+    assert first["status"] == "staged"
+
+    # advance well past the default 12h TTL
+    now.value = "2026-07-05T00:00:00"
+
+    second = spec.handler({"text": "fresh draft"})
+    # must NOT be "busy" — the stale post should have been expired first
+    assert second["status"] == "staged"
+    assert second != {"status": "busy", "message": BUSY_MESSAGE}
+
+    pending = staged.pending("aetheria")
+    assert pending is not None
+    assert pending.text == "fresh draft"
+
+
+def test_fresh_staged_post_within_ttl_still_blocks_as_busy(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 0)
+    now = MutableNow("2026-07-01T00:00:00")
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=now,
+    )
+    first = spec.handler({"text": "recent draft"})
+    assert first["status"] == "staged"
+
+    # advance, but stay within the default 12h TTL
+    now.value = "2026-07-01T02:00:00"
+
+    second = spec.handler({"text": "another draft"})
+    assert second == {"status": "busy", "message": BUSY_MESSAGE}
+
+
+def test_custom_ttl_hours_is_respected(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 0)
+    now = MutableNow("2026-07-01T00:00:00")
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=now,
+        ttl_hours=1.0,
+    )
+    first = spec.handler({"text": "old draft"})
+    assert first["status"] == "staged"
+
+    now.value = "2026-07-01T02:00:00"  # 2h later, past the 1h custom TTL
+
+    second = spec.handler({"text": "new draft"})
+    assert second["status"] == "staged"
+    assert staged.pending("aetheria").text == "new draft"
+
+
+# ---------------------------------------------------------------------------
+# Finding 2 — autonomous publish (Stage 1 original / Stage 2) writes no
+# lattice memory, so those posts are unrecallable. x_memory_fn must be
+# called on a successful publish, and never on staging or a failed publish.
+# ---------------------------------------------------------------------------
+
+
+class RecordingMemory:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def __call__(self, text: str, reply_to, result) -> None:
+        self.calls.append({"text": text, "reply_to": reply_to, "result": result})
+
+
+def test_stage1_original_publish_writes_x_memory(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 1)
+    memory = RecordingMemory()
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+        x_memory_fn=memory,
+    )
+    result = spec.handler({"text": "an original thought"})
+    assert result["status"] == "posted"
+    assert len(memory.calls) == 1
+    assert memory.calls[0]["text"] == "an original thought"
+    assert memory.calls[0]["reply_to"] is None
+    assert memory.calls[0]["result"]["id"] == "posted-123"
+
+
+def test_stage2_publish_writes_x_memory(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 2)
+    memory = RecordingMemory()
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+        x_memory_fn=memory,
+    )
+    result = spec.handler({"text": "a reply", "reply_to": "42"})
+    assert result["status"] == "posted"
+    assert len(memory.calls) == 1
+    assert memory.calls[0]["reply_to"] == "42"
+
+
+def test_stage1_reply_stages_and_does_not_write_x_memory(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 1)
+    memory = RecordingMemory()
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+        x_memory_fn=memory,
+    )
+    result = spec.handler({"text": "a reply", "reply_to": "42"})
+    assert result["status"] == "staged"
+    assert memory.calls == []
+
+
+def test_publish_returning_error_does_not_write_x_memory(staged, trust_path):
+    def erroring_publisher(text, *, reply_to=None):
+        return {"error": "rate limited"}
+
+    memory = RecordingMemory()
+    set_trust_stage(trust_path, 2)
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=erroring_publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+        x_memory_fn=memory,
+    )
+    spec.handler({"text": "will fail softly"})
+    assert memory.calls == []
+
+
+def test_x_memory_fn_is_optional_and_defaults_to_no_op(staged, publisher, trust_path):
+    set_trust_stage(trust_path, 2)
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+    )
+    result = spec.handler({"text": "no memory fn wired"})
+    assert result["status"] == "posted"
+
+
+def test_x_memory_fn_raising_does_not_crash_publish(staged, publisher, trust_path):
+    def raising_memory(text, reply_to, result):
+        raise RuntimeError("embed service down")
+
+    set_trust_stage(trust_path, 2)
+    spec = build_post_to_x_tool(
+        staged=staged,
+        publisher_fn=publisher,
+        trust_path=trust_path,
+        now_fn=fixed_now_fn,
+        x_memory_fn=raising_memory,
+    )
+    result = spec.handler({"text": "still posts despite memory failure"})
+    assert result["status"] == "posted"
+    assert result["result"]["id"] == "posted-123"

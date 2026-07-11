@@ -26,6 +26,7 @@ wake (a different session entirely).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Callable
@@ -35,8 +36,19 @@ from soveryn.agents.presence.staged_store import StagedBusyError, StagedStore
 from soveryn.agents.presence.trust import read_trust_stage
 from soveryn.platform.tools.registry import ToolSpec
 
+logger = logging.getLogger(__name__)
+
 PublisherFn = Callable[..., Any]
 NowFn = Callable[[], str]
+XMemoryFn = Callable[[str, "str | None", dict[str, Any]], Any]
+
+DEFAULT_TTL_HOURS = 12.0
+
+
+def _noop_x_memory_fn(text: str, reply_to: "str | None", result: dict[str, Any]) -> None:
+    """Default no-op x_memory_fn — callers that don't care about lattice
+    recall (e.g. most existing tests) don't have to wire one."""
+    return None
 
 STAGED_MESSAGE = "Staged — it posts once Jon says yes."
 BUSY_MESSAGE = "You already have a post waiting on Jon; resolve that first."
@@ -95,12 +107,27 @@ def build_post_to_x_tool(
     publisher_fn: PublisherFn,
     trust_path: Path,
     now_fn: NowFn,
+    ttl_hours: float = DEFAULT_TTL_HOURS,
+    x_memory_fn: XMemoryFn = _noop_x_memory_fn,
 ) -> ToolSpec:
     """Build the trust-gated `post_to_x` tool.
 
     The trust stage is re-read from `trust_path` on every invocation (never
     cached), so a Stage-0 panic mid-session takes effect starting with the
     very next call — no redeploy, no stale in-memory gate.
+
+    Every call first expires any stale `proposed` staged post older than
+    `ttl_hours` (default 12h) BEFORE checking busy/stages. Without this, a
+    staged post Jon never answers would permanently occupy the single
+    per-agent slot and lock out all future posts.
+
+    `x_memory_fn(text, reply_to, result)` is called after a SUCCESSFUL
+    autonomous publish (Stage 1 original / Stage 2) so that post is written
+    into the lattice and stays recallable — the resolver's chat-path
+    approval flow (a DIFFERENT injection point, different signature) writes
+    its own lattice node separately. A failure in `x_memory_fn` is logged
+    and swallowed — the tweet is already live; a recall-write failure must
+    never turn a successful publish into a tool error.
     """
 
     def _stage_it(text: str, reply_to: str | None) -> dict[str, Any]:
@@ -118,6 +145,12 @@ def build_post_to_x_tool(
                 "status": "error",
                 "message": f"Posting failed: {exc}",
             }
+        if isinstance(result, dict) and result.get("id") and not result.get("error"):
+            try:
+                x_memory_fn(text, reply_to, result)
+            except Exception as exc:  # noqa: BLE001 - the tweet is already live;
+                # a broken recall write must not turn success into an error.
+                logger.warning("x_memory_fn failed after successful publish: %s", exc)
         return {
             "status": "posted",
             "message": "Posted to X.",
@@ -127,6 +160,11 @@ def build_post_to_x_tool(
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         text = args["text"]
         reply_to = args.get("reply_to")
+
+        # Expire any stale proposed post FIRST, before busy/stage checks —
+        # a never-answered staged post must not permanently occupy the
+        # single per-agent slot (Finding 1).
+        staged.expire_stale(now_fn(), ttl_hours)
 
         stage = read_trust_stage(trust_path)
 

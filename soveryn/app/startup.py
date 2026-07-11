@@ -581,6 +581,32 @@ def create_app(
                 x_candidate_store.record_posted_id(posted_id)
                 return {"id": posted_id, "url": f"https://x.com/i/web/status/{posted_id}"}
 
+            # x_memory_fn (tool-path) — wired directly into post_to_x for the
+            # AUTONOMOUS publish path (Stage 1 original / Stage 2). Those
+            # posts go straight to X inside the tool itself, with no
+            # chat-path resolver anywhere in the loop, so this is the only
+            # place that ever writes their lattice `x_post` node — without
+            # it they'd be live on X but unrecallable (Finding 2). Different
+            # signature than the resolver's `_x_memory_fn` below
+            # (`text, reply_to, result` vs `post, result`) because it's a
+            # different injection point with no `StagedPost` in hand.
+            # build_post_to_x_tool already wraps this call in try/except (an
+            # embed-service outage must not turn a successful publish into a
+            # tool error), so no extra guarding is needed here.
+            def _x_autonomous_memory_fn(
+                text: str, reply_to: str | None, result: dict[str, Any]
+            ) -> None:
+                write_x_post_node(
+                    lattice_store=recall_lattice,
+                    embed_fn=_default_embed,
+                    agent="aetheria",
+                    text=text,
+                    source_tweet=reply_to,
+                    edited_by_jon=False,
+                    posted_id=result.get("id") or "",
+                    now=datetime.now().isoformat(),
+                )
+
             tool_registry.register(
                 build_read_x_tool(owner_agent="aetheria", store=x_candidate_store)
             )
@@ -591,6 +617,7 @@ def create_app(
                     publisher_fn=_x_publisher_fn,
                     trust_path=x_trust_path,
                     now_fn=lambda: datetime.now().isoformat(),
+                    x_memory_fn=_x_autonomous_memory_fn,
                 )
             )
 
