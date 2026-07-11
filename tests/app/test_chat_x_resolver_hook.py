@@ -245,8 +245,9 @@ def test_chat_stream_affirm_publishes_and_skips_normal_turn(app_state):
 
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
-    assert len(events) == 1
-    assert events[0]["type"] == "x_resolution"
+    # x_resolution frame, then a done frame that closes the UI spinner (the
+    # resolver short-circuits the normal turn, so this terminates the stream).
+    assert [e["type"] for e in events] == ["x_resolution", "done"]
     assert events[0]["action"] == "published"
     assert app_state["rec"].publish_calls == [("draft post", None)]
     assert app_state["fake_stream"].calls == []  # normal turn did NOT run
