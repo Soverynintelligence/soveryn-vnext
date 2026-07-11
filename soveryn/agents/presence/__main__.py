@@ -28,6 +28,7 @@ from soveryn.agents.presence.aetheria_bridge import make_draft_fn
 from soveryn.agents.presence.candidate_store import CandidateStore
 from soveryn.agents.presence.config import PresenceConfig
 from soveryn.agents.presence.daemon import PresenceDaemonSurface
+from soveryn.agents.presence.pending_store import PendingStore
 from soveryn.agents.presence.signal_log import SignalLog
 from soveryn.agents.presence.x_client import XClient
 from soveryn.config.loader import load_env_config
@@ -150,6 +151,7 @@ def build_daemon(args: LauncherArgs) -> PresenceDaemonSurface:
     x_client = XClient.from_env()
     store = CandidateStore(cfg.db_path)
     signal_log = SignalLog(cfg.signal_log_path)
+    pending_store = PendingStore(cfg.pending_db_path)
 
     env = load_env_config()
     conv_store = ConversationStore(env.conversations_db)
@@ -169,6 +171,7 @@ def build_daemon(args: LauncherArgs) -> PresenceDaemonSurface:
         draft_fn=draft_fn,
         send_fn=send_fn,
         signal_log=signal_log,
+        pending_store=pending_store,
     )
 
 

@@ -17,6 +17,7 @@ class PresenceConfig:
     poll_interval_seconds: float
     db_path: Path
     signal_log_path: Path
+    pending_db_path: Path
 
     @classmethod
     def default(cls) -> "PresenceConfig":
@@ -26,4 +27,5 @@ class PresenceConfig:
             max_drafts_per_scan=3, poll_interval_seconds=300.0,
             db_path=base / "presence_candidates.db",
             signal_log_path=base / "presence_signal_log.db",
+            pending_db_path=base / "presence_pending.db",
         )
