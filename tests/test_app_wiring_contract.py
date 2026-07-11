@@ -164,3 +164,36 @@ def test_scotty_tool_scope(app):
     assert "request_direction" in names
     # Documents are an Aetheria+Vett capability — Scotty must NOT have it.
     assert "create_document" not in names, "scotty should not have document tools"
+
+
+# ─── X presence tools (Task 6): read_x + post_to_x, aetheria-only ────────────
+
+def test_aetheria_has_x_tools(app):
+    names = _tool_names(_loops(app)["aetheria"], "aetheria")
+    assert "read_x" in names, f"aetheria missing 'read_x': {sorted(names)}"
+    assert "post_to_x" in names, f"aetheria missing 'post_to_x': {sorted(names)}"
+
+
+def test_x_tools_scoped_to_aetheria_only(app):
+    for agent in ("vett", "scotty"):
+        names = _tool_names(_loops(app)[agent], agent)
+        assert "read_x" not in names, f"{agent} must not have 'read_x'"
+        assert "post_to_x" not in names, f"{agent} must not have 'post_to_x'"
+
+
+def test_create_app_boots_with_no_x_creds(tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path):
+    """create_app() must succeed with zero X_* env vars set — the post_to_x
+    publisher_fn must construct XClient.from_env() LAZILY (on first publish
+    call), never at app-boot time."""
+    for name in (
+        "X_BEARER_TOKEN", "X_API_KEY", "X_API_SECRET",
+        "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
+    monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv2.db"))
+    names = _tool_names(_loops(app)["aetheria"], "aetheria")
+    assert "read_x" in names
+    assert "post_to_x" in names

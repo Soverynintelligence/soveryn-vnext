@@ -19,6 +19,7 @@ app.extensions['soveryn']:
 
 from __future__ import annotations
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -539,6 +540,58 @@ def create_app(
                 build_mark_share_tool(lattice_store=recall_lattice, owner_agent="aetheria")
             )
         # Scotty: not registered by default. He reports through threads Jon initiates.
+
+        # X presence — read_x + post_to_x on the REAL aetheria loop (one
+        # Aetheria, no clone/second decision-maker). The isolated feed-worker
+        # process (soveryn-x-feed.service) writes candidates into the SAME
+        # PresenceConfig.default().db_path this reads, so read_x always shows
+        # what the feed found. post_to_x is trust-gated (x_trust.json,
+        # fail-closed to Stage 0) and, below that trust ceiling, only stages
+        # into StagedStore — Jon's chat-side affirmation (Task 7/8) is what
+        # actually publishes. publisher_fn below builds XClient.from_env()
+        # LAZILY, on first publish call, NOT here — create_app() must boot
+        # cleanly with zero X_* env vars (staging needs no creds; only an
+        # actual Stage 1/2 publish does).
+        if recall_lattice is not None:
+            from soveryn.agents.presence.candidate_store import CandidateStore
+            from soveryn.agents.presence.config import PresenceConfig
+            from soveryn.agents.presence.staged_store import StagedStore
+            from soveryn.agents.presence.x_client import XClient
+            from soveryn.agents.aetheria.tools.x_tools import (
+                build_post_to_x_tool,
+                build_read_x_tool,
+            )
+
+            presence_cfg = PresenceConfig.default()
+            x_candidate_store = CandidateStore(presence_cfg.db_path)
+            x_staged_store = StagedStore(env.data_root / "x_staged.db")
+            x_trust_path = env.data_root / "x_trust.json"
+
+            def _x_publisher_fn(text: str, reply_to: str | None = None) -> dict[str, Any]:
+                try:
+                    client = XClient.from_env()
+                    posted_id = (
+                        client.reply_tweet(text, reply_to)
+                        if reply_to
+                        else client.create_tweet(text)
+                    )
+                except Exception as exc:  # noqa: BLE001 - never crash the loop/app
+                    return {"error": str(exc)}
+                x_candidate_store.record_posted_id(posted_id)
+                return {"id": posted_id, "url": f"https://x.com/i/web/status/{posted_id}"}
+
+            tool_registry.register(
+                build_read_x_tool(owner_agent="aetheria", store=x_candidate_store)
+            )
+            tool_registry.register(
+                build_post_to_x_tool(
+                    owner_agent="aetheria",
+                    staged=x_staged_store,
+                    publisher_fn=_x_publisher_fn,
+                    trust_path=x_trust_path,
+                    now_fn=lambda: datetime.now().isoformat(),
+                )
+            )
 
         # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
         # that can emit deliberate_share also get to introspect their own
