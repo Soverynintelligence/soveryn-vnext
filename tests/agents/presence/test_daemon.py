@@ -12,8 +12,9 @@ import pytest
 from soveryn.agents.presence.candidate_store import CandidateStore
 from soveryn.agents.presence.config import PresenceConfig
 from soveryn.agents.presence.daemon import PresenceDaemonSurface, _interruptible_sleep
+from soveryn.agents.presence.pending_store import PendingStore
 from soveryn.agents.presence.signal_log import SignalLog
-from soveryn.agents.presence.x_client import Tweet
+from soveryn.agents.presence.x_client import Tweet, XClientError
 
 
 def _status_of(tmp_path, tweet_id):
@@ -65,7 +66,18 @@ def _daemon(tmp_path, tweets, draft_fn, sent, **cfg_overrides):
         draft_fn=draft_fn,
         send_fn=lambda m: sent.append(m),
         signal_log=SignalLog(tmp_path / "s.db"),
+        pending_store=PendingStore(tmp_path / "pending.db"),
     )
+
+
+class FailingCreateFakeX(FakeX):
+    """FakeX whose posting calls always raise, to exercise a failed publish."""
+
+    def create_tweet(self, text):
+        raise XClientError("X API 500: server error")
+
+    def reply_tweet(self, text, in_reply_to):
+        raise XClientError("X API 500: server error")
 
 
 _DRAFT_FN = lambda p: '{"post":"grounded.","based_on":"data","skip":false}'
@@ -87,7 +99,7 @@ def test_scan_dedups_across_niche_terms_and_mention_search(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    assert len(d.pending) == 1
+    assert len(d.pending_store.draft_ids()) == 1
 
 
 def test_scan_below_threshold_tweet_is_not_drafted(tmp_path):
@@ -111,9 +123,10 @@ def test_scan_below_threshold_tweet_is_not_drafted(tmp_path):
         draft_fn=_DRAFT_FN,
         send_fn=lambda m: sent.append(m),
         signal_log=SignalLog(tmp_path / "s.db"),
+        pending_store=PendingStore(tmp_path / "pending.db"),
     )
     assert d.scan_once() == 0
-    assert d.pending == {}
+    assert d.pending_store.draft_ids() == set()
     assert sent == []
 
 
@@ -122,14 +135,14 @@ def test_scan_respects_max_drafts_per_scan(tmp_path):
     tweets = [Tweet(str(i), "a", "sovereign AI local LLM", "u") for i in range(5)]
     d = _daemon(tmp_path, tweets, _DRAFT_FN, sent, max_drafts_per_scan=2)
     assert d.scan_once() == 2
-    assert len(d.pending) == 2
+    assert len(d.pending_store.draft_ids()) == 2
 
 
 def test_scan_skip_draft_does_not_add_to_pending(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _SKIP_FN, sent)
     assert d.scan_once() == 0
-    assert d.pending == {}
+    assert d.pending_store.draft_ids() == set()
     assert sent == []
 
 
@@ -137,7 +150,7 @@ def test_scan_draft_id_is_deterministic_tweet_id(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("42", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    assert list(d.pending.keys()) == ["42"]
+    assert d.pending_store.draft_ids() == {"42"}
 
 
 def test_scan_skip_marks_candidate_skipped_and_is_not_redrafted(tmp_path):
@@ -172,9 +185,9 @@ def test_niche_rich_mention_ingested_as_mention_not_topic(tmp_path):
 
     assert _kind_of(tmp_path, "1") == "mention"
 
-    draft_id = next(iter(d.pending))
-    assert d.pending[draft_id].kind == "mention"
-    assert d.pending[draft_id].in_reply_to == "1"
+    draft_id = next(iter(d.pending_store.draft_ids()))
+    assert d.pending_store.get_draft(draft_id).kind == "mention"
+    assert d.pending_store.get_draft(draft_id).in_reply_to == "1"
 
 
 # ─── resolve_reply ──────────────────────────────────────────────────────────
@@ -184,7 +197,7 @@ def test_resolve_approve_publishes(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    draft_id = next(iter(d.pending))
+    draft_id = next(iter(d.pending_store.draft_ids()))
     r = d.resolve_reply(draft_id, "y")
     assert r.ok and d.x_client.posted == ["grounded."]
 
@@ -193,16 +206,16 @@ def test_resolve_approve_removes_from_pending(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    draft_id = next(iter(d.pending))
+    draft_id = next(iter(d.pending_store.draft_ids()))
     d.resolve_reply(draft_id, "y")
-    assert draft_id not in d.pending
+    assert d.pending_store.get_draft(draft_id) is None
 
 
 def test_resolve_reject_no_publish(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    assert d.resolve_reply(next(iter(d.pending)), "n") is None
+    assert d.resolve_reply(next(iter(d.pending_store.draft_ids())), "n") is None
     assert d.x_client.posted == []
 
 
@@ -210,7 +223,7 @@ def test_resolve_edit_publishes_jons_literal_text(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    draft_id = next(iter(d.pending))
+    draft_id = next(iter(d.pending_store.draft_ids()))
     r = d.resolve_reply(draft_id, "my own words instead")
     assert r.ok and d.x_client.posted == ["my own words instead"]
 
@@ -225,7 +238,7 @@ def test_resolve_logs_every_outcome_to_signal_log(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    draft_id = next(iter(d.pending))
+    draft_id = next(iter(d.pending_store.draft_ids()))
     d.resolve_reply(draft_id, "y")
     records = d.signal_log.all()
     assert len(records) == 1
@@ -237,11 +250,78 @@ def test_resolve_reject_logs_reason(tmp_path):
     sent = []
     d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
-    draft_id = next(iter(d.pending))
+    draft_id = next(iter(d.pending_store.draft_ids()))
     d.resolve_reply(draft_id, "reject: too promotional")
     records = d.signal_log.all()
     assert records[0]["action"] == "reject"
     assert records[0]["reason"] == "too promotional"
+
+
+def test_resolve_approve_publish_failure_leaves_draft_pending_for_retry(tmp_path):
+    # A failed publish (e.g. a transient X API error) must not delete the
+    # pending draft — Jon retrying "y" later needs to be able to resolve the
+    # same draft_id again instead of hitting "unknown draft id".
+    sent = []
+    cfg = _cfg(tmp_path)
+    d = PresenceDaemonSurface(
+        cfg=cfg,
+        x_client=FailingCreateFakeX([Tweet("1", "a", "sovereign AI local LLM", "u")]),
+        store=CandidateStore(tmp_path / "c.db"),
+        draft_fn=_DRAFT_FN,
+        send_fn=lambda m: sent.append(m),
+        signal_log=SignalLog(tmp_path / "s.db"),
+        pending_store=PendingStore(tmp_path / "pending.db"),
+    )
+    d.scan_once()
+    draft_id = next(iter(d.pending_store.draft_ids()))
+
+    r = d.resolve_reply(draft_id, "y")
+
+    assert r.ok is False
+    assert d.pending_store.get_draft(draft_id) is not None  # left for retry
+    records = d.signal_log.all()
+    assert len(records) == 1
+    assert records[0]["action"] == "approve"
+
+
+def test_drain_pending_replies_processes_enqueued_reply_end_to_end(tmp_path):
+    sent = []
+    d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
+    d.scan_once()
+    draft_id = next(iter(d.pending_store.draft_ids()))
+    d.pending_store.enqueue_reply(draft_id, "y", now="2026-07-11T00:00:00")
+
+    processed = d.drain_pending_replies()
+
+    assert processed == 1
+    assert d.x_client.posted == ["grounded."]
+    assert d.pending_store.get_draft(draft_id) is None
+    # Drain is exhaustive: a second call finds nothing left queued.
+    assert d.drain_pending_replies() == 0
+
+
+def test_drain_pending_replies_bad_reply_does_not_abort_the_rest(tmp_path):
+    # One resolve_reply raising must not stop the rest of the queue from
+    # being drained.
+    sent = []
+    d = _daemon(tmp_path, [], _DRAFT_FN, sent)
+
+    calls = []
+
+    def flaky_resolve(draft_id, reply_text):
+        calls.append(draft_id)
+        if draft_id == "bad":
+            raise RuntimeError("boom")
+        return None
+
+    d.resolve_reply = flaky_resolve
+    d.pending_store.enqueue_reply("bad", "y", now="2026-07-11T00:00:00")
+    d.pending_store.enqueue_reply("good", "y", now="2026-07-11T00:00:01")
+
+    processed = d.drain_pending_replies()
+
+    assert processed == 2
+    assert calls == ["bad", "good"]
 
 
 # ─── run_forever ────────────────────────────────────────────────────────────
@@ -330,6 +410,7 @@ def test_run_forever_survives_scan_once_exception(tmp_path):
         draft_fn=_DRAFT_FN,
         send_fn=lambda m: sent.append(m),
         signal_log=SignalLog(tmp_path / "s.db"),
+        pending_store=PendingStore(tmp_path / "pending.db"),
     )
 
     scan_calls = {"n": 0}

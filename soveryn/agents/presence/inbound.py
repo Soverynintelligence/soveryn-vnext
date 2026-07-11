@@ -13,9 +13,11 @@ running inbound path as of Task 11. The only Signal receive loop in this
 repo is `soveryn.agents.signal_bridge.daemon.SignalBridgeDaemon` — its own
 long-lived process (soveryn-signal-bridge.service) that unconditionally
 routes every allowlisted inbound message to Aetheria's /chat. The presence
-daemon (soveryn-presence.service, Task 11) is a *separate* process with no
-shared memory with the bridge, so `daemon.pending` here can't be reached
-from there without either:
+daemon (soveryn-presence.service, Task 11) is a *separate* process. Its
+pending drafts now live in `PendingStore` (SQLite), which the bridge process
+CAN open — but the bridge doesn't yet write into `pending_replies` or call
+this module, so `handle_inbound_reply` still can't be reached from there
+without either:
   (a) teaching SignalBridgeDaemon to check this module before dispatching
       to /chat (an edit to soveryn/agents/signal_bridge/daemon.py, out of
       this task's file scope), or
@@ -66,7 +68,7 @@ def handle_inbound_reply(daemon: PresenceDaemonSurface, text: str) -> bool:
     post would otherwise be silently lost (the known Task 10 gap this
     closes).
     """
-    parsed = parse_draft_reply(text, daemon.pending.keys())
+    parsed = parse_draft_reply(text, daemon.pending_store.draft_ids())
     if parsed is None:
         return False
 

@@ -17,6 +17,7 @@ import pytest
 import soveryn.agents.presence.__main__ as launch
 from soveryn.agents.presence.config import PresenceConfig
 from soveryn.agents.presence.daemon import PresenceDaemonSurface
+from soveryn.agents.presence.pending_store import PendingStore
 
 
 def test_parse_args_defaults():
@@ -90,6 +91,7 @@ def patched_build(monkeypatch, tmp_path):
         poll_interval_seconds=300.0,
         db_path=tmp_path / "candidates.db",
         signal_log_path=tmp_path / "signal_log.db",
+        pending_db_path=tmp_path / "pending.db",
     )
     monkeypatch.setattr(PresenceConfig, "default", classmethod(lambda cls: fake_cfg))
 
@@ -112,6 +114,7 @@ def test_build_daemon_returns_presence_daemon_surface(patched_build):
     daemon = launch.build_daemon(launch.LauncherArgs())
     assert isinstance(daemon, PresenceDaemonSurface)
     assert isinstance(daemon.x_client, FakeXClient)
+    assert isinstance(daemon.pending_store, PendingStore)
 
 
 def test_build_daemon_real_send_uses_signal_sender(patched_build):
@@ -227,28 +230,32 @@ class _FailingXClient:
 
 def _make_daemon(tmp_path, x_client):
     from soveryn.agents.presence.candidate_store import CandidateStore
+    from soveryn.agents.presence.pending_store import PendingStore
     from soveryn.agents.presence.signal_log import SignalLog
 
     store = CandidateStore(tmp_path / "cand.db")
     signal_log = SignalLog(tmp_path / "sig.db")
+    pending_store = PendingStore(tmp_path / "pending.db")
     sent: list[str] = []
     daemon = PresenceDaemonSurface(
         cfg=PresenceConfig(
             niche_terms=(), own_handle="Soveryn_AI", score_threshold=2.0,
             max_drafts_per_scan=3, poll_interval_seconds=300.0,
             db_path=tmp_path / "cand.db", signal_log_path=tmp_path / "sig.db",
+            pending_db_path=tmp_path / "pending.db",
         ),
         x_client=x_client,
         store=store,
         draft_fn=lambda prompt: "unused",
         send_fn=sent.append,
         signal_log=signal_log,
+        pending_store=pending_store,
     )
     draft = Draft(
         candidate_tweet_id="tid1", kind="topic",
         text="a post", based_on="(none stated)", in_reply_to=None,
     )
-    daemon.pending["tid1"] = draft
+    pending_store.put_draft("tid1", draft)
     return daemon, sent
 
 
@@ -259,7 +266,7 @@ def test_handle_inbound_reply_resolves_pending_draft(tmp_path):
     handled = handle_inbound_reply(daemon, "tid1 y")
 
     assert handled is True
-    assert "tid1" not in daemon.pending
+    assert daemon.pending_store.get_draft("tid1") is None
 
 
 def test_handle_inbound_reply_ignores_unmatched_text(tmp_path):
@@ -269,7 +276,7 @@ def test_handle_inbound_reply_ignores_unmatched_text(tmp_path):
     handled = handle_inbound_reply(daemon, "just chatting, not a draft reply")
 
     assert handled is False
-    assert "tid1" in daemon.pending
+    assert daemon.pending_store.get_draft("tid1") is not None
     assert sent == []
 
 
