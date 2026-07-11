@@ -22,6 +22,7 @@ DAEMON_SESSION_TITLE_PREFIXES: tuple[str, ...] = (
     "[patrol]",
     "[webhook]",
     "[dream]",
+    "[presence]",
 )
 
 
