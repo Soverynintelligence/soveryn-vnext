@@ -32,8 +32,18 @@ def read_trust_stage(path: Path) -> int:
         if isinstance(stage, int) and stage in {0, 1, 2}:
             return stage
         return 0
-    except (FileNotFoundError, json.JSONDecodeError, OSError, PermissionError):
-        # Missing, malformed, or unreadable file → safe default
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        OSError,
+        PermissionError,
+        AttributeError,
+        TypeError,
+        ValueError,
+    ):
+        # Missing, malformed, unreadable, or valid-JSON-but-non-object content
+        # (e.g. a bare `2`, `null`, `[]`, `"x"` — `.get` on those raises
+        # AttributeError/TypeError) → safe default. Contract: ANY error → 0.
         return 0
 
 

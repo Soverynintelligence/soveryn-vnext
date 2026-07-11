@@ -74,6 +74,16 @@ class TestReadTrustStage:
             # Restore for cleanup
             trust_file.chmod(0o644)
 
+    @pytest.mark.parametrize("content", ["2", "null", "[]", '"x"'])
+    def test_valid_json_non_object_content_fails_closed_to_zero(self, tmp_path, content):
+        """Finding 3: valid JSON that isn't an object (bare int/null/list/str)
+        must fail closed to stage 0, not raise AttributeError from
+        `data.get("stage")` on a non-dict `data`.
+        """
+        trust_file = tmp_path / "x_trust.json"
+        trust_file.write_text(content)
+        assert read_trust_stage(trust_file) == 0
+
 
 class TestSetTrustStage:
     """Tests for set_trust_stage."""
