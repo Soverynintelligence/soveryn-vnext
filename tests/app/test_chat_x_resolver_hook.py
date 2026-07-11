@@ -72,8 +72,8 @@ class _Recorder:
         self.publish_calls.append((text, reply_to))
         return self._publish_result
 
-    def memory_fn(self, post):
-        self.memory_calls.append(post)
+    def memory_fn(self, post, result=None):
+        self.memory_calls.append((post, result))
 
     def rejection_fn(self, post, reason=None):
         self.rejection_calls.append((post, reason))

@@ -596,16 +596,14 @@ def create_app(
 
             # x_memory_fn / x_rejection_fn — wired for the chat-path approval
             # resolver (Task 8, soveryn/app/routes/chat.py). `resolve_pending`
-            # (Task 7) calls `x_memory_fn(post)` / `rejection_fn(post,
-            # reason=...)` with the StagedPost only — it does NOT forward the
-            # publisher's result dict, so the X-assigned tweet id from
-            # `_x_publisher_fn` never reaches here. `post.id` (the staged
-            # post's own deterministic id) is used as the best available
-            # `posted_id`; the lattice provenance `url` built from it is NOT
-            # a real X status URL. Reuse the exact lattice + embed_fn
-            # aetheria's loop uses so a published post is recallable
-            # alongside everything else she's said.
-            def _x_memory_fn(post) -> str:
+            # (Task 7) calls `x_memory_fn(post, result)` — `result` is the
+            # publisher's dict carrying the REAL X-assigned tweet id/url, so
+            # the lattice provenance records a live status URL (falls back to
+            # the staged post's own id only if the result lacks one). Reuse the
+            # exact lattice + embed_fn aetheria's loop uses so a published post
+            # is recallable alongside everything else she's said.
+            def _x_memory_fn(post, result=None) -> str:
+                result = result or {}
                 return write_x_post_node(
                     lattice_store=recall_lattice,
                     embed_fn=_default_embed,
@@ -613,7 +611,7 @@ def create_app(
                     text=post.text,
                     source_tweet=post.reply_to,
                     edited_by_jon=False,
-                    posted_id=post.id,
+                    posted_id=result.get("id") or post.id,
                     now=datetime.now().isoformat(),
                 )
 

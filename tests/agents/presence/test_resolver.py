@@ -40,8 +40,8 @@ class Recorder:
             raise self._publish_raises
         return self._publish_result
 
-    def x_memory_fn(self, post):
-        self.x_memory_calls.append(post)
+    def x_memory_fn(self, post, result):
+        self.x_memory_calls.append((post, result))
 
     def rejection_fn(self, post, reason=None):
         self.rejection_calls.append((post, reason))
@@ -155,7 +155,13 @@ def test_affirm_publishes_marks_and_writes_memory(tmp_path):
     assert "https://x.com/Soveryn_AI/status/999" in result.note
 
     assert rec.publish_calls == [("hello world", None)]
-    assert rec.x_memory_calls == [post]
+    # x_memory_fn receives (post, result) — and the result carries the REAL
+    # X-assigned id ("999"), not the staged post's local id, so recalled posts
+    # have live status URLs.
+    assert len(rec.x_memory_calls) == 1
+    called_post, called_result = rec.x_memory_calls[0]
+    assert called_post == post
+    assert called_result.get("id") == "999"
     assert staged.pending("aetheria") is None  # no longer proposed
 
 

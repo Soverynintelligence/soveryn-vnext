@@ -122,7 +122,7 @@ def resolve_pending(
     message: str,
     staged: StagedStore,
     publisher_fn: Callable[[str, Optional[str]], Mapping[str, Any]],
-    x_memory_fn: Callable[[StagedPost], Any],
+    x_memory_fn: Callable[[StagedPost, Mapping[str, Any]], Any],
     rejection_fn: Callable[..., Any],
     now: str,
 ) -> Optional[ResolveResult]:
@@ -158,9 +158,12 @@ def resolve_pending(
             )
 
         staged.mark(post.id, "published")
-        x_memory_fn(post)
         posted_id = result.get("id")
         url = result.get("url", "")
+        # Pass the publish RESULT through so the lattice memory records the
+        # REAL X-assigned tweet id/url, not the staged post's local id — else
+        # her recalled posts would carry dead links.
+        x_memory_fn(post, result)
         return ResolveResult(
             action="published",
             note=f"[posted to X: {url}]",
