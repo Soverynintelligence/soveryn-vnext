@@ -12,6 +12,7 @@ shutdown is honored mid-sleep the same way across daemons.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -24,6 +25,8 @@ from soveryn.agents.presence.publisher import PublishResult, publish
 from soveryn.agents.presence.scorer import score_tweet
 from soveryn.agents.presence.signal_log import SignalLog
 from soveryn.agents.presence.x_client import Tweet, XClient
+
+logger = logging.getLogger(__name__)
 
 DraftFn = Callable[[str], str]
 SendFn = Callable[[str], None]
@@ -59,24 +62,31 @@ class PresenceDaemonSurface:
         """Search + score + upsert candidates, then draft and send the
         top-ranked pending ones over Signal for approval.
 
-        Searches every niche term (kind="topic") plus one own-handle mention
-        query (kind="mention", scored with the mention boost). Already-seen
-        tweet ids (in candidates or posted_ids) are skipped before scoring.
-        Only candidates scoring >= cfg.score_threshold are stored.
+        Searches the own-handle mention query (kind="mention", scored with
+        the mention boost) BEFORE every niche term (kind="topic"), so a tweet
+        that both mentions the handle and matches a niche term is upserted as
+        a mention first — the niche pass then skips it via is_seen, keeping
+        its reply linkage and mention boost intact. Already-seen tweet ids
+        (in candidates or posted_ids) are skipped before scoring. Only
+        candidates scoring >= cfg.score_threshold are stored.
 
         Returns the number of drafts sent this scan (not the number of
         candidates ingested).
         """
-        for term in self.cfg.niche_terms:
-            self._ingest(self.x_client.search_recent(term), kind="topic", is_mention=False)
-
         mention_query = f"@{self.cfg.own_handle}"
         self._ingest(self.x_client.search_recent(mention_query), kind="mention", is_mention=True)
+
+        for term in self.cfg.niche_terms:
+            self._ingest(self.x_client.search_recent(term), kind="topic", is_mention=False)
 
         sent = 0
         for candidate in self.store.pending_ranked(self.cfg.max_drafts_per_scan):
             draft = draft_for_candidate(candidate, self.draft_fn)
             if draft is None:
+                # Terminal status: a skip must not leave the candidate in
+                # "pending", or pending_ranked keeps re-surfacing it on every
+                # future scan and it re-runs the model for free forever.
+                self.store.mark(candidate.tweet_id, "skipped")
                 continue
             # Deterministic draft id — the candidate's own tweet_id, never a
             # wall-clock timestamp or random value (drafts must be
@@ -163,7 +173,12 @@ class PresenceDaemonSurface:
         while iterations is None or completed < iterations:
             if should_stop():
                 break
-            self.scan_once()
+            try:
+                self.scan_once()
+            except Exception:
+                # A transient failure (e.g. an X API error) must not exit
+                # the daemon — log it and continue to the next scan.
+                logger.exception("presence scan_once failed; continuing")
             completed += 1
             if iterations is not None and completed >= iterations:
                 break

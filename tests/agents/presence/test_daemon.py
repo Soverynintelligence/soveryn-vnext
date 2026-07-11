@@ -5,6 +5,8 @@ All edges are faked (FakeX, draft_fn, send_fn): no network, no model call.
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
 from soveryn.agents.presence.candidate_store import CandidateStore
@@ -12,6 +14,24 @@ from soveryn.agents.presence.config import PresenceConfig
 from soveryn.agents.presence.daemon import PresenceDaemonSurface, _interruptible_sleep
 from soveryn.agents.presence.signal_log import SignalLog
 from soveryn.agents.presence.x_client import Tweet
+
+
+def _status_of(tmp_path, tweet_id):
+    conn = sqlite3.connect(str(tmp_path / "c.db"))
+    row = conn.execute(
+        "SELECT status FROM candidates WHERE tweet_id = ?", (tweet_id,)
+    ).fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def _kind_of(tmp_path, tweet_id):
+    conn = sqlite3.connect(str(tmp_path / "c.db"))
+    row = conn.execute(
+        "SELECT kind FROM candidates WHERE tweet_id = ?", (tweet_id,)
+    ).fetchone()
+    conn.close()
+    return row[0] if row else None
 
 
 class FakeX:
@@ -118,6 +138,43 @@ def test_scan_draft_id_is_deterministic_tweet_id(tmp_path):
     d = _daemon(tmp_path, [Tweet("42", "a", "sovereign AI local LLM", "u")], _DRAFT_FN, sent)
     d.scan_once()
     assert list(d.pending.keys()) == ["42"]
+
+
+def test_scan_skip_marks_candidate_skipped_and_is_not_redrafted(tmp_path):
+    # Finding 3: a candidate whose draft_fn returns skip must leave "pending"
+    # (a terminal "skipped" status) or it re-surfaces via pending_ranked on
+    # every subsequent scan and re-runs the model for free.
+    calls = []
+
+    def counting_skip_fn(prompt):
+        calls.append(prompt)
+        return '{"post":"","based_on":"","skip":true}'
+
+    sent = []
+    d = _daemon(tmp_path, [Tweet("1", "a", "sovereign AI local LLM", "u")], counting_skip_fn, sent)
+
+    d.scan_once()
+    assert _status_of(tmp_path, "1") == "skipped"
+    assert len(calls) == 1
+
+    d.scan_once()
+    assert len(calls) == 1  # draft_fn must not be called again for a skipped candidate
+
+
+def test_niche_rich_mention_ingested_as_mention_not_topic(tmp_path):
+    # Finding 5: a tweet that both @-mentions the handle AND contains niche
+    # terms must be stored kind="mention" (own-handle search runs first), not
+    # "topic" — otherwise it loses its reply linkage and mention boost.
+    sent = []
+    tweet = Tweet("1", "a", "sovereign AI local LLM @Soveryn_AI what do you think?", "u")
+    d = _daemon(tmp_path, [tweet], _DRAFT_FN, sent)
+    d.scan_once()
+
+    assert _kind_of(tmp_path, "1") == "mention"
+
+    draft_id = next(iter(d.pending))
+    assert d.pending[draft_id].kind == "mention"
+    assert d.pending[draft_id].in_reply_to == "1"
 
 
 # ─── resolve_reply ──────────────────────────────────────────────────────────
@@ -246,3 +303,44 @@ def test_interruptible_sleep_zero_duration_returns_immediately():
     _interruptible_sleep(duration_seconds=0.0, should_stop=lambda: False,
                           sleep=sleeps.append, granularity=1.0)
     assert sleeps == []
+
+
+def test_run_forever_survives_scan_once_exception(tmp_path):
+    # Finding 4: a transient exception from one scan_once (e.g. an X API
+    # error) must not exit the daemon — it should be logged and the loop
+    # must continue to the next iteration.
+    sent = []
+
+    class FlakyFakeX(FakeX):
+        def __init__(self, tweets):
+            super().__init__(tweets)
+            self.calls = 0
+
+        def search_recent(self, q, since_id=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("transient X error")
+            return self.tweets
+
+    cfg = _cfg(tmp_path)
+    d = PresenceDaemonSurface(
+        cfg=cfg,
+        x_client=FlakyFakeX([]),
+        store=CandidateStore(tmp_path / "c.db"),
+        draft_fn=_DRAFT_FN,
+        send_fn=lambda m: sent.append(m),
+        signal_log=SignalLog(tmp_path / "s.db"),
+    )
+
+    scan_calls = {"n": 0}
+    orig_scan = d.scan_once
+
+    def counting_scan():
+        scan_calls["n"] += 1
+        return orig_scan()
+
+    d.scan_once = counting_scan
+
+    d.run_forever(iterations=2, sleep=lambda *_: None)
+
+    assert scan_calls["n"] == 2
