@@ -172,10 +172,13 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     for agent in ("aetheria", "vett", "scotty"):
         assert loops[agent].context_window == 32_768, agent
         assert loops[agent].history_token_budget == 8_000, agent
-    # The generation caps stay Aetheria-interactive-only.
+    # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
-    assert loops["vett"].max_tokens != 8192
+    # 2026-07-11: Vett also raised to 8192 — document-length tool calls
+    # (create_document with a full markdown paper) were truncated mid-JSON at
+    # the 2048 default. Scotty stays at the default. See startup.py:750.
+    assert loops["vett"].max_tokens == 8192
     assert loops["scotty"].max_tokens != 8192
 
 

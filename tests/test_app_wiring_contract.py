@@ -118,7 +118,9 @@ def test_vett_capability_wiring(app):
     assert v.coord_store is not None
     # Research-weight timeout fix (the "can't message vett" root cause).
     assert v.chat_timeout_seconds == 300.0
-    assert v.max_tool_rounds == 8
+    # 2026-07-11: raised 8->16 (deeper research directives exhausted the round
+    # budget); coupled with dispatch_timeout 1200s. See startup.py:707.
+    assert v.max_tool_rounds == 16
 
 
 def test_scotty_stays_bounded(app):
