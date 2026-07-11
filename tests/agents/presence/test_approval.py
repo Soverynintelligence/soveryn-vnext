@@ -13,7 +13,10 @@ D = Draft("1", "reply", "Grounded > confident.", "confab data", "1")
 
 def test_message_shows_provenance_and_link():
     m = format_signal_message(D, "d1")
-    assert "confab data" in m and "d1" in m and "status/1" in m or "x.com" in m
+    assert "confab data" in m
+    assert "d1" in m
+    assert "status/1" in m
+    assert "x.com" in m
 
 
 def test_approve_tokens():
