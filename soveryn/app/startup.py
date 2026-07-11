@@ -736,6 +736,18 @@ def create_app(
                 # is gone now because she moved to Gemma 4 with thinking
                 # disabled; only Qwen-running agents need this).
                 kwargs["thinking_budget_tokens"] = 384
+                # 2026-07-11: Vett was never given the max_tokens override
+                # Aetheria got (line ~667). On the AgentLoop default of 2048 —
+                # minus her 384-token thinking budget → ~1664 visible tokens —
+                # a long tool call (e.g. create_document with a full markdown
+                # paper) gets guillotined mid-string at ~8000 chars, so the
+                # tool-call arguments JSON is unterminated → llama-server 500
+                # "Failed to parse tool call arguments as JSON: missing closing
+                # quote". Root-caused live 2026-07-11 (the Cathedral paper).
+                # 8192 (~30k chars of content after thinking) matches Aetheria
+                # and covers document-length tool calls; her 65536 n_ctx has
+                # ample room for it.
+                kwargs["max_tokens"] = 8192
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
         # Phase E: start the coord event worker now that agent_loops exists.
