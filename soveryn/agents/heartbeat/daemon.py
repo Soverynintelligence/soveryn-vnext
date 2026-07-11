@@ -37,6 +37,9 @@ from soveryn.agents.heartbeat.prompt import (
     build_heartbeat_prompt,
 )
 from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+from soveryn.agents.presence.candidate_store import CandidateStore
+from soveryn.agents.presence.config import PresenceConfig
+from soveryn.agents.presence.digest import build_digest
 from soveryn.agents.heartbeat.trigger import (
     HeartbeatConfig,
     SkipReason,
@@ -304,6 +307,16 @@ class HeartbeatDaemon:
             }
             prev_record = self._thoughts_log.last()
             delta = compute_delta(current_snapshot, prev_record)
+            # X digest — best-effort. Reads the same feed candidate_store the
+            # read_x tool reads; a feed problem (missing db, corrupt store,
+            # etc.) must never break the heartbeat tick.
+            try:
+                x_digest = build_digest(
+                    CandidateStore(PresenceConfig.default().db_path)
+                ) or ""
+            except Exception:
+                logger.exception("heartbeat tick: X digest build failed, omitting")
+                x_digest = ""
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -311,6 +324,7 @@ class HeartbeatDaemon:
                 salience_section=salience_section,
                 material_signals=material_signals,
                 delta=delta,
+                x_digest=x_digest,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")

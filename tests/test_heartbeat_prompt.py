@@ -57,3 +57,18 @@ def test_material_signals_render_as_orientation_not_forced():
                                lattice=_lattice(), material_signals=sigs)
     assert "[DEADLINE] Funding: July 10 due in 7 days" in p
     assert "disabled" not in p.lower()          # no [NO_OP]-disabled framing
+
+
+def test_x_digest_line_included_when_present():
+    p = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                               lattice=_lattice(), x_digest="a few mentions")
+    assert "- X: a few mentions" in p
+
+
+def test_x_digest_omitted_when_empty():
+    with_digest = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                                          lattice=_lattice(), x_digest="")
+    without_digest = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                                             lattice=_lattice())
+    assert "- X:" not in with_digest
+    assert with_digest == without_digest

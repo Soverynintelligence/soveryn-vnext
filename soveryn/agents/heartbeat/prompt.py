@@ -48,6 +48,7 @@ def build_heartbeat_prompt(
     salience_section: str = "",
     material_signals: list[Any] | None = None,
     delta: dict | None = None,
+    x_digest: str = "",
 ) -> str:
     """Construct the freed heartbeat brief. Returns a plain-text prompt string.
 
@@ -63,6 +64,9 @@ def build_heartbeat_prompt(
             Rendered as orientation items; no forced surfacing.
         delta: Output of compute_delta(). Accepted but no longer used to
             short-circuit the prompt (kept for signature compatibility).
+        x_digest: Pre-rendered, qualitative one-line X activity digest (from
+            soveryn.agents.presence.digest.build_digest). Empty = omit the
+            line entirely. No directive framing is added here.
     """
     if material_signals is None:
         material_signals = []
@@ -96,6 +100,8 @@ def build_heartbeat_prompt(
         + (f"; {lattice.new_contradiction_flag_count} new contradiction flags"
            if lattice.new_contradiction_flag_count > 0 else "")
     )
+    if x_digest:
+        lines.append(f"- X: {x_digest}")
     if material_signals:
         lines.append("- Things that have been sitting, or that crossed a line:")
         for sig in material_signals:
