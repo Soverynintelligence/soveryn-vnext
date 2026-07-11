@@ -93,3 +93,38 @@ def test_take_replies_drains_the_queue(tmp_path):
 def test_take_replies_empty_queue_returns_empty_list(tmp_path):
     s = PendingStore(tmp_path / "p.db")
     assert s.take_replies() == []
+
+
+# ─── Cross-process safety ────────────────────────────────────────────────
+#
+# In production, the signal bridge (soveryn-signal-bridge.service) and the
+# presence daemon (soveryn-presence.service) are two separate processes
+# that share PendingStore's db file only through SQLite — one enqueues
+# replies, the other drains them. Simulate that here with two independent
+# PendingStore instances (each opening its own sqlite3 connection) on the
+# same path.
+
+
+def test_two_pending_store_instances_same_path_enqueue_and_take(tmp_path):
+    db_path = tmp_path / "shared.db"
+    bridge_side = PendingStore(db_path)
+    presence_side = PendingStore(db_path)
+
+    bridge_side.enqueue_reply("d1", "y", now="2026-07-11T00:00:00")
+    presence_side.put_draft("d2", _draft(candidate_tweet_id="d2"))
+
+    assert presence_side.take_replies() == [("d1", "y")]
+    assert bridge_side.draft_ids() == {"d2"}
+
+
+def test_two_pending_store_instances_interleaved_writes_no_lock_errors(tmp_path):
+    """Several enqueue/take round trips interleaved between two instances
+    must not raise 'database is locked' — busy-timeout + WAL make
+    concurrent cross-process access safe."""
+    db_path = tmp_path / "shared.db"
+    bridge_side = PendingStore(db_path)
+    presence_side = PendingStore(db_path)
+
+    for i in range(5):
+        bridge_side.enqueue_reply(f"d{i}", "y", now=f"2026-07-11T00:00:0{i}")
+        assert presence_side.take_replies() == [(f"d{i}", "y")]

@@ -13,6 +13,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from soveryn.agents.presence.drafting import Draft
+from soveryn.agents.presence.pending_store import PendingStore
 from soveryn.agents.signal_bridge.client import (
     InboundMessage,
     SignalCliError,
@@ -562,6 +564,146 @@ def test_call_vnext_chat_omits_attachments_when_empty(lattice_db, conv_db):
     with patch.object(daemon, "_post_json", side_effect=fake_post):
         daemon._call_vnext_chat("sess-1", "hi")
     assert "attachments" not in captured["body"]
+
+
+# ─── Presence-reply short-circuit ───────────────────────────────────────────
+#
+# The presence daemon (soveryn-presence.service) and this bridge are separate
+# processes that share only PendingStore's SQLite file. When a message
+# arrives from Jon (the presence approver, identified by SIGNAL_USER_NUMBER)
+# and leads with a live pending presence draft-id, the bridge must enqueue
+# it into PendingStore for the presence daemon to drain — NOT dispatch it to
+# Aetheria's /chat. Any other sender, or a message that doesn't lead with a
+# pending id, is unaffected and keeps going to /chat as before.
+
+def _draft(**overrides) -> Draft:
+    fields = dict(
+        candidate_tweet_id="tid1", kind="topic", text="a post",
+        based_on="(none stated)", in_reply_to=None,
+    )
+    fields.update(overrides)
+    return Draft(**fields)
+
+
+@pytest.fixture
+def pending_db(tmp_path):
+    return tmp_path / "pending.db"
+
+
+def test_presence_reply_from_approver_enqueues_and_does_not_dispatch_chat(
+    lattice_db, conv_db, pending_db, monkeypatch,
+):
+    monkeypatch.setenv("SIGNAL_USER_NUMBER", "+19105813970")
+    store = PendingStore(pending_db)
+    store.put_draft("184659123", _draft())
+
+    daemon = SignalBridgeDaemon(
+        _config(), lattice_db=lattice_db, conv_db=conv_db, pending_db_path=pending_db,
+    )
+    msg = InboundMessage(
+        source_e164="+19105813970", timestamp_ms=1,
+        body="184659123 y", attachment_ids=(),
+    )
+    with patch.object(daemon, "_call_vnext_chat") as mock_chat, \
+         patch("soveryn.agents.signal_bridge.daemon.send_once") as mock_send:
+        daemon._handle_inbound(msg)
+
+    mock_chat.assert_not_called()
+    mock_send.assert_called_once()
+    kwargs = mock_send.call_args.kwargs
+    assert kwargs["recipient_e164"] == "+19105813970"
+    assert "184659123" in kwargs["body"]
+
+    # The reply was queued for the presence daemon to drain, not lost.
+    assert store.take_replies() == [("184659123", "y")]
+
+    with sqlite3.connect(str(lattice_db)) as con:
+        directions = [r[0] for r in con.execute(
+            "SELECT direction FROM signal_log ORDER BY created_at"
+        ).fetchall()]
+    assert directions == ["presence_reply"]
+
+
+def test_normal_message_from_approver_routes_to_chat(
+    lattice_db, conv_db, pending_db, monkeypatch,
+):
+    """No leading pending-id → falls through to ordinary /chat routing even
+    though the sender IS the presence approver."""
+    monkeypatch.setenv("SIGNAL_USER_NUMBER", "+19105813970")
+    store = PendingStore(pending_db)
+    store.put_draft("184659123", _draft())
+
+    daemon = SignalBridgeDaemon(
+        _config(), lattice_db=lattice_db, conv_db=conv_db, pending_db_path=pending_db,
+    )
+    msg = InboundMessage(
+        source_e164="+19105813970", timestamp_ms=1,
+        body="good morning", attachment_ids=(),
+    )
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", return_value="morning back.") as mock_chat, \
+         patch("soveryn.agents.signal_bridge.daemon.send_once") as mock_send:
+        daemon._handle_inbound(msg)
+
+    mock_chat.assert_called_once()
+    mock_send.assert_called_once()
+    assert mock_send.call_args.kwargs["body"] == "morning back."
+    assert store.take_replies() == []
+
+
+def test_message_from_other_allowlisted_sender_leading_with_pending_id_routes_to_chat(
+    lattice_db, conv_db, pending_db, monkeypatch,
+):
+    """Only the presence approver's replies short-circuit; a different
+    allowlisted sender who happens to type a live draft id first is routed
+    to /chat like any other message."""
+    monkeypatch.setenv("SIGNAL_USER_NUMBER", "+19105813970")
+    store = PendingStore(pending_db)
+    store.put_draft("184659123", _draft())
+
+    other_allowed = "+15555550111"
+    cfg = _config(allowed_numbers=frozenset({"+19105813970", other_allowed}))
+    daemon = SignalBridgeDaemon(
+        cfg, lattice_db=lattice_db, conv_db=conv_db, pending_db_path=pending_db,
+    )
+    msg = InboundMessage(
+        source_e164=other_allowed, timestamp_ms=1,
+        body="184659123 y", attachment_ids=(),
+    )
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", return_value="got it.") as mock_chat, \
+         patch("soveryn.agents.signal_bridge.daemon.send_once") as mock_send:
+        daemon._handle_inbound(msg)
+
+    mock_chat.assert_called_once()
+    mock_send.assert_called_once()
+    assert store.take_replies() == []
+
+
+def test_presence_reply_short_circuit_skipped_when_signal_user_number_unset(
+    lattice_db, conv_db, pending_db, monkeypatch,
+):
+    """No SIGNAL_USER_NUMBER configured → never treat any sender as the
+    approver; normal /chat routing applies even to a message that leads
+    with a live pending draft-id."""
+    monkeypatch.delenv("SIGNAL_USER_NUMBER", raising=False)
+    store = PendingStore(pending_db)
+    store.put_draft("184659123", _draft())
+
+    daemon = SignalBridgeDaemon(
+        _config(), lattice_db=lattice_db, conv_db=conv_db, pending_db_path=pending_db,
+    )
+    msg = InboundMessage(
+        source_e164="+19105813970", timestamp_ms=1,
+        body="184659123 y", attachment_ids=(),
+    )
+    with patch.object(daemon, "_ensure_session", return_value="sess-1"), \
+         patch.object(daemon, "_call_vnext_chat", return_value="ok") as mock_chat, \
+         patch("soveryn.agents.signal_bridge.daemon.send_once"):
+        daemon._handle_inbound(msg)
+
+    mock_chat.assert_called_once()
+    assert store.take_replies() == []
 
 
 # ─── send_once: attachments ─────────────────────────────────────────────────

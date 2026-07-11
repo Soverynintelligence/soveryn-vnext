@@ -1,8 +1,11 @@
 """Signal bridge daemon.
 
-Polls signal-cli for inbound messages, routes each accepted one through
-Aetheria's /chat surface, sends her response back over signal-cli. Drops
-off-allowlist senders silently (with an audit row). Persists every
+Polls signal-cli for inbound messages and routes each accepted one to one
+of two places: Aetheria's /chat surface, or — if the sender is the presence
+approver (`SIGNAL_USER_NUMBER`) replying to a live pending presence draft —
+the shared `PendingStore` reply queue that `soveryn-presence.service` (a
+separate process) drains each loop. See `_maybe_handle_presence_reply`.
+Drops off-allowlist senders silently (with an audit row). Persists every
 event to signal_log.
 
 Process shape mirrors heartbeat / patrol daemons (signal handler for
@@ -19,6 +22,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import signal
 import sqlite3
 import sys
@@ -30,6 +34,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from soveryn.agents.presence.config import PresenceConfig
+from soveryn.agents.presence.inbound import parse_draft_reply
+from soveryn.agents.presence.pending_store import PendingStore
 from soveryn.agents.signal_bridge.client import (
     InboundMessage,
     SignalCliError,
@@ -45,8 +52,16 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
 DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+# Shared with soveryn-presence.service — the ONLY channel the two processes
+# communicate over. See PendingStore's module docstring.
+DEFAULT_PENDING_DB = PresenceConfig.default().pending_db_path
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
+# Env var the presence daemon's SignalSender (soveryn.agents.ares.signal_sender)
+# reads as its Signal send recipient — i.e. Jon, the presence approver. A
+# reply from this number that leads with a live pending draft-id is a
+# presence approval/reject/edit, not a chat message.
+SIGNAL_USER_NUMBER_ENV = "SIGNAL_USER_NUMBER"
 
 
 # Inbound image extension -> MIME mapping. Canonical source is
@@ -104,10 +119,12 @@ class SignalBridgeDaemon:
         *,
         lattice_db: Path = DEFAULT_LATTICE_DB,
         conv_db: Path = DEFAULT_CONV_DB,
+        pending_db_path: Path = DEFAULT_PENDING_DB,
     ) -> None:
         self.config = config
         self.lattice_db = Path(lattice_db)
         self.conv_db = Path(conv_db)
+        self.pending_db_path = Path(pending_db_path)
         self._stop = False
 
     # ─── Lifecycle ──────────────────────────────────────────────────────────
@@ -184,6 +201,9 @@ class SignalBridgeDaemon:
                 error="sender not in allowlist",
             )
             logger.info("dropped inbound from %s (not allowlisted)", msg.source_e164)
+            return
+
+        if self._maybe_handle_presence_reply(msg):
             return
 
         self._log_event(
@@ -281,6 +301,65 @@ class SignalBridgeDaemon:
             attachment_count=0,
             error=last_error,
         )
+
+    # ─── Presence-reply short-circuit ───────────────────────────────────────
+
+    def _maybe_handle_presence_reply(self, msg: InboundMessage) -> bool:
+        """Route an approval-flow reply into `PendingStore` instead of /chat.
+
+        The presence daemon (soveryn-presence.service) is a separate process
+        that sends draft posts to Jon over Signal and drains its own
+        `pending_replies` queue each loop. This bridge is the only process
+        that actually receives inbound Signal, so a reply from Jon (the
+        presence approver, `SIGNAL_USER_NUMBER`) that leads with a live
+        pending draft-id must be handed to that queue here, not dispatched
+        to Aetheria's /chat.
+
+        Returns True if the message was claimed as a presence reply (caller
+        must return without any further dispatch); False if it should fall
+        through to normal /chat routing — either because the sender isn't
+        the approver, `SIGNAL_USER_NUMBER` isn't configured, or the message
+        body doesn't lead with a pending draft-id.
+        """
+        approver_number = os.environ.get(SIGNAL_USER_NUMBER_ENV, "").strip()
+        if not approver_number or msg.source_e164 != approver_number:
+            return False
+
+        store = PendingStore(self.pending_db_path)
+        parsed = parse_draft_reply(msg.body or "", store.draft_ids())
+        if parsed is None:
+            return False
+
+        draft_id, reply_text = parsed
+        store.enqueue_reply(draft_id, reply_text, now=datetime.now().isoformat())
+
+        ack = f"Queued your reply for draft {draft_id} — resolving."
+        last_error: str | None = None
+        try:
+            send_once(
+                signal_cli_bin=self.config.signal_cli_bin,
+                bot_number=self.config.bot_number,
+                recipient_e164=msg.source_e164,
+                body=ack,
+            )
+        except SignalCliError as e:
+            last_error = str(e)
+            logger.warning(
+                "presence-reply ack to %s failed: %s", msg.source_e164, e,
+            )
+
+        self._log_event(
+            direction="presence_reply",
+            sender=msg.source_e164, recipient=self.config.bot_number,
+            body_head=msg.body[:200],
+            attachment_count=len(msg.attachment_ids),
+            error=last_error,
+        )
+        logger.info(
+            "routed inbound from %s to presence PendingStore (draft %s)",
+            msg.source_e164, draft_id,
+        )
+        return True
 
     # ─── Session management ─────────────────────────────────────────────────
 
