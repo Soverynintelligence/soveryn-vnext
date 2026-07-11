@@ -13,6 +13,7 @@ anything (production has legacy 'lattice' values).
 
 from __future__ import annotations
 import json
+import logging
 import math
 import sqlite3
 import uuid
@@ -667,6 +668,8 @@ class LegacyLatticeAdapter:
 
 # ─── Direct Agent Communication: forensic-trail edge writer ─────────────────
 
+logger = logging.getLogger(__name__)
+
 _DIRECT_COMM_RELATIONS = {"execute": "direct_command", "query": "direct_query"}
 
 
@@ -679,9 +682,10 @@ def record_direct_communication_edge(
     session_id: str,
     mode: str,
     message_head: str = "",
-) -> tuple[str, str]:
+) -> tuple[str, str | None]:
     """Write a forensic record of a direct communication. Returns
-    (message_node_id, edge_id).
+    (message_node_id, edge_id). edge_id is None when coord_node_id does not
+    resolve to a real lattice node (the anchor edge is skipped, not fabricated).
 
     Two rows land:
       1. A lattice node (layer=private, type='direct_message') capturing the
@@ -727,9 +731,32 @@ def record_direct_communication_edge(
         layer=LAYER_PRIVATE,
         provenance=provenance,
     )
-    edge_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
     with store._conn() as conn:
+        # coord_node_id is an LLM-supplied tool argument (direct_message_agent),
+        # so it may not resolve to a real lattice node. Anchoring an edge to a
+        # non-existent target violates the edges FOREIGN KEY and raises
+        # IntegrityError — which is what silently failed every direct-comm
+        # forensic write when Aetheria referenced a dangling coord id. The
+        # forensic *node* above already captures the directive (with coord_node_id
+        # in its provenance); when the anchor isn't a real node, skip the *edge*
+        # with a clean warning rather than raising. (source_id is our own
+        # just-committed node, so only the anchor can dangle.)
+        anchor_exists = (
+            conn.execute(
+                "SELECT 1 FROM nodes WHERE id = ? LIMIT 1", (coord_node_id,)
+            ).fetchone()
+            is not None
+        )
+        if not anchor_exists:
+            logger.warning(
+                "direct-comm anchor edge skipped: coord_node_id %r is not a lattice "
+                "node; forensic node %s persisted with the coord ref in provenance",
+                coord_node_id,
+                message_node_id,
+            )
+            return message_node_id, None
+        edge_id = str(uuid.uuid4())
         conn.execute(
             "INSERT INTO edges "
             "(id, source_id, target_id, relationship, strength, bidirectional, "

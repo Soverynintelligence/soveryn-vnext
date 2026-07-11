@@ -169,3 +169,36 @@ def test_record_direct_communication_edge_satisfies_fk_with_real_nodes(tmp_path)
         ).fetchone()[0]
     assert edge_count == 3
     assert node_count == 3
+
+
+def test_record_direct_communication_edge_skips_edge_when_coord_anchor_missing(tmp_path):
+    """coord_node_id is an LLM-supplied tool arg and may not be a real lattice
+    node. The forensic node must still persist; the anchor edge is skipped
+    (edge_id is None) rather than raising a FOREIGN KEY IntegrityError — the
+    bug that failed every direct-comm forensic write on a dangling coord ref."""
+    from soveryn.platform.lattice.legacy import (
+        LatticeStore, record_direct_communication_edge,
+    )
+    store = LatticeStore(tmp_path / "lattice.db")
+    # coord_node_id never written as a node — a dangling anchor
+    message_node_id, edge_id = record_direct_communication_edge(
+        store=store,
+        coord_node_id="does-not-exist-0000",
+        sender_agent="aetheria",
+        target_agent="vett",
+        session_id="sess-1",
+        mode="execute",
+        message_head="do the thing",
+    )
+    assert edge_id is None                       # edge skipped, not fabricated
+    assert isinstance(message_node_id, str)      # forensic node still persisted
+    with store._conn() as conn:
+        node = conn.execute(
+            "SELECT 1 FROM nodes WHERE id = ?", (message_node_id,)
+        ).fetchone()
+        edges = conn.execute(
+            "SELECT count(*) AS c FROM edges "
+            "WHERE relationship IN ('direct_command','direct_query')"
+        ).fetchone()
+    assert node is not None                       # node row is real
+    assert edges["c"] == 0                         # no dangling edge written
