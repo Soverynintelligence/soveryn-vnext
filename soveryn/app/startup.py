@@ -561,6 +561,7 @@ def create_app(
                 build_post_to_x_tool,
                 build_read_x_tool,
             )
+            from soveryn.agents.presence.x_memory import log_rejection, write_x_post_node
 
             presence_cfg = PresenceConfig.default()
             x_candidate_store = CandidateStore(presence_cfg.db_path)
@@ -592,6 +593,37 @@ def create_app(
                     now_fn=lambda: datetime.now().isoformat(),
                 )
             )
+
+            # x_memory_fn / x_rejection_fn — wired for the chat-path approval
+            # resolver (Task 8, soveryn/app/routes/chat.py). `resolve_pending`
+            # (Task 7) calls `x_memory_fn(post)` / `rejection_fn(post,
+            # reason=...)` with the StagedPost only — it does NOT forward the
+            # publisher's result dict, so the X-assigned tweet id from
+            # `_x_publisher_fn` never reaches here. `post.id` (the staged
+            # post's own deterministic id) is used as the best available
+            # `posted_id`; the lattice provenance `url` built from it is NOT
+            # a real X status URL. Reuse the exact lattice + embed_fn
+            # aetheria's loop uses so a published post is recallable
+            # alongside everything else she's said.
+            def _x_memory_fn(post) -> str:
+                return write_x_post_node(
+                    lattice_store=recall_lattice,
+                    embed_fn=_default_embed,
+                    agent=post.agent,
+                    text=post.text,
+                    source_tweet=post.reply_to,
+                    edited_by_jon=False,
+                    posted_id=post.id,
+                    now=datetime.now().isoformat(),
+                )
+
+            def _x_rejection_fn(post, *, reason: str | None = None) -> None:
+                log_rejection(
+                    signal_path=env.data_root / "x_rejections.jsonl",
+                    text=post.text,
+                    reason=reason or "",
+                    now=datetime.now().isoformat(),
+                )
 
         # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
         # that can emit deliberate_share also get to introspect their own
@@ -901,6 +933,21 @@ def create_app(
         _ds = delegation_store  # type: ignore[name-defined]
     except NameError:
         _ds = None
+    # X presence resolver deps (Task 8) — constructed inside the aetheria
+    # build block above (`if recall_lattice is not None:`). When agent_loops
+    # is injected externally (test fixtures), the build block is skipped and
+    # these stay None — the chat-hook (maybe_resolve_x_approval) treats a
+    # missing dep as "nothing to resolve" rather than KeyError'ing.
+    try:
+        _x_staged_ext = x_staged_store  # type: ignore[name-defined]
+        _x_publisher_ext = _x_publisher_fn  # type: ignore[name-defined]
+        _x_memory_ext = _x_memory_fn  # type: ignore[name-defined]
+        _x_rejection_ext = _x_rejection_fn  # type: ignore[name-defined]
+    except NameError:
+        _x_staged_ext = None
+        _x_publisher_ext = None
+        _x_memory_ext = None
+        _x_rejection_ext = None
     from soveryn.platform.delegation.worktree import (
         merge_worktree as _merge_worktree,
         remove_worktree as _remove_worktree,
@@ -925,6 +972,11 @@ def create_app(
         "merge_fn": _merge_worktree,
         "remove_fn": _remove_worktree,
         "repo_root": _repo_root,
+        # X presence resolver deps (Task 8) — see chat.py maybe_resolve_x_approval.
+        "x_staged": _x_staged_ext,
+        "x_publisher_fn": _x_publisher_ext,
+        "x_memory_fn": _x_memory_ext,
+        "x_rejection_fn": _x_rejection_ext,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +

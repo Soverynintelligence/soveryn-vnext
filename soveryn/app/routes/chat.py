@@ -6,12 +6,14 @@ Stable machine-readable error codes (see soveryn/app/startup.py).
 
 from __future__ import annotations
 import json as _json
+from datetime import datetime
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from soveryn.agents.loop import (
     AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
     ToolCallEvent, ToolResultEvent, TTSTokenEvent,
 )
+from soveryn.agents.presence.resolver import ResolveResult, resolve_pending
 from soveryn.config.runtime import ACTIVE_AGENTS, RETIRED
 from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerTimeout
 from soveryn.inference.routing import RoutingError
@@ -99,6 +101,60 @@ def _resolve_agent(name: str | None):
 
 def _state():
     return current_app.extensions["soveryn"]
+
+
+def maybe_resolve_x_approval(
+    *, agent: str, message: str, state: dict, now: str,
+) -> ResolveResult | None:
+    """Pre-turn hook: resolve a pending staged X post against `message`.
+
+    Called from BOTH /chat and /chat_stream, before the AgentLoop turn — a
+    hook in only one route would be bypassed by whichever surface uses the
+    other (the desktop UI streams). Staged posts are keyed on the AGENT
+    ("aetheria"), not session_id, so this fires regardless of which session
+    Jon replies in — a post proposed during a heartbeat wake (session
+    `[heartbeat] aetheria`) can be approved from his primary thread.
+
+    Returns None (caller proceeds into the normal turn unchanged) when:
+      - `agent != "aetheria"` (the only agent with an X presence),
+      - the X deps aren't wired on `state` (e.g. a test/fixture app that
+        never populated app.extensions["soveryn"] — fail open, not KeyError),
+      - there's nothing staged, or `message` doesn't classify as a clear
+        affirm/decline (unrelated, edit, or a [HEARTBEAT] brief — classify
+        buckets those as "unrelated" with no special-casing needed here).
+
+    Returns a ResolveResult only on a clear affirm (published) or decline
+    (rejected) — the caller must return that outcome to the client and
+    skip the agent's normal turn (a bare affirm's whole meaning was "post
+    it"; running her normal turn on top would be a non sequitur).
+    """
+    if agent != "aetheria":
+        return None
+
+    x_staged = state.get("x_staged")
+    x_publisher_fn = state.get("x_publisher_fn")
+    x_memory_fn = state.get("x_memory_fn")
+    x_rejection_fn = state.get("x_rejection_fn")
+    if x_staged is None or x_publisher_fn is None or x_memory_fn is None or x_rejection_fn is None:
+        return None
+
+    return resolve_pending(
+        agent="aetheria",
+        message=message,
+        staged=x_staged,
+        publisher_fn=x_publisher_fn,
+        x_memory_fn=x_memory_fn,
+        rejection_fn=x_rejection_fn,
+        now=now,
+    )
+
+
+def _x_resolution_payload(result: ResolveResult) -> dict:
+    return {
+        "action": result.action,
+        "note": result.note,
+        "posted_id": result.posted_id,
+    }
 
 
 # ─── /sessions CRUD ──────────────────────────────────────────────────────────
@@ -198,6 +254,21 @@ def chat():
         return attach_err
 
     state = _state()
+
+    # X-approval pre-turn hook (Task 8) — before the loop. A clear affirm/
+    # decline on a staged post resolves it here and returns without running
+    # the normal turn; anything else (nothing staged, unrelated, edit, a
+    # [HEARTBEAT] brief, or agent != aetheria) is a no-op and falls through.
+    x_result = maybe_resolve_x_approval(
+        agent=agent, message=message, state=state, now=datetime.now().isoformat(),
+    )
+    if x_result is not None:
+        return jsonify({
+            "agent": agent,
+            "session_id": session_id,
+            "x_resolution": _x_resolution_payload(x_result),
+        }), 200
+
     loop = state["agent_loops"].get(agent)
     if loop is None:
         # Defense in depth: agent_loops should always have every ACTIVE_AGENT.
@@ -301,6 +372,27 @@ def chat_stream():
         return attach_err
 
     state = _state()
+
+    # X-approval pre-turn hook (Task 8) — same helper as /chat, called BEFORE
+    # the loop here too. A hook in only /chat would be bypassed by the
+    # desktop UI, which streams. See maybe_resolve_x_approval's docstring.
+    x_result = maybe_resolve_x_approval(
+        agent=agent, message=message, state=state, now=datetime.now().isoformat(),
+    )
+    if x_result is not None:
+        def _generate_x_resolution():
+            yield _sse({"type": "x_resolution", **_x_resolution_payload(x_result)})
+
+        return Response(
+            stream_with_context(_generate_x_resolution()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream; charset=utf-8",
+            },
+        )
+
     loop = state["agent_loops"].get(agent)
     if loop is None:
         return _err("unknown_agent", f"No loop registered for {agent!r}", 400)
