@@ -21,10 +21,13 @@ testable.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Optional
 
 from soveryn.agents.presence.staged_store import StagedPost, StagedStore
+
+logger = logging.getLogger(__name__)
 
 # Whole-message (stripped, lowercased) equality — not substring matching.
 # Keeping this an exact-match set (rather than "contains") is itself part
@@ -163,7 +166,16 @@ def resolve_pending(
         # Pass the publish RESULT through so the lattice memory records the
         # REAL X-assigned tweet id/url, not the staged post's local id — else
         # her recalled posts would carry dead links.
-        x_memory_fn(post, result)
+        #
+        # The tweet is ALREADY live and ALREADY marked published above — a
+        # recall-write failure here (e.g. the embed service is down) must
+        # never turn a successful publish into a 500. Log and move on.
+        try:
+            x_memory_fn(post, result)
+        except Exception as exc:  # noqa: BLE001 - see comment above
+            logger.warning(
+                "x_memory_fn failed after publishing staged post %s: %s", post.id, exc
+            )
         return ResolveResult(
             action="published",
             note=f"[posted to X: {url}]",

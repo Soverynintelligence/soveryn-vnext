@@ -296,6 +296,35 @@ def test_affirm_publishes_reply_with_reply_to(tmp_path):
     assert rec.publish_calls == [("a reply", "tweet-42")]
 
 
+def test_affirm_publish_success_but_x_memory_fn_raises_still_returns_published(tmp_path):
+    """Finding 4: an embed-service outage in x_memory_fn must NOT turn a
+    successful, already-published post into a 500 — resolve_pending must
+    still return a `published` ResolveResult and the store must still be
+    marked published.
+    """
+    staged, post = make_staged(tmp_path, text="hello world", reply_to=None)
+    rec = Recorder(publish_result={"id": "999", "url": "https://x.com/Soveryn_AI/status/999"})
+
+    def raising_x_memory_fn(post, result):
+        raise RuntimeError("embed service down")
+
+    result = resolve_pending(
+        agent="aetheria",
+        message="yes",
+        staged=staged,
+        publisher_fn=rec.publisher_fn,
+        x_memory_fn=raising_x_memory_fn,
+        rejection_fn=rec.rejection_fn,
+        now="2026-07-11T10:05:00",
+    )
+
+    assert isinstance(result, ResolveResult)
+    assert result.action == "published"
+    assert result.posted_id == "999"
+    # already published + marked, regardless of the memory-write failure
+    assert staged.pending("aetheria") is None
+
+
 def test_agent_scoping_does_not_resolve_other_agents_post(tmp_path):
     staged = StagedStore(tmp_path / "staged.db")
     staged.stage(agent="aetheria", text="aetheria's draft", reply_to=None, now="2026-07-11T10:00:00")
