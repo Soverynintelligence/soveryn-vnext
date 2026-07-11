@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from soveryn.agents.presence.x_client import XClient, Tweet, XClientError
 
@@ -22,6 +23,31 @@ class FakeHTTP:
     def post(self, url, **kw):
         self.calls.append(("POST", url, kw))
         return self.resp
+
+
+class RaisingHTTP:
+    """Fake http whose .get/.post raise a raw requests exception, simulating
+    a network failure (DNS, connection refused, timeout, etc.)."""
+
+    def __init__(self, exc):
+        self._exc = exc
+
+    def get(self, *a, **kw):
+        raise self._exc
+
+    def post(self, *a, **kw):
+        raise self._exc
+
+
+class NonJsonErrorResp:
+    """Fake response whose .json() raises, simulating a non-JSON error body
+    (e.g. Cloudflare HTML on a 503)."""
+
+    def __init__(self, status):
+        self.status_code = status
+
+    def json(self):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
 
 
 def test_search_recent_parses_tweets():
@@ -63,3 +89,69 @@ def test_from_env_missing_var_raises(monkeypatch):
     import pytest as _pytest
     with _pytest.raises(XClientError):
         XClient.from_env(http=FakeHTTP(FakeResp(200, {"data": []})))
+
+
+# ─── Finding 1: XClient must raise ONLY XClientError ───────────────────────
+
+
+def test_search_recent_connection_error_becomes_x_client_error():
+    http = RaisingHTTP(requests.exceptions.ConnectionError("connection refused"))
+    c = XClient(bearer="SECRETBEARER", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError) as e:
+        c.search_recent("local LLM")
+    assert "SECRETBEARER" not in str(e.value)
+
+
+def test_search_recent_timeout_becomes_x_client_error():
+    http = RaisingHTTP(requests.exceptions.Timeout("timed out"))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError):
+        c.search_recent("local LLM")
+
+
+def test_post_tweet_connection_error_becomes_x_client_error():
+    http = RaisingHTTP(requests.exceptions.ConnectionError("connection refused"))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError):
+        c.create_tweet("hello")
+
+
+def test_post_tweet_timeout_becomes_x_client_error():
+    http = RaisingHTTP(requests.exceptions.Timeout("timed out"))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError):
+        c.reply_tweet("hello", "1")
+
+
+def test_error_response_non_json_body_raises_with_status_and_no_secret():
+    # Simulates a 503 with a Cloudflare HTML body instead of JSON.
+    http = FakeHTTP(NonJsonErrorResp(503))
+    c = XClient(bearer="SECRETBEARER", oauth=("SECRETKEY", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError) as e:
+        c.search_recent("local LLM")
+    msg = str(e.value)
+    assert "503" in msg
+    assert "SECRETBEARER" not in msg
+    assert "SECRETKEY" not in msg
+
+
+def test_post_tweet_error_response_non_json_body_raises_with_status():
+    http = FakeHTTP(NonJsonErrorResp(500))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError) as e:
+        c.create_tweet("hello")
+    assert "500" in str(e.value)
+
+
+def test_post_tweet_malformed_2xx_body_missing_data_raises():
+    http = FakeHTTP(FakeResp(201, {"unexpected": "shape"}))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError):
+        c.create_tweet("hello")
+
+
+def test_post_tweet_malformed_2xx_body_missing_id_raises():
+    http = FakeHTTP(FakeResp(201, {"data": {}}))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    with pytest.raises(XClientError):
+        c.create_tweet("hello")

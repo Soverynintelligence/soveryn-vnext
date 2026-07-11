@@ -57,22 +57,30 @@ class XClient:
         params = {"query": query, "tweet.fields": "author_id"}
         if since_id is not None:
             params["since_id"] = since_id
-        resp = self._http.get(
-            _SEARCH_URL,
-            params=params,
-            headers={"Authorization": f"Bearer {self._bearer}"},
-        )
-        self._raise_for_status(resp)
-        data = resp.json().get("data", [])
-        return [
-            Tweet(
-                id=item["id"],
-                author=item.get("author_id", ""),
-                text=item.get("text", ""),
-                url=f"https://x.com/i/web/status/{item['id']}",
+        try:
+            resp = self._http.get(
+                _SEARCH_URL,
+                params=params,
+                headers={"Authorization": f"Bearer {self._bearer}"},
             )
-            for item in data
-        ]
+        except Exception as exc:
+            raise XClientError(f"X API request failed: {type(exc).__name__}") from exc
+        self._raise_for_status(resp)
+        try:
+            data = resp.json().get("data", [])
+            return [
+                Tweet(
+                    id=item["id"],
+                    author=item.get("author_id", ""),
+                    text=item.get("text", ""),
+                    url=f"https://x.com/i/web/status/{item['id']}",
+                )
+                for item in data
+            ]
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise XClientError(
+                f"X API returned malformed search response: {type(exc).__name__}"
+            ) from exc
 
     def create_tweet(self, text: str) -> str:
         return self._post_tweet({"text": text})
@@ -83,13 +91,24 @@ class XClient:
 
     def _post_tweet(self, body: dict) -> str:
         auth = OAuth1(*self._oauth)
-        resp = self._http.post(_TWEETS_URL, json=body, auth=auth)
+        try:
+            resp = self._http.post(_TWEETS_URL, json=body, auth=auth)
+        except Exception as exc:
+            raise XClientError(f"X API request failed: {type(exc).__name__}") from exc
         self._raise_for_status(resp)
-        return resp.json()["data"]["id"]
+        try:
+            return resp.json()["data"]["id"]
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise XClientError(
+                f"X API returned malformed post response: {type(exc).__name__}"
+            ) from exc
 
     @staticmethod
     def _raise_for_status(resp) -> None:
         if 200 <= resp.status_code < 300:
             return
-        title = resp.json().get("title", "?")
+        try:
+            title = resp.json().get("title", "?")
+        except (ValueError, AttributeError, TypeError):
+            title = "?"
         raise XClientError(f"X API {resp.status_code}: {title}")
