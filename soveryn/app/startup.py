@@ -143,6 +143,15 @@ def create_app(
         )
         register_personal_files_tools(tool_registry, owner_agent="aetheria")
 
+        # Vett gets bounded read access to the American History app content
+        # project (2026-07-11) — she authored the spec and is drafting chapters.
+        # Scoped to ONLY that one directory, not Jon's full content roots.
+        register_personal_files_tools(
+            tool_registry,
+            owner_agent="vett",
+            roots=((Path.home() / "american-history-app").resolve(),),
+        )
+
         # Image generation — wraps ComfyUI on :8188. JuggernautXL Lightning
         # default (~5s gen). Aetheria gets the file path back; she can
         # describe what she made and where to find it.

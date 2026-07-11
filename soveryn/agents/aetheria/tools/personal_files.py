@@ -82,10 +82,12 @@ def resolve_within_content_roots(
     )
 
 
-def _content_roots_summary() -> dict:
+def _content_roots_summary(roots: tuple[Path, ...] | None = None) -> dict:
     """When called with no path, surface what's available at the top level."""
+    if roots is None:
+        roots = AETHERIA_CONTENT_ROOTS
     summary = []
-    for root in AETHERIA_CONTENT_ROOTS:
+    for root in roots:
         if not root.exists() or not root.is_dir():
             summary.append({
                 "root": str(root),
@@ -111,19 +113,21 @@ def _content_roots_summary() -> dict:
 
 def build_list_personal_files_tool(
     *, owner_agent: str = "aetheria",
+    roots: tuple[Path, ...] | None = None,
 ) -> ToolSpec:
-    """Bounded directory listing under Jon's content roots. With no `path`
-    argument, surfaces a summary of the available roots so Aetheria can
-    pick one to drill into."""
+    """Bounded directory listing under the given content roots (default:
+    Jon's content roots). With no `path` argument, surfaces a summary of
+    the available roots. `roots` scopes a non-default owner (e.g. Vett)
+    to a specific project directory."""
 
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path")
         if path_arg is None or (isinstance(path_arg, str) and not path_arg.strip()):
-            return _content_roots_summary()
+            return _content_roots_summary(roots)
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_content_roots(path_arg)
+            resolved = resolve_within_content_roots(path_arg, roots=roots)
         except PathOutOfContentRootsError as e:
             raise ToolArgError(str(e))
         if not resolved.exists():
@@ -190,18 +194,18 @@ def build_list_personal_files_tool(
 
 def build_read_personal_file_tool(
     *, owner_agent: str = "aetheria",
+    roots: tuple[Path, ...] | None = None,
 ) -> ToolSpec:
-    """Bounded file read under the content-roots allowlist. UTF-8 decoded
-    for text; binary files (images, PDFs) return a metadata stub with no
-    body — Aetheria can then pass the path to signal_send if she wants
-    to share it without reading bytes herself."""
+    """Bounded file read under the given content roots (default: Jon's
+    content roots). UTF-8 decoded for text; binary files return a metadata
+    stub. `roots` scopes a non-default owner to a specific directory."""
 
     def handler(args: Mapping[str, Any]) -> Any:
         path_arg = args.get("path", "")
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_content_roots(path_arg)
+            resolved = resolve_within_content_roots(path_arg, roots=roots)
         except PathOutOfContentRootsError as e:
             raise ToolArgError(str(e))
         if not resolved.exists():
@@ -280,7 +284,9 @@ def build_read_personal_file_tool(
 
 def register_personal_files_tools(
     registry, *, owner_agent: str = "aetheria",
+    roots: tuple[Path, ...] | None = None,
 ) -> None:
-    """Register both tools for the given agent."""
-    registry.register(build_list_personal_files_tool(owner_agent=owner_agent))
-    registry.register(build_read_personal_file_tool(owner_agent=owner_agent))
+    """Register both tools for the given agent, optionally scoped to
+    specific `roots` (default: Jon's content roots)."""
+    registry.register(build_list_personal_files_tool(owner_agent=owner_agent, roots=roots))
+    registry.register(build_read_personal_file_tool(owner_agent=owner_agent, roots=roots))
