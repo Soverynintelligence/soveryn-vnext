@@ -52,9 +52,21 @@ class Recorder:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("text", ["yes", "Y", " y ", "post it", "GO", "send it", "👍", "ok post", "Yes"])
+@pytest.mark.parametrize(
+    "text",
+    ["post it", " post it ", "POST IT", "post", "send it", "send", "yes post",
+     "yes post it", "yes send it", "ok post", "ok send it"],
+)
 def test_classify_clear_affirm_tokens(text):
     assert classify_affirmation(text) == "affirm"
+
+
+@pytest.mark.parametrize("text", ["yes", "y", " y ", "Y", "go", "GO", "👍", "ok", "OK"])
+def test_classify_bare_affirm_like_tokens_are_now_unrelated(text):
+    """Core of the fix (finding #5): a bare "yes"/"y"/"go"/thumbs-up/"ok" must
+    NOT auto-publish a queued X post — it must classify as "unrelated" (safe
+    no-op) since it lacks an explicit publish verb ("post"/"send")."""
+    assert classify_affirmation(text) == "unrelated"
 
 
 @pytest.mark.parametrize("text", ["no", "N", " no ", "nope", "don't", "dont", "reject", "skip", "cancel", "No"])
@@ -123,7 +135,7 @@ def test_no_pending_returns_none(tmp_path):
 
     result = resolve_pending(
         agent="aetheria",
-        message="yes",
+        message="post it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=rec.x_memory_fn,
@@ -141,7 +153,7 @@ def test_affirm_publishes_marks_and_writes_memory(tmp_path):
 
     result = resolve_pending(
         agent="aetheria",
-        message="yes",
+        message="post it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=rec.x_memory_fn,
@@ -171,7 +183,7 @@ def test_affirm_with_publisher_error_does_not_mark_published(tmp_path):
 
     result = resolve_pending(
         agent="aetheria",
-        message="yes",
+        message="post it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=rec.x_memory_fn,
@@ -193,7 +205,7 @@ def test_affirm_with_publisher_exception_does_not_mark_published(tmp_path):
 
     result = resolve_pending(
         agent="aetheria",
-        message="go",
+        message="send it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=rec.x_memory_fn,
@@ -310,7 +322,7 @@ def test_affirm_publish_success_but_x_memory_fn_raises_still_returns_published(t
 
     result = resolve_pending(
         agent="aetheria",
-        message="yes",
+        message="post it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=raising_x_memory_fn,
@@ -332,7 +344,7 @@ def test_agent_scoping_does_not_resolve_other_agents_post(tmp_path):
 
     result = resolve_pending(
         agent="vett",
-        message="yes",
+        message="post it",
         staged=staged,
         publisher_fn=rec.publisher_fn,
         x_memory_fn=rec.x_memory_fn,

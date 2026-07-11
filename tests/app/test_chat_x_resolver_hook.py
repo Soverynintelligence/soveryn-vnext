@@ -136,7 +136,7 @@ def test_chat_affirm_publishes_and_skips_normal_turn(app_state):
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat",
-                 {"agent": "aetheria", "session_id": sid, "message": "yes"})
+                 {"agent": "aetheria", "session_id": sid, "message": "post it"})
 
     assert resp.status_code == 200
     payload = json.loads(resp.data)

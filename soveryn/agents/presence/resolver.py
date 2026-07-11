@@ -8,11 +8,17 @@ affirmation. Everything else (an edit instruction, a decline, or anything
 ambiguous) leaves the post `proposed` and lets Aetheria's normal turn run.
 
 Bias to safety is the whole point of this file: `classify_affirmation`
-only recognizes a small, explicit set of affirm tokens as "affirm" — a
-subject change, a question, an unrelated instruction, or genuine ambiguity
-must NEVER be read as approval to publish. When in doubt the bucket is
-"unrelated", which is a no-op here (the post stays pending, nothing goes
-out, her normal conversational turn proceeds untouched).
+only recognizes a small, explicit set of affirm tokens as "affirm" — and
+every one of those tokens carries an explicit publish verb ("post" /
+"send"), e.g. "post it", "send it", "yes post it". A BARE "yes", "y", "go",
+"ok", or a thumbs-up carries no publish intent and classifies as
+"unrelated" — because the staged post is keyed per-agent, ANY Aetheria
+`/chat` message runs through this resolver, so a bare "yes" typed about
+something completely unrelated must never be read as "publish the queued
+tweet". A subject change, a question, an unrelated instruction, or genuine
+ambiguity must NEVER be read as approval to publish. When in doubt the
+bucket is "unrelated", which is a no-op here (the post stays pending,
+nothing goes out, her normal conversational turn proceeds untouched).
 
 No wall-clock calls happen in this module — `now` is passed in by the
 caller (chat-path hook, Task 8) so resolution stays deterministic and
@@ -33,14 +39,24 @@ logger = logging.getLogger(__name__)
 # Keeping this an exact-match set (rather than "contains") is itself part
 # of the safety bias: a stray "yes" embedded in a longer, uncertain reply
 # must not trigger a publish.
+#
+# Every token here carries an EXPLICIT publish verb ("post" / "send").
+# A bare "yes" / "y" / "go" / "ok" / thumbs-up is deliberately NOT in this
+# set: because the staged post is keyed per-agent, any Aetheria `/chat` or
+# `/chat_stream` message runs through this resolver, so a bare affirmative
+# typed about something entirely unrelated to the queued post must not
+# publish it. Those bare tokens now fall through to "unrelated" (a safe
+# no-op) instead of "affirm".
 AFFIRM_TOKENS = {
-    "yes",
-    "y",
     "post it",
-    "go",
+    "post",
     "send it",
-    "\U0001f44d",  # 👍
+    "send",
+    "yes post",
+    "yes post it",
+    "yes send it",
     "ok post",
+    "ok send it",
 }
 
 DECLINE_TOKENS = {

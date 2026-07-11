@@ -50,8 +50,15 @@ def _noop_x_memory_fn(text: str, reply_to: "str | None", result: dict[str, Any])
     recall (e.g. most existing tests) don't have to wire one."""
     return None
 
-STAGED_MESSAGE = "Staged — it posts once Jon says yes."
-BUSY_MESSAGE = "You already have a post waiting on Jon; resolve that first."
+STAGED_MESSAGE = (
+    "Staged — it will NOT post until Jon replies 'post it' (or 'send it'). "
+    "Tell Jon what you'd like to post to @Soveryn_AI, show him the text, "
+    "and ask for his go-ahead."
+)
+BUSY_MESSAGE = (
+    "You already have a post waiting on Jon; resolve that first — remind "
+    "him it needs him to reply 'post it' (or 'send it') before it goes out."
+)
 
 
 def build_read_x_tool(*, owner_agent: str = "aetheria", store: CandidateStore) -> ToolSpec:

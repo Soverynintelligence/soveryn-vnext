@@ -159,6 +159,18 @@ def test_post_to_x_spec_shape(staged, publisher, trust_path):
     assert spec.schema["additionalProperties"] is False
 
 
+# --- Finding 5 (Fix B): the staged message must surface the post to Jon
+# and state the exact approve phrase, so Aetheria naturally tells him a
+# post is pending instead of it sitting invisible in the staged slot. ---
+
+
+def test_staged_message_instructs_surfacing_and_names_approve_phrase():
+    lowered = STAGED_MESSAGE.lower()
+    assert "jon" in lowered
+    assert "post it" in lowered  # the exact approve phrase Jon must say
+    assert "not post" in lowered or "will not post" in lowered or "won't post" in lowered
+
+
 # --- Stage 0: everything stages, publisher never called ---
 
 
