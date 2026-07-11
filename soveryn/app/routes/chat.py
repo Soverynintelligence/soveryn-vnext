@@ -382,6 +382,18 @@ def chat_stream():
     if x_result is not None:
         def _generate_x_resolution():
             yield _sse({"type": "x_resolution", **_x_resolution_payload(x_result)})
+            # Terminate the stream with a DoneEvent-shaped frame — the resolver
+            # short-circuits the normal turn, so without this the UI never gets
+            # the "done" it waits for and the thinking spinner hangs forever.
+            # Surface the resolution note (e.g. "[posted to X: <url>]") as content.
+            yield _sse({
+                "type": "done",
+                "content": x_result.note,
+                "finish_reason": "stop",
+                "tool_calls": None,
+                "usage": None,
+                "context_usage": None,
+            })
 
         return Response(
             stream_with_context(_generate_x_resolution()),

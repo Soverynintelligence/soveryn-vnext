@@ -281,3 +281,25 @@ def test_chat_stream_heartbeat_message_with_pending_does_not_publish(app_state):
     assert app_state["rec"].publish_calls == []
     assert len(app_state["fake_stream"].calls) == 1
     assert app_state["staged"].pending("aetheria") is not None
+
+
+def test_chat_stream_affirm_emits_done_event_to_close_spinner(app_state):
+    """The /chat_stream approval path must terminate the SSE stream with a
+    'done' frame — otherwise the UI's thinking spinner hangs forever (the
+    resolver short-circuits the normal turn, so no DoneEvent arrives)."""
+    sid = _new_session(app_state["client"], "aetheria")
+    app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
+                               now="2026-07-11T10:00:00")
+
+    resp = _post(app_state["client"], "/chat_stream",
+                 {"agent": "aetheria", "session_id": sid, "message": "post it"})
+
+    assert resp.status_code == 200
+    events = _parse_sse(resp.data)
+    types = [e["type"] for e in events]
+    assert "x_resolution" in types
+    assert "done" in types, f"stream did not close with a done event: {types}"
+    # the done frame carries the resolution note as content
+    done = next(e for e in events if e["type"] == "done")
+    assert "posted to X" in (done.get("content") or "")
+    assert app_state["rec"].publish_calls == [("draft post", None)]
