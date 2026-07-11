@@ -60,13 +60,22 @@ class SignalCliProvider:
     def send(self, message: str, recipient: str) -> bool:
         if not message.strip() or not recipient.strip():
             return False
+        # signal-cli allows only ONE process per account. The signal-bridge
+        # holds the account for up to 30s per `receive --timeout 30` poll, so
+        # a naive send here collides ("Config file is in use by another
+        # instance"). Serialize through the SAME cross-process fcntl.flock the
+        # bridge uses (lazy import avoids any module-load coupling); the lock
+        # blocks until the bridge's receive releases, then the send runs with
+        # exclusive access.
+        from soveryn.agents.signal_bridge.client import _signal_cli_lock
         try:
-            result = subprocess.run(
-                [self.binary, "-a", self.bot_number, "send", "-m", message, recipient],
-                capture_output=True,
-                text=True,
-                timeout=20,
-            )
+            with _signal_cli_lock():
+                result = subprocess.run(
+                    [self.binary, "-a", self.bot_number, "send", "-m", message, recipient],
+                    capture_output=True,
+                    text=True,
+                    timeout=20,
+                )
         except (OSError, subprocess.TimeoutExpired):
             return False
         return result.returncode == 0
