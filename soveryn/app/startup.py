@@ -180,6 +180,7 @@ def create_app(
             tool_registry,
             grants_config_path=str(env.data_root / "steward" / "grants.json"),
             submissions_path=str(env.data_root / "steward" / "submissions.json"),
+            statuses_path=str(env.data_root / "steward" / "statuses.json"),
         )
 
         # Delegation tools — Aetheria's rail for handing bounded implementation

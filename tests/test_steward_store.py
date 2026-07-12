@@ -8,7 +8,137 @@ from datetime import date
 import pytest
 
 from soveryn.platform.steward.engine import GrantObligation
-from soveryn.platform.steward.store import SubmissionStore, apply_submissions, load_grants
+from soveryn.platform.steward.store import (
+    StatusStore,
+    SubmissionStore,
+    apply_status_overrides,
+    apply_submissions,
+    load_grants,
+    set_grant_status,
+)
+
+
+# ---------------------------------------------------------------------------
+# StatusStore round-trip (manual applied/pending overrides, keyed by award_id)
+# ---------------------------------------------------------------------------
+
+def test_status_store_round_trip(tmp_path):
+    s = StatusStore(str(tmp_path / "statuses.json"))
+    s.set("COSMOS-1", "applied", note="submitted to funder portal")
+    got = s.all()
+    assert "COSMOS-1" in got
+    assert got["COSMOS-1"]["status"] == "applied"
+    assert got["COSMOS-1"]["note"] == "submitted to funder portal"
+    assert got["COSMOS-1"]["set_at"]  # a date present
+
+
+def test_status_store_persists_across_instances(tmp_path):
+    path = str(tmp_path / "statuses.json")
+    s1 = StatusStore(path)
+    s1.set("NSF-9", "pending", note="awaiting info")
+    s2 = StatusStore(path)
+    got = s2.all()
+    assert got["NSF-9"]["status"] == "pending"
+
+
+def test_status_store_empty_initially(tmp_path):
+    s = StatusStore(str(tmp_path / "new.json"))
+    assert s.all() == {}
+
+
+def test_status_store_clear_removes_override(tmp_path):
+    s = StatusStore(str(tmp_path / "statuses.json"))
+    s.set("COSMOS-1", "applied")
+    s.clear("COSMOS-1")
+    assert "COSMOS-1" not in s.all()
+
+
+# ---------------------------------------------------------------------------
+# apply_status_overrides — pure overlay, precedence done > manual > computed
+# ---------------------------------------------------------------------------
+
+def test_apply_status_overrides_marks_applied():
+    obs = [GrantObligation("COSMOS-1", "Cosmos", "Sovereign AI", "Milestone",
+                           date(2026, 1, 1), "overdue")]
+    overrides = {"COSMOS-1": {"status": "applied", "note": "submitted"}}
+    out = apply_status_overrides(obs, overrides)
+    assert out[0].status == "applied"
+
+
+def test_apply_status_overrides_marks_pending():
+    obs = [GrantObligation("COSMOS-1", "Cosmos", "Sovereign AI", "Milestone",
+                           date(2026, 1, 1), "overdue")]
+    overrides = {"COSMOS-1": {"status": "pending", "note": ""}}
+    out = apply_status_overrides(obs, overrides)
+    assert out[0].status == "pending"
+
+
+def test_apply_status_overrides_covers_all_obligations_of_grant():
+    """A manual override is keyed by award_id and overlays every obligation."""
+    obs = [
+        GrantObligation("COSMOS-1", "Cosmos", "t", "M1", date(2026, 1, 1), "overdue"),
+        GrantObligation("COSMOS-1", "Cosmos", "t", "M2", date(2027, 1, 1), "upcoming"),
+    ]
+    overrides = {"COSMOS-1": {"status": "applied", "note": ""}}
+    out = apply_status_overrides(obs, overrides)
+    assert [o.status for o in out] == ["applied", "applied"]
+
+
+def test_apply_status_overrides_done_wins():
+    """Precedence: a submission->done still wins over a manual applied/pending."""
+    obs = [GrantObligation("COSMOS-1", "Cosmos", "t", "M1", date(2026, 1, 1), "done")]
+    overrides = {"COSMOS-1": {"status": "applied", "note": ""}}
+    out = apply_status_overrides(obs, overrides)
+    assert out[0].status == "done"
+
+
+def test_apply_status_overrides_leaves_unlisted():
+    obs = [GrantObligation("X", "X", "t", "M", date(2026, 1, 1), "overdue")]
+    assert apply_status_overrides(obs, {})[0].status == "overdue"
+
+
+def test_apply_status_overrides_is_pure():
+    obs = [GrantObligation("COSMOS-1", "Cosmos", "t", "M", date(2026, 1, 1), "overdue")]
+    overrides = {"COSMOS-1": {"status": "applied", "note": ""}}
+    apply_status_overrides(obs, overrides)
+    assert obs[0].status == "overdue"
+
+
+# ---------------------------------------------------------------------------
+# set_grant_status — shared write path (tool + HTTP endpoint use this)
+# ---------------------------------------------------------------------------
+
+def test_set_grant_status_persists_and_round_trips(tmp_path):
+    path = str(tmp_path / "statuses.json")
+    res = set_grant_status(path, "COSMOS-1", "applied", note="portal ref 123")
+    assert res["ok"] is True
+    assert res["award_id"] == "COSMOS-1"
+    assert res["status"] == "applied"
+    # round-trips through a fresh store
+    got = StatusStore(path).all()
+    assert got["COSMOS-1"]["status"] == "applied"
+    assert got["COSMOS-1"]["note"] == "portal ref 123"
+
+
+def test_set_grant_status_rejects_invalid(tmp_path):
+    path = str(tmp_path / "statuses.json")
+    with pytest.raises(ValueError):
+        set_grant_status(path, "COSMOS-1", "bogus")
+
+
+def test_set_grant_status_clear_to_auto_restores(tmp_path):
+    path = str(tmp_path / "statuses.json")
+    set_grant_status(path, "COSMOS-1", "applied")
+    res = set_grant_status(path, "COSMOS-1", "auto")
+    assert res["ok"] is True
+    assert res["status"] == "auto"
+    assert "COSMOS-1" not in StatusStore(path).all()
+
+
+def test_set_grant_status_empty_award_id_rejected(tmp_path):
+    path = str(tmp_path / "statuses.json")
+    with pytest.raises(ValueError):
+        set_grant_status(path, "", "applied")
 
 
 # ---------------------------------------------------------------------------

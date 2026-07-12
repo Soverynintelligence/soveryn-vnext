@@ -30,7 +30,7 @@ class GrantObligation:
     title: str
     report_label: str
     due_date: date
-    status: str                             # "upcoming" | "overdue" | "done" (set by store overlay)
+    status: str                             # "upcoming" | "overdue" | "done" | "applied" | "pending" (set by store overlays)
     submitted_at: date | None = None        # populated by apply_submissions overlay
     note: str = ""                          # submission note, populated by apply_submissions overlay
 

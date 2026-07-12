@@ -45,6 +45,25 @@ def _seed_empty_grants(path: Path) -> None:
     path.write_text(json.dumps([]), encoding="utf-8")
 
 
+def _seed_overdue_grant(path: Path) -> None:
+    """A milestone grant with a firmly-past due date → computes as 'overdue'."""
+    path.write_text(
+        json.dumps([
+            {
+                "funder": "Longview",
+                "award_id": "APP-1",
+                "title": "Submitted application",
+                "period_start": "2025-01-01",
+                "period_end": "2027-01-01",
+                "reporting_cadence": "milestone",
+                # Within the fixed 365-day lookback but firmly in the past → 'overdue'.
+                "milestones": [["2026-01-01", "Application submitted"]],
+            }
+        ]),
+        encoding="utf-8",
+    )
+
+
 # ---------------------------------------------------------------------------
 # registration tests
 # ---------------------------------------------------------------------------
@@ -63,7 +82,9 @@ def test_steward_tools_registered_for_aetheria_and_vett(tmp_path: Path) -> None:
         submissions_path=str(subs_path),
     )
 
-    steward_tool_names = {"grant_deadlines", "grant_status", "list_grants", "grant_submit"}
+    steward_tool_names = {
+        "grant_deadlines", "grant_status", "list_grants", "grant_submit", "grant_set_status",
+    }
 
     aetheria_names = {s.name for s in registry.iter_tools_for_agent("aetheria")}
     vett_names = {s.name for s in registry.iter_tools_for_agent("vett")}
@@ -376,6 +397,144 @@ def test_grant_submit_returns_structured_result(tmp_path: Path) -> None:
     assert isinstance(result["submitted_at"], str)   # ISO string, not date object
     # Confirm grant_submit does NOT include config_present (write surface unchanged)
     assert "config_present" not in result
+
+
+# ---------------------------------------------------------------------------
+# grant_set_status — applied/pending overrides + surfacing exemption
+# ---------------------------------------------------------------------------
+
+def test_grant_set_status_applied_excludes_from_deadlines(tmp_path: Path) -> None:
+    """A grant marked applied → its obligation resolves to 'applied', excluded from deadlines."""
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    # Before: the overdue obligation shows up in deadlines
+    before = registry.invoke("aetheria", "grant_deadlines", {"window_days": 500})["deadlines"]
+    assert any(d["award_id"] == "APP-1" for d in before)
+
+    # Mark applied
+    res = registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "applied"})
+    assert res["ok"] is True
+    assert res["status"] == "applied"
+
+    # After: excluded from grant_deadlines (no longer re-flagged)
+    after = registry.invoke("aetheria", "grant_deadlines", {"window_days": 500})["deadlines"]
+    assert not any(d["award_id"] == "APP-1" for d in after)
+
+    # grant_status resolves the obligation to 'applied', not 'overdue'
+    status = registry.invoke("aetheria", "grant_status", {"award_id": "APP-1"})
+    assert all(o["status"] == "applied" for o in status["obligations"])
+
+
+def test_grant_set_status_pending_excludes_from_deadlines(tmp_path: Path) -> None:
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "pending"})
+    after = registry.invoke("aetheria", "grant_deadlines", {"window_days": 500})["deadlines"]
+    assert not any(d["award_id"] == "APP-1" for d in after)
+
+
+def test_grant_set_status_done_wins_over_manual(tmp_path: Path) -> None:
+    """Precedence: a submission->done still wins over a manual applied override."""
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    # Mark applied, then submit the specific obligation → done must win.
+    registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "applied"})
+    registry.invoke("aetheria", "grant_submit", {"award_id": "APP-1", "report_date": "2026-01-01"})
+
+    status = registry.invoke("aetheria", "grant_status", {"award_id": "APP-1"})
+    submitted = [o for o in status["obligations"] if o["due_date"] == "2026-01-01"]
+    assert submitted and submitted[0]["status"] == "done"
+
+
+def test_grant_set_status_rejects_invalid(tmp_path: Path) -> None:
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    with pytest.raises(ToolArgError):
+        registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "bogus"})
+
+
+def test_grant_set_status_clear_restores_computed(tmp_path: Path) -> None:
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "applied"})
+    # Clear back to auto → the computed 'overdue' returns and re-surfaces.
+    registry.invoke("aetheria", "grant_set_status", {"award_id": "APP-1", "status": "auto"})
+    after = registry.invoke("aetheria", "grant_deadlines", {"window_days": 500})["deadlines"]
+    app1 = [d for d in after if d["award_id"] == "APP-1"]
+    assert app1 and app1[0]["status"] == "overdue"
+
+
+def test_grant_set_status_registered_for_vett(tmp_path: Path) -> None:
+    from soveryn.platform.steward.tools import register_steward_tools
+
+    registry = ToolRegistry(audit_hook=None)
+    grants_path = tmp_path / "grants.json"
+    subs_path = tmp_path / "subs.json"
+    _seed_overdue_grant(grants_path)
+
+    register_steward_tools(
+        registry,
+        grants_config_path=str(grants_path),
+        submissions_path=str(subs_path),
+    )
+
+    res = registry.invoke("vett", "grant_set_status", {"award_id": "APP-1", "status": "pending"})
+    assert res["ok"] is True
 
 
 # ---------------------------------------------------------------------------

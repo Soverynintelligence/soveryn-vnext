@@ -19,12 +19,30 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
+from pathlib import Path
+
 from soveryn.platform.steward.engine import compute_grant_schedule
-from soveryn.platform.steward.store import SubmissionStore, apply_submissions, load_grants
+from soveryn.platform.steward.store import (
+    StatusStore,
+    SubmissionStore,
+    apply_status_overrides,
+    apply_submissions,
+    load_grants,
+    set_grant_status,
+)
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 # Agents that should receive steward tools. NOT scotty.
 _STEWARD_OWNERS = ("aetheria", "vett")
+
+# Statuses that are non-actionable "waiting" states — excluded from grant_deadlines
+# so submitted applications stop re-surfacing to Aetheria for review.
+_NON_ACTIONABLE = frozenset({"done", "applied", "pending"})
+
+
+def _default_statuses_path(submissions_path: str) -> str:
+    """Manual status overrides live beside submissions (statuses.json)."""
+    return str(Path(submissions_path).with_name("statuses.json"))
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +53,7 @@ def build_grant_deadlines_tool(
     *,
     grants_config_path: str,
     submissions_path: str,
+    statuses_path: str,
     owner_agent: str,
 ) -> ToolSpec:
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -66,8 +85,12 @@ def build_grant_deadlines_tool(
             horizon_days=window_days,
         )
         obligations = apply_submissions(obligations, submissions)
+        overrides = StatusStore(statuses_path).all()
+        obligations = apply_status_overrides(obligations, overrides)
 
-        # Filter out done — only upcoming/overdue shown in this view
+        # Only genuinely-actionable obligations here: done (submitted) and the manual
+        # waiting states (applied/pending) are excluded so a submitted application
+        # stops re-surfacing as an overdue deadline.
         deadlines = [
             {
                 "award_id": ob.award_id,
@@ -78,7 +101,7 @@ def build_grant_deadlines_tool(
                 "status": ob.status,
             }
             for ob in obligations
-            if ob.status != "done"
+            if ob.status not in _NON_ACTIONABLE
         ]
         return {
             "config_present": True,
@@ -123,6 +146,7 @@ def build_grant_status_tool(
     *,
     grants_config_path: str,
     submissions_path: str,
+    statuses_path: str,
     owner_agent: str,
 ) -> ToolSpec:
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -161,6 +185,8 @@ def build_grant_status_tool(
             horizon_days=3 * 365,
         )
         obligations = apply_submissions(obligations, submissions)
+        overrides = StatusStore(statuses_path).all()
+        obligations = apply_status_overrides(obligations, overrides)
 
         next_deadline: str | None = None
         upcoming = [ob for ob in obligations if ob.status in ("upcoming", "overdue")]
@@ -328,6 +354,64 @@ def build_grant_submit_tool(
 
 
 # ---------------------------------------------------------------------------
+# grant_set_status
+# ---------------------------------------------------------------------------
+
+def build_grant_set_status_tool(
+    *,
+    statuses_path: str,
+    owner_agent: str,
+) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> dict[str, Any]:
+        award_id = args.get("award_id", "")
+        status = args.get("status", "")
+        note = args.get("note", "")
+        if not isinstance(note, str):
+            note = str(note)
+        try:
+            # Shared validated write path — identical to the board HTTP endpoint.
+            return set_grant_status(statuses_path, award_id, status, note)
+        except ValueError as exc:
+            raise ToolArgError(str(exc)) from exc
+
+    return ToolSpec(
+        name="grant_set_status",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "award_id": {
+                    "type": "string",
+                    "description": "The award_id whose pipeline status to set (from list_grants).",
+                },
+                "status": {
+                    "type": "string",
+                    "description": (
+                        "'applied' (submitted, awaiting funder decision) or 'pending' "
+                        "(awaiting more info). Use 'auto' to clear the override and restore "
+                        "the date-computed status. Both waiting states remove the grant from "
+                        "grant_deadlines and stop it rendering as overdue."
+                    ),
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional note (e.g. portal reference, decision-expected date).",
+                },
+            },
+            "required": ["award_id", "status"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Set an award-level pipeline status: 'applied' (submitted, awaiting decision) "
+            "or 'pending' (awaiting info), or 'auto' to clear. Marks a submitted APPLICATION "
+            "as a waiting state so it stops re-surfacing as an overdue deadline. This is an "
+            "audited write over the whole award's obligations."
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
 # registration
 # ---------------------------------------------------------------------------
 
@@ -336,22 +420,30 @@ def register_steward_tools(
     *,
     grants_config_path: str,
     submissions_path: str,
+    statuses_path: str | None = None,
 ) -> None:
-    """Register all four steward tools for aetheria and vett.
+    """Register all five steward tools for aetheria and vett.
 
-    Each tool is registered once per owner — 8 registrations total (4 tools × 2 owners).
+    Each tool is registered once per owner — 10 registrations total (5 tools × 2 owners).
     Scotty is intentionally excluded: grant-compliance is a research+oversight
     surface, not a bounded mechanical executor task.
+
+    statuses_path defaults to statuses.json beside submissions_path.
     """
+    if statuses_path is None:
+        statuses_path = _default_statuses_path(submissions_path)
+
     for owner in _STEWARD_OWNERS:
         registry.register(build_grant_deadlines_tool(
             grants_config_path=grants_config_path,
             submissions_path=submissions_path,
+            statuses_path=statuses_path,
             owner_agent=owner,
         ))
         registry.register(build_grant_status_tool(
             grants_config_path=grants_config_path,
             submissions_path=submissions_path,
+            statuses_path=statuses_path,
             owner_agent=owner,
         ))
         registry.register(build_list_grants_tool(
@@ -360,5 +452,9 @@ def register_steward_tools(
         ))
         registry.register(build_grant_submit_tool(
             submissions_path=submissions_path,
+            owner_agent=owner,
+        ))
+        registry.register(build_grant_set_status_tool(
+            statuses_path=statuses_path,
             owner_agent=owner,
         ))

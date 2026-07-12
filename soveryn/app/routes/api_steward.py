@@ -7,9 +7,20 @@ from datetime import date
 from flask import Blueprint, current_app, jsonify, request
 
 from soveryn.platform.steward.engine import compute_grant_schedule
-from soveryn.platform.steward.store import load_grants
+from soveryn.platform.steward.store import (
+    StatusStore,
+    apply_status_overrides,
+    load_grants,
+    set_grant_status,
+)
 
 bp = Blueprint("api_steward", __name__)
+
+
+def _steward_dir():
+    """Return data_root/steward as a Path."""
+    env = current_app.extensions["soveryn"]["env"]
+    return env.data_root / "steward"
 
 
 @bp.get("/api/steward/board")
@@ -46,8 +57,9 @@ def api_steward_board():
     except (TypeError, ValueError):
         horizon_days = 400
 
-    env = current_app.extensions["soveryn"]["env"]
-    grants_path = env.data_root / "steward" / "grants.json"
+    steward_dir = _steward_dir()
+    grants_path = steward_dir / "grants.json"
+    statuses_path = steward_dir / "statuses.json"
     today = date.today()
 
     try:
@@ -65,6 +77,11 @@ def api_steward_board():
         lookback_days=365,
         horizon_days=horizon_days,
     )
+
+    # Overlay manual pipeline statuses (applied/pending). applied/pending stay
+    # ON the board (a distinct waiting colour) but are no longer overdue.
+    overrides = StatusStore(str(statuses_path)).all()
+    obligations = apply_status_overrides(obligations, overrides)
 
     # Build a lookup so we can surface award_amount on each entry.
     # GrantObligation intentionally omits it (engine is cadence-only),
@@ -91,3 +108,34 @@ def api_steward_board():
         "config_present": True,
         "entries": entries,
     }), 200
+
+
+@bp.post("/api/steward/status")
+def api_steward_set_status():
+    """Set an award-level manual pipeline status (applied/pending) or clear it.
+
+    Body (JSON):
+        { "award_id": str, "status": "applied"|"pending"|"auto", "note": str? }
+
+    'auto' (or ""/"clear"/"none") clears the override and restores the computed status.
+
+    Shares the exact validated write path (set_grant_status) used by the
+    grant_set_status agent tool — no duplicated logic. Owner-agnostic (this is the
+    board control; the agent tools carry the per-agent ownership).
+
+    Returns 200 with the confirmation dict, or 400 on an invalid status / empty award_id.
+    """
+    body = request.get_json(silent=True) or {}
+    award_id = body.get("award_id", "")
+    status = body.get("status", "")
+    note = body.get("note", "")
+    if not isinstance(note, str):
+        note = str(note)
+
+    statuses_path = _steward_dir() / "statuses.json"
+    try:
+        result = set_grant_status(str(statuses_path), award_id, status, note)
+    except ValueError as exc:
+        return jsonify({"ok": False, "message": str(exc)}), 400
+
+    return jsonify(result), 200

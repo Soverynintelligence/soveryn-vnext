@@ -226,6 +226,69 @@ def test_board_done_items_excluded(tmp_path, fake_chat, monkeypatch):
     assert "upcoming" in statuses
 
 
+# ─── Tests: applied/pending manual status via POST /api/steward/status ───────
+
+def test_set_status_applied_returns_ok(client_with_grants):
+    resp = client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "applied"},
+    )
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["ok"] is True
+    assert data["award_id"] == "GRANT-B"
+    assert data["status"] == "applied"
+
+
+def test_set_status_applied_makes_grant_not_overdue_on_board(client_with_grants):
+    """GRANT-B's 2026-01-01 milestone computes overdue; marking applied must flip it."""
+    client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "applied"},
+    )
+    resp = client_with_grants.get("/api/steward/board?days=99999")
+    data = resp.get_json()
+    grant_b = [e for e in data["entries"] if e["award_id"] == "GRANT-B"]
+    assert grant_b, "GRANT-B should still be visible on the board"
+    for e in grant_b:
+        assert e["status"] == "applied"
+        assert e["status"] != "overdue"
+
+
+def test_set_status_pending_shows_pending_on_board(client_with_grants):
+    client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "pending"},
+    )
+    resp = client_with_grants.get("/api/steward/board?days=99999")
+    data = resp.get_json()
+    grant_b = [e for e in data["entries"] if e["award_id"] == "GRANT-B"]
+    assert grant_b and all(e["status"] == "pending" for e in grant_b)
+
+
+def test_set_status_invalid_returns_400(client_with_grants):
+    resp = client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "bogus"},
+    )
+    assert resp.status_code == 400
+
+
+def test_set_status_clear_restores_overdue(client_with_grants):
+    client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "applied"},
+    )
+    client_with_grants.post(
+        "/api/steward/status",
+        json={"award_id": "GRANT-B", "status": "auto"},
+    )
+    resp = client_with_grants.get("/api/steward/board?days=99999")
+    data = resp.get_json()
+    grant_b = [e for e in data["entries"] if e["award_id"] == "GRANT-B"]
+    assert grant_b and all(e["status"] == "overdue" for e in grant_b)
+
+
 def test_board_amount_present(client_with_grants):
     """GRANT-A has award_amount 50000; GRANT-B has null."""
     resp = client_with_grants.get("/api/steward/board?days=99999")

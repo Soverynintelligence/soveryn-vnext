@@ -616,6 +616,13 @@
     border-color:rgba(212,168,39,0.22);
     background:rgba(212,168,39,0.04);
   }
+  /* applied/pending = non-actionable "waiting" states — distinct blue/neutral,
+     NEVER red. Override the overdue rules above via later specificity. */
+  .steward-entry[data-status="applied"],
+  .steward-entry[data-status="pending"] {
+    border-color:rgba(96,150,220,0.20);
+    background:rgba(96,150,220,0.04);
+  }
   .steward-dot {
     flex:0 0 8px; width:8px; height:8px; border-radius:50%;
     background:rgba(232,227,213,0.25);
@@ -626,6 +633,22 @@
   }
   .steward-entry[data-urgent="true"] .steward-dot {
     background:#d4a827; box-shadow:0 0 8px rgba(212,168,39,0.45);
+  }
+  .steward-entry[data-status="applied"] .steward-dot,
+  .steward-entry[data-status="pending"] .steward-dot {
+    background:#6096dc; box-shadow:0 0 8px rgba(96,150,220,0.45);
+  }
+  .steward-entry[data-status="applied"] .steward-days,
+  .steward-entry[data-status="pending"] .steward-days,
+  .steward-entry[data-status="applied"] .steward-due,
+  .steward-entry[data-status="pending"] .steward-due { color:#8fb4e0; }
+  .steward-status-select {
+    flex:0 0 auto;
+    font-size:9px; text-transform:uppercase; letter-spacing:0.06em;
+    background:rgba(255,255,255,0.04);
+    color:rgba(232,227,213,0.6);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:5px; padding:2px 4px; cursor:pointer;
   }
   .steward-entry .steward-due {
     flex:0 0 auto;
@@ -914,9 +937,12 @@
     </div>
 
     <!-- Steward — Funding Board panel.
-         Read-only grant obligation list (upcoming + overdue, sorted by due_date).
+         Grant obligation list (upcoming + overdue + applied/pending, sorted by due_date).
          Data from /api/steward/board. Dot colors: amber=near (<30d), red=overdue,
-         neutral=far. config-absent state renders when grants.json not yet seeded. -->
+         blue=applied/pending (submitted application, awaiting decision — NOT overdue),
+         neutral=far. Each item has a status control that POSTs /api/steward/status to
+         mark applied/pending or clear back to auto. config-absent state renders when
+         grants.json not yet seeded. -->
     <section class="panel" data-testid="steward-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
       <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
@@ -1827,9 +1853,24 @@
   // ─── Steward — Funding Board ──────────────────────────────────────────────
   // Fetches /api/steward/board (default horizon 400d). Each entry becomes a
   // .steward-entry card with status dot (red=overdue, amber=near<30d,
-  // neutral=far), due date, signed days-out, funder, and action label.
+  // blue=applied/pending, neutral=far), due date, signed days-out, funder,
+  // action label, and a status control (applied/pending/auto).
   // Graceful: config_present=false renders a soft "not configured" note.
   // Done items are excluded server-side; the route never returns them.
+  // applied/pending stay ON the board (waiting state) but never render as overdue.
+
+  // POST a manual pipeline status, then refresh the board.
+  async function stewardSetStatus(awardId, status) {
+    try {
+      await fetch("/api/steward/status", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({award_id: awardId, status: status}),
+      });
+    } catch (e) { /* best-effort; refresh will reflect any change */ }
+    renderSteward();
+  }
+
   async function renderSteward() {
     const data = await fetchJson("/api/steward/board");
     const container = document.querySelector("[data-steward-feed]");
@@ -1853,13 +1894,17 @@
 
     container.innerHTML = entries.map((e, i) => {
       const daysOut = e.days_out;
+      // applied/pending are non-actionable waiting states — never overdue/urgent.
+      const isWaiting = e.status === "applied" || e.status === "pending";
       const isOverdue = e.status === "overdue";
-      const isUrgent = !isOverdue && daysOut <= 30;
+      const isUrgent = !isOverdue && !isWaiting && daysOut <= 30;
       const isNearest = i === 0;
 
-      // days_out label: "OVERDUE" for negative, "+Nd" for upcoming
+      // days_out label: waiting → status name; overdue → OVERDUE; else +Nd
       let daysLabel;
-      if (isOverdue) {
+      if (isWaiting) {
+        daysLabel = `<strong>${htmlEscape(e.status.toUpperCase())}</strong>`;
+      } else if (isOverdue) {
         daysLabel = `<strong>OVERDUE</strong>`;
       } else {
         daysLabel = `+${daysOut}d`;
@@ -1868,13 +1913,26 @@
       // Funder: truncate to keep cards compact
       const funder = htmlEscape((e.funder || "").slice(0, 36));
       const label = htmlEscape((e.label || "").slice(0, 60));
+      const awardId = htmlEscape(e.award_id);
+
+      // Per-item status control: mark applied/pending or clear back to auto.
+      const opt = (val, txt) =>
+        `<option value="${val}"${e.status === val ? ' selected' : ''}>${txt}</option>`;
+      const statusSelect = `
+        <select class="steward-status-select" aria-label="Set pipeline status"
+                data-steward-status="${awardId}">
+          ${e.status === "applied" || e.status === "pending" ? '' : '<option value="" selected disabled>set…</option>'}
+          ${opt("applied", "applied")}
+          ${opt("pending", "pending")}
+          <option value="auto">clear</option>
+        </select>`;
 
       return `
         <div class="steward-entry"
              data-status="${htmlEscape(e.status)}"
              data-urgent="${isUrgent ? 'true' : 'false'}"
              data-nearest="${isNearest ? 'true' : 'false'}"
-             title="${htmlEscape(e.funder)} · ${htmlEscape(e.award_id)}">
+             title="${htmlEscape(e.funder)} · ${awardId}">
           <span class="steward-dot"></span>
           <span class="steward-due">${htmlEscape(e.due_date)}</span>
           <span class="steward-days">${daysLabel}</span>
@@ -1882,9 +1940,19 @@
             <div class="steward-funder">${funder}</div>
             <div class="steward-label">${label}</div>
           </div>
+          ${statusSelect}
         </div>
       `;
     }).join("");
+
+    // Wire the status controls (delegated per-select change → POST + refresh).
+    container.querySelectorAll("[data-steward-status]").forEach((sel) => {
+      sel.addEventListener("change", (ev) => {
+        const awardId = ev.target.getAttribute("data-steward-status");
+        const status = ev.target.value;
+        if (awardId && status) stewardSetStatus(awardId, status);
+      });
+    });
   }
 
   // ─── Boot + polling ───────────────────────────────────────────────────────
