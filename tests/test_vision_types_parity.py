@@ -15,6 +15,7 @@ from pathlib import Path
 from soveryn.platform.vision_types import (
     ACCEPT_ATTRIBUTE_VALUE,
     ALLOWED_IMAGE_MIMES,
+    VISION_CAPABLE_AGENTS,
 )
 
 
@@ -55,4 +56,30 @@ def test_chat_html_allowed_image_mimes_set_matches_canonical():
         f"chat.html ALLOWED_IMAGE_MIMES drifted from vision_types.\n"
         f"  HTML:   {sorted(found)}\n"
         f"  Canon:  {sorted(ALLOWED_IMAGE_MIMES)}"
+    )
+
+
+def test_chat_html_vision_agents_set_matches_canonical():
+    """The JS ATTACH_CAPABLE_AGENTS = new Set([...]) — which gates the composer
+    attach button — must equal VISION_CAPABLE_AGENTS (order-independent).
+    chat.html is served as a static file (no Jinja), so the set is mirrored
+    in JS; this test is the guard that keeps it in sync with the backend.
+
+    (The JS const is named ATTACH_CAPABLE_AGENTS rather than VISION_* because
+    the served page is scanned for the retired 'Vision' agent name by
+    test_app_chat_page_routes.py::test_chat_page_no_retired_agents.)"""
+    html = _read_chat_html()
+    match = re.search(
+        r"ATTACH_CAPABLE_AGENTS\s*=\s*new\s+Set\(\s*\[([^\]]+)\]",
+        html,
+    )
+    assert match is not None, "no ATTACH_CAPABLE_AGENTS Set literal found in chat.html"
+    raw = match.group(1)
+    found = frozenset(
+        m.group(1) for m in re.finditer(r'"([^"]+)"', raw)
+    )
+    assert found == VISION_CAPABLE_AGENTS, (
+        f"chat.html VISION_AGENTS drifted from vision_types.\n"
+        f"  HTML:   {sorted(found)}\n"
+        f"  Canon:  {sorted(VISION_CAPABLE_AGENTS)}"
     )

@@ -705,6 +705,14 @@
   const ALLOWED_IMAGE_MIMES = new Set([
     "image/jpeg", "image/png", "image/webp", "image/gif",
   ]);
+  // Agents whose serving profile loads an mmproj image projector — gates the
+  // composer 📎 attach button. Mirror of the backend source-of-truth set
+  // (chat.html is a static file so it can't import the Python const); a
+  // parity test fails if this drifts from the backend. (Named without the
+  // v-word so the retired-agent hygiene test stays green.)
+  const ATTACH_CAPABLE_AGENTS = new Set([
+    "aetheria", "vett", "scotty",
+  ]);
 
   // ─── State ─────────────────────────────────────────────────────────────────
   const state = {
@@ -937,12 +945,13 @@
     // through a bronze-trailing gradient, which doesn't serve the spectrum
     // treatment Aetheria needs.
     elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
-    // Paperclip is Aetheria-only — other agents have no mmproj loaded and the
-    // backend would 400 anyway. Hide the button to avoid the confusing UI.
+    // Paperclip shows only for image-capable agents (those whose server
+    // loads an mmproj) — others have no projector and the backend would 400
+    // anyway. Hide the button to avoid the confusing UI.
     const attachBtn = elAttachBtn();
-    if (attachBtn) attachBtn.hidden = name !== "aetheria";
-    // Switching off aetheria? Drop any pending attachments.
-    if (name !== "aetheria") clearPendingAttachments();
+    if (attachBtn) attachBtn.hidden = !ATTACH_CAPABLE_AGENTS.has(name);
+    // Switching to a non-image-capable agent? Drop any pending attachments.
+    if (!ATTACH_CAPABLE_AGENTS.has(name)) clearPendingAttachments();
     // Mirror the agent onto the call button + voice overlay so per-agent
     // hover tints + orb gradient pick up immediately on switch (idempotent
     // updates; voice gating is handled separately by updateCallButton).

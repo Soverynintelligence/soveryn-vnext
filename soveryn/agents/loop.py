@@ -52,6 +52,7 @@ from soveryn.memory.lattice import LatticeStore, Node, embed_text as _default_em
 from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.steering_rack import SteeringRack
+from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 from soveryn.platform.voice.sanitize import sanitize_for_tts
 
@@ -762,15 +763,15 @@ class AgentLoop:
         wire-level content is replaced with an OpenAI vision-format list
         ([{"type": "text", ...}, {"type": "image_url", ...}, ...]). The DB
         row still stores `user_message` as plain text (no schema migration;
-        multimodal history persistence is intentionally deferred). Aetheria
-        is the only agent with a vision-capable model loaded — passing
-        attachments to any other agent raises AgentLoopError BEFORE
-        save_turn so guard rejections don't pollute history with a phantom
-        user turn.
+        multimodal history persistence is intentionally deferred). Only
+        agents whose serving profile loads an mmproj projector
+        (VISION_CAPABLE_AGENTS) can decode images — passing attachments to
+        any other agent raises AgentLoopError BEFORE save_turn so guard
+        rejections don't pollute history with a phantom user turn.
 
         Raises:
           AgentLoopError — session does not exist OR session.agent != self.agent_name
-                           OR attachments passed to a non-aetheria agent
+                           OR attachments passed to a non-vision-capable agent
                            (in all cases, NO user turn is saved, NO chat dispatched)
           ConversationStoreError — invalid role on save (shouldn't happen here)
           LlamaServerError / LlamaServerTimeout — chat failure (user turn stays saved)
@@ -790,12 +791,13 @@ class AgentLoop:
             )
 
         # Vision guard — BEFORE save_turn so a rejected attachment leaves no
-        # phantom user turn behind. Aetheria is the only agent with a
-        # vision-capable model loaded; routing other agents' attachments
-        # would silently drop the image at the wire boundary.
-        if attachments and self.agent_name != "aetheria":
+        # phantom user turn behind. Only agents whose serving profile loads an
+        # mmproj projector (VISION_CAPABLE_AGENTS) can decode images; routing
+        # any other agent's attachments would silently drop the image at the
+        # wire boundary.
+        if attachments and self.agent_name not in VISION_CAPABLE_AGENTS:
             raise AgentLoopError(
-                f"attachments only supported for aetheria "
+                f"attachments only supported for vision-capable agents "
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
 
@@ -1114,7 +1116,8 @@ class AgentLoop:
 
         attachments — mirror of process_message: wire-level current user
         message becomes a vision-format list; DB still stores text-only;
-        aetheria-only (raises AgentLoopError BEFORE save_turn otherwise).
+        vision-capable agents only (raises AgentLoopError BEFORE save_turn
+        otherwise).
 
         Setup errors (session validation, recall failures, LlamaServerError
         BEFORE the first chunk) propagate as exceptions — the Flask route
@@ -1136,9 +1139,9 @@ class AgentLoop:
 
         # Vision guard — BEFORE save_turn so a rejected attachment leaves no
         # phantom user turn behind. Mirrors the sync path.
-        if attachments and self.agent_name != "aetheria":
+        if attachments and self.agent_name not in VISION_CAPABLE_AGENTS:
             raise AgentLoopError(
-                f"attachments only supported for aetheria "
+                f"attachments only supported for vision-capable agents "
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
 

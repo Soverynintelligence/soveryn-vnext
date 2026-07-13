@@ -994,19 +994,40 @@ def test_process_message_without_attachments_unchanged(conv_store):
     assert sent_user.content.endswith("plain text")
 
 
-def test_process_message_attachments_on_non_aetheria_agent_raises_before_save(conv_store):
+def test_process_message_attachments_on_non_vision_agent_raises_before_save(conv_store):
     """Vision guard fires BEFORE save_turn so guard rejections don't pollute
-    history with a phantom user turn."""
+    history with a phantom user turn. 'cognition' is not in
+    VISION_CAPABLE_AGENTS (no mmproj on its server)."""
     fake = _CapturingChat()
-    loop_vett = AgentLoop("vett", conv_store, chat_fn=fake)
-    sid = conv_store.new_session("vett")
+    # Construct with a routable agent (route_for_agent runs in __init__ and
+    # only knows aetheria/vett/scotty), then override agent_name to a
+    # non-vision agent to exercise the guard branch — every routable agent is
+    # now vision-capable, so this is the only way to hit it.
+    loop_cog = AgentLoop("vett", conv_store, chat_fn=fake)
+    loop_cog.agent_name = "cognition"
+    sid = conv_store.new_session("cognition")
     with pytest.raises(AgentLoopError, match="attachments only supported"):
-        loop_vett.process_message(
+        loop_cog.process_message(
             sid, "hi", attachments=("data:image/jpeg;base64,AAAA",),
         )
     # No user turn saved, no chat dispatched
     assert conv_store.load_history(sid) == ()
     assert fake.calls == []
+
+
+def test_process_message_attachments_on_vision_capable_agent_splices(conv_store):
+    """Vett/Scotty share the vett-scotty mmproj server — the guard must NOT
+    fire, and the wire-level current user message becomes a vision list."""
+    fake = _CapturingChat()
+    loop_vett = AgentLoop("vett", conv_store, chat_fn=fake)
+    sid = conv_store.new_session("vett")
+    img = "data:image/jpeg;base64,AAAA"
+    loop_vett.process_message(sid, "what's this?", attachments=(img,))
+    sent_user = fake.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in sent_user.content)
 
 
 def test_process_message_multiple_attachments_all_spliced(conv_store):

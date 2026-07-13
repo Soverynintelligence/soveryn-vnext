@@ -245,18 +245,27 @@ def test_chat_stream_rejects_oversized_attachment(app_state):
     assert app_state["stream"].calls == []
 
 
-def test_chat_stream_rejects_attachments_on_non_aetheria_agent(app_state):
-    """Route-level guard fires BEFORE loop, returning clean JSON 400."""
+@pytest.mark.parametrize("agent", ["vett", "scotty"])
+def test_chat_stream_accepts_attachments_on_vision_capable_agents(app_state, agent):
+    """Vett + Scotty share the vett-scotty mmproj server — their attachments
+    must stream through, not 400 as Aetheria-only. (Route-level rejection of a
+    genuinely non-vision agent is unit-tested in test_app_chat_routes.py via
+    _validate_attachments, since every ACTIVE_AGENT is now vision-capable.)"""
+    img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
-    sid = _new_session(client, agent="vett")
+    sid = _new_session(client, agent=agent)
     resp = _post_stream(client, {
-        "agent": "vett", "session_id": sid, "message": "hi",
-        "attachments": ["data:image/jpeg;base64,AAAA"],
+        "agent": agent, "session_id": sid, "message": "what's this?",
+        "attachments": [img],
     })
-    assert resp.status_code == 400
-    assert resp.content_type.startswith("application/json")
-    assert json.loads(resp.data)["error"]["code"] == "agent_does_not_support_vision"
-    assert app_state["stream"].calls == []
+    assert resp.status_code == 200
+    events = _parse_sse(resp.data)
+    assert events[-1]["type"] == "done"
+    captured = app_state["stream"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in last_user.content)
 
 
 def test_chat_stream_rejects_non_list_attachments(app_state):

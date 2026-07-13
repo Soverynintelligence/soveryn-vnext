@@ -26,7 +26,10 @@ bp = Blueprint("chat", __name__)
 # route, the signal-bridge encoder, and the UI's file-input accept all
 # derive from one source. See vision_types.py + the parity test in
 # tests/test_vision_types_parity.py.
-from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES  # noqa: E402
+from soveryn.platform.vision_types import (  # noqa: E402
+    ALLOWED_IMAGE_MIME_PREFIXES,
+    VISION_CAPABLE_AGENTS,
+)
 
 # ~25MB pre-decode ceiling (base64 expands ~4/3 → ~25MB binary). Bounded at
 # the route boundary so a malformed client can't OOM the loop or the wire.
@@ -67,7 +70,7 @@ def _validate_attachments(raw, agent: str):
         if len(a) > MAX_ATTACHMENT_DATA_URL_BYTES:
             return None, _err("invalid_attachments",
                               f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes", 400)
-    if agent != "aetheria":
+    if agent not in VISION_CAPABLE_AGENTS:
         return None, _err("agent_does_not_support_vision",
                           f"agent {agent!r} has no vision model loaded", 400)
     return tuple(raw), None

@@ -384,15 +384,54 @@ def test_chat_rejects_oversized_attachment(app_state):
     assert _err(resp)["code"] == "invalid_attachments"
 
 
-def test_chat_rejects_attachments_on_non_aetheria_agent(app_state):
+@pytest.mark.parametrize("agent", ["vett", "scotty"])
+def test_chat_accepts_attachments_on_vision_capable_agents(app_state, agent):
+    """Vett + Scotty share the vett-scotty server which loads an mmproj
+    vision projector — their attachments must be accepted and plumbed to
+    the loop, not rejected as Aetheria-only."""
+    img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
-    sid = _new_session(client, agent="vett")
+    sid = _new_session(client, agent=agent)
     resp = _post(client, "/chat", {
-        "agent": "vett", "session_id": sid, "message": "hi",
-        "attachments": ["data:image/jpeg;base64,AAAA"],
+        "agent": agent, "session_id": sid, "message": "what's this?",
+        "attachments": [img],
     })
-    assert resp.status_code == 400
-    assert _err(resp)["code"] == "agent_does_not_support_vision"
+    assert resp.status_code == 200
+    captured = app_state["fake_chat"].calls[-1]["request"]
+    last_user = captured.messages[-1]
+    assert isinstance(last_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in last_user.content)
+
+
+def test_validate_attachments_accepts_vision_capable_agents(app_state):
+    """Unit: _validate_attachments returns the normalized tuple (no error)
+    for every vision-capable agent."""
+    from soveryn.app.routes.chat import _validate_attachments
+    from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
+
+    img = "data:image/png;base64,AAAA"
+    with app_state["app"].app_context():
+        for agent in VISION_CAPABLE_AGENTS:
+            attachments, err = _validate_attachments([img], agent)
+            assert err is None, f"{agent!r} should be accepted"
+            assert attachments == (img,)
+
+
+def test_validate_attachments_rejects_non_vision_agent(app_state):
+    """Unit: a genuinely non-vision agent (not in VISION_CAPABLE_AGENTS) is
+    still rejected with the accurate not-supported error."""
+    from soveryn.app.routes.chat import _validate_attachments
+    from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
+
+    assert "cognition" not in VISION_CAPABLE_AGENTS
+    with app_state["app"].app_context():
+        attachments, err = _validate_attachments(
+            ["data:image/jpeg;base64,AAAA"], "cognition")
+        assert attachments is None
+        resp, status = err
+        assert status == 400
+        assert json.loads(resp.get_data())["error"]["code"] == "agent_does_not_support_vision"
 
 
 def test_chat_rejects_non_list_attachments(app_state):
