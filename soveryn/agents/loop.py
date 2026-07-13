@@ -54,6 +54,7 @@ from soveryn.platform.continuity.config import ContinuityConfig
 from soveryn.platform.steering_rack import SteeringRack
 from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
+from soveryn.platform.verification.gate import GateDecision, VerificationGate
 from soveryn.platform.voice.sanitize import sanitize_for_tts
 
 
@@ -447,6 +448,7 @@ class AgentLoop:
         coord_store: "CoordinationStore | None" = None,
         black_box: BlackBox | None = None,
         steering_rack: SteeringRack | None = None,
+        verification_gate: "VerificationGate | None" = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -530,6 +532,16 @@ class AgentLoop:
         self.coord_store = coord_store
         self.black_box = black_box
         self.steering_rack = steering_rack
+        # Deterministic verification gate (Vett-only in v1). None → no gate;
+        # the gate itself is owner-scoped so even when wired to every loop it
+        # is a no-op for non-owner agents. `_gate_active` is the single guard
+        # the finalization paths consult before running any gate logic, so a
+        # non-owner turn finalizes on the exact pre-gate code path.
+        self.verification_gate = verification_gate
+        self._gate_active = (
+            verification_gate is not None
+            and verification_gate.applies_to(self.agent_name)
+        )
         self.session_context_cache = SessionContextCache()
 
     def _build_continuity_brief(self, session_id: str) -> str:
@@ -751,6 +763,38 @@ class AgentLoop:
         budget = max(1, self.context_window - self.max_tokens - _CONTEXT_SAFETY_MARGIN_TOKENS)
         return _fit_tool_loop_messages(messages, budget)
 
+    def _gate_decision(
+        self,
+        *,
+        answer_text: str,
+        question_text: str,
+        tool_ledger: tuple[str, ...],
+        budget: int,
+    ) -> "GateDecision | None":
+        """Consult the verification gate, FAIL-OPEN on any error.
+
+        A detector/gate bug must NEVER crash or hang a turn — on ANY exception
+        we log and return None, and the caller emits the answer normally. This
+        is the safety contract: a gate bug degrades to the old (pre-gate)
+        behavior, it never breaks the fleet. Returns None both when the gate is
+        inactive (non-owner agent) and when it errored.
+        """
+        if not self._gate_active or self.verification_gate is None:
+            return None
+        try:
+            return self.verification_gate.evaluate(
+                answer_text=answer_text,
+                question_text=question_text,
+                tool_ledger=tool_ledger,
+                budget=budget,
+            )
+        except Exception:  # noqa: BLE001 — fail-open is the whole point
+            logging.getLogger(__name__).exception(
+                "verification gate raised for agent %s; emitting answer as-is "
+                "(fail-open)", self.agent_name,
+            )
+            return None
+
     def process_message(
         self,
         session_id: str,
@@ -905,51 +949,120 @@ class AgentLoop:
         response = self._chat(request)
 
         tool_rounds = 0
-        while response.tool_calls and self.tool_registry is not None:
-            if tool_rounds >= self.max_tool_rounds:
-                response = ChatResponse(
+        # Verification ledger + budget for the Vett-only finalization gate.
+        # turn_tool_ledger accumulates the NAMES of tools invoked this turn so
+        # the gate can ask "did any verify tool run?". verify_budget bounds the
+        # number of forced-verify rounds (0 when the gate is inactive → the
+        # outer loop runs exactly once, identical to the pre-gate path).
+        turn_tool_ledger: list[str] = []
+        verify_budget = (
+            self.verification_gate.forced_verify_budget
+            if self._gate_active and self.verification_gate is not None else 0
+        )
+
+        # Outer gate-continuation loop. Without an active gate it iterates once.
+        while True:
+            while response.tool_calls and self.tool_registry is not None:
+                if tool_rounds >= self.max_tool_rounds:
+                    response = ChatResponse(
+                        content=response.content,
+                        finish_reason="tool_round_limit",
+                        tool_calls=response.tool_calls,
+                        usage=response.usage,
+                        raw=response.raw,
+                    )
+                    break
+                # Record tool names for the verification ledger BEFORE dispatch.
+                for _tc in response.tool_calls:
+                    _fn = _tc.get("function") or {}
+                    turn_tool_ledger.append(str(_fn.get("name") or ""))
+                if recorder is not None:
+                    recorder.record_action(
+                        round_index=tool_rounds,
+                        tool_calls=list(response.tool_calls),
+                        content=response.content or "",
+                    )
+                messages = messages + (ChatMessage(
+                    role="assistant",
                     content=response.content,
-                    finish_reason="tool_round_limit",
                     tool_calls=response.tool_calls,
-                    usage=response.usage,
-                    raw=response.raw,
+                ),)
+                result_messages = [
+                    self._tool_result_message(tool_call, session_id=session_id)
+                    for tool_call in response.tool_calls
+                ]
+                if recorder is not None:
+                    recorder.record_observation(
+                        round_index=tool_rounds,
+                        results=[
+                            _build_observation_entry(tc, rm)
+                            for tc, rm in zip(response.tool_calls, result_messages)
+                        ],
+                    )
+                messages = messages + tuple(result_messages)
+                messages = self._fit(messages)
+                request = ChatRequest(
+                    messages=messages,
+                    model=self.server.model_alias,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    tools=self._tool_schemas() or None,
+                    thinking_budget_tokens=self.thinking_budget_tokens,
                 )
-                break
-            if recorder is not None:
-                recorder.record_action(
-                    round_index=tool_rounds,
-                    tool_calls=list(response.tool_calls),
-                    content=response.content or "",
+                response = self._chat(request)
+                tool_rounds += 1
+
+            # ── Verification gate at final-answer finalization (Vett-only,
+            # fail-open). Only a GENUINE final answer is gated: a
+            # tool_round_limit break is left alone (the round budget is already
+            # spent — there is nothing more to force), and a turn with no
+            # content falls through to the loud empty/limit guards below.
+            if (
+                self._gate_active
+                and response.content
+                and not response.tool_calls
+                and response.finish_reason != "tool_round_limit"
+            ):
+                decision = self._gate_decision(
+                    answer_text=response.content,
+                    question_text=user_message,
+                    tool_ledger=tuple(turn_tool_ledger),
+                    budget=verify_budget,
                 )
-            messages = messages + (ChatMessage(
-                role="assistant",
-                content=response.content,
-                tool_calls=response.tool_calls,
-            ),)
-            result_messages = [
-                self._tool_result_message(tool_call, session_id=session_id)
-                for tool_call in response.tool_calls
-            ]
-            if recorder is not None:
-                recorder.record_observation(
-                    round_index=tool_rounds,
-                    results=[
-                        _build_observation_entry(tc, rm)
-                        for tc, rm in zip(response.tool_calls, result_messages)
-                    ],
-                )
-            messages = messages + tuple(result_messages)
-            messages = self._fit(messages)
-            request = ChatRequest(
-                messages=messages,
-                model=self.server.model_alias,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                tools=self._tool_schemas() or None,
-                thinking_budget_tokens=self.thinking_budget_tokens,
-            )
-            response = self._chat(request)
-            tool_rounds += 1
+                if (
+                    decision is not None
+                    and decision.action == "hold"
+                    and tool_rounds < self.max_tool_rounds
+                ):
+                    # HOLD: do not emit. Inject the corrective note and let the
+                    # loop continue for one forced-verify round. Bounded by
+                    # verify_budget (default 2) → no infinite loop.
+                    verify_budget -= 1
+                    messages = messages + (ChatMessage(
+                        role="system", content=decision.note,
+                    ),)
+                    messages = self._fit(messages)
+                    request = ChatRequest(
+                        messages=messages,
+                        model=self.server.model_alias,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        tools=self._tool_schemas() or None,
+                        thinking_budget_tokens=self.thinking_budget_tokens,
+                    )
+                    response = self._chat(request)
+                    continue
+                if decision is not None and decision.action == "floor":
+                    # Budget exhausted and still unsourced → honest floor. Never
+                    # falls back to the drafted guess.
+                    response = ChatResponse(
+                        content=decision.answer,
+                        finish_reason=response.finish_reason,
+                        tool_calls=None,
+                        usage=response.usage,
+                        raw=response.raw,
+                    )
+            break
 
         # 5. Save assistant turn from response.content ONLY (constraint 4).
         #    Any DB error here propagates (constraint 5) — we don't pretend
@@ -1234,6 +1347,21 @@ class AgentLoop:
         final_finish_reason: str | None = None
         final_usage: dict | None = None
 
+        # Verification gate state (Vett-only, self-scoped via _gate_active).
+        # For a gate-active turn, content tokens are BUFFERED per round rather
+        # than streamed live: the confab must never reach the user, and once
+        # tokens are streamed they cannot be un-sent. So for gate-active turns
+        # each round's tokens are withheld until the round completes and the
+        # gate decides (emit → replay buffered tokens; hold → discard them;
+        # floor → replace with the honest floor). For non-gate turns the code
+        # path below is byte-for-byte the pre-gate behavior (yield live).
+        gate_active = self._gate_active
+        turn_tool_ledger: list[str] = []
+        verify_budget = (
+            self.verification_gate.forced_verify_budget
+            if gate_active and self.verification_gate is not None else 0
+        )
+
         while True:
             request = ChatRequest(
                 messages=messages,
@@ -1257,14 +1385,17 @@ class AgentLoop:
                     first_chunk_seen = True
                     if chunk.delta:
                         round_content_parts.append(chunk.delta)
-                        yield TokenEvent(delta=chunk.delta)
-                        # Additive sanitized-for-TTS channel. Voice consumers
-                        # subscribe to TTSTokenEvent; chat consumers ignore it.
-                        # If sanitization drops everything (pure markup chunk),
-                        # we emit nothing for that chunk — TTS never sees noise.
-                        sanitized_chunk = sanitize_for_tts(chunk.delta, preserve_outer_whitespace=True)
-                        if sanitized_chunk.strip():
-                            yield TTSTokenEvent(text=sanitized_chunk)
+                        # Gate-active turns buffer (don't stream) until the gate
+                        # clears this round — see the block header above.
+                        if not gate_active:
+                            yield TokenEvent(delta=chunk.delta)
+                            # Additive sanitized-for-TTS channel. Voice consumers
+                            # subscribe to TTSTokenEvent; chat consumers ignore it.
+                            # If sanitization drops everything (pure markup chunk),
+                            # we emit nothing for that chunk — TTS never sees noise.
+                            sanitized_chunk = sanitize_for_tts(chunk.delta, preserve_outer_whitespace=True)
+                            if sanitized_chunk.strip():
+                                yield TTSTokenEvent(text=sanitized_chunk)
                     if chunk.tool_calls_delta:
                         _accumulate_tool_calls(round_tool_calls, chunk.tool_calls_delta)
                     if chunk.usage:
@@ -1327,9 +1458,27 @@ class AgentLoop:
                 if tool_rounds >= self.max_tool_rounds:
                     # Cap hit: keep whatever content we have for this round, mark
                     # the finish reason for the caller, and break out to save+done.
+                    # Gate-active turns buffered this content — release it now so
+                    # the user isn't left with a DoneEvent but no token stream.
+                    if gate_active and round_content:
+                        yield TokenEvent(delta=round_content)
+                        _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                        if _s.strip():
+                            yield TTSTokenEvent(text=_s)
                     final_content_parts.append(round_content)
                     final_finish_reason = "tool_round_limit"
                     break
+
+                # Gate-active turns buffered this round's content instead of
+                # streaming it. This round ends in tool calls (an intermediate
+                # "let me verify" step, not a final claim), so its content is
+                # safe to release now — replay the buffered tokens before the
+                # tool visibility events.
+                if gate_active and round_content:
+                    yield TokenEvent(delta=round_content)
+                    _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                    if _s.strip():
+                        yield TTSTokenEvent(text=_s)
 
                 # Carry the assistant-with-tool_calls message into the next round's
                 # context so the model has a coherent transcript.
@@ -1345,6 +1494,11 @@ class AgentLoop:
                         tool_calls=list(round_tc_tuple),
                         content=round_content,
                     )
+
+                # Record tool names for the verification ledger.
+                for _tc in round_tc_tuple:
+                    _fn = _tc.get("function") or {}
+                    turn_tool_ledger.append(str(_fn.get("name") or ""))
 
                 # Invoke each tool, emit visibility events, append result messages.
                 round_observations: list[dict] = []
@@ -1398,6 +1552,13 @@ class AgentLoop:
                         finish_reason="no_registry",
                         usage=final_usage,
                     )
+                # Gate-active turns buffered this content — release it before the
+                # terminal DoneEvent so the user isn't left with content-only.
+                if gate_active and round_content:
+                    yield TokenEvent(delta=round_content)
+                    _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                    if _s.strip():
+                        yield TTSTokenEvent(text=_s)
                 yield DoneEvent(
                     content=round_content,
                     finish_reason=round_finish_reason,
@@ -1411,6 +1572,39 @@ class AgentLoop:
                 return
 
             # No tool calls: this round produced the final answer.
+            # ── Verification gate (Vett-only, fail-open). For a gate-active
+            # turn the round's tokens are still BUFFERED (never streamed), so a
+            # held confab is discarded before it ever reaches the user.
+            if gate_active and round_content:
+                decision = self._gate_decision(
+                    answer_text=round_content,
+                    question_text=user_message,
+                    tool_ledger=tuple(turn_tool_ledger),
+                    budget=verify_budget,
+                )
+                if (
+                    decision is not None
+                    and decision.action == "hold"
+                    and tool_rounds < self.max_tool_rounds
+                ):
+                    # HOLD: discard the buffered confab (never emitted), inject
+                    # the corrective note, continue for one forced-verify round.
+                    # Bounded by verify_budget → no infinite loop.
+                    verify_budget -= 1
+                    messages = messages + (ChatMessage(
+                        role="system", content=decision.note,
+                    ),)
+                    continue
+                if decision is not None and decision.action == "floor":
+                    round_content = decision.answer or round_content
+            # For a gate-active turn nothing has been streamed yet — release the
+            # (gate-cleared or floored) final content now, as one TokenEvent, so
+            # the user sees the grounded answer and never the withheld confab.
+            if gate_active and round_content:
+                yield TokenEvent(delta=round_content)
+                _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                if _s.strip():
+                    yield TTSTokenEvent(text=_s)
             final_content_parts.append(round_content)
             final_finish_reason = round_finish_reason
             break

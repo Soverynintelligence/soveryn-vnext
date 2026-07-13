@@ -457,6 +457,17 @@ def create_app(
                 owner_agent=agent_name,
             )
 
+        # system_probe — read-only LIVE host inventory (GPUs/CPU/mem/net/board)
+        # over a FIXED command allowlist. Gives the "this machine" fact-class a
+        # source to cite instead of a gap to confabulate (the failure the
+        # verification gate exists to stop). No user input ever reaches a
+        # command — category selects a hardcoded command set (mirrors the SSRF
+        # guard on fetch_url). Owners: Vett (+ Aetheria); NOT Scotty
+        # (mechanical-local surface only, per tool-ownership policy).
+        from soveryn.platform.system_probe import register_system_probe_tool
+        for agent_name in ("vett", "aetheria"):
+            register_system_probe_tool(tool_registry, owner_agent=agent_name)
+
         # Vett's patrol tools (read_patrol_sources + mark_source_visited).
         # These read the static YAML source list and update per-source state
         # in vett_patrol_state — only Vett gets them; Aetheria isn't in the
@@ -724,6 +735,16 @@ def create_app(
         # tool results AND in the Black Box trajectory.
         steering_rack = SteeringRack()
 
+        # Verification gate — the deterministic anti-confabulation guard. v1 is
+        # owner-scoped to VETT ONLY (default owner set); it is a self-scoped
+        # no-op for every other agent, so wiring it into every loop below does
+        # NOT change aetheria/scotty behavior. The gate holds a risky final
+        # answer that ran no verify tool this turn, injects a corrective, and
+        # forces a system_probe/web_search round (budget 2), then honest-floors.
+        # See docs/superpowers/specs/2026-07-02-vett-verification-gate-design.md.
+        from soveryn.platform.verification import VerificationGate
+        verification_gate = VerificationGate()
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -734,6 +755,8 @@ def create_app(
             kwargs["continuity_config"] = _continuity_for(name)
             kwargs["black_box"] = black_box
             kwargs["steering_rack"] = steering_rack
+            # Owner-scoped to Vett (v1); a no-op for other agents.
+            kwargs["verification_gate"] = verification_gate
             # 32K-context llama-server slots across the fleet (Aetheria solo;
             # Vett+Scotty on the shared vett-scotty server). Give every loop the
             # server window + a raw-transcript cap so it trims history to fit
