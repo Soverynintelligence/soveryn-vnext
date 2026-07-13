@@ -49,6 +49,7 @@ def build_heartbeat_prompt(
     material_signals: list[Any] | None = None,
     delta: dict | None = None,
     x_digest: str = "",
+    daily_post_invite: str = "",
 ) -> str:
     """Construct the freed heartbeat brief. Returns a plain-text prompt string.
 
@@ -67,6 +68,10 @@ def build_heartbeat_prompt(
         x_digest: Pre-rendered, qualitative one-line X activity digest (from
             soveryn.agents.presence.digest.build_digest). Empty = omit the
             line entirely. No directive framing is added here.
+        daily_post_invite: A once-per-day, morning-only invitation to compose
+            her single original tweet. Appended as its own line only when
+            non-empty; empty (the usual case) omits it entirely. It's an
+            invitation, not a command — kept light and skippable.
     """
     if material_signals is None:
         material_signals = []
@@ -112,6 +117,9 @@ def build_heartbeat_prompt(
     if salience_section:
         lines.append("")
         lines.append(salience_section.rstrip())
+    if daily_post_invite:
+        lines.append("")
+        lines.append(daily_post_invite)
     lines.append("")
     lines.append(
         "You have your whole self here: the internet to search and read, your files and your "

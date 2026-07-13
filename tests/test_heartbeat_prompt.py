@@ -72,3 +72,18 @@ def test_x_digest_omitted_when_empty():
                                              lattice=_lattice())
     assert "- X:" not in with_digest
     assert with_digest == without_digest
+
+
+def test_daily_post_invite_included_when_present():
+    invite = "Morning — your window for today's one post."
+    p = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                               lattice=_lattice(), daily_post_invite=invite)
+    assert invite in p
+
+
+def test_daily_post_invite_omitted_when_empty():
+    with_invite = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                                         lattice=_lattice(), daily_post_invite="")
+    without = build_heartbeat_prompt(minutes_since_last_heartbeat=30, board=_board(),
+                                     lattice=_lattice())
+    assert with_invite == without

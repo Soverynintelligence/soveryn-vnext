@@ -58,12 +58,16 @@ class XFeedWorker:
         self._last_error: str | None = None
 
     def poll_once(self) -> int:
-        """Search mentions then niche terms, score, and store new candidates.
+        """Search mentions (then niche terms only if trawl is enabled), score,
+        and store new candidates.
 
         Searches the own-handle mention query FIRST (kind="mention") so a
         tweet that both mentions the handle and matches a niche term is
         stored once, as a mention, with the mention score boost intact —
         the subsequent niche-term pass then skips it via `store.is_seen`.
+        The niche-term pass runs ONLY when `cfg.trawl_niche_topics` is True;
+        by default it's off, so a poll issues just the mention query and she
+        replies only to people who @-mention her (no metered topic reads).
         Already-seen tweet ids (in `candidates` or `posted_ids`) are skipped
         before scoring; only tweets scoring >= `cfg.score_threshold` are
         upserted.
@@ -82,10 +86,15 @@ class XFeedWorker:
             new_count = self._ingest(
                 self.x_client.search_recent(mention_query), kind="mention", is_mention=True
             )
-            for term in self.cfg.niche_terms:
-                new_count += self._ingest(
-                    self.x_client.search_recent(term), kind="topic", is_mention=False
-                )
+            # Niche-topic trawl is gated off by default (2026-07-13): she now
+            # replies only to people who @-mention her, so trawling niche terms
+            # for random tweets to reply to just burns metered X reads. Flip
+            # cfg.trawl_niche_topics True to restore the old topic sweep.
+            if self.cfg.trawl_niche_topics:
+                for term in self.cfg.niche_terms:
+                    new_count += self._ingest(
+                        self.x_client.search_recent(term), kind="topic", is_mention=False
+                    )
         except XClientError as exc:
             self._consecutive_errors += 1
             self._last_error = str(exc)

@@ -24,6 +24,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from soveryn.agents.heartbeat.daily_post import (
+    DAILY_POST_INVITE,
+    DEFAULT_DAILY_POST_HOUR,
+    read_last_invite_date,
+    should_nudge,
+    write_last_invite_date,
+)
 from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.delta import compute_delta
 from soveryn.agents.heartbeat.materiality import (
@@ -61,6 +68,9 @@ DEFAULT_THOUGHTS_LOG = Path.home() / "soveryn_vnext" / "data" / "heartbeat_thoug
 # hours_since_deploy for the amnesty/worst-first logic in detect_materiality.
 # Path is gitignored (data/heartbeat_deploy_started_at).
 DEFAULT_DEPLOY_SENTINEL = Path.home() / "soveryn_vnext" / "data" / "heartbeat_deploy_started_at"
+# Once-per-day AM X-post nudge: persists the last-nudged date so a mid-day
+# daemon restart doesn't re-nudge. Path is gitignored (data/).
+DEFAULT_DAILY_POST_STATE = Path.home() / "soveryn_vnext" / "data" / "x_daily_post_state.json"
 
 # Window of lattice activity to summarise in the brief (separate from the
 # interval/backoff knobs since this is a *content* knob not a *timing* knob).
@@ -92,6 +102,8 @@ class HeartbeatDaemon:
         salience_db: Path = DEFAULT_SALIENCE_DB,
         deploy_sentinel: Path | None = None,
         thoughts_log_path: Path | None = None,
+        daily_post_state_path: Path | None = None,
+        daily_post_hour: int = DEFAULT_DAILY_POST_HOUR,
     ) -> None:
         self.config = config
         self.vnext_base = vnext_base.rstrip("/")
@@ -112,6 +124,13 @@ class HeartbeatDaemon:
             else DEFAULT_THOUGHTS_LOG
         )
         self._thoughts_log = ThoughtsLog(_tlog_path)
+        # Once-per-day AM X-post nudge state. Injectable for test isolation;
+        # defaults to DEFAULT_DAILY_POST_STATE in production.
+        self.daily_post_state_path: Path = (
+            Path(daily_post_state_path) if daily_post_state_path is not None
+            else DEFAULT_DAILY_POST_STATE
+        )
+        self.daily_post_hour = daily_post_hour
         self._stop = False
         self._heartbeat_session_id: str | None = None
         # Idempotent migration: add surfaced_to_chat column to heartbeat_log
@@ -302,6 +321,26 @@ class HeartbeatDaemon:
             except Exception:
                 logger.exception("heartbeat tick: X digest build failed, omitting")
                 x_digest = ""
+            # Once-per-day AM post nudge — best-effort. Fires on the FIRST
+            # eligible tick each calendar day at/after `daily_post_hour` local
+            # (`now` is the single wall-clock read passed down from run()), then
+            # persists today's date so a mid-day restart won't re-nudge. Any
+            # failure here must never break the tick.
+            daily_post_invite = ""
+            try:
+                last_invite = read_last_invite_date(self.daily_post_state_path)
+                if should_nudge(
+                    now=now,
+                    last_invite_date=last_invite,
+                    hour_threshold=self.daily_post_hour,
+                ):
+                    daily_post_invite = DAILY_POST_INVITE
+                    write_last_invite_date(
+                        self.daily_post_state_path, now.date().isoformat()
+                    )
+            except Exception:
+                logger.exception("heartbeat tick: daily post nudge failed, omitting")
+                daily_post_invite = ""
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -310,6 +349,7 @@ class HeartbeatDaemon:
                 material_signals=material_signals,
                 delta=delta,
                 x_digest=x_digest,
+                daily_post_invite=daily_post_invite,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")
@@ -813,6 +853,9 @@ def _build_daemon_from_env() -> HeartbeatDaemon:
         config,
         vnext_base=os.environ.get("SOVERYN_HEARTBEAT_VNEXT_BASE", DEFAULT_VNEXT_BASE),
         salience_db=Path(os.environ.get("SOVERYN_SALIENCE_DB", str(DEFAULT_SALIENCE_DB))),
+        daily_post_hour=int(
+            os.environ.get("SOVERYN_HEARTBEAT_DAILY_POST_HOUR", str(DEFAULT_DAILY_POST_HOUR))
+        ),
     )
 
 

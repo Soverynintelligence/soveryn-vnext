@@ -162,6 +162,7 @@ def test_niche_rich_mention_ingested_as_mention_not_topic(tmp_path):
 
 
 def test_poll_once_stores_topic_tweet_without_mention(tmp_path):
+    # Topic ingestion only happens when the niche trawl is explicitly enabled.
     tweet = Tweet("1", "a", "sovereign AI and local LLM are the future", "u")
 
     class NoMentionFakeX(FakeX):
@@ -169,9 +170,29 @@ def test_poll_once_stores_topic_tweet_without_mention(tmp_path):
             self.queries.append(query)
             return [] if query.startswith("@") else self.tweets
 
-    w = _worker(tmp_path, NoMentionFakeX([tweet]))
+    w = _worker(tmp_path, NoMentionFakeX([tweet]), trawl_niche_topics=True)
     assert w.poll_once() == 1
     assert _kind_of(tmp_path, "1") == "topic"
+
+
+def test_poll_once_default_searches_only_mention_query(tmp_path):
+    # With trawl_niche_topics False (the default), a poll issues ONLY the
+    # @-mention search — no niche terms — and still ingests a mention normally.
+    tweet = Tweet("1", "a", "@Soveryn_AI what do you think of local LLMs?", "u")
+    x = FakeX([tweet])
+    w = _worker(tmp_path, x)
+    assert w.poll_once() == 1
+    assert x.queries == ["@Soveryn_AI"]  # ONLY the mention query, no niche terms
+    assert _kind_of(tmp_path, "1") == "mention"
+
+
+def test_poll_once_trawl_flag_runs_niche_searches(tmp_path):
+    # Back-compat: with the flag True, the niche searches still run.
+    tweet = Tweet("1", "a", "@Soveryn_AI sovereign AI local LLM", "u")
+    x = FakeX([tweet])
+    w = _worker(tmp_path, x, trawl_niche_topics=True)
+    w.poll_once()
+    assert x.queries == ["@Soveryn_AI", "sovereign AI", "local LLM"]
 
 
 def test_poll_once_client_error_does_not_raise_and_returns_zero(tmp_path):
