@@ -77,21 +77,6 @@ CHAT_TIMEOUT_SECONDS = 240
 WEBHOOK_SESSION_TITLE_PREFIX = "[webhook]"
 HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 
-# Titles we EXCLUDE from "primary thread" resolution — these are surfaces
-# owned by other rails (rhythm, voice, messenger threads) and surfacing
-# heartbeat content into them is the trap the arc surfaced.
-_NON_PRIMARY_TITLE_PREFIXES: tuple[str, ...] = (
-    "[heartbeat]",
-    "[voice]",
-    "[webhook]",
-    "[signal]",
-    "[dream]",
-    "messenger:",
-)
-# Title for the fallback primary thread created when no eligible aetheria
-# session exists yet. Intentionally NOT bracket-prefixed so it doesn't
-# match _NON_PRIMARY_TITLE_PREFIXES on the next lookup.
-_PRIMARY_FALLBACK_TITLE = "primary"
 
 class HeartbeatDaemon:
     """Single-threaded tick loop. One tick at a time; if a tick takes longer
@@ -360,27 +345,21 @@ class HeartbeatDaemon:
             return
 
         # Live: invoke Aetheria via /chat with the durable heartbeat session.
+        # The /chat round-trip persists BOTH this prompt and her assistant note
+        # into the durable [heartbeat] aetheria session — that session IS the
+        # pulse's home (the "Heartbeat" rail). Her note lands there and nowhere
+        # else: we do NOT copy it into any "primary"/main chat. A pure-quiet
+        # pulse (empty note) leaves nothing. Material signals stay visible on
+        # the Mission Control tile regardless.
         try:
             session_id = self._ensure_heartbeat_session()
             response = self._call_vnext_chat(session_id, prompt)
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
 
-            # Freed pulse: her whole response is her note. No markers, no forced
-            # surfacing. A non-empty note lands in her primary thread (reaches Jon +
-            # the tile); a pure-quiet pulse (empty note) surfaces nothing. Material
-            # signals stay visible on the Mission Control tile regardless.
+            # Her whole response is her note; it already persists in the
+            # [heartbeat] session via the /chat round-trip above.
             note = (response_text or "").strip()
-            surfaced_to_chat = False
-            if note:
-                try:
-                    self._surface_to_primary_thread(note)
-                    surfaced_to_chat = True
-                except Exception:
-                    logger.exception(
-                        "heartbeat tick %s: note surface failed; note stayed in "
-                        "[heartbeat] session only", tick_id,
-                    )
 
             # T7: append a ThoughtsLog record every pulse.
             # The "snapshot" key is LOAD-BEARING — compute_delta reads
@@ -397,7 +376,9 @@ class HeartbeatDaemon:
                     "delta": delta,
                     "note": note,
                     "tool_calls": tool_call_count,
-                    "surfaced": surfaced_to_chat,
+                    # Surfacing to a "primary" chat was removed: pulse notes live
+                    # only in the [heartbeat] session, so this is always False.
+                    "surfaced": False,
                 }
                 self._thoughts_log.append(_tlog_record)
             except Exception:
@@ -416,13 +397,12 @@ class HeartbeatDaemon:
                 tool_call_count=tool_call_count,
                 response_length=len(response_text),
                 error=None,
-                surfaced_to_chat=surfaced_to_chat,
             )
             logger.info(
                 "heartbeat tick %s done. action_taken=%s tool_calls=%s "
-                "response_len=%d surfaced_to_chat=%s note_len=%d",
+                "response_len=%d note_len=%d",
                 tick_id, action_taken, tool_call_count,
-                len(response_text), surfaced_to_chat, len(note),
+                len(response_text), len(note),
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during chat invocation")
@@ -748,78 +728,6 @@ class HeartbeatDaemon:
         payload = {"agent": "aetheria", "session_id": session_id, "message": message}
         return self._post_json("/chat", payload, timeout=CHAT_TIMEOUT_SECONDS)
 
-    def _resolve_primary_thread(self) -> str:
-        """Find or create Aetheria's PRIMARY chat thread.
-
-        Most-recent aetheria session whose title doesn't start with any of
-        the non-primary prefixes (heartbeat, voice, webhook, signal, dream,
-        messenger:). Re-resolved each call so a fresh desktop chat thread
-        Jon opens becomes the new primary automatically.
-
-        If no eligible session exists, creates a fresh one titled "primary".
-        """
-        like_clauses = " OR ".join(
-            ["title LIKE ?"] * len(_NON_PRIMARY_TITLE_PREFIXES)
-        )
-        sql = (
-            "SELECT session_id FROM conversation_meta "
-            "WHERE agent = 'aetheria' "
-            f"AND NOT (title IS NOT NULL AND ({like_clauses})) "
-            "ORDER BY updated_at DESC LIMIT 1"
-        )
-        params = tuple(f"{p}%" for p in _NON_PRIMARY_TITLE_PREFIXES)
-        with sqlite3.connect(str(self.conv_db)) as con:
-            row = con.execute(sql, params).fetchone()
-        if row is not None:
-            return row[0]
-        # No eligible session — create a fresh primary thread via the /sessions
-        # API so vnext sees the new row through the same path /chat would.
-        payload = {"agent": "aetheria", "title": _PRIMARY_FALLBACK_TITLE}
-        resp = self._post_json("/sessions", payload, timeout=10)
-        return resp["session_id"]
-
-    def _surface_to_primary_thread(self, content: str) -> None:
-        """Insert `content` into Aetheria's primary thread as an ASSISTANT turn.
-
-        Implementation note (load-bearing): the daemon writes the assistant
-        turn directly via sqlite3 rather than POSTing to /chat. /chat treats
-        its `message` field as a USER turn, and would (a) record it under
-        Jon's voice and (b) trigger an LLM round-trip that we don't want —
-        the content already came from Aetheria's own heartbeat round-trip.
-
-        Direct write is the cheapest correct path: ConversationStore.save_turn
-        does the same INSERT (with FTS trigger fan-out + conversation_meta
-        touch) and that's all we need. We replicate that exact sequence so
-        the FTS index, updated_at, and turn ordering all match what vnext
-        would produce. Source='heartbeat' marks the turn for any downstream
-        consumer (UI badge, audit) that wants to distinguish it from
-        in-thread Aetheria replies.
-
-        Salience observer hooks are NOT fired for these surfaced turns —
-        the heartbeat's own [heartbeat] session is already daemon-excluded
-        in SalienceObserver.DAEMON_SESSION_TITLE_PREFIXES, and re-flagging
-        Aetheria's own surfaced content into the next heartbeat digest
-        would re-create the feedback loop the salience exclusion existed
-        to prevent.
-        """
-        session_id = self._resolve_primary_thread()
-        now = datetime.now().isoformat()
-        with sqlite3.connect(str(self.conv_db)) as con:
-            con.execute(
-                "INSERT INTO conversations "
-                "(session_id, agent, role, content, timestamp, source, finish_reason) "
-                "VALUES (?, ?, 'assistant', ?, ?, 'heartbeat', NULL)",
-                (session_id, "aetheria", content, now),
-            )
-            con.execute(
-                "UPDATE conversation_meta SET updated_at = ? WHERE session_id = ?",
-                (now, session_id),
-            )
-        logger.info(
-            "heartbeat surfaced to primary thread %s (chars=%d)",
-            session_id, len(content),
-        )
-
     def _post_json(self, path: str, body: dict, *, timeout: int) -> dict:
         url = f"{self.vnext_base}{path}"
         req = urllib.request.Request(
@@ -851,7 +759,6 @@ class HeartbeatDaemon:
         tool_call_count: int | None,
         response_length: int | None,
         error: str | None,
-        surfaced_to_chat: bool = False,
     ) -> None:
         try:
             with sqlite3.connect(str(self.lattice_db)) as con:
@@ -867,7 +774,9 @@ class HeartbeatDaemon:
                      None if action_taken is None else (1 if action_taken else 0),
                      tool_call_count, response_length, error,
                      1 if self.config.dry_run else 0,
-                     1 if surfaced_to_chat else 0),
+                     # Surfacing removed: pulse notes stay in the [heartbeat]
+                     # session, never a "primary" chat — so always 0.
+                     0),
                 )
         except Exception:
             logger.exception("failed to write heartbeat_log row %s", tick_id)

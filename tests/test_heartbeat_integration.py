@@ -2,15 +2,20 @@
 delta round-trip.
 
 Covers:
-1. non-empty response → _surface_to_primary_thread called with the note.
-2. empty response → not surfaced.
+1. non-empty note → delivered via _call_vnext_chat to the durable [heartbeat]
+   session and NOT copied into any "primary"/main chat (no session mint).
+2. empty note → nothing surfaced; still no "primary" session mint.
 3. thoughts-log written every pulse with note/tool_calls/surfaced/snapshot.
 4. zero-delta → "Environment static" in prompt.
 5. round-trip contract → second pulse reads first's "snapshot" via compute_delta.
 
-Test strategy: fake _call_vnext_chat and _surface_to_primary_thread like the
-existing daemon tests (patch.object).  Deploy sentinel pre-seeded 100h before
-NOW_DT so stall amnesty is expired and the stall lane is live for seeding material.
+Contract: a pulse note lives ONLY in the [heartbeat] aetheria session (the
+/chat round-trip persists it there). The daemon no longer surfaces the note to
+a separate chat, so the old "surfaced" bookkeeping is always False.
+
+Test strategy: fake _call_vnext_chat like the existing daemon tests
+(patch.object).  Deploy sentinel pre-seeded 100h before NOW_DT so stall amnesty
+is expired and the stall lane is live for seeding material.
 """
 
 from __future__ import annotations
@@ -20,7 +25,7 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -128,72 +133,90 @@ def _run_tick_with_fakes(
         )
 
 
-# ── Test 1: non-empty note → surfaces to primary thread ───────────────────────
+# ── Test 1: non-empty note → lives only in the [heartbeat] session ────────────
 
 
-def test_note_pulse_surfaces_the_note(tmp_path):
-    """Non-empty response → _surface_to_primary_thread called with the note."""
+def test_note_pulse_lives_only_in_heartbeat_session(tmp_path):
+    """Non-empty note → delivered via _call_vnext_chat to the [heartbeat]
+    session, and NO separate "primary" chat is written / minted."""
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
     note_text = "I looked into the stalled blueprint and found a blocker."
-    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-        _run_tick_with_fakes(
-            d,
-            model_response=note_text,
-            material_signals=_ONE_MATERIAL,
-        )
-        mock_surface.assert_called_once_with(note_text)
+    fake_response = {"content": note_text, "tool_calls": []}
+    with (
+        patch.object(d, "_call_vnext_chat", return_value=fake_response) as mock_chat,
+        patch.object(d, "_ensure_heartbeat_session", return_value="sid-heartbeat"),
+        patch.object(d, "_gather_material_signals", return_value=_ONE_MATERIAL),
+        patch.object(d, "_post_json") as mock_post,
+    ):
+        d._do_tick(now=NOW_DT, eligibility=TickEligibility(True, None))
+
+    # The pulse is delivered to Aetheria via the durable heartbeat session
+    # (the /chat round-trip is what persists both the prompt and her note there).
+    mock_chat.assert_called_once()
+    assert mock_chat.call_args.args[0] == "sid-heartbeat"
+    assert isinstance(mock_chat.call_args.args[1], str) and mock_chat.call_args.args[1]
+    # ...and nothing mints/writes a separate "primary" chat.
+    mock_post.assert_not_called()
 
 
-def test_note_pulse_thoughts_log_surfaced_true(tmp_path):
-    """Non-empty note → thoughts-log record has surfaced=True."""
+def test_note_pulse_thoughts_log_surfaced_false(tmp_path):
+    """Non-empty note → recorded in thoughts-log with the note text; surfacing
+    is removed so surfaced is always False (note lives in [heartbeat] only)."""
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="Checked the lattice — nothing alarming.",
-            material_signals=[],
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="Checked the lattice — nothing alarming.",
+        material_signals=[],
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
     assert rec is not None
-    assert rec["surfaced"] is True
+    assert rec["surfaced"] is False
     assert rec["note"] == "Checked the lattice — nothing alarming."
 
 
-# ── Test 2: empty note → nothing surfaced ─────────────────────────────────────
+# ── Test 2: empty note → nothing surfaced, no "primary" mint ──────────────────
 
 
 def test_empty_note_pulse_surfaces_nothing(tmp_path):
-    """Empty response → _surface_to_primary_thread NOT called."""
+    """Empty response → nothing surfaced and NO "primary" session minted."""
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-        _run_tick_with_fakes(
-            d,
-            model_response="",
-            material_signals=[],
-        )
-        mock_surface.assert_not_called()
+    fake_response = {"content": "", "tool_calls": []}
+    with (
+        patch.object(d, "_call_vnext_chat", return_value=fake_response) as mock_chat,
+        patch.object(d, "_ensure_heartbeat_session", return_value="sid-heartbeat"),
+        patch.object(d, "_gather_material_signals", return_value=[]),
+        patch.object(d, "_post_json") as mock_post,
+    ):
+        d._do_tick(now=NOW_DT, eligibility=TickEligibility(True, None))
+
+    mock_chat.assert_called_once()
+    assert mock_chat.call_args.args[0] == "sid-heartbeat"
+    mock_post.assert_not_called()  # no "primary" chat write / mint
 
 
 def test_empty_note_with_material_surfaces_nothing(tmp_path):
-    """Empty response even with material signals → NOT surfaced (no fail-safe)."""
+    """Empty response even with material signals → nothing surfaced, no mint."""
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread") as mock_surface:
-        _run_tick_with_fakes(
-            d,
-            model_response="",
-            material_signals=_ONE_MATERIAL,
-        )
-        mock_surface.assert_not_called()
+    fake_response = {"content": "", "tool_calls": []}
+    with (
+        patch.object(d, "_call_vnext_chat", return_value=fake_response),
+        patch.object(d, "_ensure_heartbeat_session", return_value="sid-heartbeat"),
+        patch.object(d, "_gather_material_signals", return_value=_ONE_MATERIAL),
+        patch.object(d, "_post_json") as mock_post,
+    ):
+        d._do_tick(now=NOW_DT, eligibility=TickEligibility(True, None))
+
+    mock_post.assert_not_called()  # material present but still no "primary" mint
 
 
 def test_empty_note_thoughts_log_surfaced_false(tmp_path):
@@ -201,12 +224,11 @@ def test_empty_note_thoughts_log_surfaced_false(tmp_path):
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="   \n  ",
-            material_signals=[],
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="   \n  ",
+        material_signals=[],
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
@@ -223,12 +245,11 @@ def test_thoughts_log_written_every_pulse(tmp_path):
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="",
-            material_signals=[],
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="",
+        material_signals=[],
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
@@ -240,12 +261,11 @@ def test_thoughts_log_record_has_required_keys(tmp_path):
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="Something worth noting.",
-            material_signals=_ONE_MATERIAL,
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="Something worth noting.",
+        material_signals=_ONE_MATERIAL,
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
@@ -259,12 +279,11 @@ def test_thoughts_log_record_has_snapshot_key(tmp_path):
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="Something important.",
-            material_signals=_ONE_MATERIAL,
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="Something important.",
+        material_signals=_ONE_MATERIAL,
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
@@ -281,12 +300,11 @@ def test_thoughts_log_no_decision_or_violation_fields(tmp_path):
     tlog_path = tmp_path / "thoughts.jsonl"
     d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
-    with patch.object(d, "_surface_to_primary_thread"):
-        _run_tick_with_fakes(
-            d,
-            model_response="Pulled on a thread.",
-            material_signals=[],
-        )
+    _run_tick_with_fakes(
+        d,
+        model_response="Pulled on a thread.",
+        material_signals=[],
+    )
 
     from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
     rec = ThoughtsLog(tlog_path).last()
@@ -356,12 +374,11 @@ class TestSnapshotRoundTrip:
         d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
         # Pulse 1 — model leaves a note, board has 2 open blueprints.
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="Something important.",
-                material_signals=[],
-            )
+        _run_tick_with_fakes(
+            d,
+            model_response="Something important.",
+            material_signals=[],
+        )
 
         # Read what pulse 1 wrote.
         tlog = ThoughtsLog(tlog_path)
@@ -392,12 +409,11 @@ class TestSnapshotRoundTrip:
         d = _make_daemon(tmp_path, thoughts_path=tlog_path)
 
         # Pulse 1.
-        with patch.object(d, "_surface_to_primary_thread"):
-            _run_tick_with_fakes(
-                d,
-                model_response="",
-                material_signals=[],
-            )
+        _run_tick_with_fakes(
+            d,
+            model_response="",
+            material_signals=[],
+        )
 
         rec1 = ThoughtsLog(tlog_path).last()
         assert rec1 is not None
