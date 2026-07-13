@@ -106,6 +106,34 @@ def test_poll_once_skips_tweet_below_score_threshold(tmp_path):
     assert _kind_of(tmp_path, "1") is None
 
 
+def test_poll_once_skips_topic_tweet_with_restricted_replies(tmp_path):
+    """A topic (uninvited) tweet whose author restricts replies is skipped at
+    ingest — an uninvited reply 403s at post time ("Reply to this conversation
+    is not allowed") and burns a metered X credit for nothing."""
+    tweet = Tweet("1", "a", "sovereign AI and local LLM reliability", "u",
+                  reply_settings="following")
+
+    class NoMentionFakeX(FakeX):
+        def search_recent(self, query, since_id=None):
+            self.queries.append(query)
+            return [] if query.startswith("@") else self.tweets
+
+    w = _worker(tmp_path, NoMentionFakeX([tweet]))
+    assert w.poll_once() == 0
+    assert _kind_of(tmp_path, "1") is None
+
+
+def test_poll_once_keeps_mention_even_with_restricted_replies(tmp_path):
+    """Mentions are exempt from the reply-settings filter: being mentioned
+    means the author engaged her, so the reply is allowed regardless of the
+    conversation's reply setting."""
+    tweet = Tweet("1", "a", "sovereign AI and local LLM reliability", "u",
+                  reply_settings="mentionedUsers")
+    w = _worker(tmp_path, FakeX([tweet]))
+    assert w.poll_once() == 1
+    assert _kind_of(tmp_path, "1") == "mention"
+
+
 def test_poll_once_dedups_already_seen_tweets(tmp_path):
     tweet = Tweet("1", "a", "sovereign AI and local LLM reliability", "u")
     w = _worker(tmp_path, FakeX([tweet]))

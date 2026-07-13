@@ -26,6 +26,10 @@ class Tweet:
     author: str
     text: str
     url: str
+    # X conversation controls: "everyone" | "mentionedUsers" | "following" | ...
+    # Anything other than "everyone" means an uninvited reply will 403 at post
+    # time. Defaults to "everyone" when the API omits the field (open tweet).
+    reply_settings: str = "everyone"
 
 
 class XClient:
@@ -54,7 +58,7 @@ class XClient:
         )
 
     def search_recent(self, query: str, since_id: str | None = None) -> list[Tweet]:
-        params = {"query": query, "tweet.fields": "author_id"}
+        params = {"query": query, "tweet.fields": "author_id,reply_settings"}
         if since_id is not None:
             params["since_id"] = since_id
         try:
@@ -74,6 +78,7 @@ class XClient:
                     author=item.get("author_id", ""),
                     text=item.get("text", ""),
                     url=f"https://x.com/i/web/status/{item['id']}",
+                    reply_settings=item.get("reply_settings", "everyone"),
                 )
                 for item in data
             ]

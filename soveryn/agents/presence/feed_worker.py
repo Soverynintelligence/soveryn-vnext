@@ -105,6 +105,14 @@ class XFeedWorker:
         for tweet in tweets:
             if self.store.is_seen(tweet.id):
                 continue
+            # Skip tweets she cannot reply to: an uninvited reply to a
+            # conversation whose author restricts replies (to mentioned or
+            # followed users only) 403s at post time — "Reply to this
+            # conversation is not allowed" — and burns a metered X credit for
+            # nothing. Mentions are exempt: being mentioned means the author
+            # engaged her, so the reply is allowed regardless of the setting.
+            if not is_mention and tweet.reply_settings != "everyone":
+                continue
             score = score_tweet(tweet, self.cfg, is_mention=is_mention)
             if score < self.cfg.score_threshold:
                 continue
