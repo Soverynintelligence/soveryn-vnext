@@ -107,8 +107,20 @@ class XClient:
     def _raise_for_status(resp) -> None:
         if 200 <= resp.status_code < 300:
             return
+        # Capture the `detail` (and nested errors[].message), not just the
+        # generic `title` — X's real reason ("duplicate content", "you cannot
+        # reply to ...") lives in detail; the title alone ("Forbidden") is
+        # undebuggable.
+        title, detail = "?", ""
         try:
-            title = resp.json().get("title", "?")
+            body = resp.json()
+            title = body.get("title", "?")
+            detail = body.get("detail", "") or ""
+            if not detail and isinstance(body.get("errors"), list) and body["errors"]:
+                detail = body["errors"][0].get("message", "") or ""
         except (ValueError, AttributeError, TypeError):
-            title = "?"
-        raise XClientError(f"X API {resp.status_code}: {title}")
+            pass
+        msg = f"X API {resp.status_code}: {title}"
+        if detail:
+            msg += f" — {detail}"
+        raise XClientError(msg)
