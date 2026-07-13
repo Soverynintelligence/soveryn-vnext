@@ -69,6 +69,42 @@ def test_classify_bare_affirm_like_tokens_are_now_unrelated(text):
     assert classify_affirmation(text) == "unrelated"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "post it now", "send it now", "ok send it now",
+        "approve", "approve it", "approve it and post", "approve and post it",
+        "approve it and post it", "publish it", "go ahead and post it",
+        "yes go ahead and post it", "yes post it now", "post it to x",
+    ],
+)
+def test_classify_natural_publish_affirmations(text):
+    """Regression (2026-07-12): Jon's natural approvals must classify as affirm,
+    not fall through to 'unrelated' and deadlock the single staged slot. The
+    old exact-match set rejected everything but the canonical tokens — even
+    "post it now" (the trailing "now" broke the match). A message composed
+    ENTIRELY of approval/publish vocabulary carrying an explicit publish verb
+    is a clear approval to publish."""
+    assert classify_affirmation(text) == "affirm"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "can you post the meeting notes to the board",
+        "approve scotty's task",
+        "i need to send jon an email",
+        "post the report when you get a chance",
+        "should i post this or not",
+    ],
+)
+def test_classify_publish_verb_with_content_words_is_unrelated(text):
+    """Safety bias preserved: a message that merely CONTAINS a publish verb but
+    also carries out-of-vocabulary content words (a different subject, an
+    unrelated instruction, a question) must NOT auto-publish the queued post."""
+    assert classify_affirmation(text) == "unrelated"
+
+
 @pytest.mark.parametrize("text", ["no", "N", " no ", "nope", "don't", "dont", "reject", "skip", "cancel", "No"])
 def test_classify_clear_decline_tokens(text):
     assert classify_affirmation(text) == "decline"

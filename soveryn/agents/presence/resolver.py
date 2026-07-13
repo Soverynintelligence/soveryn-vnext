@@ -91,23 +91,67 @@ EDIT_KEYWORDS = (
 )
 
 
+# Explicit publish/approve verbs — a recognized affirmation must carry at
+# least one of these. A bare "yes"/"ok"/"go" (finding #5) has none and stays
+# a safe no-op.
+_PUBLISH_VERBS = {"post", "send", "publish", "approve"}
+
+# Filler/approval words that may legitimately surround a publish verb in a
+# pure approval-to-publish message ("post it now", "approve it and post",
+# "yes go ahead and post it to x"). The safety property: a message is an
+# affirm ONLY if EVERY word is either a publish verb or one of these filler
+# words. Any out-of-vocabulary content word (a different subject, an unrelated
+# instruction like "post the report when you get a chance") means the message
+# is NOT purely an approval, so it falls through to "unrelated" and never
+# auto-publishes the queued post.
+_APPROVE_FILLER = {
+    "it", "them", "that", "this", "one", "the",
+    "and", "then", "now", "yes", "yeah", "yep", "ok", "okay", "sure",
+    "please", "go", "ahead", "just", "do", "lets", "let's",
+    "to", "x", "twitter", "tweet", "out", "live",
+}
+
+
+def _is_publish_affirmation(normalized: str) -> bool:
+    """True iff `normalized` (stripped/lowercased) is a clear approval to
+    publish: either an exact canonical token, or a message composed ENTIRELY
+    of approval/publish vocabulary that carries at least one explicit publish
+    verb. Accepts natural phrasings ("post it now", "approve it and post");
+    rejects a bare "yes"/"ok" (no verb) and anything with a content word.
+    """
+    if normalized in AFFIRM_TOKENS:
+        return True
+    words = [
+        w for w in normalized
+        .replace(",", " ").replace(".", " ").replace("!", " ").replace("?", " ")
+        .split()
+        if w
+    ]
+    return (
+        bool(words)
+        and all(w in _PUBLISH_VERBS or w in _APPROVE_FILLER for w in words)
+        and any(w in _PUBLISH_VERBS for w in words)
+    )
+
+
 def classify_affirmation(text: str) -> str:
     """Classify Jon's reply to a staged post.
 
     Returns one of "affirm" | "edit" | "decline" | "unrelated".
 
-    Bias to safety: "affirm" fires ONLY on the small set of clear tokens in
-    AFFIRM_TOKENS (whole message, stripped/lowercased). "decline" fires only
-    on the equally explicit DECLINE_TOKENS. Empty/whitespace input, and
-    anything else that doesn't match a clear affirm/decline token or an
-    edit cue, is "unrelated" — the safe default that never publishes.
+    Bias to safety: "affirm" fires only on a clear approval-to-publish (an
+    exact canonical token OR a message made up ENTIRELY of approval/publish
+    vocabulary carrying an explicit publish verb — see `_is_publish_affirmation`).
+    "decline" fires only on the explicit DECLINE_TOKENS. A bare "yes"/"ok"/"go",
+    empty input, a subject change, an unrelated instruction, or an edit cue all
+    resolve to a non-affirm bucket — never a publish.
     """
     normalized = (text or "").strip().lower()
 
     if not normalized:
         return "unrelated"
 
-    if normalized in AFFIRM_TOKENS:
+    if _is_publish_affirmation(normalized):
         return "affirm"
 
     if normalized in DECLINE_TOKENS:
@@ -170,10 +214,15 @@ def resolve_pending(
 
         if not result or result.get("error"):
             # Publish failed: do NOT mark published, leave the post
-            # `proposed` so Jon's next affirm retries it.
+            # `proposed` so Jon's next affirm retries it. Surface the REAL
+            # error (X API status/message) instead of a generic note — a
+            # swallowed publish error is undebuggable; Jon needs to see what
+            # X actually rejected (duplicate content, rate cap, auth, etc.).
+            err = (result or {}).get("error") or "empty publisher result (no id returned)"
+            logger.warning("staged post %s publish failed: %s", post.id, err)
             return ResolveResult(
                 action="declined",
-                note="[post failed — still pending, try again]",
+                note=f"[post failed: {err} — still pending, try again]",
             )
 
         staged.mark(post.id, "published")
