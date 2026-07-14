@@ -66,3 +66,14 @@ def test_parse_prometheus_extracts_vllm_gauges():
 
 def test_parse_prometheus_ignores_comments_and_junk():
     assert _parse_prometheus("# TYPE foo gauge\n\ngarbage line\n") == {}
+
+
+def test_parse_prometheus_extracts_unbraced_lines():
+    """Test lines without label braces, e.g., 'vllm:foo 1.0'."""
+    raw = (
+        'vllm:foo 1.0\n'
+        'vllm:bar 2.5\n'
+    )
+    m = _parse_prometheus(raw)
+    assert m["vllm:foo"] == 1.0
+    assert m["vllm:bar"] == 2.5
