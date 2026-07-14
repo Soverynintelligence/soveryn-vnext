@@ -65,8 +65,9 @@ else                                      -> available = False
 
 **Two HTTP calls** to vLLM on the resolved host (short timeouts):
 - `GET :8000/v1/models` — served model id, liveness
-- `GET :8000/metrics` — Prometheus text. Parse:
-  `vllm:num_requests_running`, `vllm:num_requests_waiting`, `vllm:gpu_cache_usage_perc`
+- `GET :8000/metrics` — Prometheus text. Parse (names verified against the live
+  Spark running vLLM 0.25.0, not guessed):
+  `vllm:num_requests_running`, `vllm:num_requests_waiting`, `vllm:kv_cache_usage_perc`
 
 Any failure degrades that sub-section to `None` rather than failing the whole probe —
 a dead vLLM must still show a live box.
