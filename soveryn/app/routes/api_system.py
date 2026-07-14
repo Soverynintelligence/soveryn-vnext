@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify
 
 from soveryn.app.services.gpu_stats import get_gpu_stats
+from soveryn.app.services.rig_stats import get_rig_stats
 from soveryn.app.services.spark_stats import get_spark_stats
 
 bp = Blueprint("api_system", __name__)
@@ -16,6 +17,20 @@ bp = Blueprint("api_system", __name__)
 @bp.get("/api/system/gpu")
 def api_system_gpu():
     r = get_gpu_stats()
+    return jsonify({
+        "available": r.available,
+        "message": r.message,
+        "gpus": [asdict(g) for g in r.gpus],
+        "fetched_at": r.fetched_at,
+    }), 200
+
+
+@bp.get("/api/system/rig")
+def api_system_rig():
+    """The Rig panel: which model/agent occupies which GPU, and how much VRAM
+    each resident takes — the fact `/api/system/gpu` can't answer.
+    """
+    r = get_rig_stats()
     return jsonify({
         "available": r.available,
         "message": r.message,
