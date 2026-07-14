@@ -139,6 +139,27 @@ def test_wifi_fallback_is_reported_as_degraded():
     assert r.path == "wifi"          # <-- amber in the UI, not green
 
 
+def test_empty_docker_section_still_reports_available_host():
+    """A `docker ps` failure/empty result on the remote must not be mistaken
+    for host unreachability. Since PROBE_CMD ORs the docker command with
+    `|| true`, proc.returncode reflects only SSH-level reachability — the
+    docker section can be empty and the host data must still come through."""
+    empty_docker_probe = (
+        "45, 52\n"
+        "---\n"
+        "Mem:  129922760704 52613349376 17179869184 0 60129542144 74000000000\n"
+        "---\n"
+    )
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_ok(stdout=empty_docker_probe)), \
+         patch("urllib.request.urlopen", side_effect=_fake_http):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.host.gpu_util_pct == 45
+    assert r.host.mem_total_bytes == 129922760704
+    assert r.containers == []
+
+
 def test_both_paths_down_degrades_cleanly():
     spark_stats._cache = None
     with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]):
@@ -148,6 +169,19 @@ def test_both_paths_down_degrades_cleanly():
     assert r.host is None
     assert r.containers == []
     assert r.message
+
+
+def test_both_paths_down_message_surfaces_stderr():
+    """'Spark unreachable' alone can't distinguish a bad key from a dead
+    fabric. The last non-empty stderr from the probe attempts must be
+    included so an operator can tell what actually failed."""
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]):
+        r = get_spark_stats(_force_refresh=True)
+    assert "No route to host" in r.message
+    # host interpolation must still be present
+    assert spark_stats.SPARK_FABRIC_HOST in r.message
+    assert spark_stats.SPARK_WIFI_HOST in r.message
 
 
 def test_box_up_but_vllm_dead_still_reports_the_box():

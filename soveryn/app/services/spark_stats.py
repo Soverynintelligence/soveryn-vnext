@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import subprocess
 import time
-import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -23,21 +22,29 @@ SPARK_FABRIC_HOST = "10.10.10.2"
 SPARK_WIFI_HOST = "192.168.86.26"
 SPARK_VLLM_PORT = 8000
 
-_CACHE_TTL_SECONDS = 10.0
-_SSH_TIMEOUT_SECONDS = 8.0
+# Worst case: _SSH_TIMEOUT_SECONDS * 2 hosts + _HTTP_TIMEOUT_SECONDS * 2 calls
+# (models + metrics) = 4*2 + 3*2 = 14s, comfortably inside the cache TTL so a
+# hanging (not dead) Spark can't cause overlapping probes the cache can't
+# suppress. A normal probe takes well under 1s.
+_CACHE_TTL_SECONDS = 20.0
+_SSH_TIMEOUT_SECONDS = 4.0
 _SSH_CONNECT_TIMEOUT = 2
 _HTTP_TIMEOUT_SECONDS = 3.0
 
 _SECTION = "---"
 
-# One SSH round-trip for everything the box can tell us.
+# One SSH round-trip for everything the box can tell us. The shell reports the
+# LAST command's exit status, and ssh propagates it as proc.returncode — so
+# the docker command must never itself fail, or a Docker daemon hiccup would
+# be mistaken for "host unreachable" and discard perfectly good GPU/mem data.
+# `-a` (not just running) so a crashed/exited container is visible too.
 PROBE_CMD = (
     "nvidia-smi --query-gpu=utilization.gpu,temperature.gpu "
     "--format=csv,noheader,nounits 2>/dev/null | head -1; "
     f"echo {_SECTION}; "
     "free -b | sed -n 2p; "
     f"echo {_SECTION}; "
-    "docker ps --format '{{.Names}}|{{.State}}'"
+    "docker ps -a --format '{{.Names}}|{{.State}}' || true"
 )
 
 
@@ -161,7 +168,7 @@ def _ssh(host: str) -> subprocess.CompletedProcess | None:
         return None
 
 
-def _http_json(url: str) -> dict | None:
+def _http_json(url: str) -> dict | list | None:
     try:
         with urllib.request.urlopen(url, timeout=_HTTP_TIMEOUT_SECONDS) as r:
             return json.loads(r.read())
@@ -200,9 +207,12 @@ def _fetch_vllm(host: str) -> SparkVllm:
 
 def _probe() -> SparkStatsResult:
     # Fabric FIRST. The fallback order is the link health check.
+    last_stderr = ""
     for path, host in (("fabric", SPARK_FABRIC_HOST), ("wifi", SPARK_WIFI_HOST)):
         proc = _ssh(host)
         if proc is None or proc.returncode != 0:
+            if proc is not None and proc.stderr and proc.stderr.strip():
+                last_stderr = proc.stderr.strip()
             continue
         spark_host, containers = _parse_probe(proc.stdout)
         return SparkStatsResult(
@@ -213,15 +223,18 @@ def _probe() -> SparkStatsResult:
             vllm=_fetch_vllm(host),
             fetched_at=time.time(),
         )
+    message = f"Spark unreachable over fabric ({SPARK_FABRIC_HOST}) or WiFi ({SPARK_WIFI_HOST})"
+    if last_stderr:
+        message += f": {last_stderr}"
     return SparkStatsResult(
         available=False,
-        message=f"Spark unreachable over fabric ({SPARK_FABRIC_HOST}) or WiFi ({SPARK_WIFI_HOST})",
+        message=message,
         fetched_at=time.time(),
     )
 
 
 def get_spark_stats(*, _force_refresh: bool = False) -> SparkStatsResult:
-    """Current Spark stats, cached for 10s (SSH spawn is ~200ms)."""
+    """Current Spark stats, cached for 20s (SSH spawn is ~200ms)."""
     global _cache
     now = time.time()
     if not _force_refresh and _cache is not None and (now - _cache.fetched_at) < _CACHE_TTL_SECONDS:

@@ -1220,7 +1220,7 @@
         memPct == null ? dash
           : `${gib(h.mem_used_bytes)}/${gib(h.mem_total_bytes)} GiB · ${memPct}%`}</span></div>
       <div class="row"><span>vllm</span><span class="val">${
-        v.up ? (v.model || "up") : "down"}</span></div>
+        v.up ? htmlEscape(v.model || "up") : "down"}</span></div>
       <div class="row"><span>requests</span><span class="val">${
         v.up ? `${v.requests_running ?? 0} run · ${v.requests_waiting ?? 0} wait` : dash}</span></div>
       <div class="row"><span>kv cache</span><span class="val">${
