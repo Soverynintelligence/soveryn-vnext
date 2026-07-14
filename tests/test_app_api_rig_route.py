@@ -58,6 +58,7 @@ def test_rig_route_returns_json_shape(client):
     assert gpu["util_pct"] == 0
     assert gpu["temp_c"] == 45
     assert gpu["residents"] == [{"name": "aetheria", "mem_mib": 43086}]
+    assert data["residents_known"] is True
 
 
 def test_rig_route_when_smi_missing_returns_200_available_false(client):
@@ -71,3 +72,37 @@ def test_rig_route_when_smi_missing_returns_200_available_false(client):
     assert data["available"] is False
     assert data["gpus"] == []
     assert "message" in data
+
+
+def test_rig_route_exposes_residents_known_false_when_compute_apps_probe_fails(client):
+    """The compute-apps probe fails but --query-gpu succeeds: gpus are
+    populated (real identity/memory/temp), residents is [] on every gpu, and
+    the route must surface residents_known=False so the UI doesn't render
+    every card as free capacity."""
+    from soveryn.app.services import rig_stats
+    rig_stats._cache = None
+    with patch("subprocess.run", side_effect=[_smi(GPU_RAW), FileNotFoundError()]):
+        resp = client.get("/api/system/rig")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["available"] is True
+    assert data["residents_known"] is False
+    assert len(data["gpus"]) == 1
+    assert data["gpus"][0]["residents"] == []
+
+
+def test_rig_route_exposes_residents_known_true_when_genuinely_idle(client):
+    """The counterpart: compute-apps succeeds and legitimately reports zero
+    rows. residents_known must be True here, provably distinct from the
+    failure case above even though residents is [] in both."""
+    from soveryn.app.services import rig_stats
+    rig_stats._cache = None
+    with patch("subprocess.run", side_effect=[_smi(GPU_RAW), _smi("", rc=0)]):
+        resp = client.get("/api/system/rig")
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert data["available"] is True
+    assert data["residents_known"] is True
+    assert data["gpus"][0]["residents"] == []

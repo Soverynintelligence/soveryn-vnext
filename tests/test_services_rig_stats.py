@@ -217,6 +217,53 @@ def test_get_rig_stats_falls_back_on_nonzero_exit():
     assert r.gpus == []
 
 
+def test_compute_apps_missing_binary_yields_residents_unknown_not_idle():
+    """--query-compute-apps raising FileNotFoundError must NOT read as
+    'zero processes' — every gpu would light up as free capacity that isn't
+    really free. available stays True (gpu identity/memory/temp are real),
+    residents is [] on each gpu (we have no data), but residents_known must
+    be explicitly False so the UI can tell this apart from genuine idleness."""
+    with patch("subprocess.run", side_effect=[_smi(GPU_RAW), FileNotFoundError("nvidia-smi")]):
+        r = get_rig_stats(_force_refresh=True)
+
+    assert r.available is True
+    assert r.residents_known is False
+    assert len(r.gpus) == 3
+    for g in r.gpus:
+        assert g.residents == []
+    # memory/temp identity survives untouched
+    by_index = {g.index: g for g in r.gpus}
+    assert by_index[2].mem_used_mib == 45267
+    assert by_index[2].temp_c == 45
+
+
+def test_compute_apps_nonzero_exit_yields_residents_unknown_not_idle():
+    """Same failure class as the missing-binary case, but the query-compute-apps
+    process ran and exited non-zero instead of raising."""
+    with patch("subprocess.run", side_effect=[_smi(GPU_RAW), _smi("", rc=3)]):
+        r = get_rig_stats(_force_refresh=True)
+
+    assert r.available is True
+    assert r.residents_known is False
+    assert len(r.gpus) == 3
+    for g in r.gpus:
+        assert g.residents == []
+
+
+def test_compute_apps_succeeds_with_zero_rows_is_genuine_idle():
+    """The counterpart to the two failure tests above: query-compute-apps
+    runs cleanly and legitimately reports no processes at all. This must
+    read as KNOWN-idle, not unknown — the two states must be provably
+    distinguishable from each other."""
+    with patch("subprocess.run", side_effect=[_smi(GPU_RAW), _smi("", rc=0)]):
+        r = get_rig_stats(_force_refresh=True)
+
+    assert r.available is True
+    assert r.residents_known is True
+    for g in r.gpus:
+        assert g.residents == []
+
+
 def test_get_rig_stats_caches_within_window():
     with patch("subprocess.run", side_effect=[_smi(GPU_RAW), _smi(APPS_RAW)]) as mock_run, \
          patch("soveryn.app.services.rig_stats._resolve_pid_name", side_effect=_name_lookup):

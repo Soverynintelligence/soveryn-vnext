@@ -36,6 +36,7 @@ def api_system_rig():
         "message": r.message,
         "gpus": [asdict(g) for g in r.gpus],
         "fetched_at": r.fetched_at,
+        "residents_known": r.residents_known,
     }), 200
 
 

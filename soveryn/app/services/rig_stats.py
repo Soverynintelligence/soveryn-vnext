@@ -56,6 +56,13 @@ class RigStatsResult:
     gpus: list[RigGpu] = field(default_factory=list)
     message: str = ""
     fetched_at: float = 0.0
+    # False whenever the --query-compute-apps probe itself failed (missing
+    # binary, timeout, non-zero exit) — NOT when it succeeded and legitimately
+    # returned zero rows. residents=[] is ambiguous between "nothing running"
+    # and "we couldn't ask"; this field is what breaks that ambiguity for the
+    # UI. Must never be conflated with `available`, which only reflects the
+    # --query-gpu identity probe.
+    residents_known: bool = True
 
 
 _cache: RigStatsResult | None = None
@@ -192,7 +199,11 @@ def _probe() -> RigStatsResult:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         apps_proc = None
 
-    apps_raw = apps_proc.stdout if (apps_proc is not None and apps_proc.returncode == 0) else ""
+    # residents_known is False for ANY failure of the compute-apps probe —
+    # missing binary, timeout, or non-zero exit. Only a genuine rc==0 counts
+    # as "we asked and got an answer" (even if that answer is zero rows).
+    residents_known = apps_proc is not None and apps_proc.returncode == 0
+    apps_raw = apps_proc.stdout if residents_known else ""
 
     gpu_rows = _parse_gpu_list(gpu_proc.stdout)
     app_rows = _parse_compute_apps(apps_raw)
@@ -216,7 +227,9 @@ def _probe() -> RigStatsResult:
         for row in gpu_rows
     ]
 
-    return RigStatsResult(available=True, gpus=gpus, fetched_at=time.time())
+    return RigStatsResult(
+        available=True, gpus=gpus, fetched_at=time.time(), residents_known=residents_known,
+    )
 
 
 def get_rig_stats(*, _force_refresh: bool = False) -> RigStatsResult:
