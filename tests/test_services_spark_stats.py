@@ -1,9 +1,12 @@
 """Tests for soveryn/app/services/spark_stats.py."""
 
+import subprocess
 import urllib.error
+from unittest.mock import patch
 
+from soveryn.app.services import spark_stats
 from soveryn.app.services.spark_stats import (
-    _parse_probe, _parse_prometheus, SparkContainer,
+    _parse_probe, _parse_prometheus, SparkContainer, get_spark_stats,
 )
 
 PROBE_OK = """45, 52
@@ -81,13 +84,6 @@ def test_parse_prometheus_extracts_unbraced_lines():
     assert m["vllm:bar"] == 2.5
 
 
-import subprocess
-from unittest.mock import patch
-
-from soveryn.app.services import spark_stats
-from soveryn.app.services.spark_stats import get_spark_stats
-
-
 def _ssh_ok(stdout=PROBE_OK):
     return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
 
@@ -162,6 +158,42 @@ def test_box_up_but_vllm_dead_still_reports_the_box():
     assert r.available is True
     assert r.host.gpu_util_pct == 45
     assert r.vllm.up is False
+
+
+def test_ssh_missing_binary_degrades_cleanly():
+    """No ssh on PATH must not escape get_spark_stats()."""
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=FileNotFoundError("ssh")):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.path is None
+
+
+def test_ssh_timeout_degrades_cleanly():
+    spark_stats._cache = None
+    with patch("subprocess.run",
+               side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=8.0)):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.path is None
+
+
+def test_ssh_unexpected_exception_degrades_cleanly():
+    """A UnicodeDecodeError from text=True decoding stray remote bytes (or a
+    PermissionError on an unexecutable ssh binary) must still degrade to
+    'unreachable' rather than 500ing the dashboard route."""
+    spark_stats._cache = None
+    unicode_err = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+    with patch("subprocess.run", side_effect=unicode_err):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.path is None
+
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=PermissionError("ssh not executable")):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.path is None
 
 
 def test_caches_within_window():

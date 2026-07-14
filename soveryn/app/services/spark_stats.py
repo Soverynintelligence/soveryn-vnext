@@ -11,6 +11,7 @@ is unified with the host. Memory therefore comes from `free -b`, never nvidia-sm
 """
 
 from __future__ import annotations
+import json
 import subprocess
 import time
 import urllib.error
@@ -136,8 +137,6 @@ def _parse_prometheus(raw: str) -> dict[str, float]:
     return out
 
 
-import json
-
 _cache: SparkStatsResult | None = None
 
 
@@ -155,7 +154,10 @@ def _ssh(host: str) -> subprocess.CompletedProcess | None:
             ],
             capture_output=True, text=True, timeout=_SSH_TIMEOUT_SECONDS,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except Exception:
+        # Anything from the subprocess call — missing/unexecutable ssh binary,
+        # a hung connection, or a non-UTF8 byte in remote output tripping
+        # text=True decoding — must degrade to "unreachable", never raise.
         return None
 
 
@@ -213,7 +215,7 @@ def _probe() -> SparkStatsResult:
         )
     return SparkStatsResult(
         available=False,
-        message="Spark unreachable over fabric (10.10.10.2) or WiFi (192.168.86.26)",
+        message=f"Spark unreachable over fabric ({SPARK_FABRIC_HOST}) or WiFi ({SPARK_WIFI_HOST})",
         fetched_at=time.time(),
     )
 
