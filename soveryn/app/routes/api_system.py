@@ -56,6 +56,7 @@ def api_system_spark():
         "containers": [asdict(c) for c in r.containers],
         "vllm": asdict(r.vllm) if r.vllm else None,
         "fetched_at": r.fetched_at,
+        "host_known": r.host_known,
     }), 200
 
 

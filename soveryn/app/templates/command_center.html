@@ -1334,7 +1334,7 @@
 
     if (!d || !d.available) {
       el.innerHTML = `<span class="link down">UNREACHABLE</span>
-        <div style="opacity:0.6">${(d && d.message) || "Spark unavailable"}</div>`;
+        <div style="opacity:0.6">${htmlEscape((d && d.message) || "Spark unavailable")}</div>`;
       return;
     }
 
@@ -1345,12 +1345,21 @@
       ? `<span class="link fabric">FABRIC · 200G</span>`
       : `<span class="link wifi">DEGRADED — ON WIFI</span>`;
 
-    const h = d.host || {};
+    // host_known=false means SSH enrichment failed (e.g. a wedged sshd under
+    // memory pressure) while the box is still genuinely reachable/serving —
+    // NOT the same as unreachable. Degrade the host metrics to dashes/text,
+    // never zeros, and never red: a "0 running" here would misreport an
+    // unknown container list as a confirmed-empty one.
+    const hostKnown = d.host_known !== false;
+    const h = hostKnown ? (d.host || {}) : {};
     const memPct = (h.mem_total_bytes != null && h.mem_used_bytes != null && h.mem_total_bytes > 0)
       ? Math.round(100 * h.mem_used_bytes / h.mem_total_bytes) : null;
     const gib = b => (b / 1073741824).toFixed(0);
     const v = d.vllm || {};
     const dash = "—";
+    const containersRow = hostKnown
+      ? `${(d.containers || []).filter(c => c.state === "running").length} running`
+      : "host metrics unavailable";
 
     el.innerHTML = `
       ${badge}
@@ -1366,8 +1375,7 @@
         v.up ? `${v.requests_running ?? 0} run · ${v.requests_waiting ?? 0} wait` : dash}</span></div>
       <div class="row"><span>kv cache</span><span class="val">${
         (v.up && v.kv_cache_pct != null) ? (v.kv_cache_pct * 100).toFixed(1) + "%" : dash}</span></div>
-      <div class="row"><span>containers</span><span class="val">${
-        (d.containers || []).filter(c => c.state === "running").length} running</span></div>
+      <div class="row"><span>containers</span><span class="val">${containersRow}</span></div>
     `;
   }
 
@@ -1437,7 +1445,11 @@
         <div class="rig-note">${htmlEscape((d && d.message) || "no answer from the Spark")}</div>`;
       return;
     }
-    const h = d.host || {};
+    // host_known=false (SSH enrichment failed — e.g. a wedged sshd) must
+    // render as "unknown", never as zero and never as the red/unreachable
+    // state below: the box answered over HTTP and is genuinely up.
+    const hostKnown = d.host_known !== false;
+    const h = hostKnown ? (d.host || {}) : {};
     const haveMem = (h.mem_total_bytes != null && h.mem_used_bytes != null && h.mem_total_bytes > 0);
     let rail = "", headroom = "—", hw = "GB10 · unified memory";
     if (haveMem) {
@@ -1447,6 +1459,8 @@
       headroom = `${gbFromBytes(freeB).toFixed(1)} GB`;
       hw = `GB10 · ${totalGb} GB unified`;
       rail = railHtml(freeB / totalB, `headroom ${headroom} free of ${totalGb} gigabytes unified`);
+    } else if (!hostKnown) {
+      hw = "GB10 · host metrics unavailable";
     }
     const hot = (h.gpu_temp_c != null && h.gpu_temp_c >= 75);
     const v = d.vllm || {};

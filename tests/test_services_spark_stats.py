@@ -101,7 +101,9 @@ METRICS = (
 
 
 def _fake_http(url, timeout=0):
-    """Stand-in for urllib.request.urlopen — supports `with ... as r: r.read()`."""
+    """Stand-in for urllib.request.urlopen — supports `with ... as r: r.read()`.
+    Answers for ANY host — used when the test wants both fabric and wifi to
+    look reachable over HTTP."""
     class _R:
         def __enter__(self_inner):
             return self_inner
@@ -112,6 +114,22 @@ def _fake_http(url, timeout=0):
                 return b'{"data":[{"id":"nemotron"}]}'
             return METRICS.encode()
     return _R()
+
+
+def _fake_http_only(reachable_host):
+    """Stand-in for urllib.request.urlopen that only answers for one host —
+    used to simulate vLLM being reachable on exactly one of fabric/wifi."""
+    def _f(url, timeout=0):
+        if reachable_host not in url:
+            raise urllib.error.URLError("no route")
+        return _fake_http(url, timeout)
+    return _f
+
+
+def _no_http(url, timeout=0):
+    """Stand-in for urllib.request.urlopen that never answers — used so tests
+    of SSH-only behaviour don't hit the real network."""
+    raise urllib.error.URLError("no route")
 
 
 def test_fabric_path_is_preferred_and_reported():
@@ -127,16 +145,67 @@ def test_fabric_path_is_preferred_and_reported():
     assert r.vllm.up is True
     assert r.vllm.model == "nemotron"
     assert r.vllm.kv_cache_pct == 0.25
+    assert r.host_known is True
+
+
+def test_fabric_preferred_over_wifi_when_both_answer():
+    """Both fabric and wifi answer over HTTP — fabric must win, since the
+    fallback order IS the link health check."""
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_ok()), \
+         patch("urllib.request.urlopen", side_effect=_fake_http) as urlopen:
+        r = get_spark_stats(_force_refresh=True)
+    assert r.path == "fabric"
+    # HTTP must have been tried against the fabric host first (and, since it
+    # answered, the wifi HTTP probe must never have been attempted).
+    first_url = urlopen.call_args_list[0][0][0]
+    assert spark_stats.SPARK_FABRIC_HOST in first_url
+    assert all(spark_stats.SPARK_WIFI_HOST not in c[0][0] for c in urlopen.call_args_list)
+
+
+def test_vllm_answers_fabric_but_ssh_fails_still_available():
+    """THE PRODUCTION BUG: a wedged sshd (memory pressure, TCP/22 accepts but
+    never sends a banner) must never paint a healthy, serving Spark as dead.
+    vLLM answers on fabric; SSH fails outright."""
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_fail()), \
+         patch("urllib.request.urlopen", side_effect=_fake_http_only(spark_stats.SPARK_FABRIC_HOST)):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.path == "fabric"
+    assert r.host_known is False
+    assert r.host is None
+    assert r.containers == []
+    assert r.vllm.up is True
+    assert r.vllm.model == "nemotron"
+    # the SSH failure must still be surfaced, not silently swallowed
+    assert "No route to host" in r.message
+
+
+def test_vllm_answers_only_on_wifi_ssh_fails():
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_fail()), \
+         patch("urllib.request.urlopen", side_effect=_fake_http_only(spark_stats.SPARK_WIFI_HOST)):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.path == "wifi"
+    assert r.host_known is False
+    assert r.host is None
+    assert r.containers == []
+    assert r.vllm.up is True
 
 
 def test_wifi_fallback_is_reported_as_degraded():
-    """THE POINT OF THIS FEATURE. Fabric down + WiFi up must NOT look healthy."""
+    """THE POINT OF THIS FEATURE. Fabric HTTP down + WiFi HTTP up must NOT
+    look healthy — the path must report 'wifi', not 'fabric'."""
     spark_stats._cache = None
-    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_ok()]), \
-         patch("urllib.request.urlopen", side_effect=_fake_http):
+    with patch("subprocess.run", return_value=_ssh_ok()), \
+         patch("urllib.request.urlopen", side_effect=_fake_http_only(spark_stats.SPARK_WIFI_HOST)):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is True
     assert r.path == "wifi"          # <-- amber in the UI, not green
+    assert r.host_known is True
+    assert r.host.gpu_util_pct == 45
 
 
 def test_empty_docker_section_still_reports_available_host():
@@ -162,12 +231,14 @@ def test_empty_docker_section_still_reports_available_host():
 
 def test_both_paths_down_degrades_cleanly():
     spark_stats._cache = None
-    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]):
+    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is False
     assert r.path is None
     assert r.host is None
     assert r.containers == []
+    assert r.host_known is False
     assert r.message
 
 
@@ -176,7 +247,8 @@ def test_both_paths_down_message_surfaces_stderr():
     fabric. The last non-empty stderr from the probe attempts must be
     included so an operator can tell what actually failed."""
     spark_stats._cache = None
-    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]):
+    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert "No route to host" in r.message
     # host interpolation must still be present
@@ -192,21 +264,25 @@ def test_box_up_but_vllm_dead_still_reports_the_box():
     assert r.available is True
     assert r.host.gpu_util_pct == 45
     assert r.vllm.up is False
+    assert r.host_known is True
 
 
 def test_ssh_missing_binary_degrades_cleanly():
     """No ssh on PATH must not escape get_spark_stats()."""
     spark_stats._cache = None
-    with patch("subprocess.run", side_effect=FileNotFoundError("ssh")):
+    with patch("subprocess.run", side_effect=FileNotFoundError("ssh")), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is False
     assert r.path is None
+    assert r.host_known is False
 
 
 def test_ssh_timeout_degrades_cleanly():
     spark_stats._cache = None
     with patch("subprocess.run",
-               side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=8.0)):
+               side_effect=subprocess.TimeoutExpired(cmd="ssh", timeout=8.0)), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is False
     assert r.path is None
@@ -216,15 +292,17 @@ def test_ssh_unexpected_exception_degrades_cleanly():
     """A UnicodeDecodeError from text=True decoding stray remote bytes (or a
     PermissionError on an unexecutable ssh binary) must still degrade to
     'unreachable' rather than 500ing the dashboard route."""
-    spark_stats._cache = None
     unicode_err = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
-    with patch("subprocess.run", side_effect=unicode_err):
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=unicode_err), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is False
     assert r.path is None
 
     spark_stats._cache = None
-    with patch("subprocess.run", side_effect=PermissionError("ssh not executable")):
+    with patch("subprocess.run", side_effect=PermissionError("ssh not executable")), \
+         patch("urllib.request.urlopen", side_effect=_no_http):
         r = get_spark_stats(_force_refresh=True)
     assert r.available is False
     assert r.path is None

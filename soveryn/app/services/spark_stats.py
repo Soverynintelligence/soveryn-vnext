@@ -6,6 +6,16 @@ everything keeps working over WiFi with nothing to announce it. So we probe the
 fabric FIRST and fall back to WiFi — and we report which path answered. The
 fallback IS the link health check.
 
+Reachability and path are decided over HTTP to vLLM, NOT SSH. A wedged sshd
+(e.g. under memory pressure — TCP/22 accepts but never sends a banner) is a
+real production failure mode, and the box can be completely healthy and still
+serving inference the entire time. SSH is only used as OPTIONAL ENRICHMENT —
+host metrics (GPU util/temp, unified memory, container list) — run against
+whichever host answered over HTTP. If SSH fails, the result still reports
+available=True with the vLLM data; only the host section degrades
+(`host_known=False`, host=None, containers=[]). Only when BOTH HTTP and SSH
+fail on BOTH hosts is the Spark genuinely unreachable.
+
 Unified memory: on GB10, `nvidia-smi` reports memory.total as [N/A] because memory
 is unified with the host. Memory therefore comes from `free -b`, never nvidia-smi.
 """
@@ -80,6 +90,13 @@ class SparkStatsResult:
     containers: list[SparkContainer] = field(default_factory=list)
     vllm: SparkVllm | None = None
     fetched_at: float = 0.0
+    # SSH is enrichment, not reachability — a wedged sshd (e.g. under memory
+    # pressure) must never make a box that is genuinely serving traffic render
+    # dead. False means the SSH probe failed: host is None and containers is
+    # []. This is the same distinction rig_stats.py makes with
+    # `residents_known` — "unknown" must never be rendered as either healthy
+    # or down.
+    host_known: bool = True
 
 
 def _int_or_none(text: str) -> int | None:
@@ -206,29 +223,73 @@ def _fetch_vllm(host: str) -> SparkVllm:
 
 
 def _probe() -> SparkStatsResult:
-    # Fabric FIRST. The fallback order is the link health check.
+    # Step 1 — reachability AND path, decided over HTTP to vLLM. Fabric tried
+    # first: the fabric/wifi order IS the link health check, same as before,
+    # just moved off of SSH and onto the channel that actually matters.
     last_stderr = ""
-    for path, host in (("fabric", SPARK_FABRIC_HOST), ("wifi", SPARK_WIFI_HOST)):
-        proc = _ssh(host)
+    http_path: str | None = None
+    http_host: str | None = None
+    vllm: SparkVllm | None = None
+    for cand_path, cand_host in (("fabric", SPARK_FABRIC_HOST), ("wifi", SPARK_WIFI_HOST)):
+        v = _fetch_vllm(cand_host)
+        if v.up:
+            http_path, http_host, vllm = cand_path, cand_host, v
+            break
+
+    # Step 2 — SSH is optional enrichment for host metrics only, run against
+    # whichever host answered over HTTP. If HTTP found nothing at all, SSH
+    # becomes the last-resort reachability check itself (fabric first) so a
+    # box with a wedged/absent vLLM but a live sshd still reports available.
+    ssh_targets = (
+        [(http_path, http_host)] if http_host is not None
+        else [("fabric", SPARK_FABRIC_HOST), ("wifi", SPARK_WIFI_HOST)]
+    )
+
+    path = http_path
+    spark_host: SparkHost | None = None
+    containers: list[SparkContainer] = []
+    host_known = False
+
+    for cand_path, cand_host in ssh_targets:
+        proc = _ssh(cand_host)
         if proc is None or proc.returncode != 0:
             if proc is not None and proc.stderr and proc.stderr.strip():
                 last_stderr = proc.stderr.strip()
             continue
         spark_host, containers = _parse_probe(proc.stdout)
+        host_known = True
+        if path is None:
+            # HTTP was silent everywhere; SSH is now the source of both
+            # reachability and path.
+            path = cand_path
+            vllm = _fetch_vllm(cand_host)
+        break
+
+    if path is None:
+        message = f"Spark unreachable over fabric ({SPARK_FABRIC_HOST}) or WiFi ({SPARK_WIFI_HOST})"
+        if last_stderr:
+            message += f": {last_stderr}"
         return SparkStatsResult(
-            available=True,
-            path=path,
-            host=spark_host,
-            containers=containers,
-            vllm=_fetch_vllm(host),
+            available=False,
+            host_known=False,
+            message=message,
             fetched_at=time.time(),
         )
-    message = f"Spark unreachable over fabric ({SPARK_FABRIC_HOST}) or WiFi ({SPARK_WIFI_HOST})"
-    if last_stderr:
-        message += f": {last_stderr}"
+
+    # The box is reachable (HTTP and/or SSH answered). Degrade the host
+    # section, never the whole result, when SSH couldn't get host metrics —
+    # but still surface why, since that stderr is exactly what let us
+    # diagnose tonight's "healthy box painted dead" incident.
+    message = f"host metrics unavailable: {last_stderr}" if (not host_known and last_stderr) else ""
+
     return SparkStatsResult(
-        available=False,
+        available=True,
+        path=path,
         message=message,
+        host=spark_host if host_known else None,
+        containers=containers if host_known else [],
+        vllm=vllm,
+        host_known=host_known,
         fetched_at=time.time(),
     )
 
