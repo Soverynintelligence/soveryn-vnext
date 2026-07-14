@@ -1205,7 +1205,7 @@
       : `<span class="link wifi">DEGRADED — ON WIFI</span>`;
 
     const h = d.host || {};
-    const memPct = (h.mem_total_bytes && h.mem_used_bytes)
+    const memPct = (h.mem_total_bytes != null && h.mem_used_bytes != null && h.mem_total_bytes > 0)
       ? Math.round(100 * h.mem_used_bytes / h.mem_total_bytes) : null;
     const gib = b => (b / 1073741824).toFixed(0);
     const v = d.vllm || {};
