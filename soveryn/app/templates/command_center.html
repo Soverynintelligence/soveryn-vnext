@@ -799,31 +799,178 @@
     font-size:11px; color:rgba(232,227,213,0.4); padding:10px; font-style:italic;
   }
 
-  /* ─── Topology (live: tower + Spark A; Spark B pending) ─────────────────── */
-  .topology svg { width:100%; max-width:640px; height:auto; display:block; margin:0 auto; }
-  .topology .node rect { fill:rgba(18,16,12,0.7); stroke:rgba(225,210,170,0.18); stroke-width:1; rx:8; ry:8; }
-  .topology .node[data-status="alive"] rect { stroke:var(--sov-electric-blue); stroke-width:1.5; }
-  .topology .node[data-status="pending"] rect { stroke-dasharray:4 3; stroke:rgba(232,227,213,0.25); }
-  .topology .node text { fill:var(--text); font-size:11px; font-weight:500; }
-  .topology .node .role { fill:rgba(232,227,213,0.45); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; font-weight:400; }
-  .topology .node .dot[data-status="alive"]   { fill:var(--sov-electric-blue); }
-  .topology .node .dot[data-status="pending"] { fill:rgba(232,227,213,0.25); }
-  .topology .link {
-    stroke:rgba(225,210,170,0.18); stroke-width:1; fill:none;
+  /* ─── THE RIG — the sovereign compute, drawn as a headroom map ────────────
+     SIGNATURE: the memory rail is INVERTED. The OCCUPIED portion renders as
+     dark ink; the FREE portion is what is LIT GOLD, and the glow scales with
+     the free fraction (--lit, set inline per card). A nearly-full card goes
+     dark and reads as CLOSED; an idle card blazes and reads as OPEN.
+     Luminance encodes availability.
+
+     Every other dashboard shows utilization. The questions this rig actually
+     gets asked are "can I fit another model here?" and "is Aetheria about to
+     run out of room?" — both headroom questions. So headroom carries the
+     light, and ALL the boldness lives in the rail. Everything else stays
+     quiet: hairline plates, uppercase letterspaced micro-labels, tabular
+     numerals, temperature as a plain number. */
+  .rig { display:flex; flex-direction:column; gap:16px; }
+  .rig-head {
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
   }
-  .topology .link[data-status="active"]  { stroke:var(--sov-electric-blue); stroke-opacity:0.6; }
-  .topology .link[data-status="pending"] { stroke-dasharray:5 4; }
-  .topology .link-label { font-size:9px; fill:rgba(232,227,213,0.4); letter-spacing:0.06em; text-transform:uppercase; }
-  .topology .legend { margin-top:14px; font-size:10px; color:rgba(232,227,213,0.45); text-align:center; letter-spacing:0.06em; text-transform:uppercase; }
-  .topology .legend .live { color:var(--sov-electric-blue); }
-  .topology .legend .pending { color:rgba(232,227,213,0.55); }
-  .topology .node[data-status="degraded"] rect { stroke:#d4a827; stroke-width:1.5; }
-  .topology .node[data-status="dead"] rect     { stroke:#c0392b; stroke-width:1.5; }
-  .topology .node .dot[data-status="degraded"] { fill:#d4a827; }
-  .topology .node .dot[data-status="dead"]     { fill:#c0392b; }
-  .topology .link[data-status="degraded"] { stroke:#d4a827; stroke-opacity:0.8; }
-  .topology .link[data-status="dead"]     { stroke:#c0392b; stroke-opacity:0.5; stroke-dasharray:5 4; }
-  .topology .legend .degraded { color:#d4a827; }
+  .rig-head h3 {
+    font-size:11px; color:rgba(236,243,244,0.45);
+    text-transform:uppercase; letter-spacing:0.12em;
+  }
+  .rig-totals {
+    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+    color:rgba(236,243,244,0.42); font-variant-numeric:tabular-nums;
+  }
+  .rig-totals .fabric-state[data-state="live"]     { color:var(--sov-electric-blue); }
+  .rig-totals .fabric-state[data-state="degraded"] { color:#d4a827; }
+  .rig-totals .fabric-state[data-state="dead"]     { color:#c0392b; }
+
+  /* Bays — the hairline plates the hardware sits on. */
+  .rig-bay {
+    border:1px solid rgba(184,149,74,0.16);
+    border-radius:var(--r-md);
+    padding:16px 18px 18px;
+  }
+  .rig-bay .bay-label {
+    font-size:9px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(236,243,244,0.38); margin-bottom:16px;
+  }
+
+  .rig-cards { display:flex; flex-direction:column; gap:18px; }
+  .rig-card { display:flex; flex-direction:column; gap:9px; }
+  .rig-card .rc-top {
+    display:grid; align-items:center; gap:16px;
+    grid-template-columns:186px 1fr auto auto;
+    grid-template-areas:"name rail head temp";
+  }
+  .rc-name {
+    grid-area:name; font-size:11px; letter-spacing:0.1em;
+    text-transform:uppercase; color:rgba(236,243,244,0.82);
+  }
+  .rc-headroom { grid-area:head; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; }
+  .rc-headroom .hl { color:rgba(236,243,244,0.40); margin-right:7px; }
+  .rc-headroom .hv { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+  .rc-temp {
+    grid-area:temp; font-size:11px; color:rgba(236,243,244,0.40);
+    font-variant-numeric:tabular-nums; min-width:46px; text-align:right;
+  }
+  /* Temperature is a quiet number. It only earns colour when it's actually hot. */
+  .rc-temp[data-hot="true"] { color:var(--sov-amber); }
+
+  /* THE RAIL. `ink` = occupied (dark). `lit` = FREE (gold, glowing). Deliberately
+     no overflow:hidden — the lit block's glow must be allowed to bloom past the
+     plate, which is the whole point: an open card lights up the panel. */
+  .rail {
+    grid-area:rail; display:flex; gap:0; height:14px; padding:1px;
+    border:1px solid rgba(184,149,74,0.14); border-radius:4px;
+    background:rgba(0,0,0,0.35); min-width:80px;
+  }
+  .rail .ink { border-radius:2px; background:rgba(232,227,213,0.10); }
+  .rail .lit {
+    border-radius:2px; background:var(--gold-sheen);
+    opacity:calc(0.40 + 0.60 * var(--lit, 0));
+    box-shadow:0 0 calc(3px + 17px * var(--lit, 0))
+               rgba(212,180,106, calc(0.12 + 0.38 * var(--lit, 0)));
+  }
+
+  /* Residents — small chips, one per process actually holding VRAM. */
+  .rc-residents { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:22px; }
+  .res-chip {
+    font-size:10px; letter-spacing:0.03em;
+    color:rgba(236,243,244,0.66);
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.06);
+    border-radius:4px; padding:3px 9px;
+    font-variant-numeric:tabular-nums;
+  }
+  .res-chip .caret { color:rgba(184,149,74,0.8); margin-right:6px; }
+  .res-chip .mem { color:rgba(236,243,244,0.42); margin-left:7px; }
+  .res-idle { font-size:10px; color:rgba(236,243,244,0.35); letter-spacing:0.1em; }
+  /* residents_known === false: the list is UNKNOWN, not empty. Muted, and the
+     OPEN treatment is suppressed — see refreshRig(). */
+  .res-unknown {
+    font-size:10px; color:rgba(236,243,244,0.32);
+    letter-spacing:0.12em; text-transform:uppercase;
+  }
+  .open-marker {
+    margin-left:auto; font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--sov-gold-bright);
+  }
+
+  /* Fabric spine — tower to Sparks. */
+  .rig-spine { display:flex; align-items:center; gap:14px; padding:0 6px; }
+  .rig-spine .line {
+    flex:1; height:1px; position:relative; overflow:hidden;
+    background:rgba(236,243,244,0.12);
+  }
+  .rig-spine .copy {
+    font-size:9px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(236,243,244,0.42); white-space:nowrap;
+  }
+  .rig-spine[data-state="live"] .line {
+    background:linear-gradient(90deg, rgba(62,168,232,0.10), rgba(62,168,232,0.55), rgba(62,168,232,0.10));
+  }
+  .rig-spine[data-state="live"] .copy { color:var(--sov-electric-blue); }
+  .rig-spine[data-state="degraded"] .line { background:rgba(212,168,39,0.45); }
+  .rig-spine[data-state="degraded"] .copy { color:#d4a827; }
+  .rig-spine[data-state="dead"] .line {
+    background:repeating-linear-gradient(90deg, rgba(192,57,43,0.55) 0 6px, transparent 6px 12px);
+  }
+  .rig-spine[data-state="dead"] .copy { color:#c0392b; }
+  /* The ONE moment of motion on this panel: a slow packet travelling the spine,
+     and only while the fabric is genuinely live. Nothing else animates. */
+  .rig-spine[data-state="live"] .line::after {
+    content:""; position:absolute; top:0; bottom:0; left:0; width:32%;
+    background:linear-gradient(90deg, transparent, rgba(168,222,255,0.95), transparent);
+    transform:translateX(-120%);
+    animation:rig-fabric-flow 3.8s linear infinite;
+  }
+  @keyframes rig-fabric-flow {
+    from { transform:translateX(-120%); }
+    to   { transform:translateX(420%); }
+  }
+
+  /* Sparks — A is live hardware, B is an empty bay (an invitation, not an apology). */
+  .rig-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .spark-hw {
+    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+    color:rgba(236,243,244,0.5); margin-bottom:12px;
+    font-variant-numeric:tabular-nums;
+  }
+  .spark-foot { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:11px; }
+  .rig-bay.spark .rc-residents { margin-top:12px; }
+  .rig-bay.empty-bay {
+    border-style:dashed; border-color:rgba(236,243,244,0.13);
+    display:flex; flex-direction:column;
+  }
+  .empty-bay .bay-empty {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:7px; padding:14px 0 8px;
+  }
+  .empty-bay .eb-title {
+    font-size:11px; letter-spacing:0.26em; text-transform:uppercase;
+    color:rgba(236,243,244,0.45);
+  }
+  .empty-bay .eb-sub { font-size:10px; letter-spacing:0.08em; color:rgba(236,243,244,0.3); }
+  .rig-dead { font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:#c0392b; }
+  .rig-note { font-size:10px; color:rgba(236,243,244,0.38); margin-top:7px; line-height:1.5; }
+
+  @media (max-width: 860px) {
+    .rig-card .rc-top {
+      grid-template-columns:1fr auto;
+      grid-template-areas:"name temp" "rail rail" "head head";
+      gap:9px 12px;
+    }
+    .rig-sparks { grid-template-columns:1fr; }
+    .rig-spine .copy { white-space:normal; text-align:center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rig-spine[data-state="live"] .line::after { animation:none; display:none; }
+  }
 </style>
 </head>
 <body data-testid="command-center">
@@ -1064,62 +1211,45 @@
       </div>
     </section>
 
-    <!-- Topology — the sovereign fabric. SOVERYN tower is three GPUs (1x
-         Blackwell RTX PRO 5000 48GB + 2x Quadro RTX 8000 48GB), driven live
-         from /api/system/gpu. Spark A is live now on a 200G ConnectX-7
-         fabric link, driven from /api/system/spark — never rendered alive
-         unless path === "fabric". Spark B does not exist yet and stays
-         "pending" scaffold; the plan is still two Sparks. -->
-    <section class="panel topology" data-testid="topology">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:18px;">Fabric</h3>
-      <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" aria-label="SOVERYN compute fabric topology">
-        <!-- Links first so they sit under the nodes. -->
-        <g class="link" data-status="pending" data-testid="topology-link-soveryn-spark-a">
-          <!-- SOVERYN <-> Spark A (left) — 200G ConnectX-7 fabric, JS-driven -->
-          <path d="M 200 90 Q 130 180 130 230"/>
-        </g>
-        <g class="link" data-status="pending">
-          <!-- SOVERYN <-> Spark B (right) — Spark B does not exist yet -->
-          <path d="M 440 90 Q 510 180 510 230"/>
-        </g>
-        <g class="link" data-status="pending" data-testid="topology-link-spark-spark">
-          <!-- Spark A <-> Spark B — ConnectX-7, not yet measured (Spark B pending) -->
-          <path d="M 200 250 L 440 250"/>
-        </g>
-        <text class="link-label" x="320" y="244" text-anchor="middle">ConnectX-7 · pending</text>
+    <!-- THE RIG — the sovereign compute as a HEADROOM map. The tower's three
+         GPUs come from /api/system/rig (which, unlike /api/system/gpu, can say
+         WHAT occupies each card). Spark A comes from /api/system/spark and is
+         never drawn alive unless path === "fabric". Spark B doesn't exist yet:
+         a dashed empty bay, no fake status. The memory rails are inverted —
+         free VRAM is the lit part. See the .rig CSS block. -->
+    <section class="panel rig" data-testid="rig" aria-label="The rig — live GPU headroom">
+      <div class="rig-head">
+        <h3>The Rig</h3>
+        <div class="rig-totals" data-rig-totals>reading the rig…</div>
+      </div>
 
-        <!-- SOVERYN tower — alive, the existing node. VRAM total is live-populated. -->
-        <g class="node" data-status="alive" data-node="soveryn" data-testid="topology-node-soveryn" transform="translate(232 30)">
-          <rect width="176" height="62"/>
-          <circle class="dot" data-status="alive" cx="14" cy="18" r="4"/>
-          <text x="26" y="22">SOVERYN tower</text>
-          <text class="role" x="14" y="40" data-tower-vram>GPUs · loading…</text>
-          <text class="role" x="14" y="54">Aetheria, daemons</text>
-        </g>
+      <div class="rig-bay tower">
+        <div class="bay-label">SOVERYN Tower</div>
+        <div class="rig-cards" data-rig-gpus>
+          <div class="rig-note">reading the rig…</div>
+        </div>
+      </div>
 
-        <!-- DGX Spark A — live on the 200G fabric, driven from /api/system/spark. -->
-        <g class="node" data-status="pending" data-node="spark-a" data-testid="topology-node-spark-a" transform="translate(42 220)">
-          <rect width="176" height="62"/>
-          <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
-          <text x="26" y="22">DGX Spark A</text>
-          <text class="role" x="14" y="40" data-spark-a-hw>GB10 · 128GB unified</text>
-          <text class="role" x="14" y="54" data-spark-a-status>loading…</text>
-        </g>
+      <div class="rig-spine" data-rig-spine data-state="dead">
+        <span class="line"></span>
+        <span class="copy" data-rig-spine-copy>checking the fabric…</span>
+        <span class="line"></span>
+      </div>
 
-        <!-- DGX Spark B — pending. Does not exist yet; still the plan. -->
-        <g class="node" data-status="pending" data-node="spark-b" transform="translate(422 220)">
-          <rect width="176" height="62"/>
-          <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
-          <text x="26" y="22">DGX Spark B</text>
-          <text class="role" x="14" y="40">GB10 · 128GB unified</text>
-          <text class="role" x="14" y="54">pending arrival</text>
-        </g>
-      </svg>
-      <div class="legend">
-        <span class="live">●</span> live &nbsp;·&nbsp;
-        <span class="degraded">●</span> degraded &nbsp;·&nbsp;
-        <span class="pending">○</span> pending
-        &nbsp;·&nbsp; 200G ConnectX-7 fabric · Spark B pending
+      <div class="rig-sparks">
+        <div class="rig-bay spark" data-testid="rig-spark-a">
+          <div class="bay-label">DGX Spark A</div>
+          <div data-rig-spark-a>
+            <div class="rig-note">reading the Spark…</div>
+          </div>
+        </div>
+        <div class="rig-bay empty-bay" data-testid="rig-spark-b">
+          <div class="bay-label">Spark B</div>
+          <div class="bay-empty">
+            <div class="eb-title">Empty bay</div>
+            <div class="eb-sub">awaiting hardware</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1241,62 +1371,163 @@
     `;
   }
 
-  // ─── Topology diagram (tower VRAM + Spark A live state) ───────────────────
-  async function refreshTopology() {
-    const towerVram = document.querySelector('[data-tower-vram]');
-    const gpuData = await fetchJson("/api/system/gpu");
-    if (towerVram) {
-      if (gpuData && gpuData.available && gpuData.gpus && gpuData.gpus.length) {
-        const totalMib = gpuData.gpus.reduce((sum, g) => sum + (g.mem_total_mib || 0), 0);
-        const totalGB = Math.round(totalMib / 1024);
-        towerVram.textContent = `${gpuData.gpus.length} GPUs · ${totalGB}GB VRAM`;
-      } else {
-        towerVram.textContent = "GPUs · —";
-      }
-      // Tower status is left alone: the dashboard runs on the tower, so if
-      // you're reading this page, the tower is alive.
-    }
+  // ─── THE RIG — headroom map (tower GPUs + Spark A) ─────────────────────────
+  // The rail is INVERTED: what is LIT is what is FREE. `--lit` (0..1) is the
+  // free fraction and drives both the gold block's width and its glow, so a
+  // full card goes dark and an idle card blazes. See the .rig CSS block.
+  const GIB = 1073741824;
+  const gbFromMib = mib => (mib / 1024);
+  const gbFromBytes = b => (b / GIB);
 
-    const sparkANode = document.querySelector('[data-testid="topology-node-spark-a"]');
-    const sparkALink = document.querySelector('[data-testid="topology-link-soveryn-spark-a"]');
-    const sparkAHw = document.querySelector('[data-spark-a-hw]');
-    const sparkAStatus = document.querySelector('[data-spark-a-status]');
-    const d = await fetchJson("/api/system/spark");
+  function railHtml(freeFrac, label) {
+    const lit = Math.max(0, Math.min(1, freeFrac || 0));
+    const litPct = (lit * 100).toFixed(2);
+    const inkPct = (100 - lit * 100).toFixed(2);
+    return `<div class="rail" role="img" aria-label="${htmlEscape(label)}" style="--lit:${lit.toFixed(3)}">
+        <div class="ink" style="width:${inkPct}%"></div>
+        <div class="lit" style="width:${litPct}%"></div>
+      </div>`;
+  }
 
-    // Same polarity as refreshSpark(): only an exact "fabric" path is alive.
-    // Anything else (wifi, null, an unforeseen future value) is degraded —
-    // a silent WiFi fallback must never be allowed to render green.
-    let status, statusText;
-    if (!d || !d.available) {
-      status = "dead";
-      statusText = "unreachable";
-    } else if (d.path === "fabric") {
-      status = "alive";
-      statusText = "fabric · 200G";
+  function rigGpuCardHtml(g, residentsKnown) {
+    const total = g.mem_total_mib || 0;
+    const used = Math.max(0, Math.min(g.mem_used_mib || 0, total));
+    const freeMib = total - used;
+    const freeFrac = total > 0 ? freeMib / total : 0;
+    const freeGb = gbFromMib(freeMib).toFixed(1);
+    const totalGb = Math.round(gbFromMib(total));
+    // "NVIDIA RTX PRO 5000 Blackwell" -> "RTX PRO 5000 Blackwell". The vendor
+    // prefix is noise on a rig where every card is an NVIDIA card.
+    const name = String(g.name || "GPU").replace(/^NVIDIA\s+/i, "");
+    const hot = (g.temp_c != null && g.temp_c >= 75);
+
+    // residents_known === false means the resident list is UNKNOWN, not empty.
+    // Rendering those cards as idle/OPEN would light every card as available
+    // and lie confidently — so the OPEN treatment is suppressed entirely. The
+    // rail still shows: the memory numbers are real regardless.
+    let residents;
+    if (!residentsKnown) {
+      residents = `<span class="res-unknown">residents unknown</span>`;
+    } else if (!g.residents || !g.residents.length) {
+      residents = `<span class="res-idle">— idle —</span>
+        <span class="open-marker">◆ open</span>`;
     } else {
-      status = "degraded";
-      statusText = "DEGRADED — WIFI";
+      residents = g.residents.map(r => `
+        <span class="res-chip"><span class="caret">›</span>${htmlEscape(r.name)}<span class="mem">${
+          gbFromMib(r.mem_mib || 0).toFixed(1)}G</span></span>`).join("");
     }
 
-    if (sparkANode) {
-      sparkANode.setAttribute("data-status", status);
-      const dot = sparkANode.querySelector(".dot");
-      if (dot) dot.setAttribute("data-status", status);
-    }
-    if (sparkALink) {
-      sparkALink.setAttribute("data-status", status === "alive" ? "active" : status);
-    }
-    if (sparkAStatus) sparkAStatus.textContent = statusText;
+    return `
+      <div class="rig-card" data-gpu-index="${Number(g.index)}">
+        <div class="rc-top">
+          <span class="rc-name">${htmlEscape(name)}</span>
+          ${railHtml(freeFrac, `headroom ${freeGb} gigabytes free of ${totalGb}`)}
+          <span class="rc-headroom"><span class="hl">headroom</span><span class="hv">${freeGb} GB</span></span>
+          <span class="rc-temp" data-hot="${hot}">${g.temp_c == null ? "—" : g.temp_c + "°C"}</span>
+        </div>
+        <div class="rc-residents">${residents}</div>
+      </div>`;
+  }
 
-    if (sparkAHw) {
-      const h = (d && d.host) || null;
-      if (h && h.mem_total_bytes != null && h.mem_used_bytes != null) {
-        const gib = b => (b / 1073741824).toFixed(0);
-        sparkAHw.textContent = `GB10 · ${gib(h.mem_used_bytes)}/${gib(h.mem_total_bytes)}GB unified`;
-      } else {
-        sparkAHw.textContent = "GB10 · 128GB unified";
-      }
+  function renderSparkBay(d) {
+    const el = document.querySelector("[data-rig-spark-a]");
+    if (!el) return;
+    if (!d || !d.available) {
+      el.innerHTML = `<div class="rig-dead">unreachable</div>
+        <div class="rig-note">${htmlEscape((d && d.message) || "no answer from the Spark")}</div>`;
+      return;
     }
+    const h = d.host || {};
+    const haveMem = (h.mem_total_bytes != null && h.mem_used_bytes != null && h.mem_total_bytes > 0);
+    let rail = "", headroom = "—", hw = "GB10 · unified memory";
+    if (haveMem) {
+      const totalB = h.mem_total_bytes;
+      const freeB = Math.max(0, totalB - h.mem_used_bytes);
+      const totalGb = Math.round(gbFromBytes(totalB));
+      headroom = `${gbFromBytes(freeB).toFixed(1)} GB`;
+      hw = `GB10 · ${totalGb} GB unified`;
+      rail = railHtml(freeB / totalB, `headroom ${headroom} free of ${totalGb} gigabytes unified`);
+    }
+    const hot = (h.gpu_temp_c != null && h.gpu_temp_c >= 75);
+    const v = d.vllm || {};
+    const running = Math.round(v.requests_running ?? 0);
+    const waiting = Math.round(v.requests_waiting ?? 0);
+    const kv = v.kv_cache_pct == null ? null : (v.kv_cache_pct * 100).toFixed(0);
+    const vllmLine = v.up
+      ? `<span class="res-chip"><span class="caret">›</span>${htmlEscape(v.model || "vllm")}<span class="mem">${
+          running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}</span></span>`
+      : `<span class="res-unknown">vllm down</span>`;
+
+    el.innerHTML = `
+      <div class="spark-hw">${htmlEscape(hw)}</div>
+      ${rail}
+      <div class="spark-foot">
+        <span class="rc-headroom"><span class="hl">headroom</span><span class="hv">${headroom}</span></span>
+        <span class="rc-temp" data-hot="${hot}">${h.gpu_temp_c == null ? "—" : h.gpu_temp_c + "°C"}</span>
+      </div>
+      <div class="rc-residents">${vllmLine}</div>`;
+  }
+
+  async function refreshRig() {
+    const bay = document.querySelector("[data-rig-gpus]");
+    if (!bay) return;
+    const [rig, spark] = await Promise.all([
+      fetchJson("/api/system/rig"),
+      fetchJson("/api/system/spark"),
+    ]);
+
+    // --- Tower ---------------------------------------------------------------
+    let gpuCount = 0, totalMib = 0;
+    if (!rig || !rig.available || !rig.gpus || !rig.gpus.length) {
+      bay.innerHTML = `<div class="rig-note">${
+        htmlEscape((rig && rig.message) || "rig stats unavailable")}</div>`;
+    } else {
+      const gpus = rig.gpus.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+      gpuCount = gpus.length;
+      totalMib = gpus.reduce((sum, g) => sum + (g.mem_total_mib || 0), 0);
+      bay.innerHTML = gpus.map(g => rigGpuCardHtml(g, rig.residents_known === true)).join("");
+    }
+
+    // --- Fabric --------------------------------------------------------------
+    // Same polarity as refreshSpark(): ONLY an exact "fabric" path is live.
+    // Anything else — wifi, null, an unforeseen future value — is degraded. A
+    // silent fallback to the ~100x slower path must never be allowed to render
+    // green, so the branch is on "fabric", never on "wifi".
+    let fabricState, fabricCopy, fabricShort;
+    if (!spark || !spark.available) {
+      fabricState = "dead";
+      fabricCopy = "Spark unreachable";
+      fabricShort = "Spark unreachable";
+    } else if (spark.path === "fabric") {
+      fabricState = "live";
+      fabricCopy = "200G ConnectX-7 · fabric live";
+      fabricShort = "fabric live";
+    } else {
+      fabricState = "degraded";
+      fabricCopy = "Fabric down — on wifi";
+      fabricShort = "fabric down — on wifi";
+    }
+
+    const spine = document.querySelector("[data-rig-spine]");
+    if (spine) {
+      spine.setAttribute("data-state", fabricState);
+      const copy = spine.querySelector("[data-rig-spine-copy]");
+      if (copy) copy.textContent = fabricCopy;
+    }
+
+    // --- Header totals — computed live, never hardcoded. ----------------------
+    const totalsEl = document.querySelector("[data-rig-totals]");
+    if (totalsEl) {
+      const bits = [
+        `${gpuCount || "—"} GPU${gpuCount === 1 ? "" : "s"}`,
+        `${totalMib ? Math.round(gbFromMib(totalMib)) : "—"} GB VRAM`,
+      ];
+      if (spark && spark.available) bits.push("1 Spark");
+      totalsEl.innerHTML = `${htmlEscape(bits.join(" · "))} · <span class="fabric-state" data-state="${
+        fabricState}">${htmlEscape(fabricShort)}</span>`;
+    }
+
+    renderSparkBay(spark);
   }
 
   // ─── Sparkline (14d memory writes) ────────────────────────────────────────
@@ -2088,7 +2319,7 @@
     renderAgentStates();
     renderGpu();
     refreshSpark();
-    refreshTopology();
+    refreshRig();
     renderSparkline();
     renderFeed();
     renderStats();
