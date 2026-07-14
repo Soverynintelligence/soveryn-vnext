@@ -134,3 +134,95 @@ def _parse_prometheus(raw: str) -> dict[str, float]:
         except ValueError:
             continue
     return out
+
+
+import json
+
+_cache: SparkStatsResult | None = None
+
+
+def _ssh(host: str) -> subprocess.CompletedProcess | None:
+    """One SSH round-trip. Returns None if ssh itself is missing or hangs."""
+    try:
+        return subprocess.run(
+            [
+                "ssh",
+                "-o", "BatchMode=yes",
+                "-o", f"ConnectTimeout={_SSH_CONNECT_TIMEOUT}",
+                "-o", "StrictHostKeyChecking=accept-new",
+                f"{SPARK_SSH_USER}@{host}",
+                PROBE_CMD,
+            ],
+            capture_output=True, text=True, timeout=_SSH_TIMEOUT_SECONDS,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def _http_json(url: str) -> dict | None:
+    try:
+        with urllib.request.urlopen(url, timeout=_HTTP_TIMEOUT_SECONDS) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
+def _http_text(url: str) -> str | None:
+    try:
+        with urllib.request.urlopen(url, timeout=_HTTP_TIMEOUT_SECONDS) as r:
+            return r.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
+def _fetch_vllm(host: str) -> SparkVllm:
+    """A dead vLLM must not hide a live box — degrade to up=False, never raise."""
+    base = f"http://{host}:{SPARK_VLLM_PORT}"
+    models = _http_json(f"{base}/v1/models")
+    if not models:
+        return SparkVllm(up=False)
+    try:
+        model = models["data"][0]["id"]
+    except (KeyError, IndexError, TypeError):
+        model = None
+
+    m = _parse_prometheus(_http_text(f"{base}/metrics") or "")
+    return SparkVllm(
+        up=True,
+        model=model,
+        requests_running=m.get("vllm:num_requests_running"),
+        requests_waiting=m.get("vllm:num_requests_waiting"),
+        kv_cache_pct=m.get("vllm:kv_cache_usage_perc"),
+    )
+
+
+def _probe() -> SparkStatsResult:
+    # Fabric FIRST. The fallback order is the link health check.
+    for path, host in (("fabric", SPARK_FABRIC_HOST), ("wifi", SPARK_WIFI_HOST)):
+        proc = _ssh(host)
+        if proc is None or proc.returncode != 0:
+            continue
+        spark_host, containers = _parse_probe(proc.stdout)
+        return SparkStatsResult(
+            available=True,
+            path=path,
+            host=spark_host,
+            containers=containers,
+            vllm=_fetch_vllm(host),
+            fetched_at=time.time(),
+        )
+    return SparkStatsResult(
+        available=False,
+        message="Spark unreachable over fabric (10.10.10.2) or WiFi (192.168.86.26)",
+        fetched_at=time.time(),
+    )
+
+
+def get_spark_stats(*, _force_refresh: bool = False) -> SparkStatsResult:
+    """Current Spark stats, cached for 10s (SSH spawn is ~200ms)."""
+    global _cache
+    now = time.time()
+    if not _force_refresh and _cache is not None and (now - _cache.fetched_at) < _CACHE_TTL_SECONDS:
+        return _cache
+    _cache = _probe()
+    return _cache

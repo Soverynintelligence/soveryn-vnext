@@ -1,5 +1,7 @@
 """Tests for soveryn/app/services/spark_stats.py."""
 
+import urllib.error
+
 from soveryn.app.services.spark_stats import (
     _parse_probe, _parse_prometheus, SparkContainer,
 )
@@ -77,3 +79,96 @@ def test_parse_prometheus_extracts_unbraced_lines():
     m = _parse_prometheus(raw)
     assert m["vllm:foo"] == 1.0
     assert m["vllm:bar"] == 2.5
+
+
+import subprocess
+from unittest.mock import patch
+
+from soveryn.app.services import spark_stats
+from soveryn.app.services.spark_stats import get_spark_stats
+
+
+def _ssh_ok(stdout=PROBE_OK):
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+
+
+def _ssh_fail():
+    return subprocess.CompletedProcess(args=[], returncode=255, stdout="",
+                                       stderr="ssh: connect ... No route to host")
+
+
+METRICS = (
+    'vllm:num_requests_running{model_name="nemotron"} 2.0\n'
+    'vllm:num_requests_waiting{model_name="nemotron"} 0.0\n'
+    'vllm:kv_cache_usage_perc{model_name="nemotron"} 0.25\n'
+)
+
+
+def _fake_http(url, timeout=0):
+    """Stand-in for urllib.request.urlopen — supports `with ... as r: r.read()`."""
+    class _R:
+        def __enter__(self_inner):
+            return self_inner
+        def __exit__(self_inner, *a):
+            return False
+        def read(self_inner):
+            if "/v1/models" in url:
+                return b'{"data":[{"id":"nemotron"}]}'
+            return METRICS.encode()
+    return _R()
+
+
+def test_fabric_path_is_preferred_and_reported():
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_ok()) as run, \
+         patch("urllib.request.urlopen", side_effect=_fake_http):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.path == "fabric"
+    # the fabric address must be the one it tried first
+    assert spark_stats.SPARK_FABRIC_HOST in " ".join(run.call_args_list[0][0][0])
+    assert r.host.gpu_util_pct == 45
+    assert r.vllm.up is True
+    assert r.vllm.model == "nemotron"
+    assert r.vllm.kv_cache_pct == 0.25
+
+
+def test_wifi_fallback_is_reported_as_degraded():
+    """THE POINT OF THIS FEATURE. Fabric down + WiFi up must NOT look healthy."""
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_ok()]), \
+         patch("urllib.request.urlopen", side_effect=_fake_http):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.path == "wifi"          # <-- amber in the UI, not green
+
+
+def test_both_paths_down_degrades_cleanly():
+    spark_stats._cache = None
+    with patch("subprocess.run", side_effect=[_ssh_fail(), _ssh_fail()]):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.path is None
+    assert r.host is None
+    assert r.containers == []
+    assert r.message
+
+
+def test_box_up_but_vllm_dead_still_reports_the_box():
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_ok()), \
+         patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+        r = get_spark_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.host.gpu_util_pct == 45
+    assert r.vllm.up is False
+
+
+def test_caches_within_window():
+    spark_stats._cache = None
+    with patch("subprocess.run", return_value=_ssh_ok()) as run, \
+         patch("urllib.request.urlopen", side_effect=_fake_http):
+        get_spark_stats(_force_refresh=True)
+        get_spark_stats()
+        get_spark_stats()
+    assert run.call_count == 1
