@@ -373,6 +373,15 @@
   .gpu-bar .track { height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
   .gpu-bar .fill { height:100%; background:linear-gradient(90deg,#3dba6f,#d4a827,#c0392b); }
 
+  .spark-tile { font-size:11px; color:rgba(236,243,244,0.7); }
+  .spark-tile .link { display:inline-block; padding:2px 7px; border-radius:3px;
+    font-weight:600; letter-spacing:0.04em; font-size:10px; margin-bottom:8px; }
+  .spark-tile .link.fabric { background:rgba(61,186,111,0.15); color:#3dba6f; }
+  .spark-tile .link.wifi   { background:rgba(212,168,39,0.18); color:#d4a827; }
+  .spark-tile .link.down   { background:rgba(192,57,43,0.18); color:#c0392b; }
+  .spark-tile .row { display:flex; justify-content:space-between; margin-bottom:4px; }
+  .spark-tile .row .val { font-variant-numeric:tabular-nums; color:rgba(236,243,244,0.95); }
+
   .system-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; margin-top:18px; font-size:11px; }
   .system-stats div { display:flex; justify-content:space-between; color:rgba(236,243,244,0.55); }
   .system-stats div span { color:var(--text); font-variant-numeric:tabular-nums; }
@@ -989,6 +998,10 @@
         <div class="gpu-bars" data-testid="gpu-bars" aria-live="polite" aria-label="GPU statistics">
           <div class="gpu-bar" data-empty>GPU stats loading…</div>
         </div>
+        <h3 style="margin-top:18px">Spark</h3>
+        <div class="spark-tile" data-testid="spark-tile" aria-live="polite" aria-label="DGX Spark status">
+          <div style="opacity:0.5">Spark loading…</div>
+        </div>
         <div class="system-stats" data-stats>
           <div>memory nodes <span data-stat="nodes">—</span></div>
           <div>sessions <span data-stat="sessions">—</span></div>
@@ -1170,6 +1183,51 @@
         </div>
       `);
     }
+  }
+
+  // ─── Spark tile ───────────────────────────────────────────────────────────
+  async function refreshSpark() {
+    const el = document.querySelector('[data-testid="spark-tile"]');
+    if (!el) return;
+    const d = await fetchJson("/api/system/spark");
+
+    if (!d || !d.available) {
+      el.innerHTML = `<span class="link down">UNREACHABLE</span>
+        <div style="opacity:0.6">${(d && d.message) || "Spark unavailable"}</div>`;
+      return;
+    }
+
+    // WiFi means the 200G fabric is DOWN and we silently fell back to a ~100x
+    // slower path. Amber, never green — a green tile here would hide the failure.
+    const onFabric = d.path === "fabric";
+    const badge = onFabric
+      ? `<span class="link fabric">FABRIC · 200G</span>`
+      : `<span class="link wifi">DEGRADED — ON WIFI</span>`;
+
+    const h = d.host || {};
+    const memPct = (h.mem_total_bytes && h.mem_used_bytes)
+      ? Math.round(100 * h.mem_used_bytes / h.mem_total_bytes) : null;
+    const gib = b => (b / 1073741824).toFixed(0);
+    const v = d.vllm || {};
+    const dash = "—";
+
+    el.innerHTML = `
+      ${badge}
+      <div class="row"><span>gpu</span><span class="val">${
+        h.gpu_util_pct == null ? dash : h.gpu_util_pct + "%"} · ${
+        h.gpu_temp_c == null ? dash : h.gpu_temp_c + "°C"}</span></div>
+      <div class="row"><span>unified mem</span><span class="val">${
+        memPct == null ? dash
+          : `${gib(h.mem_used_bytes)}/${gib(h.mem_total_bytes)} GiB · ${memPct}%`}</span></div>
+      <div class="row"><span>vllm</span><span class="val">${
+        v.up ? (v.model || "up") : "down"}</span></div>
+      <div class="row"><span>requests</span><span class="val">${
+        v.up ? `${v.requests_running ?? 0} run · ${v.requests_waiting ?? 0} wait` : dash}</span></div>
+      <div class="row"><span>kv cache</span><span class="val">${
+        (v.up && v.kv_cache_pct != null) ? (v.kv_cache_pct * 100).toFixed(1) + "%" : dash}</span></div>
+      <div class="row"><span>containers</span><span class="val">${
+        (d.containers || []).filter(c => c.state === "running").length} running</span></div>
+    `;
   }
 
   // ─── Sparkline (14d memory writes) ────────────────────────────────────────
@@ -1960,6 +2018,7 @@
     renderGreeting();
     renderAgentStates();
     renderGpu();
+    refreshSpark();
     renderSparkline();
     renderFeed();
     renderStats();
