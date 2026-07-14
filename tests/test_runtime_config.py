@@ -47,8 +47,9 @@ def test_app_port_is_5001_during_side_by_side():
 
 
 def test_embeddings_url_resolves():
-    # Phase 7 (2026-05-26) — router cutover: all MODEL_SERVERS share :8090.
-    assert runtime.embeddings_url() == "http://127.0.0.1:8090"
+    # 2026-07-14 — router SPLIT: embeddings lives on the Quadro router (:8091)
+    # alongside vett-scotty/cognition. Only aetheria_primary stays on :8090.
+    assert runtime.embeddings_url() == "http://127.0.0.1:8091"
 
 
 # ─── Service endpoints (spec §2, §3) ─────────────────────────────────────────
@@ -60,11 +61,28 @@ def test_parakeet_stt_service_endpoint_present():
     assert parakeet[0].port == 8087
 
 
-def test_model_servers_all_route_through_router_port_8090():
-    """Phase 7 router cutover: one llama-server router on :8090 fronts every
-    logical preset via per-model dispatch in the request body's "model" field."""
-    ports = {s.port for s in runtime.MODEL_SERVERS}
-    assert ports == {8090}
+def test_aetheria_alone_on_8090_everyone_else_on_8091():
+    """2026-07-14 — router SPLIT. llama.cpp/ggml initializes a CUDA context on
+    every VISIBLE device — `--device` only restricts where layers are
+    OFFLOADED, not what the process can see — so co-tenant models pinned via
+    `--device CUDA2` were still leaking ~1.7GB onto Aetheria's Blackwell.
+    CUDA_VISIBLE_DEVICES is the only real isolation, and router children
+    inherit env from their router, so one router cannot serve both her and
+    everyone else. Hence two routers:
+        :8090  router-blackwell  -> aetheria ALONE (she does not share)
+        :8091  router-quadro     -> vett-scotty, embeddings, cognition, reflection
+    This test protects that split. If a future change "helpfully" merges the
+    ports back to a single router, this must fail — that would silently
+    reintroduce the Blackwell VRAM leak onto Aetheria's dedicated GPU.
+    """
+    aetheria = [s for s in runtime.MODEL_SERVERS if s.name == "aetheria_primary"]
+    others = [s for s in runtime.MODEL_SERVERS if s.name != "aetheria_primary"]
+    assert len(aetheria) == 1
+    assert aetheria[0].port == 8090
+    assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
+    assert {s.port for s in others} == {8091}
+    # And no non-aetheria entry may share Aetheria's port.
+    assert all(s.port != 8090 for s in others)
 
 
 def test_model_servers_have_distinct_logical_names():
@@ -100,10 +118,12 @@ def test_cognition_is_cognition_not_aetheria_public():
 
 def test_all_ports_includes_parakeet():
     """all_ports() must surface every active-fleet port for preflight checks.
-    Under router mode the model-server side collapses to a single port."""
+    2026-07-14 router SPLIT: the model-server side is now TWO ports —
+    :8090 (Blackwell, aetheria alone) and :8091 (Quadro, everyone else) —
+    not one, precisely because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    assert ports == {8087, 8090}
+    assert ports == {8087, 8090, 8091}
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():

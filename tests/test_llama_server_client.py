@@ -390,11 +390,13 @@ def test_chat_invalid_response_shape_raises_llama_server_error():
 def test_embed_routes_to_embeddings_server_only():
     """embed() must contact the embeddings endpoint, never a chat endpoint.
 
-    Phase 7 (router cutover): all four MODEL_SERVERS now share :8090 — the
-    per-port isolation that used to enforce this boundary is gone, replaced by
-    per-model dispatch on the router. The semantic invariant that survives is:
-    embed() goes to /v1/embeddings with the embeddings server's model_alias,
-    NEVER to /v1/chat/completions. Verify both pieces."""
+    2026-07-14 (router SPLIT): embeddings lives on the Quadro router (:8091)
+    with vett-scotty/cognition — Aetheria's Blackwell router (:8090) serves
+    her alone, so per-port isolation no longer separates chat from embeddings
+    within a single router; per-model dispatch still does. The semantic
+    invariant that survives is: embed() goes to /v1/embeddings on :8091 with
+    the embeddings server's model_alias, NEVER to /v1/chat/completions and
+    NEVER to Aetheria's dedicated :8090. Verify all three pieces."""
     request = EmbeddingRequest(input=("hello world",))
     body = {
         "data": [{"embedding": [0.1, 0.2, 0.3], "index": 0}],
@@ -404,10 +406,11 @@ def test_embed_routes_to_embeddings_server_only():
     with ctx:
         embed(request)
 
-    # Must hit /v1/embeddings on the router port; never /v1/chat/completions
+    # Must hit /v1/embeddings on the Quadro router port; never chat, never :8090
     url_called = captured["req"].full_url
-    assert ":8090/v1/embeddings" in url_called
+    assert ":8091/v1/embeddings" in url_called
     assert "/v1/chat/completions" not in url_called
+    assert ":8090" not in url_called
 
     # Payload must carry the embeddings server's alias so the router
     # dispatches to the embeddings child subprocess, not an agent child.

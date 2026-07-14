@@ -14,12 +14,17 @@ from soveryn.agents.vett.harness.llm_client import SoverynVettInferenceModel
 
 
 def test_inference_model_constructs_with_defaults():
-    """Constructor produces a working OpenAI-compat client without errors."""
+    """Constructor produces a working OpenAI-compat client without errors.
+
+    2026-07-14 (router SPLIT): vett-scotty lives on the Quadro router (:8091),
+    not Aetheria's dedicated Blackwell router (:8090) — she does not share
+    her GPU with anyone. Default must target :8091."""
     model = SoverynVettInferenceModel()
     assert model.model == "vett-scotty"
     assert model.api_style == "chat_completions"
     assert model.openai_client.base_url.host in ("127.0.0.1", "localhost")
-    assert "8090" in str(model.openai_client.base_url)
+    assert "8091" in str(model.openai_client.base_url)
+    assert "8090" not in str(model.openai_client.base_url)
 
 
 def test_inference_model_constructor_accepts_overrides():
