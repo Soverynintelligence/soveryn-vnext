@@ -817,6 +817,13 @@
   .topology .legend { margin-top:14px; font-size:10px; color:rgba(232,227,213,0.45); text-align:center; letter-spacing:0.06em; text-transform:uppercase; }
   .topology .legend .live { color:var(--sov-electric-blue); }
   .topology .legend .pending { color:rgba(232,227,213,0.55); }
+  .topology .node[data-status="degraded"] rect { stroke:#d4a827; stroke-width:1.5; }
+  .topology .node[data-status="dead"] rect     { stroke:#c0392b; stroke-width:1.5; }
+  .topology .node .dot[data-status="degraded"] { fill:#d4a827; }
+  .topology .node .dot[data-status="dead"]     { fill:#c0392b; }
+  .topology .link[data-status="degraded"] { stroke:#d4a827; stroke-opacity:0.8; }
+  .topology .link[data-status="dead"]     { stroke:#c0392b; stroke-opacity:0.5; stroke-dasharray:5 4; }
+  .topology .legend .degraded { color:#d4a827; }
 </style>
 </head>
 <body data-testid="command-center">
@@ -1057,46 +1064,49 @@
       </div>
     </section>
 
-    <!-- Topology — the sovereign fabric. SOVERYN tower live; 2x DGX Spark
-         + ConnectX-7 are scaffolded as "pending" until hardware arrives,
-         then the data-status flip is the only change needed. -->
+    <!-- Topology — the sovereign fabric. SOVERYN tower is three GPUs (1x
+         Blackwell RTX PRO 5000 48GB + 2x Quadro RTX 8000 48GB), driven live
+         from /api/system/gpu. Spark A is live now on a 200G ConnectX-7
+         fabric link, driven from /api/system/spark — never rendered alive
+         unless path === "fabric". Spark B does not exist yet and stays
+         "pending" scaffold; the plan is still two Sparks. -->
     <section class="panel topology" data-testid="topology">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:18px;">Fabric</h3>
       <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" aria-label="SOVERYN compute fabric topology">
         <!-- Links first so they sit under the nodes. -->
-        <g class="link" data-status="active">
-          <!-- SOVERYN <-> Spark A (left) — mgmt ethernet -->
+        <g class="link" data-status="pending" data-testid="topology-link-soveryn-spark-a">
+          <!-- SOVERYN <-> Spark A (left) — 200G ConnectX-7 fabric, JS-driven -->
           <path d="M 200 90 Q 130 180 130 230"/>
         </g>
-        <g class="link" data-status="active">
-          <!-- SOVERYN <-> Spark B (right) — mgmt ethernet -->
+        <g class="link" data-status="pending">
+          <!-- SOVERYN <-> Spark B (right) — Spark B does not exist yet -->
           <path d="M 440 90 Q 510 180 510 230"/>
         </g>
         <g class="link" data-status="pending" data-testid="topology-link-spark-spark">
-          <!-- Spark A <-> Spark B — 400G ConnectX-7 DAC -->
+          <!-- Spark A <-> Spark B — ConnectX-7, not yet measured (Spark B pending) -->
           <path d="M 200 250 L 440 250"/>
         </g>
-        <text class="link-label" x="320" y="244" text-anchor="middle">400G DAC</text>
+        <text class="link-label" x="320" y="244" text-anchor="middle">ConnectX-7 · pending</text>
 
-        <!-- SOVERYN tower — alive, the existing node. -->
-        <g class="node" data-status="alive" data-node="soveryn" transform="translate(232 30)">
+        <!-- SOVERYN tower — alive, the existing node. VRAM total is live-populated. -->
+        <g class="node" data-status="alive" data-node="soveryn" data-testid="topology-node-soveryn" transform="translate(232 30)">
           <rect width="176" height="62"/>
           <circle class="dot" data-status="alive" cx="14" cy="18" r="4"/>
           <text x="26" y="22">SOVERYN tower</text>
-          <text class="role" x="14" y="40">Blackwell 96GB · live</text>
+          <text class="role" x="14" y="40" data-tower-vram>GPUs · loading…</text>
           <text class="role" x="14" y="54">Aetheria, daemons</text>
         </g>
 
-        <!-- DGX Spark A — pending. -->
-        <g class="node" data-status="pending" data-node="spark-a" transform="translate(42 220)">
+        <!-- DGX Spark A — live on the 200G fabric, driven from /api/system/spark. -->
+        <g class="node" data-status="pending" data-node="spark-a" data-testid="topology-node-spark-a" transform="translate(42 220)">
           <rect width="176" height="62"/>
           <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
           <text x="26" y="22">DGX Spark A</text>
-          <text class="role" x="14" y="40">GB10 · 128GB unified</text>
-          <text class="role" x="14" y="54">pending arrival</text>
+          <text class="role" x="14" y="40" data-spark-a-hw>GB10 · 128GB unified</text>
+          <text class="role" x="14" y="54" data-spark-a-status>loading…</text>
         </g>
 
-        <!-- DGX Spark B — pending. -->
+        <!-- DGX Spark B — pending. Does not exist yet; still the plan. -->
         <g class="node" data-status="pending" data-node="spark-b" transform="translate(422 220)">
           <rect width="176" height="62"/>
           <circle class="dot" data-status="pending" cx="14" cy="18" r="4"/>
@@ -1107,8 +1117,9 @@
       </svg>
       <div class="legend">
         <span class="live">●</span> live &nbsp;·&nbsp;
+        <span class="degraded">●</span> degraded &nbsp;·&nbsp;
         <span class="pending">○</span> pending
-        &nbsp;·&nbsp; mgmt ethernet always-on · 400G ConnectX-7 once Sparks land
+        &nbsp;·&nbsp; 200G ConnectX-7 fabric · Spark B pending
       </div>
     </section>
 
@@ -1228,6 +1239,64 @@
       <div class="row"><span>containers</span><span class="val">${
         (d.containers || []).filter(c => c.state === "running").length} running</span></div>
     `;
+  }
+
+  // ─── Topology diagram (tower VRAM + Spark A live state) ───────────────────
+  async function refreshTopology() {
+    const towerVram = document.querySelector('[data-tower-vram]');
+    const gpuData = await fetchJson("/api/system/gpu");
+    if (towerVram) {
+      if (gpuData && gpuData.available && gpuData.gpus && gpuData.gpus.length) {
+        const totalMib = gpuData.gpus.reduce((sum, g) => sum + (g.mem_total_mib || 0), 0);
+        const totalGB = Math.round(totalMib / 1024);
+        towerVram.textContent = `${gpuData.gpus.length} GPUs · ${totalGB}GB VRAM`;
+      } else {
+        towerVram.textContent = "GPUs · —";
+      }
+      // Tower status is left alone: the dashboard runs on the tower, so if
+      // you're reading this page, the tower is alive.
+    }
+
+    const sparkANode = document.querySelector('[data-testid="topology-node-spark-a"]');
+    const sparkALink = document.querySelector('[data-testid="topology-link-soveryn-spark-a"]');
+    const sparkAHw = document.querySelector('[data-spark-a-hw]');
+    const sparkAStatus = document.querySelector('[data-spark-a-status]');
+    const d = await fetchJson("/api/system/spark");
+
+    // Same polarity as refreshSpark(): only an exact "fabric" path is alive.
+    // Anything else (wifi, null, an unforeseen future value) is degraded —
+    // a silent WiFi fallback must never be allowed to render green.
+    let status, statusText;
+    if (!d || !d.available) {
+      status = "dead";
+      statusText = "unreachable";
+    } else if (d.path === "fabric") {
+      status = "alive";
+      statusText = "fabric · 200G";
+    } else {
+      status = "degraded";
+      statusText = "DEGRADED — WIFI";
+    }
+
+    if (sparkANode) {
+      sparkANode.setAttribute("data-status", status);
+      const dot = sparkANode.querySelector(".dot");
+      if (dot) dot.setAttribute("data-status", status);
+    }
+    if (sparkALink) {
+      sparkALink.setAttribute("data-status", status === "alive" ? "active" : status);
+    }
+    if (sparkAStatus) sparkAStatus.textContent = statusText;
+
+    if (sparkAHw) {
+      const h = (d && d.host) || null;
+      if (h && h.mem_total_bytes != null && h.mem_used_bytes != null) {
+        const gib = b => (b / 1073741824).toFixed(0);
+        sparkAHw.textContent = `GB10 · ${gib(h.mem_used_bytes)}/${gib(h.mem_total_bytes)}GB unified`;
+      } else {
+        sparkAHw.textContent = "GB10 · 128GB unified";
+      }
+    }
   }
 
   // ─── Sparkline (14d memory writes) ────────────────────────────────────────
@@ -2019,6 +2088,7 @@
     renderAgentStates();
     renderGpu();
     refreshSpark();
+    refreshTopology();
     renderSparkline();
     renderFeed();
     renderStats();
