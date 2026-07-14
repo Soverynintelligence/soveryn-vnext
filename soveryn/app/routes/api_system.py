@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify
 
 from soveryn.app.services.gpu_stats import get_gpu_stats
+from soveryn.app.services.spark_stats import get_spark_stats
 
 bp = Blueprint("api_system", __name__)
 
@@ -19,6 +20,25 @@ def api_system_gpu():
         "available": r.available,
         "message": r.message,
         "gpus": [asdict(g) for g in r.gpus],
+        "fetched_at": r.fetched_at,
+    }), 200
+
+
+@bp.get("/api/system/spark")
+def api_system_spark():
+    """DGX Spark: box health + vLLM serving state.
+
+    `path` is "fabric" | "wifi" | null. WiFi means the 200G link is DOWN and we
+    silently fell back to a ~100x slower path — the UI renders that amber, not green.
+    """
+    r = get_spark_stats()
+    return jsonify({
+        "available": r.available,
+        "path": r.path,
+        "message": r.message,
+        "host": asdict(r.host) if r.host else None,
+        "containers": [asdict(c) for c in r.containers],
+        "vllm": asdict(r.vllm) if r.vllm else None,
         "fetched_at": r.fetched_at,
     }), 200
 
