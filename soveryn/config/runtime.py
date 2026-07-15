@@ -47,14 +47,21 @@ MODEL_ROOT = Path("/mnt/soveryn_models/GGUF")
 class ModelServer:
     """A single llama-server endpoint.
 
-    Phase 7 (2026-05-26) — router cutover: all four MODEL_SERVERS now share
-    port 8090. `name` remains the logical preset identity inside vNext;
+    2026-07-14 — router SPLIT. There are now TWO routers, because llama.cpp
+    initializes a CUDA context on every VISIBLE device (`--device` restricts
+    where layers are OFFLOADED, not what is visible), so co-tenant models were
+    leaking ~1.7GB onto Aetheria's Blackwell. Each router is pinned with
+    CUDA_VISIBLE_DEVICES to only the cards it may touch:
+        :8090  router-blackwell  -> aetheria ALONE (she does not share)
+        :8091  router-quadro     -> vett-scotty, embeddings, cognition, reflection
+    A router that cannot SEE a card cannot allocate on it.
+    `name` remains the logical preset identity inside vNext;
     `model_alias` is the router-facing identifier sent in the OpenAI `model`
     field. The router's preset .ini (soveryn_vnext/runtime/router-presets.ini)
     has both the alias and the model basename registered, so both resolve.
     """
     name: str                       # logical identity, e.g. "aetheria_primary"
-    port: int                       # 127.0.0.1:<port>  — all model servers share :8090 under router mode
+    port: int                       # 127.0.0.1:<port>  — 8090 = Blackwell router (aetheria only), 8091 = Quadro router
     model_path: Path                # GGUF file
     mmproj_path: Path | None = None
     role: str = ""                  # human-readable: "Aetheria primary inference", etc.
@@ -91,7 +98,7 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     ModelServer(
         name="vett_scotty_shared",
-        port=8090,
+        port=8091,
         model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
         mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
         role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
@@ -107,14 +114,14 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     ModelServer(
         name="embeddings",
-        port=8090,
+        port=8091,
         model_path=MODEL_ROOT / "nomic-embed-text-v1.5.Q8_0.gguf",
         role="Single embedding backend (nomic-embed), used by Lattice",
         model_alias="embeddings",
     ),
     ModelServer(
         name="cognition",
-        port=8090,
+        port=8091,
         model_path=MODEL_ROOT / "gemma-4-E4B-it-Q8_0.gguf",
         role="Cognition layer — dream consolidation, background dispatch worker",
         model_alias="cognition",
@@ -249,7 +256,7 @@ def _validate() -> None:
     if unrouted:
         raise RuntimeError(f"Active agents without server routing: {unrouted}")
     # Port-collision invariant under router mode (Phase 7, 2026-05-26):
-    # MODEL_SERVERS deliberately share a single port (8090) because one
+    # MODEL_SERVERS are split across TWO router ports (8090 Blackwell / 8091 Quadro) because one
     # llama-server router process proxies all four logical servers via the
     # "model" field. The collision check therefore validates uniqueness by
     # (port, name) for MODEL_SERVERS — duplicates on port alone are allowed

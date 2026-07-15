@@ -38,7 +38,7 @@ from soveryn.agents.vett.harness.vendor.trajectory import Action, ActionBuilder
 from soveryn.agents.vett.harness.vendor.utils import ProviderFormat
 
 
-_DEFAULT_ROUTER_URL = "http://127.0.0.1:8090"
+_DEFAULT_ROUTER_URL = "http://127.0.0.1:8091"  # Quadro router (vett-scotty). Aetheria is :8090.
 _DEFAULT_MODEL = "vett-scotty"
 
 

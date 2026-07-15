@@ -108,7 +108,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
                         help=("Max trajectory length forwarded to the vendored "
                               "Agent (default 20; vendored default 32). When "
                               "exceeded, the harness raises RuntimeError mid-run."))
-    parser.add_argument("--router-url", default="http://127.0.0.1:8090",
+    parser.add_argument("--router-url", default="http://127.0.0.1:8091",
                         help="llama-server router URL (default :8090).")
     parser.add_argument("--model", default="vett-scotty",
                         help="Router model alias (default vett-scotty).")

@@ -25,7 +25,7 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 logger = logging.getLogger(__name__)
 
 
-_DEFAULT_ROUTER_URL = "http://127.0.0.1:8090/v1/chat/completions"
+_DEFAULT_ROUTER_URL = "http://127.0.0.1:8091/v1/chat/completions"  # Quadro router — [reflection] lives there, not with Aetheria
 _DEFAULT_MODEL_ALIAS = "reflection"  # matches router-presets.ini [reflection]
 _DEFAULT_TIMEOUT_SECONDS = 90.0
 _DEFAULT_TEMPERATURE = 0.7
