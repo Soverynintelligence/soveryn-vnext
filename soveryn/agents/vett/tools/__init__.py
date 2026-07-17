@@ -12,6 +12,7 @@ from soveryn.agents.vett.tools.patrol_sources import (
 )
 from soveryn.agents.vett.tools.pdf import (
     build_convert_to_pdf_tool,
+    build_read_pdf_tool,
     register_vett_pdf_tools,
 )
 from soveryn.agents.vett.tools.git import (
@@ -27,6 +28,7 @@ __all__ = [
     "build_read_patrol_sources_tool",
     "register_vett_patrol_tools",
     "build_convert_to_pdf_tool",
+    "build_read_pdf_tool",
     "register_vett_pdf_tools",
     "build_git_status_tool",
     "build_git_log_tool",
