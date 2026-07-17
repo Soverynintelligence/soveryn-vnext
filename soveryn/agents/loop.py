@@ -646,7 +646,13 @@ class AgentLoop:
             )
             return cached.text
 
-        query_vector = self.embed_fn(user_message)
+        # Librarian asymmetric prefix: recall queries embed as "query", memories
+        # as "document". embed_fn is normally embed_text (accepts prompt); test
+        # fakes may not, so fall back.
+        try:
+            query_vector = self.embed_fn(user_message, prompt="query")
+        except TypeError:
+            query_vector = self.embed_fn(user_message)
         ranked = self.lattice_store.find_nodes_by_embedding(
             self.agent_name,
             query_vector,

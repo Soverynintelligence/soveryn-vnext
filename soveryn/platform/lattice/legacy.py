@@ -626,14 +626,16 @@ class LatticeStore:
         return tuple(scored[:limit])
 
 
-def embed_text(text: str) -> tuple[float, ...]:
+def embed_text(text: str, prompt: str = "document") -> tuple[float, ...]:
     """Convenience: encode a single string via the embeddings server.
 
-    Imports the client lazily so importing soveryn.memory.lattice doesn't
-    drag in urllib at module load time.
+    `prompt` selects the Librarian's asymmetric prefix: "document" (default, for
+    memories/writes) or "query" (for recall queries). The old nomic server
+    ignored it; the Nemotron-8B server uses it. Imports the client lazily so
+    importing soveryn.memory.lattice doesn't drag in urllib at module load time.
     """
     from soveryn.inference.llama_server_client import EmbeddingRequest, embed
-    resp = embed(EmbeddingRequest(input=(text,)))
+    resp = embed(EmbeddingRequest(input=(text,), prompt=prompt))
     if not resp.vectors:
         raise LatticeError("embed_text: server returned no vectors")
     return resp.vectors[0]

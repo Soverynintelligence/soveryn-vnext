@@ -114,9 +114,13 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     ModelServer(
         name="embeddings",
-        port=8091,
+        # 2026-07-17 Librarian: repointed off the nomic router (:8091) to the
+        # standalone Nemotron-3-Embed-8B server (:8096, sentence-transformers in
+        # the isolated nemo-embed env). 4096-dim; lattice fully re-embedded.
+        # model_path below is cosmetic now — the :8096 server is self-contained.
+        port=8096,
         model_path=MODEL_ROOT / "nomic-embed-text-v1.5.Q8_0.gguf",
-        role="Single embedding backend (nomic-embed), used by Lattice",
+        role="Embedding backend: Nemotron-3-Embed-8B on :8096, used by Lattice",
         model_alias="embeddings",
     ),
     ModelServer(

@@ -102,6 +102,10 @@ class ChatResponse:
 class EmbeddingRequest:
     input: tuple[str, ...]                  # always a sequence; single-string callers wrap to (s,)
     model: str = "nomic-embed-text-v1.5"
+    # 2026-07-17 Librarian: asymmetric prompt for the Nemotron-8B server — docs
+    # (memories) embed as "document", recall queries as "query". Ignored by the
+    # old nomic server. Defaults to document so writes stay correct.
+    prompt: str = "document"
 
 
 @dataclass(frozen=True)
@@ -474,6 +478,7 @@ def embed(
     payload = {
         "model": server.model_alias or request.model,
         "input": list(request.input),
+        "prompt": request.prompt,   # "document" (default) | "query" — Librarian asymmetric prefix
     }
     url = f"http://127.0.0.1:{server.port}/v1/embeddings"
     parsed = _post_json(url, payload, timeout, server.name)

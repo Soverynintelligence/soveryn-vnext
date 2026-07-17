@@ -788,8 +788,13 @@ def create_app(
                     if identity_spine_lattice is not None:
                         kwargs["identity_spine_store"] = identity_spine_lattice
                     kwargs["recall_k"] = 5
-                    kwargs["recall_threshold"] = 0.70
-                    # embed_fn defaults to _default_embed (calls :8086 nomic-embed)
+                    # 2026-07-17: Librarian = Nemotron-3-Embed-8B (4096-dim, on :8096).
+                    # Its cosine scores run ~0.3-0.55 for good matches (nomic ran
+                    # ~0.68-0.70 with no separation), so the threshold drops from
+                    # 0.70 -> 0.25 or recall would return nothing.
+                    kwargs["recall_threshold"] = 0.25
+                    # embed_fn defaults to _default_embed (calls the embeddings
+                    # ModelServer, now the Nemotron-8B server on :8096)
                 # Live chat history budget. SessionContextCache (commit 9baa798)
                 # made the byte-identical prelude cacheable, but the heartbeat
                 # tier-2 issue still periodically flushes Aetheria's llama-server
