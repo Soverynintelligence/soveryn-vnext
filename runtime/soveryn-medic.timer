@@ -1,0 +1,11 @@
+[Unit]
+Description=SOVERYN Medic tick (every 60s)
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=60
+AccuracySec=5
+Unit=soveryn-medic.service
+
+[Install]
+WantedBy=timers.target

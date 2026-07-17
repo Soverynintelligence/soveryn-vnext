@@ -1,0 +1,10 @@
+[Unit]
+Description=SOVERYN Medic — fleet auto-heal actuator (green actions only; never touches routers)
+After=soveryn-vnext.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin
+Environment=SIGNAL_BOT_NUMBER=+19102489392 SIGNAL_USER_NUMBER=+19105813970 SIGNAL_CLI_BIN=/usr/local/bin/signal-cli
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.medic

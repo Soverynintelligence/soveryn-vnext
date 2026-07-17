@@ -161,3 +161,28 @@ def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
     assert hist["embeddings"] == [1000.0]
     # the action reflects the failure
     assert result["actions"][0]["ok"] is False
+
+
+import importlib
+import subprocess as _sp
+
+
+def test_module_main_runs_one_tick(monkeypatch):
+    called = {}
+    monkeypatch.setattr(medic, "run_once", lambda: called.setdefault("ran", True) or {"actions": []})
+    main_mod = importlib.import_module("soveryn.platform.medic.__main__")
+    main_mod.main()
+    assert called.get("ran") is True
+
+
+def test_service_unit_targets_the_module_and_soveryn_python():
+    text = open("runtime/soveryn-medic.service").read()
+    assert "python -m soveryn.platform.medic" in text
+    assert "/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python" in text
+    assert "Type=oneshot" in text
+
+
+def test_timer_unit_ticks_every_60s():
+    text = open("runtime/soveryn-medic.timer").read()
+    assert "OnUnitActiveSec=60" in text
+    assert "Unit=soveryn-medic.service" in text
