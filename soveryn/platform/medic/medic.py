@@ -11,6 +11,11 @@ loop. `FORBIDDEN_UNITS` + a test enforce this.
 """
 from __future__ import annotations
 
+import json
+import subprocess
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,3 +98,128 @@ def decide(
             continue
         decisions.append(MedicDecision(key, target.unit, "act", "unhealthy — healing"))
     return decisions
+
+
+# ── probe classification (pure) ─────────────────────────────────────────────
+_HTTP_PORTS = {"vnext": 5001, "embeddings": 8096, "router": 8090}
+_UNIT_KEYS = ("dream", "x-feed", "tg-bridge", "parakeet", "vett-patrol", "representation")
+
+
+def probe_unhealthy(
+    *,
+    http_ok: dict[str, bool],
+    unit_active: dict[str, bool],
+    heartbeat_age: float,
+    comfyui_on_her_card: bool,
+) -> tuple[set[str], bool]:
+    """Pure: turn injected readings into (unhealthy_keys, router_healthy)."""
+    unhealthy: set[str] = set()
+    if not http_ok.get("vnext", True):
+        unhealthy.add("vnext")
+    if not http_ok.get("embeddings", True):
+        unhealthy.add("embeddings")
+    for key in _UNIT_KEYS:
+        if not unit_active.get(key, True):
+            unhealthy.add(key)
+    if heartbeat_age > HEARTBEAT_MAX_AGE_S:
+        unhealthy.add("heartbeat")
+    if comfyui_on_her_card:
+        unhealthy.add("comfyui")
+    return unhealthy, bool(http_ok.get("router", True))
+
+
+# ── live readers ────────────────────────────────────────────────────────────
+def _http_ok(port: int, timeout: float = 2.0) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def _unit_is_active(unit: str, timeout: float = 3.0) -> bool:
+    try:
+        out = subprocess.run(["systemctl", "--user", "is-active", unit],
+                             capture_output=True, text=True, timeout=timeout)
+        return out.stdout.strip() == "active"
+    except (subprocess.SubprocessError, OSError):
+        return False  # can't confirm alive → treat as unhealthy (medic will restart)
+
+
+def _heartbeat_age(now: float) -> float:
+    try:
+        return now - HEARTBEAT_FILE.stat().st_mtime
+    except OSError:
+        return 0.0  # unknown → do not fire a false heartbeat alarm
+
+
+def _comfyui_on_her_card() -> bool:
+    from soveryn.agents.ares.lanes import vitals
+    try:
+        apps = vitals._read_compute_apps()
+    except Exception:  # noqa: BLE001
+        return False
+    return any(gpu == vitals.HER_GPU_UUID and "envs/comfyui/" in name
+               for gpu, _pid, name in apps)
+
+
+def _probe() -> tuple[set[str], bool]:
+    now = time.time()
+    http_ok = {k: _http_ok(p) for k, p in _HTTP_PORTS.items()}
+    unit_active = {k: _unit_is_active(TARGETS[k].unit) for k in _UNIT_KEYS}
+    return probe_unhealthy(
+        http_ok=http_ok,
+        unit_active=unit_active,
+        heartbeat_age=_heartbeat_age(now),
+        comfyui_on_her_card=_comfyui_on_her_card(),
+    )
+
+
+# ── actuation + state ───────────────────────────────────────────────────────
+def _run_unit(unit: str, verb: str) -> None:
+    if unit in FORBIDDEN_UNITS:  # belt-and-suspenders; no router target exists
+        raise AssertionError(f"medic refused to {verb} forbidden unit {unit}")
+    subprocess.run(["systemctl", "--user", verb, unit], timeout=90, check=True)
+
+
+def _escalate(decision: MedicDecision) -> None:
+    signal_sender.send(f"[MEDIC] {decision.unit} {decision.reason}", priority=decision.priority)
+
+
+def _read_history() -> dict[str, list[float]]:
+    try:
+        return {k: [float(t) for t in v] for k, v in json.loads(HISTORY_FILE.read_text()).items()}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _write_history(history: dict[str, list[float]], now: float) -> None:
+    pruned = {k: [t for t in v if now - t < LOOPGUARD_WINDOW_S] for k, v in history.items()}
+    pruned = {k: v for k, v in pruned.items() if v}
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    HISTORY_FILE.write_text(json.dumps(pruned, sort_keys=True))
+
+
+def _log(record: dict) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(LOG_FILE, "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def run_once(now: float | None = None) -> dict:
+    now = time.time() if now is None else now
+    unhealthy, router_healthy = _probe()
+    history = _read_history()
+    decisions = decide(unhealthy_keys=unhealthy, router_healthy=router_healthy,
+                       restart_history=history, now=now)
+    actions = []
+    for d in decisions:
+        if d.action == "act":
+            _run_unit(d.unit, TARGETS[d.key].verb)
+            history.setdefault(d.key, []).append(now)
+        elif d.action == "escalate":
+            _escalate(d)
+        actions.append({"key": d.key, "unit": d.unit, "action": d.action, "reason": d.reason})
+    _write_history(history, now)
+    _log({"ts": now, "unhealthy": sorted(unhealthy), "router_healthy": router_healthy, "actions": actions})
+    return {"unhealthy": sorted(unhealthy), "actions": actions}

@@ -56,3 +56,77 @@ def test_non_critical_escalation_is_not_priority():
     d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
                      restart_history=hist, now=800.0)
     assert d[0].action == "escalate" and d[0].priority is False
+
+
+import json
+
+
+def test_probe_unhealthy_classifies_from_readings():
+    unhealthy, router_healthy = medic.probe_unhealthy(
+        http_ok={"vnext": False, "embeddings": True, "router": True},
+        unit_active={"dream": False, "x-feed": True, "tg-bridge": True, "parakeet": True,
+                     "vett-patrol": True, "representation": True},
+        heartbeat_age=100.0,           # fresh
+        comfyui_on_her_card=False,
+    )
+    assert unhealthy == {"vnext", "dream"}
+    assert router_healthy is True
+
+
+def test_probe_flags_stale_heartbeat_and_comfyui_squatter():
+    unhealthy, _ = medic.probe_unhealthy(
+        http_ok={"vnext": True, "embeddings": True, "router": True},
+        unit_active={"dream": True, "x-feed": True, "tg-bridge": True, "parakeet": True,
+                     "vett-patrol": True, "representation": True},
+        heartbeat_age=3000.0,          # > 2400 → stale
+        comfyui_on_her_card=True,
+    )
+    assert "heartbeat" in unhealthy and "comfyui" in unhealthy
+
+
+def test_run_once_acts_and_records_history(tmp_path, monkeypatch):
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    # everything healthy except embeddings
+    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+    calls = []
+    monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: calls.append((unit, verb)))
+    monkeypatch.setattr(medic, "_escalate", lambda d: calls.append(("ESCALATE", d.unit)))
+
+    result = medic.run_once(now=1000.0)
+
+    assert ("soveryn-embeddings.service", "restart") in calls
+    assert result["actions"][0]["action"] == "act"
+    hist = json.loads((tmp_path / "restart_history.json").read_text())
+    assert hist["embeddings"] == [1000.0]
+
+
+def test_run_once_escalates_and_does_not_restart_when_loopguard_tripped(tmp_path, monkeypatch):
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    (tmp_path / "restart_history.json").write_text(json.dumps({"vnext": [100.0, 400.0, 700.0]}))
+    monkeypatch.setattr(medic, "_probe", lambda: ({"vnext"}, True))
+    calls = []
+    monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: calls.append(("RESTART", unit)))
+    monkeypatch.setattr(medic, "_escalate", lambda d: calls.append(("ESCALATE", d.unit)))
+
+    medic.run_once(now=800.0)
+
+    assert ("ESCALATE", "soveryn-vnext.service") in calls
+    assert ("RESTART", "soveryn-vnext.service") not in calls
+
+
+def test_run_once_never_calls_run_unit_on_a_router(tmp_path, monkeypatch):
+    # Defense in depth: even if a router key were somehow unhealthy, no router
+    # unit can reach _run_unit (there is no router target).
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    monkeypatch.setattr(medic, "_probe", lambda: (set(medic.TARGETS), True))
+    restarted = []
+    monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: restarted.append(unit))
+    monkeypatch.setattr(medic, "_escalate", lambda d: None)
+    medic.run_once(now=5000.0)
+    assert not (medic.FORBIDDEN_UNITS & set(restarted))
