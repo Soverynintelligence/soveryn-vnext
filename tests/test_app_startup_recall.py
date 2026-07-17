@@ -61,7 +61,9 @@ def test_aetheria_gets_recall_when_recall_lattice_exists(
     state = app.extensions["soveryn"]
     aetheria = state["agent_loops"]["aetheria"]
     assert aetheria.recall_k == 5
-    assert aetheria.recall_threshold == pytest.approx(0.70)
+    # 2026-07-17 — Librarian: threshold lowered 0.70 → 0.25 for meaning-based
+    # recall via Nemotron-3-Embed-8B (4096-dim, asymmetric query/passage prefixes).
+    assert aetheria.recall_threshold == pytest.approx(0.25)
     assert aetheria.lattice_store is not None
 
 

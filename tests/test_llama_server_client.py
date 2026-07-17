@@ -394,7 +394,7 @@ def test_embed_routes_to_embeddings_server_only():
     with vett-scotty/cognition — Aetheria's Blackwell router (:8090) serves
     her alone, so per-port isolation no longer separates chat from embeddings
     within a single router; per-model dispatch still does. The semantic
-    invariant that survives is: embed() goes to /v1/embeddings on :8091 with
+    invariant that survives is: embed() goes to /v1/embeddings on :8096 with
     the embeddings server's model_alias, NEVER to /v1/chat/completions and
     NEVER to Aetheria's dedicated :8090. Verify all three pieces."""
     request = EmbeddingRequest(input=("hello world",))
@@ -406,9 +406,9 @@ def test_embed_routes_to_embeddings_server_only():
     with ctx:
         embed(request)
 
-    # Must hit /v1/embeddings on the Quadro router port; never chat, never :8090
+    # Must hit /v1/embeddings on the Librarian embeddings port; never chat, never :8090
     url_called = captured["req"].full_url
-    assert ":8091/v1/embeddings" in url_called
+    assert ":8096/v1/embeddings" in url_called
     assert "/v1/chat/completions" not in url_called
     assert ":8090" not in url_called
 

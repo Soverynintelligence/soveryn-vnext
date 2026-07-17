@@ -47,9 +47,9 @@ def test_app_port_is_5001_during_side_by_side():
 
 
 def test_embeddings_url_resolves():
-    # 2026-07-14 — router SPLIT: embeddings lives on the Quadro router (:8091)
-    # alongside vett-scotty/cognition. Only aetheria_primary stays on :8090.
-    assert runtime.embeddings_url() == "http://127.0.0.1:8091"
+    # 2026-07-17 — Librarian: embeddings moved to its own Nemotron-3-Embed-8B
+    # server on :8096 (off the Quadro router). Only aetheria_primary stays on :8090.
+    assert runtime.embeddings_url() == "http://127.0.0.1:8096"
 
 
 # ─── Service endpoints (spec §2, §3) ─────────────────────────────────────────
@@ -70,7 +70,8 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     inherit env from their router, so one router cannot serve both her and
     everyone else. Hence two routers:
         :8090  router-blackwell  -> aetheria ALONE (she does not share)
-        :8091  router-quadro     -> vett-scotty, embeddings, cognition, reflection
+        :8091  router-quadro     -> vett-scotty, cognition, reflection
+        :8096  embeddings        -> Librarian Nemotron-3-Embed-8B (own server)
     This test protects that split. If a future change "helpfully" merges the
     ports back to a single router, this must fail — that would silently
     reintroduce the Blackwell VRAM leak onto Aetheria's dedicated GPU.
@@ -80,7 +81,8 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     assert len(aetheria) == 1
     assert aetheria[0].port == 8090
     assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
-    assert {s.port for s in others} == {8091}
+    # vett-scotty + cognition on :8091; embeddings on its own :8096 Nemotron server.
+    assert {s.port for s in others} == {8091, 8096}
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
 
@@ -118,12 +120,12 @@ def test_cognition_is_cognition_not_aetheria_public():
 
 def test_all_ports_includes_parakeet():
     """all_ports() must surface every active-fleet port for preflight checks.
-    2026-07-14 router SPLIT: the model-server side is now TWO ports —
-    :8090 (Blackwell, aetheria alone) and :8091 (Quadro, everyone else) —
-    not one, precisely because Aetheria's GPU must never be shared."""
+    Router SPLIT + Librarian: the model-server side is now THREE ports —
+    :8090 (Blackwell, aetheria alone), :8091 (Quadro, vett-scotty/cognition),
+    and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    assert ports == {8087, 8090, 8091}
+    assert ports == {8087, 8090, 8091, 8096}
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():
