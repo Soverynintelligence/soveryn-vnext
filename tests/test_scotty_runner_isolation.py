@@ -69,3 +69,43 @@ def test_git_status_from_registry_reads_worktree(wt):
     out = _tool(reg, "git_status").handler({})
     assert out["clean"] is False
     assert str(wt.resolve()) == out["cwd"]
+
+
+def test_delegation_run_command_fails_closed_without_bwrap(wt, monkeypatch):
+    """Security invariant: delegated run_command must REFUSE (never run
+    unsandboxed) when bwrap is unavailable. Simulate a host with no bwrap by
+    forcing the resolver to None."""
+    # sandbox_argv reads the sandbox module's BWRAP global at call time.
+    monkeypatch.setattr("soveryn.platform.delegation.sandbox.BWRAP", None)
+    reg = build_worktree_tool_registry(wt)
+    out = _tool(reg, "run_command").handler(
+        {"executable": "python", "args": ["--version"]}
+    )
+    assert out["returncode"] is None
+    assert "refused" in out["message"]
+    assert "bwrap" in out["stderr_tail"]
+
+
+def test_delegation_run_pytest_fails_closed_without_bwrap(wt, monkeypatch):
+    """Same fail-closed guarantee for delegated pytest."""
+    (wt / "tests").mkdir()
+    (wt / "tests" / "test_x.py").write_text("def test_x():\n    assert True\n")
+    monkeypatch.setattr("soveryn.platform.delegation.sandbox.BWRAP", None)
+    reg = build_worktree_tool_registry(wt)
+    out = _tool(reg, "run_pytest").handler({"target": "tests/test_x.py"})
+    assert out["passed"] is False
+    assert out["returncode"] is None
+    assert "bwrap" in out["stderr_tail"]
+
+
+def test_normal_scotty_run_command_is_not_sandboxed(monkeypatch):
+    """Regression guard: normal (non-delegation) Scotty use must NOT fail closed
+    on missing bwrap — only the sandbox=True delegation path does."""
+    from soveryn.agents.scotty.tools.run_command import build_run_command_tool
+
+    # Even with bwrap "gone", the non-delegation path must still run (it never
+    # touches the sandbox at all).
+    monkeypatch.setattr("soveryn.platform.delegation.sandbox.BWRAP", None)
+    tool = build_run_command_tool(owner_agent="scotty")  # sandbox defaults False
+    out = tool.handler({"executable": "python", "args": ["--version"]})
+    assert out["returncode"] == 0

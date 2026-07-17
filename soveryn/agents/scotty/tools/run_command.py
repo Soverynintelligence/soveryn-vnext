@@ -32,6 +32,11 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
+from soveryn.platform.delegation.sandbox import (
+    SANDBOX_HOME,
+    SandboxUnavailable,
+    sandbox_argv,
+)
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 
@@ -71,7 +76,9 @@ READ_ONLY_GIT_SUBCOMMANDS: frozenset[str] = frozenset({
 FORBIDDEN_PYTHON_FIRST_ARGS: frozenset[str] = frozenset({"-c", "--command"})
 
 
-def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+def build_run_command_tool(
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT, sandbox: bool = False
+) -> ToolSpec:
     """Bounded subprocess wrapping ALLOWED_EXECUTABLES with structured I/O.
 
     ``root`` is the subprocess cwd AND the PYTHONPATH anchor — so a ``python -m``
@@ -79,6 +86,12 @@ def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
     editable finder is appended to sys.meta_path, so a front-of-path PYTHONPATH
     shadows the live install; verified empirically). Defaults to the live repo;
     delegated execution passes the task worktree.
+
+    ``sandbox=True`` wraps every subprocess in a bubblewrap jail scoped to
+    ``root`` (no network; read-only host filesystem except ``root``; ephemeral
+    tmpfs ``HOME``). This is set ONLY for delegated execution — normal Scotty use
+    (root=SCOTTY_PROJECT_ROOT) runs unsandboxed. Fails CLOSED: if bwrap is
+    unavailable the command is refused, never run unsandboxed.
     """
     root = Path(root)
 
@@ -147,7 +160,9 @@ def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
         # service environment could pick up LD_PRELOAD-style overrides.
         clean_env = {
             "PATH": f"{_PY_BIN_DIR}:/usr/local/bin:/usr/bin:/bin",
-            "HOME": str(Path.home()),
+            # Sandboxed runs get the ephemeral tmpfs HOME (caches/dotfiles vanish);
+            # unsandboxed normal Scotty use keeps the real HOME.
+            "HOME": SANDBOX_HOME if sandbox else str(Path.home()),
             "LANG": os.environ.get("LANG", "C.UTF-8"),
             "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
             # Import isolation: code under root shadows the editable-installed
@@ -155,9 +170,27 @@ def build_run_command_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
             "PYTHONPATH": str(root),
         }
 
+        cmd = [resolved_executable, *argv]
+        if sandbox:
+            # Delegated execution: jail the subprocess. Fail CLOSED — if bwrap is
+            # unavailable, refuse rather than run Scotty's code unsandboxed.
+            try:
+                cmd = sandbox_argv(str(root), cmd)
+            except SandboxUnavailable as exc:
+                return {
+                    "executable": executable,
+                    "args": list(argv),
+                    "returncode": None,
+                    "timed_out": False,
+                    "stdout_tail": "",
+                    "stderr_tail": str(exc),
+                    "truncated": False,
+                    "message": "refused: delegated command could not be sandboxed",
+                }
+
         try:
             result = subprocess.run(
-                [resolved_executable, *argv],
+                cmd,
                 cwd=str(root),
                 capture_output=True,
                 text=True,

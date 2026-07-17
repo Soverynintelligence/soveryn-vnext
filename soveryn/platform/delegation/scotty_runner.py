@@ -65,11 +65,15 @@ def build_worktree_tool_registry(worktree: Path):
     registry.register(build_read_file_tool(owner_agent="scotty", root=worktree))
     registry.register(build_list_directory_tool(owner_agent="scotty", root=worktree))
     registry.register(build_edit_file_tool(owner_agent="scotty", root=worktree))
-    registry.register(build_run_command_tool(owner_agent="scotty", root=worktree))
+    registry.register(
+        build_run_command_tool(owner_agent="scotty", root=worktree, sandbox=True)
+    )
     registry.register(build_git_status_tool(owner_agent="scotty", root=worktree))
     registry.register(build_git_diff_tool(owner_agent="scotty", root=worktree))
     registry.register(build_git_restore_file_tool(owner_agent="scotty", root=worktree))
-    registry.register(build_run_pytest_tool(owner_agent="scotty", root=worktree))
+    registry.register(
+        build_run_pytest_tool(owner_agent="scotty", root=worktree, sandbox=True)
+    )
     return registry
 
 

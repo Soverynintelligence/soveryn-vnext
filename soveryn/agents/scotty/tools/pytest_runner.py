@@ -20,6 +20,11 @@ from soveryn.agents.scotty.tools.paths import (
     PathOutOfBoundsError,
     resolve_within_root,
 )
+from soveryn.platform.delegation.sandbox import (
+    SANDBOX_HOME,
+    SandboxUnavailable,
+    sandbox_argv,
+)
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
 
@@ -28,7 +33,12 @@ PYTEST_OUTPUT_MAX_BYTES = 16 * 1024  # 16 KB tail of stdout
 PYTHON_BIN = sys.executable
 
 
-def build_run_pytest_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+def build_run_pytest_tool(
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT, sandbox: bool = False
+) -> ToolSpec:
+    """``sandbox=True`` jails pytest in bubblewrap (no network; host read-only
+    except ``root``). Set ONLY for delegated execution — normal Scotty use runs
+    unsandboxed. Fails CLOSED: if bwrap is unavailable, pytest is refused."""
     root = Path(root).resolve()
     tests_dir = (root / "tests").resolve()
 
@@ -68,9 +78,27 @@ def build_run_pytest_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT)
         existing_pp = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = f"{root}{os.pathsep}{existing_pp}" if existing_pp else str(root)
 
+        cmd = [PYTHON_BIN, "-m", "pytest", pytest_target, "-q", "--tb=line"]
+        if sandbox:
+            # Delegated execution: jail pytest (it runs Scotty-written worktree
+            # code). Ephemeral tmpfs HOME; fail CLOSED if bwrap is unavailable.
+            env["HOME"] = SANDBOX_HOME
+            try:
+                cmd = sandbox_argv(str(root), cmd)
+            except SandboxUnavailable as exc:
+                return {
+                    "target": str(resolved_target),
+                    "returncode": None,
+                    "passed": False,
+                    "summary_line": "refused: pytest could not be sandboxed",
+                    "stdout_tail": "",
+                    "stderr_tail": str(exc),
+                    "truncated": False,
+                }
+
         try:
             result = subprocess.run(
-                [PYTHON_BIN, "-m", "pytest", pytest_target, "-q", "--tb=line"],
+                cmd,
                 cwd=str(root),
                 capture_output=True,
                 text=True,

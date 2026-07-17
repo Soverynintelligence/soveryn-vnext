@@ -949,6 +949,17 @@ def create_app(
         # start. Nothing reaches the live tree without a human approve. Full
         # chain proven by tests/test_delegation_end_to_end_isolation.py. Set
         # SOVERYN_START_DELEGATION_WORKER=False to disable (e.g. test fixtures).
+        # 2026-07-17 sandbox history: the worker was briefly disabled because
+        # delegated code (Scotty's run_command/run_pytest AND the acceptance
+        # runner) executed on the host with full user privileges — no network or
+        # filesystem jail. That Task-9 gate is now BUILT: every delegated exec
+        # path is wrapped in bubblewrap by platform/delegation/sandbox.py
+        # (no network; host filesystem read-only except the worktree; ephemeral
+        # tmpfs HOME) and FAILS CLOSED if bwrap is unavailable. Verified by
+        # tests/test_scotty_runner_isolation.py (fail-closed) + live jail proof
+        # (network/write-outside blocked, write-inside works). Re-enabled by
+        # default. Requires bwrap usable on the host (setuid, or unprivileged
+        # user namespaces permitted).
         if app.config.setdefault("SOVERYN_START_DELEGATION_WORKER", True):
             import threading as _threading
             from soveryn.platform.delegation.worker import run_forever as _delegation_run_forever
