@@ -8,12 +8,7 @@ probe fails safe (returns []) so a probe error never crashes the Ares daemon.
 from __future__ import annotations
 
 import os
-import sqlite3
-import subprocess
-import time
 from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
 
 from soveryn.agents.ares.findings import AresFinding, Severity
 
@@ -22,8 +17,6 @@ from soveryn.agents.ares.findings import AresFinding, Severity
 HER_GPU_UUID = os.environ.get(
     "ARES_HER_GPU_UUID", "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 )
-
-DELEGATION_DB = Path.home() / "soveryn_vnext" / "data" / "delegation.db"
 
 
 @dataclass(frozen=True)
