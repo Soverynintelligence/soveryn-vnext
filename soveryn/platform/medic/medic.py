@@ -22,14 +22,13 @@ from pathlib import Path
 from soveryn.agents.ares import signal_sender
 
 STATE_DIR = Path.home() / "soveryn_vnext" / "data" / "medic"
-HISTORY_FILE = STATE_DIR / "restart_history.json"
+STATE_FILE = STATE_DIR / "medic_state.json"
 LOG_FILE = STATE_DIR / "medic.jsonl"
 
 HEARTBEAT_FILE = Path.home() / "soveryn_vnext" / "data" / "heartbeat_thoughts.jsonl"
 HEARTBEAT_MAX_AGE_S = 2400.0   # 40 min — one missed 30-min beat + margin
 
 LOOPGUARD_MAX = 3
-LOOPGUARD_WINDOW_S = 900.0
 
 FORBIDDEN_UNITS = {"soveryn-router.service", "soveryn-router-quadro.service"}
 
@@ -47,7 +46,7 @@ class MedicTarget:
 class MedicDecision:
     key: str
     unit: str
-    action: str   # "act" | "escalate" | "skip_cooldown" | "skip_router_down"
+    action: str   # "act" | "escalate" | "skip_cooldown" | "skip_router_down" | "skip_escalated"
     reason: str
     priority: bool = False
 
@@ -70,13 +69,18 @@ def decide(
     *,
     unhealthy_keys: set[str],
     router_healthy: bool,
-    restart_history: dict[str, list[float]],
+    state: dict[str, dict],
     now: float,
     targets: dict[str, MedicTarget] = TARGETS,
     loopguard_max: int = LOOPGUARD_MAX,
-    loopguard_window_s: float = LOOPGUARD_WINDOW_S,
 ) -> list[MedicDecision]:
-    """Pure. One decision per unhealthy target, in deterministic key order."""
+    """Pure. One decision per unhealthy target, in deterministic key order.
+
+    Convergence: a target is restarted (cooldown-paced) up to loopguard_max
+    times; after that it is escalated ONCE (latched via state["escalated"]) and
+    then left alone until it recovers. run_once clears a target's state the tick
+    it is no longer unhealthy, so a healed service resets cleanly.
+    """
     decisions: list[MedicDecision] = []
     for key in sorted(unhealthy_keys):
         target = targets[key]
@@ -84,14 +88,17 @@ def decide(
             decisions.append(MedicDecision(key, target.unit, "skip_router_down",
                                            "router unhealthy; not restarting vnext"))
             continue
-        history = restart_history.get(key, [])
-        recent = [ts for ts in history if now - ts < loopguard_window_s]
-        if len(recent) >= loopguard_max:
+        st = state.get(key, _blank_state())
+        if st["escalated"]:
+            decisions.append(MedicDecision(key, target.unit, "skip_escalated",
+                                           "already escalated; awaiting recovery"))
+            continue
+        if st["consecutive_fails"] >= loopguard_max:
             decisions.append(MedicDecision(key, target.unit, "escalate",
-                                           f"unhealed after {loopguard_max} attempts in {int(loopguard_window_s)}s",
+                                           f"unhealed after {loopguard_max} restart attempts",
                                            priority=target.escalation_priority))
             continue
-        last = max(history) if history else None
+        last = st["last_restart_ts"]
         if last is not None and (now - last) < target.cooldown_s:
             decisions.append(MedicDecision(key, target.unit, "skip_cooldown",
                                            f"within {int(target.cooldown_s)}s cooldown"))
@@ -186,18 +193,28 @@ def _escalate(decision: MedicDecision) -> None:
     signal_sender.send(f"[MEDIC] {decision.unit} {decision.reason}", priority=decision.priority)
 
 
-def _read_history() -> dict[str, list[float]]:
+def _blank_state() -> dict:
+    return {"consecutive_fails": 0, "last_restart_ts": None, "escalated": False}
+
+
+def _read_state() -> dict[str, dict]:
     try:
-        return {k: [float(t) for t in v] for k, v in json.loads(HISTORY_FILE.read_text()).items()}
+        raw = json.loads(STATE_FILE.read_text())
+        return {
+            k: {
+                "consecutive_fails": int(v.get("consecutive_fails", 0)),
+                "last_restart_ts": (float(v["last_restart_ts"]) if v.get("last_restart_ts") is not None else None),
+                "escalated": bool(v.get("escalated", False)),
+            }
+            for k, v in raw.items()
+        }
     except (OSError, ValueError, AttributeError, TypeError):
         return {}
 
 
-def _write_history(history: dict[str, list[float]], now: float) -> None:
-    pruned = {k: [t for t in v if now - t < LOOPGUARD_WINDOW_S] for k, v in history.items()}
-    pruned = {k: v for k, v in pruned.items() if v}
+def _write_state(state: dict[str, dict]) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    HISTORY_FILE.write_text(json.dumps(pruned, sort_keys=True))
+    STATE_FILE.write_text(json.dumps(state, sort_keys=True))
 
 
 def _log(record: dict) -> None:
@@ -209,26 +226,37 @@ def _log(record: dict) -> None:
 def run_once(now: float | None = None) -> dict:
     now = time.time() if now is None else now
     unhealthy, router_healthy = _probe()
-    history = _read_history()
+    state = _read_state()
+    # Recovery: forget any target no longer unhealthy — clears its fail count
+    # AND its escalation latch, so the next outage starts fresh.
+    for key in list(state):
+        if key not in unhealthy:
+            del state[key]
     decisions = decide(unhealthy_keys=unhealthy, router_healthy=router_healthy,
-                       restart_history=history, now=now)
+                       state=state, now=now)
     actions = []
     for d in decisions:
         record = {"key": d.key, "unit": d.unit, "action": d.action, "reason": d.reason}
         if d.action == "act":
-            # Record the attempt toward cooldown + the loop-guard regardless of
-            # outcome — a failing unit must not be retried every tick forever.
-            history.setdefault(d.key, []).append(now)
+            st = state.setdefault(d.key, _blank_state())
             try:
                 _run_unit(d.unit, TARGETS[d.key].verb)
-            except Exception as exc:  # noqa: BLE001 — a failed actuation must not abort the tick
+                record["ok"] = True
+            except Exception as exc:  # noqa: BLE001 — a failed heal must not abort the tick
                 record["ok"] = False
                 record["error"] = str(exc)
-            else:
-                record["ok"] = True
+            st["consecutive_fails"] += 1
+            st["last_restart_ts"] = now
         elif d.action == "escalate":
-            _escalate(d)
+            st = state.setdefault(d.key, _blank_state())
+            try:
+                _escalate(d)
+                record["ok"] = True
+            except Exception as exc:  # noqa: BLE001 — a failed page must not abort the tick
+                record["ok"] = False
+                record["error"] = str(exc)
+            st["escalated"] = True  # latch: page once, then stay quiet until recovery
         actions.append(record)
-    _write_history(history, now)
+    _write_state(state)
     _log({"ts": now, "unhealthy": sorted(unhealthy), "router_healthy": router_healthy, "actions": actions})
     return {"unhealthy": sorted(unhealthy), "actions": actions}

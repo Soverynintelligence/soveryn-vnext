@@ -1,3 +1,4 @@
+import importlib
 import json
 
 import pytest
@@ -15,51 +16,53 @@ def test_no_target_is_a_router_unit():
 
 def test_unhealthy_target_out_of_cooldown_acts():
     d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
-                     restart_history={}, now=1000.0)
+                     state={}, now=1000.0)
     assert len(d) == 1 and d[0].action == "act" and d[0].unit == "soveryn-embeddings.service"
 
 
 def test_within_cooldown_is_skipped():
+    state = {"embeddings": {"consecutive_fails": 1, "last_restart_ts": 900.0, "escalated": False}}
     d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
-                     restart_history={"embeddings": [900.0]}, now=1000.0)  # 100 < 300
+                     state=state, now=1000.0)  # 100 < 300
     assert d[0].action == "skip_cooldown"
 
 
 def test_cooldown_is_per_target_not_global():
     # embeddings cooling, heartbeat not → heartbeat still acts.
+    state = {"embeddings": {"consecutive_fails": 1, "last_restart_ts": 990.0, "escalated": False}}
     d = medic.decide(unhealthy_keys={"embeddings", "heartbeat"}, router_healthy=True,
-                     restart_history={"embeddings": [990.0]}, now=1000.0)
+                     state=state, now=1000.0)
     by_key = {x.key: x for x in d}
     assert by_key["embeddings"].action == "skip_cooldown"
     assert by_key["heartbeat"].action == "act"
 
 
 def test_loopguard_trips_to_escalate():
-    hist = {"vnext": [100.0, 400.0, 700.0]}  # 3 restarts within 900s of now=800
+    state = {"vnext": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}
     d = medic.decide(unhealthy_keys={"vnext"}, router_healthy=True,
-                     restart_history=hist, now=800.0)
+                     state=state, now=800.0)
     assert d[0].action == "escalate"
     assert d[0].priority is True  # vnext escalation is night-pageable
 
 
-def test_loopguard_window_expires():
-    hist = {"embeddings": [0.0, 10.0, 20.0]}  # all older than 900s at now=2000
+def test_non_critical_escalation_is_not_priority():
+    state = {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}
     d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
-                     restart_history=hist, now=2000.0)
-    assert d[0].action == "act"
+                     state=state, now=800.0)
+    assert d[0].action == "escalate" and d[0].priority is False
+
+
+def test_escalated_target_is_latched():
+    state = {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": True}}
+    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
+                     state=state, now=800.0)
+    assert d[0].action == "skip_escalated"
 
 
 def test_vnext_deferred_when_router_unhealthy():
     d = medic.decide(unhealthy_keys={"vnext"}, router_healthy=False,
-                     restart_history={}, now=1000.0)
+                     state={}, now=1000.0)
     assert d[0].action == "skip_router_down"
-
-
-def test_non_critical_escalation_is_not_priority():
-    hist = {"embeddings": [100.0, 400.0, 700.0]}
-    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
-                     restart_history=hist, now=800.0)
-    assert d[0].action == "escalate" and d[0].priority is False
 
 
 def test_probe_unhealthy_classifies_from_readings():
@@ -85,9 +88,9 @@ def test_probe_flags_stale_heartbeat_and_comfyui_squatter():
     assert "heartbeat" in unhealthy and "comfyui" in unhealthy
 
 
-def test_run_once_acts_and_records_history(tmp_path, monkeypatch):
+def test_run_once_acts_and_records_state(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
     # everything healthy except embeddings
     monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
@@ -99,15 +102,17 @@ def test_run_once_acts_and_records_history(tmp_path, monkeypatch):
 
     assert ("soveryn-embeddings.service", "restart") in calls
     assert result["actions"][0]["action"] == "act"
-    hist = json.loads((tmp_path / "restart_history.json").read_text())
-    assert hist["embeddings"] == [1000.0]
+    state = medic._read_state()
+    assert state["embeddings"]["consecutive_fails"] == 1
+    assert state["embeddings"]["last_restart_ts"] == 1000.0
 
 
 def test_run_once_escalates_and_does_not_restart_when_loopguard_tripped(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
-    (tmp_path / "restart_history.json").write_text(json.dumps({"vnext": [100.0, 400.0, 700.0]}))
+    (tmp_path / "medic_state.json").write_text(json.dumps(
+        {"vnext": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}))
     monkeypatch.setattr(medic, "_probe", lambda: ({"vnext"}, True))
     calls = []
     monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: calls.append(("RESTART", unit)))
@@ -123,7 +128,7 @@ def test_run_once_never_calls_run_unit_on_a_router(tmp_path, monkeypatch):
     # Defense in depth: even if a router key were somehow unhealthy, no router
     # unit can reach _run_unit (there is no router target).
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
     monkeypatch.setattr(medic, "_probe", lambda: (set(medic.TARGETS), True))
     restarted = []
@@ -142,7 +147,7 @@ def test_run_unit_refuses_a_forbidden_router_unit():
 
 def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
-    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
     monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
 
@@ -156,15 +161,85 @@ def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
 
     # audit line written despite the failure
     assert (tmp_path / "medic.jsonl").read_text().strip() != ""
-    # the failed attempt was still recorded to history (paces retries / feeds loop-guard)
-    hist = json.loads((tmp_path / "restart_history.json").read_text())
-    assert hist["embeddings"] == [1000.0]
+    # the failed attempt was still recorded to state (paces retries / feeds loop-guard)
+    state = medic._read_state()
+    assert state["embeddings"]["consecutive_fails"] == 1
     # the action reflects the failure
     assert result["actions"][0]["ok"] is False
 
 
-import importlib
-import subprocess as _sp
+def test_run_once_survives_a_failed_escalation(tmp_path, monkeypatch):
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    (tmp_path / "medic_state.json").write_text(json.dumps(
+        {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}))
+    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+
+    def boom(decision):
+        raise RuntimeError("signal send failed")
+
+    monkeypatch.setattr(medic, "_escalate", boom)
+    monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: None)
+
+    result = medic.run_once(now=1000.0)  # must NOT raise
+
+    assert (tmp_path / "medic.jsonl").read_text().strip() != ""
+    state = medic._read_state()
+    assert state["embeddings"]["escalated"] is True
+    assert result["actions"][0]["ok"] is False
+
+
+def test_run_once_clears_state_on_recovery(tmp_path, monkeypatch):
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    (tmp_path / "medic_state.json").write_text(json.dumps(
+        {"embeddings": {"consecutive_fails": 2, "last_restart_ts": 700.0, "escalated": False}}))
+    # embeddings is healthy now — not in the unhealthy set returned by probe.
+    monkeypatch.setattr(medic, "_probe", lambda: (set(), True))
+    monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: None)
+    monkeypatch.setattr(medic, "_escalate", lambda d: None)
+
+    medic.run_once(now=1000.0)
+
+    state = medic._read_state()
+    assert "embeddings" not in state
+
+
+def test_converges_no_infinite_restart():
+    # Regression test for the Critical convergence bug: a target with a 600s
+    # cooldown (e.g. heartbeat) that stays unhealthy forever must NOT restart
+    # forever — it must escalate after LOOPGUARD_MAX attempts and then latch
+    # into skip_escalated, bounding total act count at LOOPGUARD_MAX no matter
+    # how many further ticks are simulated.
+    state: dict[str, dict] = {}
+    now = 0.0
+    act_count = 0
+    escalate_count = 0
+    skip_escalated_seen = False
+
+    for _tick in range(50):  # far more ticks than LOOPGUARD_MAX
+        decisions = medic.decide(unhealthy_keys={"heartbeat"}, router_healthy=True,
+                                 state=state, now=now)
+        d = decisions[0]
+        st = state.setdefault("heartbeat", medic._blank_state())
+        if d.action == "act":
+            act_count += 1
+            st["consecutive_fails"] += 1
+            st["last_restart_ts"] = now
+        elif d.action == "escalate":
+            escalate_count += 1
+            st["escalated"] = True
+        elif d.action == "skip_escalated":
+            skip_escalated_seen = True
+        # advance past the target's cooldown each step so a real window-based
+        # bug (which re-arms on aged-out entries) would keep acting forever.
+        now += medic.TARGETS["heartbeat"].cooldown_s + 1.0
+
+    assert act_count == medic.LOOPGUARD_MAX
+    assert escalate_count == 1
+    assert skip_escalated_seen is True
 
 
 def test_module_main_runs_one_tick(monkeypatch):
