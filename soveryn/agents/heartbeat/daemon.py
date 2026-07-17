@@ -401,6 +401,27 @@ class HeartbeatDaemon:
             # [heartbeat] session via the /chat round-trip above.
             note = (response_text or "").strip()
 
+            # Phase 1 (2026-07-17): her reflection ALSO lands in the Lattice as a
+            # PRIVATE node, so it becomes part of her associative memory
+            # (recallable via the Librarian embedder) instead of only living in
+            # the black-box thoughts-log + linear [heartbeat] session. Private =
+            # only she recalls it. Best-effort: a lattice/embed failure must never
+            # break the pulse.
+            if note:
+                try:
+                    from soveryn.platform.lattice.legacy import LatticeStore, embed_text
+                    LatticeStore(self.lattice_db).write_node(
+                        agent="aetheria", content=note, node_type="reflection",
+                        layer="private", tags=("heartbeat", "reflection"),
+                        embedding=tuple(embed_text(note[:6000])),
+                        provenance={"source": "heartbeat", "pulse_id": tick_id,
+                                    "ts": now.isoformat()},
+                    )
+                except Exception:
+                    logger.exception(
+                        "heartbeat tick %s: lattice private-node write failed "
+                        "(best-effort; pulse continues)", tick_id)
+
             # T7: append a ThoughtsLog record every pulse.
             # The "snapshot" key is LOAD-BEARING — compute_delta reads
             # prev_record["snapshot"] on the next pulse. Do not rename or drop it.
