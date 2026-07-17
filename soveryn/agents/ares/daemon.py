@@ -18,6 +18,7 @@ from soveryn.agents.ares.findings import AresFinding, FindingTracker, Severity
 from soveryn.agents.ares.lanes.architecture import collect_architecture_live
 from soveryn.agents.ares.lanes.hardware import collect_cpu_live, collect_drives_live, collect_gpu_live
 from soveryn.agents.ares.lanes.network import collect_network_live
+from soveryn.agents.ares.lanes.vitals import collect_vitals_live
 from soveryn.agents.ares.router import AresSinks, default_sinks, route_cleared, route_finding
 from soveryn.platform.bus import SQLiteBus
 
@@ -148,6 +149,7 @@ def _default_collectors() -> tuple[Collector, ...]:
         collect_drives_live,
         collect_network_live,
         collect_architecture_live,
+        collect_vitals_live,
     )
 
 

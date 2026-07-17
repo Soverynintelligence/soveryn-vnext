@@ -8,7 +8,12 @@ probe fails safe (returns []) so a probe error never crashes the Ares daemon.
 from __future__ import annotations
 
 import os
+import sqlite3
+import subprocess
+import time
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 
 from soveryn.agents.ares.findings import AresFinding, Severity
 
@@ -17,6 +22,8 @@ from soveryn.agents.ares.findings import AresFinding, Severity
 HER_GPU_UUID = os.environ.get(
     "ARES_HER_GPU_UUID", "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 )
+
+DELEGATION_DB = Path.home() / "soveryn_vnext" / "data" / "delegation.db"
 
 
 @dataclass(frozen=True)
@@ -106,4 +113,83 @@ def collect_delegation_stuck(
                 {"task_id": task_id, "age_seconds": round(age, 1)},
                 key=task_id,
             ))
+    return findings
+
+
+# ── live I/O shell (fails safe per source) ──────────────────────────────────
+def _parse_gpu_headroom_rows(csv_text: str) -> list[tuple[str, int, int]]:
+    rows: list[tuple[str, int, int]] = []
+    for line in csv_text.splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) != 3:
+            continue
+        try:
+            rows.append((parts[0], int(parts[1]), int(parts[2])))
+        except ValueError:
+            continue
+    return rows
+
+
+def _parse_compute_apps(csv_text: str) -> list[tuple[str, str, str]]:
+    apps: list[tuple[str, str, str]] = []
+    for line in csv_text.splitlines():
+        parts = [p.strip() for p in line.split(",", 2)]
+        if len(parts) != 3:
+            continue
+        apps.append((parts[0], parts[1], parts[2]))
+    return apps
+
+
+def _read_gpu_headroom_rows() -> list[tuple[str, int, int]]:
+    out = subprocess.run(
+        ["nvidia-smi", "--query-gpu=uuid,memory.used,memory.total",
+         "--format=csv,noheader,nounits"],
+        capture_output=True, text=True, timeout=5,
+    )
+    return _parse_gpu_headroom_rows(out.stdout) if out.returncode == 0 else []
+
+
+def _read_compute_apps() -> list[tuple[str, str, str]]:
+    out = subprocess.run(
+        ["nvidia-smi", "--query-compute-apps=gpu_uuid,pid,process_name",
+         "--format=csv,noheader"],
+        capture_output=True, text=True, timeout=5,
+    )
+    return _parse_compute_apps(out.stdout) if out.returncode == 0 else []
+
+
+def _read_executing_tasks(db_path: Path = DELEGATION_DB) -> list[tuple[str, str, float]]:
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(str(db_path))
+    try:
+        rows = conn.execute(
+            "SELECT id, status, updated_at FROM delegation_tasks WHERE status = 'executing'"
+        ).fetchall()
+    finally:
+        conn.close()
+    tasks: list[tuple[str, str, float]] = []
+    for task_id, status, updated_at in rows:
+        try:
+            epoch = datetime.fromisoformat(updated_at).timestamp()
+        except (ValueError, TypeError):
+            continue
+        tasks.append((str(task_id), str(status), epoch))
+    return tasks
+
+
+def _safe(reader, transform):
+    try:
+        return transform(reader())
+    except Exception:  # noqa: BLE001 — detection must never crash the daemon
+        return []
+
+
+def collect_vitals_live() -> list[AresFinding]:
+    """Zero-arg Ares collector. Each source is independently fail-safe."""
+    now = time.time()
+    findings: list[AresFinding] = []
+    findings += _safe(_read_gpu_headroom_rows, collect_gpu_headroom)
+    findings += _safe(_read_compute_apps, collect_foreign_procs)
+    findings += _safe(_read_executing_tasks, lambda tasks: collect_delegation_stuck(tasks, now=now))
     return findings

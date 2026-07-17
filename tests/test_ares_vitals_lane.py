@@ -72,3 +72,31 @@ def test_delegation_recent_or_terminal_is_ignored():
         ("t2", "failed", 1.0),         # terminal
     ]
     assert vitals.collect_delegation_stuck(tasks, now=1400.0) == []
+
+
+from soveryn.agents.ares import daemon as ares_daemon
+
+
+def test_parse_gpu_headroom_rows_parses_csv():
+    csv = "GPU-abc, 47500, 48935\nGPU-def, 100, 49152\n"
+    assert vitals._parse_gpu_headroom_rows(csv) == [("GPU-abc", 47500, 48935), ("GPU-def", 100, 49152)]
+
+
+def test_parse_compute_apps_parses_csv():
+    csv = "GPU-abc, 999, /x/envs/comfyui/bin/python\n"
+    assert vitals._parse_compute_apps(csv) == [("GPU-abc", "999", "/x/envs/comfyui/bin/python")]
+
+
+def test_collect_vitals_live_is_zero_arg_and_safe(monkeypatch):
+    # Force every underlying reader to raise; the lane must swallow and return [].
+    monkeypatch.setattr(vitals, "_read_gpu_headroom_rows", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(vitals, "_read_compute_apps", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(vitals, "_read_executing_tasks", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    assert vitals.collect_vitals_live() == []
+
+
+def test_vitals_lane_is_registered_in_default_collectors():
+    collectors = ares_daemon._default_collectors()
+    assert vitals.collect_vitals_live in collectors
+    # And it honors the zero-arg collector contract.
+    assert callable(vitals.collect_vitals_live)
