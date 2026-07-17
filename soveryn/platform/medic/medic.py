@@ -189,7 +189,7 @@ def _escalate(decision: MedicDecision) -> None:
 def _read_history() -> dict[str, list[float]]:
     try:
         return {k: [float(t) for t in v] for k, v in json.loads(HISTORY_FILE.read_text()).items()}
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, TypeError):
         return {}
 
 
@@ -214,12 +214,21 @@ def run_once(now: float | None = None) -> dict:
                        restart_history=history, now=now)
     actions = []
     for d in decisions:
+        record = {"key": d.key, "unit": d.unit, "action": d.action, "reason": d.reason}
         if d.action == "act":
-            _run_unit(d.unit, TARGETS[d.key].verb)
+            # Record the attempt toward cooldown + the loop-guard regardless of
+            # outcome — a failing unit must not be retried every tick forever.
             history.setdefault(d.key, []).append(now)
+            try:
+                _run_unit(d.unit, TARGETS[d.key].verb)
+            except Exception as exc:  # noqa: BLE001 — a failed actuation must not abort the tick
+                record["ok"] = False
+                record["error"] = str(exc)
+            else:
+                record["ok"] = True
         elif d.action == "escalate":
             _escalate(d)
-        actions.append({"key": d.key, "unit": d.unit, "action": d.action, "reason": d.reason})
+        actions.append(record)
     _write_history(history, now)
     _log({"ts": now, "unhealthy": sorted(unhealthy), "router_healthy": router_healthy, "actions": actions})
     return {"unhealthy": sorted(unhealthy), "actions": actions}

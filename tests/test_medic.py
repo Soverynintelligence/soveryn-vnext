@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from soveryn.platform.medic import medic
 
 
@@ -56,9 +60,6 @@ def test_non_critical_escalation_is_not_priority():
     d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
                      restart_history=hist, now=800.0)
     assert d[0].action == "escalate" and d[0].priority is False
-
-
-import json
 
 
 def test_probe_unhealthy_classifies_from_readings():
@@ -130,3 +131,33 @@ def test_run_once_never_calls_run_unit_on_a_router(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "_escalate", lambda d: None)
     medic.run_once(now=5000.0)
     assert not (medic.FORBIDDEN_UNITS & set(restarted))
+
+
+def test_run_unit_refuses_a_forbidden_router_unit():
+    with pytest.raises(AssertionError):
+        medic._run_unit("soveryn-router.service", "restart")
+    with pytest.raises(AssertionError):
+        medic._run_unit("soveryn-router-quadro.service", "restart")
+
+
+def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
+    monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(medic, "HISTORY_FILE", tmp_path / "restart_history.json")
+    monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
+    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+
+    def boom(unit, verb):
+        raise RuntimeError("systemctl failed")
+
+    monkeypatch.setattr(medic, "_run_unit", boom)
+    monkeypatch.setattr(medic, "_escalate", lambda d: None)
+
+    result = medic.run_once(now=1000.0)  # must NOT raise
+
+    # audit line written despite the failure
+    assert (tmp_path / "medic.jsonl").read_text().strip() != ""
+    # the failed attempt was still recorded to history (paces retries / feeds loop-guard)
+    hist = json.loads((tmp_path / "restart_history.json").read_text())
+    assert hist["embeddings"] == [1000.0]
+    # the action reflects the failure
+    assert result["actions"][0]["ok"] is False
