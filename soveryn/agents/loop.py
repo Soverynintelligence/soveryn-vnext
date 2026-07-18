@@ -806,6 +806,8 @@ class AgentLoop:
         session_id: str,
         user_message: str,
         attachments: tuple[str, ...] | None = None,
+        *,
+        source: str = "direct",
     ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
 
@@ -818,6 +820,12 @@ class AgentLoop:
         (VISION_CAPABLE_AGENTS) can decode images — passing attachments to
         any other agent raises AgentLoopError BEFORE save_turn so guard
         rejections don't pollute history with a phantom user turn.
+
+        source — tags both the user and assistant turn's `source` column
+        (default "direct", i.e. a human chat turn). The heartbeat daemon
+        passes source="heartbeat" so pulse turns are distinguishable from
+        real human turns in the UI. Threaded straight to save_turn — see
+        ConversationStore.save_turn.
 
         Raises:
           AgentLoopError — session does not exist OR session.agent != self.agent_name
@@ -853,7 +861,9 @@ class AgentLoop:
 
         # 1. Save user turn (constraint 6: stays saved if chat later fails).
         # Text-only by design — vision parts live in-flight, not in the DB.
-        self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
+        self.conv_store.save_turn(
+            session_id, self.agent_name, "user", user_message, source=source,
+        )
 
         # 2. Load history (includes the just-saved user turn).
         history_turns = self.conv_store.load_history(session_id)
@@ -1113,7 +1123,7 @@ class AgentLoop:
             )
         self.conv_store.save_turn(
             session_id, self.agent_name, "assistant", response.content,
-            finish_reason=response.finish_reason,
+            source=source, finish_reason=response.finish_reason,
         )
         if recorder is not None:
             recorder.finalize(
@@ -1227,6 +1237,8 @@ class AgentLoop:
         session_id: str,
         user_message: str,
         attachments: tuple[str, ...] | None = None,
+        *,
+        source: str = "direct",
     ) -> "Iterator[AgentStreamEvent]":
         """Streaming variant. Yields TokenEvent per content delta, then either
         DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
@@ -1237,6 +1249,9 @@ class AgentLoop:
         message becomes a vision-format list; DB still stores text-only;
         vision-capable agents only (raises AgentLoopError BEFORE save_turn
         otherwise).
+
+        source — mirror of process_message: tags both the user and assistant
+        turn's `source` column (default "direct").
 
         Setup errors (session validation, recall failures, LlamaServerError
         BEFORE the first chunk) propagate as exceptions — the Flask route
@@ -1266,7 +1281,9 @@ class AgentLoop:
 
         # ── Save user turn FIRST (honest state if stream fails later).
         # Text-only by design — vision parts live in-flight, not in the DB.
-        self.conv_store.save_turn(session_id, self.agent_name, "user", user_message)
+        self.conv_store.save_turn(
+            session_id, self.agent_name, "user", user_message, source=source,
+        )
         history_turns = self.conv_store.load_history(session_id)
 
         continuity_brief = self._build_continuity_brief(session_id)
@@ -1659,7 +1676,7 @@ class AgentLoop:
 
         self.conv_store.save_turn(
             session_id, self.agent_name, "assistant", accumulated_content,
-            finish_reason=final_finish_reason or "stop",
+            source=source, finish_reason=final_finish_reason or "stop",
         )
         if recorder is not None:
             recorder.finalize(

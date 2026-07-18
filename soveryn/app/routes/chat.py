@@ -76,6 +76,22 @@ def _validate_attachments(raw, agent: str):
     return tuple(raw), None
 
 
+def _validate_source(raw):
+    """Validate the optional 'source' field.
+
+    Returns: (source_str, error_response_or_none). Absent → ("direct", None)
+    — this is the human-chat default at every layer (AgentLoop, save_turn).
+    Present but not a non-empty str → 400. The heartbeat daemon is the only
+    caller that opts into a non-default value ("heartbeat").
+    """
+    if raw is None:
+        return "direct", None
+    if not isinstance(raw, str) or not raw.strip():
+        return None, _err("invalid_source",
+                          "source must be a non-empty string", 400)
+    return raw, None
+
+
 def _parse_json_body():
     """Return parsed dict or an error tuple. Use: body, err = _parse_json_body()."""
     if request.content_type and "application/json" not in request.content_type.lower():
@@ -256,6 +272,10 @@ def chat():
     if attach_err is not None:
         return attach_err
 
+    source, source_err = _validate_source(body.get("source"))
+    if source_err is not None:
+        return source_err
+
     state = _state()
 
     # X-approval pre-turn hook (Task 8) — before the loop. A clear affirm/
@@ -280,7 +300,9 @@ def chat():
     # AgentLoop validates session ownership BEFORE chat; we translate its
     # AgentLoopError into the right HTTP status here.
     try:
-        response = loop.process_message(session_id, message, attachments=attachments)
+        response = loop.process_message(
+            session_id, message, attachments=attachments, source=source,
+        )
     except AgentLoopError as e:
         msg = str(e)
         if "does not exist" in msg:
@@ -374,6 +396,10 @@ def chat_stream():
     if attach_err is not None:
         return attach_err
 
+    source, source_err = _validate_source(body.get("source"))
+    if source_err is not None:
+        return source_err
+
     state = _state()
 
     # X-approval pre-turn hook (Task 8) — same helper as /chat, called BEFORE
@@ -417,7 +443,9 @@ def chat_stream():
     # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
     # per constraint 3, rather than appearing inside a half-opened text/event-stream.
     try:
-        event_iter = loop.process_message_stream(session_id, message, attachments=attachments)
+        event_iter = loop.process_message_stream(
+            session_id, message, attachments=attachments, source=source,
+        )
         # Pre-fetch the first event so setup errors surface here.
         try:
             first_event = next(event_iter)

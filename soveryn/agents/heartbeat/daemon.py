@@ -786,7 +786,10 @@ class HeartbeatDaemon:
         return self._heartbeat_session_id
 
     def _call_vnext_chat(self, session_id: str, message: str) -> dict:
-        payload = {"agent": "aetheria", "session_id": session_id, "message": message}
+        payload = {
+            "agent": "aetheria", "session_id": session_id, "message": message,
+            "source": "heartbeat",
+        }
         return self._post_json("/chat", payload, timeout=CHAT_TIMEOUT_SECONDS)
 
     def _post_json(self, path: str, body: dict, *, timeout: int) -> dict:
