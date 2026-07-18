@@ -92,3 +92,46 @@ def test_retag_is_idempotent():
     assert src['I spent this pulse...'] == 'heartbeat'
     assert src['hey are you ok?'] == 'direct'
     assert src['yes, I am here'] == 'direct'
+
+
+def test_backup_captures_wal_resident_committed_rows(tmp_path):
+    import shutil
+
+    module = _load_migration_module()
+    live = tmp_path / "live.db"
+    conn = sqlite3.connect(str(live))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE t(x INTEGER)")
+    conn.commit()
+    # Second connection commits rows that stay in the -wal file (no checkpoint).
+    w = sqlite3.connect(str(live))
+    w.execute("INSERT INTO t VALUES (1),(2),(3)")
+    w.commit()  # committed, but WAL not checkpointed into the main file
+    # Sanity: a raw copy of just the main file would miss them (may even miss
+    # the table itself, if nothing has been checkpointed yet — either way it
+    # cannot be trusted as a rollback snapshot of a live WAL-mode DB).
+    raw = tmp_path / "raw.db"
+    shutil.copy2(live, raw)
+    try:
+        sqlite3.connect(str(raw)).execute("SELECT COUNT(*) FROM t").fetchone()[0]
+    except sqlite3.OperationalError:
+        pass
+    # The proper backup must capture all 3.
+    bak = tmp_path / "bak.db"
+    module.backup_db(live, bak)
+    bak_n = sqlite3.connect(str(bak)).execute("SELECT COUNT(*) FROM t").fetchone()[0]
+    assert bak_n == 3
+    w.close()
+    conn.close()
+
+
+def test_backup_refuses_to_overwrite(tmp_path):
+    import pytest
+
+    module = _load_migration_module()
+    live = tmp_path / "live.db"
+    sqlite3.connect(str(live)).execute("CREATE TABLE t(x)")
+    bak = tmp_path / "bak.db"
+    bak.write_text("existing")
+    with pytest.raises(SystemExit):
+        module.backup_db(live, bak)

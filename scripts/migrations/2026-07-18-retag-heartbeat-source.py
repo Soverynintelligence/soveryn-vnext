@@ -29,7 +29,6 @@ automatically on import):
 """
 from __future__ import annotations
 
-import shutil
 import sqlite3
 from pathlib import Path
 
@@ -38,6 +37,33 @@ HEARTBEAT_PREFIX = "[HEARTBEAT]"
 
 LIVE_DB_PATH = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
 BACKUP_SUFFIX = ".backup-2026-07-18"
+
+
+def backup_db(live_path: str | Path, backup_path: str | Path) -> None:
+    """Full, WAL-consistent snapshot of a live sqlite DB via the online backup API.
+
+    A plain file copy of a WAL-mode database can silently omit rows that are
+    committed but not yet checkpointed into the main .db file (they live in
+    the -wal sidecar). The sqlite online backup API (Connection.backup) reads
+    through the live connection and captures all committed data regardless of
+    checkpoint state, producing a faithful snapshot safe to use as a rollback
+    point.
+
+    Refuses to overwrite an existing backup.
+    """
+    backup_path = Path(backup_path)
+    if backup_path.exists():
+        raise SystemExit(f"backup already exists, refusing to overwrite: {backup_path}")
+    src = sqlite3.connect(str(live_path))
+    try:
+        dst = sqlite3.connect(str(backup_path))
+        try:
+            with dst:
+                src.backup(dst)  # captures WAL-resident committed data
+        finally:
+            dst.close()
+    finally:
+        src.close()
 
 
 def retag_heartbeat_turns(conn: sqlite3.Connection) -> dict:
@@ -111,13 +137,7 @@ def main() -> None:
         raise SystemExit(f"Live DB not found at {LIVE_DB_PATH}")
 
     backup_path = LIVE_DB_PATH.with_name(LIVE_DB_PATH.name + BACKUP_SUFFIX)
-    if backup_path.exists():
-        raise SystemExit(
-            f"Backup already exists at {backup_path} — refusing to overwrite. "
-            "Remove or rename it first if you intend to re-run this migration."
-        )
-
-    shutil.copy2(LIVE_DB_PATH, backup_path)
+    backup_db(LIVE_DB_PATH, backup_path)
     print(f"Backed up {LIVE_DB_PATH} -> {backup_path}")
 
     conn = sqlite3.connect(LIVE_DB_PATH)
