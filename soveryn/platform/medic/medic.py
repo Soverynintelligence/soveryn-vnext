@@ -12,11 +12,13 @@ loop. `FORBIDDEN_UNITS` + a test enforce this.
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from soveryn.agents.ares import signal_sender
@@ -25,7 +27,10 @@ STATE_DIR = Path.home() / "soveryn_vnext" / "data" / "medic"
 STATE_FILE = STATE_DIR / "medic_state.json"
 LOG_FILE = STATE_DIR / "medic.jsonl"
 
-HEARTBEAT_FILE = Path.home() / "soveryn_vnext" / "data" / "heartbeat_thoughts.jsonl"
+# Liveness comes from heartbeat_log (a row EVERY ~30-min tick, including
+# quiet-hours skips) — NOT the thoughts file, which only moves when she
+# produces a thought. A resting heartbeat still ticks; it is not a glitch.
+HEARTBEAT_LOG_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
 HEARTBEAT_MAX_AGE_S = 2400.0   # 40 min — one missed 30-min beat + margin
 
 LOOPGUARD_MAX = 3
@@ -153,11 +158,21 @@ def _unit_is_active(unit: str, timeout: float = 3.0) -> bool:
         return False  # can't confirm alive → treat as unhealthy (medic will restart)
 
 
-def _heartbeat_age(now: float) -> float:
+def _heartbeat_age(now: float, db_path: Path = HEARTBEAT_LOG_DB) -> float:
+    """Seconds since the heartbeat daemon last TICKED (per heartbeat_log,
+    which logs every tick incl. quiet-hours skips). 0.0 on any error —
+    unknown liveness must not trigger a restart."""
     try:
-        return now - HEARTBEAT_FILE.stat().st_mtime
-    except OSError:
-        return 0.0  # unknown → do not fire a false heartbeat alarm
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            row = conn.execute("SELECT MAX(triggered_at) FROM heartbeat_log").fetchone()
+        finally:
+            conn.close()
+        if not row or not row[0]:
+            return 0.0
+        return now - datetime.fromisoformat(row[0]).timestamp()
+    except Exception:  # noqa: BLE001 — unknown liveness is not a stale alarm
+        return 0.0
 
 
 def _comfyui_on_her_card() -> bool:

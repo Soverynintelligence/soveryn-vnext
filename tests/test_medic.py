@@ -1,9 +1,34 @@
 import importlib
 import json
+import sqlite3
+from datetime import datetime
 
 import pytest
 
 from soveryn.platform.medic import medic
+
+
+def _make_heartbeat_log_db(tmp_path, rows):
+    """rows: list of dicts with at least 'triggered_at'; other cols default."""
+    db_path = tmp_path / "lattice_vnext.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """CREATE TABLE heartbeat_log(
+            id TEXT, triggered_at TEXT, completed_at TEXT, eligible INT,
+            skip_reason TEXT, action_taken INT, tool_call_count INT,
+            response_length INT, error TEXT, dry_run INT, surfaced_to_chat INT
+        )"""
+    )
+    for row in rows:
+        conn.execute(
+            "INSERT INTO heartbeat_log (id, triggered_at, eligible, skip_reason) "
+            "VALUES (?, ?, ?, ?)",
+            (row.get("id", "x"), row["triggered_at"], row.get("eligible", 1),
+             row.get("skip_reason")),
+        )
+    conn.commit()
+    conn.close()
+    return db_path
 
 
 def test_no_target_is_a_router_unit():
@@ -86,6 +111,48 @@ def test_probe_flags_stale_heartbeat_and_comfyui_squatter():
         comfyui_on_her_card=True,
     )
     assert "heartbeat" in unhealthy and "comfyui" in unhealthy
+
+
+def test_heartbeat_age_fresh_when_recent_tick(tmp_path):
+    ts = "2026-07-18T08:20:58.532907"
+    now = datetime.fromisoformat(ts).timestamp() + 300  # ~5 min later
+    db = _make_heartbeat_log_db(tmp_path, [{"triggered_at": ts, "eligible": 1}])
+    age = medic._heartbeat_age(now, db_path=db)
+    assert 295 <= age <= 305
+    assert age < medic.HEARTBEAT_MAX_AGE_S
+
+
+def test_heartbeat_age_fresh_when_recent_tick_is_a_quiet_hours_skip(tmp_path):
+    # THE regression test: a resting (quiet-hours-skipped) but recently-ticked
+    # heartbeat must read as ALIVE, not stale. This is the exact case that
+    # false-flagged and triggered 3 needless restarts + a suppressed escalation.
+    ts = "2026-07-18T03:00:12.000000"
+    now = datetime.fromisoformat(ts).timestamp() + 600  # ~10 min later
+    db = _make_heartbeat_log_db(
+        tmp_path, [{"triggered_at": ts, "eligible": 0, "skip_reason": "quiet_hours"}]
+    )
+    age = medic._heartbeat_age(now, db_path=db)
+    assert 595 <= age <= 605
+    assert age < medic.HEARTBEAT_MAX_AGE_S
+
+
+def test_heartbeat_age_stale_when_no_tick_past_threshold(tmp_path):
+    ts = "2026-07-18T08:20:58.532907"
+    now = datetime.fromisoformat(ts).timestamp() + 3000  # 50 min later
+    db = _make_heartbeat_log_db(tmp_path, [{"triggered_at": ts, "eligible": 0,
+                                            "skip_reason": "quiet_hours"}])
+    age = medic._heartbeat_age(now, db_path=db)
+    assert age > medic.HEARTBEAT_MAX_AGE_S
+
+
+def test_heartbeat_age_safe_on_missing_db(tmp_path):
+    missing = tmp_path / "does_not_exist.db"
+    assert medic._heartbeat_age(1000.0, db_path=missing) == 0.0
+
+
+def test_heartbeat_age_safe_on_empty_table(tmp_path):
+    db = _make_heartbeat_log_db(tmp_path, [])
+    assert medic._heartbeat_age(1000.0, db_path=db) == 0.0
 
 
 def test_run_once_acts_and_records_state(tmp_path, monkeypatch):
