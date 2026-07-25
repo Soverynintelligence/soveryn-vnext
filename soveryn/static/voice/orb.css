@@ -1,17 +1,36 @@
-/* Phase 1: Aetheria-only color theme + state machine.
- * Phase 1.5 extends .orb-vett and .orb-scotty by setting --orb-primary
- * and --orb-secondary to their character colors.
+/* Orb colour theme + state machine.
+ *
+ * 2026-07-25: brought onto the SOVERYN brand. Aetheria was twilight violet
+ * (#5d3a8e), which predated the palette and matched nothing else she wears —
+ * she is oxide sage everywhere now. Vett and Scotty were the "Phase 1.5"
+ * TODO and had no classes at all, so the voice landing page rendered them
+ * with no colour; both are defined here now.
+ *
+ * These mirror the agent hues in command_center/chat/documents. Keep them in
+ * step: sage / steel / terracotta.
  */
 
 :root {
-    --bg-deep: #0a0a0a;
-    --text-soft: #d4d4d4;
+    --bg-deep: #0f1011;        /* carbon */
+    --text-soft: #E7E5DC;      /* bone */
 }
 
 .orb-aetheria {
-    --orb-primary: #5d3a8e;    /* twilight violet */
-    --orb-secondary: #8e6ec4;
-    --orb-glow: rgba(142, 110, 196, 0.5);
+    --orb-primary: #566149;    /* oxide sage, deep */
+    --orb-secondary: #8fa07f;  /* sage, light */
+    --orb-glow: rgba(116, 133, 106, 0.5);
+}
+
+.orb-vett {
+    --orb-primary: #404e59;    /* weathered steel, deep */
+    --orb-secondary: #7d94a3;  /* steel, light */
+    --orb-glow: rgba(107, 130, 144, 0.5);
+}
+
+.orb-scotty {
+    --orb-primary: #54271b;    /* terracotta, deep */
+    --orb-secondary: #c26a4c;  /* terracotta, light */
+    --orb-glow: rgba(163, 84, 58, 0.5);
 }
 
 body {

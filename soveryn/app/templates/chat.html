@@ -23,14 +23,15 @@
     --sov-sage-bright:#8fa07f;     /* gentle sage highlight (not flashy) */
     --sov-sage-deep:#566149;       /* sage shadow / edge */
     --copper-sheen:linear-gradient(115deg,#8C5A3C 0%,#c0824f 40%,#d69a68 49%,#b7794a 60%,#74492e 100%);
-    --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%); /* brushed-metal streak */
+    --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%);
+    --steel-sheen:linear-gradient(115deg,#404e59 0%,#5f7684 40%,#7d94a3 49%,#556a77 60%,#303b44 100%); /* brushed-metal streak */
     --sov-olive:#74856a;           /* (retained) */
     --sov-bronze:#8C5A3C;          /* aged Spartan-shield bronze (Jon's avatar / patina) */
     --sov-maroon:#a3543a;          /* Scotty — engineering maroon (Star Trek red-shirt) */
     --sov-maroon-bright:#c26a4c;   /* maroon highlight */
-    --maroon-sheen:linear-gradient(135deg,#c26a4c,#a3543a 55%,#6b3323); /* engineering disc */
-    --sov-deep-blue:#5c5733;       /* Vett */
-    --sov-electric-blue:#8a8250;   /* Aetheria phosphor — a GLOW signal */
+    --maroon-sheen:linear-gradient(115deg,#6b3323 0%,#a3543a 40%,#c26a4c 49%,#8f4831 60%,#54271b 100%); /* engineering disc */
+    --sov-deep-blue:#404e59;       /* Vett */
+    --sov-electric-blue:#6b8290;   /* Aetheria phosphor — a GLOW signal */
     --sov-sage:#74856a;            /* Aetheria gradient start */
     --sov-gray:#9a988a;            /* Aetheria gradient middle */
     --sov-amber:#c0824f;           /* soft accent */
@@ -504,22 +505,22 @@
   .voice-orb[data-agent="aetheria"] {
     background: radial-gradient(circle at 35% 35%,
                   var(--sov-sage-bright) 0%,
-                  var(--sov-amber) 50%,
+                  var(--sov-sage) 50%,
                   var(--sov-sage-deep) 100%);
-    box-shadow: 0 0 90px rgba(184, 149, 74, 0.40);
+    box-shadow: 0 0 90px rgba(116, 133, 106, 0.40);
   }
   .voice-orb[data-agent="vett"] {
     background: radial-gradient(circle at center,
-                  #4a6488 0%,
+                  #7d94a3 0%,
                   var(--sov-deep-blue) 70%);
-    box-shadow: 0 0 90px rgba(62, 168, 232, 0.28);
+    box-shadow: 0 0 90px rgba(107, 130, 144, 0.28);
   }
   .voice-orb[data-agent="scotty"] {
     background: radial-gradient(circle at 35% 35%,
                   var(--sov-maroon-bright) 0%,
                   var(--sov-maroon) 60%,
-                  #4a181f 100%);
-    box-shadow: 0 0 90px rgba(156, 53, 67, 0.35);
+                  #54271b 100%);
+    box-shadow: 0 0 90px rgba(163, 84, 58, 0.35);
   }
   .voice-orb[data-state="idle"]        { transform: scale(0.95); opacity: 0.5; }
   .voice-orb[data-state="listening"]   { transform: scale(1.0);  opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
@@ -693,7 +694,7 @@
   // depth without complicating the identity.
   const AGENT_COLORS = {
     aetheria: "var(--sage-sheen)",                              /* primary voice → brushed SOVERYN gold */
-    vett:     "linear-gradient(135deg, var(--sov-deep-blue), #6f6a3e)",
+    vett:     "var(--steel-sheen)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
