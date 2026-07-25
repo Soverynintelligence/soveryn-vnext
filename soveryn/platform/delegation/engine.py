@@ -28,6 +28,11 @@ from soveryn.platform.delegation.worktree import (
 
 logger = logging.getLogger(__name__)
 
+# How many failed worktrees to keep on disk for post-mortem inspection before
+# pruning the oldest. Retention is what makes a failure diagnosable; the cap is
+# what stops retention from filling the disk.
+FAILED_WORKTREE_RETENTION = 5
+
 
 # ─── Default commit implementation ───────────────────────────────────────────
 
@@ -145,19 +150,38 @@ def execute_task(
             )
             store.set_status(task_id, "failed")
             logger.warning("engine: task %s failed acceptance → failed", task_id)
-            # Best-effort cleanup on red
-            _cleanup(remove_worktree, repo_root, wt_path, branch)
+            # Worktree RETAINED on red (changed 2026-07-22). It is the only
+            # forensic record of what Scotty actually did; deleting it is what
+            # made the 8/8 empty-diff failures undiagnosable for 6 weeks.
+            # Bounded retention keeps disk from growing without limit.
+            _prune_failed_worktrees(remove_worktree, store, repo_root)
 
     except Exception:
         logger.exception("engine: unhandled exception for task %s", task_id)
+        # Capture whatever landed in the worktree BEFORE anything else — a task
+        # that RAISED (e.g. tool_round_limit, the actual Scotty failure mode)
+        # otherwise recorded no diff at all, so the failure left zero evidence.
+        if wt_path is not None:
+            try:
+                partial = diff_fn(wt_path)
+                store.set_result(
+                    task_id,
+                    diff=partial,
+                    test_output="",
+                    summary="execution raised before acceptance",
+                )
+            except Exception:
+                logger.exception(
+                    "engine: could not capture partial diff for task %s", task_id
+                )
         # Best-effort status transition (may already be in a terminal state)
         try:
             store.set_status(task_id, "failed")
         except Exception:
             logger.exception("engine: could not set failed status for task %s", task_id)
-        # Best-effort worktree cleanup
+        # Worktree RETAINED on exception too — see the red-path note above.
         if wt_path is not None and branch is not None:
-            _cleanup(remove_worktree, repo_root, wt_path, branch)
+            _prune_failed_worktrees(remove_worktree, store, repo_root)
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -176,4 +200,38 @@ def _cleanup(
             "engine: failed to remove worktree %s (branch %s) — may need manual cleanup",
             wt_path,
             branch,
+        )
+
+
+def _prune_failed_worktrees(
+    remove_worktree_fn: Callable[[str | Path, str, str], None],
+    store: DelegationStore,
+    repo_root: str,
+) -> None:
+    """Retain the FAILED_WORKTREE_RETENTION most recent failed worktrees for
+    inspection; remove the worktrees of older failed tasks.
+
+    The current failing task's worktree is therefore always kept — it is the
+    newest and sits well within the retention window. Only tasks that have
+    fallen off the end of the window are cleaned up, and best-effort: a task
+    whose worktree is already gone (or was never recorded) is skipped. The
+    task row and its stored diff are never touched — only the on-disk worktree.
+    """
+    try:
+        failed = store.list_tasks(status="failed")   # newest-first
+    except Exception:
+        logger.exception("engine: could not list failed tasks for worktree pruning")
+        return
+
+    for task in failed[FAILED_WORKTREE_RETENTION:]:
+        wt = getattr(task, "worktree_path", None)
+        branch = getattr(task, "branch", None)
+        if not wt or not branch:
+            continue
+        if not Path(wt).exists():
+            continue
+        _cleanup(remove_worktree_fn, repo_root, wt, branch)
+        logger.info(
+            "engine: pruned aged failed worktree %s (task %s) beyond retention=%d",
+            wt, task.id, FAILED_WORKTREE_RETENTION,
         )

@@ -302,8 +302,12 @@ class TestRedPath:
         # in_review must never appear
         assert store.get_task(tid).status == "failed"
 
-    def test_worktree_removed_on_red(self, tmp_path):
-        """On failure the worktree should be cleaned up (best-effort)."""
+    def test_worktree_retained_on_red(self, tmp_path):
+        """CHANGED 2026-07-22: on failure the worktree is RETAINED for forensic
+        inspection, not removed. With a single failed task nothing is beyond the
+        retention window, so remove_worktree is not called. (Was
+        test_worktree_removed_on_red, which asserted the delete-on-failure
+        behavior that made the Scotty 8/8 failures undiagnosable.)"""
         store = _store(tmp_path)
         tid = _task(store)
         remove = _fake_remove_worktree()
@@ -320,7 +324,7 @@ class TestRedPath:
             remove_worktree=remove,
         )
 
-        assert len(remove.calls) == 1
+        assert not remove.calls
 
 
 class TestExceptionHandling:
@@ -439,8 +443,11 @@ class TestExceptionHandling:
 
         assert store.get_task(tid).status == "failed"
 
-    def test_worktree_cleanup_on_exception(self, tmp_path):
-        """Exception mid-flow should still trigger worktree cleanup."""
+    def test_worktree_retained_on_exception(self, tmp_path):
+        """CHANGED 2026-07-22: an exception mid-flow RETAINS the worktree (only
+        forensic record) rather than deleting it, and the exception is still
+        swallowed — execute_task never propagates. With one failed task nothing
+        is pruned."""
         store = _store(tmp_path)
         tid = _task(store)
         remove = _fake_remove_worktree()
@@ -448,6 +455,7 @@ class TestExceptionHandling:
         def boom_scotty(wt, obj, scope):
             raise RuntimeError("boom")
 
+        # must not raise
         execute_task(
             tid,
             store=store,
@@ -460,4 +468,108 @@ class TestExceptionHandling:
             remove_worktree=remove,
         )
 
-        assert len(remove.calls) == 1
+        assert store.get_task(tid).status == "failed"
+        assert not remove.calls
+
+
+# ─── Forensic evidence retention (added 2026-07-22) ──────────────────────────
+# Root cause of the Scotty 8/8 empty-diff failures went undiagnosed for 6 weeks
+# because failure DELETED the worktree and the exception path captured NO diff.
+# These pin: (a) a raised scotty_run still records whatever diff exists, and
+# (b) failed worktrees are RETAINED for inspection, not cleaned up.
+
+class TestForensicRetention:
+    def test_exception_path_captures_diff_before_any_cleanup(self, tmp_path):
+        """A task whose scotty_run RAISES (e.g. tool_round_limit) must still
+        store the diff of whatever landed in the worktree — otherwise the
+        failure is invisible."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        diff = _fake_diff_fn(diff="--- a\n+++ b\n@@ +partial work@@")
+
+        def boom(worktree_path, objective, scope):
+            raise RuntimeError("tool_round_limit: budget exhausted")
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=boom,
+            run_acceptance=_fake_run_acceptance(),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=diff,
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=_fake_remove_worktree(),
+        )
+
+        task = store.get_task(tid)
+        assert task.status == "failed"
+        # diff_fn was consulted even though scotty_run raised
+        assert diff.calls, "diff must be captured on the exception path"
+
+    def test_failed_worktree_is_retained_not_removed(self, tmp_path):
+        """Red acceptance must NOT delete the worktree — it's the only forensic
+        record of what Scotty actually did."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        remover = _fake_remove_worktree()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=_fake_run_acceptance(passed=False, output="0 passed"),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+            remove_worktree=remover,
+        )
+
+        assert store.get_task(tid).status == "failed"
+        assert not remover.calls, "failed worktree must be retained for inspection"
+
+    def test_prunes_worktrees_beyond_retention_cap(self, tmp_path, monkeypatch):
+        """Retention is bounded: once more than FAILED_WORKTREE_RETENTION tasks
+        have failed, the oldest worktrees are pruned so disk does not grow
+        without limit."""
+        import soveryn.platform.delegation.engine as eng
+        monkeypatch.setattr(eng, "FAILED_WORKTREE_RETENTION", 2)
+
+        store = _store(tmp_path)
+        made = []
+
+        # A REALISTIC remover: actually deletes the dir, like the real
+        # remove_worktree. This matters — the engine skips pruning a worktree
+        # whose path no longer exists, so a non-deleting fake would re-prune the
+        # same dirs every round and over-count.
+        remove_calls: list[tuple] = []
+
+        def remove(repo_root, worktree_path, branch):
+            remove_calls.append((repo_root, worktree_path, branch))
+            import shutil
+            shutil.rmtree(worktree_path, ignore_errors=True)
+
+        remove.calls = remove_calls  # type: ignore[attr-defined]
+
+        def make_wt(repo_root, task_id):
+            p = tmp_path / f"wt-{task_id}"
+            p.mkdir()
+            made.append(str(p))
+            return str(p), f"task/{task_id}"
+
+        for _ in range(4):
+            tid = _task(store)
+            eng.execute_task(
+                tid, store=store, repo_root="/fake/repo",
+                scotty_run=_fake_scotty_run(),
+                run_acceptance=_fake_run_acceptance(passed=False),
+                make_worktree=make_wt,
+                diff_fn=_fake_diff_fn(), commit_fn=_fake_commit_fn(),
+                remove_worktree=remove,
+            )
+
+        # 4 failed, retention=2 → the 2 oldest should have been pruned
+        assert len(remove.calls) == 2, remove.calls
+        pruned_paths = {c[1] for c in remove.calls}
+        assert pruned_paths == set(made[:2]), "the two OLDEST worktrees should be pruned"
