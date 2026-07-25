@@ -11,37 +11,37 @@
     /* Gold-on-obsidian (mirrors chat.html). Aetheria's art direction
        2026-06-19: matte charcoal material, weathered brushed gold metalwork,
        solid slabs (no glassmorphism), blue/status as the only glow. */
-    --sov-canvas:#0a0a0b;          /* matte charcoal-black material base */
-    --sov-gold:#b8954a;            /* primary accent — weathered metallic gold */
-    --sov-gold-bright:#d4b46a;     /* gentle gold highlight */
-    --sov-gold-deep:#6e5526;       /* gold shadow / edge */
-    --gold-sheen:linear-gradient(115deg,#a8843c 0%,#cdac5e 40%,#dcbd72 49%,#c2a256 60%,#8a6f34 100%);
-    --sov-olive:#94a455;           /* (retained) */
-    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (patina) */
+    --sov-canvas:#0f1011;          /* matte charcoal-black material base */
+    --sov-sage-bright:#8fa07f;     /* gentle sage highlight */
+    --sov-sage-deep:#566149;       /* sage shadow / edge */
+    --copper-sheen:linear-gradient(115deg,#8C5A3C 0%,#c0824f 40%,#d69a68 49%,#b7794a 60%,#74492e 100%);
+    --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%);
+    --sov-olive:#74856a;           /* (retained) */
+    --sov-bronze:#8C5A3C;          /* aged Spartan-shield bronze (patina) */
     --sov-maroon:#9c3543;          /* Scotty — engineering maroon (Star Trek red-shirt) */
     --sov-maroon-bright:#bd4f5b;
     --maroon-sheen:linear-gradient(135deg,#bd4f5b,#9c3543 55%,#5e2029);
     --sov-deep-blue:#1f2c44;       /* Vett */
     --sov-electric-blue:#3ea8e8;   /* Aetheria phosphor — a GLOW signal */
-    --sov-sage:#8a9a4d;
+    --sov-sage:#74856a;
     --sov-gray:#9a988a;
-    --sov-amber:#e0b878;
-    --text:#f3efe5;                /* high-contrast warm white */
+    --sov-amber:#c0824f;
+    --text:#E7E5DC;                /* high-contrast warm white */
     --text-dim:rgba(243,239,229,0.60);
 
     /* Legacy aliases — historic refs in this template still resolve. */
     --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:var(--sov-gold);
+    --leaf:var(--sov-sage);
     --slate:#2a4459;
-    --node:var(--sov-gold);
+    --node:var(--sov-sage);
     --bronze:var(--sov-bronze);
-    --gold:var(--sov-gold);
+    --copper:var(--sov-amber);
 
     /* Solid obsidian slabs, razor-thin gold hairline, minimal blur — the
        floating-glass panels Aetheria flagged become heavy slabs. */
     --glass-bg:rgba(16,16,19,0.92);
-    --glass-border:rgba(184,149,74,0.30);
+    --glass-border:rgba(192,130,79,0.30);
     --glass-blur:blur(3px) saturate(105%);
     --r-lg:22px;
     --r-md:14px;
@@ -59,16 +59,19 @@
   body::before {
     content:"";
     position:fixed; inset:0;
-    background:#0a0a0b url("/static/logo-metal.png") no-repeat center center;
-    background-size:cover;
-    opacity:0.55;
+    background:#0f1011 url("/static/soveryn-mark.png") no-repeat center 54%;
+    /* sized by HEIGHT so it can never overflow the viewport and clip at the top */
+    background-size:auto min(58vh,520px);
+    opacity:0.42;
+    /* lift the copper/sage out of the carbon rather than just fading it up */
+    filter:brightness(1.18) saturate(1.15);
     pointer-events:none;
     z-index:0;
   }
   body::after {
     content:"";
     position:fixed; inset:0;
-    background:radial-gradient(120% 90% at 50% 45%, transparent 28%, rgba(10,10,11,0.68) 100%);
+    background:radial-gradient(120% 90% at 50% 45%, transparent 40%, rgba(15,16,17,0.45) 100%);
     pointer-events:none;
     z-index:0;
   }
@@ -89,7 +92,7 @@
   header.top .brand-logo {
     width:72px; height:72px;
     object-fit:contain;
-    filter:drop-shadow(0 0 18px rgba(184,149,74,0.18));
+    filter:drop-shadow(0 0 18px rgba(192,130,79,0.18));
   }
   header.top .brand-text { display:flex; flex-direction:column; gap:6px; }
   header.top .wordmark {
@@ -101,7 +104,7 @@
     font-size:10px; letter-spacing:0.28em;
     text-transform:uppercase;
   }
-  header.top .tagline .dot { color:var(--sov-gold); margin:0 6px; }
+  header.top .tagline .dot { color:var(--sov-sage); margin:0 6px; }
   header.top .nav-links {
     display:flex; gap:16px; align-items:center;
     font-size:12px; color:rgba(232,227,213,0.55);
@@ -140,11 +143,11 @@
   }
   .hero .medallion {
     width:340px; height:340px; max-width:64vw; aspect-ratio:1;
-    background:url("/static/logo-metal.png") no-repeat center center;
+    background:url("/static/soveryn-mark.png") no-repeat center center;
     background-size:contain;
     filter:
-      drop-shadow(0 0 46px rgba(62,168,232,0.22))   /* blue node-glow */
-      drop-shadow(0 0 16px rgba(184,149,74,0.16));   /* gold ground-glow */
+      drop-shadow(0 0 30px rgba(116,133,106,0.20))   /* oxide sage */
+      drop-shadow(0 0 12px rgba(192,130,79,0.14));   /* aged copper */
   }
   .hero .greeting-text h1 { font-size:34px; font-weight:500; letter-spacing:-0.01em; }
   .hero .greeting-text p { margin-top:8px; color:var(--text-dim); line-height:1.55; font-size:14px; max-width:600px; margin-left:auto; margin-right:auto; }
@@ -173,12 +176,15 @@
     animation:ring 2.4s ease-in-out infinite;
   }
   @keyframes ring { 0%,100% { transform:scale(1); opacity:0.35 } 50% { transform:scale(1.08); opacity:0.1 } }
-  /* Agent identity discs — Aetheria carries the brand olive (she's the
-     central voice; the SOVERYN brand color is hers). Vett = deep blue,
-     Scotty = bronze. The pulse-ring `color` inherits each signature hue. */
+  /* Agent identity discs. Aetheria = sage, Vett = deep blue, Scotty =
+     maroon; the pulse-ring `color` inherits each signature hue. These are
+     IDENTITY, not brand — they stay fixed so the comm bus stays readable at
+     a glance. (Historic note: gold used to be the SOVERYN brand colour and
+     was hers for that reason. The 2026-07-24 rebrand moved the brand to
+     oxide sage + aged copper; Jon kept the three agent hues unchanged.) */
   .agent-card[data-agent="aetheria"] .disc {
-    background:var(--gold-sheen);
-    color:var(--sov-gold);
+    background:var(--sage-sheen);
+    color:var(--sov-sage);
   }
   .agent-card[data-agent="vett"] .disc {
     background:linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c);
@@ -209,8 +215,8 @@
   .library-header h3 { margin-bottom:0; }
   .library-filters { display:flex; gap:8px; align-items:center; }
   .library-filters select, .library-filters input[type="text"] {
-    background:rgba(255,255,255,0.04); color:var(--text);
-    border:1px solid rgba(255,255,255,0.08); border-radius:6px;
+    background:rgba(255,255,255,0.02); color:var(--text);
+    border:1px solid rgba(255,255,255,0.04); border-radius:6px;
     padding:5px 10px; font-size:11px; font-family:inherit;
     outline:none;
   }
@@ -218,7 +224,7 @@
     color:rgba(236,243,244,0.35);
   }
   .library-filters select:focus, .library-filters input[type="text"]:focus {
-    border-color:rgba(184,149,74,0.5);
+    border-color:rgba(192,130,79,0.5);
   }
 
   /* Specialists + Comm bus row — twin panels side by side. */
@@ -233,8 +239,8 @@
      so Jon isn't tempted to fire it prematurely. */
   .specialist-item {
     padding:12px 14px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.05);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.025);
     border-radius:8px;
     display:grid; grid-template-columns:1fr auto; gap:10px; align-items:start;
   }
@@ -244,7 +250,7 @@
   }
   .specialist-item .info { min-width:0; }
   .specialist-item .info .name {
-    font-size:13px; font-weight:500; color:var(--sov-gold);
+    font-size:13px; font-weight:500; color:var(--sov-sage);
     margin-bottom:4px;
   }
   .specialist-item .info .meta {
@@ -280,7 +286,7 @@
      blue arrow) edges. Each item one row, compact. */
   .commbus-item {
     padding:8px 12px;
-    background:rgba(255,255,255,0.025);
+    background:rgba(255,255,255,0.0125);
     border-radius:6px;
     display:flex; flex-direction:column; gap:4px;
     font-size:12px;
@@ -297,15 +303,15 @@
   .commbus-item .head .arrow {
     font-family:ui-monospace,monospace; font-size:13px; line-height:1;
   }
-  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-gold); }
+  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-amber); }
   .commbus-item[data-rel="direct_query"]   .head .arrow { color:var(--sov-electric-blue); }
   .commbus-item .head .sender, .commbus-item .head .target {
     font-weight:500; color:rgba(236,243,244,0.75);
   }
-  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-gold); }
+  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-amber); }
   .commbus-item[data-sender="vett"]     .head .sender { color:var(--sov-electric-blue); }
   .commbus-item[data-sender="scotty"]   .head .sender { color:var(--sov-maroon); }
-  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-gold); }
+  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-amber); }
   .commbus-item[data-target="vett"]     .head .target { color:var(--sov-electric-blue); }
   .commbus-item[data-target="scotty"]   .head .target { color:var(--sov-maroon); }
   .commbus-item .head .age {
@@ -323,7 +329,7 @@
   .library-feed { display:flex; flex-direction:column; gap:12px; max-height:340px; overflow-y:auto; padding-right:4px; }
   .library-item {
     padding:10px 14px;
-    background:rgba(255,255,255,0.025);
+    background:rgba(255,255,255,0.0125);
     border-left:3px solid rgba(236,243,244,0.20);
     border-radius:0 6px 6px 0;
     font-size:13px; color:rgba(236,243,244,0.85);
@@ -333,7 +339,7 @@
     color:rgba(236,243,244,0.35); font-style:italic;
     background:none; border-left-color:transparent; padding:8px 0;
   }
-  .library-item[data-agent="aetheria"] { border-left-color:var(--sov-gold); }
+  .library-item[data-agent="aetheria"] { border-left-color:var(--sov-amber); }
   .library-item[data-agent="vett"]     { border-left-color:var(--sov-electric-blue); }
   .library-item[data-agent="scotty"]   { border-left-color:var(--sov-maroon); }
   .library-item .head {
@@ -342,7 +348,7 @@
     margin-bottom:4px;
   }
   .library-item .head .who { font-weight:500; }
-  .library-item[data-agent="aetheria"] .head .who { color:var(--sov-gold); }
+  .library-item[data-agent="aetheria"] .head .who { color:var(--sov-amber); }
   .library-item[data-agent="vett"]     .head .who { color:var(--sov-electric-blue); }
   .library-item[data-agent="scotty"]   .head .who { color:var(--sov-maroon); }
   .library-item .head .ts { color:rgba(236,243,244,0.4); font-variant-numeric:tabular-nums; }
@@ -350,7 +356,7 @@
     display:flex; gap:4px; flex-wrap:wrap; margin-left:auto;
   }
   .library-item .head .tag {
-    background:rgba(255,255,255,0.06); border-radius:4px;
+    background:rgba(255,255,255,0.03); border-radius:4px;
     padding:1px 6px; font-size:9px; letter-spacing:0.04em;
     color:rgba(236,243,244,0.6);
   }
@@ -358,19 +364,19 @@
   .activity-feed { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:4px; }
   .activity-item { font-size:13px; color:rgba(236,243,244,0.78); line-height:1.5; }
   .activity-item .who { font-weight:500; }
-  .activity-item .who[data-agent="aetheria"] { color:var(--sov-gold); }
+  .activity-item .who[data-agent="aetheria"] { color:var(--sov-amber); }
   .activity-item .who[data-agent="vett"]     { color:var(--sov-electric-blue); }
   .activity-item .who[data-agent="scotty"]   { color:var(--sov-maroon); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
   .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
-  .sparkline .bar { flex:1; background:var(--sov-gold); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+  .sparkline .bar { flex:1; background:var(--sov-amber); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
 
   .gpu-bars { display:flex; flex-direction:column; gap:10px; }
   .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
   .gpu-bar .row { display:flex; justify-content:space-between; margin-bottom:4px; }
   .gpu-bar .row .pct { font-variant-numeric:tabular-nums; }
-  .gpu-bar .track { height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
+  .gpu-bar .track { height:6px; background:rgba(255,255,255,0.025); border-radius:3px; overflow:hidden; }
   .gpu-bar .fill { height:100%; background:linear-gradient(90deg,#3dba6f,#d4a827,#c0392b); }
 
   .spark-tile { font-size:11px; color:rgba(236,243,244,0.7); }
@@ -392,8 +398,8 @@
   }
   .attention .empty { color:rgba(236,243,244,0.35); font-style:italic; }
 
-  a.agent-card:focus-visible { outline:2px solid var(--sov-gold); outline-offset:4px; border-radius:var(--r-lg); }
-  button:focus-visible { outline:2px solid var(--sov-gold); outline-offset:2px; }
+  a.agent-card:focus-visible { outline:2px solid var(--sov-amber); outline-offset:4px; border-radius:var(--r-lg); }
+  button:focus-visible { outline:2px solid var(--sov-amber); outline-offset:2px; }
 
   /* ─── Daemon status strip ─────────────────────────────────────────────── */
   .daemon-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
@@ -412,7 +418,7 @@
     background:rgba(232,227,213,0.25);
   }
   .daemon-card[data-status="active"] .label .dot {
-    background:var(--sov-gold); box-shadow:0 0 8px rgba(184,149,74,0.5);
+    background:var(--sov-amber); box-shadow:0 0 8px rgba(192,130,79,0.5);
   }
   .daemon-card[data-status="stale"]  .label .dot { background:#d4a827; box-shadow:0 0 8px rgba(212,168,39,0.45); }
   .daemon-card[data-status="quiet"]  .label .dot { background:rgba(232,227,213,0.35); }
@@ -430,16 +436,16 @@
     display:flex; align-items:center; justify-content:space-between;
   }
   .board-col h4 .count {
-    color:var(--sov-gold); font-weight:600; font-size:11px;
-    background:rgba(184,149,74,0.10); padding:2px 8px; border-radius:10px;
+    color:var(--sov-amber); font-weight:600; font-size:11px;
+    background:rgba(192,130,79,0.10); padding:2px 8px; border-radius:10px;
     letter-spacing:0;
   }
   .board-col[data-board="blueprint"] h4 .count { color:var(--sov-bronze); background:rgba(198,154,90,0.10); }
   .board-col[data-board="friction"]  h4 .count { color:#d4a827; background:rgba(212,168,39,0.10); }
   .board-item {
     padding:10px 12px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.02);
     border-radius:8px;
     margin-bottom:8px;
     font-size:12px; color:rgba(232,227,213,0.82);
@@ -450,7 +456,7 @@
     font-size:10px; color:rgba(232,227,213,0.5); margin-bottom:4px;
     text-transform:uppercase; letter-spacing:0.08em;
   }
-  .board-item .head .who                       { color:var(--sov-gold); }
+  .board-item .head .who                       { color:var(--sov-amber); }
   .board-item .head .who[data-agent="vett"]   { color:var(--sov-electric-blue); }
   .board-item .head .who[data-agent="scotty"] { color:var(--sov-maroon); }
   .board-item .body {
@@ -535,8 +541,8 @@
   .heartbeat-pulse {
     display:flex; align-items:center; gap:10px;
     padding:8px 12px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.02);
     border-radius:8px;
     font-size:11px;
     color:rgba(232,227,213,0.78);
@@ -570,7 +576,7 @@
   }
   .heartbeat-pulse[data-eligible="false"] .when { color:rgba(232,227,213,0.32); }
   .heartbeat-pulse[data-eligible="false"] .state strong { color:rgba(232,227,213,0.55); }
-  .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-gold); }
+  .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-amber); }
   .heartbeat-pulse[data-surfaced="true"] {
     border-color:rgba(224,184,120,0.18);
     background:rgba(224,184,120,0.04);
@@ -590,7 +596,7 @@
   .ares-counts .sev-critical  { color:#f59e0b; }
   .ares-finding {
     display:flex; align-items:flex-start; gap:8px; padding:7px 10px;
-    background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125); border:1px solid rgba(255,255,255,0.02);
     border-left-width:3px; border-radius:6px; font-size:11px; line-height:1.4;
     color:rgba(232,227,213,0.78);
   }
@@ -610,8 +616,8 @@
   .steward-entry {
     display:flex; align-items:center; gap:10px;
     padding:8px 12px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.02);
     border-radius:8px;
     font-size:11px;
     color:rgba(232,227,213,0.78);
@@ -654,9 +660,9 @@
   .steward-status-select {
     flex:0 0 auto;
     font-size:9px; text-transform:uppercase; letter-spacing:0.06em;
-    background:rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.02);
     color:rgba(232,227,213,0.6);
-    border:1px solid rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.04);
     border-radius:5px; padding:2px 4px; cursor:pointer;
   }
   .steward-entry .steward-due {
@@ -702,7 +708,7 @@
      then a compact list for reflections. No controls — revert/purge later. */
   .cognition-note {
     padding:12px 14px;
-    background:rgba(255,255,255,0.025);
+    background:rgba(255,255,255,0.0125);
     border-left:3px solid var(--sov-electric-blue);
     border-radius:0 6px 6px 0;
     font-size:13px; color:rgba(232,227,213,0.85);
@@ -717,8 +723,8 @@
   .cognition-feed { display:flex; flex-direction:column; gap:8px; }
   .cognition-item {
     padding:10px 14px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.02);
     border-radius:8px;
     font-size:12px; color:rgba(232,227,213,0.82);
     line-height:1.5;
@@ -735,7 +741,7 @@
   .cognition-item .head .scope {
     color:var(--sov-electric-blue); font-weight:500;
   }
-  .cognition-item .head .scope[data-scope="value"]  { color:var(--sov-gold); }
+  .cognition-item .head .scope[data-scope="value"]  { color:var(--sov-amber); }
   .cognition-item .head .scope[data-scope="manner"] { color:var(--sov-electric-blue); }
   .cognition-item .head .scope[data-scope="unsure"] { color:rgba(232,227,213,0.45); }
   .cognition-item .head .jon-badge {
@@ -750,8 +756,8 @@
   .scotty-approvals-feed { display:flex; flex-direction:column; gap:10px; max-height:420px; overflow-y:auto; }
   .scotty-proposal {
     padding:12px 14px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.02);
     border-left:3px solid var(--sov-amber, #d4a827);
     border-radius:0 6px 6px 0;
     font-size:12px; color:rgba(232,227,213,0.82);
@@ -831,7 +837,7 @@
 
   /* Bays — the hairline plates the hardware sits on. */
   .rig-bay {
-    border:1px solid rgba(184,149,74,0.16);
+    border:1px solid rgba(192,130,79,0.16);
     border-radius:var(--r-md);
     padding:16px 18px 18px;
   }
@@ -866,15 +872,15 @@
      plate, which is the whole point: an open card lights up the panel. */
   .rail {
     grid-area:rail; display:flex; gap:0; height:14px; padding:1px;
-    border:1px solid rgba(184,149,74,0.14); border-radius:4px;
+    border:1px solid rgba(192,130,79,0.14); border-radius:4px;
     background:rgba(0,0,0,0.35); min-width:80px;
   }
   .rail .ink { border-radius:2px; background:rgba(232,227,213,0.10); }
   .rail .lit {
-    border-radius:2px; background:var(--gold-sheen);
+    border-radius:2px; background:var(--copper-sheen);
     opacity:calc(0.40 + 0.60 * var(--lit, 0));
     box-shadow:0 0 calc(3px + 17px * var(--lit, 0))
-               rgba(212,180,106, calc(0.12 + 0.38 * var(--lit, 0)));
+               rgba(143,160,127, calc(0.12 + 0.38 * var(--lit, 0)));
   }
 
   /* Residents — small chips, one per process actually holding VRAM. */
@@ -882,12 +888,12 @@
   .res-chip {
     font-size:10px; letter-spacing:0.03em;
     color:rgba(236,243,244,0.66);
-    background:rgba(255,255,255,0.03);
-    border:1px solid rgba(255,255,255,0.06);
+    background:rgba(255,255,255,0.015);
+    border:1px solid rgba(255,255,255,0.03);
     border-radius:4px; padding:3px 9px;
     font-variant-numeric:tabular-nums;
   }
-  .res-chip .caret { color:rgba(184,149,74,0.8); margin-right:6px; }
+  .res-chip .caret { color:rgba(192,130,79,0.8); margin-right:6px; }
   .res-chip .mem { color:rgba(236,243,244,0.42); margin-left:7px; }
   .res-idle { font-size:10px; color:rgba(236,243,244,0.35); letter-spacing:0.1em; }
   /* residents_known === false: the list is UNKNOWN, not empty. Muted, and the
@@ -898,7 +904,7 @@
   }
   .open-marker {
     margin-left:auto; font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
-    color:var(--sov-gold-bright);
+    color:var(--sov-sage-bright);
   }
 
   /* Fabric spine — tower to Sparks. */
@@ -1112,6 +1118,36 @@
         <div class="empty">loading…</div>
       </div>
     </section>
+
+    <!-- Pondwright — Carolina Water Gardens Intelligence. Read-only glance over the isolation
+         wall: counts only (no names, no chat content), fetched cross-origin from the Spark's
+         public /summary. The lead data itself never enters the lattice. -->
+    <section class="panel" data-testid="pondwright-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Pondwright — Carolina Water Gardens</h3>
+      <div class="pw-cc" data-pw-summary aria-live="polite"><div class="empty">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var el = document.querySelector('[data-pw-summary]');
+      if(!el) return;
+      function stat(v,l){ return '<div><div style="font-size:22px;font-weight:600;color:#ece3d5;">'+v+'</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(232,227,213,0.4);">'+l+'</div></div>'; }
+      function paint(d){
+        var dot = d.enabled ? '#3f9a5f' : '#d4a827';
+        el.innerHTML =
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">'
+          + stat(d.conversations_today, 'chats today')
+          + stat(d.leads_captured, 'leads captured')
+          + stat(d.conversations_total, 'chats total')
+          + stat(d.last_activity ? d.last_activity.slice(11,16) : '—', 'last activity')
+          + '</div><div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(232,227,213,0.55);">'
+          + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
+          + (d.enabled ? 'live' : 'paused')
+          + ' · <a href="https://crm.pondwright.com/conversations" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">view conversations →</a></div>';
+      }
+      function load(){ fetch('https://chat.pondwright.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">Pondwright offline</div>'; }); }
+      load(); setInterval(load, 30000);
+    })();
+    </script>
 
     <!-- Cognition + Scotty Approvals — twin-column row.
          Left: Aetheria's Sense-of-Us note + recent reflections (read-only, Phase 4.2).

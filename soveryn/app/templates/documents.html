@@ -6,14 +6,14 @@
 <title>SOVERYN · Documents</title>
 <style>
   :root {
-    --sov-canvas:#050505;
-    --sov-olive:#94a455;
-    --sov-bronze:#8a6e3f;
+    --sov-canvas:#0f1011;
+    --sov-olive:#74856a;
+    --sov-bronze:#8C5A3C;
     --sov-deep-blue:#1f2c44;
     --sov-electric-blue:#3ea8e8;
-    --sov-sage:#8a9a4d;
-    --sov-amber:#e0b878;
-    --text:#e8e3d5;
+    --sov-sage:#74856a;
+    --sov-amber:#c0824f;
+    --text:#E7E5DC;
     --glass-bg:rgba(18,16,12,0.40);
     --glass-border:rgba(225,210,170,0.10);
     --glass-blur:blur(30px) saturate(140%);
@@ -28,9 +28,11 @@
   body::before {
     content:"";
     position:fixed; inset:0;
-    background:url("/static/logo.png") no-repeat center center;
-    background-size:160vmin auto;
-    opacity:0.50;
+    background:url("/static/soveryn-mark.png") no-repeat center 54%;
+    background-size:auto min(58vh,520px);
+    opacity:0.42;
+    /* lift the copper/sage out of the carbon rather than just fading it up */
+    filter:brightness(1.18) saturate(1.15);
     pointer-events:none;
     z-index:0;
   }
@@ -74,8 +76,8 @@
     display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap;
   }
   .filter-row select, .filter-row input[type="text"] {
-    background:rgba(255,255,255,0.04); color:var(--text);
-    border:1px solid rgba(255,255,255,0.08); border-radius:6px;
+    background:rgba(255,255,255,0.02); color:var(--text);
+    border:1px solid rgba(255,255,255,0.04); border-radius:6px;
     padding:6px 10px; font-size:12px; font-family:inherit; outline:none;
   }
   .filter-row select:focus, .filter-row input[type="text"]:focus {
@@ -88,13 +90,13 @@
   .doc-item {
     display:flex; align-items:center; gap:16px;
     padding:14px 16px;
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.05);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.025);
     border-radius:var(--r-md);
     cursor:pointer;
     transition:border-color 0.15s ease, background 0.15s ease;
   }
-  .doc-item:hover { border-color:rgba(148,164,85,0.25); background:rgba(255,255,255,0.04); }
+  .doc-item:hover { border-color:rgba(148,164,85,0.25); background:rgba(255,255,255,0.02); }
   .doc-item.active { border-color:rgba(148,164,85,0.5); background:rgba(148,164,85,0.06); }
 
   .doc-item .agent-disc {
@@ -118,7 +120,7 @@
   .doc-item .download-group { display:flex; gap:6px; flex-shrink:0; }
   .dl-btn {
     padding:5px 10px; border-radius:6px; font-size:11px;
-    border:1px solid rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.04);
     color:rgba(236,243,244,0.6);
     transition:border-color 0.12s ease, color 0.12s ease;
   }
@@ -151,13 +153,13 @@
   .doc-content p  { margin:6px 0; }
   .doc-content ul, .doc-content ol { margin:6px 0 6px 18px; }
   .doc-content li { margin:2px 0; }
-  .doc-content pre { background:rgba(255,255,255,0.04); padding:10px 14px; border-radius:6px; font-size:12px; overflow-x:auto; }
-  .doc-content code { font-size:12px; background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:3px; }
+  .doc-content pre { background:rgba(255,255,255,0.02); padding:10px 14px; border-radius:6px; font-size:12px; overflow-x:auto; }
+  .doc-content code { font-size:12px; background:rgba(255,255,255,0.03); padding:1px 5px; border-radius:3px; }
   .doc-content pre code { background:none; padding:0; }
   .doc-content blockquote { border-left:3px solid rgba(148,164,85,0.4); padding:4px 12px; margin:8px 0; color:rgba(236,243,244,0.6); }
   .doc-content table { border-collapse:collapse; width:100%; font-size:12px; margin:10px 0; }
-  .doc-content th, .doc-content td { border:1px solid rgba(255,255,255,0.08); padding:6px 10px; text-align:left; }
-  .doc-content th { background:rgba(255,255,255,0.04); }
+  .doc-content th, .doc-content td { border:1px solid rgba(255,255,255,0.04); padding:6px 10px; text-align:left; }
+  .doc-content th { background:rgba(255,255,255,0.02); }
 
   .loading-spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(148,164,85,0.2); border-top-color:var(--sov-olive); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:8px; }
   @keyframes spin { to { transform:rotate(360deg); } }

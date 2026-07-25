@@ -13,44 +13,44 @@
          Vett     → deep background blue (cosmic depth)
          Scotty   → bronze (the structural trunk; forged executor) */
 
-    /* Brand tokens — gold-on-obsidian, per Aetheria's art direction
+    /* Brand tokens — sage + copper on carbon (2026-07-24 rebrand), per Aetheria's art direction
        (2026-06-19). The interface should feel like a monument / piece of
        high-end hardware, not a themed website: matte charcoal as a MATERIAL,
        weathered brushed gold as machined metalwork (NOT bright/flashy),
        solid obsidian slabs (no glassmorphism). Blue + status signals are the
        ONLY things that glow — gold stays matte and structural. */
-    --sov-canvas:#0a0a0b;          /* matte charcoal-black material base */
-    --sov-gold:#b8954a;            /* primary accent — weathered metallic gold (SOVERYN-lettering tone) */
-    --sov-gold-bright:#d4b46a;     /* gentle gold highlight (not flashy) */
-    --sov-gold-deep:#6e5526;       /* gold shadow / edge */
-    --gold-sheen:linear-gradient(115deg,#a8843c 0%,#cdac5e 40%,#dcbd72 49%,#c2a256 60%,#8a6f34 100%); /* brushed-metal streak */
-    --sov-olive:#94a455;           /* (retained) */
-    --sov-bronze:#8a6e3f;          /* aged Spartan-shield bronze (Jon's avatar / patina) */
+    --sov-canvas:#0f1011;          /* matte charcoal-black material base */
+    --sov-sage-bright:#8fa07f;     /* gentle sage highlight (not flashy) */
+    --sov-sage-deep:#566149;       /* sage shadow / edge */
+    --copper-sheen:linear-gradient(115deg,#8C5A3C 0%,#c0824f 40%,#d69a68 49%,#b7794a 60%,#74492e 100%);
+    --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%); /* brushed-metal streak */
+    --sov-olive:#74856a;           /* (retained) */
+    --sov-bronze:#8C5A3C;          /* aged Spartan-shield bronze (Jon's avatar / patina) */
     --sov-maroon:#9c3543;          /* Scotty — engineering maroon (Star Trek red-shirt) */
     --sov-maroon-bright:#bd4f5b;   /* maroon highlight */
     --maroon-sheen:linear-gradient(135deg,#bd4f5b,#9c3543 55%,#5e2029); /* engineering disc */
     --sov-deep-blue:#1f2c44;       /* Vett */
     --sov-electric-blue:#3ea8e8;   /* Aetheria phosphor — a GLOW signal */
-    --sov-sage:#8a9a4d;            /* Aetheria gradient start */
+    --sov-sage:#74856a;            /* Aetheria gradient start */
     --sov-gray:#9a988a;            /* Aetheria gradient middle */
-    --sov-amber:#e0b878;           /* soft accent */
-    --text:#f3efe5;                /* high-contrast warm white — pops on obsidian */
+    --sov-amber:#c0824f;           /* soft accent */
+    --text:#E7E5DC;                /* high-contrast warm white — pops on obsidian */
     --text-dim:rgba(243,239,229,0.60); /* secondary text, lifted out of muddy gray */
 
     /* Legacy aliases — old token names map into the new palette. */
     --canvas:var(--sov-canvas);
     --earth:#4e2d11;
-    --leaf:var(--sov-gold);
+    --leaf:var(--sov-amber);
     --slate:#2a4459;
-    --node:var(--sov-gold);        /* focus rings → gold */
+    --node:var(--sov-amber);        /* focus rings → copper */
     --bronze:var(--sov-bronze);
-    --gold:var(--sov-gold);
+    --copper:var(--sov-amber);
 
     /* Structure — solid obsidian slabs with a razor-thin gold hairline.
        Glassmorphism killed: panels are near-opaque, blur minimal so the
        grain material reads through the edges rather than a frosted blur. */
     --glass-bg:rgba(16,16,19,0.92);          /* solid matte obsidian slab */
-    --glass-border:rgba(184,149,74,0.30);    /* 1px weathered-gold hairline */
+    --glass-border:rgba(192,130,79,0.30);    /* 1px weathered-gold hairline */
     --glass-blur:blur(3px) saturate(105%);
     --r-lg:22px;
     --r-md:14px;
@@ -68,9 +68,12 @@
   body::before {
     content:"";
     position:fixed; inset:0;
-    background:#0a0a0b url("/static/logo-metal.png") no-repeat center center;
-    background-size:cover;
-    opacity:0.55;
+    background:#0f1011 url("/static/soveryn-mark.png") no-repeat center 54%;
+    /* sized by HEIGHT so it can never overflow the viewport and clip at the top */
+    background-size:auto min(58vh,520px);
+    opacity:0.42;
+    /* lift the copper/sage out of the carbon rather than just fading it up */
+    filter:brightness(1.18) saturate(1.15);
     pointer-events:none;
     z-index:0;
   }
@@ -79,7 +82,7 @@
   body::after {
     content:"";
     position:fixed; inset:0;
-    background:radial-gradient(110% 85% at 50% 50%, transparent 45%, rgba(10,10,11,0.55) 100%);
+    background:radial-gradient(110% 85% at 50% 50%, transparent 55%, rgba(15,16,17,0.40) 100%);
     pointer-events:none;
     z-index:0;
   }
@@ -126,24 +129,25 @@
     flex-shrink:0;
     transition:background 0.12s ease, color 0.12s ease, transform 0.18s ease;
   }
-  .sidebar-toggle:hover { background:rgba(255,255,255,0.05); color:var(--text); }
+  .sidebar-toggle:hover { background:rgba(255,255,255,0.025); color:var(--text); }
   body.sidebar-collapsed .sidebar-toggle { transform:rotate(180deg); }
   .brand { display:flex; justify-content:space-between; align-items:center; padding:4px 6px 12px; }
-  /* Wordmark — brushed metal, like the SOVERYN lettering on the mark. */
+  /* Wordmark — brushed metal, like the SOVERYN lettering on the mark.
+     Copper since the 2026-07-24 rebrand; gold is now reserved for Aetheria. */
   .brand .wordmark {
     font-weight:600; letter-spacing:0.18em; font-size:13px;
-    background:var(--gold-sheen);
+    background:var(--copper-sheen);
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .brand .home { color:var(--text-dim); font-size:11px; text-decoration:none; }
   .brand .home:hover { color:var(--text); }
 
-  /* The SOVERYN action — sharp, high-contrast brushed gold (Aetheria's call:
-     the New Conversation button is the boldest gold element). Dark text on
-     machined metal. */
+  /* The SOVERYN action — the boldest brand element on the page. Brushed
+     COPPER since the 2026-07-24 rebrand (was gold; gold is now Aetheria's
+     alone). Dark text on machined metal. */
   .new-chat {
-    background:var(--gold-sheen);
-    border:1px solid var(--sov-gold-deep);
+    background:var(--copper-sheen);
+    border:1px solid var(--sov-bronze);
     color:#17120a;
     padding:10px 14px; border-radius:var(--r-md);
     font-size:13px; font-weight:600;
@@ -155,7 +159,7 @@
   .agent-pills { display:flex; gap:6px; }
   .agent-pill {
     flex:1; padding:8px 10px; border-radius:var(--r-sm);
-    background:rgba(255,255,255,0.03);
+    background:rgba(255,255,255,0.015);
     border:1px solid var(--glass-border);
     font-size:11px; font-weight:500;
     text-align:center;
@@ -173,11 +177,11 @@
 
   .search input {
     width:100%; padding:8px 12px; border-radius:var(--r-sm);
-    background:rgba(255,255,255,0.03);
+    background:rgba(255,255,255,0.015);
     border:1px solid var(--glass-border);
     color:var(--text); font-size:12px; outline:none;
   }
-  .search input:focus { border-color:rgba(184,149,74,0.55); }
+  .search input:focus { border-color:rgba(192,130,79,0.55); }
 
   .history { flex:1; overflow-y:auto; padding-right:4px; }
   .history h4 { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
@@ -188,10 +192,10 @@
     font-size:12px;
     border-left:2px solid transparent;
   }
-  .history a:hover { background:rgba(255,255,255,0.04); }
+  .history a:hover { background:rgba(255,255,255,0.02); }
   .history a:hover .del-session { opacity:0.55; }
-  /* Active session — gold-flagged row (the active highlight Aetheria called for). */
-  .history a.active { background:rgba(184,149,74,0.12); border-left-color:var(--sov-gold); color:var(--text); }
+  /* Active session — copper-flagged row (the active highlight Aetheria called for). */
+  .history a.active { background:rgba(192,130,79,0.12); border-left-color:var(--sov-amber); color:var(--text); }
   .history .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .history .label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .history .del-session {
@@ -249,20 +253,20 @@
     -webkit-backdrop-filter:var(--glass-blur);
   }
   /* Default disc = Aetheria's brushed gold (overridden by JS per agent).
-     The brand color is hers since she's the central voice — and the brand
-     is gold. */
+     Gold is her IDENTITY, not the brand — the 2026-07-24 rebrand moved the
+     brand to sage + copper and Jon reserved gold for her disc alone. */
   .chat-header .disc {
     width:32px; height:32px; border-radius:50%;
-    background:var(--gold-sheen);
+    background:var(--sage-sheen);
     flex-shrink:0;
-    box-shadow:inset 0 0 0 1px rgba(212,180,106,0.25);
+    box-shadow:inset 0 0 0 1px rgba(143,160,127,0.25);
   }
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
   .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
   .chat-header .actions { display:flex; gap:6px; }
   .chat-header .actions button { color:rgba(236,243,244,0.55); padding:6px 8px; border-radius:8px; font-size:14px; }
-  .chat-header .actions button:hover { background:rgba(255,255,255,0.04); color:var(--text); }
+  .chat-header .actions button:hover { background:rgba(255,255,255,0.02); color:var(--text); }
 
   /* Thread */
   .thread {
@@ -280,8 +284,8 @@
   /* User bubble: a gold-hairlined obsidian slab (gold message-bubble border). */
   .bubble.user {
     align-self:flex-end;
-    background:rgba(184,149,74,0.10);
-    border:1px solid rgba(184,149,74,0.34);
+    background:rgba(192,130,79,0.10);
+    border:1px solid rgba(192,130,79,0.34);
     border-bottom-right-radius:4px;
   }
   /* Aetheria's bubble — dropped to 0.40 alpha so the tree bg reads through
@@ -301,8 +305,8 @@
     font-family:"SF Mono","Menlo",monospace;
     font-size:11px; line-height:1.5;
     color:rgba(236,243,244,0.6);
-    background:rgba(255,255,255,0.025);
-    border:1px solid rgba(255,255,255,0.06);
+    background:rgba(255,255,255,0.0125);
+    border:1px solid rgba(255,255,255,0.03);
     border-radius:6px;
     padding:6px 10px;
     margin-bottom:-2px;
@@ -314,7 +318,7 @@
     color:rgba(236,243,244,0.5);
     margin-top:3px;
     padding-top:3px;
-    border-top:1px dashed rgba(255,255,255,0.05);
+    border-top:1px dashed rgba(255,255,255,0.025);
   }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   /* Live intent mark (mark_share): reads as a deliberate note, not a data tool. */
@@ -359,13 +363,13 @@
   .composer .stream-toggle {
     font-size:11px; color:rgba(236,243,244,0.55);
     padding:6px 10px; border-radius:14px;
-    background:rgba(255,255,255,0.04);
+    background:rgba(255,255,255,0.02);
   }
-  /* Send button — brushed gold (the SOVERYN action). */
+  /* Send button — brushed copper (the SOVERYN action). */
   .composer .send {
     width:32px; height:32px; border-radius:50%;
-    background:var(--gold-sheen); color:#17120a;
-    border:1px solid var(--sov-gold-deep);
+    background:var(--copper-sheen); color:#17120a;
+    border:1px solid var(--sov-sage-deep);
     display:flex; align-items:center; justify-content:center;
     font-weight:700;
   }
@@ -470,7 +474,7 @@
     line-height: 1;
   }
   /* Subtle per-agent hover tint — keeps the action row uniform at rest. */
-  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-gold); background: rgba(184,149,74,0.10); }
+  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-amber); background: rgba(192,130,79,0.10); }
   .chat-header .actions .call-btn[data-agent="vett"]:hover     { color: var(--sov-electric-blue); background: rgba(62,168,232,0.08); }
   .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: var(--sov-maroon-bright); background: rgba(156,53,67,0.10); }
 
@@ -499,9 +503,9 @@
   }
   .voice-orb[data-agent="aetheria"] {
     background: radial-gradient(circle at 35% 35%,
-                  var(--sov-gold-bright) 0%,
-                  var(--sov-gold) 50%,
-                  var(--sov-gold-deep) 100%);
+                  var(--sov-sage-bright) 0%,
+                  var(--sov-amber) 50%,
+                  var(--sov-sage-deep) 100%);
     box-shadow: 0 0 90px rgba(184, 149, 74, 0.40);
   }
   .voice-orb[data-agent="vett"] {
@@ -540,7 +544,7 @@
     text-transform: uppercase;
     opacity: 0.85;
   }
-  .voice-title[data-agent="aetheria"] { color: var(--sov-gold); }
+  .voice-title[data-agent="aetheria"] { color: var(--sov-amber); }
   .voice-title[data-agent="vett"]     { color: var(--sov-electric-blue); }
   .voice-title[data-agent="scotty"]   { color: var(--sov-maroon-bright); }
   .voice-status {
@@ -578,11 +582,11 @@
     text-transform: uppercase;
     transition: background 0.12s ease, border-color 0.12s ease;
   }
-  .voice-hangup[data-agent="aetheria"] { border-color: rgba(184,149,74,0.55); color: var(--sov-gold); }
+  .voice-hangup[data-agent="aetheria"] { border-color: rgba(192,130,79,0.55); color: var(--sov-amber); }
   .voice-hangup[data-agent="vett"]     { border-color: rgba(62,168,232,0.5);  color: var(--sov-electric-blue); }
   .voice-hangup[data-agent="scotty"]   { border-color: rgba(156,53,67,0.55); color: var(--sov-maroon-bright); }
-  .voice-hangup:hover { background: rgba(255,255,255,0.04); }
-  .voice-hangup:active { background: rgba(255,255,255,0.08); }
+  .voice-hangup:hover { background: rgba(255,255,255,0.02); }
+  .voice-hangup:active { background: rgba(255,255,255,0.04); }
   /* Pre-mounted hidden <audio> for iOS Safari — playback must begin inside
      the user gesture that starts the call; a pre-mounted element with
      playsinline lets ontrack assign srcObject without re-triggering policy. */
@@ -608,7 +612,7 @@
 
     <div class="history" data-testid="history">
       <h4>Today</h4>
-      <a href="#" class="active"><span class="dot" style="background:var(--gold)"></span>Session loading…</a>
+      <a href="#" class="active"><span class="dot" style="background:var(--copper)"></span>Session loading…</a>
     </div>
 
     <div class="bulk-actions">
@@ -688,13 +692,13 @@
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
   // depth without complicating the identity.
   const AGENT_COLORS = {
-    aetheria: "var(--gold-sheen)",                              /* primary voice → brushed SOVERYN gold */
+    aetheria: "var(--sage-sheen)",                              /* primary voice → brushed SOVERYN gold */
     vett:     "linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
-    aetheria: "var(--sov-gold)",
+    aetheria: "var(--sov-sage)",
     vett:     "var(--sov-deep-blue)",
     scotty:   "var(--sov-maroon)",
   };
