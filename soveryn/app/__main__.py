@@ -19,6 +19,8 @@ later commit if/when we need it.
 """
 
 from __future__ import annotations
+import os
+import logging
 import argparse
 import sys
 
@@ -56,6 +58,30 @@ def _resolve_launch_config(
     return host, port
 
 
+def _configure_logging() -> None:
+    """Send the app's Python logging to stdout so systemd captures it.
+
+    Added 2026-07-22. Before this the app configured NO root handler, so every
+    ``logging.getLogger(__name__)`` call across the codebase emitted into the
+    void — 120 journal lines over 9 days, zero from Python. The delegation
+    engine and Scotty runner logged their failures faithfully and nobody could
+    read them, which is what made the Scotty 8/8 empty-diff failures take 6
+    weeks to diagnose. For a project whose thesis is that the audit log is
+    ground truth, silent logging is a first-class bug.
+
+    Level is env-overridable via SOVERYN_LOG_LEVEL (default INFO). Idempotent:
+    force=True so a re-entrant call (tests, reload) doesn't stack handlers.
+    """
+    level_name = os.environ.get("SOVERYN_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        stream=sys.stdout,
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+        force=True,
+    )
+
+
 def _build_startup_line(host: str, port: int, env: EnvConfig, agent_names: list[str]) -> str:
     """One-line summary printed before app.run."""
     return (
@@ -84,6 +110,8 @@ def main(argv: list[str] | None = None, *, app_factory=create_app, runner=None) 
     parser.add_argument("--port", type=int, default=None,
                         help="bind port (default: EnvConfig.app_port = 5001)")
     args = parser.parse_args(argv)
+
+    _configure_logging()
 
     env = load_env_config()
     host, port = _resolve_launch_config(env, args.host, args.port)
