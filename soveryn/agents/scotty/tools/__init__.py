@@ -40,6 +40,7 @@ from soveryn.agents.scotty.tools.git import (
     build_git_restore_file_tool,
 )
 from soveryn.agents.scotty.tools.edit import build_edit_file_tool
+from soveryn.agents.scotty.tools.write import build_write_file_tool
 from soveryn.agents.scotty.tools.run_command import build_run_command_tool
 from soveryn.agents.scotty.tools.pytest_runner import build_run_pytest_tool
 from soveryn.agents.scotty.tools.paths import (
@@ -59,6 +60,7 @@ def register_scotty_tools(registry: ToolRegistry) -> None:
     registry.register(build_git_diff_tool(owner_agent="scotty"))
     # Fix
     registry.register(build_edit_file_tool(owner_agent="scotty"))
+    registry.register(build_write_file_tool(owner_agent="scotty"))
     registry.register(build_run_command_tool(owner_agent="scotty"))
     # Verify
     registry.register(build_run_pytest_tool(owner_agent="scotty"))
@@ -74,6 +76,7 @@ __all__ = [
     "build_git_diff_tool",
     "build_git_restore_file_tool",
     "build_edit_file_tool",
+    "build_write_file_tool",
     "build_run_command_tool",
     "build_run_pytest_tool",
     "SCOTTY_PROJECT_ROOT",

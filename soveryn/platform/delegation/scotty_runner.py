@@ -12,7 +12,7 @@ Isolation
 ---------
 ALL of Scotty's tools are pinned to ``worktree_path``:
   - read_file / list_directory: ``root=worktree`` (read-only inspection).
-  - edit_file / git_status / git_diff / git_restore_file: ``root=worktree``
+  - write_file / edit_file / git_status / git_diff / git_restore_file: ``root=worktree``
     (writes + git ops resolve under the worktree; paths escaping it are
     rejected by resolve_within_root).
   - run_command / run_pytest: ``root=worktree`` — cwd is the worktree AND
@@ -53,6 +53,7 @@ def build_worktree_tool_registry(worktree: Path):
         build_read_file_tool,
         build_list_directory_tool,
         build_edit_file_tool,
+        build_write_file_tool,
         build_run_command_tool,
         build_git_status_tool,
         build_git_diff_tool,
@@ -65,6 +66,7 @@ def build_worktree_tool_registry(worktree: Path):
     registry.register(build_read_file_tool(owner_agent="scotty", root=worktree))
     registry.register(build_list_directory_tool(owner_agent="scotty", root=worktree))
     registry.register(build_edit_file_tool(owner_agent="scotty", root=worktree))
+    registry.register(build_write_file_tool(owner_agent="scotty", root=worktree))
     registry.register(
         build_run_command_tool(owner_agent="scotty", root=worktree, sandbox=True)
     )
