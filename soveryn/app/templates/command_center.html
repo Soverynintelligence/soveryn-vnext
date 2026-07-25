@@ -18,11 +18,11 @@
     --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%);
     --sov-olive:#74856a;           /* (retained) */
     --sov-bronze:#8C5A3C;          /* aged Spartan-shield bronze (patina) */
-    --sov-maroon:#9c3543;          /* Scotty — engineering maroon (Star Trek red-shirt) */
-    --sov-maroon-bright:#bd4f5b;
-    --maroon-sheen:linear-gradient(135deg,#bd4f5b,#9c3543 55%,#5e2029);
-    --sov-deep-blue:#1f2c44;       /* Vett */
-    --sov-electric-blue:#3ea8e8;   /* Aetheria phosphor — a GLOW signal */
+    --sov-maroon:#a3543a;          /* Scotty — engineering maroon (Star Trek red-shirt) */
+    --sov-maroon-bright:#c26a4c;
+    --maroon-sheen:linear-gradient(135deg,#c26a4c,#a3543a 55%,#6b3323);
+    --sov-deep-blue:#5c5733;       /* Vett */
+    --sov-electric-blue:#8a8250;   /* Aetheria phosphor — a GLOW signal */
     --sov-sage:#74856a;
     --sov-gray:#9a988a;
     --sov-amber:#c0824f;
@@ -164,37 +164,19 @@
     transition:transform 0.18s ease, border-color 0.18s ease;
   }
   .agent-card:hover { transform:translateY(-2px); border-color:rgba(255,255,255,0.16); }
-  .agent-card .disc {
-    width:46px; height:46px; border-radius:50%;
-    position:relative; flex-shrink:0;
-  }
-  .agent-card .disc::after {
-    content:""; position:absolute; inset:-6px;
-    border-radius:50%;
-    border:1px solid currentColor;
-    opacity:0.35;
-    animation:ring 2.4s ease-in-out infinite;
-  }
   @keyframes ring { 0%,100% { transform:scale(1); opacity:0.35 } 50% { transform:scale(1.08); opacity:0.1 } }
-  /* Agent identity discs. Aetheria = sage, Vett = deep blue, Scotty =
+  /* 2026-07-24: the agent-card discs were REMOVED. On a card that already
+     shows the name, role and last-active, the disc encoded nothing the text
+     didn't — and it was the ornament forcing three agent hues into a palette
+     that only wants carbon/sage/copper/bone. The 6px dots in the comm bus and
+     activity feed are kept: at that density a colour genuinely helps you spot
+     one agent without reading. (Jon: "whats the purpose anyway")
+     Historic note on the hues themselves. Aetheria = sage, Vett = deep blue, Scotty =
      maroon; the pulse-ring `color` inherits each signature hue. These are
      IDENTITY, not brand — they stay fixed so the comm bus stays readable at
      a glance. (Historic note: gold used to be the SOVERYN brand colour and
      was hers for that reason. The 2026-07-24 rebrand moved the brand to
      oxide sage + aged copper; Jon kept the three agent hues unchanged.) */
-  .agent-card[data-agent="aetheria"] .disc {
-    background:var(--sage-sheen);
-    color:var(--sov-sage);
-  }
-  .agent-card[data-agent="vett"] .disc {
-    background:linear-gradient(135deg, var(--sov-deep-blue), #2c3d5c);
-    color:var(--sov-electric-blue);
-  }
-  .agent-card[data-agent="scotty"] .disc {
-    /* Gold highlight → dark patina, like an old worn bronze shield. */
-    background:var(--maroon-sheen);
-    color:var(--sov-maroon);
-  }
   .agent-card .body { flex:1; min-width:0; }
   .agent-card .name { font-size:14px; font-weight:500; }
   .agent-card .role { color:rgba(236,243,244,0.55); font-size:11px; margin-top:2px; }
@@ -1004,7 +986,6 @@
 
     <section class="agent-row" data-testid="agent-row">
       <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria" aria-label="Open chat with Aetheria">
-        <div class="disc"></div>
         <div class="body">
           <div class="name">aetheria</div>
           <div class="role">primary · cathedral</div>
@@ -1012,7 +993,6 @@
         </div>
       </a>
       <a href="/chat?agent=vett" class="agent-card" data-agent="vett" aria-label="Open chat with Vett">
-        <div class="disc"></div>
         <div class="body">
           <div class="name">vett</div>
           <div class="role">verifier</div>
@@ -1020,7 +1000,6 @@
         </div>
       </a>
       <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty" aria-label="Open chat with Scotty">
-        <div class="disc"></div>
         <div class="body">
           <div class="name">scotty</div>
           <div class="role">executor</div>
