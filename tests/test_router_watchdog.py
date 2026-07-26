@@ -9,6 +9,9 @@ from soveryn.platform.watchdog.router_watchdog import (
     parse_dead_models,
     decide_restart,
     in_cooldown,
+    journal_since,
+    WINDOW_SECONDS,
+    THRESHOLD,
 )
 
 GUARDED = {"aetheria", "vett-scotty", "cognition", "embeddings", "reflection"}
@@ -84,3 +87,54 @@ def test_in_cooldown_false_after_window():
 
 def test_in_cooldown_false_when_never_restarted():
     assert in_cooldown(last_restart_ts=None, now=500.0, cooldown_s=300.0) is False
+
+
+# ── regression: the 2026-07-26 silent outage ────────────────────────────────
+# Aetheria's backend died and the watchdog never fired for 26 hours. Not a bad
+# signature and not a bad journal — the lookback was 2 minutes while the ONLY
+# caller knocking on the dead slot was the heartbeat, every 1800s. Each window
+# saw exactly one error; THRESHOLD wants two. It logged action:"none" 1,500
+# times while she was unreachable.
+HEARTBEAT_INTERVAL_S = 1800.0
+
+
+def test_window_spans_enough_heartbeats_to_reach_threshold():
+    """The window must be able to hold THRESHOLD heartbeat-spaced errors.
+
+    This is the invariant the outage violated. If the heartbeat interval is ever
+    raised above the window, the watchdog silently stops being able to fire.
+    """
+    needed = (THRESHOLD - 1) * HEARTBEAT_INTERVAL_S
+    assert WINDOW_SECONDS > needed, (
+        f"window {WINDOW_SECONDS}s cannot hold {THRESHOLD} errors spaced "
+        f"{HEARTBEAT_INTERVAL_S}s apart; the watchdog can never reach threshold"
+    )
+
+
+def test_journal_since_defaults_to_full_window():
+    assert journal_since(now=10_000.0, last_restart_ts=None,
+                         window_s=2400.0) == 7_600.0
+
+
+def test_journal_since_floors_at_last_restart():
+    """Errors older than the last restart are not evidence — they caused it."""
+    assert journal_since(now=10_000.0, last_restart_ts=9_500.0,
+                         window_s=2400.0) == 9_500.0
+
+
+def test_journal_since_ignores_restart_older_than_window():
+    assert journal_since(now=10_000.0, last_restart_ts=1_000.0,
+                         window_s=2400.0) == 7_600.0
+
+
+def test_no_restart_loop_after_a_restart_clears_the_slot():
+    """The widened window must not re-count pre-restart errors once cooldown lapses.
+
+    Without the floor, a 40-minute window would still see the errors that
+    triggered the restart and fire again every cooldown period, forever.
+    """
+    now, restart_at = 10_000.0, 9_900.0
+    since = journal_since(now, restart_at, WINDOW_SECONDS)
+    assert since == restart_at
+    # an error from before the restart falls outside the scanned range
+    assert 9_800.0 < since

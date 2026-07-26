@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import datetime
 
 # The router lazily serves these; a crashed one leaves a dead slot. Scoped to
 # the preset sections so a can't-load model (MiniMax-M3) never triggers a
@@ -31,7 +32,16 @@ STATE_DIR = os.path.expanduser("~/soveryn_vnext/data/watchdog")
 COOLDOWN_FILE = os.path.join(STATE_DIR, "last_restart")
 LOG_FILE = os.path.join(STATE_DIR, "watchdog.jsonl")
 
-WINDOW = "2 min ago"   # journal lookback per tick
+# Journal lookback per tick. MUST exceed the slowest thing that knocks on a dead
+# slot, or the watchdog cannot reach THRESHOLD and never fires.
+# 2026-07-26: this was "2 min ago" and caused a 26-hour silent outage. Aetheria's
+# backend died and the ONLY caller was the heartbeat, which knocks every 1800s —
+# so each 2-minute window saw exactly ONE error, never the two THRESHOLD wants.
+# The watchdog logged dead:[] action:"none" on every tick for two days while she
+# was unreachable. It worked as designed under chat traffic (errors arrive fast)
+# and was blind precisely when the box was quiet, which is when nobody notices.
+# 40 min > 2 heartbeat intervals, so two consecutive misses now land together.
+WINDOW_SECONDS = 2400.0
 THRESHOLD = 2          # dead-slot errors for one model before we act
 COOLDOWN_S = 300.0     # min seconds between restarts (anti-flap)
 
@@ -71,6 +81,20 @@ def decide_restart(dead_counts: dict[str, int], threshold: int) -> list[str]:
     return sorted(m for m, c in dead_counts.items() if c >= threshold)
 
 
+def journal_since(now: float, last_restart_ts: float | None, window_s: float) -> float:
+    """Start of the lookback window.
+
+    Never reaches back past the last restart. Without this floor, widening the
+    window would re-count the errors that CAUSED the previous restart and fire
+    again the moment cooldown lapsed — a restart loop. After a restart the slate
+    is genuinely clean, so only errors newer than it are evidence.
+    """
+    floor = now - window_s
+    if last_restart_ts is not None and last_restart_ts > floor:
+        return last_restart_ts
+    return floor
+
+
 def in_cooldown(last_restart_ts: float | None, now: float, cooldown_s: float) -> bool:
     """True if a restart happened within the last `cooldown_s` seconds."""
     if last_restart_ts is None:
@@ -79,7 +103,8 @@ def in_cooldown(last_restart_ts: float | None, now: float, cooldown_s: float) ->
 
 
 # ── I/O shell ───────────────────────────────────────────────────────────────
-def _read_journal(since: str) -> str:
+def _read_journal(since_ts: float) -> str:
+    since = datetime.fromtimestamp(since_ts).strftime("%Y-%m-%d %H:%M:%S")
     try:
         out = subprocess.run(
             ["journalctl", "--user", "-u", ROUTER_UNIT, "--no-pager", "--since", since],
@@ -121,9 +146,11 @@ def run_once(now: float | None = None, guarded: set[str] | None = None) -> dict:
     now = time.time() if now is None else now
     guarded = DEFAULT_GUARDED if guarded is None else guarded
 
-    counts = parse_dead_models(_read_journal(WINDOW), guarded)
+    last_restart = _read_last_restart()
+    since_ts = journal_since(now, last_restart, WINDOW_SECONDS)
+    counts = parse_dead_models(_read_journal(since_ts), guarded)
     dead = decide_restart(counts, THRESHOLD)
-    cooling = in_cooldown(_read_last_restart(), now, COOLDOWN_S)
+    cooling = in_cooldown(last_restart, now, COOLDOWN_S)
 
     action = "none"
     if dead and not cooling:
