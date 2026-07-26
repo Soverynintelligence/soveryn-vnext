@@ -260,9 +260,162 @@ def build_read_pdf_tool(
     )
 
 
+# --- PDF -> EDITABLE DOCX ----------------------------------------------------
+
+_TO_DOCX_MAX_BYTES = 30 * 1024 * 1024   # match read_pdf's cap
+_TO_DOCX_MAX_PAGES = 50                  # bound conversion work
+
+
+def build_pdf_to_editable_doc_tool(
+    *,
+    owner_agent: str = "vett",
+    root: Path | None = None,
+    writable_root: Path | None = None,
+) -> ToolSpec:
+    """Convert a text-layer PDF into an editable .docx (pdf2docx).
+
+    Reads are fenced to `root` (defaults to home, matching read_pdf); the .docx
+    is written ONLY inside `writable_root` (defaults to ~/Downloads) so this tool
+    cannot write outside Vett's drop dir — the output name is reduced to a bare
+    filename, never a path. Scanned/image-only PDFs have no text layer, so
+    pdf2docx would just embed a picture; those are rejected with a clear
+    "needs OCR" message instead of producing a fake-editable doc.
+    """
+    read_root = root or Path.home()
+    write_root = writable_root or (Path.home() / "Downloads")
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        path_arg = args.get("path", "")
+        if not isinstance(path_arg, str) or not path_arg:
+            raise ToolArgError("path (string) is required")
+        try:
+            resolved = resolve_within_root(path_arg, root=read_root, must_exist=True)
+        except PathOutOfBoundsError as e:
+            raise ToolArgError(str(e))
+        except FileNotFoundError as e:
+            raise ToolArgError(str(e))
+        if not resolved.is_file():
+            raise ToolArgError(f"path {path_arg!r} is not a regular file")
+        if resolved.suffix.lower() != ".pdf":
+            return {"error": "not_pdf", "message": f"{resolved.name} is not a .pdf."}
+
+        size = resolved.stat().st_size
+        if size > _TO_DOCX_MAX_BYTES:
+            return {"error": "too_large",
+                    "message": f"{resolved.name} is {size} bytes; cap is {_TO_DOCX_MAX_BYTES}."}
+
+        # Output is a bare filename dropped into the writable root — never a path,
+        # so this tool can't be steered into writing outside ~/Downloads.
+        out_arg = args.get("output_name")
+        if isinstance(out_arg, str) and out_arg.strip():
+            name = Path(out_arg.strip()).name
+            if not name.lower().endswith(".docx"):
+                name += ".docx"
+        else:
+            name = resolved.stem + ".editable.docx"
+
+        try:
+            import fitz  # PyMuPDF — cheap text-layer probe before the heavy convert
+        except Exception as e:  # noqa: BLE001
+            return {"error": "pdf_lib_missing", "message": f"PyMuPDF unavailable: {e}"}
+        try:
+            doc = fitz.open(str(resolved))
+        except Exception as e:  # noqa: BLE001
+            return {"error": "open_failed", "message": str(e)}
+        try:
+            if getattr(doc, "needs_pass", False):
+                return {"error": "encrypted",
+                        "message": f"{resolved.name} is password-protected."}
+            total_pages = doc.page_count
+            end_page = min(total_pages, _TO_DOCX_MAX_PAGES)
+            text_chars = sum(len(doc[i].get_text() or "") for i in range(end_page))
+        finally:
+            doc.close()
+
+        if text_chars < 10:
+            return {
+                "error": "scanned_no_text",
+                "message": (
+                    f"{resolved.name} has no text layer (image-only scan). "
+                    "pdf2docx would only embed a picture, not editable text. "
+                    "This needs OCR, which this tool does not do."
+                ),
+            }
+
+        try:
+            from pdf2docx import Converter
+        except Exception as e:  # noqa: BLE001
+            return {"error": "pdf2docx_missing", "message": f"pdf2docx unavailable: {e}"}
+
+        write_root.mkdir(parents=True, exist_ok=True)
+        out_path = write_root / name
+        try:
+            cv = Converter(str(resolved))
+            try:
+                cv.convert(str(out_path), start=0, end=end_page)
+            finally:
+                cv.close()
+        except Exception as e:  # noqa: BLE001 — report, don't crash the agent
+            return {"error": "convert_failed", "message": str(e)}
+
+        result: dict[str, Any] = {
+            "ok": True,
+            "output_path": str(out_path),
+            "bytes": out_path.stat().st_size if out_path.exists() else 0,
+            "pages_converted": end_page,
+        }
+        if total_pages > _TO_DOCX_MAX_PAGES:
+            result["note"] = (
+                f"Only the first {_TO_DOCX_MAX_PAGES} of {total_pages} pages were "
+                "converted (page cap)."
+            )
+        return result
+
+    return ToolSpec(
+        name="pdf_to_editable_doc",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to the source PDF. Fenced to the home dir; "
+                        "symlink escapes are rejected. Must have a real text layer "
+                        "(a digital PDF, not a scan)."
+                    ),
+                },
+                "output_name": {
+                    "type": "string",
+                    "description": (
+                        "Optional output filename (not a path). The .docx is always "
+                        "written into ~/Downloads. Defaults to "
+                        "'<source>.editable.docx'."
+                    ),
+                },
+            },
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Convert a text-layer PDF into an EDITABLE Word (.docx) that mirrors "
+            "the layout, written into ~/Downloads. Use this for 'make this PDF "
+            "editable'. Works ONLY on digital PDFs with a real text layer — a "
+            "scanned/image-only PDF is rejected (it would just embed a picture; "
+            "that needs OCR, which this does not do). If unsure whether a PDF has "
+            "text, check with read_pdf first."
+        ),
+    )
+
+
 def register_vett_pdf_tools(
     registry, *, owner_agent: str = "vett", read_root: Path | None = None
 ) -> None:
-    """Register Vett's PDF tools (convert-to-pdf writer + read_pdf reader)."""
+    """Register Vett's PDF tools (convert-to-pdf writer + read_pdf reader +
+    pdf_to_editable_doc converter)."""
     registry.register(build_convert_to_pdf_tool(owner_agent=owner_agent))
     registry.register(build_read_pdf_tool(owner_agent=owner_agent, root=read_root))
+    registry.register(
+        build_pdf_to_editable_doc_tool(owner_agent=owner_agent, root=read_root)
+    )
