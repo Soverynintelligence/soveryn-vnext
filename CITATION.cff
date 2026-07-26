@@ -13,7 +13,7 @@ authors:
   - given-names: Jon
     family-names: DeOliveira
     orcid: 'https://orcid.org/0009-0006-9188-739X'
-    affiliation: SOVERYN Intelligence
+    affiliation: SOVERYN Intelligence LLC
 repository-code: 'https://github.com/Soverynintelligence/soveryn-vnext'
 url: 'https://soverynintelligence.com'
 keywords:
@@ -32,7 +32,7 @@ preferred-citation:
     - given-names: Jon
       family-names: DeOliveira
       orcid: 'https://orcid.org/0009-0006-9188-739X'
-      affiliation: SOVERYN Intelligence
+      affiliation: SOVERYN Intelligence LLC
   doi: 10.5281/zenodo.21603107
   url: 'https://doi.org/10.5281/zenodo.21603107'
   year: 2026
