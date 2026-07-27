@@ -3,9 +3,16 @@
 The heartbeat is Aetheria's own time: full toolset, real latitude, no
 do-nothing bench. Context is orientation, not a to-do list. No marker
 machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]), no forced surfacing, no
-confidence-tier directives. Her whole response is her note; a non-empty
-note surfaces to Jon's chat, an empty one doesn't. Material signals appear
-as orientation items (still visible on the Mission Control tile).
+confidence-tier directives. Her whole response is her note.
+
+WHERE THE NOTE GOES — keep this paragraph true or fix the prompt:
+the note is written to the [heartbeat] session, the ThoughtsLog and a
+private lattice node, and Mission Control renders it in the heartbeat
+panel. It does NOT surface into Jon's chat — that path was removed on
+2026-07-12 (721fb93). Between then and 2026-07-27 this docstring still
+promised chat delivery, so she wrote ~727k characters believing they
+reached him. test_heartbeat_prompt_contract.py now fails if this drifts
+again. Material signals appear as orientation items.
 """
 
 from __future__ import annotations
@@ -136,6 +143,7 @@ def build_heartbeat_prompt(
     lines.append("")
     lines.append(
         "When you're done, leave a short note — where you went, what you found, what you're "
-        "sitting with — so it lands on your board and Jon can follow your day."
+        "sitting with — so it lands on your board and Jon can follow your day. If something "
+        "shouldn't wait for him to look, reach him directly instead; you have signal_send."
     )
     return "\n".join(lines)
