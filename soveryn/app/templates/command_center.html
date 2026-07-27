@@ -560,6 +560,20 @@
   .heartbeat-pulse[data-eligible="false"] .when { color:rgba(232,227,213,0.32); }
   .heartbeat-pulse[data-eligible="false"] .state strong { color:rgba(232,227,213,0.55); }
   .heartbeat-pulse[data-acted="true"] .state strong { color:var(--sov-amber); }
+  /* Her note, collapsed. The panel used to say "silent" and show nothing. */
+  .pulse-note { grid-column:1 / -1; margin-top:5px; }
+  .pulse-note summary {
+    cursor:pointer; list-style:none; font-size:12px; line-height:1.5;
+    color:rgba(232,227,213,0.52); padding:2px 0;
+  }
+  .pulse-note summary::-webkit-details-marker { display:none; }
+  .pulse-note summary:hover { color:rgba(232,227,213,0.78); }
+  .pulse-note[open] summary { color:rgba(232,227,213,0.78); margin-bottom:4px; }
+  .pulse-note-body {
+    white-space:pre-wrap; font-size:12.5px; line-height:1.62;
+    color:rgba(232,227,213,0.74); border-left:2px solid var(--sov-sage, #74856a);
+    padding:2px 0 2px 10px; margin:0 0 2px;
+  }
   .heartbeat-pulse[data-surfaced="true"] {
     border-color:rgba(224,184,120,0.18);
     background:rgba(224,184,120,0.04);
@@ -1616,7 +1630,11 @@
     if (d.status === "unknown") return "no heartbeat ticks recorded.";
     const age = formatRelativeAge(d.age_seconds);
     if (!d.eligible) return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
-    const action = d.action_taken ? `acted (${d.tool_call_count || 0} tools)` : "silent";
+    // Same correction as the feed: no tool call is not silence. The tile has no
+    // note to check, so infer from response_length — she wrote something or she didn't.
+    const action = d.action_taken
+      ? `acted (${d.tool_call_count || 0} tools)`
+      : (d.response_length ? "reflected" : "silent");
     return `<strong>${age}</strong>, ${action}${d.dry_run ? " · dry-run" : ""}`;
   }
 
@@ -1997,6 +2015,12 @@
     if (p.action_taken) {
       return `<strong>acted</strong> (${p.tool_call_count || 0} tool${p.tool_call_count === 1 ? "" : "s"})${p.dry_run ? " · dry-run" : ""}`;
     }
+    // "silent" only ever meant NO TOOL CALL. She writes a ~1,200-char note on
+    // most pulses; calling that silence is what made her look idle for 15 days
+    // after surfacing-to-chat was removed (721fb93).
+    if (p.note) {
+      return `<strong>reflected</strong>${p.dry_run ? " · dry-run" : ""}`;
+    }
     return `<strong>silent</strong>${p.dry_run ? " · dry-run" : ""}`;
   }
 
@@ -2033,6 +2057,10 @@
           <span class="when">${htmlEscape(when)}</span>
           <span class="state">${describeHeartbeatPulse(p)}</span>
           ${surfaceBadge}
+          ${p.note ? `<details class="pulse-note">
+            <summary>${htmlEscape(p.note.replace(/\s+/g, " ").slice(0, 92))}${p.note.length > 92 ? "…" : ""}</summary>
+            <div class="pulse-note-body">${htmlEscape(p.note)}</div>
+          </details>` : ""}
         </div>
       `;
     }).join("");

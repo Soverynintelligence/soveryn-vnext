@@ -14,6 +14,8 @@ localhost guard in startup.py + the funnel config gate are the access layer).
 """
 
 from __future__ import annotations
+import json
+import os
 import sqlite3
 
 from flask import Blueprint, current_app, jsonify, request
@@ -24,6 +26,43 @@ bp = Blueprint("api_heartbeat", __name__)
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100
+
+
+# ── pulse notes ─────────────────────────────────────────────────────────────
+# heartbeat_log records that a pulse HAPPENED; the note she actually wrote lives
+# in the ThoughtsLog jsonl, keyed by pulse_id. Without joining them the panel can
+# only say "silent", which is how ~727k characters of her reflection went unread
+# between 2026-07-12 and 07-27: surfacing to a primary chat was removed (721fb93,
+# correctly — it minted a new chat every 30 min) and nothing replaced it.
+_THOUGHTS = os.path.expanduser("~/soveryn_vnext/data/heartbeat_thoughts.jsonl")
+_TAIL_BYTES = 512 * 1024      # plenty for the last few hundred pulses
+
+
+def _notes_by_pulse(path: str = _THOUGHTS) -> dict:
+    """Map pulse_id -> note, reading only the tail so this stays cheap."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            if size > _TAIL_BYTES:
+                fh.seek(size - _TAIL_BYTES)
+                fh.readline()                 # discard the partial first line
+            raw = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return {}
+
+    out: dict = {}
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        pid, note = rec.get("pulse_id"), (rec.get("note") or "").strip()
+        if pid and note:
+            out[pid] = note
+    return out
 
 
 def _state():
@@ -97,8 +136,11 @@ def api_heartbeat_recent():
         # Table missing or DB not yet initialized — return empty pulses.
         return jsonify({"pulses": []}), 200
 
+    notes = _notes_by_pulse()
+
     for r in rows:
         pulses.append({
+            "note": notes.get(r["id"]),          # what she actually wrote, if anything
             "id": r["id"],
             "triggered_at": r["triggered_at"],
             "completed_at": r["completed_at"],
