@@ -122,8 +122,46 @@ def execute_task(
         wt_path, branch = make_worktree(repo_root, task_id)
         store.set_execution(task_id, worktree_path=wt_path, branch=branch)
 
-        # 3. Run Scotty's bounded loop
+        # 2b. BASELINE the acceptance on the pristine worktree.
+        #
+        # An acceptance command that already passes before any work has been
+        # done cannot fail, so it cannot judge anything. On 2026-07-28 a real
+        # dispatch hit exactly this: the acceptance named
+        # tests/test_active_context.py, a 320-line suite covering code that had
+        # been merged that morning. It referenced nothing Scotty was asked to
+        # build. He wrote 142 lines, the pre-existing tests passed, and the task
+        # went to in_review having tested none of it.
+        #
+        # This is the mirror of the 2026-07-27 defect. There the acceptance named
+        # a file that did not exist, so the task could never pass. Here it named
+        # one that did not cover the work, so it could never fail. Same root:
+        # nothing checked that the gate had anything to do with the task.
+        #
+        # Red-before-green, enforced. Costs one extra acceptance run per task.
         task = store.get_task(task_id)
+        baseline_passed, baseline_output = run_acceptance(wt_path, task.acceptance)
+        if baseline_passed:
+            store.set_result(
+                task_id,
+                diff="",
+                test_output=baseline_output,
+                summary=(
+                    "vacuous acceptance: the command already passed on an "
+                    "untouched worktree, before any work was done. It cannot "
+                    "fail, so it cannot verify this task. Name a test that "
+                    "exercises the change — a new test file, or a new case in "
+                    "an existing one."
+                ),
+            )
+            store.set_status(task_id, "failed")
+            logger.warning(
+                "engine: task %s has a vacuous acceptance (passed on a pristine "
+                "worktree) → failed without running Scotty", task_id,
+            )
+            _prune_failed_worktrees(remove_worktree, store, repo_root)
+            return
+
+        # 3. Run Scotty's bounded loop
         # Tell Scotty the acceptance criterion he is about to be judged on.
         # Before 2026-07-27 it was withheld: he got objective+scope, then the
         # engine ran an acceptance command he had never seen. 10/10 tasks

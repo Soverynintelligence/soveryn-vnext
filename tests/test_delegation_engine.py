@@ -74,11 +74,25 @@ def _fake_diff_fn(diff: str = "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"):
     return diff_fn
 
 
-def _fake_run_acceptance(passed: bool = True, output: str = "1 passed"):
+def _fake_run_acceptance(passed: bool = True, output: str = "1 passed",
+                         baseline_passed: bool = False):
+    """Injectable acceptance runner modelling red-before-green.
+
+    The engine now runs acceptance TWICE: once on the pristine worktree to prove
+    the command can fail, then again after Scotty. So the first call is the
+    baseline and defaults to RED — which is what a well-formed task looks like,
+    since a test that already passes cannot judge new work.
+
+    Pass baseline_passed=True to simulate the vacuous case (2026-07-28: an
+    acceptance naming a pre-existing suite that covered none of the task).
+    """
     calls: list[tuple] = []
 
     def run_acceptance(worktree_path, acceptance):
+        first = not calls
         calls.append((worktree_path, acceptance))
+        if first:
+            return baseline_passed, ("1 passed" if baseline_passed else "1 failed")
         return passed, output
 
     run_acceptance.calls = calls  # type: ignore[attr-defined]
@@ -609,3 +623,71 @@ class TestAcceptanceIsToldToScotty:
             "Scotty was not told the acceptance command. He is judged by it, so "
             "withholding it makes the task unwinnable by construction."
         )
+
+
+class TestVacuousAcceptanceIsRefused:
+    """An acceptance that passes before any work cannot judge the work.
+
+    2026-07-28: a real dispatch named tests/test_active_context.py as its
+    acceptance — a 320-line suite covering code merged that same morning, which
+    referenced nothing the task asked for. Scotty wrote 142 lines, the
+    pre-existing tests passed, and the task reached in_review having tested none
+    of it. The mirror of the 07-27 defect: that acceptance could never pass,
+    this one could never fail. Both because nothing checked the gate was related
+    to the task.
+    """
+
+    def test_task_fails_when_acceptance_passes_on_pristine_worktree(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store)
+        scotty = _fake_scotty_run()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=scotty,
+            run_acceptance=_fake_run_acceptance(baseline_passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        task = store.get_task(tid)
+        assert task.status == "failed"
+        assert "vacuous" in (task.summary or "").lower()
+
+    def test_scotty_is_never_started_on_a_vacuous_acceptance(self, tmp_path):
+        """Don't burn a model run on a gate that cannot judge the result."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        scotty = _fake_scotty_run()
+
+        execute_task(
+            tid, store=store, repo_root="/fake/repo",
+            scotty_run=scotty,
+            run_acceptance=_fake_run_acceptance(baseline_passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(), commit_fn=_fake_commit_fn(),
+        )
+
+        assert not scotty.calls, "Scotty ran despite an unjudgeable acceptance"
+
+    def test_red_baseline_then_green_still_reaches_in_review(self, tmp_path):
+        """The normal path: fails before the work, passes after."""
+        store = _store(tmp_path)
+        tid = _task(store)
+        results = iter([(False, "1 failed"), (True, "1 passed")])
+
+        def run_acceptance(worktree, acceptance):
+            return next(results)
+
+        execute_task(
+            tid, store=store, repo_root="/fake/repo",
+            scotty_run=_fake_scotty_run(),
+            run_acceptance=run_acceptance,
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(), commit_fn=_fake_commit_fn(),
+        )
+
+        assert store.get_task(tid).status == "in_review"
