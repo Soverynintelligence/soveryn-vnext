@@ -121,6 +121,19 @@ class ActiveContextStore:
             turn_count=row[4],
         )
 
+    def delete(self, topic: str) -> bool:
+        """Remove the record for *topic*. Returns True if a row was removed.
+
+        Added 2026-07-28 for ActiveContextService.clear_action: an action that
+        has been resolved must leave the live context, or "not yet heard back
+        on" becomes a lie that grows.
+        """
+        with self._conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM active_context WHERE topic = ?", (topic,)
+            )
+            return cur.rowcount > 0
+
     def list_all(self) -> list[ActiveContext]:
         """Return all contexts, newest first."""
         with self._conn() as conn:

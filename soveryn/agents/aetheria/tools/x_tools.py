@@ -116,6 +116,7 @@ def build_post_to_x_tool(
     now_fn: NowFn,
     ttl_hours: float = DEFAULT_TTL_HOURS,
     x_memory_fn: XMemoryFn = _noop_x_memory_fn,
+    active_context=None,
 ) -> ToolSpec:
     """Build the trust-gated `post_to_x` tool.
 
@@ -142,6 +143,22 @@ def build_post_to_x_tool(
             staged.stage(agent=owner_agent, text=text, reply_to=reply_to, now=now_fn())
         except StagedBusyError:
             return {"status": "busy", "message": BUSY_MESSAGE}
+        # Give the staged post a READ path. Until 2026-07-28 it had none: no
+        # route listed staged posts, no tool let her check for one, and the
+        # audit tool did not cover the store. Five consecutive daily posts
+        # expired unseen (07-22 → 07-27) while she correctly believed she had
+        # written them. Same defect as the invisible delegations — an action
+        # with no way back to the actor.
+        if active_context is not None:
+            try:
+                active_context.record_action(
+                    rail="heartbeat", action="x_post_staged", detail=text,
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception(
+                    "active-context write failed; post is still staged"
+                )
         return {"status": "staged", "message": STAGED_MESSAGE}
 
     def _publish_it(text: str, reply_to: str | None) -> dict[str, Any]:

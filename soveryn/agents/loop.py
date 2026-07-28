@@ -428,6 +428,7 @@ class AgentLoop:
         chat_fn: ChatFn = _default_chat,
         stream_fn: StreamFn = _default_chat_stream,
         chat_timeout_seconds: float = 120.0,
+        active_context=None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
         thinking_budget_tokens: int | None = None,
@@ -542,7 +543,67 @@ class AgentLoop:
             verification_gate is not None
             and verification_gate.applies_to(self.agent_name)
         )
+        # Cross-rail live thread (ActiveContextService | None). Optional so
+        # every existing construction site and test keeps working unchanged.
+        self.active_context = active_context
         self.session_context_cache = SessionContextCache()
+
+    def _rail_for(self, session_id: str) -> str:
+        """Map a session to the rail it represents, from its title prefix."""
+        try:
+            session = self.conv_store.get_session(session_id)
+        except Exception:
+            return "chat"
+        title = (getattr(session, "title", "") or "") if session else ""
+        for prefix, rail in (
+            ("[heartbeat]", "heartbeat"), ("[voice]", "voice"),
+            ("[signal]", "signal"), ("[m]", "messenger"),
+            ("[dream]", "dream"), ("[patrol]", "patrol"),
+            ("[webhook]", "webhook"), ("[presence]", "presence"),
+        ):
+            if title.startswith(prefix):
+                return rail
+        return "chat"
+
+    def _record_active_exchange(self, session_id: str, user_message: str,
+                                assistant_text: str) -> None:
+        """Write the live thread. Never allowed to break a turn.
+
+        Called from BOTH process_message and process_message_stream — a write
+        in only one is bypassed by whichever surface uses the other, the same
+        trap the staged-X-post pre-turn hook documents in routes/chat.py.
+        """
+        if self.active_context is None:
+            return
+        try:
+            self.active_context.record_exchange(
+                rail=self._rail_for(session_id),
+                user_text=user_message,
+                assistant_text=assistant_text,
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "active context write failed; turn unaffected"
+            )
+
+    def _render_active_context(self) -> str:
+        """Render the cross-rail live thread, or "" when unwired.
+
+        Deliberately NOT part of the continuity cache fingerprint: the whole
+        point is that it reflects what another rail did seconds ago, so a cache
+        keyed to this session's tails would serve a stale thread.
+        """
+        if self.active_context is None:
+            return ""
+        try:
+            return self.active_context.render()
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "active context render failed; serving without it"
+            )
+            return ""
 
     def _build_continuity_brief(self, session_id: str) -> str:
         """Build or reuse the Cross-Surface Recent Activity Brief.
@@ -562,8 +623,19 @@ class AgentLoop:
             return ""
         try:
             session = self.conv_store.get_session(session_id)
-            if session is not None and self.continuity_config.session_is_autonomous(session.title):
-                return ""
+            # Autonomous sessions ([heartbeat], [dream], [patrol]) are excluded
+            # from cross-session TAILS on purpose — 26 wakes a day of transcript
+            # would bury the budget. Before 2026-07-28 they returned "" here and
+            # so received no continuity at all, which is why her most
+            # independent thinking never reached another rail and never came
+            # back to her. They now get the ACTIVE CONTEXT block: state, not
+            # transcript, and small enough to always afford.
+            autonomous = (
+                session is not None
+                and self.continuity_config.session_is_autonomous(session.title)
+            )
+            if autonomous:
+                return self._render_active_context()
             tails = ()
             if is_aetheria:
                 from soveryn.platform.continuity.store import recent_cross_session_tails
@@ -615,6 +687,9 @@ class AgentLoop:
                 text = build_recent_activity_brief(tails, config=self.continuity_config)
             if active_focus:
                 text = f"{text}\n\n{active_focus}" if text else active_focus
+            active_context = self._render_active_context()
+            if active_context:
+                text = f"{text}\n\n{active_context}" if text else active_context
             self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(
                 fingerprint=fingerprint,
                 text=text,
@@ -1125,6 +1200,7 @@ class AgentLoop:
             session_id, self.agent_name, "assistant", response.content,
             source=source, finish_reason=response.finish_reason,
         )
+        self._record_active_exchange(session_id, user_message, response.content)
         if recorder is not None:
             recorder.finalize(
                 final_content=response.content,
@@ -1678,6 +1754,7 @@ class AgentLoop:
             session_id, self.agent_name, "assistant", accumulated_content,
             source=source, finish_reason=final_finish_reason or "stop",
         )
+        self._record_active_exchange(session_id, user_message, accumulated_content)
         if recorder is not None:
             recorder.finalize(
                 final_content=accumulated_content,

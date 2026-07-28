@@ -106,6 +106,22 @@ def create_app(
             )
         pinned_text = pinned_path.read_text(encoding="utf-8")
 
+        # ── Cross-rail live thread ────────────────────────────────────────
+        # Aetheria-only: it is HER continuity, one thread across chat, voice,
+        # Signal, messenger and heartbeat. Built HERE, above the X tools and
+        # the AgentLoop construction, because both need the same instance.
+        #
+        # Unlike the recent-activity brief this also reaches autonomous
+        # sessions. Before 2026-07-28 a [heartbeat] wake received no continuity
+        # at all and contributed none, so her most independent thinking never
+        # reached another rail and never came back to her. The heartbeat daemon
+        # runs out-of-process and opens this same file directly.
+        from soveryn.context.service import ActiveContextService
+        from soveryn.context.store import ActiveContextStore
+        active_context_service = ActiveContextService(
+            ActiveContextStore(env.data_root / "active_context.db")
+        )
+
         # Recall wiring (Aetheria only). Prod lattice remains the embedding
         # recall source; vnext lattice supplies the reviewed identity spine.
         # Both are read-only in AgentLoop. Writes stay out of live recall.
@@ -646,6 +662,7 @@ def create_app(
                     trust_path=x_trust_path,
                     now_fn=lambda: datetime.now().isoformat(),
                     x_memory_fn=_x_autonomous_memory_fn,
+                    active_context=active_context_service,
                 )
             )
 
@@ -903,6 +920,8 @@ def create_app(
                 # and covers document-length tool calls; her 65536 n_ctx has
                 # ample room for it.
                 kwargs["max_tokens"] = 8192
+            if name == "aetheria":
+                kwargs["active_context"] = active_context_service
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
         # Phase E: start the coord event worker now that agent_loops exists.

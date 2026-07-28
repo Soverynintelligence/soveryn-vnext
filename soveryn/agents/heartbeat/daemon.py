@@ -104,8 +104,24 @@ class HeartbeatDaemon:
         thoughts_log_path: Path | None = None,
         daily_post_state_path: Path | None = None,
         daily_post_hour: int = DEFAULT_DAILY_POST_HOUR,
+        active_context_db: Path | None = None,
     ) -> None:
         self.config = config
+        # Cross-rail live thread. The daemon runs OUT OF PROCESS from the Flask
+        # app, so it opens the same SQLite file rather than sharing an object —
+        # which is exactly why the store was made connection-per-operation and
+        # WAL. None disables the write (tests, and any deployment that has not
+        # wired it) without touching the pulse.
+        self._active_context = None
+        if active_context_db is not None:
+            try:
+                from soveryn.context.service import ActiveContextService
+                from soveryn.context.store import ActiveContextStore
+                self._active_context = ActiveContextService(
+                    ActiveContextStore(active_context_db)
+                )
+            except Exception:
+                logger.exception("active context unavailable; pulses will not carry")
         self.vnext_base = vnext_base.rstrip("/")
         self.lattice_db = Path(lattice_db)
         self.conv_db = Path(conv_db)
@@ -442,6 +458,22 @@ class HeartbeatDaemon:
                     "surfaced": False,
                 }
                 self._thoughts_log.append(_tlog_record)
+                # Carry the CONCLUSION across rails. Before 2026-07-28 the
+                # comment above was literally true — notes lived only in the
+                # [heartbeat] session and reached nobody, including her. The
+                # note replaces the previous one rather than accumulating: 26
+                # wakes a day at ~344 tokens cannot ride in a 1500-token brief,
+                # and a later pulse supersedes an earlier one anyway.
+                if self._active_context is not None and (note or "").strip():
+                    try:
+                        self._active_context.record_thought(
+                            rail="heartbeat", note=note
+                        )
+                    except Exception:
+                        logger.exception(
+                            "heartbeat tick %s: active-context write failed; "
+                            "pulse unaffected", tick_id,
+                        )
             except Exception:
                 logger.exception(
                     "heartbeat tick %s: thoughts-log write failed; "
@@ -879,6 +911,15 @@ def _build_daemon_from_env() -> HeartbeatDaemon:
         salience_db=Path(os.environ.get("SOVERYN_SALIENCE_DB", str(DEFAULT_SALIENCE_DB))),
         daily_post_hour=int(
             os.environ.get("SOVERYN_HEARTBEAT_DAILY_POST_HOUR", str(DEFAULT_DAILY_POST_HOUR))
+        ),
+        # Same file the Flask app opens. Must match startup.py's
+        # env.data_root / "active_context.db" or the pulse writes into a store
+        # nobody reads — the failure mode this whole layer exists to end.
+        active_context_db=Path(
+            os.environ.get(
+                "SOVERYN_ACTIVE_CONTEXT_DB",
+                str(DEFAULT_CONV_DB.parent.parent / "active_context.db"),
+            )
         ),
     )
 
