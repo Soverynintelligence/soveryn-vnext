@@ -22,13 +22,13 @@ from collections.abc import Mapping
 from typing import Any
 
 from soveryn.platform.delegation.store import DelegationStore
+from soveryn.platform.delegation.validate import acceptance_problem
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 
-# Prefixes that identify a runnable test / check command. "./script" is
-# intentionally excluded: acceptance runs as a real subprocess and a bare
+# The allowlist of real check runners now lives in validate.CHECK_RUNNERS.
+# "./script" remains excluded: acceptance runs as a real subprocess and a bare
 # script prefix would let it execute ANY file in the worktree (which Scotty
-# writes). Constrain the entrypoint to a known interpreter/test runner.
-_ACCEPTANCE_PREFIXES = ("pytest", "python -m")
+# writes). Constrain the entrypoint to a known runner.
 
 
 # ---------------------------------------------------------------------------
@@ -61,13 +61,13 @@ def build_dispatch_task_tool(
         if not isinstance(acceptance, str) or not acceptance.strip():
             raise ToolArgError("acceptance must be a non-empty string")
 
-        # Gate: acceptance must be a runnable test/check command.
-        if not any(acceptance.strip().startswith(p) for p in _ACCEPTANCE_PREFIXES):
-            raise ToolArgError(
-                "acceptance must be a test/check command starting with "
-                "'pytest' or 'python -m' — "
-                f"got: {acceptance!r}"
-            )
+        # Gate: acceptance must be a command that actually RUNS a check.
+        # The old gate accepted any 'python -m' prefix, which let through five
+        # real dispatches of the form 'python -m tests.test_x' — a module run
+        # directly, which never executes a suite. See validate.acceptance_problem.
+        problem = acceptance_problem(acceptance)
+        if problem is not None:
+            raise ToolArgError(problem)
 
         task_id = store.create_task(
             dispatched_by=owner_agent,

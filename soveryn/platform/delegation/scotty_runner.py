@@ -38,6 +38,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+from soveryn.platform.delegation.validate import ground_truth_block
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,6 +187,7 @@ def scotty_run(
                             f"task — you cannot pass a test that isn't there.\n\n"
                             if acceptance else ""
                         )
+                        + ground_truth_block(objective, scope, acceptance, worktree)
                         + f"Complete the objective, then report briefly what you did. "
                         f"Be factual and concise — no preamble."
                     )
