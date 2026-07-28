@@ -6,6 +6,8 @@ no real DB, no full create_app dependency chain.
 """
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 from flask import Flask
 
@@ -182,10 +184,21 @@ class TestPending:
         assert resp.get_json() == []
 
     def test_never_500(self, client_green):
-        """Best-effort: even a broken store should not 500."""
+        """Best-effort: even a broken store should not 500.
+
+        Injects a store whose reads RAISE. Setting the extension to None does
+        not simulate a broken store — _get_store() treats None as "not injected"
+        and falls back to the real production database, so the assertion then
+        depended on that database holding no in_review tasks. That held only
+        while delegation never succeeded; it broke on 2026-07-28 the first time
+        a dispatched task actually reached in_review.
+        """
+        class _BrokenStore:
+            def list_tasks(self, *a, **k):
+                raise sqlite3.OperationalError("database is locked")
+
         client, app = client_green
-        # Simulate a broken store by monkey-patching
-        app.extensions["soveryn"]["delegation_store"] = None
+        app.extensions["soveryn"]["delegation_store"] = _BrokenStore()
         resp = client.get("/api/delegation/pending")
         assert resp.status_code == 200
         assert resp.get_json() == []
