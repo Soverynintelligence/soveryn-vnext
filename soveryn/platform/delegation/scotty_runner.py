@@ -40,6 +40,37 @@ from pathlib import Path
 
 from soveryn.platform.delegation.validate import ground_truth_block
 
+# A delegated Scotty authors whole FILES, and a file travels as a JSON string
+# argument to write_file. AgentLoop's 2048-token default was therefore a hard
+# ceiling on the size of file he could produce — and it did not fail gracefully.
+# On 2026-07-27 a Cross-Rail dispatch died with llama-server HTTP 500:
+#   Failed to parse tool call arguments as JSON ... column 3430: missing closing
+#   quote; last read: '"""Tests for ActiveContext ... from sovery
+# The generation was cut mid-token, so the JSON string never closed and the
+# server rejected the entire call. It reads like a model failure and is not one:
+# the content was correct right up to the byte where the budget ran out.
+# vett-scotty serves a 65536-token context, so 2048 was never the binding
+# constraint — just an unexamined default. 8192 tokens is roughly a 30KB file,
+# well above anything a bounded task should produce and still an order of
+# magnitude inside the context window.
+DELEGATION_MAX_TOKENS = 8192
+
+# Measured on vett-scotty (Qwen3.6-27B Q8, Quadro): 17.7 tok/s. A generation
+# that actually uses the 8192-token budget therefore runs ~463s. AgentLoop's
+# 120s default cannot express that, and the failure is opaque — the first
+# re-run after raising the token budget died on
+#   LlamaServerTimeout: vett_scotty_shared: timeout after 120.0s
+# which reads as a hung server rather than a budget that cannot fit the work.
+# 600s leaves headroom over the 463s worst case for prompt processing.
+DELEGATION_CHAT_TIMEOUT_SECONDS = 600.0
+
+# Wall-clock for the WHOLE turn, across every tool round. One maximal round can
+# now legitimately consume 600s, so the old 600s total made a multi-round task
+# impossible by arithmetic. 1800s allows a realistic task (several modest rounds
+# plus one large file write). Note the worker is SERIAL by design, so this is
+# also the longest a single bad task can block the queue.
+DELEGATION_MAX_SECONDS = 1800
+
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +118,7 @@ def scotty_run(
     scope: str,
     acceptance: str = "",
     *,
-    max_seconds: int = 600,
+    max_seconds: int = DELEGATION_MAX_SECONDS,
     max_tool_rounds: int = 12,
 ) -> str:
     """Run Scotty's bounded execution loop for one delegated task.
@@ -158,6 +189,8 @@ def scotty_run(
                         conv_store,
                         tool_registry=registry,
                         max_tool_rounds=max_tool_rounds,
+                        max_tokens=DELEGATION_MAX_TOKENS,
+                        chat_timeout_seconds=DELEGATION_CHAT_TIMEOUT_SECONDS,
                         soul_text="",  # skip soul for delegation runs
                     )
 
