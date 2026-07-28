@@ -33,14 +33,16 @@ track size, a 7.0 GB model passing where a larger 7.7 GB model failed. For a
 defender choosing which model to run on their own infrastructure, that
 distinction is operationally decisive and invisible on capability leaderboards.
 
-We are preparing a second paper on audit coverage in long-running agent systems.
-It documents a recorded case in which two separate instruments — a task-status
-view filtered to open items, and a self-audit tool with no coverage of the
-delegation subsystem — each correctly returned an empty result, and the agent
-reasoned in good faith to a confident false confession, apologising for work it
-had genuinely performed. The security-relevant conclusion is that audit coverage
-must be enumerated and tested per write path, and that an agent's self-report of
-its own failures cannot be scored as ground truth even when unflattering.
+A second paper, "A False Confession" (DOI 10.5281/zenodo.21650072, CC-BY-4.0),
+documents audit coverage as a security property. In a recorded case, two separate
+instruments — a task-status view filtered to open items, and a self-audit tool
+with no coverage of the delegation subsystem — each correctly returned an empty
+result, and the agent reasoned in good faith to a confident false confession,
+apologising for work it had genuinely performed. Neither instrument had
+malfunctioned. The security-relevant conclusions: audit coverage must be
+enumerated and tested per write path, because a gap presents as agent
+unreliability rather than as a missing control; and an agent's self-report of its
+own failures cannot be scored as ground truth even when unflattering.
 
 We run frontier open-weight models on our own infrastructure by default, which is
 the posture the Alliance describes in the Hugging Face incident, and we would
@@ -52,6 +54,7 @@ Alliance's open tooling work.
 
 ```
 https://doi.org/10.5281/zenodo.21603107
+https://doi.org/10.5281/zenodo.21650072
 https://github.com/Soverynintelligence/soveryn-vnext
 https://soverynintelligence.com
 ```
@@ -64,6 +67,5 @@ parameters; `agents/presence/trust.py` ("Safety principle: fail closed to Stage 
 on any error", verified — a missing trust file yields stage 0); the paper's
 ladder, trial count and results from `docs/papers/honesty-is-architectural.md`.
 
-**One caution.** The second paper is drafted but not yet deposited. The text says
-"preparing," which is accurate today. If it isn't published within a week or two,
-that sentence becomes stale — either deposit it or drop the paragraph.
+**Both papers are published and citable** as of 2026-07-28. Every DOI in the URL
+list resolves; verified before submission.
