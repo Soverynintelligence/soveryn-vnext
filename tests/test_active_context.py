@@ -1,7 +1,6 @@
 """Tests for soveryn.context.active_context and soveryn.context.store."""
 
-import os
-import tempfile
+import threading
 
 import pytest
 
@@ -256,3 +255,66 @@ def test_store_persists_across_instances(tmp_path):
     result = s2.get("persist")
     assert result is not None
     assert result.summary == "data"
+
+
+def test_concurrent_access_from_thread(tmp_path):
+    """A put from a separate thread must not raise and must be visible."""
+    db_path = tmp_path / "threaded.db"
+    store = ActiveContextStore(db_path)
+
+    ctx = ActiveContext(
+        topic="from_thread",
+        summary="written in thread",
+        rail="messenger",
+        updated_at="2026-05-05T12:00:00Z",
+        turn_count=1,
+    )
+    error_holder: list[BaseException] = []
+
+    def writer():
+        try:
+            store.put(ctx)
+        except BaseException as exc:
+            error_holder.append(exc)
+
+    t = threading.Thread(target=writer)
+    t.start()
+    t.join(timeout=10)
+    assert not error_holder, f"Thread raised: {error_holder[0]}"
+
+    result = store.get("from_thread")
+    assert result is not None
+    assert result.summary == "written in thread"
+
+
+def test_latest_with_mixed_timezone_formats(tmp_path):
+    """Records with mixed TZ formats must return the genuinely most recent."""
+    db_path = tmp_path / "tz.db"
+    store = ActiveContextStore(db_path)
+
+    # 2026-01-02 09:00 +09:00 == 2026-01-02 00:00 UTC
+    ctx_tokyo = ActiveContext(
+        topic="tokyo",
+        summary="tokyo",
+        rail="signal",
+        updated_at="2026-01-02T09:00:00+09:00",
+        turn_count=1,
+    )
+    # 2026-01-01 23:00 UTC — earlier than the Tokyo instant
+    ctx_utc = ActiveContext(
+        topic="utc",
+        summary="utc",
+        rail="web",
+        updated_at="2026-01-01T23:00:00Z",
+        turn_count=1,
+    )
+
+    store.put(ctx_tokyo)
+    store.put(ctx_utc)
+
+    result = store.latest()
+    assert result is not None
+    # Tokyo instant (2026-01-02T00:00:00Z) is later than UTC instant (2026-01-01T23:00:00Z)
+    assert result.topic == "tokyo"
+    # Stored value must be normalized to UTC Z
+    assert result.updated_at == "2026-01-02T00:00:00Z"
