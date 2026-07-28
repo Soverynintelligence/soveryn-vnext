@@ -53,8 +53,10 @@ def _fake_remove_worktree():
 def _fake_scotty_run(summary: str = "done"):
     calls: list[tuple] = []
 
-    def scotty_run(worktree_path, objective, scope):
-        calls.append((worktree_path, objective, scope))
+    def scotty_run(worktree_path, objective, scope, acceptance=""):
+        # acceptance added 2026-07-27: Scotty is now TOLD the criterion he
+        # is judged on. Withholding it was why 10/10 real tasks failed.
+        calls.append((worktree_path, objective, scope, acceptance))
         return summary
 
     scotty_run.calls = calls  # type: ignore[attr-defined]
@@ -573,3 +575,37 @@ class TestForensicRetention:
         assert len(remove.calls) == 2, remove.calls
         pruned_paths = {c[1] for c in remove.calls}
         assert pruned_paths == set(made[:2]), "the two OLDEST worktrees should be pruned"
+
+
+class TestAcceptanceIsToldToScotty:
+    """Scotty must be TOLD the criterion he is judged on.
+
+    2026-07-27: every delegation task ever dispatched — 10 of 10 — failed. The
+    engine ran `run_acceptance(worktree, task.acceptance)` but called
+    `scotty_run(worktree, objective, scope)` without it. Scotty was graded on a
+    rubric he was never shown. Two failure signatures followed: "acceptance
+    tests failed" (built the wrong shape) and "execution raised before
+    acceptance" (burned the round budget working out what done meant).
+    """
+
+    def test_acceptance_reaches_the_runner(self, tmp_path):
+        store = _store(tmp_path)
+        tid = _task(store, acceptance="pytest tests/test_greeting.py")
+        fake = _fake_scotty_run()
+
+        execute_task(
+            tid,
+            store=store,
+            repo_root="/fake/repo",
+            scotty_run=fake,
+            run_acceptance=_fake_run_acceptance(passed=True),
+            make_worktree=_fake_make_worktree(),
+            diff_fn=_fake_diff_fn(),
+            commit_fn=_fake_commit_fn(),
+        )
+
+        assert fake.calls, "scotty_run was never called"
+        assert fake.calls[0][3] == "pytest tests/test_greeting.py", (
+            "Scotty was not told the acceptance command. He is judged by it, so "
+            "withholding it makes the task unwinnable by construction."
+        )

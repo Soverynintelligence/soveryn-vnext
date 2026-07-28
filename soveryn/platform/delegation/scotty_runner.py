@@ -83,6 +83,7 @@ def scotty_run(
     worktree_path: str,
     objective: str,
     scope: str,
+    acceptance: str = "",
     *,
     max_seconds: int = 600,
     max_tool_rounds: int = 12,
@@ -175,7 +176,16 @@ def scotty_run(
                         f"WORKING DIRECTORY: {worktree}\n"
                         f"All your file operations should target files under "
                         f"this worktree path.\n\n"
-                        f"Complete the objective, then report briefly what you did. "
+                        + (
+                            f"ACCEPTANCE — this exact command must pass:\n"
+                            f"    {acceptance}\n"
+                            f"Your work is judged ONLY by this command. Run it "
+                            f"yourself before you report. If the test file it "
+                            f"names does not exist, CREATE it as part of the "
+                            f"task — you cannot pass a test that isn't there.\n\n"
+                            if acceptance else ""
+                        )
+                        + f"Complete the objective, then report briefly what you did. "
                         f"Be factual and concise — no preamble."
                     )
 

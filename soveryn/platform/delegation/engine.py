@@ -57,7 +57,7 @@ def execute_task(
     *,
     store: DelegationStore,
     repo_root: str | Path,
-    scotty_run: Callable[[str, str, str], str],
+    scotty_run: Callable[..., str],
     run_acceptance: Callable[[str, str], tuple[bool, str]],
     make_worktree: Callable[[str | Path, str], tuple[str, str]] = create_worktree,
     diff_fn: Callable[[str], str] = worktree_diff,
@@ -124,7 +124,11 @@ def execute_task(
 
         # 3. Run Scotty's bounded loop
         task = store.get_task(task_id)
-        summary = scotty_run(wt_path, task.objective, task.scope)
+        # Tell Scotty the acceptance criterion he is about to be judged on.
+        # Before 2026-07-27 it was withheld: he got objective+scope, then the
+        # engine ran an acceptance command he had never seen. 10/10 tasks
+        # failed. You cannot hit a target you are not shown.
+        summary = scotty_run(wt_path, task.objective, task.scope, task.acceptance)
 
         # 4. Run acceptance gate
         passed, output = run_acceptance(wt_path, task.acceptance)
