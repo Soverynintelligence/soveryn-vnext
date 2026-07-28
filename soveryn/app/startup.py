@@ -442,6 +442,7 @@ def create_app(
                     tool_registry,
                     lattice_db_path=env.lattice_db,
                     owner_agent=agent_name,
+                    delegation_db_path=env.data_root / "delegation.db",
                 )
 
         # Web tools (web_search + fetch_url) — Aetheria and Vett only.

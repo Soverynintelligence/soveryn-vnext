@@ -29,7 +29,8 @@ MAX_RECORDS = 200
 
 AUDIT_COVERAGE_NOTE = (
     "Coverage: this tool returns actions from the COORD board event log, "
-    "COORD read references, and LIBRARY writes — every action you take "
+    "COORD read references, LIBRARY writes, and DELEGATION dispatches "
+    "(tasks you sent to Scotty, with their status) — every action you take "
     "via your coordination tools and your library write tool is captured "
     "here. NOT covered: lattice searches (search_lattice_by_*), file reads "
     "(read_file / list_directory), library searches (search_library). "
@@ -44,6 +45,7 @@ def build_recent_self_audit_tool(
     *,
     lattice_db_path: Path,
     owner_agent: str,
+    delegation_db_path: Path | None = None,
 ) -> ToolSpec:
     """Tool factory. Reads three audit tables in the lattice DB and unifies
     into a chronological timeline scoped to this agent."""
@@ -129,6 +131,39 @@ def build_recent_self_audit_tool(
                     },
                 })
 
+        # ─ delegation dispatches ─
+        # Lives in its own DB, so it needs its own connection. Without this an
+        # agent cannot see tasks it dispatched, and may wrongly conclude it
+        # fabricated the dispatch (2026-07-27).
+        if delegation_db_path is not None and Path(delegation_db_path).is_file():
+            try:
+                with sqlite3.connect(str(delegation_db_path)) as dcon:
+                    dcon.row_factory = sqlite3.Row
+                    for r in dcon.execute(
+                        "SELECT id, objective, scope, acceptance, status, summary, "
+                        "       created_at, updated_at "
+                        "FROM delegation_tasks "
+                        "WHERE dispatched_by = ? AND created_at >= ? "
+                        "ORDER BY created_at DESC",
+                        (owner_agent, since),
+                    ).fetchall():
+                        actions.append({
+                            "kind": f"delegation.{r['status']}",
+                            "timestamp": r["created_at"],
+                            "node_id": r["id"],
+                            "details": {
+                                "objective_head": (r["objective"] or "")[:200],
+                                "scope": r["scope"],
+                                "acceptance": r["acceptance"],
+                                "status": r["status"],
+                                "summary": r["summary"],
+                                "updated_at": r["updated_at"],
+                            },
+                        })
+            except sqlite3.Error:
+                # Never let an unreadable delegation DB break the audit.
+                pass
+
         # Sort unified timeline most-recent first; cap at MAX_RECORDS.
         actions.sort(key=lambda a: a["timestamp"], reverse=True)
         truncated = len(actions) > MAX_RECORDS
@@ -186,7 +221,9 @@ def register_audit_tools(
     *,
     lattice_db_path: Path,
     owner_agent: str,
+    delegation_db_path: Path | None = None,
 ) -> None:
     registry.register(build_recent_self_audit_tool(
         lattice_db_path=lattice_db_path, owner_agent=owner_agent,
+        delegation_db_path=delegation_db_path,
     ))
