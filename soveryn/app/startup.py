@@ -94,6 +94,10 @@ def create_app(
     from soveryn.app.messenger.store import MessengerStore
     messenger_store = MessengerStore(env.data_root / "messenger.db")
 
+    # Defined before the gate so it always exists: when agent_loops are
+    # injected (tests, fixtures) the construction below is skipped, and a
+    # locals() lookup would have hidden that behind a silent None.
+    active_context_service = None
     if agent_loops is None:
         # Pinned memory is Aetheria-only by design — it's her relationship
         # substrate (facts about Jon, the project, her continuity). Vett and
@@ -118,9 +122,19 @@ def create_app(
         # runs out-of-process and opens this same file directly.
         from soveryn.context.service import ActiveContextService
         from soveryn.context.store import ActiveContextStore
-        active_context_service = ActiveContextService(
-            ActiveContextStore(env.data_root / "active_context.db")
+        _active_context_store = ActiveContextStore(
+            env.data_root / "active_context.db"
         )
+        # One service per agent over ONE shared file. Slots are namespaced by
+        # agent so nobody overwrites anybody, and the shared file is precisely
+        # what lets each of them carry a one-line headline of what the others
+        # are on — Jon, 2026-07-28: "if this system is to function as one unit
+        # the team all need to be whole."
+        active_context_services = {
+            name: ActiveContextService(_active_context_store, agent=name)
+            for name in ACTIVE_AGENTS
+        }
+        active_context_service = active_context_services["aetheria"]
 
         # Recall wiring (Aetheria only). Prod lattice remains the embedding
         # recall source; vnext lattice supplies the reviewed identity spine.
@@ -920,8 +934,9 @@ def create_app(
                 # and covers document-length tool calls; her 65536 n_ctx has
                 # ample room for it.
                 kwargs["max_tokens"] = 8192
-            if name == "aetheria":
-                kwargs["active_context"] = active_context_service
+            # Every agent gets its own live thread, not just Aetheria.
+            if name in active_context_services:
+                kwargs["active_context"] = active_context_services[name]
             agent_loops[name] = AgentLoop(name, conv_store, **kwargs)
 
         # Phase E: start the coord event worker now that agent_loops exists.
@@ -1077,6 +1092,9 @@ def create_app(
         "x_publisher_fn": _x_publisher_ext,
         "x_memory_fn": _x_memory_ext,
         "x_rejection_fn": _x_rejection_ext,
+        # Cross-rail live thread — the X approval routes clear the staged-post
+        # marker from it on approve/reject.
+        "active_context": active_context_service,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -1263,6 +1281,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_heartbeat_bp)
     from soveryn.app.routes.api_ares import bp as api_ares_bp
     app.register_blueprint(api_ares_bp)
+    from soveryn.app.routes.x_approvals import bp as x_approvals_bp
+    app.register_blueprint(x_approvals_bp)
     from soveryn.app.routes.api_specialists import bp as api_specialists_bp
     app.register_blueprint(api_specialists_bp)
     from soveryn.app.routes.aetheria_assets import bp as aetheria_assets_bp

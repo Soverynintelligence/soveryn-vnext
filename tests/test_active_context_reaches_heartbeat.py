@@ -100,3 +100,30 @@ class TestFailureIsNeverFatal:
                          continuity_config=ContinuityConfig(enabled=True))
         sid = conv.new_session("aetheria", title="[heartbeat] aetheria")
         assert loop._build_continuity_brief(sid) == ""
+
+
+class TestEveryAgentIsWhole:
+    """A peer with no coord_store still carries its own thread."""
+
+    def test_scotty_gets_his_thread_without_a_coord_store(self, tmp_path):
+        store = ActiveContextStore(tmp_path / "team.db")
+        scotty_ctx = ActiveContextService(store, agent="scotty")
+        conv = ConversationStore(tmp_path / "conv.db")
+        loop = AgentLoop(
+            "scotty", conv,
+            continuity_config=ContinuityConfig(enabled=True),
+            active_context=scotty_ctx,
+        )
+        sid = conv.new_session("scotty", title="a scotty session")
+        scotty_ctx.record_thought(rail="chat", note="the acceptance contract is fixed")
+
+        brief = loop._build_continuity_brief(sid)
+        assert BLOCK_HEADER in brief
+        assert "the acceptance contract is fixed" in brief
+
+    def test_a_peer_without_the_service_still_gets_nothing(self, tmp_path):
+        conv = ConversationStore(tmp_path / "conv.db")
+        loop = AgentLoop("scotty", conv,
+                         continuity_config=ContinuityConfig(enabled=True))
+        sid = conv.new_session("scotty", title="a scotty session")
+        assert loop._build_continuity_brief(sid) == ""

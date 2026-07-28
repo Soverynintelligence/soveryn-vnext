@@ -1160,6 +1160,13 @@
         <div class="cognition-item" data-empty>no reflections yet.</div>
       </div>
     </section>
+    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
+      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
+        <div class="empty">Nothing staged.</div>
+      </div>
+    </section>
+
     <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
       <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
@@ -2189,6 +2196,65 @@
   // Reject  → prompts for feedback, POST /api/delegation/<id>/reject {feedback}.
   // 409 conflict on approve → shows the server message without removing the card.
   // Empty state: "No proposals awaiting review."
+  // Staged X posts. Until 2026-07-28 there was NO surface for these at all —
+  // five daily posts expired unseen because the only approval path was typing
+  // something the chat classifier happened to read as a yes.
+  async function renderXApprovals() {
+    const feed = document.querySelector("[data-x-approvals-feed]");
+    if (!feed) return;
+    const data = await fetchJson("/api/x/staged");
+    const posts = Array.isArray(data) ? data : [];
+    if (posts.length === 0) {
+      feed.innerHTML = '<div class="empty">Nothing staged.</div>';
+      return;
+    }
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    feed.innerHTML = posts.map(p => `
+      <div class="scotty-proposal" data-post-id="${esc(p.id)}">
+        <div class="sp-summary" style="white-space:pre-wrap">${esc(p.text)}</div>
+        <div class="sp-tests">staged ${esc(p.proposed_at).slice(0, 16).replace("T", " ")}${p.reply_to ? " · reply to " + esc(p.reply_to) : ""}</div>
+        <div class="sp-actions">
+          <button class="xp-approve" data-post-id="${esc(p.id)}">Post it</button>
+          <button class="xp-reject"  data-post-id="${esc(p.id)}">Drop</button>
+        </div>
+        <div class="sp-notice" style="display:none"></div>
+      </div>`).join("");
+
+    const wire = (sel, path, body) => {
+      feed.querySelectorAll(sel).forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.postId;
+          const card = feed.querySelector(`.scotty-proposal[data-post-id="${id}"]`);
+          const notice = card && card.querySelector(".sp-notice");
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/x/staged/${id}/${path}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body || {}),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (res.ok) {
+              if (notice) { notice.textContent = payload.note || "Done."; notice.style.display = ""; }
+              setTimeout(renderXApprovals, 1200);
+            } else {
+              // Show the REAL error. A swallowed publish failure is undebuggable.
+              if (notice) { notice.textContent = payload.error || `Failed (${res.status}).`; notice.style.display = ""; }
+              btn.disabled = false;
+            }
+          } catch (e) {
+            if (notice) { notice.textContent = "Network error."; notice.style.display = ""; }
+            btn.disabled = false;
+          }
+        });
+      });
+    };
+    wire(".xp-approve", "approve");
+    wire(".xp-reject", "reject", { reason: "dropped from the command center" });
+  }
+
   async function renderScottyApprovals() {
     const feed = document.querySelector("[data-scotty-approvals-feed]");
     if (!feed) return;
@@ -2255,7 +2321,7 @@
             body: JSON.stringify({ feedback }),
           });
           if (res.ok) {
-            renderScottyApprovals();
+            renderScottyApprovals(); renderXApprovals();
           } else {
             if (notice) { notice.textContent = "Rejection failed — check logs."; notice.style.display = ""; }
           }
@@ -2387,7 +2453,7 @@
     renderAres();
     renderSteward();
     renderCognition();
-    renderScottyApprovals();
+    renderScottyApprovals(); renderXApprovals();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();

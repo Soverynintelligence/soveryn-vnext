@@ -620,7 +620,10 @@ class AgentLoop:
         # whether her own messages up to the hub were received.
         is_aetheria = self.agent_name == "aetheria"
         if not is_aetheria and self.coord_store is None:
-            return ""
+            # A peer with no coord_store still gets its own live thread —
+            # otherwise "the whole team is whole" is false for exactly the
+            # agent with the fewest other continuity sources (Scotty).
+            return self._render_active_context()
         try:
             session = self.conv_store.get_session(session_id)
             # Autonomous sessions ([heartbeat], [dream], [patrol]) are excluded

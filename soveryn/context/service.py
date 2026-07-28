@@ -59,6 +59,8 @@ EXCHANGE_HEAD_CHARS = 180
 THOUGHT_CHARS = 700          # ~175 tokens: one pulse's conclusion, not its prose
 ACTION_HEAD_CHARS = 120
 ACTION_CAP = 5
+TEAM_CAP = 4               # one headline per peer agent, never their feed
+TEAM_HEAD_CHARS = 160
 
 
 def _now_iso() -> str:
@@ -92,9 +94,20 @@ def _age(updated_at: str, now: str) -> str:
 class ActiveContextService:
     """Read/write the live thread. No LLM anywhere in this path."""
 
-    def __init__(self, store: ActiveContextStore, *, now_fn=_now_iso) -> None:
+    def __init__(self, store: ActiveContextStore, *, agent: str = "aetheria",
+                 now_fn=_now_iso) -> None:
         self._store = store
+        self._agent = agent
         self._now_fn = now_fn
+
+    def _slot(self, name: str) -> str:
+        """Namespace a slot to this agent.
+
+        Slots are the store's PRIMARY KEY, so without this every agent would
+        overwrite the same three rows. Namespacing keeps one shared file — and
+        that file is what lets each agent see the others (see render).
+        """
+        return f"{self._agent}:{name}"
 
     # ── writers ──────────────────────────────────────────────────────────
 
@@ -105,9 +118,9 @@ class ActiveContextService:
             f"Jon: {_head(user_text, EXCHANGE_HEAD_CHARS)}\n"
             f"  Her: {_head(assistant_text, EXCHANGE_HEAD_CHARS)}"
         )
-        prior = self._store.get(THREAD_SLOT)
+        prior = self._store.get(self._slot(THREAD_SLOT))
         self._store.put(ActiveContext(
-            topic=THREAD_SLOT,
+            topic=self._slot(THREAD_SLOT),
             summary=summary,
             rail=rail,
             updated_at=self._now_fn(),
@@ -123,7 +136,7 @@ class ActiveContextService:
         if not (note or "").strip():
             return
         self._store.put(ActiveContext(
-            topic=THINKING_SLOT,
+            topic=self._slot(THINKING_SLOT),
             summary=_head(note, THOUGHT_CHARS),
             rail=rail,
             updated_at=self._now_fn(),
@@ -133,7 +146,7 @@ class ActiveContextService:
     def record_action(self, *, rail: str, action: str, detail: str = "") -> None:
         """Record something she DID, so it has a read path back to her."""
         self._store.put(ActiveContext(
-            topic=f"{ACTION_PREFIX}{action}",
+            topic=self._slot(f"{ACTION_PREFIX}{action}"),
             summary=_head(detail, ACTION_HEAD_CHARS),
             rail=rail,
             updated_at=self._now_fn(),
@@ -152,7 +165,10 @@ class ActiveContextService:
         if not records:
             return ""
         now = self._now_fn()
-        by_slot = {r.topic: r for r in records}
+        mine = f"{self._agent}:"
+        by_slot = {
+            r.topic[len(mine):]: r for r in records if r.topic.startswith(mine)
+        }
 
         lines: list[str] = [BLOCK_HEADER]
 
@@ -173,13 +189,33 @@ class ActiveContextService:
             )
             lines.append(f"  {thinking.summary}")
 
-        actions = [r for r in records if r.topic.startswith(ACTION_PREFIX)][:ACTION_CAP]
+        actions = [
+            r for r in records
+            if r.topic.startswith(mine + ACTION_PREFIX)
+        ][:ACTION_CAP]
         if actions:
             lines.append("Actions she has taken and not yet heard back on:")
             for a in actions:
-                name = a.topic[len(ACTION_PREFIX):]
+                name = a.topic[len(mine) + len(ACTION_PREFIX):]
                 detail = f" — {a.summary}" if a.summary else ""
                 lines.append(f"  {name} ({a.rail}, {_age(a.updated_at, now)}){detail}")
+
+        # The team, one line each. Jon, 2026-07-28: "if this system is to
+        # function as one unit the team all need to be whole." Capped hard at a
+        # single headline per peer — this is peripheral vision, not their feed.
+        peers = [
+            r for r in records
+            if r.topic.endswith(f":{THINKING_SLOT}")
+            and not r.topic.startswith(mine)
+        ][:TEAM_CAP]
+        if peers:
+            lines.append("The rest of the team:")
+            for p in peers:
+                who = p.topic.split(":", 1)[0]
+                lines.append(
+                    f"  {who} ({_age(p.updated_at, now)}): "
+                    f"{_head(p.summary, TEAM_HEAD_CHARS)}"
+                )
 
         if len(lines) == 1:
             return ""
@@ -188,4 +224,4 @@ class ActiveContextService:
 
     def clear_action(self, action: str) -> None:
         """Drop an action once it has been resolved."""
-        self._store.delete(f"{ACTION_PREFIX}{action}")
+        self._store.delete(self._slot(f"{ACTION_PREFIX}{action}"))

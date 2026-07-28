@@ -56,7 +56,7 @@ class TestExchange:
     def test_turn_count_accumulates_across_rails(self, svc):
         svc.record_exchange(rail="web", user_text="a", assistant_text="b")
         svc.record_exchange(rail="signal", user_text="c", assistant_text="d")
-        rec = svc._store.get(THREAD_SLOT)
+        rec = svc._store.get(svc._slot(THREAD_SLOT))
         assert rec.turn_count == 2
         # The thread is one thread — the newest rail owns it.
         assert rec.rail == "signal"
@@ -90,7 +90,7 @@ class TestThought:
 
     def test_empty_note_is_ignored(self, svc):
         svc.record_thought(rail="heartbeat", note="   ")
-        assert svc._store.get(THINKING_SLOT) is None
+        assert svc._store.get(svc._slot(THINKING_SLOT)) is None
 
 
 class TestActions:
@@ -134,3 +134,49 @@ class TestAge:
         )
         svc.record_exchange(rail="signal", user_text="a", assistant_text="b")
         assert "3h ago" in svc.render()
+
+
+class TestTheTeamIsOneUnit:
+    """Jon, 2026-07-28: "if this system is to function as one unit the team all
+    need to be whole." Each agent owns its own thread; each sees the others'
+    headline, capped at one line so it is peripheral vision, not their feed."""
+
+    def _svc(self, store, agent):
+        return ActiveContextService(store, agent=agent)
+
+    def test_agents_do_not_overwrite_each_other(self, tmp_path):
+        store = ActiveContextStore(tmp_path / "team.db")
+        a = self._svc(store, "aetheria")
+        v = self._svc(store, "vett")
+        a.record_exchange(rail="chat", user_text="ask aetheria", assistant_text="A")
+        v.record_exchange(rail="chat", user_text="ask vett", assistant_text="V")
+
+        assert "ask aetheria" in a.render() and "ask vett" not in a.render().split(
+            "The rest of the team:")[0]
+        assert "ask vett" in v.render()
+
+    def test_each_agent_sees_the_others_latest_thinking(self, tmp_path):
+        store = ActiveContextStore(tmp_path / "team.db")
+        a = self._svc(store, "aetheria")
+        s = self._svc(store, "scotty")
+        s.record_thought(rail="chat", note="the delegation contract is fixed")
+
+        out = a.render()
+        assert "The rest of the team:" in out
+        assert "scotty" in out
+        assert "the delegation contract is fixed" in out
+
+    def test_a_peer_contributes_one_line_not_a_feed(self, tmp_path):
+        store = ActiveContextStore(tmp_path / "team.db")
+        a = self._svc(store, "aetheria")
+        v = self._svc(store, "vett")
+        v.record_exchange(rail="chat", user_text="x" * 400, assistant_text="y" * 400)
+        v.record_action(rail="chat", action="something", detail="z" * 400)
+        v.record_thought(rail="chat", note="w" * 400)
+
+        team = a.render().split("The rest of the team:")[1]
+        peer_lines = [
+            ln for ln in team.strip().splitlines() if ln.strip() != BLOCK_FOOTER
+        ]
+        assert len(peer_lines) == 1, peer_lines
+        assert "something" not in team

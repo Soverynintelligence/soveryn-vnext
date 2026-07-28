@@ -207,50 +207,83 @@ def resolve_pending(
     verdict = classify_affirmation(message)
 
     if verdict == "affirm":
-        try:
-            result = publisher_fn(post.text, post.reply_to)
-        except Exception as exc:  # noqa: BLE001 - a raised publisher must not crash resolution
-            result = {"error": str(exc)}
-
-        if not result or result.get("error"):
-            # Publish failed: do NOT mark published, leave the post
-            # `proposed` so Jon's next affirm retries it. Surface the REAL
-            # error (X API status/message) instead of a generic note — a
-            # swallowed publish error is undebuggable; Jon needs to see what
-            # X actually rejected (duplicate content, rate cap, auth, etc.).
-            err = (result or {}).get("error") or "empty publisher result (no id returned)"
-            logger.warning("staged post %s publish failed: %s", post.id, err)
-            return ResolveResult(
-                action="declined",
-                note=f"[post failed: {err} — still pending, try again]",
-            )
-
-        staged.mark(post.id, "published")
-        posted_id = result.get("id")
-        url = result.get("url", "")
-        # Pass the publish RESULT through so the lattice memory records the
-        # REAL X-assigned tweet id/url, not the staged post's local id — else
-        # her recalled posts would carry dead links.
-        #
-        # The tweet is ALREADY live and ALREADY marked published above — a
-        # recall-write failure here (e.g. the embed service is down) must
-        # never turn a successful publish into a 500. Log and move on.
-        try:
-            x_memory_fn(post, result)
-        except Exception as exc:  # noqa: BLE001 - see comment above
-            logger.warning(
-                "x_memory_fn failed after publishing staged post %s: %s", post.id, exc
-            )
-        return ResolveResult(
-            action="published",
-            note=f"[posted to X: {url}]",
-            posted_id=posted_id,
+        return publish_staged(
+            post=post, staged=staged, publisher_fn=publisher_fn,
+            x_memory_fn=x_memory_fn,
         )
 
     if verdict == "decline":
-        staged.mark(post.id, "rejected")
-        rejection_fn(post, reason=message)
-        return ResolveResult(action="declined", note="[dropped]")
+        return reject_staged(
+            post=post, staged=staged, rejection_fn=rejection_fn, reason=message,
+        )
 
     # "edit" and "unrelated": post stays proposed, her normal turn runs.
     return None
+
+
+def publish_staged(
+    *,
+    post: StagedPost,
+    staged: StagedStore,
+    publisher_fn: Callable[[str, Optional[str]], Mapping[str, Any]],
+    x_memory_fn: Callable[[StagedPost, Mapping[str, Any]], Any],
+) -> ResolveResult:
+    """Publish an already-identified staged post.
+
+    Split out of resolve_pending 2026-07-28 so the approval UI can reuse this
+    exact path. Before that the only way to approve was to type a message that
+    classify_affirmation happened to read as an affirm — with no surface listing
+    staged posts at all, five consecutive daily posts expired unseen.
+    """
+    try:
+        result = publisher_fn(post.text, post.reply_to)
+    except Exception as exc:  # noqa: BLE001 - a raised publisher must not crash resolution
+        result = {"error": str(exc)}
+
+    if not result or result.get("error"):
+        # Publish failed: do NOT mark published, leave the post
+        # `proposed` so Jon's next affirm retries it. Surface the REAL
+        # error (X API status/message) instead of a generic note — a
+        # swallowed publish error is undebuggable; Jon needs to see what
+        # X actually rejected (duplicate content, rate cap, auth, etc.).
+        err = (result or {}).get("error") or "empty publisher result (no id returned)"
+        logger.warning("staged post %s publish failed: %s", post.id, err)
+        return ResolveResult(
+            action="declined",
+            note=f"[post failed: {err} — still pending, try again]",
+        )
+
+    staged.mark(post.id, "published")
+    posted_id = result.get("id")
+    url = result.get("url", "")
+    # Pass the publish RESULT through so the lattice memory records the
+    # REAL X-assigned tweet id/url, not the staged post's local id — else
+    # her recalled posts would carry dead links.
+    #
+    # The tweet is ALREADY live and ALREADY marked published above — a
+    # recall-write failure here (e.g. the embed service is down) must
+    # never turn a successful publish into a 500. Log and move on.
+    try:
+        x_memory_fn(post, result)
+    except Exception as exc:  # noqa: BLE001 - see comment above
+        logger.warning(
+            "x_memory_fn failed after publishing staged post %s: %s", post.id, exc
+        )
+    return ResolveResult(
+        action="published",
+        note=f"[posted to X: {url}]",
+        posted_id=posted_id,
+    )
+
+
+def reject_staged(
+    *,
+    post: StagedPost,
+    staged: StagedStore,
+    rejection_fn: Callable[..., Any],
+    reason: str = "",
+) -> ResolveResult:
+    """Reject an already-identified staged post. See publish_staged."""
+    staged.mark(post.id, "rejected")
+    rejection_fn(post, reason=reason)
+    return ResolveResult(action="declined", note="[dropped]")
