@@ -39,3 +39,26 @@ preferred-citation:
   month: 7
   publisher:
     name: Zenodo
+
+# Companion paper. preferred-citation stays the primary result (the measurement);
+# this is the case study that argues why the architecture is necessary.
+references:
+  - type: article
+    title: 'A False Confession'
+    authors:
+      - given-names: Jon
+        family-names: DeOliveira
+        orcid: 'https://orcid.org/0009-0006-9188-739X'
+        affiliation: SOVERYN Intelligence LLC
+    doi: 10.5281/zenodo.21650072
+    url: 'https://doi.org/10.5281/zenodo.21650072'
+    year: 2026
+    month: 7
+    publisher:
+      name: Zenodo
+    abstract: >-
+      A recorded case in which an agent's audit tooling could not see its own
+      actions, and good-faith reasoning produced a fabricated admission of
+      fabrication. Argues that an agent has no privileged access to its own past
+      behaviour in either direction, and that a self-report of failure cannot be
+      scored as ground truth.
