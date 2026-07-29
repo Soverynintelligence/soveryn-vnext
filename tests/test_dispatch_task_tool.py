@@ -306,3 +306,75 @@ def test_description_warns_not_done_until_landed(store):
     tool = build_dispatch_task_tool(store=store)
     desc = tool.description.lower()
     assert "landed" in desc
+
+
+class TestDuplicateGuard:
+    """The same objective must not be dispatched twice while one is live.
+
+    2026-07-28, 20:50 → 22:50: five dispatches of the same Cross-Rail task, one
+    per heartbeat pulse, each waking Scotty for 10-20 minutes of GPU. The work
+    had been merged that morning and one dispatch was already in_review. She had
+    been told in conversation it was done; that did not survive into the next
+    pulse, because a fact stated on one rail has no path into an autonomous
+    session. Hence a guard in code rather than in prose.
+    """
+
+    def _tool(self, tmp_path):
+        from soveryn.platform.delegation.tools import build_dispatch_task_tool
+        store = DelegationStore(tmp_path / "d.db")
+        return build_dispatch_task_tool(store=store), store
+
+    ARGS = {
+        "objective": "Implement the Cross-Rail Active Context Manager per spec.",
+        "scope": "soveryn/context/ only",
+        "acceptance": "python -m pytest tests/test_ctx.py -q",
+    }
+
+    def test_second_dispatch_returns_the_first(self, tmp_path):
+        tool, store = self._tool(tmp_path)
+        first = tool.handler(dict(self.ARGS))
+        second = tool.handler(dict(self.ARGS))
+
+        assert second["duplicate"] is True
+        assert second["task_id"] == first["task_id"]
+        assert len(store.list_tasks()) == 1, "a duplicate row was created"
+
+    def test_message_names_the_existing_task_and_status(self, tmp_path):
+        tool, _ = self._tool(tmp_path)
+        first = tool.handler(dict(self.ARGS))
+        second = tool.handler(dict(self.ARGS))
+
+        assert first["task_id"] in second["message"]
+        assert "dispatched" in second["message"]
+
+    def test_incidental_whitespace_and_case_still_match(self, tmp_path):
+        """The five real dispatches differed only in spacing."""
+        tool, store = self._tool(tmp_path)
+        tool.handler(dict(self.ARGS))
+        messy = dict(self.ARGS)
+        messy["objective"] = "  implement the CROSS-RAIL   Active Context\n Manager per spec.  "
+
+        result = tool.handler(messy)
+        assert result["duplicate"] is True
+        assert len(store.list_tasks()) == 1
+
+    def test_a_different_objective_still_dispatches(self, tmp_path):
+        tool, store = self._tool(tmp_path)
+        tool.handler(dict(self.ARGS))
+        other = dict(self.ARGS)
+        other["objective"] = "Add a retry loop to the fetcher."
+
+        result = tool.handler(other)
+        assert not result.get("duplicate")
+        assert len(store.list_tasks()) == 2
+
+    def test_retry_after_failure_is_allowed(self, tmp_path):
+        """failed/rejected are NOT live — re-dispatching after a failure is fine."""
+        tool, store = self._tool(tmp_path)
+        first = tool.handler(dict(self.ARGS))
+        store.set_status(first["task_id"], "executing")
+        store.set_status(first["task_id"], "failed")
+
+        result = tool.handler(dict(self.ARGS))
+        assert not result.get("duplicate"), "a failed task must be retryable"
+        assert len(store.list_tasks()) == 2

@@ -31,6 +31,32 @@ from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 # writes). Constrain the entrypoint to a known runner.
 
 
+# Statuses in which a task is still live — a second dispatch of the same
+# objective would duplicate work rather than retry it. A `failed` or `rejected`
+# task is deliberately NOT here: re-dispatching after a failure is legitimate.
+_LIVE_STATUSES: frozenset[str] = frozenset({"dispatched", "executing", "in_review"})
+
+
+def _find_open_duplicate(store: DelegationStore, objective: str):
+    """Return a live task with the same objective, or None.
+
+    Compared on normalised whitespace and case so that a re-worded-but-identical
+    objective still matches; the five dispatches on 2026-07-28 differed only in
+    incidental spacing.
+    """
+    def norm(text: str) -> str:
+        return " ".join((text or "").split()).casefold()
+
+    target = norm(objective)
+    try:
+        for task in store.list_tasks():
+            if task.status in _LIVE_STATUSES and norm(task.objective) == target:
+                return task
+    except Exception:
+        return None      # a guard that breaks dispatch is worse than no guard
+    return None
+
+
 # ---------------------------------------------------------------------------
 # build_dispatch_task_tool
 # ---------------------------------------------------------------------------
@@ -68,6 +94,37 @@ def build_dispatch_task_tool(
         problem = acceptance_problem(acceptance)
         if problem is not None:
             raise ToolArgError(problem)
+
+        # ── Duplicate guard ──────────────────────────────────────────────
+        # 2026-07-28, 20:50→22:50: the same Cross-Rail task was dispatched five
+        # times, once per heartbeat pulse, each run waking Scotty for 10–20
+        # minutes of GPU. The work had already been merged that morning and one
+        # dispatch was already sitting in_review. Nothing she could read said
+        # so — the board still showed Ready, and a heartbeat pulse carries no
+        # memory of what a previous pulse dispatched.
+        #
+        # She was told in conversation that it was done. That did not survive
+        # into the next pulse, because a fact stated on one rail has no path
+        # into an autonomous session. So this is enforced in code, where it
+        # cannot be forgotten, rather than in prose she may not be carrying.
+        #
+        # Returns the EXISTING task rather than raising: the useful answer to
+        # "dispatch this" when it is already running is "you already did, here
+        # it is, here is its status" — which is also the read path that was
+        # missing.
+        existing = _find_open_duplicate(store, objective.strip())
+        if existing is not None:
+            return {
+                "task_id": existing.id,
+                "status": existing.status,
+                "duplicate": True,
+                "message": (
+                    f"Already dispatched. Task {existing.id} was created at "
+                    f"{existing.created_at} and is currently '{existing.status}'. "
+                    "Not dispatching again. Check its status or wait for review "
+                    "rather than re-sending."
+                ),
+            }
 
         task_id = store.create_task(
             dispatched_by=owner_agent,
