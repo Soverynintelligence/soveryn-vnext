@@ -131,7 +131,11 @@ def create_app(
         # are on — Jon, 2026-07-28: "if this system is to function as one unit
         # the team all need to be whole."
         active_context_services = {
-            name: ActiveContextService(_active_context_store, agent=name)
+            name: ActiveContextService(
+                _active_context_store, agent=name,
+                # So a heartbeat pulse can SEE what a previous pulse dispatched.
+                delegation_db_path=env.data_root / "delegation.db",
+            )
             for name in ACTIVE_AGENTS
         }
         active_context_service = active_context_services["aetheria"]

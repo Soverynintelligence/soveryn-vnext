@@ -180,3 +180,96 @@ class TestTheTeamIsOneUnit:
         ]
         assert len(peer_lines) == 1, peer_lines
         assert "something" not in team
+
+
+class TestWorkInFlightIsVisible:
+    """A pulse must be able to see what a previous pulse dispatched.
+
+    2026-07-28, 20:50 → 22:50: five dispatches of the same task, one per
+    heartbeat pulse, each waking Scotty for 10-20 minutes of GPU. The work was
+    already merged and one dispatch already sat in_review. Nothing a pulse could
+    read said so. Derived on read rather than mirrored, because a mirrored copy
+    is a second source that can disagree with the delegation store.
+    """
+
+    def _svc_with_tasks(self, tmp_path, rows):
+        import sqlite3
+        db = tmp_path / "delegation.db"
+        con = sqlite3.connect(db)
+        con.execute(
+            "CREATE TABLE delegation_tasks (id TEXT, dispatched_by TEXT, "
+            "objective TEXT, status TEXT, created_at TEXT)"
+        )
+        con.executemany("INSERT INTO delegation_tasks VALUES (?,?,?,?,?)", rows)
+        con.commit(); con.close()
+        return ActiveContextService(
+            ActiveContextStore(tmp_path / "ctx.db"),
+            agent="aetheria", delegation_db_path=db,
+        )
+
+    def test_open_dispatch_appears_in_the_brief(self, tmp_path):
+        svc = self._svc_with_tasks(tmp_path, [
+            ("25f730b6-aaaa", "aetheria", "Implement the Cross-Rail manager",
+             "in_review", "2026-07-28T22:20:00Z"),
+        ])
+        out = svc.render()
+        assert "already dispatched and not heard back on" in out
+        assert "Implement the Cross-Rail manager" in out
+        assert "in_review" in out
+        assert "25f730b6" in out
+
+    def test_finished_tasks_do_not_appear(self, tmp_path):
+        svc = self._svc_with_tasks(tmp_path, [
+            ("a", "aetheria", "old failed thing", "failed", "2026-07-28T20:00:00Z"),
+            ("b", "aetheria", "old rejected thing", "rejected", "2026-07-28T20:00:00Z"),
+            ("c", "aetheria", "landed thing", "landed", "2026-07-28T20:00:00Z"),
+        ])
+        assert svc.render() == ""
+
+    def test_another_agents_dispatch_is_not_hers(self, tmp_path):
+        svc = self._svc_with_tasks(tmp_path, [
+            ("x", "vett", "vett's task", "dispatched", "2026-07-28T22:00:00Z"),
+        ])
+        assert "vett's task" not in svc.render()
+
+    def test_unreadable_store_does_not_break_the_brief(self, tmp_path):
+        svc = ActiveContextService(
+            ActiveContextStore(tmp_path / "ctx.db"), agent="aetheria",
+            delegation_db_path=tmp_path / "does-not-exist.db",
+        )
+        svc.record_thought(rail="heartbeat", note="still thinking")
+        assert "still thinking" in svc.render()
+
+
+class TestNaiveTimestampsFromRealStores:
+    """delegation.db writes datetime.now().isoformat() — naive local time.
+
+    This service writes UTC with a Z. Mixing them raised TypeError the first
+    time render() ran against the real database, having passed every test,
+    because the fixtures were tz-aware and the real data is not.
+    """
+
+    def test_naive_created_at_does_not_raise(self, tmp_path):
+        import sqlite3
+        from datetime import datetime, timedelta
+        db = tmp_path / "delegation.db"
+        con = sqlite3.connect(db)
+        con.execute(
+            "CREATE TABLE delegation_tasks (id TEXT, dispatched_by TEXT, "
+            "objective TEXT, status TEXT, created_at TEXT)"
+        )
+        # 2h30m, not exactly 2h: _now_iso() truncates microseconds, so a stamp
+        # sitting exactly on an hour boundary floors to the hour below and the
+        # assertion becomes a coin flip. Test inside the band, not on its edge.
+        naive = (datetime.now() - timedelta(hours=2, minutes=30)).isoformat()
+        con.execute("INSERT INTO delegation_tasks VALUES (?,?,?,?,?)",
+                    ("abc12345", "aetheria", "a real task", "in_review", naive))
+        con.commit(); con.close()
+
+        svc = ActiveContextService(
+            ActiveContextStore(tmp_path / "ctx.db"),
+            agent="aetheria", delegation_db_path=db,
+        )
+        out = svc.render()
+        assert "a real task" in out
+        assert "2h ago" in out

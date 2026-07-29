@@ -41,7 +41,9 @@ to ACTION_CAP ``action:*`` slots.
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 from soveryn.context.active_context import ActiveContext
 from soveryn.context.store import ActiveContextStore
@@ -61,6 +63,9 @@ ACTION_HEAD_CHARS = 120
 ACTION_CAP = 5
 TEAM_CAP = 4               # one headline per peer agent, never their feed
 TEAM_HEAD_CHARS = 160
+INFLIGHT_CAP = 4           # open dispatches shown; more than this is a queue problem
+INFLIGHT_HEAD_CHARS = 90
+LIVE_TASK_STATUSES = ("dispatched", "executing", "in_review")
 
 
 def _now_iso() -> str:
@@ -81,6 +86,14 @@ def _age(updated_at: str, now: str) -> str:
         current = datetime.fromisoformat(now.replace("Z", "+00:00"))
     except ValueError:
         return updated_at
+    # Sources disagree on tz-awareness and always will: this service writes
+    # UTC with a Z, but delegation.db stores datetime.now().isoformat() — naive
+    # LOCAL time. Subtracting one from the other raises, and it raised the first
+    # time this ran against real data rather than fixtures. Naive means local.
+    if then.tzinfo is None:
+        then = then.astimezone()
+    if current.tzinfo is None:
+        current = current.astimezone()
     minutes = int((current - then).total_seconds() // 60)
     if minutes < 1:
         return "just now"
@@ -95,10 +108,17 @@ class ActiveContextService:
     """Read/write the live thread. No LLM anywhere in this path."""
 
     def __init__(self, store: ActiveContextStore, *, agent: str = "aetheria",
-                 now_fn=_now_iso) -> None:
+                 now_fn=_now_iso, delegation_db_path=None) -> None:
         self._store = store
         self._agent = agent
         self._now_fn = now_fn
+        # Work in flight is DERIVED on read from the delegation store, not
+        # mirrored into this one. 2026-07-28: the same task was dispatched five
+        # times in two hours, one per heartbeat pulse, because nothing a pulse
+        # could read said a dispatch already existed. A mirrored copy would be a
+        # second source that can disagree; the delegation store is already the
+        # record of truth, so read it.
+        self._delegation_db_path = delegation_db_path
 
     def _slot(self, name: str) -> str:
         """Namespace a slot to this agent.
@@ -162,8 +182,10 @@ class ActiveContextService:
         this is context she reads, not a directive she obeys.
         """
         records = self._store.list_all()
-        if not records:
-            return ""
+        # No early return on an empty store. Work-in-flight is derived from a
+        # DIFFERENT database, so bailing here would hide it — which is exactly
+        # the bug this section exists to fix, reproduced one level up. Decide
+        # whether there is anything to say only after every source is consulted.
         now = self._now_fn()
         mine = f"{self._agent}:"
         by_slot = {
@@ -200,6 +222,17 @@ class ActiveContextService:
                 detail = f" — {a.summary}" if a.summary else ""
                 lines.append(f"  {name} ({a.rail}, {_age(a.updated_at, now)}){detail}")
 
+        # Work she has in flight. Derived, never cached — the point is that it
+        # is true at the moment she reads it.
+        inflight = self._open_dispatches()
+        if inflight:
+            lines.append("Work you have already dispatched and not heard back on:")
+            for t in inflight:
+                lines.append(
+                    f"  [{t['status']}] {_head(t['objective'], INFLIGHT_HEAD_CHARS)} "
+                    f"(sent {_age(t['created_at'], now)}, task {t['id'][:8]})"
+                )
+
         # The team, one line each. Jon, 2026-07-28: "if this system is to
         # function as one unit the team all need to be whole." Capped hard at a
         # single headline per peer — this is peripheral vision, not their feed.
@@ -221,6 +254,27 @@ class ActiveContextService:
             return ""
         lines.append(BLOCK_FOOTER)
         return "\n".join(lines)
+
+    def _open_dispatches(self) -> list[dict]:
+        """Tasks this agent dispatched that are still live. Never raises."""
+        if self._delegation_db_path is None:
+            return []
+        path = Path(self._delegation_db_path)
+        if not path.is_file():
+            return []
+        try:
+            with sqlite3.connect(str(path)) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT id, objective, status, created_at FROM delegation_tasks "
+                    f"WHERE dispatched_by = ? AND status IN "
+                    f"({','.join('?' * len(LIVE_TASK_STATUSES))}) "
+                    "ORDER BY created_at DESC",
+                    (self._agent, *LIVE_TASK_STATUSES),
+                ).fetchall()
+            return [dict(r) for r in rows[:INFLIGHT_CAP]]
+        except sqlite3.Error:
+            return []   # an unreadable delegation store must not break her brief
 
     def clear_action(self, action: str) -> None:
         """Drop an action once it has been resolved."""
