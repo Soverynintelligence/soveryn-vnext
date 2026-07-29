@@ -32,7 +32,11 @@ def _make_fake_execute():
     """
     calls = []
 
-    def execute_fn(task_id, *, store, repo_root, scotty_run, run_acceptance):
+    def execute_fn(task_id, *, store, repo_root, scotty_run, run_acceptance,
+                   active_context=None):
+        # active_context added 2026-07-28 — the delegated executor now sees the
+        # same team state as everyone else. It knew nothing before, which is why
+        # the same task was dispatched five times in one evening.
         calls.append({
             "task_id": task_id,
             "store": store,
@@ -175,7 +179,8 @@ def test_failing_execute_fn_does_not_abort_loop(store):
 
     calls = []
 
-    def flaky_execute(task_id, *, store, repo_root, scotty_run, run_acceptance):
+    def flaky_execute(task_id, *, store, repo_root, scotty_run, run_acceptance,
+                      active_context=None):
         calls.append(task_id)
         if task_id == id_a:
             raise RuntimeError("simulated engine crash")

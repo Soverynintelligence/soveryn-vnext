@@ -41,6 +41,7 @@ def run_forever(
     repo_root: str | Path,
     scotty_run: Callable[[str, str, str], str],
     run_acceptance: Callable[[str, str], tuple[bool, str]],
+    active_context=None,
     poll_seconds: float = 5.0,
     _run_once_and_stop: bool = False,
 ) -> None:
@@ -81,7 +82,8 @@ def run_forever(
 
     while True:
         _drain(store, execute_fn=execute_fn, repo_root=repo_root,
-               scotty_run=scotty_run, run_acceptance=run_acceptance)
+               scotty_run=scotty_run, run_acceptance=run_acceptance,
+               active_context=active_context)
         if _run_once_and_stop:
             return
         time.sleep(poll_seconds)
@@ -142,6 +144,7 @@ def _drain(
     repo_root: str,
     scotty_run: Callable,
     run_acceptance: Callable,
+    active_context=None,
 ) -> int:
     """Execute all currently dispatched tasks, serially. Returns count run."""
     tasks = store.list_tasks(status="dispatched")
@@ -154,6 +157,7 @@ def _drain(
                 repo_root=repo_root,
                 scotty_run=scotty_run,
                 run_acceptance=run_acceptance,
+                active_context=active_context,
             )
             count += 1
         except Exception:

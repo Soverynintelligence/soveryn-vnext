@@ -64,6 +64,7 @@ def execute_task(
     commit_fn: Callable[[str, str, str], None] = _default_commit_fn,
     remove_worktree: Callable[[str | Path, str, str], None] = _default_remove_worktree,
     max_seconds: int = 600,
+    active_context=None,
 ) -> None:
     """Drive *task_id* through isolated execution → verification → proposal.
 
@@ -166,7 +167,10 @@ def execute_task(
         # Before 2026-07-27 it was withheld: he got objective+scope, then the
         # engine ran an acceptance command he had never seen. 10/10 tasks
         # failed. You cannot hit a target you are not shown.
-        summary = scotty_run(wt_path, task.objective, task.scope, task.acceptance)
+        summary = scotty_run(
+            wt_path, task.objective, task.scope, task.acceptance,
+            active_context=active_context,
+        )
 
         # 4. Run acceptance gate
         passed, output = run_acceptance(wt_path, task.acceptance)

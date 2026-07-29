@@ -53,7 +53,8 @@ def _fake_remove_worktree():
 def _fake_scotty_run(summary: str = "done"):
     calls: list[tuple] = []
 
-    def scotty_run(worktree_path, objective, scope, acceptance=""):
+    def scotty_run(worktree_path, objective, scope, acceptance="", *,
+                   active_context=None):
         # acceptance added 2026-07-27: Scotty is now TOLD the criterion he
         # is judged on. Withholding it was why 10/10 real tasks failed.
         calls.append((worktree_path, objective, scope, acceptance))

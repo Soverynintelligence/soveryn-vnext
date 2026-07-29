@@ -118,6 +118,7 @@ def scotty_run(
     scope: str,
     acceptance: str = "",
     *,
+    active_context=None,
     max_seconds: int = DELEGATION_MAX_SECONDS,
     max_tool_rounds: int = 12,
 ) -> str:
@@ -192,6 +193,19 @@ def scotty_run(
                         max_tokens=DELEGATION_MAX_TOKENS,
                         chat_timeout_seconds=DELEGATION_CHAT_TIMEOUT_SECONDS,
                         soul_text="",  # skip soul for delegation runs
+                        # 2026-07-28: the executor knew NOTHING. Handed an
+                        # objective and a scope, with no view of what the rest
+                        # of the fleet had already built or dispatched. He was
+                        # asked five times in two hours to build something that
+                        # had been merged that morning and could not have known.
+                        #
+                        # The isolation this runner documents is FILESYSTEM
+                        # isolation — every tool pinned to the worktree. That is
+                        # deliberate and is untouched here: context is read-only
+                        # text in the prompt, not a tool. Nobody ever decided he
+                        # should be ignorant; the delegation path and the
+                        # continuity path were built a month apart and never met.
+                        active_context=active_context,
                     )
 
                     # Fresh session for this isolated delegation run

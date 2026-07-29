@@ -67,7 +67,8 @@ def test_delegation_isolation_end_to_end(live_repo):
     )
 
     # Deterministic Scotty: edit V=1 → V=2 via the worktree-pinned edit_file.
-    def fake_scotty_run(worktree_path, objective, scope, acceptance=""):
+    def fake_scotty_run(worktree_path, objective, scope, acceptance="", *,
+                        active_context=None):
         reg = build_worktree_tool_registry(Path(worktree_path))
         _tool(reg, "edit_file").handler(
             {"path": "mod.py", "old_string": "V = 1", "new_string": "V = 2"}

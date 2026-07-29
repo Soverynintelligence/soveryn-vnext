@@ -1018,6 +1018,8 @@ def create_app(
                     "repo_root": _delegation_repo_root,
                     "scotty_run": _scotty_run,
                     "run_acceptance": _run_acceptance_in_worktree,
+                    # The executor sees the same team state as everyone else.
+                    "active_context": active_context_services.get("scotty"),
                 },
                 args=(delegation_store,),
                 daemon=True,
