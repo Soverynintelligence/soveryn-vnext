@@ -125,6 +125,111 @@ class DacEdge:
     age_minutes: int
 
 
+def recent_comms_traffic(
+    lattice_db_path: Path,
+    *,
+    delegation_db_path: Path | None = None,
+    limit: int = 12,
+    now: datetime | None = None,
+) -> list[DacEdge]:
+    """All agent-to-agent traffic, from every channel agents actually use.
+
+    2026-07-30: the Comms Bus panel had shown nothing for 18 days. Nothing was
+    broken and no data was lost — it read `edges WHERE relationship LIKE
+    'direct%'`, a channel that produced NINE rows in two months, while the real
+    traffic had moved elsewhere. In the same 18 days: 474 coord_references,
+    45 coord_event_log entries and 18 delegation dispatches, none of it visible.
+
+    A panel reading a channel its agents have abandoned is worse than an empty
+    panel, because it reports quiet that isn't there. So this unions the three
+    live sources into one shape:
+
+      coord_event_log   actor_agent → triggered_agents  (board handoffs; this is
+                        the richest signal — it carries the chain that a promote
+                        by Aetheria triggered Vett, who triggered Scotty)
+      delegation_tasks  dispatched_by → scotty          (the dispatch rail)
+      direct_* edges    legacy, kept because they are real when they happen
+
+    Returns the same DacEdge shape so the existing panel renders unchanged.
+    """
+    import json as _json
+    now = now or datetime.now()
+    limit = max(1, min(limit, 100))
+    out: list[DacEdge] = []
+
+    def _age(ts: str) -> int:
+        try:
+            then = datetime.fromisoformat(ts)
+        except (ValueError, TypeError):
+            return 0
+        if then.tzinfo is not None and now.tzinfo is None:
+            then = then.replace(tzinfo=None)
+        return max(0, int((now - then).total_seconds() // 60))
+
+    # ── coordination board handoffs ──────────────────────────────────────────
+    try:
+        with sqlite3.connect(str(lattice_db_path)) as con:
+            con.row_factory = sqlite3.Row
+            rows = con.execute(
+                "SELECT id, kind, node_id, actor_agent, triggered_agents, "
+                "       payload_json, created_at "
+                "FROM coord_event_log "
+                "WHERE triggered_agents IS NOT NULL AND triggered_agents != '' "
+                "ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        for r in rows:
+            try:
+                payload = _json.loads(r["payload_json"] or "{}")
+            except (ValueError, TypeError):
+                payload = {}
+            head = (payload.get("content_head") or payload.get("lesson_content_head")
+                    or payload.get("new_status") or r["kind"] or "")
+            board = payload.get("board")
+            if board:
+                head = f"[{board}] {head}".strip()
+            out.append(DacEdge(
+                edge_id=r["id"], relationship=r["kind"] or "coord",
+                sender=r["actor_agent"] or "unknown",
+                target=r["triggered_agents"] or "unknown",
+                coord_node_id=r["node_id"] or "", session_id="",
+                message_head=head[:160], created_at=r["created_at"],
+                age_minutes=_age(r["created_at"]),
+            ))
+    except sqlite3.Error:
+        pass    # a missing coord log must not blank the whole panel
+
+    # ── delegation dispatches ────────────────────────────────────────────────
+    if delegation_db_path is not None and Path(delegation_db_path).is_file():
+        try:
+            with sqlite3.connect(str(delegation_db_path)) as con:
+                con.row_factory = sqlite3.Row
+                rows = con.execute(
+                    "SELECT id, dispatched_by, objective, status, created_at "
+                    "FROM delegation_tasks ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+            for r in rows:
+                out.append(DacEdge(
+                    edge_id=r["id"], relationship=f"dispatch:{r['status']}",
+                    sender=r["dispatched_by"] or "unknown", target="scotty",
+                    coord_node_id="", session_id="",
+                    message_head=" ".join((r["objective"] or "").split())[:160],
+                    created_at=r["created_at"], age_minutes=_age(r["created_at"]),
+                ))
+        except sqlite3.Error:
+            pass
+
+    # ── legacy direct edges ──────────────────────────────────────────────────
+    try:
+        out.extend(recent_dac_edges(lattice_db_path, limit=limit, now=now))
+    except sqlite3.Error:
+        pass
+
+    out.sort(key=lambda e: e.created_at or "", reverse=True)
+    return out[:limit]
+
+
 def recent_dac_edges(
     lattice_db_path: Path,
     *,

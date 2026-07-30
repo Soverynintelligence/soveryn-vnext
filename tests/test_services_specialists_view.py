@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from soveryn.app.services.specialists_view import (
+    recent_comms_traffic,
     DacEdge, _parse_title, kill_specialist,
     list_active_specialists, recent_dac_edges,
 )
@@ -338,3 +339,100 @@ def test_recent_dac_edges_excludes_non_dac_relationships(lattice_db):
 
 def test_recent_dac_edges_empty_lattice(lattice_db):
     assert recent_dac_edges(lattice_db) == []
+
+
+class TestCommsTrafficSeesEveryChannel:
+    """The Comms Bus must read the channels agents actually use.
+
+    2026-07-30: the panel had shown nothing for 18 days. Nothing was broken and
+    no data was lost — it read `edges WHERE relationship LIKE 'direct%'`, which
+    produced NINE rows in two months, while 474 coord_references, 45
+    coord_event_log entries and 18 delegation dispatches went unseen. A panel
+    reading an abandoned channel is worse than an empty one: it reports quiet
+    that is not there.
+    """
+
+    def _lattice(self, tmp_path):
+        db = tmp_path / "lattice.db"
+        con = sqlite3.connect(db)
+        con.execute(
+            "CREATE TABLE coord_event_log (id TEXT, kind TEXT, node_id TEXT, "
+            "actor_agent TEXT, chain_depth INT, parent_event_id TEXT, "
+            "payload_json TEXT, triggered_agents TEXT, created_at TEXT)"
+        )
+        con.execute("CREATE TABLE edges (id TEXT, source_id TEXT, target_id TEXT, "
+                    "relationship TEXT, archived INT DEFAULT 0, created_at TEXT)")
+        con.execute("CREATE TABLE nodes (id TEXT, content TEXT, provenance TEXT)")
+        con.commit(); con.close()
+        return db
+
+    def test_board_handoffs_appear(self, tmp_path):
+        db = self._lattice(tmp_path)
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO coord_event_log VALUES (?,?,?,?,?,?,?,?,?)",
+                    ("e1", "promoted", "n1", "aetheria", 0, None,
+                     '{"board":"Blueprint","content_head":"Evolve the Self-Model"}',
+                     "vett", "2026-07-29T22:50:05"))
+        con.commit(); con.close()
+
+        out = recent_comms_traffic(db, limit=10)
+        assert len(out) == 1
+        assert out[0].sender == "aetheria" and out[0].target == "vett"
+        assert "Evolve the Self-Model" in out[0].message_head
+        assert "Blueprint" in out[0].message_head
+
+    def test_events_with_no_trigger_are_not_traffic(self, tmp_path):
+        """A node created with nobody notified is not agent-to-agent comms."""
+        db = self._lattice(tmp_path)
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO coord_event_log VALUES (?,?,?,?,?,?,?,?,?)",
+                    ("e2", "node_created", "n2", "aetheria", 0, None, "{}", "",
+                     "2026-07-29T18:00:00"))
+        con.commit(); con.close()
+        assert recent_comms_traffic(db, limit=10) == []
+
+    def test_delegation_dispatches_appear(self, tmp_path):
+        db = self._lattice(tmp_path)
+        deleg = tmp_path / "delegation.db"
+        con = sqlite3.connect(deleg)
+        con.execute("CREATE TABLE delegation_tasks (id TEXT, dispatched_by TEXT, "
+                    "objective TEXT, status TEXT, created_at TEXT)")
+        con.execute("INSERT INTO delegation_tasks VALUES (?,?,?,?,?)",
+                    ("t1", "aetheria", "Implement the Cross-Rail manager",
+                     "in_review", "2026-07-28T22:20:00"))
+        con.commit(); con.close()
+
+        out = recent_comms_traffic(db, delegation_db_path=deleg, limit=10)
+        assert len(out) == 1
+        assert out[0].sender == "aetheria" and out[0].target == "scotty"
+        assert out[0].relationship == "dispatch:in_review"
+
+    def test_all_channels_merge_newest_first(self, tmp_path):
+        db = self._lattice(tmp_path)
+        deleg = tmp_path / "delegation.db"
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO coord_event_log VALUES (?,?,?,?,?,?,?,?,?)",
+                    ("e1", "promoted", "n1", "aetheria", 0, None, "{}", "vett",
+                     "2026-07-29T10:00:00"))
+        con.commit(); con.close()
+        con = sqlite3.connect(deleg)
+        con.execute("CREATE TABLE delegation_tasks (id TEXT, dispatched_by TEXT, "
+                    "objective TEXT, status TEXT, created_at TEXT)")
+        con.execute("INSERT INTO delegation_tasks VALUES (?,?,?,?,?)",
+                    ("t1", "aetheria", "a task", "failed", "2026-07-29T12:00:00"))
+        con.commit(); con.close()
+
+        out = recent_comms_traffic(db, delegation_db_path=deleg, limit=10)
+        assert [e.created_at for e in out] == sorted(
+            [e.created_at for e in out], reverse=True)
+        assert {e.target for e in out} == {"vett", "scotty"}
+
+    def test_missing_delegation_store_does_not_blank_the_panel(self, tmp_path):
+        db = self._lattice(tmp_path)
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO coord_event_log VALUES (?,?,?,?,?,?,?,?,?)",
+                    ("e1", "promoted", "n1", "aetheria", 0, None, "{}", "vett",
+                     "2026-07-29T10:00:00"))
+        con.commit(); con.close()
+        out = recent_comms_traffic(db, delegation_db_path=tmp_path / "nope.db")
+        assert len(out) == 1

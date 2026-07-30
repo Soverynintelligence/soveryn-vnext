@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 from soveryn.app.services.memory_activity import (
     daily_write_counts, recent_library_writes, total_node_count,
 )
-from soveryn.app.services.specialists_view import recent_dac_edges
+from soveryn.app.services.specialists_view import recent_comms_traffic, recent_dac_edges
 from soveryn.memory.lattice import LatticeStore
 
 bp = Blueprint("api_memory", __name__)
@@ -114,7 +114,15 @@ def api_memory_dac_edges():
 
     state = current_app.extensions["soveryn"]
     lattice_db_path = state["env"].lattice_db
-    edges = recent_dac_edges(lattice_db_path, limit=limit)
+    # Every channel the agents actually use, not just the legacy direct_* edges.
+    # Those produced 9 rows in two months while 537 real events flowed through
+    # coord_event_log and delegation — an empty panel reporting quiet that was
+    # not there (2026-07-30).
+    edges = recent_comms_traffic(
+        lattice_db_path,
+        delegation_db_path=state["env"].data_root / "delegation.db",
+        limit=limit,
+    )
     return jsonify({
         "limit": limit,
         "edges": [

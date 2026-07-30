@@ -88,6 +88,9 @@ def client(tmp_path, fake_chat, seeded_conv_lattice, monkeypatch):
     conv_path, lattice_path = seeded_conv_lattice
     monkeypatch.setenv("SOVERYN_LATTICE_DB", str(lattice_path))
     monkeypatch.setenv("SOVERYN_CONVERSATIONS_DB", str(conv_path))
+    # Isolate data_root too. Without it the comm-bus route reads the REAL
+    # data/delegation.db and the test asserts against production (2026-07-30).
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
     conv = ConversationStore(conv_path)
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
