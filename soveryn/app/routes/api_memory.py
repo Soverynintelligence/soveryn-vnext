@@ -8,6 +8,9 @@ from flask import Blueprint, current_app, jsonify, request
 from soveryn.app.services.memory_activity import (
     daily_write_counts, recent_library_writes, total_node_count,
 )
+from soveryn.app.services.memory_browser import browse as _browse
+from soveryn.app.services.memory_browser import facets as _facets
+from soveryn.app.services.memory_browser import get_node as _get_node
 from soveryn.app.services.specialists_view import recent_comms_traffic, recent_dac_edges
 from soveryn.memory.lattice import LatticeStore
 
@@ -140,3 +143,64 @@ def api_memory_dac_edges():
             for e in edges
         ],
     }), 200
+
+
+# ─── Memory browser ──────────────────────────────────────────────────────────
+# Jon, 2026-07-30: "i should be able to see all memory."
+#
+# Everything above this line is aggregate — counts and recent-write events. You
+# could see that she had written 747 reflections and not read one. These three
+# are the read path.
+#
+# `private` is excluded unless ?private=1. The exclusion is enforced in the
+# service, not here, so a new route cannot forget it. Every response reports
+# include_private so a view can never imply it is showing everything when it
+# is not.
+
+def _wants_private() -> bool:
+    return request.args.get("private", "").strip() in {"1", "true", "yes"}
+
+
+@bp.get("/api/memory/browse")
+def api_memory_browse():
+    """Timeline + search over the lattice. Previews only; never 500."""
+    state = current_app.extensions["soveryn"]
+    try:
+        limit = int(request.args.get("limit", "50"))
+        offset = int(request.args.get("offset", "0"))
+    except ValueError:
+        return _err("invalid_message", "limit and offset must be integers", 400)
+    try:
+        return jsonify(_browse(
+            state["env"].lattice_db,
+            q=request.args.get("q", "").strip(),
+            node_type=request.args.get("type", "").strip(),
+            agent=request.args.get("agent", "").strip(),
+            tag=request.args.get("tag", "").strip(),
+            include_private=_wants_private(),
+            limit=limit, offset=offset,
+        )), 200
+    except Exception:
+        logger.exception("memory browse failed")
+        return jsonify({"nodes": [], "total": 0, "error": "browse failed"}), 200
+
+
+@bp.get("/api/memory/node/<node_id>")
+def api_memory_node(node_id: str):
+    """One node in full, with its edges — preview to evidence."""
+    state = current_app.extensions["soveryn"]
+    node = _get_node(state["env"].lattice_db, node_id,
+                     include_private=_wants_private())
+    if node is None:
+        # 404 for both "absent" and "private and not requested", so the default
+        # view cannot be used to enumerate private node ids by probing.
+        return jsonify({"error": "not found"}), 404
+    return jsonify(node), 200
+
+
+@bp.get("/api/memory/facets")
+def api_memory_facets():
+    """Type/agent counts for the filter chips, plus how many are hidden."""
+    state = current_app.extensions["soveryn"]
+    return jsonify(_facets(state["env"].lattice_db,
+                           include_private=_wants_private())), 200

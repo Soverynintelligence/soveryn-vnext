@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from soveryn.app.services.memory_browser import browse, facets, get_node
 from soveryn.app.services.specialists_view import (
     recent_comms_traffic,
     DacEdge, _parse_title, kill_specialist,
@@ -436,3 +437,85 @@ class TestCommsTrafficSeesEveryChannel:
         con.commit(); con.close()
         out = recent_comms_traffic(db, delegation_db_path=tmp_path / "nope.db")
         assert len(out) == 1
+
+
+class TestMemoryBrowserPrivacyGate:
+    """Jon, 2026-07-30: "private is private until it's surfaced."
+
+    2,308 of 2,614 nodes are in the private layer. The exclusion lives in the
+    service, not the route, so a new route cannot forget it.
+    """
+
+    def _lattice(self, tmp_path):
+        db = tmp_path / "lat.db"
+        con = sqlite3.connect(db)
+        con.execute(
+            "CREATE TABLE nodes (id TEXT, type TEXT, layer TEXT, agent TEXT, "
+            "content TEXT, intensity REAL, salience REAL, access_count INT, "
+            "tags TEXT, created_at TEXT, updated_at TEXT, embedding BLOB, "
+            "intent TEXT, provenance TEXT)"
+        )
+        con.execute("CREATE TABLE edges (id TEXT, source_id TEXT, target_id TEXT, "
+                    "relationship TEXT, strength REAL, bidirectional INT, "
+                    "archived INT DEFAULT 0, reinforcement_count INT, "
+                    "reinforced_at TEXT, created_at TEXT)")
+        rows = [
+            ("pub1", "reflection", "global", "aetheria", "a public thought about ponds",
+             0.5, 0.5, 0, '["x"]', "2026-07-30T10:00:00", None, None, None, None),
+            ("priv1", "reflection", "private", "aetheria", "a private thought about ponds",
+             0.5, 0.5, 0, "[]", "2026-07-30T11:00:00", None, None, None, None),
+        ]
+        con.executemany("INSERT INTO nodes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        con.commit(); con.close()
+        return db
+
+    def test_browse_excludes_private_by_default(self, tmp_path):
+        db = self._lattice(tmp_path)
+        r = browse(db, q="ponds")
+        assert [n["id"] for n in r["nodes"]] == ["pub1"]
+        assert r["total"] == 1
+        assert r["include_private"] is False
+
+    def test_browse_includes_private_only_when_asked(self, tmp_path):
+        db = self._lattice(tmp_path)
+        r = browse(db, q="ponds", include_private=True)
+        assert {n["id"] for n in r["nodes"]} == {"pub1", "priv1"}
+        assert r["include_private"] is True
+
+    def test_every_response_states_its_scope(self, tmp_path):
+        """A view must never imply it is showing everything when it is not."""
+        db = self._lattice(tmp_path)
+        assert "include_private" in browse(db)
+        assert "include_private" in facets(db)
+
+    def test_facets_report_how_many_are_hidden(self, tmp_path):
+        db = self._lattice(tmp_path)
+        f = facets(db)
+        assert f["total"] == 1 and f["private_hidden"] == 1
+
+    def test_private_node_is_indistinguishable_from_absent(self, tmp_path):
+        """Both return None, so the default view cannot enumerate private ids."""
+        db = self._lattice(tmp_path)
+        assert get_node(db, "priv1") is None
+        assert get_node(db, "does-not-exist") is None
+        assert get_node(db, "priv1", include_private=True)["id"] == "priv1"
+
+    def test_edge_into_private_is_acknowledged_not_opened(self, tmp_path):
+        """Hiding the link entirely would misrepresent the graph's shape."""
+        db = self._lattice(tmp_path)
+        con = sqlite3.connect(db)
+        con.execute("INSERT INTO edges VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    ("e1", "pub1", "priv1", "associated_with", 0.5, 1, 0, 1,
+                     None, "2026-07-30T12:00:00"))
+        con.commit(); con.close()
+
+        n = get_node(db, "pub1")
+        assert len(n["edges"]) == 1
+        e = n["edges"][0]
+        assert e["other_private"] is True
+        assert e["other_preview"] == "(private)"
+        assert "private thought" not in e["other_preview"]
+
+    def test_missing_lattice_does_not_raise(self, tmp_path):
+        assert browse(tmp_path / "nope.db")["nodes"] == []
+        assert get_node(tmp_path / "nope.db", "x") is None

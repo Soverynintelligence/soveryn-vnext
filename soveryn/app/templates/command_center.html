@@ -609,7 +609,39 @@
      Shell mirrors .heartbeat-panel (same .panel wrapper, compact row cards).
      Status dot reuses .daemon-card .dot colors: amber = near (<30d),
      red = overdue, neutral = far out. */
-  .steward-feed { display:flex; flex-direction:column; gap:6px; }
+
+  /* ── Memory browser ───────────────────────────────────────────────────── */
+  .mem-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .mem-controls input[type=text]{
+    flex:1 1 200px; background:rgba(255,255,255,.04); border:1px solid rgba(232,227,213,.14);
+    color:#ece3d5; padding:7px 10px; border-radius:3px; font-size:12px; font-family:inherit; }
+  .mem-controls input[type=text]:focus{ outline:none; border-color:var(--sov-amber,#c0824f); }
+  .mem-controls select{
+    background:rgba(255,255,255,.04); border:1px solid rgba(232,227,213,.14);
+    color:#ece3d5; padding:7px 8px; border-radius:3px; font-size:11px; }
+  .mem-priv { display:flex; align-items:center; gap:6px; font-size:11px;
+    color:rgba(232,227,213,.55); cursor:pointer; user-select:none; }
+  .mem-scope { font-size:11px; color:rgba(232,227,213,.45); margin-bottom:8px; }
+  .mem-scope b { color:#c0824f; font-weight:600; }
+  .mem-feed { display:flex; flex-direction:column; gap:8px; max-height:460px; overflow-y:auto; }
+  .mem-item { border-left:2px solid rgba(232,227,213,.12); padding:7px 0 7px 11px; cursor:pointer; }
+  .mem-item:hover { border-left-color:var(--sov-amber,#c0824f); }
+  .mem-item .mh { display:flex; gap:9px; align-items:baseline; flex-wrap:wrap;
+    font-size:10px; text-transform:uppercase; letter-spacing:.09em;
+    color:rgba(232,227,213,.42); margin-bottom:3px; }
+  .mem-item .mh .ag { color:#8fae8f; }
+  .mem-item .mh .ty { color:#c0824f; }
+  .mem-item .mh .pv { color:#d4a827; }
+  .mem-item .mp { font-size:12.5px; line-height:1.55; color:rgba(232,227,213,.82); }
+  .mem-item .mt { margin-top:4px; font-size:10px; color:rgba(232,227,213,.34); }
+  .mem-full { margin-top:8px; padding:10px 11px; background:rgba(255,255,255,.03);
+    border-radius:3px; font-size:12.5px; line-height:1.62; white-space:pre-wrap;
+    color:rgba(232,227,213,.9); }
+  .mem-edges { margin-top:9px; font-size:11px; color:rgba(232,227,213,.55); }
+  .mem-edges div { padding:2px 0; }
+  .mem-edges .rel { color:#8fae8f; }
+  .steward-feed { display:flex; flex-direction:column; gap:6px;
+    max-height:190px; overflow-y:auto; }   /* shrunk 2026-07-30 to make room for Memory */
   .steward-entry {
     display:flex; align-items:center; gap:10px;
     padding:8px 12px;
@@ -1180,6 +1212,85 @@
       }
       function load(){ fetch('https://ask.soverynintelligence.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">unreachable</div>'; }); }
       load(); setInterval(load, 30000);
+    })();
+    </script>
+
+
+    <!-- Memory — the read path into the lattice. Jon, 2026-07-30: "i should be
+         able to see all memory." Everything else here is aggregate; this reads
+         the actual nodes. Private is EXCLUDED by default and the hidden count is
+         stated on screen, because 88% of the lattice is private and showing 12%
+         of it unlabelled would misrepresent what you are looking at. -->
+    <section class="panel" data-testid="memory-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Memory</h3>
+      <div class="mem-controls">
+        <input type="text" data-mem-q placeholder="search her memory…" aria-label="Search memory">
+        <select data-mem-type aria-label="Filter by type"><option value="">all types</option></select>
+        <select data-mem-agent aria-label="Filter by agent"><option value="">all agents</option></select>
+        <label class="mem-priv"><input type="checkbox" data-mem-private> show private</label>
+      </div>
+      <div class="mem-scope" data-mem-scope></div>
+      <div class="mem-feed" data-mem-feed aria-live="polite"><div class="mem-item">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var feed=document.querySelector('[data-mem-feed]'); if(!feed) return;
+      var qIn=document.querySelector('[data-mem-q]'), tSel=document.querySelector('[data-mem-type]'),
+          aSel=document.querySelector('[data-mem-agent]'), pChk=document.querySelector('[data-mem-private]'),
+          scope=document.querySelector('[data-mem-scope]'), open=null, timer=null;
+      function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+      function qs(){var p=new URLSearchParams();
+        if(qIn.value.trim())p.set('q',qIn.value.trim());
+        if(tSel.value)p.set('type',tSel.value); if(aSel.value)p.set('agent',aSel.value);
+        if(pChk.checked)p.set('private','1'); p.set('limit','60'); return p.toString();}
+      function loadFacets(){
+        fetch('/api/memory/facets'+(pChk.checked?'?private=1':'')).then(function(r){return r.json();}).then(function(d){
+          var keepT=tSel.value, keepA=aSel.value;
+          tSel.innerHTML='<option value="">all types</option>'+(d.types||[]).map(function(t){
+            return '<option value="'+esc(t.type)+'">'+esc(t.type)+' ('+t.n+')</option>';}).join('');
+          aSel.innerHTML='<option value="">all agents</option>'+(d.agents||[]).map(function(a){
+            return '<option value="'+esc(a.agent)+'">'+esc(a.agent)+' ('+a.n+')</option>';}).join('');
+          tSel.value=keepT; aSel.value=keepA;
+          // Say plainly what is NOT being shown.
+          scope.innerHTML = d.include_private
+            ? 'showing <b>all '+d.total+'</b> nodes, private included'
+            : 'showing <b>'+d.total+'</b> non-private nodes · <b>'+d.private_hidden+'</b> private hidden';
+        }).catch(function(){});
+      }
+      function render(d){
+        if(d.error){feed.innerHTML='<div class="mem-item">'+esc(d.error)+'</div>';return;}
+        if(!d.nodes||!d.nodes.length){feed.innerHTML='<div class="mem-item">nothing matches.</div>';return;}
+        feed.innerHTML=d.nodes.map(function(n){
+          return '<div class="mem-item" data-id="'+esc(n.id)+'">'
+            +'<div class="mh"><span>'+esc((n.created_at||'').slice(0,16).replace('T',' '))+'</span>'
+            +'<span class="ag">'+esc(n.agent)+'</span><span class="ty">'+esc(n.type)+'</span>'
+            +(n.layer==='private'?'<span class="pv">private</span>':'')+'</div>'
+            +'<div class="mp">'+esc(n.preview)+'</div>'
+            +((n.tags&&n.tags.length)?'<div class="mt">'+esc(n.tags.join(' · '))+'</div>':'')
+            +'</div>';}).join('');
+        feed.querySelectorAll('.mem-item[data-id]').forEach(function(el){
+          el.addEventListener('click',function(){
+            if(open===el){var f=el.querySelector('.mem-full'),g=el.querySelector('.mem-edges');
+              if(f)f.remove(); if(g)g.remove(); open=null; return;}
+            fetch('/api/memory/node/'+encodeURIComponent(el.dataset.id)+(pChk.checked?'?private=1':''))
+              .then(function(r){return r.ok?r.json():null;}).then(function(n){
+                if(!n)return;
+                var h='<div class="mem-full">'+esc(n.content)+'</div>';
+                if(n.edges&&n.edges.length){
+                  h+='<div class="mem-edges">'+n.edges.length+' edge(s)'+n.edges.slice(0,8).map(function(e){
+                    return '<div>'+(e.direction==='out'?'→ ':'← ')+'<span class="rel">'+esc(e.relationship)+'</span> · '+esc(e.other_preview.slice(0,90))+'</div>';}).join('')+'</div>';
+                }
+                el.insertAdjacentHTML('beforeend',h); open=el;
+              }).catch(function(){});
+          });
+        });
+      }
+      function load(){fetch('/api/memory/browse?'+qs()).then(function(r){return r.json();}).then(render).catch(function(){});}
+      function debounced(){clearTimeout(timer);timer=setTimeout(function(){load();},250);}
+      qIn.addEventListener('input',debounced);
+      tSel.addEventListener('change',load); aSel.addEventListener('change',load);
+      pChk.addEventListener('change',function(){loadFacets();load();});
+      loadFacets(); load();
     })();
     </script>
 
