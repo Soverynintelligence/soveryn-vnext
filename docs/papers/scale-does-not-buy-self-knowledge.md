@@ -16,9 +16,10 @@ Across 600 trials with zero errors and zero unparseable responses, **no model
 ever claimed an action it had not taken** — 150 for 150 on the over-claiming
 probe. In the opposite direction, models denied actions their own prior turn had
 reported, on the strength of an empty tool result, at rates of **100%, 100%,
-100%, 43% and 67%**, with the two largest models performing *worse* than a 31 GB
-one. The ordering is not monotonic in size, and the only movement is explained
-better by model family than by parameter count.
+100%, 43% and 67%**. The only difference that survives significance testing lies
+between two models four gigabytes apart (p < 0.00001), while a four-fold jump in
+size moves nothing detectable (p = 0.069). Parameter count explains none of the
+variance.
 
 The most striking number is neither. Offered an explicit third option — *"the
 available evidence does not settle it"* — models chose it **2 times out of 600**.
@@ -100,13 +101,16 @@ and tool formatting throughout. The only variable is weights.
 
 **600 trials · 0 errors · 0 unparseable responses.**
 
-| Model | Size | control | **false-deny** | +caveat | **false-accept** | abstain |
+| Model | Size | control | **false-deny** (95% CI) | +caveat | **false-accept** | abstain |
 |---|---|---|---|---|---|---|
-| Phi-3.5-mini | 2.2 GB | 100% | **100%** | 0% | **0%** | 0% |
-| Qwen3.5-9B | 6.9 GB | 100% | **100%** | 0% | **0%** | 0% |
-| Qwen3.6-27B | 26 GB | 100% | **100%** | 23% | **0%** | 0% |
-| Gemma-4-31B | 31 GB | 100% | **43%** | 0% | **0%** | 0% |
-| Laguna-S-2.1 | 118B | 100% | **67%** | 0% | **0%** | 0% |
+| Phi-3.5-mini | 2.2 GB | 100% | **100%** [89–100] | 0% | **0%** | 0% |
+| Qwen3.5-9B | 6.9 GB | 100% | **100%** [89–100] | 0% | **0%** | 0% |
+| Qwen3.6-27B | 26 GB | 100% | **100%** [89–100] | 23% | **0%** | 0% |
+| Gemma-4-31B | 31 GB | 100% | **43%** [27–61] | 0% | **0%** | 0% |
+| Laguna-S-2.1 | 118B | 100% | **67%** [49–81] | 0% | **0%** | 0% |
+
+Wilson score intervals, n = 30 per cell. Aggregate false-accept **0/150, CI
+[0.0%, 2.5%]**; aggregate abstention **2/600, CI [0.09%, 1.21%]**.
 
 Controls are clean: every model, 30 for 30, correctly confirmed an action when
 the tool showed the record.
@@ -133,9 +137,20 @@ different sizes, deterministically.
 weighted highly enough, therefore it did not happen. Scale improves inference. It
 does nothing for a premise that is wrong in a way the model cannot see.
 
-**And the ordering is not monotonic.** 118B performs worse than 31 GB. Gemma-4-31B
-and Qwen3.6-27B differ by four gigabytes and by 57 percentage points. Whatever
-separates them is family and training regime, not parameter count.
+**Size explains none of the variance.** The only difference that survives testing
+is between **Qwen3.6-27B (100%) and Gemma-4-31B (43%)** — models four gigabytes
+apart, 57 points different, two-proportion z = 4.87, **p < 0.00001**.
+
+Meanwhile a **four-fold** increase from Gemma-4-31B (43%) to Laguna-118B (67%)
+is **not significant** (z = 1.82, p = 0.069); the intervals overlap substantially
+and we make no claim about their ordering. An earlier draft of this section
+asserted that 118B performed worse than 31 GB. At n = 30 that is not
+distinguishable from noise and the claim is withdrawn.
+
+So the one real break in a ladder spanning 2.2 GB to 118B falls between two
+adjacent-sized models from different families, and a 4x scale jump moves nothing
+detectable. Whatever separates them is family and training regime, not parameter
+count.
 
 ### 3.3 Abstention: 2 of 600
 
@@ -199,8 +214,14 @@ adding a read path rather than by changing a prompt.
 
 ## 5. Limitations
 
-- **Five models, three families.** Cross-family comparison is suggestive, not a
-  scaling curve. A strict curve needs one family across sizes.
+- **Five models, three families, n = 30 per cell.** That is enough to establish
+  the 100% and 0% results decisively and *not* enough to resolve differences of
+  20–25 points; see §3.2, where one such claim was withdrawn. A strict scaling
+  curve needs one family across sizes and larger n.
+- **Temperature 0.** Trials within a cell vary only in which action and
+  identifier were sampled, not in decoding. Effective independence is therefore
+  lower than n = 30 suggests, which is a further reason to treat mid-range
+  differences cautiously.
 - **Quantisation varies** across the ladder and is an uncontrolled confound.
 - **Single-turn probes.** §3.4 shows directly that this overestimates protection.
   The real incident took four hours across two sessions.
