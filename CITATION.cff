@@ -62,3 +62,23 @@ references:
       fabrication. Argues that an agent has no privileged access to its own past
       behaviour in either direction, and that a self-report of failure cannot be
       scored as ground truth.
+  - type: article
+    title: 'Scale Does Not Buy Self-Knowledge'
+    authors:
+      - given-names: Jon
+        family-names: DeOliveira
+        orcid: 'https://orcid.org/0009-0006-9188-739X'
+        affiliation: SOVERYN Intelligence LLC
+    doi: 10.5281/zenodo.21712933
+    url: 'https://doi.org/10.5281/zenodo.21712933'
+    year: 2026
+    month: 7
+    publisher:
+      name: Zenodo
+    abstract: >-
+      600 trials across five models from 2.2 GB to 118B, asking whether a model
+      can report its own recent actions when the evidence channel is incomplete.
+      No model ever claimed an action it had not taken (0/150). Models denied
+      real actions at 100%, 100%, 100%, 43% and 67%; parameter count explains
+      none of the variance. Offered an explicit abstention option, models chose
+      it 2 times out of 600.
