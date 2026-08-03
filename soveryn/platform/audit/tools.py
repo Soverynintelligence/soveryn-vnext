@@ -18,6 +18,9 @@ import sqlite3
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from pathlib import Path
+
+#: telemetry `source` written by ToolRegistry's default audit hook.
+TOOL_AUDIT_SOURCE = "platform.tools.registry"
 from typing import Any
 
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
@@ -28,16 +31,17 @@ MAX_WINDOW_MINUTES = 60 * 24      # one day
 MAX_RECORDS = 200
 
 AUDIT_COVERAGE_NOTE = (
-    "Coverage: this tool returns actions from the COORD board event log, "
-    "COORD read references, LIBRARY writes, and DELEGATION dispatches "
-    "(tasks you sent to Scotty, with their status) — every action you take "
-    "via your coordination tools and your library write tool is captured "
-    "here. NOT covered: lattice searches (search_lattice_by_*), file reads "
-    "(read_file / list_directory), library searches (search_library). "
-    "Those tools don't emit audit events. If you don't see an action you "
-    "took here, it may still have happened via an uncovered tool — defer "
-    "to this audit log only for what's in scope, and acknowledge uncertainty "
-    "for anything outside it."
+    "Coverage: EVERY tool call you make through the registry is recorded — "
+    "including searches, file reads and directory listings — plus the COORD "
+    "board event log, COORD read references, LIBRARY writes, and DELEGATION "
+    "dispatches with their status. "
+    "NOT covered: anything you did outside a tool call (reasoning, text you "
+    "wrote, decisions you narrated), and any window before 2026-05-31 when "
+    "tool auditing began. "
+    "If this returns 'audit.source_unavailable', the log could not be read "
+    "this query and an empty result means NOTHING — not that you took no "
+    "actions. Absence of a record is evidence only when the source was "
+    "readable and in scope."
 )
 
 
@@ -46,6 +50,7 @@ def build_recent_self_audit_tool(
     lattice_db_path: Path,
     owner_agent: str,
     delegation_db_path: Path | None = None,
+    telemetry_db_path: Path | None = None,
 ) -> ToolSpec:
     """Tool factory. Reads three audit tables in the lattice DB and unifies
     into a chronological timeline scoped to this agent."""
@@ -164,6 +169,64 @@ def build_recent_self_audit_tool(
                 # Never let an unreadable delegation DB break the audit.
                 pass
 
+        # ── tool-invocation audit ────────────────────────────────────────
+        # The registry has logged every mediated tool call since 2026-05-31 via
+        # its default audit hook — 17,436 rows at the time this was added. This
+        # tool never read them.
+        #
+        # That is the 2026-07-27 incident. Aetheria dispatched a task, reported
+        # it with its id, then queried recent_self_audit, got nothing, and
+        # concluded she had fabricated the work. The record existed:
+        #
+        #   2026-07-27T21:20:58  aetheria/dispatch_task  ok=True
+        #
+        # It sat in telemetry, written by the audit hook nineteen minutes after
+        # she reported the dispatch, in a store this tool did not query. Two
+        # papers were written about the confession; the evidence was on disk the
+        # whole time. See 10.5281/zenodo.21650072.
+        if telemetry_db_path is not None:
+            try:
+                with sqlite3.connect(
+                    f"file:{telemetry_db_path}?mode=ro", uri=True
+                ) as tcon:
+                    tcon.row_factory = sqlite3.Row
+                    for r in tcon.execute(
+                        "SELECT created_at, payload FROM telemetry "
+                        "WHERE source = ? AND created_at >= ? "
+                        "ORDER BY created_at DESC LIMIT 200",
+                        (TOOL_AUDIT_SOURCE, since),
+                    ).fetchall():
+                        try:
+                            payload = json.loads(r["payload"])
+                        except (TypeError, ValueError):
+                            continue
+                        if payload.get("agent") != owner_agent:
+                            continue
+                        actions.append({
+                            "kind": f"tool.{payload.get('tool_name', 'unknown')}",
+                            "timestamp": r["created_at"],
+                            "node_id": None,
+                            "details": {
+                                "tool": payload.get("tool_name"),
+                                "ok": payload.get("ok"),
+                                "error": payload.get("error"),
+                            },
+                        })
+            except sqlite3.Error:
+                # An unreadable telemetry store must not break the audit — but
+                # it MUST be visible, or absence reads as "no tool calls".
+                actions.append({
+                    "kind": "audit.source_unavailable",
+                    "timestamp": now.isoformat(),
+                    "node_id": None,
+                    "details": {
+                        "source": "tool_audit",
+                        "note": "tool-invocation log unreadable this query; "
+                                "absence of tool calls below is NOT evidence "
+                                "that none occurred",
+                    },
+                })
+
         # Sort unified timeline most-recent first; cap at MAX_RECORDS.
         actions.sort(key=lambda a: a["timestamp"], reverse=True)
         truncated = len(actions) > MAX_RECORDS
@@ -222,8 +285,10 @@ def register_audit_tools(
     lattice_db_path: Path,
     owner_agent: str,
     delegation_db_path: Path | None = None,
+    telemetry_db_path: Path | None = None,
 ) -> None:
     registry.register(build_recent_self_audit_tool(
         lattice_db_path=lattice_db_path, owner_agent=owner_agent,
         delegation_db_path=delegation_db_path,
+        telemetry_db_path=telemetry_db_path,
     ))

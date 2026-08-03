@@ -47,7 +47,12 @@ DEFAULT_COGNITION_URL = "http://127.0.0.1:8089"
 DEFAULT_TICK_SECONDS = 1800.0      # 30 min — no faster than the heartbeat
 DEFAULT_IDLE_SECONDS = 900.0       # 15 min — a real lull, not a typing pause
 DEFAULT_POLL_SECONDS = 300.0       # check the gate every 5 min, run at most per tick
-DEFAULT_TURN_LOOKBACK_HOURS = 6
+# Must comfortably exceed the idle threshold. The cycle only runs when the box
+# has been QUIET, so a lookback anchored near the idle window is self-defeating:
+# at 03:50 on 2026-08-03 it fired correctly and got turns=0, because "recent
+# activity" and "system is idle" exclude each other on a single-user machine.
+# 48h lets a 4am cycle reflect on yesterday evening.
+DEFAULT_TURN_LOOKBACK_HOURS = 48
 DEFAULT_MAX_TURNS = 40
 DEFAULT_TIMEOUT_SECONDS = 180
 

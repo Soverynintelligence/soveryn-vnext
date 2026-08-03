@@ -502,6 +502,11 @@ def create_app(
                     lattice_db_path=env.lattice_db,
                     owner_agent=agent_name,
                     delegation_db_path=env.data_root / "delegation.db",
+                    # The tool-invocation log. Present since 2026-05-31 and
+                    # never read by the self-audit tool — which is why the
+                    # 2026-07-27 dispatch looked fabricated to the agent that
+                    # made it. See platform/audit/tools.py.
+                    telemetry_db_path=env.data_root / "telemetry" / "telemetry.db",
                 )
 
         # Web tools (web_search + fetch_url) — Aetheria and Vett only.

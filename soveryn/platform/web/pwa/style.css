@@ -521,6 +521,12 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 .mc-card {
   background: var(--surface); border-radius: 12px; padding: 12px 14px;
   border: 1px solid var(--rule);
+  /* Grid and flex children default to min-width:auto, so they refuse to shrink
+     below their content and long values (GPU names, resident process paths,
+     heartbeat notes) push straight out of the card. Reported on iPad with a
+     hardware keyboard attached, 2026-08-03. */
+  min-width: 0;
+  overflow: hidden;
 }
 .mc-card-title {
   margin: 0 0 8px; font-family: var(--font-mono);
@@ -532,9 +538,18 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 .mc-stat {
   display: flex; justify-content: space-between; align-items: baseline;
   gap: 12px; padding: 3px 0;
+  min-width: 0;
 }
-.mc-stat-label { color: var(--muted); font-size: 13px; }
-.mc-stat-value { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
+.mc-stat-label {
+  color: var(--muted); font-size: 13px;
+  min-width: 0; flex: 1 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mc-stat-value {
+  font-family: var(--font-mono); font-size: 13px; color: var(--fg);
+  min-width: 0; flex: 0 1 auto; text-align: right;
+  overflow-wrap: break-word;   /* not `anywhere` — that shreds words when narrow */
+}
 .mc-stat-value.tone-hot  { color: var(--copper); }   /* 80C+ */
 .mc-stat-value.tone-bad  { color: var(--danger); }
 
@@ -549,11 +564,15 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 .mc-item:last-child { border-bottom: 0; }
 .mc-item-main {
   font-size: 13px; color: var(--fg);
+  min-width: 0; overflow-wrap: break-word;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
 .mc-item-meta { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
-.mc-note { margin: 0 0 6px; font-size: 14px; line-height: 1.55; color: var(--fg); }
+.mc-note {
+  margin: 0 0 6px; font-size: 14px; line-height: 1.55; color: var(--fg);
+  min-width: 0; overflow-wrap: break-word;
+}
 
 /* Loading placeholder. Pulses only if the viewer hasn't asked for less motion. */
 .mc-skel {
@@ -567,6 +586,13 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 
 /* ── iPad and up: tabs become a sidebar, cards become columns ────────────── */
 @media (min-width: 768px) {
+  /* The v1 shell boxes #app to 640px and centres it — correct for a phone,
+     wrong for a tablet. Left uncorrected it cost the sidebar layout its width:
+     the grid got ~400px inside the box, three columns became ~136px each, and
+     text broke one character per line ("emb edd ing s"). Screenshot 2026-08-03.
+     Release the box wherever the sidebar layout applies. */
+  #app { max-width: none; margin: 0; }
+
   #mc-tabbar {
     top: 0; right: auto; bottom: 0; width: var(--sidebar-w);
     flex-direction: column; justify-content: flex-start;
@@ -587,6 +613,7 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 
   .mc-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* minmax(0,…) not 1fr — 1fr is min-content-floored and overflows. */
     gap: 14px; padding: 16px;
   }
   .mc-card-wide { grid-column: 1 / -1; }
