@@ -64,6 +64,9 @@ def write_x_post_node(
         tags=("x", "post"),
         embedding=embed_fn(text),
         provenance={
+            # She posted it; the URL is the citation.
+            "cls": "witnessed",
+            "source": f"https://x.com/i/web/status/{posted_id}",
             "source_tweet": source_tweet,
             "posted_id": posted_id,
             "url": f"https://x.com/i/web/status/{posted_id}",

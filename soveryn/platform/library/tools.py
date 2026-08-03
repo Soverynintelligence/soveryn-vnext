@@ -62,6 +62,12 @@ def build_write_library_node_tool(
                 tags=tuple(tags_arg) if tags_arg else None,
                 embedding=_maybe_embed(content.strip()),
                 provenance={
+                    # cls + source are BOTH required by
+                    # _provenance_from_payload; without cls the entry parses to
+                    # None and falls to Channel B, unassertable. 1,045 nodes were
+                    # in that state until 2026-08-03 — real provenance the reader
+                    # could not read.
+                    "cls": "witnessed",
                     "source": "library_write",
                     "written_by": owner_agent,
                 },

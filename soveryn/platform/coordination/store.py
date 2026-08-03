@@ -719,6 +719,12 @@ def _row_to_coord_node(row: sqlite3.Row) -> CoordinationNode:
 
 def _provenance_for(node: CoordinationNode) -> dict:
     return {
+        # cls + source are both required by _provenance_from_payload; without
+        # them the entry parses to None and is unassertable regardless of how
+        # specific the rest of this payload is. The agent moved this node on a
+        # board — that is a witnessed act, and the board is the citation.
+        "cls": "witnessed",
+        "source": f"coordination:{node.board.value}",
         "board": node.board.value,
         "status": node.status.value,
         "owner": node.owner,

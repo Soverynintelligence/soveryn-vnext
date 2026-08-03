@@ -437,7 +437,8 @@ class HeartbeatDaemon:
                         agent="aetheria", content=note, node_type="reflection",
                         layer="private", tags=("heartbeat", "reflection"),
                         embedding=tuple(embed_text(note[:6000])),
-                        provenance={"source": "heartbeat", "pulse_id": tick_id,
+                        provenance={"cls": "witnessed",
+                                    "source": "heartbeat", "pulse_id": tick_id,
                                     "ts": now.isoformat()},
                     )
                 except Exception:

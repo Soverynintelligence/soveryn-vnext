@@ -36,7 +36,8 @@ def resolve_trigger(store: LatticeStore, *, agent: str, trigger_ref: str) -> str
         content=trigger_ref,
         node_type=TRIGGER_ANCHOR_TYPE,
         layer=LAYER_PRIVATE,
-        provenance={"kind": TRIGGER_ANCHOR_TYPE},
+        provenance={"cls": "witnessed", "source": TRIGGER_ANCHOR_TYPE,
+                    "kind": TRIGGER_ANCHOR_TYPE},
     )
 
 
@@ -60,6 +61,8 @@ def record_intent(
         layer=LAYER_PRIVATE,
         intent=intent.stance,
         provenance={
+            "cls": "witnessed",
+            "source": DELIBERATE_SHARE_TYPE,
             "kind": DELIBERATE_SHARE_TYPE,
             "why": intent.why,
             "stance": intent.stance,
