@@ -272,8 +272,13 @@ def chat(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
+    if server.chat_template_kwargs:
+        # Per-server template kwargs. Laguna on vLLM needs enable_thinking sent
+        # explicitly or its reasoning parser leaks a bare "</think>" into
+        # content — see ModelServer.chat_template_kwargs.
+        payload["chat_template_kwargs"] = dict(server.chat_template_kwargs)
 
-    url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
+    url = f"{server.base_url}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
 
     # llama-server emits OpenAI-compat: choices[0].message.{content,tool_calls}, finish_reason
@@ -356,8 +361,13 @@ def chat_stream(
         payload["tools"] = [dict(t) for t in request.tools]
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
+    if server.chat_template_kwargs:
+        # Per-server template kwargs. Laguna on vLLM needs enable_thinking sent
+        # explicitly or its reasoning parser leaks a bare "</think>" into
+        # content — see ModelServer.chat_template_kwargs.
+        payload["chat_template_kwargs"] = dict(server.chat_template_kwargs)
 
-    url = f"http://127.0.0.1:{server.port}/v1/chat/completions"
+    url = f"{server.base_url}/v1/chat/completions"
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -480,7 +490,7 @@ def embed(
         "input": list(request.input),
         "prompt": request.prompt,   # "document" (default) | "query" — Librarian asymmetric prefix
     }
-    url = f"http://127.0.0.1:{server.port}/v1/embeddings"
+    url = f"{server.base_url}/v1/embeddings"
     parsed = _post_json(url, payload, timeout, server.name)
 
     try:

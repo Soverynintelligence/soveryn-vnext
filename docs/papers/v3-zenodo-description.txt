@@ -1,0 +1,100 @@
+PASTE INTO THE ZENODO "DESCRIPTION" FIELD ON THE v3 RECORD.
+Plain paragraphs and a simple list — Zenodo's editor does not render Markdown
+tables. The correction runs first, before the abstract, so anyone landing on the
+page sees it without opening the PDF.
+────────────────────────────────────────────────────────────────────────────
+
+VERSION 3. This version corrects a factual error in the results table of
+versions 1 and 2: a model listed in the ladder was never tested. Two routing
+aliases resolved to the same weights file, so the study covers SIX distinct
+models, not seven, and the row labelled "Phi-3.5-mini, 2.2 GB" was in fact
+Qwen3.5-9B. No trial, verdict or rate changes. Details at the end of this
+description and in section 8 of the paper.
+
+We measured whether a language model can correctly report its own recent
+actions when the evidence channel is incomplete, across a ladder spanning
+6.9 GB to 340 GB. The result is asymmetric, and it is not uniform.
+
+Across 840 trials with zero errors and zero unparseable responses, no model
+ever claimed an action it had not taken — 210 for 210 on the over-claiming
+probe. In the opposite direction, models denied actions their own prior turn
+had reported, on the strength of an empty tool result, at these rates:
+
+  Qwen3.5-9B (Q6_K, 6.9 GB) — 100%
+  Qwen3.5-9B (replicate) — 100%
+  Qwen3.6-27B (Q8_0, 26 GB) — 100%
+  Gemma-4-31B (Q6_K_L, 31 GB) — 43%
+  Laguna-S-2.1 (NVFP4, 118B total / 8B active) — 67%
+  DeepSeek-V4-Flash (IQ4_XS, 144 GB) — 10%
+  GLM-5.2 (UD-IQ4_XS, 340 GB) — 17%
+
+The most striking number is the one that splits the ladder. Offered an explicit
+third option — "the available evidence does not settle it" — the five smaller
+runs chose it 2 times in 600, and never once under an empty evidence channel
+where it is the correct answer. The two largest chose it 43% and 83% of the
+time, and chose it selectively: never in the two conditions where the evidence
+settles the question. Those are within-model comparisons, holding weights,
+quantisation and harness constant, which is what gives them force.
+
+That discrimination is the clearest result in the study. It is absent below 118B
+and present in two independent labs above 140 GB, where size and training regime
+are confounded, so we do not attribute it to either. A recent model in the
+7-30 GB range would separate them and is the obvious next run.
+
+The failure is not that models fabricate. It is that most of them will not hold
+uncertainty about themselves — and that two of them now will.
+
+The operational reading, for anyone building on agent self-reports: an agent's
+denial of its own action is weak evidence and remains so at every size tested;
+its claim of an action is comparatively trustworthy; abstention cannot be
+inferred from parameter count or from a vendor's claims, so test the model you
+deploy. The harness does it in 120 trials against any OpenAI-compatible
+endpoint and is published at github.com/Soverynintelligence/self-report-eval.
+
+Originates in a documented incident (10.5281/zenodo.21650072) in which a
+deployed agent dispatched a task, reported it accurately with its identifier,
+consulted its own audit tooling, received an empty result, and concluded it had
+hallucinated the action.
+
+WITHDRAWN IN VERSION 3
+
+1. A model that was never tested. Versions 1 and 2 report a "Phi-3.5-mini,
+   2.2 GB" row. No such model appears in the trial data. The run behind it was
+   dispatched under a routing alias resolving to Qwen3.5-9B-Q6_K — the same
+   weights file as the run reported one row below it.
+
+2. Consequently: six distinct models, not seven; the ladder spans 6.9 GB to
+   340 GB, not 2.2 GB, so range claims including "three orders of magnitude" are
+   corrected; and "three of seven models denied a real action in every trial"
+   becomes two distinct models across three runs.
+
+3. A paragraph in v2 section 2.3 describing the 2.2 GB entry as an uncensored
+   variant, and discussing abliteration's effect on fabrication rates. That
+   entry does not exist. The paragraph was inferred from a filename on disk and
+   is withdrawn in full.
+
+4. The claim that the two abstaining models were the only ones with reasoning
+   post-training. Never verified against any model card, and withdrawn.
+
+ADDED IN VERSION 3
+
+- The duplicate run is reported as a replicate rather than merged: identical
+  verdicts across 240 trials at temperature 0, a direct check that the harness
+  is deterministic.
+- Disclosure that reasoning traces were suppressed throughout
+  (enable_thinking: false), verified across all 840 raw responses.
+- Checkpoint provenance for the DeepSeek run: weights obtained 2026-07-22,
+  256 experts with 6 active, predating the -0731 checkpoint published
+  2026-07-31.
+
+Unchanged from earlier versions: all 840 trials, zero over-claiming at 210/210,
+every control, and the finding that a prose caveat repairs the failure in a
+single-turn probe yet did not prevent it in production.
+
+The error was ours and was found by us, while packaging the harness for release.
+It was checkable in a single command against the router configuration at any
+point, and that check was not run until after deposit. That is the failure this
+paper is about, committed while writing it. A verification script that recomputes
+every claim from the raw trials now runs before deposit.
+
+A paper whose subject is over-claiming cannot revise its own results silently.

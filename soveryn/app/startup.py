@@ -166,6 +166,31 @@ def create_app(
                 embed_fn=_default_embed,
             )
 
+            # Vett and Scotty get the SAME lattice search Aetheria has.
+            #
+            # Until 2026-08-02 their only memory tool was `search_library`,
+            # which filters to layer_filter="library" — 55 nodes of 2,709. Of
+            # Vett's own 86 memories it reached 19. Every search returned
+            # nothing, so she concluded she had no memory at all and told Jon
+            # so. An instrument that cannot see is indistinguishable, from the
+            # inside, from a thing that is not there — which is the finding the
+            # honesty papers document, occurring in our own fleet.
+            #
+            # The agent argument controls visibility: own nodes across every
+            # layer, plus other agents' non-private nodes (fixed 2026-06-17).
+            from soveryn.agents.aetheria.tools.search import (
+                build_search_by_embedding_tool,
+                build_search_by_keywords_tool,
+            )
+            for _agent in ("vett", "scotty"):
+                tool_registry.register(build_search_by_embedding_tool(
+                    store=recall_lattice, embed_fn=_default_embed,
+                    owner_agent=_agent,
+                ))
+                tool_registry.register(build_search_by_keywords_tool(
+                    store=recall_lattice, owner_agent=_agent,
+                ))
+
         # Personal-file browser — bounded read access to Jon's content
         # directories (~/Pictures, ~/Desktop, ~/Documents, ~/Downloads).
         # Surfaced during signal-images T8 verification when Aetheria
@@ -490,6 +515,17 @@ def create_app(
         searxng_url = os.environ.get(
             "SOVERYN_SEARXNG_URL", "http://127.0.0.1:8095/",
         )
+        # spark_status — let the agents read the host they run on. Vett and
+        # Scotty execute on the Spark as of 2026-08-02 and had no way to observe
+        # it; every fact about their own machine reached them through Jon.
+        # Aetheria is included because the Spark's health is fleet state she
+        # reasons about. Read-only.
+        from soveryn.platform.inference.spark_status_tool import (
+            register_spark_status_tool,
+        )
+        for agent_name in ("aetheria", "vett", "scotty"):
+            register_spark_status_tool(tool_registry, owner_agent=agent_name)
+
         from soveryn.platform.web import register_web_tools
         for agent_name in ("aetheria", "vett"):
             register_web_tools(
@@ -1304,6 +1340,44 @@ def _register_blueprints(app: Flask) -> None:
         conv_store=ext["conv_store"],
         agent_loops=ext["agent_loops"],
     ))
+    # ── mobile app API ────────────────────────────────────────────────────
+    # /m/api/* — device-bearer auth, read-only. Mounted under the app's own
+    # prefix so it inherits the gate bypass the messenger already has
+    # (public_gate._self_authed_path). /api/* keeps its basic auth for the
+    # desktop; nothing here widens the public surface by configuration.
+    #
+    # Providers call the DESKTOP view functions and unwrap their JSON, so there
+    # is one implementation of every read and the phone cannot drift into
+    # showing different numbers from Mission Control.
+    from soveryn.app.routes.mobile_api import register_mobile_api
+    from soveryn.app.routes import api_system as _sys
+    from soveryn.app.routes import api_heartbeat as _hb
+    from soveryn.app.routes import api_cognition as _cog
+    from soveryn.app.routes import delegation as _dele
+
+    def _unwrap(view_fn):
+        def provider():
+            out = view_fn()
+            if isinstance(out, tuple):
+                out = out[0]
+            return out.get_json() if hasattr(out, "get_json") else out
+        return provider
+
+    register_mobile_api(
+        app,
+        messenger_store=ext["messenger_store"],
+        providers={
+            "system/gpu":            _unwrap(_sys.api_system_gpu),
+            "system/rig":            _unwrap(_sys.api_system_rig),
+            "system/spark":          _unwrap(_sys.api_system_spark),
+            "system/daemons":        _unwrap(_sys.api_system_daemons),
+            "delegation/pending":    _unwrap(_dele.delegation_pending),
+            "heartbeat/recent":      _unwrap(_hb.api_heartbeat_recent),
+            "cognition/note":        _unwrap(_cog.api_cognition_note),
+            "cognition/reflections": _unwrap(_cog.api_cognition_reflections),
+        },
+    )
+
     from soveryn.app.routes.api_steward import bp as api_steward_bp
     app.register_blueprint(api_steward_bp)
     from soveryn.app.routes.documents import bp as documents_bp

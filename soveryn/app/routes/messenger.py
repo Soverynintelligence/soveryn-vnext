@@ -104,7 +104,8 @@ def build_messenger_blueprint(
     @bp.route("/pair/<code>", methods=["POST"])
     def pair_claim(code: str):
         body = request.get_json(silent=True) or {}
-        device_label = body.get("device_label", "unknown device")
+        # Fallback only — claim_pairing_token prefers the minted label.
+        device_label = body.get("device_label") or None
         try:
             device = claim_pairing_token(
                 messenger_store, code=code, device_label=device_label,

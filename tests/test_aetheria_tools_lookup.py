@@ -59,7 +59,9 @@ def test_get_node_returns_channel_b_count_only(node_ids) -> None:
 
     assert result["stateable"] == []
     assert result["uncertain_count_by_class"] == {"legacy": 1}
-    assert "LOOKUP LEAK CANARY" not in repr(result)
+    # Channel B content is returned since 2026-08-03 — the guarantee is
+    # that it never reaches `stateable`, not that it is absent entirely.
+    assert "LOOKUP LEAK CANARY" not in repr(result["stateable"])
 
 
 def test_get_node_not_found_returns_flag(node_ids) -> None:

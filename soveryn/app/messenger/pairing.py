@@ -75,9 +75,17 @@ def claim_pairing_token(
     store: MessengerStore,
     *,
     code: str,
-    device_label: str,
+    device_label: str | None = None,
 ) -> PairedDevice:
-    """Atomically claim a token + mint a device secret."""
+    """Atomically claim a token + mint a device secret.
+
+    The client's label wins when it sends one — the device knows what it is.
+    When it sends nothing, the label typed at mint time is used instead of the
+    old "unknown device" placeholder, which was stored on the token and then
+    discarded. That placeholder is why the device list read "Phone" or
+    "unknown device" for every row, and why three superseded pairings sat
+    active for six weeks looking identical to the live one.
+    """
     with store._conn() as con:
         row = con.execute(
             "SELECT * FROM m_pairing_tokens WHERE token=?", (code,),
@@ -89,6 +97,10 @@ def claim_pairing_token(
         if row["expires_at"] < _now_iso():
             raise PairingError(f"pairing code {code!r} expired at {row['expires_at']}")
 
+        # Client label first (it knows the hardware), minted label second,
+        # generic last. Never a placeholder that makes rows indistinguishable.
+        label = (device_label or "").strip() or (row["label"] or "").strip() or "device"
+
         device_id = str(uuid.uuid4())
         secret = secrets.token_urlsafe(32)
         salt = os.urandom(16).hex()
@@ -99,11 +111,11 @@ def claim_pairing_token(
         con.execute(
             "INSERT INTO m_devices (device_id, secret_hash, label, created_at) "
             "VALUES (?, ?, ?, ?)",
-            (device_id, stored, device_label, now),
+            (device_id, stored, label, now),
         )
         con.execute(
             "UPDATE m_pairing_tokens SET claimed_by=?, claimed_at=? WHERE token=?",
             (device_id, now, code),
         )
 
-    return PairedDevice(device_id=device_id, secret=secret, label=device_label)
+    return PairedDevice(device_id=device_id, secret=secret, label=label)

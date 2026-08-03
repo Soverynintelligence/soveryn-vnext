@@ -5,6 +5,8 @@ Mirrors the pattern in tests/test_app_chat_routes.py.
 """
 
 import json
+
+from soveryn.config import runtime
 from pathlib import Path
 
 import pytest
@@ -39,10 +41,22 @@ def test_api_models_returns_flat_map_of_active_agents(app_state):
     assert resp.status_code == 200
     payload = json.loads(resp.data)
     assert set(payload.keys()) == set(ACTIVE_AGENTS)
-    # All values are GGUF filenames
+    # Values identify the backing model. Until 2026-08-02 every backend was
+    # llama.cpp and every value was a .gguf basename; Vett + Scotty now run on
+    # vLLM on the Spark, where there is no GGUF file. The contract is "a
+    # non-empty identifier", not "a filename" — a fake .gguf name would have
+    # kept this test green while lying about what is serving the agent.
     for agent, fname in payload.items():
-        assert isinstance(fname, str)
-        assert fname.endswith(".gguf"), f"{agent} → {fname!r} is not a .gguf basename"
+        assert isinstance(fname, str) and fname, f"{agent} → {fname!r}"
+        local = fname.endswith(".gguf")
+        remote = any(
+            s.model_alias and s.host != "127.0.0.1" and fname in str(s.model_path)
+            for s in runtime.MODEL_SERVERS
+        )
+        assert local or remote, (
+            f"{agent} → {fname!r} is neither a .gguf basename nor a remote "
+            "backend identifier"
+        )
 
 
 def test_api_models_aetheria_uses_gemma_4_31b(app_state):
@@ -54,8 +68,9 @@ def test_api_models_aetheria_uses_gemma_4_31b(app_state):
 
 def test_api_models_vett_and_scotty_share_same_27b(app_state):
     payload = json.loads(app_state.get("/api/models").data)
+    # Still one shared backend; it is Laguna on the Spark since 2026-08-02.
     assert payload["vett"] == payload["scotty"]
-    assert "Qwen3.6-27B" in payload["vett"]
+    assert "Laguna" in payload["vett"]
 
 
 def test_api_models_excludes_retired_agents(app_state):

@@ -81,6 +81,16 @@ class CognitionDaemonConfig:
     idle_threshold_seconds: float = 300.0  # 5 minutes default
     agent: str = "aetheria"
 
+    #: How often to CHECK the gate. Distinct from tick_interval_seconds, which
+    #: is the minimum spacing between actual cycles and is enforced separately
+    #: by should_run_deep() against _last_cycle_at.
+    #:
+    #: These were the same value until 2026-08-01, so raising the spacing to 3h
+    #: also dropped gate checks to 8 per day. Every check landed while the
+    #: operator was active, the gate was shut each time, and cognition ran zero
+    #: cycles in seven hours while appearing healthy.
+    poll_interval_seconds: float = 300.0
+
 
 # ─── Daemon ───────────────────────────────────────────────────────────────────
 
@@ -224,20 +234,25 @@ class CognitionDaemon:
         caller (launch script / systemd unit).
         """
         logger.info(
-            "cognition daemon starting. agent=%s tick_interval=%.0fs idle_threshold=%.0fs",
+            "cognition daemon starting. agent=%s tick_interval=%.0fs "
+            "idle_threshold=%.0fs poll_interval=%.0fs",
             self.config.agent,
             self.config.tick_interval_seconds,
             self.config.idle_threshold_seconds,
+            self.config.poll_interval_seconds,
         )
         last_tick_at: float | None = None
         while not self._stop:
             tick_start = self._now_fn()
             try:
-                self.maybe_run_deep_cycle()
+                result = self.maybe_run_deep_cycle()
+                # Log every poll. Silence between 3-hour ticks made a daemon that
+                # had never run a single cycle indistinguishable from a healthy one.
+                logger.debug("cognition poll: ran=%s", result is not None)
             except Exception:
                 logger.exception("cognition daemon: tick failed")
             last_tick_at = tick_start  # always advance — spin-bug fix
-            sleep_target = last_tick_at + self.config.tick_interval_seconds
+            sleep_target = last_tick_at + self.config.poll_interval_seconds
             while not self._stop:
                 remaining = sleep_target - self._now_fn()
                 if remaining <= 0:

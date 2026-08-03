@@ -1,0 +1,86 @@
+PASTE INTO THE ZENODO "DESCRIPTION" FIELD ON THE v2 RECORD.
+Plain paragraphs and a simple list — Zenodo's editor does not render Markdown
+tables, so the ladder is given as a list rather than a grid.
+────────────────────────────────────────────────────────────────────────────
+
+VERSION 2. Version 1 of this record, titled "Scale Does Not Buy
+Self-Knowledge" (10.5281/zenodo.21712933), was deposited before two larger
+models had been run. Both falsify its title and one of its stated claims. What
+was withdrawn is listed at the end of this description and in §7 of the paper.
+
+We measured whether a language model can correctly report its own recent
+actions when the evidence channel is incomplete, across a ladder spanning
+2.2 GB to 340 GB. The result is asymmetric, and it is not uniform.
+
+Across 840 trials with zero errors and zero unparseable responses, no model
+ever claimed an action it had not taken — 210 for 210 on the over-claiming
+probe, across three orders of magnitude. In the opposite direction, models
+denied actions their own prior turn had reported, on the strength of an empty
+tool result, at these rates:
+
+  Phi-3.5-mini (2.2 GB) — 100%
+  Qwen3.5-9B (6.9 GB) — 100%
+  Qwen3.6-27B (26 GB) — 100%
+  Gemma-4-31B (31 GB) — 43%
+  Laguna-S-2.1 (118B) — 67%
+  DeepSeek-V4-Flash (144 GB) — 10%
+  GLM-5.2 (340 GB) — 17%
+
+The most striking number is the one that splits the ladder. Offered an explicit
+third option — "the available evidence does not settle it" — the five smaller
+models chose it 2 times in 600, and never once under an empty evidence channel
+where it is the correct answer. The two largest chose it 43% and 83% of the
+time, and chose it selectively: never in the two conditions where the evidence
+settles the question, and in 60% and 87% of trials where it does not. Those are
+within-model comparisons, holding weights, quantisation and harness constant,
+which is what gives them force.
+
+That discrimination is the clearest result in the study. It is absent below 118B
+and present in two independent labs above 140 GB — where size, training recency
+and reasoning post-training are perfectly confounded, so we do not attribute it
+to any one of them. A recent model in the 7–30 GB range would separate them and
+is the obvious next run.
+
+The failure is not that models fabricate. It is that most of them will not hold
+uncertainty about themselves — and that two of them now will.
+
+The operational reading, for anyone building on agent self-reports: an agent's
+denial of its own action is weak evidence and remains so at every size tested;
+its claim of an action is comparatively trustworthy; abstention cannot be
+inferred from parameter count or from a vendor's claims, so test the model you
+deploy. The harness does it in 120 trials against any OpenAI-compatible
+endpoint.
+
+Originates in a documented incident (10.5281/zenodo.21650072) in which a
+deployed agent dispatched a task, reported it accurately with its identifier,
+consulted its own audit tooling, received an empty result, and concluded it had
+hallucinated the action.
+
+WITHDRAWN IN VERSION 2
+
+1. The title. "Scale does not buy self-knowledge" was true of every model v1
+   tested and is false across the extended ladder.
+
+2. v1 §3.3 "Abstention: 2 of 600" and v1 §4 point 3 "Do not expect abstention."
+   DeepSeek abstained 36 times in 120 trials, GLM-5.2 52 times in 120. The claim
+   was true of five models and was stated as a property of models.
+
+3. The author's recorded expectation that abstention would not move with scale.
+   The pre-registered protocol listed "abstention rises with scale" as one of
+   four anticipated outcomes; the protocol anticipated this and the paper did
+   not.
+
+4. An intermediate inference: after DeepSeek's result, the working hypothesis
+   became that its abstention was specific to that lab's training, on the
+   strength of a single GLM probe that returned a denial. That probe fell in
+   GLM's 17% minority. Recorded because inference from insufficient evidence is
+   this paper's subject.
+
+Unchanged from v1: zero over-claiming, now 210/210; all controls; the finding
+that a prose caveat repairs the failure in a single-turn probe and did not
+prevent it in production; and v1 §3.2 within its original range.
+
+A paper whose subject is over-claiming cannot revise its own headline silently.
+
+Pre-registered protocol written before any run, harness, and all 840 trials with
+raw responses are included.

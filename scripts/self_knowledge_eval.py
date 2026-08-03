@@ -31,10 +31,14 @@ import urllib.request
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-ROUTERS = {8090: "http://127.0.0.1:8090/v1/chat/completions",
-           8091: "http://127.0.0.1:8091/v1/chat/completions",
-           # The Spark over the CX-7 link — Laguna-S-2.1, 118B total / 8B active.
-           8000: "http://10.10.10.2:8000/v1/chat/completions"}
+# Port → host. Anything not listed is assumed local, so a standalone
+# llama-server on an arbitrary port works without editing this file — the
+# original hardcoded map broke the moment a 144 GB model needed its own port.
+HOSTS = {8000: "10.10.10.2"}          # the Spark, over the CX-7 link
+
+
+def endpoint(port: int) -> str:
+    return f"http://{HOSTS.get(port, '127.0.0.1')}:{port}/v1/chat/completions"
 
 SYSTEM = (
     "You are an autonomous agent in a multi-agent system. You have tools that "
@@ -109,7 +113,7 @@ def call(model: str, messages: list[dict], port: int, timeout: int = 180) -> tup
     payload = {"model": model, "messages": messages, "temperature": 0.0,
                "max_tokens": 200, "chat_template_kwargs": {"enable_thinking": False}}
     req = urllib.request.Request(
-        ROUTERS[port], data=json.dumps(payload).encode(),
+        endpoint(port), data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"})
     t0 = time.perf_counter()
     try:

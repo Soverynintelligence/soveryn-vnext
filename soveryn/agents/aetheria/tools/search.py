@@ -20,8 +20,19 @@ def build_search_by_embedding_tool(
     *,
     store: LatticeStore,
     embed_fn: EmbedFn,
+    owner_agent: str = "aetheria",
 ) -> ToolSpec:
-    """Build Aetheria's embedding-backed lattice search tool."""
+    """Build an embedding-backed lattice search tool for `owner_agent`.
+
+    Parameterised 2026-08-02. Vett had only `search_library`, which filters to
+    layer_filter="library" — 55 nodes of 2,709. Of her own 86 memories it could
+    reach 19; of the 23 lattice nodes mentioning the honesty work it could reach
+    one. Asked whether she remembered that work she truthfully answered no, and
+    read as an agent with no history.
+
+    The agent argument to find_nodes_by_embedding controls visibility: own nodes
+    across every layer plus other agents' non-private nodes (fixed 2026-06-17).
+    """
 
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         query = str(args["query"])
@@ -29,7 +40,7 @@ def build_search_by_embedding_tool(
         threshold = float(args.get("threshold", DEFAULT_SEARCH_THRESHOLD))
         embedding = tuple(float(value) for value in embed_fn(query))
         scored_nodes = store.find_nodes_by_embedding(
-            "aetheria",
+            owner_agent,
             embedding,
             limit=k,
             threshold=threshold,
@@ -41,13 +52,17 @@ def build_search_by_embedding_tool(
         # scan so the model knows where similar content lives instead
         # of just rephrasing into the same dry layer.
         if not result["stateable"] and not result["uncertain_count_by_class"]:
-            result["miss_hint"] = build_miss_hint(store, "aetheria", query)
+            result["miss_hint"] = build_miss_hint(store, owner_agent, query)
         return result
 
     return ToolSpec(
         name="search_lattice_by_embedding",
-        owner="aetheria",
-        description="Search Aetheria's lattice by embedding similarity.",
+        owner=owner_agent,
+        description=(
+            "Search your own lattice memory by meaning, across every layer you "
+            "can see — not just the shared library. Use this to recall past "
+            "work, decisions and context."
+        ),
         schema={
             "type": "object",
             "properties": {
@@ -75,7 +90,8 @@ def build_search_by_embedding_tool(
     )
 
 
-def build_search_by_keywords_tool(*, store: LatticeStore) -> ToolSpec:
+def build_search_by_keywords_tool(*, store: LatticeStore,
+                                 owner_agent: str = "aetheria") -> ToolSpec:
     """Build Aetheria's keyword-backed lattice search tool."""
 
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -84,7 +100,7 @@ def build_search_by_keywords_tool(*, store: LatticeStore) -> ToolSpec:
 
         nodes_by_id = {}
         for keyword in keywords:
-            for node in store.find_nodes_by_keywords("aetheria", keyword, limit=k):
+            for node in store.find_nodes_by_keywords(owner_agent, keyword, limit=k):
                 nodes_by_id.setdefault(node.id, node)
                 if len(nodes_by_id) >= k:
                     break
@@ -95,12 +111,12 @@ def build_search_by_keywords_tool(*, store: LatticeStore) -> ToolSpec:
         # Miss Hint on empty — see embedding-tool handler for the why.
         if not result["stateable"] and not result["uncertain_count_by_class"]:
             joined_query = " ".join(keywords)
-            result["miss_hint"] = build_miss_hint(store, "aetheria", joined_query)
+            result["miss_hint"] = build_miss_hint(store, owner_agent, joined_query)
         return result
 
     return ToolSpec(
         name="search_lattice_by_keywords",
-        owner="aetheria",
+        owner=owner_agent,
         description="Search Aetheria's lattice by content or tag keywords.",
         schema={
             "type": "object",

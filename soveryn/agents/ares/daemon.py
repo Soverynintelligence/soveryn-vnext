@@ -66,9 +66,38 @@ class AresDaemonSurface:
     def scan_once(self) -> tuple[AresFinding, ...]:
         """Run one collector pass and route lifecycle transitions."""
 
+        # A collector that RAISES has not observed "all clear" — it has observed
+        # nothing. FindingTracker.update() clears every finding absent from the
+        # list it is given, so folding a failed collector in as zero findings
+        # marks live problems resolved.
+        #
+        # Seen 2026-08-02: gpu.headroom on a card sitting under 1 GB free flipped
+        # active -> cleared every ~36 minutes with IDENTICAL evidence, paging
+        # Signal each time while Mission Control (which shows active findings
+        # only) stayed empty. _read_gpu_headroom_rows() returns [] whenever
+        # nvidia-smi exits non-zero, so one failed probe read as "every card is
+        # healthy". Absence of evidence recorded as evidence of absence.
+        #
+        # If any collector fails we skip the tracker update entirely rather than
+        # draw conclusions from a partial scan. Nothing clears, nothing is newly
+        # raised, and the next good scan resolves it.
         findings: list[AresFinding] = []
+        failed: list[str] = []
         for collector in self.collectors:
-            findings.extend(tuple(collector()))
+            name = getattr(collector, "__name__", repr(collector))
+            try:
+                findings.extend(tuple(collector()))
+            except Exception:
+                logger.exception("ares collector %s failed; scan is incomplete", name)
+                failed.append(name)
+
+        if failed:
+            logger.warning(
+                "ares scan INCOMPLETE — %d collector(s) failed (%s). "
+                "Skipping lifecycle update so nothing is falsely cleared.",
+                len(failed), ", ".join(failed),
+            )
+            return tuple(findings)
 
         result = self.tracker.update(tuple(findings))
         # Audit trail: log lifecycle transitions only (not every scan), at a

@@ -17,13 +17,13 @@ def test_aetheria_routes_to_aetheria_primary():
 def test_vett_routes_to_shared_server():
     server = route_for_agent("vett")
     assert server.name == "vett_scotty_shared"
-    assert server.model_alias == "vett-scotty"
+    assert server.model_alias == "laguna"  # Spark; see runtime.py
 
 
 def test_scotty_routes_to_shared_server():
     server = route_for_agent("scotty")
     assert server.name == "vett_scotty_shared"
-    assert server.model_alias == "vett-scotty"
+    assert server.model_alias == "laguna"  # Spark; see runtime.py
 
 
 def test_name_is_lowercased_and_stripped():

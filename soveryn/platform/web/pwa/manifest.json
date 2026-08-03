@@ -1,13 +1,13 @@
 {
   "name": "SOVERYN",
   "short_name": "SOVERYN",
-  "description": "Direct line to Aetheria, Vett, and Scotty.",
+  "description": "Mission Control and the team \u2014 Aetheria, Vett, Scotty.",
   "start_url": "/m/",
   "scope": "/m/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0a0a0a",
+  "orientation": "any",
+  "background_color": "#0f1011",
+  "theme_color": "#0f1011",
   "icons": [
     {
       "src": "/m/pwa/icons/icon-192.png",

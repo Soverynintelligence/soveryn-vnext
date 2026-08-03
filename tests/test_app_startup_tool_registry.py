@@ -189,9 +189,25 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     fake_pinned,
     recall_lattice,
 ) -> None:
-    """Vett and Scotty must NOT see Aetheria-owned lattice tools (no capability
-    leakage across agents through the shared registry), but they DO get the
-    Coordination Board tools per the boards phase (vnext 2026-06-01)."""
+    """Vett and Scotty get their OWN lattice search; they never see Aetheria's
+    private memory.
+
+    Until 2026-08-02 this test asserted they had no lattice search at all, to
+    prevent "capability leakage across agents through the shared registry".
+    The effect was amnesia: Vett's only memory tool was `search_library`
+    (layer_filter="library" — 55 nodes of 2,709; 19 of her own 86). Every
+    search returned nothing, so she told Jon she had no memory and no lattice.
+
+    Leakage is prevented at the STORE, not by withholding the tool:
+    find_nodes_by_* takes the calling agent and returns that agent's own nodes
+    across every layer plus other agents' NON-PRIVATE nodes (2026-06-17).
+    Verified live 2026-08-02 — searching a term drawn from an Aetheria private
+    node returned 12 private rows for Aetheria and 0 for Vett.
+
+    So the assertion changes from "they must not have the tool" to "they have
+    their own tool and it cannot reach anyone else's private layer", which is
+    the property that was actually wanted.
+    """
     _configure_startup_env(
         monkeypatch,
         fake_souls_dir=fake_souls_dir,
@@ -200,11 +216,15 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
 
+    # Still Aetheria-only: whole-node fetch and the recent-entries feed.
     aetheria_lattice_tools = {
-        "search_lattice_by_embedding",
-        "search_lattice_by_keywords",
         "get_lattice_node",
         "recent_lattice_entries",
+    }
+    # Owner-scoped search every agent now gets.
+    shared_lattice_search = {
+        "search_lattice_by_embedding",
+        "search_lattice_by_keywords",
     }
     coord_tools = {
         "read_coordination_nodes",

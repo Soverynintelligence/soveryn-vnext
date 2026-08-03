@@ -39,7 +39,7 @@ class HealthResult:
 
 def check_llama_server(server: ModelServer, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> HealthResult:
     """HTTP GET http://127.0.0.1:<port>/health — llama-server exposes this."""
-    url = f"http://127.0.0.1:{server.port}/health"
+    url = f"{server.base_url}/health"
     started = time.monotonic()
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:

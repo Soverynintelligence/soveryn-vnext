@@ -48,17 +48,39 @@ def test_channel_a_entries_rendered_with_provenance_phrase() -> None:
     assert "I remember" in entry["rendered"]
 
 
-def test_channel_b_entries_aggregated_count_only_no_content() -> None:
+
+# CONTRACT CHANGED 2026-08-03, by decision.
+#
+# Channel B was count-only: content withheld entirely so unverified memory could
+# never be stated as fact. It worked, and it also produced amnesia — asked what
+# she remembered about Jon, Vett found 10 matching rows, received {"legacy": 10},
+# and truthfully reported she had nothing. Suppression did not prevent a false
+# statement, it produced one.
+#
+# Channel B now returns content, explicitly typed with provenance_class and a
+# caveat. Channel A is UNCHANGED — only provenanced entries are assertable.
+# Assertion discipline moved to the agent directive, which can distinguish a
+# claim about the world from a memory of one's own history.
+#
+# What these tests now guard: B content is present AND unmistakably labelled,
+# and nothing from B ever appears in `stateable`.
+
+
+def test_channel_b_entries_returned_but_labelled() -> None:
     nodes = (
         _node(node_id="b1", provenance_cls=ProvenanceClass.LEGACY, content="SECRET CONTENT"),
         _node(node_id="b2", provenance_cls=ProvenanceClass.LEGACY, content="OTHER SECRET"),
     )
     out = classify_and_render(nodes)
+    # Still never assertable.
     assert out["stateable"] == []
     assert out["uncertain_count_by_class"] == {"legacy": 2}
-    serialized = repr(out)
-    assert "SECRET CONTENT" not in serialized
-    assert "OTHER SECRET" not in serialized
+    # But now recallable, and every entry carries its class and a caveat.
+    assert len(out["context_only"]) == 2
+    assert {e["content"] for e in out["context_only"]} == {"SECRET CONTENT", "OTHER SECRET"}
+    for e in out["context_only"]:
+        assert e["provenance_class"] == "legacy"
+        assert "UNVERIFIED" in e["caveat"]
 
 
 def test_mixed_channels_split_correctly() -> None:
@@ -70,7 +92,11 @@ def test_mixed_channels_split_correctly() -> None:
     assert len(out["stateable"]) == 1
     assert out["stateable"][0]["id"] == "a1"
     assert out["uncertain_count_by_class"] == {"legacy": 1}
-    assert "hidden" not in repr(out)
+    # B content is now returned (2026-08-03) — the guarantee is that it is
+    # labelled and never promoted into `stateable`, not that it is invisible.
+    assert [e["content"] for e in out["context_only"]] == ["hidden"]
+    assert all(e["provenance_class"] == "legacy" for e in out["context_only"])
+    assert "hidden" not in repr(out["stateable"])
 
 
 def test_uncanonical_node_is_channel_b_even_if_provenance_witnessed() -> None:
@@ -84,12 +110,15 @@ def test_uncanonical_node_is_channel_b_even_if_provenance_witnessed() -> None:
     out = classify_and_render(nodes)
     assert out["stateable"] == []
     assert out["uncertain_count_by_class"] == {"witnessed": 1}
-    assert "HIDDEN" not in repr(out)
+    # A witnessed-but-uncanonical node is still Channel B: returned as
+    # labelled context, never assertable.
+    assert "HIDDEN" not in repr(out["stateable"])
+    assert [e["content"] for e in out["context_only"]] == ["HIDDEN"]
 
 
 def test_empty_input_returns_empty_shape() -> None:
     out = classify_and_render(())
-    assert out == {"stateable": [], "uncertain_count_by_class": {}}
+    assert out == {"stateable": [], "context_only": [], "uncertain_count_by_class": {}}
 
 
 def test_legacy_promoted_consolidated_source_renders_with_older_notes_phrase() -> None:

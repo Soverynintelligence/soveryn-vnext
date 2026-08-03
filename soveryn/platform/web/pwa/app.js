@@ -204,6 +204,12 @@ async function renderTop(direction) {
   const view = currentView();
   if (!view) return;
 
+  // control.js hooks here to show/hide the tab bar. Optional by design: the
+  // messenger must keep working if control.js fails to load or is removed.
+  if (typeof window.__mcOnViewChange === 'function') {
+    try { window.__mcOnViewChange(view); } catch (e) { console.error(e); }
+  }
+
   // Build the new view DOM in detached form, then mount it.
   const $new = document.createElement('section');
   $new.className = 'view ' + (view.kind === 'thread' ? 'view-thread' : '');
@@ -278,6 +284,8 @@ async function renderPairingView($view) {
       <h1>SOVERYN</h1>
       <p>Not paired. Open localhost:5001/m/pair on the workstation, mint a code, paste it here:</p>
       <input id="pair-code" class="pairing-input" placeholder="ABCD-EFGH-1234">
+      <input id="pair-label" class="pairing-input" style="margin-top:10px"
+             placeholder="Name this device (optional)" autocapitalize="words">
       <div style="margin-top:16px">
         <button class="btn" id="pair-submit">Claim</button>
       </div>
@@ -285,10 +293,16 @@ async function renderPairingView($view) {
   `;
   $view.querySelector('#pair-submit').onclick = async () => {
     const code = $view.querySelector('#pair-code').value.trim();
+    const $lbl = $view.querySelector('#pair-label');
+    const _pairLabel = (($lbl && $lbl.value) || '').trim();
     const r = await fetch(`/m/pair/${code}`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({device_label: 'Phone'}),
+      // Was hardcoded 'Phone', which made every paired device indistinguishable
+      // in the device list — three superseded pairings stayed active for six
+      // weeks because nobody could tell which row was live. Blank is fine: the
+      // server falls back to the label typed when the code was minted.
+      body: JSON.stringify(_pairLabel ? {device_label: _pairLabel} : {}),
     });
     const j = await r.json();
     if (j.error) { alert(j.error); return; }

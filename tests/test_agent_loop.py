@@ -73,7 +73,7 @@ def test_construction_routes_vett_to_vett_scotty_shared(conv_store):
     """Phase 7 — agent → logical identity, not port (all share :8090 now)."""
     loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
     assert loop.server.name == "vett_scotty_shared"
-    assert loop.server.model_alias == "vett-scotty"
+    assert loop.server.model_alias == "laguna"  # Spark; see runtime.py
 
 
 def test_construction_normalizes_name_case(conv_store):

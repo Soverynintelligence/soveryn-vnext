@@ -18,9 +18,25 @@ from soveryn.platform.lattice.types import Entry
 
 
 def classify_and_render(nodes: tuple[Node, ...]) -> dict[str, Any]:
-    """Split nodes into stateable Channel A entries and count-only Channel B."""
+    """Split nodes into assertable Channel A entries and labelled Channel B context.
+
+    Channel B returned a COUNT ONLY until 2026-08-03. The intent was to stop
+    unverified memory being stated as fact, and it worked — but suppression at
+    the storage layer also removed the agent's ability to hold a memory AS
+    uncertain. Asked what she remembered about Jon, Vett searched, found ten
+    matching rows, received `{"legacy": 10}`, and truthfully answered that she
+    had nothing. Withholding did not prevent a false statement; it produced one
+    ("I have no memory of you") in place of a true one ("I hold an unverified
+    note that says X").
+
+    Content is now returned, explicitly typed and caveated. Assertion discipline
+    moves to the agent directive, where it can distinguish a claim about the
+    world from a memory of one's own history. Channel A is unchanged: only
+    provenanced entries are ever assertable.
+    """
 
     stateable: list[dict[str, Any]] = []
+    context_only: list[dict[str, Any]] = []
     uncertain: defaultdict[str, int] = defaultdict(int)
 
     for node in nodes:
@@ -38,9 +54,18 @@ def classify_and_render(nodes: tuple[Node, ...]) -> dict[str, Any]:
         else:
             cls = entry.provenance.cls.value if entry.provenance is not None else "unprovenanced"
             uncertain[cls] += 1
+            context_only.append({
+                "id": node.id,
+                "provenance_class": cls,
+                "source": (entry.provenance.source if entry.provenance else ""),
+                "content": node.content,
+                "caveat": ("UNVERIFIED — you may reason with this and may cite it "
+                           "as an unverified memory. Never state it as fact."),
+            })
 
     return {
         "stateable": stateable,
+        "context_only": context_only,
         "uncertain_count_by_class": dict(uncertain),
     }
 

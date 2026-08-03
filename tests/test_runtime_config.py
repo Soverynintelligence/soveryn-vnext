@@ -81,8 +81,15 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     assert len(aetheria) == 1
     assert aetheria[0].port == 8090
     assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
-    # vett-scotty + cognition on :8091; embeddings on its own :8096 Nemotron server.
-    assert {s.port for s in others} == {8091, 8096}
+    # 2026-08-02: Vett + Scotty moved OFF the local routers entirely, to the
+    # Spark (10.10.10.2:8000, Laguna on vLLM), freeing 30 GB on a Quadro that
+    # was alerting at <1 GB free and 82 C. That strengthens this invariant
+    # rather than weakening it — one fewer tenant able to leak onto her card.
+    # cognition on :8091; embeddings on its own :8096 Nemotron server.
+    assert {s.port for s in others} == {8000, 8091, 8096}
+    # The load-bearing half: nothing local shares Aetheria's router, and the
+    # remote entry is not even on this host.
+    assert all(s.host == "127.0.0.1" for s in others if s.port in (8091, 8096))
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
 
@@ -100,7 +107,7 @@ def test_each_model_server_has_router_alias_populated():
     carries the alias that router-presets.ini knows about."""
     expected = {
         "aetheria_primary": "aetheria",
-        "vett_scotty_shared": "vett-scotty",
+        "vett_scotty_shared": "laguna",
         "embeddings": "embeddings",
         "cognition": "cognition",
     }
@@ -125,7 +132,8 @@ def test_all_ports_includes_parakeet():
     and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    assert ports == {8087, 8090, 8091, 8096}
+    # 8000 = Spark vLLM (Vett + Scotty), added 2026-08-02.
+    assert ports == {8000, 8087, 8090, 8091, 8096}
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():
@@ -147,7 +155,10 @@ def test_model_servers_can_share_port_but_not_with_service_endpoints():
 def test_runtime_services_includes_all_required():
     """Spec §2, §8 Bucket A: these process-level dependencies must exist."""
     names = {r.name for r in runtime.RUNTIME_SERVICES}
-    required = {"ares_daemon", "heartbeat", "cognition", "dream_aetheria"}
+    # "cognition" was renamed "cognition_cycle" on 2026-07-31 to disambiguate
+    # the DAEMON from soveryn-cognition.service, which is the MODEL SERVER
+    # on :8089. Both existed; only the name collided.
+    required = {"ares_daemon", "heartbeat", "cognition_cycle", "dream_aetheria"}
     assert required.issubset(names), f"missing runtime services: {required - names}"
     assert "aetheria_stream" not in names
 
@@ -172,18 +183,39 @@ def test_runtime_service_names_do_not_collide_with_agents_or_retired():
     assert not (service_names & runtime.RETIRED)
 
 
-def test_dream_aetheria_is_scheduled_via_systemd():
-    """The nightly consolidation timer is a Bucket A scheduled service."""
+def test_dream_aetheria_is_a_long_running_systemd_service():
+    """Dream runs continuously under soveryn-dream.service, not on a timer.
+
+    Corrected 2026-07-31. This previously asserted kind="scheduled", describing
+    a nightly timer that does not exist: `systemctl --user list-timers` shows no
+    dream timer, and PID 1153351 is owned by soveryn-dream.service with
+    Type=simple. Quiet-hours gating happens inside the daemon
+    (SOVERYN_DREAM_QUIET_HOURS), not in systemd.
+
+    Third test found on 2026-07-31 to be enforcing a false declaration — see
+    test_heartbeat_is_a_systemd_process. Four of the registry's six pre-existing
+    entries were wrong, and tests held three of them in place.
+    """
     dream = next(r for r in runtime.RUNTIME_SERVICES if r.name == "dream_aetheria")
-    assert dream.kind == "scheduled"
+    assert dream.kind == "process"
     assert dream.launch == "systemd"
 
 
-def test_heartbeat_is_in_process_thread():
-    """Heartbeat runs as a thread inside app.py, not a separate process."""
+def test_heartbeat_is_a_systemd_process():
+    """Heartbeat runs as its own systemd user unit, not a thread inside app.py.
+
+    Corrected 2026-07-31. This test previously asserted kind="thread" /
+    launch="app_startup" and so *enforced* a declaration that was never true:
+    the heartbeat has always run as `python -m soveryn.agents.heartbeat` under
+    soveryn-heartbeat.service. Correcting the registry would have failed CI,
+    which is the most likely reason the wrong declaration survived.
+
+    A test that locks in a false fact is worse than no test — it converts a
+    stale document into an enforced one.
+    """
     hb = next(r for r in runtime.RUNTIME_SERVICES if r.name == "heartbeat")
-    assert hb.kind == "thread"
-    assert hb.launch == "app_startup"
+    assert hb.kind == "process"
+    assert hb.launch == "systemd"
 
 
 def test_ares_daemon_is_a_process_not_an_agent():

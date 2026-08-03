@@ -140,13 +140,34 @@ def _parse_compute_apps(csv_text: str) -> list[tuple[str, str, str]]:
     return apps
 
 
+class GpuReadError(RuntimeError):
+    """nvidia-smi could not be read.
+
+    Distinct from "read fine, nothing wrong". Returning [] on failure made a
+    failed probe indistinguishable from three healthy cards, and the finding
+    tracker duly cleared live alerts — see AresDaemon.scan_once.
+    """
+
+
 def _read_gpu_headroom_rows() -> list[tuple[str, int, int]]:
-    out = subprocess.run(
-        ["nvidia-smi", "--query-gpu=uuid,memory.used,memory.total",
-         "--format=csv,noheader,nounits"],
-        capture_output=True, text=True, timeout=5,
-    )
-    return _parse_gpu_headroom_rows(out.stdout) if out.returncode == 0 else []
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=uuid,memory.used,memory.total",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise GpuReadError(f"nvidia-smi could not be run: {exc}") from exc
+    if out.returncode != 0:
+        raise GpuReadError(
+            f"nvidia-smi exited {out.returncode}: {(out.stderr or '').strip()[:200]}"
+        )
+    rows = _parse_gpu_headroom_rows(out.stdout)
+    if not rows:
+        # A machine with GPUs that reports none is a failed read, not an empty
+        # rig. Ares only runs where there are cards.
+        raise GpuReadError("nvidia-smi returned no GPU rows")
+    return rows
 
 
 def _read_compute_apps() -> list[tuple[str, str, str]]:

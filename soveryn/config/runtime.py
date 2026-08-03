@@ -61,8 +61,22 @@ class ModelServer:
     has both the alias and the model basename registered, so both resolve.
     """
     name: str                       # logical identity, e.g. "aetheria_primary"
-    port: int                       # 127.0.0.1:<port>  — 8090 = Blackwell router (aetheria only), 8091 = Quadro router
+    port: int                       # <host>:<port> — 8090 = Blackwell router (aetheria only), 8091 = Quadro router
     model_path: Path                # GGUF file
+    #: Host serving this model. Defaults to loopback because every backend was
+    #: local until 2026-08-02, when Vett + Scotty moved to the Spark over the
+    #: CX-7 link to free 30 GB on a Quadro that was alerting at <1 GB free.
+    #: Callers must use `base_url`, never a hardcoded 127.0.0.1.
+    host: str = "127.0.0.1"
+    #: Extra chat_template_kwargs sent with every request to this server.
+    #: Needed for Laguna on vLLM: with NO kwargs the template pre-fills the
+    #: opening <think>, the model emits only the closing tag, and
+    #: --reasoning-parser poolside_v1 (looking for a matched pair) leaves a
+    #: literal "</think>" at the head of message.content. Passing the kwarg
+    #: explicitly — either value — makes the parser work. Verified 2026-08-02
+    #: against the live server; not DFlash, not the vLLM version, not a missing
+    #: parser flag, all of which were ruled out first.
+    chat_template_kwargs: dict | None = None
     mmproj_path: Path | None = None
     role: str = ""                  # human-readable: "Aetheria primary inference", etc.
     #: Whether this server's chat template accepts multiple system messages.
@@ -74,6 +88,11 @@ class ModelServer:
     #: /v1/chat/completions and /v1/embeddings request bodies. Must match a
     #: preset alias (section name or registered basename) in router-presets.ini.
     model_alias: str = ""
+
+    @property
+    def base_url(self) -> str:
+        """http://<host>:<port> — the single place a backend URL is formed."""
+        return f"http://{self.host}:{self.port}"
 
 
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
@@ -98,10 +117,26 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     ModelServer(
         name="vett_scotty_shared",
-        port=8091,
-        model_path=MODEL_ROOT / "Qwen_Qwen3.6-27B-Q8_0.gguf",
-        mmproj_path=MODEL_ROOT / "mmproj-Qwen_Qwen3.6-27B-bf16.gguf",
-        role="Vett + Scotty shared Qwen3.6-27B (Quadro GPU 0)",
+        # MOVED TO THE SPARK 2026-08-02 (was 127.0.0.1:8091, Qwen3.6-27B Q8_0).
+        #
+        # Why: that Quadro sat at 45 of 49 GB with <1 GB free and 82 C, with
+        # Ares paging Signal about it. Qwen3.6-27B alone was 30 GB of it.
+        # Moving frees the card outright.
+        #
+        # Evidence it is not a downgrade: on the self-report harness Qwen3.6-27B
+        # denied its own action in 30/30 trials; Laguna in 20/30. And the
+        # 2026-07-28 delegation investigation found Scotty's failures were four
+        # harness defects, none of them the model. Measured latency on
+        # comparable prompts: Laguna/vLLM 1.6 s median vs Qwen3.6-27B/llama.cpp
+        # 11.2 s.
+        #
+        # Revert: host="127.0.0.1", port=8091, model_alias="vett-scotty".
+        # Backup at runtime.py.bak-before-spark-move.
+        host="10.10.10.2",              # Spark, over the CX-7 link
+        port=8000,                      # vLLM
+        model_path=MODEL_ROOT / "Laguna-S-2.1-NVFP4",   # cosmetic for a remote server
+        mmproj_path=None,
+        role="Vett + Scotty shared Laguna-S-2.1 (Spark, vLLM)",
         # Flipped to True 2026-06-12: vett-scotty router child now uses
         # froggeric/Qwen-Fixed-Chat-Templates v20 (configured via
         # `chat-template-file = ...` in router-presets.ini [vett-scotty]),
@@ -110,7 +145,16 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         # "ALL_SURVIVED" exact). The transport adapter `prepare_wire_messages`
         # becomes a pass-through for this server.
         supports_multi_system_messages=True,
-        model_alias="vett-scotty",
+        model_alias="laguna",           # the alias vLLM serves on the Spark
+        # FLIPPED TO FALSE 2026-08-03. Either value silences the </think> leak,
+        # so this is free to choose. Reasoning was ON from the move until now,
+        # and the overnight harness run showed reasoning is not a free good:
+        # on DeepSeek-V4-Flash-0731 it took false denial of the agent's own
+        # action from 0% to 79% (n=30/cell). Vett's judgement degraded over the
+        # same window — she picked the wrong tool, denied capabilities she held,
+        # and wrote in a consultant register. Testing whether that was the
+        # model or this flag, which I introduced.
+        chat_template_kwargs={"enable_thinking": False},
     ),
     ModelServer(
         name="embeddings",
@@ -191,24 +235,47 @@ RUNTIME_SERVICES: tuple[RuntimeService, ...] = (
     RuntimeService(
         name="ares_daemon",
         kind="process",
-        launch="user_launched",
+        launch="systemd",
         role="Security daemon — scans + posts findings to inboxes (no LLM)",
     ),
     RuntimeService(
         name="heartbeat",
-        kind="thread",
-        launch="app_startup",
-        role="AetheriaAutonomy autonomous cycle (thread inside app.py)",
+        kind="process",
+        launch="systemd",
+        role="AetheriaAutonomy autonomous cycle — soveryn-heartbeat.service "
+             "(python -m soveryn.agents.heartbeat). Corrected 2026-07-31: this "
+             "was declared a thread inside app.py and never was one.",
     ),
     RuntimeService(
-        name="cognition",
+        name="delegation-worker",
         kind="thread",
         launch="app_startup",
-        role="AetheriaCognition thread inside app.py — POSTs to cognition :8089",
+        role="Delegation executor — picks up dispatched tasks, runs Scotty in a "
+             "worktree under bwrap, applies the acceptance gate "
+             "(startup.py, thread). Added to the registry 2026-07-31: it was "
+             "running and undeclared.",
+    ),
+    RuntimeService(
+        name="messenger-delivery-worker",
+        kind="thread",
+        launch="app_startup",
+        role="Messenger outbound delivery (startup.py, thread). Added to the "
+             "registry 2026-07-31: it was running and undeclared.",
+    ),
+    RuntimeService(
+        name="cognition_cycle",
+        kind="process",
+        launch="systemd",
+        role="Deep cognition cycle — soveryn-cognition-cycle.service "
+             "(python -m soveryn.agents.cognition), POSTs to the cognition "
+             "surface :8089. Declared as an app.py thread from 2026-06-22 and "
+             "never wired; no cycle ran until 2026-07-31. Gated off by "
+             "SOVERYN_COGNITION_CYCLE_ENABLED. NOTE: distinct from "
+             "soveryn-cognition.service, which is the MODEL SERVER on :8089.",
     ),
     RuntimeService(
         name="dream_aetheria",
-        kind="scheduled",
+        kind="process",
         launch="systemd",
         role="Nightly memory consolidation @ 03:00 (soveryn-dream-aetheria.timer)",
     ),
@@ -231,7 +298,7 @@ COGNITION_INSTANCE_URL: str = "http://127.0.0.1:8091"
 #: Embedding endpoint URL derived from MODEL_SERVERS (convenience).
 def embeddings_url() -> str:
     server = next(s for s in MODEL_SERVERS if s.name == "embeddings")
-    return f"http://127.0.0.1:{server.port}"
+    return server.base_url
 
 
 # ─────────────────────────────────────────────────────────────────────────────

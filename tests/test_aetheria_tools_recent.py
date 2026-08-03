@@ -75,7 +75,9 @@ def test_recent_channel_classifies_and_does_not_leak_b_content(tmp_path) -> None
 
     assert [entry["id"] for entry in result["stateable"]] == ["a1"]
     assert result["uncertain_count_by_class"] == {"legacy": 1}
-    assert "RECENT LEAK CANARY" not in repr(result)
+    # Channel B content is returned since 2026-08-03 — the guarantee is
+    # that it never reaches `stateable`, not that it is absent entirely.
+    assert "RECENT LEAK CANARY" not in repr(result["stateable"])
 
 
 def test_recent_limit_caps_total_result_count(tmp_path) -> None:

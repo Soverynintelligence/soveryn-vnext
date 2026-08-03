@@ -1,19 +1,41 @@
 /* soveryn/platform/web/pwa/style.css
-   Design contract (Aetheria, 2026-06-14):
-   "Gold on Black. Geometric Mono. No borders.
-    Asymmetric weight — Aetheria is the anchor, the others are the support."
-   See docs/notes/2026-06-14-messenger-plan-aetheria-read-ahead.md §"Verdicts locked".
+
+   Design contract v1 (Aetheria, 2026-06-14) was "Gold on Black. Geometric Mono.
+   No borders. Asymmetric weight." The gold is gone — the 2026-07-24 brand
+   rollout replaced it across Mission Control, chat and documents with
+   Carbon / Oxide-Sage / Aged-Copper / Bone, and copper alone was rejected as
+   reading too close to Anthropic. Sage is the live accent, copper the
+   secondary. The rest of v1 stands: mono for data, no decorative borders,
+   Aetheria weighted above the others.
+
+   Tokens below are the same values Mission Control uses, so the phone, the
+   iPad and the desktop are one product rather than three that resemble each
+   other.
 */
 :root {
-  --bg:        #0a0a0a;       /* true black */
-  --fg:        #e8e6e1;       /* warm off-white */
-  --muted:     #6a6a6a;
-  --accent:    #c5a059;       /* Void-Gold — high-end watch face in a dark room */
-  --rule:      #1a1a1a;
+  --bg:          #0f1011;    /* carbon — Mission Control --sov-canvas */
+  --surface:     #16181a;    /* raised: cards, tab bar */
+  --surface-2:   #1c1f21;    /* pressed / selected */
+  --fg:          #E7E5DC;    /* bone */
+  --muted:       #9a988a;
+  --accent:      #8fa07f;    /* oxide sage, bright — the live accent */
+  --accent-dim:  #74856a;
+  --accent-deep: #566149;
+  --copper:      #c0824f;    /* secondary only, never the primary signal */
+  --bronze:      #8C5A3C;
+  --rule:        #1e2022;
+  --danger:      #c26a4c;
   --font-mono: 'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
   --font-sans: 'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  /* App-furniture geometry — header height + safe-area helpers. */
+
+  /* App furniture. Safe-area insets matter on both devices: the notch/Dynamic
+     Island at the top, the home indicator at the bottom. viewport-fit=cover in
+     index.html is what makes env() non-zero. */
   --header-h:  52px;
+  --tabbar-h:  56px;
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sidebar-w: 232px;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -464,3 +486,112 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   margin-right: 4px;
 }
 .call-btn:active { opacity: 0.6; }
+
+/* ═══ Mission Control ═══════════════════════════════════════════════════════
+   One implementation, two shapes. Phone: single column, tabs pinned above the
+   home indicator. iPad (>=768px): the same tab bar becomes a left sidebar and
+   the cards flow into columns. No second codebase, no device sniffing — the
+   breakpoint is the whole difference.
+*/
+
+#mc-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; background: var(--surface);
+  border-top: 1px solid var(--rule);
+  padding-bottom: var(--safe-bottom);          /* clear the home indicator */
+}
+.mc-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; padding: 8px 4px 6px;
+  background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-family: var(--font-sans); font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+  transition: color .15s ease;
+}
+.mc-tab-glyph { font-size: 17px; line-height: 1; }
+.mc-tab.is-active { color: var(--accent); }        /* sage is the live signal */
+.mc-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Give the stack room so the last card isn't trapped under the bar. */
+body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom)); }
+
+.mc-grid { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+
+.mc-card {
+  background: var(--surface); border-radius: 12px; padding: 12px 14px;
+  border: 1px solid var(--rule);
+}
+.mc-card-title {
+  margin: 0 0 8px; font-family: var(--font-mono);
+  font-size: 11px; font-weight: 500; letter-spacing: .10em;
+  text-transform: uppercase; color: var(--muted);
+}
+.mc-card-body { font-size: 14px; }
+
+.mc-stat {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; padding: 3px 0;
+}
+.mc-stat-label { color: var(--muted); font-size: 13px; }
+.mc-stat-value { font-family: var(--font-mono); font-size: 13px; color: var(--fg); }
+.mc-stat-value.tone-hot  { color: var(--copper); }   /* 80C+ */
+.mc-stat-value.tone-bad  { color: var(--danger); }
+
+.mc-ok        { margin: 0 0 6px; color: var(--accent);  font-size: 13px; }
+.mc-alert     { margin: 0 0 6px; color: var(--danger);  font-size: 13px; font-weight: 600; }
+.mc-unavailable {
+  margin: 0; color: var(--muted); font-size: 12px;
+  font-family: var(--font-mono); font-style: normal;
+}
+
+.mc-item { padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.mc-item:last-child { border-bottom: 0; }
+.mc-item-main {
+  font-size: 13px; color: var(--fg);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mc-item-meta { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+.mc-note { margin: 0 0 6px; font-size: 14px; line-height: 1.55; color: var(--fg); }
+
+/* Loading placeholder. Pulses only if the viewer hasn't asked for less motion. */
+.mc-skel {
+  height: 12px; margin: 7px 0; border-radius: 3px;
+  background: var(--surface-2);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mc-skel { animation: mc-pulse 1.4s ease-in-out infinite; }
+  @keyframes mc-pulse { 0%,100% { opacity: .45 } 50% { opacity: .8 } }
+}
+
+/* ── iPad and up: tabs become a sidebar, cards become columns ────────────── */
+@media (min-width: 768px) {
+  #mc-tabbar {
+    top: 0; right: auto; bottom: 0; width: var(--sidebar-w);
+    flex-direction: column; justify-content: flex-start;
+    gap: 2px; padding: calc(var(--safe-top) + 16px) 8px var(--safe-bottom);
+    border-top: 0; border-right: 1px solid var(--rule);
+  }
+  .mc-tab {
+    flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
+    gap: 10px; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+    text-transform: none; letter-spacing: 0;
+  }
+  .mc-tab.is-active { background: var(--surface-2); }
+  .mc-tab-glyph { font-size: 15px; }
+
+  body.has-tabbar .app-header,
+  body.has-tabbar #view-stack { margin-left: var(--sidebar-w); }
+  body.has-tabbar #view-stack { padding-bottom: var(--safe-bottom); }
+
+  .mc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px; padding: 16px;
+  }
+  .mc-card-wide { grid-column: 1 / -1; }
+}
+
+@media (min-width: 1080px) {
+  .mc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

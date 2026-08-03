@@ -84,6 +84,13 @@ STALLED_BLUEPRINT_THRESHOLD_MINUTES = 240  # 4 hours
 # generation can take 30-90s depending on prompt+thinking budget.
 CHAT_TIMEOUT_SECONDS = 240
 
+
+class HeartbeatHTTPError(RuntimeError):
+    """An HTTP error from vNext, carrying the response body.
+
+    Exists so the pulse log records WHY the call failed rather than
+    just its status code."""
+
 WEBHOOK_SESSION_TITLE_PREFIX = "[webhook]"
 HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 
@@ -831,8 +838,30 @@ class HeartbeatDaemon:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read())
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            # vNext puts the real cause in the JSON body: /chat catches
+            # AgentLoopError and returns {"error":{"code","message"}} with a 500
+            # WITHOUT logging a traceback. urllib discards that body unless it is
+            # read here, so the pulse log recorded a bare "HTTP Error 500:
+            # INTERNAL SERVER ERROR" for five hours on 2026-08-01 while the
+            # actual message sat unread in the response.
+            detail = ""
+            try:
+                raw = e.read().decode("utf-8", "replace")[:600]
+                try:
+                    parsed = json.loads(raw).get("error") or {}
+                    detail = f"{parsed.get('code','?')}: {parsed.get('message','')}"
+                except ValueError:
+                    detail = raw
+            except Exception:  # pragma: no cover - body already consumed
+                pass
+            logger.error("heartbeat POST %s -> HTTP %s | %s", path, e.code, detail)
+            raise HeartbeatHTTPError(
+                f"HTTP {e.code} from {path}: {detail or e.reason}"
+            ) from e
 
     def _summarise_response(self, response: dict) -> tuple[bool, int]:
         """Return (action_taken, tool_call_count). action_taken = the agent

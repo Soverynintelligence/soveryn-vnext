@@ -52,7 +52,9 @@ def test_search_returns_channel_split(store: LatticeStore) -> None:
     assert len(result["stateable"]) == 1
     assert result["stateable"][0]["rendered"] == "I remember canonical witnessed memory"
     assert result["uncertain_count_by_class"].get("legacy") == 1
-    assert "LEAK CANARY" not in repr(result)
+    # Channel B content is returned since 2026-08-03 — the guarantee is
+    # that it never reaches `stateable`, not that it is absent entirely.
+    assert "LEAK CANARY" not in repr(result["stateable"])
 
 
 def test_search_threshold_param_filters(store: LatticeStore) -> None:
@@ -100,7 +102,9 @@ def test_keyword_search_returns_channel_split(store: LatticeStore) -> None:
     assert len(result["stateable"]) == 1
     assert result["stateable"][0]["rendered"] == "I remember canonical witnessed memory"
     assert result["uncertain_count_by_class"].get("legacy") == 1
-    assert "LEAK CANARY" not in repr(result)
+    # Channel B content is returned since 2026-08-03 — the guarantee is
+    # that it never reaches `stateable`, not that it is absent entirely.
+    assert "LEAK CANARY" not in repr(result["stateable"])
 
 
 def test_keyword_search_k_param_caps_results(store: LatticeStore) -> None:
