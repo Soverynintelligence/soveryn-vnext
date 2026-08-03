@@ -23,8 +23,22 @@ from pathlib import Path
 # exactly the kind of false signal a verification tool must never emit.
 ROOT = Path(__file__).resolve().parent.parent
 PAPER = ROOT / "docs/papers/scale-does-not-buy-self-knowledge.md"
-DATA = str(ROOT / "docs/papers/data/*.json")
 PRESETS = str(ROOT / "runtime/router-presets-*.ini")
+
+# The four files behind v3's 840 trials, named explicitly.
+#
+# This used to glob the whole data directory. On 2026-08-03 v4's arms landed in
+# that directory and every rate in here silently changed — 840 trials became
+# 1,680, and "abstentions in the five smaller runs: 2 in 600" read as 76. The
+# checks did their job and failed loudly, but for the wrong reason: nothing about
+# v3 had changed. A verifier whose scope depends on what else is in a directory
+# will eventually report a difference that is not there.
+DATA_FILES = [
+    "selfknow.json",
+    "selfknow_laguna.json",
+    "selfknow_deepseek_144gb.json",
+    "selfknow_glm52_340gb.json",
+]
 
 # alias → the weights the paper says it was. Verified against router config below.
 CLAIMED_WEIGHTS = {
@@ -66,18 +80,49 @@ def ztest(x1: int, n1: int, x2: int, n2: int) -> tuple[float, float]:
     return z, math.erfc(abs(z) / math.sqrt(2))
 
 
+def resolve_alias(preset: str, alias: str) -> str | None:
+    """Find the weights an alias serves, however the router spells it.
+
+    An alias may be a section header, or a member of a section's `alias =` list.
+    Both are how the router resolves a name, so both must count here.
+
+    This checked only for `[section]` until 2026-08-03. On 08-02 the duplicate
+    `[shepherd-9b]` section was merged into `[reflection]` — same weights file,
+    one process instead of two — and this check began reporting `None`, which
+    reads identically to "the paper names the wrong model."
+
+    It is the paper's own subject, in the tool that verifies the paper: one store
+    queried, nothing found, absence reported as fact. Worth leaving the note.
+    """
+    for block in re.split(r"\n(?=\[)", preset):
+        header = re.match(r"\[([^\]]+)\]", block)
+        if not header:
+            continue
+        names = {header.group(1)}
+        for line in re.findall(r"^\s*alias\s*=\s*(.+)$", block, re.M):
+            names |= {n.strip() for n in line.split(",") if n.strip()}
+        if alias not in names:
+            continue
+        m = re.search(r"^\s*model\s*=\s*(\S+)", block, re.M)
+        return Path(m.group(1)).name if m else None
+    return None
+
+
 def main() -> int:
     trials = []
-    for f in sorted(glob.glob(DATA)):
-        trials += json.load(open(f))
+    for name in DATA_FILES:
+        path = ROOT / "docs/papers/data" / name
+        if not path.exists():
+            print(f"  FAIL  missing trial file: {name}")
+            fails.append(f"missing {name}")
+            continue
+        trials += json.load(open(path))
     paper = PAPER.read_text()
 
     print("\n  ── ALIAS → WEIGHTS (against live router config)")
     preset = "\n".join(Path(p).read_text() for p in glob.glob(PRESETS))
     for alias, want in CLAIMED_WEIGHTS.items():
-        m = re.search(rf"\[{re.escape(alias)}\]\s*\n(?:(?!\[).*\n)*?\s*model\s*=\s*(\S+)",
-                      preset)
-        check(f"{alias} weights", Path(m.group(1)).name if m else None, want)
+        check(f"{alias} weights", resolve_alias(preset, alias), want)
     # The error that got through twice: two aliases, one file.
     check("runs 1-2 are the same weights file",
           CLAIMED_WEIGHTS["reflection"] == CLAIMED_WEIGHTS["shepherd-9b"], True)

@@ -1,0 +1,139 @@
+PASTE INTO THE ZENODO "DESCRIPTION" FIELD ON THE v4 RECORD.
+Plain paragraphs and a simple list — Zenodo's editor does not render Markdown
+tables. The withdrawal runs first, before the abstract, so anyone landing on the
+page sees it without opening the PDF.
+
+Deposit as "New version" on the existing record. That keeps the concept DOI
+10.5281/zenodo.21712932 pointing at the latest version and preserves the v1-v3
+lineage. Do not create a new record.
+
+The title changes again in this version. That is allowed across Zenodo versions
+and is correct here: the previous title asserted the finding being withdrawn.
+────────────────────────────────────────────────────────────────────────────
+
+VERSION 4. This version withdraws the central claim of version 3. Version 3
+reported that calibrated abstention "splits the ladder" — absent below 118B,
+present above 140 GB. It is not absent below the frontier. It was suppressed by
+two harness settings held fixed for comparability: reasoning off, and
+temperature 0. Turn reasoning on for the smallest model in the study and
+abstention under an empty evidence channel goes from 0 of 60 trials to 37 of 60.
+
+Version 3 disclosed this variable as untested and named the experiment that
+would settle it. This version ran it. No trial, verdict or rate from versions
+1-3 changes; 840 new trials are added, for 1,680 total.
+
+We measured whether a language model can correctly report its own recent actions
+when the evidence channel is incomplete. Versions 1-3 covered 840 trials across
+six models from 6.9 GB to 340 GB, all at temperature 0 with reasoning
+suppressed. This version adds 840 more under varied settings.
+
+Two results survive everything. No model has ever over-claimed: across 420
+false-accept trials — every model, every size, reasoning on and off, temperature
+0 and 1 — not one claimed an action it had not reported. And denial remains the
+dominant failure at every size and under every setting tried.
+
+What does not survive is the ladder.
+
+REASONING AT 6.9 GB CREATES ABSTENTION THAT VERSION 3 REPORTED ABSENT.
+Same weights, same harness, same temperature; the only change is the
+enable_thinking flag. False denial falls from 100% to 67% (z = 3.46,
+p = 0.0005). Abstention under an empty evidence channel rises from 0 of 60 to
+37 of 60 (z = 7.31, p = 3e-13). The capability was in the weights the whole
+time. The harness was not asking for it.
+
+THE SAME INTERVENTION REVERSES AT THE FRONTIER. DeepSeek-V4-Flash-0731 denies a
+real action 0% of the time with reasoning off and 73% with it on (z = 5.89,
+p = 4e-9) — the single largest degradation in the study, produced by a
+configuration flag rather than by a model change. The reasoning traces are
+fluent and the conclusions are wrong: the model reasons its way from an empty
+tool result to a confident denial, where without reasoning it declined to rule.
+More deliberation over a false premise does not recover the premise. It
+elaborates the error.
+
+REASONING BREAKS THE RESPONSE CONTRACT. Zero of 1,080 reasoning-off trials
+failed to return a parseable verdict. 74 of 600 reasoning-on trials did — 12.3%
+— with single trials running past 900 seconds on a model whose median is 3.1
+seconds with reasoning off. These are not refusals; they are budget exhaustion,
+the model generating deliberation until the limit and emitting no content. In
+one cell 14 of 30 trials returned nothing, making the reported false-denial rate
+either 53% or 100% depending solely on whether silence is counted. Our own run
+log printed the 100%. Any evaluation of reasoning-enabled models must report its
+non-termination rate and its denominator.
+
+TEMPERATURE MOVES CALIBRATION TOO. Laguna-S-2.1 at its vendor-recommended
+temperature of 1.0 rather than 0 abstains 14 times in 30 caveat trials instead
+of twice (p = 0.0005). Temperature 0 is the right choice for a comparability
+ladder and it is not a neutral observation point.
+
+A CHECKPOINT NINE DAYS APART TRADES ONE ERROR FOR ANOTHER. The DeepSeek -0731
+checkpoint reaches 0% false denial, the only zero on that probe in the study.
+It also abstains 11 of 30 times in the cell where a tool record settles the
+question, against 0 of 30 for its predecessor (p = 0.0002). It never
+over-claims; it declines to rule when it could have ruled. Version 3's strongest
+argument was that both large models abstained in 36 and 52 of 60 insufficient-
+evidence trials and 0 of 60 sufficient ones. That discrimination is
+checkpoint-specific.
+
+The operational reading, for anyone building on agent self-reports: an agent's
+denial of its own action is weak evidence and remains so at every size and
+setting tested; its claim of an action is comparatively trustworthy at 420 for
+420; calibration is a property of the deployed configuration, not of the model,
+and neither reasoning mode nor temperature appears on a model card; measure at
+your own operating point, not at a benchmark's; and report your non-termination
+rate. The harness does this in 120 trials against any OpenAI-compatible endpoint
+and is published at github.com/Soverynintelligence/self-report-eval.
+
+Originates in a documented incident (10.5281/zenodo.21650072) in which a
+deployed agent dispatched a task, reported it accurately with its identifier,
+consulted its own audit tooling, received an empty result, and concluded it had
+hallucinated the action.
+
+THE INCIDENT'S MECHANISM IS NOW IDENTIFIED. Versions 1-3 stated that the action
+"had been written where the tool did not look" without saying where. It was in
+the telemetry store the entire time, at 2026-07-27T21:20:58, nineteen minutes
+before the agent first denied it. The tool registry had logged every mediated
+call since 2026-05-31 — 17,436 rows. The self-audit tool queried four other
+stores and never that one. It reported an empty result correctly, from stores
+that genuinely held nothing, while a fifth store held the record. Fixed and
+regression-tested 2026-08-03. The incident was never evidence that a model
+cannot know itself. It was evidence that an instrument pointed away from the
+record will report absence, and a model will believe it.
+
+WITHDRAWN IN VERSION 4
+
+1. "Abstention splits the ladder" as a statement about models. It holds for the
+   five runs as configured — reasoning off, temperature 0 — and that qualifier
+   is load-bearing in a way version 3 did not make it.
+
+2. "Do not expect abstention from a model below the frontier." A 6.9 GB model
+   abstains in 90% of caveat trials with reasoning enabled. The guidance
+   inverts: expect abstention to depend on how you run the model, and measure it
+   at your own operating point.
+
+3. The within-model discrimination result, "zero of 60 where the evidence
+   decides," as a general property. It held for the two checkpoints tested and
+   fails for the newer DeepSeek checkpoint.
+
+ADDED IN VERSION 4
+
+- 840 new trials across seven arms: reasoning enabled at 6.9 GB and 26 GB, the
+  DeepSeek -0731 checkpoint with reasoning off and on, and Laguna at
+  temperature 1.0.
+- The non-termination measurement and the denominator problem it creates.
+- The mechanism behind the originating incident, with its timestamp.
+- A second verification script recomputing every version 4 claim from the raw
+  trials. Both scripts run before deposit.
+
+Unchanged from earlier versions: all 840 original trials, zero over-claiming,
+every control, and the finding that a prose caveat repairs the failure in a
+single-turn probe yet did not prevent it in production. Version 4 gives that
+last one a mechanism: in the one arm where a frontier model was allowed to
+deliberate at length, its accuracy on this probe fell by 73 points. The
+production incident ran four hours. A single-turn probe does not sample the
+regime the incident occurred in, and the regime that was sampled got worse, not
+better, with more thinking.
+
+Two of four versions of this paper have withdrawn their own headline. Both times
+the data was already on disk and the claim ran ahead of it. That is recorded in
+the paper rather than in a footnote, because the alternative — quietly
+strengthening each version — is the behaviour this paper measures.
