@@ -62,7 +62,13 @@ TARGETS: dict[str, MedicTarget] = {
     "heartbeat":  MedicTarget("heartbeat", "soveryn-heartbeat.service", 600.0, escalation_priority=False),
     "dream":      MedicTarget("dream", "soveryn-dream.service", 300.0, escalation_priority=False),
     "x-feed":     MedicTarget("x-feed", "soveryn-x-feed.service", 300.0, escalation_priority=False),
-    "tg-bridge":  MedicTarget("tg-bridge", "soveryn-tg-bridge.service", 300.0, escalation_priority=False),
+    # tg-bridge RETIRED 2026-08-07. Telegram was replaced by Signal; the bridge
+    # had been logging 91,560 HTTP 409s in 7 days because the Claude Code
+    # telegram plugin polls the same bot token and Telegram permits one
+    # getUpdates consumer. `systemctl disable --now` did not hold: the medic saw
+    # a stopped unit, called it unhealthy, and restarted it 42s later. A medic
+    # cannot distinguish "deliberately retired" from "crashed" — the watch list
+    # is the only place that distinction can live, so it is removed here.
     "parakeet":   MedicTarget("parakeet", "parakeet.service", 300.0, escalation_priority=False),
     "vett-patrol": MedicTarget("vett-patrol", "soveryn-vett-patrol.service", 300.0, escalation_priority=False),
     "representation": MedicTarget("representation", "soveryn-representation.service", 300.0, escalation_priority=False),
@@ -114,7 +120,7 @@ def decide(
 
 # ── probe classification (pure) ─────────────────────────────────────────────
 _HTTP_PORTS = {"vnext": 5001, "embeddings": 8096, "router": 8090}
-_UNIT_KEYS = ("dream", "x-feed", "tg-bridge", "parakeet", "vett-patrol", "representation")
+_UNIT_KEYS = ("dream", "x-feed", "parakeet", "vett-patrol", "representation")
 
 
 def probe_unhealthy(

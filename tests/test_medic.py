@@ -93,7 +93,7 @@ def test_vnext_deferred_when_router_unhealthy():
 def test_probe_unhealthy_classifies_from_readings():
     unhealthy, router_healthy = medic.probe_unhealthy(
         http_ok={"vnext": False, "embeddings": True, "router": True},
-        unit_active={"dream": False, "x-feed": True, "tg-bridge": True, "parakeet": True,
+        unit_active={"dream": False, "x-feed": True, "parakeet": True,
                      "vett-patrol": True, "representation": True},
         heartbeat_age=100.0,           # fresh
         comfyui_on_her_card=False,
@@ -105,7 +105,7 @@ def test_probe_unhealthy_classifies_from_readings():
 def test_probe_flags_stale_heartbeat_and_comfyui_squatter():
     unhealthy, _ = medic.probe_unhealthy(
         http_ok={"vnext": True, "embeddings": True, "router": True},
-        unit_active={"dream": True, "x-feed": True, "tg-bridge": True, "parakeet": True,
+        unit_active={"dream": True, "x-feed": True, "parakeet": True,
                      "vett-patrol": True, "representation": True},
         heartbeat_age=3000.0,          # > 2400 → stale
         comfyui_on_her_card=True,
@@ -328,3 +328,27 @@ def test_timer_unit_ticks_every_60s():
     text = open("runtime/soveryn-medic.timer").read()
     assert "OnUnitActiveSec=60" in text
     assert "Unit=soveryn-medic.service" in text
+
+
+def test_tg_bridge_is_not_resurrectable():
+    """A retired service must not be on the medic's watch list.
+
+    2026-08-07: Telegram was replaced by Signal, and the bridge had been logging
+    91,560 HTTP 409s in seven days — the Claude Code telegram plugin polls the
+    same bot token, and Telegram allows exactly one getUpdates consumer.
+
+    `systemctl --user disable --now` did not hold. The medic saw a stopped unit,
+    classified it unhealthy, and restarted it 42 seconds later:
+
+        08:46:06  Stopped soveryn-tg-bridge.service
+        08:46:48  Started soveryn-tg-bridge.service
+                  {"unhealthy": ["tg-bridge"], "actions": [{"action": "act", ...
+
+    That is the medic working correctly — it cannot distinguish "deliberately
+    retired" from "crashed." The watch list is the only place that distinction
+    can live, so re-adding tg-bridge would silently resurrect a dead service
+    and restart the 409 storm.
+    """
+    assert "tg-bridge" not in medic.TARGETS
+    assert "tg-bridge" not in medic._UNIT_KEYS
+    assert not any("tg-bridge" in t.unit for t in medic.TARGETS.values())
