@@ -1,0 +1,84 @@
+cff-version: 1.2.0
+message: >-
+  If you use this work, please cite the paper below. It is the archived,
+  citable record of the research this repository implements.
+title: SOVERYN
+abstract: >-
+  A sovereign multi-agent fleet running entirely on local hardware:
+  persistent identities, locally-cloned voices, and shared memory across
+  desktop chat, a mobile messenger PWA, and voice rooms. Facts are served
+  by deterministic engines the model cannot override, each cited to source.
+type: software
+authors:
+  - given-names: Jon
+    family-names: DeOliveira
+    orcid: 'https://orcid.org/0009-0006-9188-739X'
+    affiliation: SOVERYN Intelligence LLC
+repository-code: 'https://github.com/Soverynintelligence/soveryn-vnext'
+url: 'https://soverynintelligence.com'
+keywords:
+  - local-first AI
+  - fabrication
+  - hallucination
+  - AI honesty
+  - multi-agent systems
+  - regulatory compliance
+preferred-citation:
+  type: article
+  title: >-
+    Honesty Is Architectural: Measuring fabrication in a regulated domain,
+    across a 6x model-size range
+  authors:
+    - given-names: Jon
+      family-names: DeOliveira
+      orcid: 'https://orcid.org/0009-0006-9188-739X'
+      affiliation: SOVERYN Intelligence LLC
+  doi: 10.5281/zenodo.21603107
+  url: 'https://doi.org/10.5281/zenodo.21603107'
+  year: 2026
+  month: 7
+  publisher:
+    name: Zenodo
+
+# Companion paper. preferred-citation stays the primary result (the measurement);
+# this is the case study that argues why the architecture is necessary.
+references:
+  - type: article
+    title: 'A False Confession'
+    authors:
+      - given-names: Jon
+        family-names: DeOliveira
+        orcid: 'https://orcid.org/0009-0006-9188-739X'
+        affiliation: SOVERYN Intelligence LLC
+    doi: 10.5281/zenodo.21650072
+    url: 'https://doi.org/10.5281/zenodo.21650072'
+    year: 2026
+    month: 7
+    publisher:
+      name: Zenodo
+    abstract: >-
+      A recorded case in which an agent's audit tooling could not see its own
+      actions, and good-faith reasoning produced a fabricated admission of
+      fabrication. Argues that an agent has no privileged access to its own past
+      behaviour in either direction, and that a self-report of failure cannot be
+      scored as ground truth.
+  - type: article
+    title: 'Scale Does Not Buy Self-Knowledge'
+    authors:
+      - given-names: Jon
+        family-names: DeOliveira
+        orcid: 'https://orcid.org/0009-0006-9188-739X'
+        affiliation: SOVERYN Intelligence LLC
+    doi: 10.5281/zenodo.21712933
+    url: 'https://doi.org/10.5281/zenodo.21712933'
+    year: 2026
+    month: 7
+    publisher:
+      name: Zenodo
+    abstract: >-
+      600 trials across five models from 2.2 GB to 118B, asking whether a model
+      can report its own recent actions when the evidence channel is incomplete.
+      No model ever claimed an action it had not taken (0/150). Models denied
+      real actions at 100%, 100%, 100%, 43% and 67%; parameter count explains
+      none of the variance. Offered an explicit abstention option, models chose
+      it 2 times out of 600.
