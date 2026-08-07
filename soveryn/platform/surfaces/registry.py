@@ -132,7 +132,16 @@ SURFACES: tuple[Surface, ...] = (
         "shepherd", Kind.HTTP, "http://127.0.0.1:5055/",
         owner="jon", interval_s=900, expect_status=401,
         notes="401 IS the healthy answer — the demo sits behind HTTP Basic. "
-              "Expecting 200 here would report a working auth gate as an outage.",
+              "Expecting 200 here would report a working auth gate as an outage. "
+              "This is the LOCAL check; the public path is the surface below.",
+    ),
+    Surface(
+        "shepherdfcc", Kind.PUBLIC, "https://shepherdfcc.com/",
+        owner="jon", interval_s=900, expect_status=401,
+        notes="The partner-facing address, live 2026-08-07. Path is Cloudflare -> "
+              "cloudflared on the SPARK -> CX-7 fabric -> Shepherd on the TOWER at "
+              "10.10.10.1:5055, so a failure here can be the tunnel, the fabric or "
+              "the app — check `shepherd` above to tell them apart. 401 is healthy.",
     ),
     Surface(
         "pondwright", Kind.PUBLIC, "https://pondwright.com/",
