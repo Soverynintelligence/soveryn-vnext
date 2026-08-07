@@ -63,22 +63,30 @@ references:
       behaviour in either direction, and that a self-report of failure cannot be
       scored as ground truth.
   - type: article
-    title: 'Scale Does Not Buy Self-Knowledge'
+    title: 'Calibration Is Not Only in the Weights'
     authors:
       - given-names: Jon
         family-names: DeOliveira
         orcid: 'https://orcid.org/0009-0006-9188-739X'
         affiliation: SOVERYN Intelligence LLC
-    doi: 10.5281/zenodo.21712933
-    url: 'https://doi.org/10.5281/zenodo.21712933'
+    # CONCEPT DOI — always resolves to the latest version. Never cite a version
+    # DOI here. This entry previously named 21712933, which pins v1 forever:
+    # a title later falsified, and a results table listing a model that was
+    # never tested.
+    doi: 10.5281/zenodo.21712932
+    url: 'https://doi.org/10.5281/zenodo.21712932'
     year: 2026
-    month: 7
+    month: 8
     publisher:
       name: Zenodo
     abstract: >-
-      600 trials across five models from 2.2 GB to 118B, asking whether a model
-      can report its own recent actions when the evidence channel is incomplete.
-      No model ever claimed an action it had not taken (0/150). Models denied
-      real actions at 100%, 100%, 100%, 43% and 67%; parameter count explains
-      none of the variance. Offered an explicit abstention option, models chose
-      it 2 times out of 600.
+      1,680 trials asking whether a model can report its own recent actions when
+      the evidence channel is incomplete. No model has ever claimed an action it
+      had not taken — 420 for 420, every size and setting. Denial is the dominant
+      failure at every size. Enabling reasoning on a 6.9 GB model moves abstention
+      under an empty evidence channel from 0/60 to 37/60, while the same flag
+      takes a frontier model from 0% to 73% false denial: two configuration flags
+      move self-report accuracy further than four rungs of a fifty-fold parameter
+      ladder, in opposite directions at opposite ends. Supersedes v1 'Scale Does
+      Not Buy Self-Knowledge' and v3 'Self-Knowledge Is Not Uniform', each of
+      which withdrew its own headline.
