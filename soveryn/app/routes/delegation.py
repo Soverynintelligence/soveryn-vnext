@@ -77,6 +77,20 @@ def _get_merge_fn() -> Callable:
     return merge_worktree
 
 
+def _get_preserve_fn() -> Callable:
+    """Return the injected preserve function, or the real branch preserver.
+
+    Follows the same injection pattern as merge_fn/remove_fn so tests can
+    assert the ordering — preserve MUST run before remove, or a rejection
+    silently destroys the work it is reviewing.
+    """
+    fn = _ext().get("preserve_fn")
+    if fn is not None:
+        return fn
+    from soveryn.platform.delegation.worktree import preserve_branch
+    return preserve_branch
+
+
 def _get_remove_fn() -> Callable:
     """Return the injected remove function, or the real worktree remove."""
     fn = _ext().get("remove_fn")
@@ -226,10 +240,22 @@ def delegation_reject(task_id: str):
     except Exception:
         logger.exception("reject: set_status(rejected) failed for %s", task_id)
 
-    # Remove worktree (best-effort — rejected work is gone, but don't block response).
+    # Preserve the work BEFORE removing anything. remove_worktree deletes the
+    # branch by default, which leaves the commit dangling and gone at the next
+    # gc. On 2026-08-07 a rejection took 1,138 lines of working, tested code
+    # with it and still reported success; the review feedback even told the
+    # agent to build from the branch the same request had just destroyed.
+    # Rejection is a review decision, not a deletion decision.
     repo_root = _get_repo_root()
     branch = task.branch or f"task/{task_id}"
     worktree_path = task.worktree_path or ""
+
+    preserved = None
+    try:
+        preserved = _get_preserve_fn()(repo_root, branch, f"rejected/{task_id}")
+    except Exception:
+        logger.exception("reject: preserve_branch raised for %s", task_id)
+
     try:
         remove_fn = _get_remove_fn()
         remove_fn(repo_root, worktree_path, branch)
@@ -238,4 +264,11 @@ def delegation_reject(task_id: str):
             "reject: remove_worktree failed for %s (non-fatal)", task_id,
         )
 
-    return jsonify({"ok": True, "status": "rejected"}), 200
+    # Report whether the work survived. A caller must never have to guess.
+    return jsonify({
+        "ok": True,
+        "status": "rejected",
+        "preserved_as": preserved,
+        "warning": None if preserved else
+                   "branch could not be tagged — the rejected work is NOT preserved",
+    }), 200
