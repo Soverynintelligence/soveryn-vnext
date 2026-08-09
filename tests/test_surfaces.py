@@ -179,14 +179,65 @@ def test_lane_emits_critical_for_down_and_never_verified(tmp_path, monkeypatch):
         Result("dead", Status.FAILED, "HTTP 404, expected 200", 0.1, now),
         Result("blind", Status.UNKNOWN, "could not reach", 0.1, now),
     ])
-    found = lane_mod.collect(observations=Observations(tmp_path / "s.json"),
-                             surfaces=surfaces)
+    lane_mod._STREAK.clear()
+    obs = Observations(tmp_path / "s.json")
+    # A single bad probe is deliberately silent (see FAIL_STREAK); the outage
+    # has to still be there on the next scan.
+    lane_mod.collect(observations=obs, surfaces=surfaces)
+    found = lane_mod.collect(observations=obs, surfaces=surfaces)
     by_type = {f.finding_type: f for f in found}
     assert by_type["surface.down"].severity is Severity.CRITICAL
     assert by_type["surface.unknown"].severity is Severity.WARNING
     # 'blind' was never healthy, so it is ALSO never-verified — unknown and
     # unverified are different facts and both belong in the record.
+    # never_verified is NOT streak-gated: absence of any check is not a blip.
     assert by_type["surface.never_verified"].severity is Severity.CRITICAL
+
+
+def test_a_single_bad_probe_does_not_alarm(tmp_path, monkeypatch):
+    """2026-08-09: this lane fired CRITICAL to Signal four times in twelve
+    minutes for surfaces that were healthy on the very next scan. An alert that
+    cries wolf gets muted, and a muted Ares is how 53 lint findings sat unread
+    while real outages ran underneath."""
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    surfaces = (Surface("flaky", Kind.HTTP, "http://x/"),)
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["flaky"] = now          # healthy before, so not never-verified
+    obs._save()
+    lane_mod._STREAK.clear()
+
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+
+    # ...and a recovery clears the streak, so the next blip is silent again.
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.HEALTHY, "HTTP 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+
+
+def test_a_persistent_failure_still_alarms(tmp_path, monkeypatch):
+    """Tolerance must not become blindness."""
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    surfaces = (Surface("truly-dead", Kind.HTTP, "http://x/"),)
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["truly-dead"] = now
+    obs._save()
+    lane_mod._STREAK.clear()
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("truly-dead", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+
+    lane_mod.collect(observations=obs, surfaces=surfaces)
+    found = lane_mod.collect(observations=obs, surfaces=surfaces)
+    assert [f.finding_type for f in found] == ["surface.down"]
+    assert found[0].evidence["failed_checks"] >= lane_mod.FAIL_STREAK
 
 
 # ── the registry itself ─────────────────────────────────────────────────────

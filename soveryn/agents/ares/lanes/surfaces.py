@@ -35,6 +35,14 @@ class SurfaceProbeError(RuntimeError):
     """The probe pass itself failed. Distinct from 'everything is fine'."""
 
 
+# Consecutive bad probes before a surface is reported. In-memory and reset by a
+# daemon restart, which is the right trade: after a restart the first genuine
+# failure takes two scans (~2 min at the 60s interval) to surface, and nothing
+# is lost that a second look would not confirm.
+FAIL_STREAK = 2
+_STREAK: dict[str, int] = {}
+
+
 def collect(*, observations: Observations | None = None,
             surfaces=None, timeout: float = 20.0) -> tuple[AresFinding, ...]:
     surfaces = tuple(surfaces if surfaces is not None else registry.live())
@@ -52,16 +60,34 @@ def collect(*, observations: Observations | None = None,
     findings: list[AresFinding] = []
 
     for r in results:
+        if r.status is Status.HEALTHY:
+            _STREAK.pop(r.surface, None)
+            continue
+
+        # A single bad probe is not an outage. On 2026-08-09 this lane fired
+        # CRITICAL to Signal four times in twelve minutes for atticus,
+        # soverynintelligence and pondwright-estimator — every one of which was
+        # healthy on the next scan. The cause was a serial probe pass taking 41s
+        # against a 60s interval, so any latency bump tripped a 20s timeout.
+        # The pass is parallel now, but the tolerance belongs here regardless:
+        # an alert that cries wolf gets muted, and a muted Ares is how 53 lint
+        # findings sat unread while real outages ran underneath.
+        _STREAK[r.surface] = _STREAK.get(r.surface, 0) + 1
+        if _STREAK[r.surface] < FAIL_STREAK:
+            continue
+
         if r.status is Status.FAILED:
             findings.append(AresFinding(
                 "surface.down", Severity.CRITICAL,
                 {"surface": r.surface, "detail": r.detail,
+                 "failed_checks": _STREAK[r.surface],
                  "latency_s": round(r.latency_s, 3)},
                 key=r.surface))
         elif r.status is Status.UNKNOWN:
             findings.append(AresFinding(
                 "surface.unknown", Severity.WARNING,
                 {"surface": r.surface, "detail": r.detail,
+                 "failed_checks": _STREAK[r.surface],
                  "note": "probe could not run — this is NOT evidence the surface "
                          "is healthy"},
                 key=r.surface))
