@@ -30,13 +30,13 @@ def test_scan_once_routes_hardware_findings_through_tracker_and_sinks(tmp_path):
     assert findings == (warning, critical)
     assert calls["telemetry"] == [critical, warning]
     assert calls["bus"] == [critical, warning]
-    assert calls["signal"] == [(critical, False)]
+    assert calls["signal"] == [(critical, {"bypass_quiet_hours": True, "bypass_rate_cap": False})]
 
     current[:] = [[], []]
     assert surface.scan_once() == ()
     assert calls["telemetry"] == [critical, warning, critical, warning]
     assert calls["bus"] == [critical, warning, critical, warning]
-    assert calls["signal"] == [(critical, False)]
+    assert calls["signal"] == [(critical, {"bypass_quiet_hours": True, "bypass_rate_cap": False})]
 
 
 def test_dry_run_suppresses_signal_but_keeps_telemetry_and_bus(tmp_path):
@@ -69,7 +69,7 @@ def test_live_mode_allows_signal_for_critical_and_emergency(tmp_path):
         dry_run=False,
     ).scan_once()
 
-    assert calls["signal"] == [(critical, False), (emergency, True)]
+    assert calls["signal"] == [(critical, {"bypass_quiet_hours": True, "bypass_rate_cap": False}), (emergency, {"bypass_quiet_hours": True, "bypass_rate_cap": True})]
 
 
 def test_ares_daemon_scan_once_keeps_no_llm_boundary(monkeypatch, tmp_path):
@@ -250,7 +250,9 @@ def _recording_sinks(calls: dict[str, list]) -> AresSinks:
     return AresSinks(
         telemetry_sink=calls["telemetry"].append,
         bus_sink=calls["bus"].append,
-        signal_sink=lambda finding, priority=False: calls["signal"].append((finding, priority)),
+        signal_sink=lambda finding, priority=False, **brakes: calls["signal"].append(
+            (finding, brakes)
+        ),
     )
 
 

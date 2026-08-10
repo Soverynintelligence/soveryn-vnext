@@ -201,7 +201,8 @@ def _default_bus_path() -> Path:
     return Path(override) if override else DEFAULT_ARES_BUS_PATH
 
 
-def _suppress_signal(finding: AresFinding, priority: bool = False) -> None:
+def _suppress_signal(finding: AresFinding, priority: bool = False, **brakes) -> None:
+    # **brakes absorbs bypass_quiet_hours / bypass_rate_cap in dry-run mode.
     return None
 
 

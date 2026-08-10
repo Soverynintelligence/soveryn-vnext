@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from soveryn.agents.ares.findings import AresFinding, FindingEvent, Severity
 
+logger = logging.getLogger("soveryn.agents.ares.router")
+
 TelemetrySink = Callable[[AresFinding], None]
 BusSink = Callable[[AresFinding], None]
-SignalSink = Callable[[AresFinding, bool], None]
+# Keyword-only brakes now, not one positional bool — see signal_sink.
+SignalSink = Callable[..., None]
 
 
 @dataclass(frozen=True)
@@ -37,7 +41,17 @@ def route_finding(event: FindingEvent, sinks: AresSinks) -> None:
     sinks.bus_sink(finding)
     if severity is Severity.WARNING:
         return
-    sinks.signal_sink(finding, severity is Severity.EMERGENCY)
+    # Only CRITICAL and EMERGENCY reach this line — WARNING returned above. Both
+    # are worth waking someone for, so both bypass quiet hours; that is the fix
+    # for 2026-08-10, when quiet hours silently ate 37 minutes of CRITICAL
+    # surface.down. Only EMERGENCY escapes the rate cap, because the cap is flap
+    # protection and a flapping surface paged four times in twelve minutes on
+    # 2026-08-07.
+    sinks.signal_sink(
+        finding,
+        bypass_quiet_hours=True,
+        bypass_rate_cap=severity is Severity.EMERGENCY,
+    )
 
 
 def route_cleared(event: FindingEvent, sinks: AresSinks) -> None:
@@ -62,8 +76,8 @@ def default_sinks(*, bus, signal_sender) -> AresSinks:
     return AresSinks(
         telemetry_sink=telemetry_sink,
         bus_sink=lambda finding: bus_sink(finding, bus=bus),
-        signal_sink=lambda finding, priority=False: signal_sink(
-            finding, signal_sender=signal_sender, priority=priority
+        signal_sink=lambda finding, priority=False, **brakes: signal_sink(
+            finding, signal_sender=signal_sender, priority=priority, **brakes
         ),
         telemetry_cleared_sink=lambda finding: telemetry_sink(finding, status="cleared"),
         bus_cleared_sink=lambda finding: bus_sink(finding, bus=bus, status="cleared"),
@@ -89,8 +103,29 @@ def bus_sink(finding: AresFinding, *, bus, status: str = "active") -> None:
     )
 
 
-def signal_sink(finding: AresFinding, *, signal_sender, priority: bool = False) -> None:
-    signal_sender.send(_signal_message(finding), priority=priority)
+def signal_sink(
+    finding: AresFinding,
+    *,
+    signal_sender,
+    priority: bool = False,
+    bypass_quiet_hours: bool = False,
+    bypass_rate_cap: bool = False,
+) -> None:
+    result = signal_sender.send(
+        _signal_message(finding),
+        priority=priority,
+        bypass_quiet_hours=bypass_quiet_hours,
+        bypass_rate_cap=bypass_rate_cap,
+    )
+    # A dropped alert used to be perfectly silent — send() returned its reason and
+    # nobody read it. That is how 37 minutes of CRITICAL went unnoticed on
+    # 2026-08-10: the detection worked, the delivery did not, and nothing said so.
+    if result is not None and not getattr(result, "sent", True):
+        logger.warning(
+            "ares finding %s NOT sent to Signal: %s",
+            getattr(finding, "id", "?"),
+            getattr(result, "reason", "unknown"),
+        )
 
 
 def _payload(finding: AresFinding, *, status: str) -> dict:

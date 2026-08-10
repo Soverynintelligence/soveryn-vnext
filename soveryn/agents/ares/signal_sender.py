@@ -115,20 +115,45 @@ class SignalSender:
         recipient: str | None = None,
         *,
         priority: bool = False,
+        bypass_quiet_hours: bool = False,
+        bypass_rate_cap: bool = False,
     ) -> SignalSendResult:
+        """Send, subject to two INDEPENDENT brakes.
+
+        They protect against different things and conflating them cost us a real
+        outage. On 2026-08-10 a brownout took five surfaces down for 37 minutes;
+        Ares raised surface.down at CRITICAL throughout and the phone never rang,
+        because `priority` was granted only to EMERGENCY and quiet hours
+        (23:00-07:00) silently dropped everything else. WARNING never reaches
+        Signal at all, so quiet hours' only real effect was muting criticals
+        overnight — the hours Jon actually works.
+
+        `bypass_quiet_hours` — "this is worth waking someone for."
+        `bypass_rate_cap`    — "send this even if the same thing is flapping."
+
+        A CRITICAL deserves the first and NOT the second: a flapping surface
+        paged Signal four times in twelve minutes on 2026-08-07, which is what
+        the cap exists to stop.
+
+        `priority` is the old all-or-nothing flag, kept because the medic
+        (soveryn/platform/medic/medic.py:214) passes it. It means both.
+        """
         if not message.strip():
             return SignalSendResult(False, "empty-message")
         if not self.is_configured():
             return SignalSendResult(False, "not-configured")
 
+        allow_quiet = priority or bypass_quiet_hours
+        allow_cap = priority or bypass_rate_cap
+
         now = self.clock()
-        if not priority and _in_quiet_hours(
+        if not allow_quiet and _in_quiet_hours(
             now,
             start_hour=self.config.quiet_start_hour,
             end_hour=self.config.quiet_end_hour,
         ):
             return SignalSendResult(False, "quiet-hours")
-        if not priority and not self.limiter.under_cap(
+        if not allow_cap and not self.limiter.under_cap(
             now,
             hourly_cap=self.config.hourly_cap,
             daily_cap=self.config.daily_cap,
@@ -164,8 +189,21 @@ def is_configured() -> bool:
     return SignalSender(limiter=_DEFAULT_LIMITER).is_configured()
 
 
-def send(message: str, recipient: str | None = None, *, priority: bool = False) -> SignalSendResult:
-    return SignalSender(limiter=_DEFAULT_LIMITER).send(message, recipient, priority=priority)
+def send(
+    message: str,
+    recipient: str | None = None,
+    *,
+    priority: bool = False,
+    bypass_quiet_hours: bool = False,
+    bypass_rate_cap: bool = False,
+) -> SignalSendResult:
+    return SignalSender(limiter=_DEFAULT_LIMITER).send(
+        message,
+        recipient,
+        priority=priority,
+        bypass_quiet_hours=bypass_quiet_hours,
+        bypass_rate_cap=bypass_rate_cap,
+    )
 
 
 def _binary_exists(path: str) -> bool:
