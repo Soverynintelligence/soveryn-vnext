@@ -115,10 +115,10 @@ def test_budgeter_under_budget_returns_noop():
 
 
 def test_budgeter_over_budget_drops_oldest_and_returns_marker():
-    # prelude 40 chars → 15 tokens
-    prelude = (_msg("system", 40),)
+    # PR5: default charge_prelude=False — only history counts against budget.
     # 4 history messages, each 40 chars → 15 tokens each → 60 total
-    # 15 + 60 = 75 total; budget 50 → must drop messages until <= 50
+    # budget 50 → drop oldest until history ≤ 50 (drop 1 → 45)
+    prelude = (_msg("system", 40),)  # not charged by default
     history = (
         _msg("user", 40),       # oldest
         _msg("assistant", 40),
@@ -126,24 +126,56 @@ def test_budgeter_over_budget_drops_oldest_and_returns_marker():
         _msg("assistant", 40),  # newest (preserved)
     )
     trimmed, marker, elided = _apply_history_budget(prelude, history, budget=50)
-    # After dropping 2: 15 (prelude) + 30 (2 kept) = 45 ≤ 50; one more drop
-    # would leave only the newest. The minimal viable trim is 2 drops here.
-    assert elided >= 2
+    assert elided == 1
     assert marker is not None
     assert marker.role == "system"
     assert "elided" in marker.content
     assert trimmed[-1] is history[-1]  # newest always preserved
+    assert len(trimmed) == 3
+
+
+def test_budgeter_charge_prelude_true_legacy_envelope():
+    """charge_prelude=True restores pre-PR5: prelude + history share budget."""
+    prelude = (_msg("system", 40),)  # 15 tokens
+    history = (
+        _msg("user", 40),
+        _msg("assistant", 40),
+        _msg("user", 40),
+        _msg("assistant", 40),
+    )
+    # 15 + 60 = 75; budget 50 → drop until charged ≤ 50
+    trimmed, marker, elided = _apply_history_budget(
+        prelude, history, budget=50, charge_prelude=True,
+    )
+    assert elided >= 2
+    assert marker is not None
+    assert trimmed[-1] is history[-1]
+
+
+def test_budgeter_fat_prelude_does_not_elide_history_that_fits():
+    """PR5 acceptance (a): huge prelude must not starve history under history-only."""
+    prelude = (_msg("system", 40_000),)  # ~10k tokens of prelude — free under PR5
+    history = (
+        _msg("user", 40),
+        _msg("assistant", 40),
+        _msg("user", 40),
+    )  # 45 history tokens
+    trimmed, marker, elided = _apply_history_budget(
+        prelude, history, budget=6_000, charge_prelude=False,
+    )
+    assert trimmed == history
+    assert marker is None
+    assert elided == 0
 
 
 def test_budgeter_single_turn_over_budget_keeps_just_newest_no_marker():
     """When even the most recent turn alone blows budget, we can't help —
     keep just the newest turn, report 0 elided (we didn't trim — the
     overflow is a separate problem that surfaces via context_usage)."""
-    prelude = (_msg("system", 4000),)  # huge prelude
-    history = (_msg("user", 40),)  # one turn
+    # History-only: one huge user turn over budget with no older turns to drop.
+    prelude = (_msg("system", 40),)
+    history = (_msg("user", 4000),)  # ~1005 tokens alone
     trimmed, marker, elided = _apply_history_budget(prelude, history, budget=100)
-    # Budget already blown by prelude alone — nothing to drop from history
-    # without killing the just-asked question.
     assert trimmed == history
     assert marker is None
     assert elided == 0
@@ -152,7 +184,7 @@ def test_budgeter_single_turn_over_budget_keeps_just_newest_no_marker():
 def test_budgeter_preserves_newest_when_multi_turn_overflow():
     """Multi-turn history where the just-saved newest turn alone fits but
     everything older doesn't: drop everything else, keep newest, add marker."""
-    prelude = (_msg("system", 40),)  # 15 tokens
+    prelude = (_msg("system", 40),)  # not charged by default
     history = (
         _msg("user", 4000),       # 1005 tokens
         _msg("assistant", 4000),  # 1005 tokens
@@ -193,6 +225,7 @@ def test_process_message_returns_context_usage_when_budget_set(conv_store):
     loop = AgentLoop(
         "aetheria", conv_store, chat_fn=chat,
         history_token_budget=20_000, context_window=32_768,
+        soul_text="stable soul",
     )
     sid = conv_store.new_session("aetheria")
     response = loop.process_message(sid, "hello")
@@ -201,6 +234,14 @@ def test_process_message_returns_context_usage_when_budget_set(conv_store):
     assert response.context_usage["budget_tokens"] == 20_000
     assert response.context_usage["context_window"] == 32_768
     assert response.context_usage["elided_turns"] == 0
+    # PR5 fields
+    assert "prelude_tokens" in response.context_usage
+    assert "history_tokens" in response.context_usage
+    assert "total_input_tokens_est" in response.context_usage
+    assert response.context_usage["prelude_soft_budget"] == 3500
+    assert response.context_usage["total_input_soft_budget"] == 12_000
+    assert response.context_usage["prelude_tokens"] >= 1
+    assert response.context_usage["history_tokens"] >= 1
 
 
 def test_process_message_context_usage_is_none_without_budget(conv_store):
@@ -218,20 +259,43 @@ def test_process_message_elides_when_history_exceeds_budget(conv_store):
     loop = AgentLoop(
         "aetheria", conv_store, chat_fn=chat,
         history_token_budget=200, context_window=32_768,
+        soul_text="x" * 8000,  # fat prelude — must NOT force elision alone (PR5)
     )
     sid = conv_store.new_session("aetheria")
     # Seed 6 prior turns (3 user + 3 assistant) of ~400 chars each. With a
-    # 200-token budget the budgeter must drop most of them.
+    # 200-token history-only budget the budgeter must drop most of them.
     for i in range(3):
         conv_store.save_turn(sid, "aetheria", "user", "u" * 400 + f" turn {i}")
         conv_store.save_turn(sid, "aetheria", "assistant", "a" * 400 + f" turn {i}")
     response = loop.process_message(sid, "newest question")
     assert response.context_usage["elided_turns"] > 0
+    assert response.context_usage["history_tokens"] <= 200 + 50  # after trim, near budget
     # The request sent to chat_fn must contain the elision marker as a system msg
     request = chat.calls[-1]
     system_contents = [m.content for m in request.messages if m.role == "system"]
     assert any("elided" in c for c in system_contents), \
         f"elision marker missing from system messages: {system_contents}"
+
+
+def test_process_message_history_only_budget_works_for_vett(conv_store):
+    """PR5 acceptance (d): same history-only semantics for a non-Aetheria agent."""
+    chat = _CapturingChat()
+    loop = AgentLoop(
+        "vett", conv_store, chat_fn=chat,
+        history_token_budget=6_000, context_window=32_768,
+        soul_text="vett soul " * 200,  # non-empty prelude
+    )
+    sid = conv_store.new_session("vett")
+    # History that fits comfortably in 6000 tokens — must not elide.
+    for i in range(3):
+        conv_store.save_turn(sid, "vett", "user", f"short user {i}")
+        conv_store.save_turn(sid, "vett", "assistant", f"short asst {i}")
+    response = loop.process_message(sid, "hello vett")
+    assert response.context_usage is not None
+    assert response.context_usage["budget_tokens"] == 6_000
+    assert response.context_usage["elided_turns"] == 0
+    assert response.context_usage["prelude_tokens"] >= 1
+    assert response.context_usage["history_tokens"] >= 1
 
 
 def test_process_message_reuses_continuity_prelude_until_fingerprint_changes(conv_store, monkeypatch):

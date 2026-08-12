@@ -3,7 +3,7 @@
 import pytest
 
 from soveryn.agents.souls import (
-    SoulMissingError, SoulNameError, get_soul,
+    SoulMissingError, SoulNameError, get_soul, get_soul_origin,
 )
 
 
@@ -12,6 +12,9 @@ def souls_dir(tmp_path):
     d = tmp_path / "souls"
     d.mkdir()
     (d / "aetheria.md").write_text("# Aetheria\n\nFirst intelligence.\n", encoding="utf-8")
+    (d / "aetheria.origin.md").write_text(
+        "# HOW WE BECAME SOVERYN\n\nOrigin essay body.\n", encoding="utf-8",
+    )
     (d / "vett.md").write_text("# Vett\n\nVerify or say nothing.\n", encoding="utf-8")
     (d / "scotty.md").write_text("# Scotty\n\nBounded execution.\n", encoding="utf-8")
     return d
@@ -21,6 +24,24 @@ def test_get_soul_aetheria_reads_file(souls_dir):
     text = get_soul("aetheria", souls_dir=souls_dir)
     assert "Aetheria" in text
     assert "First intelligence" in text
+    # Hot path excludes origin essay (PR5)
+    assert "Origin essay body" not in text
+
+
+def test_get_soul_include_origin_appends_essay(souls_dir):
+    text = get_soul("aetheria", souls_dir=souls_dir, include_origin=True)
+    assert "First intelligence" in text
+    assert "Origin essay body" in text
+
+
+def test_get_soul_origin_reads_origin_file(souls_dir):
+    text = get_soul_origin("aetheria", souls_dir=souls_dir)
+    assert "HOW WE BECAME SOVERYN" in text
+    assert "Origin essay body" in text
+
+
+def test_get_soul_origin_missing_returns_empty(souls_dir):
+    assert get_soul_origin("vett", souls_dir=souls_dir) == ""
 
 
 def test_get_soul_vett_reads_file(souls_dir):

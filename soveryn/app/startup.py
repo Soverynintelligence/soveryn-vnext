@@ -202,6 +202,19 @@ def create_app(
         )
         register_personal_files_tools(tool_registry, owner_agent="aetheria")
 
+        # Origin essay off the hot path (Memory Grades PR5). Hard rules stay in
+        # souls/aetheria.md prelude; HOW WE BECAME SOVERYN is aetheria.origin.md
+        # via this tool only. Same merge as origin-off — design invariant 3.
+        from soveryn.agents.aetheria.tools.soul_origin import (
+            build_read_soul_origin_tool,
+        )
+        tool_registry.register(
+            build_read_soul_origin_tool(
+                souls_dir=env.souls_dir,
+                owner_agent="aetheria",
+            )
+        )
+
         # Vett gets bounded read access to two content areas:
         #   - the American History app project (2026-07-11) — she authored the
         #     spec and is drafting chapters;
@@ -840,18 +853,19 @@ def create_app(
             kwargs["steering_rack"] = steering_rack
             # Owner-scoped to Vett (v1); a no-op for other agents.
             kwargs["verification_gate"] = verification_gate
-            # 32K-context llama-server slots across the fleet (Aetheria solo;
-            # Vett+Scotty on the shared vett-scotty server). Give every loop the
-            # server window + a raw-transcript cap so it trims history to fit
-            # BEFORE send. Without this, an agent reading large files (Vett
-            # gained read_file 2026-06-17) accumulates tool output until the
-            # server hard-rejects the prompt (HTTP 400 exceed_context_size_error
-            # — observed for Vett mid-read 2026-06-17). The cap is on transcript
-            # carried in the prompt, not on what the agent knows (lattice/library
-            # recall still reaches further). Aetheria's block re-asserts the same
-            # two values below — harmless, same values.
+            # 32K-context llama-server slots across the fleet (Aetheria on
+            # blackwell router :8090 with cache-ram store; Vett+Scotty remote /
+            # quadro as configured). Every loop gets the server window + a
+            # raw-transcript cap so it trims history BEFORE send.
+            #
+            # Memory Grades PR5 (2026-08-11): history_token_budget is
+            # HISTORY-ONLY (charge_prelude=False in AgentLoop). Prelude
+            # (soul/pinned/continuity/spine/recall) is not charged against this
+            # envelope — charging it starved chat history under Aetheria's fat
+            # prelude. Fleet-wide 6000; soft prelude/total budgets report via
+            # context_usage. Tool-round fit still uses context_window.
             kwargs["context_window"] = 32_768
-            kwargs["history_token_budget"] = 8_000
+            kwargs["history_token_budget"] = 6_000
             if name == "aetheria":
                 kwargs["pinned_text"] = pinned_text
                 # Active Focus block: Aetheria carries awareness of the work in
@@ -872,17 +886,9 @@ def create_app(
                     kwargs["recall_threshold"] = 0.25
                     # embed_fn defaults to _default_embed (calls the embeddings
                     # ModelServer, now the Nemotron-8B server on :8096)
-                # Live chat history budget. SessionContextCache (commit 9baa798)
-                # made the byte-identical prelude cacheable, but the heartbeat
-                # tier-2 issue still periodically flushes Aetheria's llama-server
-                # slot (see [[project_soveryn_aetheria_prompt_cache_fix]]). When
-                # that happens, the next user turn pays a full prefill — at 20K
-                # of in-window history that was 5-10s of cold prefill on
-                # Blackwell. The 8K cap roughly halves the worst-case prefill
-                # latency. Aetheria can still reach further back through lattice
-                # recall + identity spine; the cap is on the raw transcript
-                # carried in the prompt, not on what she knows.
-                kwargs["history_token_budget"] = 8_000
+                # Soul: hard rules only on hot path (get_soul default). Origin
+                # essay is aetheria.origin.md via read_soul_origin tool (PR5).
+                kwargs["history_token_budget"] = 6_000
                 kwargs["context_window"] = 32_768
                 # Output budget. Raised 768 -> 8192 on 2026-07-06. The old 768
                 # was a defensive soft-ceiling (anti empty_turn_poisoning runaway,
@@ -894,7 +900,7 @@ def create_app(
                 # generously to COMPLETE deliverables and to think/express at
                 # length; don't ration output to dodge a different problem. If
                 # empty_turn_poisoning recurs, fix it at root, not by capping her.
-                # 8192 out + the 8K history budget fits well inside 32K context.
+                # 8192 out + the 6K history-only budget fits well inside 32K.
                 kwargs["max_tokens"] = 8192
                 # Per-LLM-call timeout. Fleet default is 120s (interactive short
                 # turns). Aetheria's assembled /chat prompt is multi-k to ~17k

@@ -301,32 +301,52 @@ def _fit_tool_loop_messages(
     return tuple(head + nonresult + sized)
 
 
+# Memory Grades PR5 (2026-08-11): history budget is HISTORY-ONLY by default.
+# Prelude (soul / pinned / continuity / spine / recall) is not charged against
+# history_token_budget — charging it starved chat history under a fat Aetheria
+# prelude. Soft budgets on prelude/total are reported via context_usage only.
+PRELUDE_SOFT_BUDGET_TOKENS = 3500
+TOTAL_INPUT_SOFT_BUDGET_TOKENS = 12_000
+
+
 def _apply_history_budget(
     prelude: tuple[ChatMessage, ...],
     history: tuple[ChatMessage, ...],
     budget: int,
+    *,
+    charge_prelude: bool = False,
 ) -> tuple[tuple[ChatMessage, ...], ChatMessage | None, int]:
-    """Drop oldest history turns until prelude + history fits inside budget.
+    """Drop oldest history turns until the charged set fits inside budget.
 
     Always preserves history[-1] (the just-saved user message). Returns:
       (possibly_trimmed_history, elision_marker_or_None, elided_count)
 
-    If the most recent turn alone (plus prelude) already blows the budget,
-    that's a prompt-overflow condition the budgeter can't fix — we still
-    drop everything older and surface the overflow via context_usage so the
-    UI banner reflects it.
+    Default charge_prelude=False (Memory Grades PR5, fleet-wide): only history
+    tokens count against budget. Prelude still rides the wire; it is governed
+    by context_window fit (_fit_tool_loop_messages) and soft budgets in
+    context_usage, not by this trimmer.
+
+    charge_prelude=True restores the pre-PR5 behavior (prelude + history share
+    one envelope) for callers that explicitly need it.
+
+    If the most recent turn alone (and charged prelude, when enabled) already
+    blows the budget, we keep the newest turn, drop older history when
+    possible, and surface pressure via context_usage.
     """
     if not history:
         return history, None, 0
     prelude_tokens = sum(_estimate_message_tokens(m) for m in prelude)
     history_tokens = [_estimate_message_tokens(m) for m in history]
-    total = prelude_tokens + sum(history_tokens)
-    if total <= budget:
+    history_sum = sum(history_tokens)
+    charged = (prelude_tokens + history_sum) if charge_prelude else history_sum
+    if charged <= budget:
         return history, None, 0
 
     kept = list(history)
     kept_tokens = list(history_tokens)
     dropped = 0
+    # Running charged total as we drop oldest history turns.
+    total = charged
     while len(kept) > 1 and total > budget:
         total -= kept_tokens.pop(0)
         kept.pop(0)
@@ -981,10 +1001,14 @@ class AgentLoop:
         if self.history_token_budget is not None:
             history_messages, marker, elided_turns = _apply_history_budget(
                 prelude, history_messages, self.history_token_budget,
+                charge_prelude=False,
             )
             if marker is not None:
                 prelude = prelude + (marker,)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
+        # Snapshot for context_usage (after history trim; elision marker in prelude).
+        _usage_prelude = prelude
+        _usage_history = history_messages
 
         # Temporal splice — prepend "[Current temporal context: ...]\n\n" to
         # the current (last) user message's text. Lives on the user turn (NOT
@@ -1220,18 +1244,33 @@ class AgentLoop:
                 tool_calls=response.tool_calls,
                 usage=response.usage,
                 raw=response.raw,
-                context_usage=self._build_context_usage(response.usage, elided_turns),
+                context_usage=self._build_context_usage(
+                    response.usage,
+                    elided_turns,
+                    prelude=_usage_prelude,
+                    history=_usage_history,
+                ),
             )
         return response
 
     def _build_context_usage(
-        self, usage: dict | None, elided_turns: int,
+        self,
+        usage: dict | None,
+        elided_turns: int,
+        *,
+        prelude: tuple[ChatMessage, ...] | None = None,
+        history: tuple[ChatMessage, ...] | None = None,
     ) -> dict:
         """Build the context_usage payload returned alongside a ChatResponse.
 
         prompt_tokens comes from the model's reported usage when available;
         if the server didn't return usage (e.g. a fake_chat in tests), we
         fall back to 0 so the UI math is defined.
+
+        Memory Grades PR5: budget_tokens is HISTORY-ONLY. prelude_tokens /
+        history_tokens / total_input_tokens_est are estimated client-side so
+        the UI can warn on soft budgets without charging prelude against the
+        history envelope.
         """
         prompt_tokens = 0
         if isinstance(usage, dict):
@@ -1239,11 +1278,22 @@ class AgentLoop:
                 prompt_tokens = int(usage.get("prompt_tokens") or 0)
             except (TypeError, ValueError):
                 prompt_tokens = 0
+        prelude_est = (
+            sum(_estimate_message_tokens(m) for m in prelude) if prelude else 0
+        )
+        history_est = (
+            sum(_estimate_message_tokens(m) for m in history) if history else 0
+        )
         return {
             "prompt_tokens": prompt_tokens,
             "budget_tokens": self.history_token_budget,
             "elided_turns": elided_turns,
             "context_window": self.context_window,
+            "prelude_tokens": prelude_est,
+            "history_tokens": history_est,
+            "total_input_tokens_est": prelude_est + history_est,
+            "prelude_soft_budget": PRELUDE_SOFT_BUDGET_TOKENS,
+            "total_input_soft_budget": TOTAL_INPUT_SOFT_BUDGET_TOKENS,
         }
 
     def _tool_result_message(
@@ -1393,10 +1443,13 @@ class AgentLoop:
         if self.history_token_budget is not None:
             history_messages, marker, elided_turns = _apply_history_budget(
                 prelude, history_messages, self.history_token_budget,
+                charge_prelude=False,
             )
             if marker is not None:
                 prelude = prelude + (marker,)
         messages = prelude + history_messages
+        _usage_prelude = prelude
+        _usage_history = history_messages
 
         # Temporal splice — see sync-path note. Lives on the current user
         # turn so the prelude stays byte-identical across turns.
@@ -1667,7 +1720,12 @@ class AgentLoop:
                     tool_calls=round_tc_tuple,
                     usage=final_usage,
                     context_usage=(
-                        self._build_context_usage(final_usage, elided_turns)
+                        self._build_context_usage(
+                            final_usage,
+                            elided_turns,
+                            prelude=_usage_prelude,
+                            history=_usage_history,
+                        )
                         if self.history_token_budget is not None else None
                     ),
                 )
@@ -1771,7 +1829,12 @@ class AgentLoop:
             tool_calls=None,
             usage=final_usage,
             context_usage=(
-                self._build_context_usage(final_usage, elided_turns)
+                self._build_context_usage(
+                    final_usage,
+                    elided_turns,
+                    prelude=_usage_prelude,
+                    history=_usage_history,
+                )
                 if self.history_token_budget is not None else None
             ),
         )
