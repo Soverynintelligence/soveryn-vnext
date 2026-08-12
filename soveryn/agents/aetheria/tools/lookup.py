@@ -18,15 +18,23 @@ def build_get_node_tool(*, store: LatticeStore) -> ToolSpec:
         if node is None:
             return {
                 "stateable": [],
+                "context_only": [],
                 "uncertain_count_by_class": {},
+                "context_only_returned": 0,
+                "context_only_omitted": 0,
                 "not_found": True,
             }
-        return classify_and_render((node,))
+        # Detail mode: full body (Memory Grades PR1) — deep read without the
+        # list-mode top-N / body caps that protect search/recent from firehose.
+        return classify_and_render((node,), mode="detail")
 
     return ToolSpec(
         name="get_lattice_node",
         owner="aetheria",
-        description="Look up one lattice node by id.",
+        description=(
+            "Look up one lattice node by id (full content, deep read). "
+            "Use after search/recent when a truncated list hit needs the whole note."
+        ),
         schema={
             "type": "object",
             "properties": {

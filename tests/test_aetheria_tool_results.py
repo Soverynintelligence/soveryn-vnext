@@ -1,4 +1,11 @@
+"""Channel-aware tool render contracts (e264382 + Memory Grades list/detail)."""
+
 from soveryn.agents.aetheria.tool_results import classify_and_render
+from soveryn.platform.lattice.content_caps import (
+    CHANNEL_A_BODY_MAX_CHARS,
+    CHANNEL_B_BODY_MAX_CHARS,
+    CHANNEL_B_TOOL_TOP_N,
+)
 from soveryn.platform.lattice.legacy import Node
 from soveryn.platform.lattice.provenance import ProvenanceClass
 
@@ -46,24 +53,15 @@ def test_channel_a_entries_rendered_with_provenance_phrase() -> None:
     assert entry["id"] == "a1"
     assert entry["provenance_class"] == "witnessed"
     assert "I remember" in entry["rendered"]
+    assert out["context_only_returned"] == 0
+    assert out["context_only_omitted"] == 0
 
 
-
-# CONTRACT CHANGED 2026-08-03, by decision.
+# CONTRACT (e264382, 2026-08-03) + Memory Grades (2026-08-11):
 #
-# Channel B was count-only: content withheld entirely so unverified memory could
-# never be stated as fact. It worked, and it also produced amnesia — asked what
-# she remembered about Jon, Vett found 10 matching rows, received {"legacy": 10},
-# and truthfully reported she had nothing. Suppression did not prevent a false
-# statement, it produced one.
-#
-# Channel B now returns content, explicitly typed with provenance_class and a
-# caveat. Channel A is UNCHANGED — only provenanced entries are assertable.
-# Assertion discipline moved to the agent directive, which can distinguish a
-# claim about the world from a memory of one's own history.
-#
-# What these tests now guard: B content is present AND unmistakably labelled,
-# and nothing from B ever appears in `stateable`.
+# Channel B returns content + caveat (never count-only-only — that produced
+# false amnesia). List mode may truncate/top-N bodies but must still return
+# some content when B matches exist. Counts cover the full result set.
 
 
 def test_channel_b_entries_returned_but_labelled() -> None:
@@ -72,15 +70,15 @@ def test_channel_b_entries_returned_but_labelled() -> None:
         _node(node_id="b2", provenance_cls=ProvenanceClass.LEGACY, content="OTHER SECRET"),
     )
     out = classify_and_render(nodes)
-    # Still never assertable.
     assert out["stateable"] == []
     assert out["uncertain_count_by_class"] == {"legacy": 2}
-    # But now recallable, and every entry carries its class and a caveat.
     assert len(out["context_only"]) == 2
     assert {e["content"] for e in out["context_only"]} == {"SECRET CONTENT", "OTHER SECRET"}
     for e in out["context_only"]:
         assert e["provenance_class"] == "legacy"
         assert "UNVERIFIED" in e["caveat"]
+    assert out["context_only_returned"] == 2
+    assert out["context_only_omitted"] == 0
 
 
 def test_mixed_channels_split_correctly() -> None:
@@ -92,8 +90,6 @@ def test_mixed_channels_split_correctly() -> None:
     assert len(out["stateable"]) == 1
     assert out["stateable"][0]["id"] == "a1"
     assert out["uncertain_count_by_class"] == {"legacy": 1}
-    # B content is now returned (2026-08-03) — the guarantee is that it is
-    # labelled and never promoted into `stateable`, not that it is invisible.
     assert [e["content"] for e in out["context_only"]] == ["hidden"]
     assert all(e["provenance_class"] == "legacy" for e in out["context_only"])
     assert "hidden" not in repr(out["stateable"])
@@ -110,15 +106,19 @@ def test_uncanonical_node_is_channel_b_even_if_provenance_witnessed() -> None:
     out = classify_and_render(nodes)
     assert out["stateable"] == []
     assert out["uncertain_count_by_class"] == {"witnessed": 1}
-    # A witnessed-but-uncanonical node is still Channel B: returned as
-    # labelled context, never assertable.
     assert "HIDDEN" not in repr(out["stateable"])
     assert [e["content"] for e in out["context_only"]] == ["HIDDEN"]
 
 
 def test_empty_input_returns_empty_shape() -> None:
     out = classify_and_render(())
-    assert out == {"stateable": [], "context_only": [], "uncertain_count_by_class": {}}
+    assert out == {
+        "stateable": [],
+        "context_only": [],
+        "uncertain_count_by_class": {},
+        "context_only_returned": 0,
+        "context_only_omitted": 0,
+    }
 
 
 def test_legacy_promoted_consolidated_source_renders_with_older_notes_phrase() -> None:
@@ -135,3 +135,105 @@ def test_legacy_promoted_consolidated_source_renders_with_older_notes_phrase() -
     assert len(out["stateable"]) == 1
     rendered = out["stateable"][0]["rendered"]
     assert "older reviewed notes" in rendered
+
+
+def test_list_mode_truncates_long_channel_b_bodies() -> None:
+    long = "X" * (CHANNEL_B_BODY_MAX_CHARS + 500)
+    nodes = (
+        _node(node_id="b1", provenance_cls=ProvenanceClass.LEGACY, content=long),
+    )
+    out = classify_and_render(nodes, mode="list")
+    assert len(out["context_only"]) == 1
+    e = out["context_only"][0]
+    assert e["truncated"] is True
+    assert e["original_chars"] == len(long)
+    assert len(e["content"]) <= CHANNEL_B_BODY_MAX_CHARS
+    assert e["content"].endswith("…")
+    assert "UNVERIFIED" in e["caveat"]
+    # Never count-only-only
+    assert e["content"]
+
+
+def test_list_mode_top_n_channel_b_with_honest_counts() -> None:
+    nodes = tuple(
+        _node(
+            node_id=f"b{i}",
+            provenance_cls=ProvenanceClass.LEGACY,
+            content=f"body-{i}",
+        )
+        for i in range(CHANNEL_B_TOOL_TOP_N + 4)
+    )
+    out = classify_and_render(nodes, mode="list")
+    assert out["uncertain_count_by_class"] == {"legacy": CHANNEL_B_TOOL_TOP_N + 4}
+    assert out["context_only_returned"] == CHANNEL_B_TOOL_TOP_N
+    assert out["context_only_omitted"] == 4
+    assert len(out["context_only"]) == CHANNEL_B_TOOL_TOP_N
+    # Preserves input order (search rank / recency)
+    assert [e["id"] for e in out["context_only"]] == [
+        f"b{i}" for i in range(CHANNEL_B_TOOL_TOP_N)
+    ]
+    # Never count-only when B matches exist
+    assert all(e["content"] for e in out["context_only"])
+
+
+def test_list_mode_truncates_long_channel_a_rendered() -> None:
+    long = "Y" * (CHANNEL_A_BODY_MAX_CHARS + 200)
+    nodes = (
+        _node(node_id="a1", provenance_cls=ProvenanceClass.WITNESSED, content=long),
+    )
+    out = classify_and_render(nodes, mode="list")
+    assert len(out["stateable"]) == 1
+    e = out["stateable"][0]
+    assert e.get("truncated") is True
+    assert e["original_chars"] == len(long)
+    # Phrase-wrapped but body contribution was capped
+    assert "I remember" in e["rendered"]
+    assert len(e["rendered"]) < len(long) + 50
+
+
+def test_detail_mode_returns_raw_content_for_channel_a() -> None:
+    content = "full detail body for assertable memory"
+    nodes = (
+        _node(node_id="a1", provenance_cls=ProvenanceClass.WITNESSED, content=content),
+    )
+    out = classify_and_render(nodes, mode="detail")
+    assert len(out["stateable"]) == 1
+    e = out["stateable"][0]
+    assert e["content"] == content
+    assert "I remember" in e["rendered"]
+    assert e["content_source"] == "lattice"
+    assert out["context_only"] == []
+
+
+def test_detail_mode_returns_raw_content_and_caveat_for_channel_b() -> None:
+    content = "unverified full note " * 20
+    nodes = (
+        _node(node_id="b1", provenance_cls=ProvenanceClass.LEGACY, content=content),
+    )
+    out = classify_and_render(nodes, mode="detail")
+    assert out["stateable"] == []
+    assert len(out["context_only"]) == 1
+    e = out["context_only"][0]
+    assert e["content"] == content
+    assert "UNVERIFIED" in e["caveat"]
+    assert e["content_source"] == "lattice"
+    assert out["context_only_omitted"] == 0
+
+
+def test_detail_mode_missing_full_text_ref_sets_flag() -> None:
+    nodes = (
+        _node(
+            node_id="b1",
+            provenance_cls=ProvenanceClass.LEGACY,
+            content="lattice head only",
+        ),
+    )
+    # Inject full_text_ref into provenance
+    assert nodes[0].provenance is not None
+    nodes[0].provenance["full_text_ref"] = "journal_archive:missing-id"
+    # Node is frozen? Check if provenance is mutable
+    out = classify_and_render(nodes, mode="detail")
+    e = out["context_only"][0]
+    assert e["content"] == "lattice head only"
+    assert e.get("full_text_missing") is True
+    assert e.get("full_text_ref") == "journal_archive:missing-id"
