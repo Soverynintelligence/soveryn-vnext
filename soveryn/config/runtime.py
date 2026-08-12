@@ -132,11 +132,21 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         #
         # Revert: host="127.0.0.1", port=8091, model_alias="vett-scotty".
         # Backup at runtime.py.bak-before-spark-move.
+        # REPOINTED TO QWEN 2026-08-12, at Jon's direction. laguna-serve was
+        # stopped and disabled to free the Spark for the honesty bake-off, and
+        # Laguna (~85 GB) cannot coexist with Qwen (~48 GB) in 121 GB.
+        #
+        # KNOWN TRADEOFF, recorded rather than buried: the 08-02 note above
+        # justified moving TO Laguna because Qwen3.6-27B denied its own action
+        # 30/30 vs Laguna 20/30. The 2026-08-11 run reproduces that on the
+        # bigger model: Qwen3.6-35B 30/30 false-deny, Laguna 18/30. So this is
+        # a knowing step onto the worse model for Vett's core failure mode.
+        # Revert: port=8000, model_alias="laguna", after starting laguna-serve.
         host="10.10.10.2",              # Spark, over the CX-7 link
-        port=8000,                      # vLLM
-        model_path=MODEL_ROOT / "Laguna-S-2.1-NVFP4",   # cosmetic for a remote server
+        port=8001,                      # vLLM (qwen-serve.service)
+        model_path=MODEL_ROOT / "Qwen3.6-35B-A3B-NVFP4",  # cosmetic for a remote server
         mmproj_path=None,
-        role="Vett + Scotty shared Laguna-S-2.1 (Spark, vLLM)",
+        role="Vett + Scotty shared Qwen3.6-35B-A3B (Spark, vLLM)",
         # Flipped to True 2026-06-12: vett-scotty router child now uses
         # froggeric/Qwen-Fixed-Chat-Templates v20 (configured via
         # `chat-template-file = ...` in router-presets.ini [vett-scotty]),
@@ -144,8 +154,14 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         # + live-verified through router :8090 (multi-system probe returned
         # "ALL_SURVIVED" exact). The transport adapter `prepare_wire_messages`
         # becomes a pass-through for this server.
-        supports_multi_system_messages=True,
-        model_alias="laguna",           # the alias vLLM serves on the Spark
+        # FLIPPED BACK TO FALSE 2026-08-12 with the move to Qwen on :8001.
+        # True was correct only because the old vett-scotty router child ran
+        # froggeric/Qwen-Fixed-Chat-Templates v20, which honored messages[1:]
+        # role=system. Stock Qwen3.6 does not: it returns HTTP 400
+        # 'System message must be at the beginning.' False re-engages
+        # prepare_wire_messages to fold them into the leading system turn.
+        supports_multi_system_messages=False,
+        model_alias="qwen36-35b",       # the alias vLLM serves on the Spark
         # FLIPPED TO FALSE 2026-08-03. Either value silences the </think> leak,
         # so this is free to choose. Reasoning was ON from the move until now,
         # and the overnight harness run showed reasoning is not a free good:
