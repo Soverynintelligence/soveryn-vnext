@@ -38,7 +38,10 @@ data/ares/
 data/telemetry/
 # Conversation + lattice DBs, pinned memory, salience, .migrated markers.
 # Souls/ IS tracked (character config) — kept via the negation below.
-data/memory/
+# Exclude the CONTENTS, not the directory: git will not descend into an
+# excluded directory, so `data/memory/` made the souls negations below
+# unreachable. aetheria.origin.md was silently untracked because of it.
+data/memory/*
 !data/memory/souls/
 !data/memory/souls/**
 data/aetheria_heartbeat_thoughts*
