@@ -194,6 +194,29 @@ SURFACES: tuple[Surface, ...] = (
               "laguna-serve is stopped and disabled, so probing :8000 would "
               "page about a service we took down on purpose.",
     ),
+    # The three Spark apps, probed through their public hostnames so the check
+    # covers the whole path: Cloudflare -> app -> model. They bind 127.0.0.1 on
+    # the Spark, so the tower cannot reach them any other way.
+    #
+    # expect_contains model_ok is the point. On 2026-08-12 all three ran happily
+    # against a backend that had moved: systemd green, /health green, and every
+    # visitor got the fallback message. /health now asks the backend whether it
+    # serves the configured model, so a repeat says so instead of looking fine.
+    Surface(
+        "pondwright-chat", Kind.HTTP, "https://chat.pondwright.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="CWG chat agent on the Spark; red means it lost its model backend.",
+    ),
+    Surface(
+        "seneca-public", Kind.HTTP, "https://ask.soverynintelligence.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="The public voice of SOVERYN. Visible to anyone reading the site.",
+    ),
+    Surface(
+        "atticus", Kind.HTTP, "https://atticus.historysledger.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="History's Ledger curator; cite-or-drop depends on a live model.",
+    ),
     Surface(
         "embeddings", Kind.HTTP, "http://127.0.0.1:8096/health",
         owner="aetheria", interval_s=600,
