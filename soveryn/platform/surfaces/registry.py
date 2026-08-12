@@ -187,9 +187,12 @@ SURFACES: tuple[Surface, ...] = (
         owner="soveryn", interval_s=300,
     ),
     Surface(
-        "laguna-spark", Kind.HTTP, "http://10.10.10.2:8000/v1/models",
-        owner="vett", interval_s=600, expect_contains="laguna",
-        notes="Vett and Scotty's backend, over the CX-7 fabric.",
+        "qwen-spark", Kind.HTTP, "http://10.10.10.2:8001/v1/models",
+        owner="vett", interval_s=600, expect_contains="qwen36-35b",
+        notes="Backend for Vett, Scotty, PondWright, Atticus and Seneca, over "
+              "the CX-7 fabric. Was laguna on :8000 until 2026-08-12; "
+              "laguna-serve is stopped and disabled, so probing :8000 would "
+              "page about a service we took down on purpose.",
     ),
     Surface(
         "embeddings", Kind.HTTP, "http://127.0.0.1:8096/health",

@@ -151,7 +151,10 @@ Optional always-on (only if VRAM headroom after pins):
 | Host | `10.10.10.2:8001` (was `:8000`) |
 | Alias | **`qwen36-35b`** (was `laguna`) — see the 2026-08-12 note below |
 | Unit | **`qwen-serve.service`** (systemd **user** unit, `Restart=always`, lingering on, survives reboot). `laguna-serve.service` is **stopped and disabled**. |
-| Agents | Vett + Scotty share one model (or split later if needed) |
+| Agents | **Everything on the Spark shares this one model** (decided 2026-08-12): Vett, Scotty, PondWright (`:8200`), Atticus (`:8500`), Seneca (`soveryn-agent`, `:8400`). |
+| ⚠️ Stopping this unit | takes **all five** down. `laguna-serve`'s own description said "Vett, Scotty and PondWright" — it was **incomplete**, and trusting it meant Atticus and Seneca stayed pointed at a dead port. **Sweep for `:8001` consumers before stopping, don't read the description.** |
+| Per-agent wiring | each app's `config.json` (`laguna_url` + `model`) and `laguna.py`. **`chat_template_kwargs {"enable_thinking": false}` is required in `laguna.py`** — without it Qwen3.6 spends the whole `max_tokens` budget inside `<think>` and the app shows an empty reply or its fallback message. |
+| Laguna | `laguna-serve` **stopped and disabled** — it does not return on reboot, deliberately. Weights remain at `~/models/Laguna-S-2.1-NVFP4`. |
 | Multi-system messages | `supports_multi_system_messages=False`. Stock Qwen3.6 returns `400 System message must be at the beginning`; `True` was only ever correct for the patched Qwen template the old router child used. |
 | Why | Laguna (~85 GiB) and Qwen (~48 GiB) cannot coexist in 121 GiB, and the Spark was needed for the 2026-08-11 honesty bake-off. **Known tradeoff, recorded not buried:** on the self-report harness Qwen3.6-35B false-denies **30/30**, Laguna **18/30**. This is a knowing step onto the worse model for Vett's core failure mode; revisit when the next Qwen lands. |
 | Thinking | `enable_thinking: false` unless a controlled A/B says otherwise |
@@ -168,6 +171,8 @@ Optional always-on (only if VRAM headroom after pins):
 | Dual routers | `:8090` blackwell + `:8091` quadro — **active** |
 | Aetheria pin | Blackwell UUID on `soveryn-router.service` |
 | Spark workers | `runtime.py` → `10.10.10.2:8001` / `qwen36-35b` (**changed 2026-08-12**; `laguna-serve` stopped + disabled) |
+| Spark app agents | PondWright `:8200`, Atticus `:8500`, Seneca `:8400` — all repointed to `:8001` / `qwen36-35b` 2026-08-12 |
+| Ares surface probe | `qwen-spark` → `:8001`, expects `qwen36-35b` (was `laguna-spark` → `:8000`; left as-is it would page forever about a service stopped on purpose) |
 | Embeddings | `soveryn-embeddings.service` on Quadro `…990a` :8096 |
 | vNext | `:5001` active |
 | Heartbeat / dream / patrol / signal | user units active |
@@ -305,7 +310,10 @@ Today three stories fight:
 | 5001 | vNext Flask |
 | 5066 | messie (optional) |
 | 8000 | Spark Laguna (remote) — **stopped + disabled 2026-08-12** |
-| 8001 | Spark Qwen3.6-35B-A3B (remote) — Vett, Scotty, PondWright |
+| 8001 | Spark Qwen3.6-35B-A3B (remote) — Vett, Scotty, PondWright, Atticus, Seneca |
+| 8200 | PondWright agent (on Spark) |
+| 8400 | Seneca / soveryn-agent (on Spark) |
+| 8500 | Atticus (on Spark) |
 | 8087 | Parakeet STT |
 | 8089 | Dream/cognition surface (live unit alias `dream`) |
 | 8090 | Blackwell router (Aetheria) |
@@ -321,7 +329,8 @@ Today three stories fight:
 ```text
 ALWAYS ON
   Self:     Aetheria @ Blackwell :8090          (identity + chat + pulse)
-  Workers:  Qwen3.6-35B @ Spark :8001         (Vett + Scotty + PondWright)
+  Workers:  Qwen3.6-35B @ Spark :8001         (Vett, Scotty, PondWright,
+                                               Atticus, Seneca -- ALL of them)
   Helpers:  Quadro pair NVLink :8091           (embed / cognition / reflection;
             optional tensor-split mid model on BOTH Quadros only)
   Memory:   Embed   @ one Quadro :8096         (lattice)
