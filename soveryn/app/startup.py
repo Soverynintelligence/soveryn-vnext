@@ -896,6 +896,16 @@ def create_app(
                 # empty_turn_poisoning recurs, fix it at root, not by capping her.
                 # 8192 out + the 8K history budget fits well inside 32K context.
                 kwargs["max_tokens"] = 8192
+                # Per-LLM-call timeout. Fleet default is 120s (interactive short
+                # turns). Aetheria's assembled /chat prompt is multi-k to ~17k
+                # tokens (tools + soul + continuity + 8k history). With cache-ram
+                # disabled, cold prefill alone routinely ran 90–180s and every
+                # heartbeat tick since 2026-08-08 504'd with
+                # `aetheria_primary: timeout after 120.0s`. Vett already has 300s
+                # for the same class of large-context work. 300s here is a safety
+                # net for rare cold prefills even after cache-ram is restored;
+                # warm cache turns finish in seconds and never sit on the budget.
+                kwargs["chat_timeout_seconds"] = 300.0
                 # Hard cap on per-request reasoning at the wire level. The
                 # router preset for Aetheria has `reasoning = off` and the
                 # Gemma-4-specific `enable_thinking=true` (inverse logic for
