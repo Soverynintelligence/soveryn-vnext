@@ -64,3 +64,7 @@ eval_runs/*.stderr
 
 # Runtime data backups (created by scripts/backup_soveryn.sh — large, local-only)
 backups/
+
+# Thermal samples: a couple of MB a month of machine readings, regenerated
+# continuously. The collector is code and belongs in git; the log does not.
+data/thermal/
