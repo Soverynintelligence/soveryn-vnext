@@ -195,6 +195,131 @@ def refresh_census():
     }), 200
 
 
+@bp.get("/api/citizens/post")
+def list_house_post():
+    """Recent House Post traffic (all citizens)."""
+    path = _db_path()
+    if not path.exists():
+        return jsonify({"posts": [], "chief_of_staff": "aetheria",
+                        "note": "no registry yet"}), 200
+    try:
+        limit = min(int(request.args.get("limit", 40)), 100)
+    except (TypeError, ValueError):
+        limit = 40
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5.0)
+        conn.row_factory = sqlite3.Row
+    except sqlite3.Error as exc:
+        return jsonify({"posts": [], "note": f"registry unreadable: {exc}"}), 200
+    try:
+        # Ensure schema exists even if only RO open failed migration — use empty
+        from soveryn.citizens import post as house_post
+        # RO connection cannot CREATE TABLE; if missing, return empty with note
+        have = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='house_post'"
+        ).fetchone()
+        if have is None:
+            return jsonify({
+                "posts": [],
+                "chief_of_staff": house_post.CHIEF_OF_STAFF_ID,
+                "note": "house_post not migrated yet — run refresh census",
+            }), 200
+        posts = house_post.recent(conn, limit=limit)
+        unread_cos = house_post.unread_for_cos(conn, limit=50)
+        return jsonify({
+            "posts": posts,
+            "chief_of_staff": house_post.CHIEF_OF_STAFF_ID,
+            "cos_unread": len(unread_cos),
+            "reading": "house-local post; desks also get inbox/ copies",
+        }), 200
+    finally:
+        conn.close()
+
+
+@bp.post("/api/citizens/post")
+def create_house_post():
+    """Send a House Post memo/request/report. Localhost-only write.
+
+    Body JSON:
+      from_id, to_id, body, kind?, subject?
+    Or route via COS:
+      via_cos: true, assignee_id, body, subject?
+      (from Jon: omit from_id — recorded as COS acting for Jon)
+    """
+    _require_localhost()
+    body_json = request.get_json(silent=True) or {}
+    body = body_json.get("body")
+    if not isinstance(body, str) or not body.strip():
+        return jsonify({
+            "error": {"code": "missing_field",
+                      "message": "Required field: body"},
+        }), 400
+
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from soveryn.citizens import post as house_post
+        from soveryn.citizens.registry import connect as reg_connect
+
+        with reg_connect(path) as conn:
+            if body_json.get("via_cos"):
+                assignee = (
+                    body_json.get("assignee_id") or body_json.get("to_id") or ""
+                ).strip()
+                if not assignee:
+                    return jsonify({
+                        "error": {"code": "missing_field",
+                                  "message": "via_cos requires assignee_id"},
+                    }), 400
+                raw_from = (body_json.get("from_id") or "jon").strip() or "jon"
+                sender = (
+                    raw_from
+                    if raw_from in ("aetheria", "vett", "scotty")
+                    else "aetheria"
+                )
+                note = body.strip()
+                if raw_from not in ("aetheria", "vett", "scotty"):
+                    note = f"(from Jon)\n\n{note}"
+                result = house_post.route_via_cos(
+                    conn,
+                    from_id=sender,
+                    assignee_id=assignee,
+                    body=note,
+                    at=_utc_now(),
+                    subject=body_json.get("subject"),
+                )
+                return jsonify({"ok": True, "routed": result}), 201
+
+            from_id = (body_json.get("from_id") or "").strip()
+            to_id = (body_json.get("to_id") or "").strip()
+            if not from_id or not to_id:
+                return jsonify({
+                    "error": {"code": "missing_field",
+                              "message": "Required: from_id, to_id, body"},
+                }), 400
+            kind = (body_json.get("kind") or "memo").strip()
+            post_id = house_post.send(
+                conn,
+                from_id=from_id,
+                to_id=to_id,
+                body=body.strip(),
+                at=_utc_now(),
+                kind=kind,
+                subject=body_json.get("subject"),
+            )
+            row = conn.execute(
+                "SELECT * FROM house_post WHERE id = ?", (post_id,)
+            ).fetchone()
+            return jsonify(dict(row) if row else {"id": post_id}), 201
+    except ValueError as exc:
+        return jsonify({"error": {"code": "invalid", "message": str(exc)}}), 400
+    except sqlite3.IntegrityError as exc:
+        return jsonify({"error": {"code": "invalid", "message": str(exc)}}), 400
+    except Exception as exc:
+        return jsonify({"error": {"code": "post_failed", "message": str(exc)}}), 500
+
+
+
 @bp.get("/api/citizens/<citizen_id>")
 def citizen_one(citizen_id: str):
     path = _db_path()

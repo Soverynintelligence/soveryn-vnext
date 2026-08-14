@@ -109,6 +109,27 @@ CREATE TABLE IF NOT EXISTS commissions (
 );
 CREATE INDEX IF NOT EXISTS commissions_by_citizen
   ON commissions(citizen_id, created_at DESC);
+
+-- House Post: inter-citizen mail (charter: they work together, not as islands).
+-- Aetheria as Chief of Staff is the default router; any citizen may write.
+CREATE TABLE IF NOT EXISTS house_post (
+  id            TEXT PRIMARY KEY,
+  from_id       TEXT NOT NULL REFERENCES citizens(id),
+  to_id         TEXT NOT NULL REFERENCES citizens(id),
+  kind          TEXT NOT NULL DEFAULT 'memo'
+                CHECK (kind IN ('memo','directive','report','request','ack')),
+  subject       TEXT,
+  body          TEXT NOT NULL,
+  state         TEXT NOT NULL DEFAULT 'unread'
+                CHECK (state IN ('unread','read','acted')),
+  commission_id TEXT,
+  created_at    TEXT NOT NULL,
+  read_at       TEXT
+);
+CREATE INDEX IF NOT EXISTS house_post_by_to
+  ON house_post(to_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS house_post_by_from
+  ON house_post(from_id, created_at DESC);
 """
 
 
@@ -277,6 +298,7 @@ def list_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     """Roster plus duties and open commissions — the Phase 3 board shape."""
     from soveryn.citizens import commissions, duties
+    from soveryn.citizens.post import CHIEF_OF_STAFF_ID
 
     out: list[dict[str, Any]] = []
     for record in list_citizens(conn):
@@ -286,6 +308,10 @@ def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         record["duties_enabled"] = [
             d["kind"] for d in duty_rows if d.get("enabled")
         ]
+        record["is_chief_of_staff"] = cid == CHIEF_OF_STAFF_ID or any(
+            d.get("kind") == "chief_of_staff" and d.get("enabled")
+            for d in duty_rows
+        )
         queued = commissions.for_citizen(conn, cid, state="queued", limit=200)
         running = commissions.for_citizen(conn, cid, state="running", limit=50)
         record["open_commissions"] = len(queued) + len(running)
@@ -300,5 +326,15 @@ def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         record["last_error"] = (
             failed["error"] if failed and failed["error"] else None
         )
+        # Unread house post addressed to this citizen
+        try:
+            unread = conn.execute(
+                "SELECT COUNT(*) AS n FROM house_post "
+                "WHERE to_id = ? AND state = 'unread'",
+                (cid,),
+            ).fetchone()
+            record["unread_post"] = int(unread["n"]) if unread else 0
+        except sqlite3.Error:
+            record["unread_post"] = 0
         out.append(record)
     return out

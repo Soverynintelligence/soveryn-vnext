@@ -50,7 +50,11 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             soul_path="data/memory/souls/aetheria.md",
             model_server="aetheria_primary",
             workspace_path=str(DEFAULT_WORKSPACES / "aetheria"),
-            notes="Blackwell :8090, alone. Never co-tenanted (charter §8).",
+            notes=(
+                "Chief of Staff of the house. Blackwell :8090, alone — never "
+                "co-tenanted (charter §8). Routes House Post, assigns commissions "
+                "to Vett/Scotty, holds the partnership surface with Jon."
+            ),
         ),
         ("soveryn-heartbeat.service", "soveryn-dream.service",
          "soveryn-cognition-cycle.service", "soveryn-signal-bridge.service"),

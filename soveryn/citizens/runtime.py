@@ -156,6 +156,31 @@ def execute_claimed(
                 conn, commission_id, result_ref=str(out_path), at=when
             )
             row = commissions.get(conn, commission_id)
+            # Report upward so COS (and the board) see outcomes without Jon
+            # hunting outboxes. Self-posts from COS are skipped inside report_to_cos.
+            try:
+                from soveryn.citizens import post as house_post
+
+                excerpt = (content or "").strip()
+                if len(excerpt) > 1200:
+                    excerpt = excerpt[:1200] + "…"
+                house_post.report_to_cos(
+                    conn,
+                    from_id=citizen_id,
+                    body=(
+                        f"Commission `{commission_id}` **done**.\n\n"
+                        f"**Task:** {body.strip()[:500]}\n\n"
+                        f"**Result:**\n{excerpt}\n\n"
+                        f"_outbox: {out_path}_"
+                    ),
+                    at=when,
+                    commission_id=commission_id,
+                    subject=f"done · {citizen_id}",
+                )
+            except Exception:
+                logger.exception(
+                    "house post report failed for commission %s", commission_id
+                )
     except Exception as exc:
         logger.exception(
             "commission %s for %s failed", commission_id, citizen_id
@@ -168,6 +193,25 @@ def execute_claimed(
             except Exception:
                 logger.exception(
                     "could not mark commission %s failed", commission_id
+                )
+            try:
+                from soveryn.citizens import post as house_post
+
+                house_post.report_to_cos(
+                    conn,
+                    from_id=citizen_id,
+                    body=(
+                        f"Commission `{commission_id}` **failed**.\n\n"
+                        f"**Task:** {body.strip()[:500]}\n\n"
+                        f"**Error:** {exc!r}"
+                    ),
+                    at=when,
+                    commission_id=commission_id,
+                    subject=f"failed · {citizen_id}",
+                )
+            except Exception:
+                logger.exception(
+                    "house post failure report failed for %s", commission_id
                 )
             row = commissions.get(conn, commission_id)
     assert row is not None

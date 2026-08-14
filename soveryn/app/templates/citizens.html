@@ -264,6 +264,43 @@
 <section class="lab-panel">
   <div class="lab-panel-head">
     <span class="n">03</span>
+    <h2>House Post · Chief of Staff</h2>
+    <span class="r" data-post-reading>inter-citizen mail · desks/inbox</span>
+  </div>
+  <div class="lab-panel-body">
+    <p class="spawn-note" style="padding:0 0 12px;border:0">
+      Citizens write each other here. Aetheria is <strong>Chief of Staff</strong>:
+      route work through her to put a commission on Vett or Scotty and a directive in their inbox.
+      Completed commissions report upward to COS automatically.
+    </p>
+    <form class="commission" data-post-form>
+      <div class="row">
+        <select data-post-mode aria-label="Mode">
+          <option value="via_cos">Route via COS → assignee + commission</option>
+          <option value="direct">Direct post (peer to peer)</option>
+        </select>
+        <select data-post-assignee aria-label="To / assignee">
+          <option value="vett">vett</option>
+          <option value="scotty">scotty</option>
+          <option value="aetheria">aetheria (COS)</option>
+        </select>
+        <input type="text" data-post-subject placeholder="subject (optional)" style="flex:1;min-width:160px">
+      </div>
+      <textarea data-post-body placeholder="what should happen? (COS will commission + direct when routing)" required></textarea>
+      <div class="row end">
+        <span class="err" data-post-err></span>
+        <button type="submit" class="act primary">Send</button>
+      </div>
+    </form>
+  </div>
+  <div class="commissions" data-posts>
+    <div class="empty">no posts yet.</div>
+  </div>
+</section>
+
+<section class="lab-panel">
+  <div class="lab-panel-head">
+    <span class="n">04</span>
     <h2>New commission</h2>
     <span class="r">localhost write · result → outbox</span>
   </div>
@@ -288,7 +325,7 @@
 
 <section class="lab-panel">
   <div class="lab-panel-head">
-    <span class="n">04</span>
+    <span class="n">05</span>
     <h2>Recent commissions</h2>
     <span class="r">newest first</span>
   </div>
@@ -309,6 +346,10 @@
   const spawnedCountEl = document.querySelector("[data-spawned-count]");
   const form = document.querySelector("[data-commission-form]");
   const errEl = document.querySelector("[data-commission-err]");
+  const postForm = document.querySelector("[data-post-form]");
+  const postErr = document.querySelector("[data-post-err]");
+  const postsEl = document.querySelector("[data-posts]");
+  const postReading = document.querySelector("[data-post-reading]");
 
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, c => ({
@@ -345,10 +386,10 @@
       return `
         <article class="citizen" data-citizen="${esc(c.id)}" data-state="${esc(c.status)}">
           <div>
-            <div class="name"><span class="dot ${esc(c.status)}"></span>${esc(c.display_name || c.id)}</div>
+            <div class="name"><span class="dot ${esc(c.status)}"></span>${esc(c.display_name || c.id)}${c.is_chief_of_staff ? '<span class="chip" style="margin-left:8px">chief of staff</span>' : ''}</div>
             <div class="meta">
               <strong>${esc(c.id)}</strong> · model ${esc(c.model_server || "—")} · ${last}
-              · open commissions <strong>${open}</strong>${spawned}
+              · open commissions <strong>${open}</strong>${spawned}${(c.unread_post || 0) ? ` · <strong>${c.unread_post}</strong> unread post` : ""}
             </div>
             <div class="chips">${dutyChips(c.duties)}</div>
             ${notes}${err}
@@ -422,6 +463,26 @@
     });
   }
 
+  function renderPosts(items) {
+    if (!items || !items.length) {
+      postsEl.innerHTML = '<div class="empty">no posts yet — send one above.</div>';
+      return;
+    }
+    postsEl.innerHTML = items.map(p => {
+      const sub = p.subject ? esc(p.subject) : esc(p.kind || "memo");
+      return `
+        <div class="comm">
+          <div class="head">
+            <span><strong style="color:var(--ink-2)">${esc(p.from_id)}</strong> → <strong style="color:var(--ink-2)">${esc(p.to_id)}</strong>
+              · ${esc(p.kind)} · ${esc((p.created_at || "").replace("T"," ").replace("Z",""))}</span>
+            <span class="state ${esc(p.state === "unread" ? "running" : p.state === "acted" ? "done" : "")}">${esc(p.state)}</span>
+          </div>
+          <div class="body"><strong>${sub}</strong><br>${esc((p.body || "").slice(0, 320))}</div>
+          ${p.commission_id ? `<div class="ref">commission: ${esc(p.commission_id)}</div>` : ""}
+        </div>`;
+    }).join("");
+  }
+
   function renderCommissions(items) {
     if (!items.length) {
       commissionsEl.innerHTML = '<div class="empty">none yet.</div>';
@@ -459,6 +520,59 @@
     }
     all.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
     renderCommissions(all.slice(0, 12));
+    try {
+      const pr = await fetch("/api/citizens/post?limit=20", { credentials: "same-origin" });
+      const pj = await pr.json();
+      if (postReading) {
+        postReading.textContent = pj.cos_unread
+          ? `COS unread ${pj.cos_unread} · ${pj.reading || "house post"}`
+          : (pj.reading || "house post");
+      }
+      renderPosts(pj.posts || []);
+    } catch (e) {
+      if (postsEl) postsEl.innerHTML = `<div class="empty">post feed unavailable</div>`;
+    }
+  }
+
+  if (postForm) {
+    postForm.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      if (postErr) postErr.textContent = "";
+      const mode = postForm.querySelector("[data-post-mode]").value;
+      const assignee = postForm.querySelector("[data-post-assignee]").value;
+      const subject = postForm.querySelector("[data-post-subject]").value.trim();
+      const body = postForm.querySelector("[data-post-body]").value.trim();
+      if (!body) {
+        if (postErr) postErr.textContent = "body required";
+        return;
+      }
+      let payload;
+      if (mode === "via_cos") {
+        payload = { via_cos: true, assignee_id: assignee, body, subject: subject || undefined };
+      } else {
+        payload = {
+          from_id: "aetheria",
+          to_id: assignee,
+          body,
+          kind: "memo",
+          subject: subject || undefined,
+        };
+      }
+      const res = await fetch("/api/citizens/post", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (postErr) postErr.textContent = (data.error && data.error.message) || "send failed";
+        return;
+      }
+      postForm.querySelector("[data-post-body]").value = "";
+      postForm.querySelector("[data-post-subject]").value = "";
+      await loadBoard();
+    });
   }
 
   document.querySelector("[data-refresh]").addEventListener("click", async () => {
