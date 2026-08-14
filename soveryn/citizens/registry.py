@@ -97,7 +97,13 @@ CREATE TABLE IF NOT EXISTS commissions (
                CHECK (state IN ('queued','running','done','failed')),
   result_ref   TEXT,
   created_at   TEXT,
-  completed_at TEXT
+  completed_at TEXT,
+  -- Who holds it and since when. Without these a worker that dies leaves a row
+  -- in `running` that nobody can attribute or time out, and the work is lost
+  -- silently — which is the failure mode that costs most.
+  claimed_by   TEXT,
+  claimed_at   TEXT,
+  error        TEXT
 );
 CREATE INDEX IF NOT EXISTS commissions_by_citizen
   ON commissions(citizen_id, created_at DESC);
@@ -123,10 +129,24 @@ def connect(path: str | Path) -> Iterator[sqlite3.Connection]:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(_SCHEMA)
+        _migrate(conn)
         conn.commit()
         yield conn
     finally:
         conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns a registry created by an earlier build is missing.
+
+    `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so
+    a db written before commissions grew claim tracking would keep the old shape
+    and every claim would fail on a missing column.
+    """
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(commissions)")}
+    for column in ("claimed_by", "claimed_at", "error"):
+        if column not in have:
+            conn.execute(f"ALTER TABLE commissions ADD COLUMN {column} TEXT")
 
 
 def register(conn: sqlite3.Connection, citizen: Citizen) -> None:
