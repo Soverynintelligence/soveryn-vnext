@@ -113,10 +113,10 @@ def resolve_full_text_ref(
 ) -> str | None:
     """Load archived full text for a provenance full_text_ref.
 
-    Supported schemes (implemented incrementally as writers land):
-      - thoughts_log:pulse_id=<uuid>
-      - dream_archive:<run_id>
-      - journal_archive:<id>
+    Supported schemes:
+      - thoughts_log:pulse_id=<uuid>   → data/heartbeat_thoughts.jsonl
+      - dream_archive:<run_id>         → data/memory/dream_archive/<run_id>.md
+      - journal_archive:<id>           → reserved (returns None until wired)
 
     Returns None if the ref is empty, unknown, or the archive is missing.
     Callers must treat None as honest miss (detail mode sets full_text_missing).
@@ -124,7 +124,89 @@ def resolve_full_text_ref(
     if not ref or not str(ref).strip():
         return None
 
-    # Archives land with PR3/PR4/PR8. Resolver is wired now so detail mode can
-    # call it without ImportError; returns None until those files exist.
-    _ = data_root  # reserved for path resolution
+    root = Path(data_root) if data_root is not None else (
+        Path.home() / "soveryn_vnext" / "data"
+    )
+    s = str(ref).strip()
+
+    if s.startswith("thoughts_log:pulse_id="):
+        pulse_id = s[len("thoughts_log:pulse_id="):].strip()
+        if not pulse_id:
+            return None
+        log_path = root / "heartbeat_thoughts.jsonl"
+        if not log_path.is_file():
+            # also accept data/ as already the vnext data root OR parent
+            alt = root.parent / "data" / "heartbeat_thoughts.jsonl"
+            log_path = alt if alt.is_file() else log_path
+        return _read_thoughts_log_note(log_path, pulse_id)
+
+    if s.startswith("dream_archive:"):
+        run_id = s[len("dream_archive:"):].strip()
+        if not run_id or "/" in run_id or ".." in run_id:
+            return None
+        path = root / "memory" / "dream_archive" / f"{run_id}.md"
+        if not path.is_file():
+            alt = root / "dream_archive" / f"{run_id}.md"
+            path = alt if alt.is_file() else path
+        if not path.is_file():
+            return None
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+
+    if s.startswith("journal_archive:"):
+        return None
+
     return None
+
+
+def _read_thoughts_log_note(log_path: Path, pulse_id: str) -> str | None:
+    if not log_path.is_file():
+        return None
+    import json
+
+    try:
+        with log_path.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("pulse_id") == pulse_id:
+                    note = row.get("note")
+                    return note if isinstance(note, str) else None
+    except OSError:
+        return None
+    return None
+
+
+def dream_archive_path(data_root: Path, dream_run_id: str) -> Path:
+    """Canonical path for a dream full-synthesis archive file."""
+    return Path(data_root) / "memory" / "dream_archive" / f"{dream_run_id}.md"
+
+
+def write_dream_archive(
+    data_root: Path,
+    dream_run_id: str,
+    synthesis: str,
+    *,
+    associations: str = "",
+    contradictions: str = "",
+) -> Path:
+    """Persist full dream synthesis for later resolve_full_text_ref."""
+    path = dream_archive_path(data_root, dream_run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = (
+        f"# Dream archive {dream_run_id}\n\n"
+        f"## Synthesis\n\n{(synthesis or '').strip()}\n"
+    )
+    if associations and associations.strip():
+        body += f"\n## Associations\n\n{associations.strip()}\n"
+    if contradictions and contradictions.strip():
+        body += f"\n## Contradictions\n\n{contradictions.strip()}\n"
+    path.write_text(body, encoding="utf-8")
+    return path

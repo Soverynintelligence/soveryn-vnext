@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Chat</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
 <style>
+
   :root {
     /* SOVERYN palette — anchored to the new logo (organic + electric
        duality, bronze trunk as bridge). Background is warm dark earth,
@@ -592,16 +596,173 @@
      the user gesture that starts the call; a pre-mounted element with
      playsinline lets ontrack assign srcObject without re-triggering policy. */
   .voice-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+
+  /* ── Lab console reconstruct ─────────────────────────────────────────── */
+  body.lab {
+    background: var(--ground) !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    background-image:
+      linear-gradient(rgba(198,166,100,.038) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(198,166,100,.038) 1px, transparent 1px) !important;
+    background-size: 64px 64px, 64px 64px !important;
+    background-attachment: fixed !important;
+  }
+  body.lab::before, body.lab::after { display:none !important; content:none !important; }
+
+  aside[data-testid="sidebar"] {
+    background: var(--panel) !important;
+    border-right: 1px solid var(--line) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  .lab-chat-plate {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    background: rgba(0,0,0,.92);
+  }
+  .lab-chat-plate img { width: 40px; height: 40px; display: block; }
+  .lab-chat-plate b {
+    font-size: .72rem; letter-spacing: .22em; display: block; color: var(--ink); font-weight: 600;
+  }
+  .lab-chat-plate i {
+    font-style: normal; font-size: .58rem; letter-spacing: .2em; color: var(--gold); display: block;
+  }
+  .lab-chat-nav {
+    display: flex; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .lab-chat-nav a {
+    flex: 1; text-align: center; padding: 10px 6px;
+    font-size: .58rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--ink-3); border-right: 1px solid var(--line);
+  }
+  .lab-chat-nav a:last-child { border-right: none; }
+  .lab-chat-nav a:hover, .lab-chat-nav a.active {
+    color: var(--gold); background: var(--panel-2);
+  }
+  .lab-chat-tools {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .lab-chat-tools .act { width: 100%; text-align: center; }
+  .lab-chat-hist {
+    flex: 1; overflow: auto; min-height: 0;
+    border-top: 1px solid var(--line);
+  }
+  .lab-chat-hist-head {
+    padding: 10px 14px; font-size: .58rem; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--ink-3);
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+
+  /* hide old brand block once plate is present */
+  aside[data-testid="sidebar"] > .brand { display: none !important; }
+
+  main[data-testid="main"] {
+    background: transparent !important;
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  [data-testid="chat-header"] {
+    background: var(--panel) !important;
+    border-bottom: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    padding: 10px 16px !important;
+  }
+  [data-testid="thread"] {
+    flex: 1; overflow: auto;
+    padding: 18px 22px !important;
+    background: transparent !important;
+  }
+  /* messages as lab log */
+  .msg.user, .message.user, [data-role="user"] {
+    align-self: flex-end;
+    background: var(--panel-2) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 3px !important;
+    font-family: var(--sans) !important;
+  }
+  .msg.assistant, .message.assistant, [data-role="assistant"] {
+    border-left: 2px solid var(--gold-dim) !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    font-family: var(--sans) !important;
+    color: var(--ink-2) !important;
+  }
+  [data-testid="composer"] {
+    background: var(--panel) !important;
+    border-top: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    padding: 12px 16px !important;
+  }
+  [data-testid="composer-input"], textarea {
+    background: transparent !important;
+    border: none !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    font-size: .85rem !important;
+  }
+  [data-testid="send"], [data-testid="stream-toggle"] {
+    border: 1px solid var(--line-lit) !important;
+    border-radius: 3px !important;
+    color: var(--gold) !important;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: .6rem !important;
+  }
+  .session-item, [data-session] {
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--line) !important;
+    font-family: var(--mono) !important;
+    font-size: .72rem !important;
+  }
+  .session-item:hover, .session-item.active {
+    background: var(--panel-2) !important;
+  }
+  .session-item.active {
+    box-shadow: inset 2px 0 0 var(--gold) !important;
+  }
+  .agent-picker, .agent-pill, [data-agent-pick] {
+    border-radius: 3px !important;
+    border-color: var(--line) !important;
+    font-family: var(--mono) !important;
+    font-size: .62rem !important;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .wordmark {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    color: var(--ink) !important;
+  }
+  input, button, select, textarea { font-family: var(--mono) !important; }
+
 </style>
 </head>
-<body>
+<body class="lab" data-lab>
   <aside data-testid="sidebar">
+    <div class="lab-chat-plate">
+      <img src="/static/lab-seal.png" alt="" width="40" height="40">
+      <span><b>SOVERYN</b><i>Chat console</i></span>
+    </div>
+    <nav class="lab-chat-nav">
+      <a href="/">Command</a>
+      <a href="/citizens">Citizens</a>
+      <a href="/chat" class="active">Chat</a>
+    </nav>
+
     <div class="brand">
       <div class="wordmark">SOVERYN</div>
       <a href="/" class="home" data-testid="mission-control-link">⌂ mission control</a>
     </div>
 
-    <button class="new-chat" data-testid="new-chat">+ New conversation</button>
+    <button class="new-chat act primary" data-testid="new-chat">+ New conversation</button>
 
     <div class="agent-pills" role="tablist" aria-label="Select agent">
       <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>

@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Command Center</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
 <style>
+
   :root {
     /* SOVERYN palette — mirrors chat.html. Anchored to the new logo
        (organic + electric duality, bronze trunk as bridge). */
@@ -1006,10 +1010,190 @@
   @media (prefers-reduced-motion: reduce) {
     .rig-spine[data-state="live"] .line::after { animation:none; display:none; }
   }
+
+  /* ── Lab face (skin only — original structure preserved) ──────────────── */
+  body.lab,
+  body[data-lab] {
+    background: var(--ground) !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    background-image:
+      linear-gradient(rgba(198,166,100,.038) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(198,166,100,.038) 1px, transparent 1px) !important;
+    background-size: 64px 64px, 64px 64px !important;
+    background-attachment: fixed !important;
+  }
+  body.lab::before,
+  body.lab::after,
+  body[data-lab]::before,
+  body[data-lab]::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 0 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Hide old top header; plate is the nameplate */
+  header.top { display: none !important; }
+
+  .panel,
+  .agent-card,
+  .daemon-card,
+  section.panel {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .agent-row,
+  .daemon-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 0 !important;
+    border: 1px solid var(--line);
+    border-top: none;
+  }
+  .agent-card,
+  .daemon-card {
+    border: none !important;
+    border-right: 1px solid var(--line) !important;
+    transform: none !important;
+    padding: 18px 20px !important;
+  }
+  .agent-card:last-child,
+  .daemon-card:last-child { border-right: none !important; }
+  .agent-card:hover,
+  .daemon-card:hover {
+    background: var(--panel-2) !important;
+    transform: none !important;
+  }
+  .agent-card .name,
+  .daemon-card .name {
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    font-size: 0.85rem;
+  }
+  .agent-card .role,
+  .daemon-card .meta {
+    color: var(--ink-3) !important;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .greeting,
+  section[data-testid="greeting"] {
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    background: var(--panel) !important;
+    padding: 24px 22px !important;
+  }
+  .greeting h1,
+  [data-greeting-heading] {
+    font-size: clamp(1.15rem, 2.4vw, 1.5rem) !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: var(--ink) !important;
+  }
+  .greeting p,
+  [data-greeting-body] {
+    font-family: var(--sans) !important;
+    color: var(--ink-2) !important;
+  }
+
+  h3,
+  .library-header h3,
+  .activity h3,
+  .system h3 {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.22em !important;
+    color: var(--ink-2) !important;
+    text-transform: uppercase !important;
+  }
+
+  .bottom-row,
+  .orch-row,
+  .pulse-row,
+  .cognition-approvals-row {
+    gap: 0 !important;
+    border: 1px solid var(--line);
+    border-top: none;
+  }
+  .bottom-row > .panel,
+  .orch-row > .panel,
+  .pulse-row > .panel,
+  .cognition-approvals-row > .panel,
+  .cognition-approvals-row > section {
+    border: none !important;
+    border-right: 1px solid var(--line) !important;
+  }
+
+  input, textarea, select, button {
+    font-family: var(--mono) !important;
+    border-radius: 3px !important;
+  }
+  .board-item-action,
+  button.board-item-action {
+    border: 1px solid var(--line-lit) !important;
+    color: var(--gold) !important;
+    background: transparent !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.6rem !important;
+  }
+
+  /* plate sits above .page content */
+  .plate {
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* panels stack with ruled seams */
+  .page > section.panel,
+  .page > .panel,
+  .page > .agent-row,
+  .page > .daemon-row,
+  .page > .bottom-row,
+  .page > .orch-row,
+  .page > .pulse-row,
+  .page > .cognition-approvals-row,
+  .page > section[data-testid] {
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  a { color: var(--gold); }
+  a:hover { color: var(--ink); }
+
 </style>
 </head>
-<body data-testid="command-center">
+<body class="lab" data-lab data-testid="command-center">
   <div class="page">
+    <div class="plate">
+      <a class="id" href="/">
+        <img src="/static/lab-seal.png" alt="" width="44" height="44">
+        <span><b>SOVERYN</b><i>Command Center</i></span>
+      </a>
+      <nav>
+        <a href="/citizens" class="keep">Citizens</a>
+        <a href="/chat" class="keep">Chat</a>
+        <a href="/m">Messages</a>
+        <a href="/documents">Documents</a>
+      </nav>
+      <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
+    </div>
+
 
     <header class="top">
       <!-- Logo lives in the ambient page background; header carries the
@@ -1363,9 +1547,12 @@
          so the conversation between agents is visible in real time. -->
     <section class="orch-row">
       <div class="panel specialists" data-testid="specialists-panel">
-        <h3>Active specialists</h3>
-        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Active specialists">
-          <div class="specialist-item" data-empty>none active.</div>
+        <h3>Spawned under Aetheria</h3>
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin:-6px 0 10px;">
+          ephemeral · not citizens · <a href="/citizens">citizens board →</a>
+        </div>
+        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Specialists spawned under Aetheria">
+          <div class="specialist-item" data-empty>none active — empty most days is fine.</div>
         </div>
       </div>
       <div class="panel commbus" data-testid="commbus-panel">
@@ -2126,7 +2313,7 @@
     const container = document.querySelector("[data-specialists-feed]");
     if (!container || !data) return;
     if (!data.active || data.active.length === 0) {
-      container.innerHTML = `<div class="specialist-item" data-empty>none active.</div>`;
+      container.innerHTML = `<div class="specialist-item" data-empty>none active — see <a href="/citizens">Citizens</a>.</div>`;
       return;
     }
     const escapeHtml = (s) => String(s)

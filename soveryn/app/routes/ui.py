@@ -17,25 +17,36 @@ from flask import Blueprint, jsonify, make_response
 bp = Blueprint("ui", __name__)
 
 COMMAND_CENTER_TEMPLATE = Path(__file__).parent.parent / "templates" / "command_center.html"
+CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
 
 
-def _serve_command_center():
-    if not COMMAND_CENTER_TEMPLATE.is_file():
+def _serve_html(path: Path, *, missing_label: str):
+    if not path.is_file():
         return jsonify({"error": {
             "code": "ui_unavailable",
-            "message": f"Command center template missing at {COMMAND_CENTER_TEMPLATE}",
+            "message": f"{missing_label} template missing at {path}",
         }}), 500
-    html = COMMAND_CENTER_TEMPLATE.read_text(encoding="utf-8")
+    html = path.read_text(encoding="utf-8")
     resp = make_response(html, 200)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
     return resp
 
 
+def _serve_command_center():
+    return _serve_html(COMMAND_CENTER_TEMPLATE, missing_label="Command center")
+
+
 @bp.get("/")
 def command_center():
     """Serve the vNext command center."""
     return _serve_command_center()
+
+
+@bp.get("/citizens")
+def citizens_board():
+    """Serve the Citizens board (Phase 3 console)."""
+    return _serve_html(CITIZENS_TEMPLATE, missing_label="Citizens board")
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"

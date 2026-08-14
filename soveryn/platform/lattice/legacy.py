@@ -471,8 +471,16 @@ class LatticeStore:
         embedding: tuple[float, ...] | None = None,
         intent: str | None = None,
         provenance: dict | None = None,
+        on_overflow: str = "raise",
     ) -> str:
-        """Write a node. Returns node id. Validates layer on write (Jon constraint 4)."""
+        """Write a node. Returns node id. Validates layer on write (Jon constraint 4).
+
+        Memory Grades (2026-08-11): content is capped by node type via
+        ``content_caps.clamp_content``. Default ``on_overflow='raise'`` for
+        interactive/tool writers (model rewrites shorter). Daemons pass
+        ``on_overflow='clamp'`` after their own distill so a long pulse cannot
+        fail the tick.
+        """
         if layer not in WRITE_LAYERS:
             raise LatticeError(
                 f"layer={layer!r} not in {sorted(WRITE_LAYERS)}; "
@@ -480,6 +488,22 @@ class LatticeStore:
             )
         if not (0.0 <= intensity <= 1.0):
             raise LatticeError(f"intensity={intensity} must be in [0.0, 1.0]")
+        if on_overflow not in ("raise", "clamp"):
+            raise LatticeError(
+                f"on_overflow={on_overflow!r} must be 'raise' or 'clamp'"
+            )
+
+        from soveryn.platform.lattice.content_caps import (
+            ContentOverflowError,
+            clamp_content,
+        )
+        try:
+            content = clamp_content(
+                node_type, content if content is not None else "",
+                on_overflow=on_overflow,  # type: ignore[arg-type]
+            )
+        except ContentOverflowError as exc:
+            raise LatticeError(str(exc)) from exc
 
         node_id = str(uuid.uuid4())
         now = datetime.now().isoformat()

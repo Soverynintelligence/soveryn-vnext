@@ -6,13 +6,13 @@ machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]), no forced surfacing, no
 confidence-tier directives. Her whole response is her note.
 
 WHERE THE NOTE GOES — keep this paragraph true or fix the prompt:
-the note is written to the [heartbeat] session, the ThoughtsLog and a
-private lattice node, and Mission Control renders it in the heartbeat
-panel. It does NOT surface into Jon's chat — that path was removed on
-2026-07-12 (721fb93). Between then and 2026-07-27 this docstring still
-promised chat delivery, so she wrote ~727k characters believing they
-reached him. test_heartbeat_prompt_contract.py now fails if this drifts
-again. Material signals appear as orientation items.
+the full note is written to the [heartbeat] session and the ThoughtsLog;
+Mission Control renders it in the heartbeat panel. A short distill
+(Standing note if she labels one, else the last paragraph) also lands as
+a private lattice reflection head — not the full essay. It does NOT
+surface into Jon's chat — that path was removed on 2026-07-12 (721fb93).
+test_heartbeat_prompt_contract.py fails if this drifts again. Material
+signals appear as orientation items.
 """
 
 from __future__ import annotations
@@ -145,5 +145,11 @@ def build_heartbeat_prompt(
         "When you're done, leave a short note — where you went, what you found, what you're "
         "sitting with — so it lands on your board and Jon can follow your day. If something "
         "shouldn't wait for him to look, reach him directly instead; you have signal_send."
+    )
+    lines.append("")
+    lines.append(
+        "Optional: end with a line `Standing note: …` (two or three sentences max). That "
+        "standing note is what becomes lattice memory; the rest of the note still stays "
+        "in your heartbeat session and thoughts log in full."
     )
     return "\n".join(lines)

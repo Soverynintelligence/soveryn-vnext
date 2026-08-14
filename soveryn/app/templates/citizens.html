@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Citizens</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
+<style>
+  body { min-height: 100vh; }
+  .page { max-width: 1100px; margin: 0 auto; }
+
+  .mast {
+    display: grid;
+    border-bottom: 1px solid var(--line);
+  }
+  @media (min-width: 900px) {
+    .mast { grid-template-columns: 1.2fr 0.8fr; }
+  }
+  .mast .say {
+    padding: 28px 22px;
+    border-bottom: 1px solid var(--line);
+  }
+  @media (min-width: 900px) {
+    .mast .say { border-bottom: none; border-right: 1px solid var(--line); }
+  }
+  .mast h1 {
+    margin: 0 0 12px;
+    font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+    font-weight: 500;
+    line-height: 1.38;
+    letter-spacing: -0.01em;
+    max-width: 28ch;
+  }
+  .mast p {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink-2);
+    font-size: 0.95rem;
+    line-height: 1.62;
+    max-width: 52ch;
+  }
+  .mast .seal {
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mast .seal img { width: min(160px, 40vw); height: auto; }
+
+  .actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 12px 22px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .reading {
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .roster { display: flex; flex-direction: column; }
+  .citizen {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px 18px;
+    padding: 18px 22px;
+    border-top: 1px solid var(--line);
+  }
+  .citizen:first-child { border-top: none; }
+  .citizen .name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: lowercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .meta {
+    margin-top: 6px;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+    line-height: 1.55;
+  }
+  .meta strong { color: var(--ink-2); font-weight: 500; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .side {
+    text-align: right;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    min-width: 120px;
+  }
+  .side .status-label {
+    color: var(--ink);
+    margin-bottom: 6px;
+    font-size: 0.7rem;
+  }
+  .err { color: var(--down); font-size: 0.78rem; margin-top: 8px; font-family: var(--sans); }
+  .empty { color: var(--ink-3); font-size: 0.72rem; padding: 18px 22px; letter-spacing: 0.08em; }
+
+  form.commission { display: flex; flex-direction: column; gap: 10px; }
+  form.commission .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  form.commission select,
+  form.commission input[type=text],
+  form.commission textarea {
+    font-family: var(--mono);
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 8px 12px;
+  }
+  form.commission select,
+  form.commission input[type=text] { min-width: 140px; }
+  form.commission textarea {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    font-family: var(--sans);
+    font-size: 0.95rem;
+  }
+  form.commission .row.end { justify-content: flex-end; align-items: center; }
+
+  .commissions { display: flex; flex-direction: column; }
+  .comm {
+    border-top: 1px solid var(--line);
+    padding: 14px 22px;
+    font-size: 0.78rem;
+  }
+  .comm:first-child { border-top: none; }
+  .comm .head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .comm .state { color: var(--gold); }
+  .comm .state.done { color: var(--ok); }
+  .comm .state.failed { color: var(--down); }
+  .comm .state.running { color: var(--gold); }
+  .comm .body {
+    font-family: var(--sans);
+    color: var(--ink-2);
+    white-space: pre-wrap;
+    font-size: 0.92rem;
+    line-height: 1.55;
+  }
+  .comm .ref {
+    margin-top: 6px;
+    color: var(--ink-3);
+    word-break: break-all;
+    font-size: 0.68rem;
+  }
+  .spawn-note {
+    padding: 12px 22px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--sans);
+    font-size: 0.88rem;
+    color: var(--ink-3);
+    line-height: 1.55;
+  }
+  .spawn-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px 16px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--line);
+    align-items: center;
+  }
+  .spawn-row:first-of-type { border-top: none; }
+  .spawn-row .nm {
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spawn-row .meta { margin-top: 4px; }
+  footer.lab-foot {
+    padding: 22px;
+    color: var(--ink-3);
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    border-top: 1px solid var(--line);
+  }
+</style>
+</head>
+<body class="lab" data-lab data-testid="citizens-board">
+
+<div class="plate">
+  <a class="id" href="/">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Citizens</i></span>
+  </a>
+  <nav>
+    <a href="/">Command</a>
+    <a href="/citizens" class="active keep">Citizens</a>
+    <a href="/chat" class="keep">Chat</a>
+    <a href="/documents">Docs</a>
+  </nav>
+</div>
+
+<div class="lab-panel">
+  <div class="mast">
+    <div class="say">
+      <h1>Who lives here — and on what evidence.</h1>
+      <p class="prose">Residence is derived from observation, not declared.
+        Duties are standing obligations. Commissions are discrete work.
+        Nothing on this board is green by default.</p>
+    </div>
+    <div class="seal">
+      <img src="/static/lab-seal.png" alt="SOVERYN Intelligence Labs">
+    </div>
+  </div>
+</div>
+
+<div class="actions">
+  <button type="button" class="act primary" data-refresh>Refresh census</button>
+  <span class="reading" data-reading>loading…</span>
+</div>
+
+<section class="lab-panel">
+  <div class="lab-panel-head">
+    <span class="n">01</span>
+    <h2>Roster · founding citizens</h2>
+    <span class="r">derived · not probed on request</span>
+  </div>
+  <div class="roster" data-roster>
+    <div class="empty">loading…</div>
+  </div>
+</section>
+
+<section class="lab-panel" data-testid="spawned-panel">
+  <div class="lab-panel-head">
+    <span class="n">02</span>
+    <h2>Spawned under Aetheria</h2>
+    <span class="r" data-spawned-count>ephemeral · not citizens</span>
+  </div>
+  <p class="spawn-note" data-spawned-note>
+    Session-scoped deputies she spins up for one job (usually on vett or scotty).
+    They are not founding citizens — no soul, no desk, no standing.
+  </p>
+  <div data-spawned-list>
+    <div class="empty">none active.</div>
+  </div>
+</section>
+
+<section class="lab-panel">
+  <div class="lab-panel-head">
+    <span class="n">03</span>
+    <h2>New commission</h2>
+    <span class="r">localhost write · result → outbox</span>
+  </div>
+  <div class="lab-panel-body">
+    <form class="commission" data-commission-form>
+      <div class="row">
+        <select data-commission-citizen aria-label="Citizen">
+          <option value="aetheria">aetheria</option>
+          <option value="vett">vett</option>
+          <option value="scotty">scotty</option>
+        </select>
+        <input type="text" data-commission-title placeholder="title (optional)" style="flex:1; min-width:200px;">
+      </div>
+      <textarea data-commission-body placeholder="what should they do? result lands in their outbox/" required></textarea>
+      <div class="row end">
+        <span class="err" data-commission-err></span>
+        <button type="submit" class="act primary">Enqueue</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="lab-panel">
+  <div class="lab-panel-head">
+    <span class="n">04</span>
+    <h2>Recent commissions</h2>
+    <span class="r">newest first</span>
+  </div>
+  <div class="commissions" data-commissions>
+    <div class="empty">none yet.</div>
+  </div>
+</section>
+
+<footer class="lab-foot">House network · my data is my data · no corporate call-home</footer>
+
+<script>
+(function () {
+  const rosterEl = document.querySelector("[data-roster]");
+  const readingEl = document.querySelector("[data-reading]");
+  const commissionsEl = document.querySelector("[data-commissions]");
+  const spawnedListEl = document.querySelector("[data-spawned-list]");
+  const spawnedNoteEl = document.querySelector("[data-spawned-note]");
+  const spawnedCountEl = document.querySelector("[data-spawned-count]");
+  const form = document.querySelector("[data-commission-form]");
+  const errEl = document.querySelector("[data-commission-err]");
+
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  function dutyChips(duties) {
+    if (!duties || !duties.length) return '<span class="chip">no duties seeded</span>';
+    return duties.map(d => {
+      const kind = d.kind || "";
+      const title = d.title || kind;
+      const cls = ["chip", kind, d.enabled ? "" : "disabled"].filter(Boolean).join(" ");
+      const sched = d.schedule ? ` · ${d.schedule}` : "";
+      return `<span class="${cls}" title="${esc(kind + sched)}">${esc(title)}</span>`;
+    }).join("");
+  }
+
+  function renderRoster(citizens) {
+    if (!citizens.length) {
+      rosterEl.innerHTML = '<div class="empty">no registry yet — run refresh census.</div>';
+      return;
+    }
+    rosterEl.innerHTML = citizens.map(c => {
+      const last = c.last_seen_at ? `last seen ${esc(c.last_seen_at)}` : "never seen";
+      const open = c.open_commissions ?? 0;
+      const spawned = (c.id === "aetheria" && c.spawned_count)
+        ? ` · spawned <strong>${c.spawned_count}</strong>`
+        : "";
+      const err = c.last_error
+        ? `<div class="err">last error: ${esc(c.last_error)}</div>` : "";
+      const notes = c.notes
+        ? `<div class="meta prose" style="font-size:.86rem;margin-top:8px">${esc(c.notes)}</div>` : "";
+      return `
+        <article class="citizen" data-citizen="${esc(c.id)}" data-state="${esc(c.status)}">
+          <div>
+            <div class="name"><span class="dot ${esc(c.status)}"></span>${esc(c.display_name || c.id)}</div>
+            <div class="meta">
+              <strong>${esc(c.id)}</strong> · model ${esc(c.model_server || "—")} · ${last}
+              · open commissions <strong>${open}</strong>${spawned}
+            </div>
+            <div class="chips">${dutyChips(c.duties)}</div>
+            ${notes}${err}
+          </div>
+          <div class="side">
+            <div class="status-label">${esc(c.status)}</div>
+            <div>${esc((c.workspace_path || "").replace(/.*soveryn_citizens/, "…/citizens"))}</div>
+          </div>
+        </article>`;
+    }).join("");
+  }
+
+  function renderSpawned(spawned) {
+    if (!spawned) {
+      spawnedListEl.innerHTML = '<div class="empty">spawned list unavailable.</div>';
+      return;
+    }
+    if (spawned.note) spawnedNoteEl.textContent = spawned.note;
+    const n = spawned.count || 0;
+    spawnedCountEl.textContent = n
+      ? `${n} active · ephemeral · not citizens`
+      : "none active · ephemeral · not citizens";
+    const items = spawned.specialists || [];
+    if (!items.length) {
+      spawnedListEl.innerHTML = '<div class="empty">none active — empty most days is fine.</div>';
+      return;
+    }
+    spawnedListEl.innerHTML = items.map(s => {
+      const id = s.specialist_id || "";
+      return `
+        <div class="spawn-row" data-specialist-id="${esc(id)}">
+          <div>
+            <div class="nm">
+              <span class="dot on_duty" title="ephemeral"></span>
+              ${esc(s.name || "unnamed")}
+              <span class="chip">ephemeral</span>
+            </div>
+            <div class="meta">
+              runs on <strong>${esc(s.host_agent || "—")}</strong>
+              · spawned by <strong>aetheria</strong>
+              · age ${esc(s.age_minutes ?? "—")}m
+              · coord ${esc((s.coord_node_id || "").slice(0, 8) || "—")}
+              · id ${esc(id.slice(0, 8))}…
+            </div>
+          </div>
+          <button type="button" class="act" data-kill-specialist="${esc(id)}"
+            title="Jon's override — kill this specialist">kill</button>
+        </div>`;
+    }).join("");
+    spawnedListEl.querySelectorAll("[data-kill-specialist]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const sid = btn.getAttribute("data-kill-specialist");
+        if (!sid) return;
+        if (!confirm(`Kill specialist ${sid.slice(0, 8)}…? Not a citizen — session only.`)) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/specialists/kill", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ specialist_id: sid }),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            alert((j.error && j.error.message) || "kill failed");
+          }
+        } finally {
+          await loadBoard();
+        }
+      });
+    });
+  }
+
+  function renderCommissions(items) {
+    if (!items.length) {
+      commissionsEl.innerHTML = '<div class="empty">none yet.</div>';
+      return;
+    }
+    commissionsEl.innerHTML = items.map(r => {
+      const ref = r.result_ref
+        ? `<div class="ref">outbox: ${esc(r.result_ref)}</div>` : "";
+      const err = r.error ? `<div class="err">${esc(r.error)}</div>` : "";
+      return `
+        <div class="comm">
+          <div class="head">
+            <span><strong style="color:var(--ink-2)">${esc(r.citizen_id)}</strong> · ${esc((r.created_at || "").replace("T"," ").replace("Z",""))}</span>
+            <span class="state ${esc(r.state)}">${esc(r.state)}</span>
+          </div>
+          <div class="body">${esc((r.body || "").slice(0, 280))}</div>
+          ${ref}${err}
+        </div>`;
+    }).join("");
+  }
+
+  async function loadBoard() {
+    const res = await fetch("/api/citizens", { credentials: "same-origin" });
+    const data = await res.json();
+    readingEl.textContent = data.reading || "";
+    renderRoster(data.citizens || []);
+    renderSpawned(data.spawned);
+    const all = [];
+    for (const c of (data.citizens || [])) {
+      const r = await fetch(`/api/citizens/${encodeURIComponent(c.id)}/commissions?limit=5`, {
+        credentials: "same-origin",
+      });
+      const j = await r.json();
+      for (const row of (j.commissions || [])) all.push(row);
+    }
+    all.sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+    renderCommissions(all.slice(0, 12));
+  }
+
+  document.querySelector("[data-refresh]").addEventListener("click", async () => {
+    readingEl.textContent = "taking census…";
+    try {
+      const res = await fetch("/api/citizens/refresh", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        readingEl.textContent = (data.error && data.error.message) || "census failed";
+        return;
+      }
+      readingEl.textContent = data.reading || "census complete";
+      renderRoster(data.citizens || []);
+      await loadBoard();
+    } catch (e) {
+      readingEl.textContent = String(e);
+    }
+  });
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    errEl.textContent = "";
+    const citizen = form.querySelector("[data-commission-citizen]").value;
+    const title = form.querySelector("[data-commission-title]").value.trim();
+    const body = form.querySelector("[data-commission-body]").value.trim();
+    if (!body) {
+      errEl.textContent = "body required";
+      return;
+    }
+    const payload = { body };
+    if (title) payload.title = title;
+    const res = await fetch(`/api/citizens/${encodeURIComponent(citizen)}/commissions`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = (data.error && data.error.message) || "enqueue failed";
+      return;
+    }
+    form.querySelector("[data-commission-body]").value = "";
+    form.querySelector("[data-commission-title]").value = "";
+    await loadBoard();
+  });
+
+  loadBoard().catch(e => {
+    rosterEl.innerHTML = `<div class="err" style="padding:18px 22px">${esc(e)}</div>`;
+  });
+  setInterval(() => { loadBoard().catch(() => {}); }, 15000);
+})();
+</script>
+</body>
+</html>
