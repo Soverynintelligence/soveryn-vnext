@@ -169,9 +169,16 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     assert isinstance(app.extensions["soveryn"]["document_store"], DocumentStore)
     # Context window + history budget are fleet-wide: every loop trims
     # transcript to fit the 32K server window before send.
+    #
+    # 8_000 -> 6_000 in Memory Grades PR5 (2026-08-11), and the NUMBER moved
+    # because the MEANING did: history_token_budget became history-only
+    # (charge_prelude=False). Charging Aetheria's prelude — soul, pinned,
+    # continuity, spine, recall — against the same envelope was starving the
+    # chat history it was supposed to protect. A smaller history-only budget
+    # leaves her more room to talk, not less.
     for agent in ("aetheria", "vett", "scotty"):
         assert loops[agent].context_window == 32_768, agent
-        assert loops[agent].history_token_budget == 8_000, agent
+        assert loops[agent].history_token_budget == 6_000, agent
     # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
