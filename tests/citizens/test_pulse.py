@@ -92,6 +92,32 @@ def test_a_completed_pulse_is_recorded_done_with_a_trace(db_path):
     assert row["state"] == "done"
     assert row["body"] == "heartbeat pulse"
     assert row["result_ref"] == "log:tick-1"
+    assert row["claimed_by"] == "heartbeat"
+
+
+def test_a_pulse_never_sits_in_queued_where_a_worker_can_steal_it(db_path):
+    """The reproduced defect: enqueue+claim left a window for the drain worker.
+
+    While the pulse is in flight the row must already be running+owned, and
+    claim() must return None so the runtime cannot take it.
+    """
+    from soveryn.citizens import commissions
+
+    with record_pulse(db_path, "aetheria", "heartbeat pulse",
+                      worker="heartbeat", now=NOW) as cid:
+        assert cid is not None
+        with connect(db_path) as conn:
+            row = commissions.get(conn, cid)
+            assert row is not None
+            assert row["state"] == "running"
+            assert row["claimed_by"] == "heartbeat"
+            # Nothing for the drain worker to take.
+            assert commissions.claim(
+                conn, "aetheria", worker="citizens-runtime", at=NOW
+            ) is None
+            assert commissions.for_citizen(
+                conn, "aetheria", state="queued"
+            ) == []
 
 
 def test_a_pulse_that_raises_is_recorded_failed_and_the_error_propagates(db_path):

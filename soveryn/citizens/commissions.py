@@ -56,6 +56,39 @@ def enqueue(conn: sqlite3.Connection, citizen_id: str, body: str, *, at: str) ->
     return commission_id
 
 
+def begin_owned(
+    conn: sqlite3.Connection,
+    citizen_id: str,
+    body: str,
+    *,
+    worker: str,
+    at: str,
+) -> str:
+    """Insert a commission already running and already claimed.
+
+    Used for duty *bookkeeping* (heartbeat pulse, etc.): the work is already
+    happening under that worker. The row must never sit in `queued`, where any
+    drain worker could steal it, run the literal body as a commission prompt,
+    and leave the real pulse unrecorded.
+
+    A pulse is not a request for someone to do work — it is a record of work
+    already in flight.
+    """
+    if not body.strip():
+        raise ValueError("a commission needs a body — what is being asked")
+    if not worker.strip():
+        raise ValueError("begin_owned needs a worker — who holds this work")
+    commission_id = str(uuid.uuid4())
+    conn.execute(
+        "INSERT INTO commissions "
+        "(id, citizen_id, body, state, created_at, claimed_by, claimed_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (commission_id, citizen_id, body, RUNNING, at, worker, at),
+    )
+    conn.commit()
+    return commission_id
+
+
 def claim(
     conn: sqlite3.Connection, citizen_id: str, *, worker: str, at: str
 ) -> dict[str, Any] | None:
@@ -176,11 +209,66 @@ def requeue(conn: sqlite3.Connection, commission_id: str, *, at: str, reason: st
 
 
 def for_citizen(
-    conn: sqlite3.Connection, citizen_id: str, *, limit: int = 50
+    conn: sqlite3.Connection,
+    citizen_id: str,
+    *,
+    limit: int = 50,
+    state: str | None = None,
 ) -> list[dict[str, Any]]:
-    rows = conn.execute(
-        "SELECT * FROM commissions WHERE citizen_id = ? "
-        "ORDER BY created_at DESC, id DESC LIMIT ?",
-        (citizen_id, limit),
-    ).fetchall()
+    if state is None:
+        rows = conn.execute(
+            "SELECT * FROM commissions WHERE citizen_id = ? "
+            "ORDER BY created_at DESC, id DESC LIMIT ?",
+            (citizen_id, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM commissions WHERE citizen_id = ? AND state = ? "
+            "ORDER BY created_at DESC, id DESC LIMIT ?",
+            (citizen_id, state, limit),
+        ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get(conn: sqlite3.Connection, commission_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT * FROM commissions WHERE id = ?", (commission_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def is_running(conn: sqlite3.Connection, citizen_id: str) -> bool:
+    """True if this citizen already has a commission in flight."""
+    row = conn.execute(
+        "SELECT 1 FROM commissions WHERE citizen_id = ? AND state = ? LIMIT 1",
+        (citizen_id, RUNNING),
+    ).fetchone()
+    return row is not None
+
+
+def cancel(
+    conn: sqlite3.Connection, commission_id: str, *, at: str, reason: str = "cancelled"
+) -> dict[str, Any]:
+    """Cancel a still-queued commission. Running work is refused.
+
+    There is no separate `cancelled` state in the schema: cancelled work is
+    recorded as `failed` with a clear reason so the trail stays findable and
+    the worker never claims it.
+    """
+    row = get(conn, commission_id)
+    if row is None:
+        raise KeyError(commission_id)
+    if row["state"] != QUEUED:
+        raise ValueError(
+            f"commission {commission_id} is {row['state']}, not {QUEUED} — "
+            "only queued work can be cancelled"
+        )
+    note = reason.strip() or "cancelled"
+    conn.execute(
+        "UPDATE commissions SET state = ?, error = ?, completed_at = ? WHERE id = ?",
+        (FAILED, note, at, commission_id),
+    )
+    conn.commit()
+    updated = get(conn, commission_id)
+    assert updated is not None
+    return updated

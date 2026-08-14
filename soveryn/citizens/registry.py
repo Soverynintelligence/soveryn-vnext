@@ -54,6 +54,7 @@ OBSERVED_ABSENT = "absent"
 
 STATUS_UNOBSERVED = "unobserved"
 STATUS_RESIDENT = "resident"
+STATUS_ON_DUTY = "on_duty"
 STATUS_OFFLINE = "offline"
 STATUS_RETIRED = "retired"
 
@@ -86,7 +87,8 @@ CREATE TABLE IF NOT EXISTS duties (
   citizen_id TEXT NOT NULL REFERENCES citizens(id) ON DELETE CASCADE,
   kind       TEXT NOT NULL,
   schedule   TEXT,
-  enabled    INTEGER NOT NULL DEFAULT 1
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  title      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS commissions (
@@ -147,6 +149,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for column in ("claimed_by", "claimed_at", "error"):
         if column not in have:
             conn.execute(f"ALTER TABLE commissions ADD COLUMN {column} TEXT")
+
+    duty_cols = {r["name"] for r in conn.execute("PRAGMA table_info(duties)")}
+    if duty_cols and "title" not in duty_cols:
+        conn.execute("ALTER TABLE duties ADD COLUMN title TEXT")
 
 
 def register(conn: sqlite3.Connection, citizen: Citizen) -> None:
@@ -237,7 +243,19 @@ def status_of(conn: sqlite3.Connection, citizen_id: str) -> str:
     ).fetchone()
     if latest is None:
         return STATUS_UNOBSERVED
-    return STATUS_RESIDENT if latest["finding"] == OBSERVED_PRESENT else STATUS_OFFLINE
+    if latest["finding"] != OBSERVED_PRESENT:
+        return STATUS_OFFLINE
+    # A resident with work in flight is on_duty (charter status surface).
+    # Commissions table may be empty/missing on an old file; treat as idle.
+    try:
+        running = conn.execute(
+            "SELECT 1 FROM commissions WHERE citizen_id = ? AND state = 'running' "
+            "LIMIT 1",
+            (citizen_id,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        running = None
+    return STATUS_ON_DUTY if running else STATUS_RESIDENT
 
 
 def list_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -252,5 +270,35 @@ def list_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             (row["id"],),
         ).fetchone()
         record["last_observation"] = dict(last) if last else None
+        out.append(record)
+    return out
+
+
+def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Roster plus duties and open commissions — the Phase 3 board shape."""
+    from soveryn.citizens import commissions, duties
+
+    out: list[dict[str, Any]] = []
+    for record in list_citizens(conn):
+        cid = record["id"]
+        duty_rows = duties.for_citizen(conn, cid)
+        record["duties"] = duty_rows
+        record["duties_enabled"] = [
+            d["kind"] for d in duty_rows if d.get("enabled")
+        ]
+        queued = commissions.for_citizen(conn, cid, state="queued", limit=200)
+        running = commissions.for_citizen(conn, cid, state="running", limit=50)
+        record["open_commissions"] = len(queued) + len(running)
+        record["running_commissions"] = len(running)
+        # Last failed commission error (if any) — board "last error" column
+        failed = conn.execute(
+            "SELECT error, completed_at FROM commissions "
+            "WHERE citizen_id = ? AND state = 'failed' "
+            "ORDER BY completed_at DESC LIMIT 1",
+            (cid,),
+        ).fetchone()
+        record["last_error"] = (
+            failed["error"] if failed and failed["error"] else None
+        )
         out.append(record)
     return out

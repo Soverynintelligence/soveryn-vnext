@@ -1083,6 +1083,74 @@ def create_app(
                 name="delegation-worker",
             ).start()
 
+        # Citizens commission runtime — drains queued commissions one-at-a-time
+        # per citizen (AgentLoop → outbox/<id>.md). Gated so tests that inject
+        # agent_loops never spawn it; production create_app() starts it by
+        # default. Set SOVERYN_START_CITIZENS_WORKER=False to disable.
+        if app.config.setdefault("SOVERYN_START_CITIZENS_WORKER", True):
+            import os as _os
+            import threading as _citizens_threading
+            from pathlib import Path as _CitizensPath
+            try:
+                from soveryn.citizens.runtime import (
+                    interactive_busy as _citizens_interactive_busy,
+                    make_agent_process_fn as _citizens_process_fn,
+                    run_forever as _citizens_run_forever,
+                )
+            except ImportError:
+                # Same shape as the soul_origin miss: a module that exists only
+                # on the writing disk must not take down create_app. The
+                # test_repo_integrity suite is the machine that catches this.
+                logger.exception(
+                    "citizens runtime unavailable — soveryn.citizens.runtime "
+                    "not importable (untracked or missing on this install)"
+                )
+            else:
+                _citizens_db = _CitizensPath(
+                    app.config.get("CITIZENS_DB")
+                    or _os.environ.get(
+                        "SOVERYN_CITIZENS_DB",
+                        str(
+                            _CitizensPath.home()
+                            / "soveryn_vnext"
+                            / "data"
+                            / "citizens.db"
+                        ),
+                    )
+                )
+                if _citizens_db.exists():
+                    _conv_db = env.conversations_db
+
+                    def _busy(cid: str, _db=_conv_db) -> bool:
+                        # Charter §8: Aetheria's GPU is alone. Don't start a
+                        # commission while Jon is mid-chat (or signal/voice).
+                        return _citizens_interactive_busy(_db, cid)
+
+                    _citizens_threading.Thread(
+                        target=_citizens_run_forever,
+                        kwargs={
+                            "db_path": _citizens_db,
+                            "process_fn": _citizens_process_fn(
+                                agent_loops, conv_store
+                            ),
+                            "busy_fn": _busy,
+                            "poll_seconds": float(
+                                app.config.get("CITIZENS_POLL_SECONDS", 5.0)
+                            ),
+                        },
+                        daemon=True,
+                        name="citizens-runtime",
+                    ).start()
+                    logger.info(
+                        "citizens runtime worker started db=%s", _citizens_db
+                    )
+                else:
+                    logger.warning(
+                        "citizens runtime not started — no registry at %s "
+                        "(run: python -m soveryn.citizens.census)",
+                        _citizens_db,
+                    )
+
     # MessengerStore was constructed earlier (above the agent_loops gate) so
     # it's in scope when deliberate_share is registered for Aetheria + Vett.
     # The same instance flows here into app.extensions for blueprint use.

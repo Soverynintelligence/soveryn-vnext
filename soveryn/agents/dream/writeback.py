@@ -3,12 +3,17 @@
 Per Aetheria's note: the cognition surface emits natural-language
 synthesis, NOT a JSON-schema-constrained structure. The parser is
 best-effort: it pulls [node:ID] references out of the prose and
-uses adjacency to suggest edges, while the synthesis prose itself
-becomes the reflection node content.
+uses adjacency to suggest edges.
 
-DB writes go to three places (silent residue + accessible reflection):
-  - nodes (layer='dream', type='reflection') ← reflection content
-  - edges (relationship='dream_association') ← extracted from [node:ID] adjacency
+Memory Grades PR4: full synthesis is archived under
+data/memory/dream_archive/; the lattice reflection is a clamped head
+(≤ DREAM_SYNTHESIS_LATTICE_MAX). Edges/contradictions still extract from
+the full synthesis before clamp.
+
+DB writes go to:
+  - dream_archive/<run_id>.md  ← full synthesis (recoverable)
+  - nodes (layer='dream', type='reflection') ← lattice head only
+  - edges (relationship='dream_association') ← from full text
   - dream_log ← audit row, always
 """
 
@@ -21,7 +26,22 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from soveryn.platform.lattice.content_caps import (
+    DREAM_SYNTHESIS_LATTICE_MAX,
+    clamp_content,
+    write_dream_archive,
+)
 from soveryn.platform.lattice.legacy import LAYER_DREAM
+
+try:
+    from soveryn.platform.lattice.distill import dream_lattice_head
+except ImportError:  # module on-disk-only / missing install
+    def dream_lattice_head(synthesis: str) -> str:  # type: ignore[misc]
+        text = (synthesis or "").strip()
+        limit = DREAM_SYNTHESIS_LATTICE_MAX
+        if len(text) <= limit:
+            return text
+        return text[: limit - 1].rstrip() + "…"
 
 
 # Matches [node:ID] where ID is any non-bracket, non-whitespace run.
@@ -122,16 +142,46 @@ def _write_reflection_node(
     associations: str,
     contradictions: str,
 ) -> str:
-    """Persist the synthesis as a layer='dream' node. Returns its id."""
+    """Persist a clamped dream reflection head. Full text → dream_archive."""
     node_id = str(uuid.uuid4())
     now = datetime.now().isoformat()
+    full = (synthesis or "").strip()
+
+    # Archive full synthesis beside the lattice DB (data/memory/… layout).
+    data_root = Path(lattice_db_path).resolve().parent
+    if data_root.name == "memory":
+        # …/data/memory/lattice.db → data root is parent of memory
+        data_root = data_root.parent
+    try:
+        write_dream_archive(
+            data_root,
+            dream_run_id,
+            full,
+            associations=associations or "",
+            contradictions=contradictions or "",
+        )
+    except OSError:
+        # Archive failure must not skip the lattice head — still write clamped.
+        pass
+
+    head = dream_lattice_head(full)
+    head = clamp_content(
+        "reflection",
+        head,
+        on_overflow="clamp",
+        max_chars=DREAM_SYNTHESIS_LATTICE_MAX,
+    )
     provenance = {
+        "cls": "witnessed",
         "source": "dream_daemon",
         "dream_run_id": dream_run_id,
+        "grade": "journal",
+        "full_text_ref": f"dream_archive:{dream_run_id}",
+        "original_chars": len(full),
         "passes_visible": {
             "associations_len": len(associations or ""),
             "contradictions_len": len(contradictions or ""),
-            "synthesis_len": len(synthesis or ""),
+            "synthesis_len": len(full),
         },
     }
     with sqlite3.connect(str(lattice_db_path)) as con:
@@ -140,7 +190,7 @@ def _write_reflection_node(
             "intensity, salience, access_count, created_at, updated_at, "
             "provenance) VALUES (?, 'reflection', ?, 'aetheria', ?, "
             "0.6, 0.6, 0, ?, ?, ?)",
-            (node_id, LAYER_DREAM, synthesis.strip(), now, now,
+            (node_id, LAYER_DREAM, head, now, now,
              json.dumps(provenance, sort_keys=True)),
         )
     return node_id

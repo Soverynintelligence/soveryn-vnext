@@ -128,7 +128,13 @@ def take_census(conn, *, workspaces: Path = DEFAULT_WORKSPACES,
                     else "no unit active: " + ", ".join(units)),
         )
 
-    return list_citizens(conn)
+    # Phase 3: register standing duties so the board can name them. Does not
+    # rewire systemd — register first, rewire later (project §7).
+    from soveryn.citizens.duties import seed_founding
+    seed_founding(conn)
+
+    from soveryn.citizens.registry import board_citizens
+    return board_citizens(conn)
 
 
 def main(argv: list[str] | None = None) -> int:

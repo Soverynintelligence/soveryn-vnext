@@ -7,7 +7,8 @@ product feel", and there are two ways to read that. The dangerous one is to make
 the queue the thing that decides when she acts — that puts a database between
 Aetheria and her own initiative, and the recorded principle is to free her, not
 cage her. The safe one, taken here, is that each pulse she runs is *written down*
-as a commission: queued, claimed, and closed with what happened.
+as a commission already in flight: owned by the heartbeat worker from the first
+insert, closed with what happened.
 
 What that buys, concretely:
 
@@ -19,6 +20,16 @@ What that buys, concretely:
     find. The 26-hour silent outage of 2026-07-26 looked exactly like an agent
     choosing not to act; a stalled commission with a claim timestamp would have
     said "she has been mid-pulse for 26 hours" instead.
+
+Why the row never sits in `queued`
+----------------------------------
+A pulse is not a request for the citizens-runtime to do work. It is a record of
+work the heartbeat is already doing. The first implementation did
+`enqueue()` then `claim()`, which left a window where the drain worker could
+steal the row, run AgentLoop on the literal body "heartbeat pulse", write a
+junk outbox file, and leave the real pulse unrecorded. That is a when, not an
+if, at 48 pulses a day. So the insert is `begin_owned` — already `running`,
+already claimed by the duty worker.
 
 The invariant that matters more than any of it
 ----------------------------------------------
@@ -41,7 +52,7 @@ from pathlib import Path
 from typing import Iterator
 
 from soveryn.citizens import commissions
-from soveryn.citizens.registry import connect
+from soveryn.citizens.registry import OBSERVED_PRESENT, connect, observe
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +67,7 @@ def record_pulse(
     now: str,
     result_ref: str = "",
 ) -> Iterator[str | None]:
-    """Wrap a duty tick so it appears in the commissions queue.
+    """Wrap a duty tick so it appears as an owned running commission.
 
     Yields the commission id, or None if the pulse could not be recorded — the
     caller does not need to care which, and must not branch on it for anything
@@ -70,16 +81,10 @@ def record_pulse(
         try:
             ctx = connect(db_path)
             conn = ctx.__enter__()
-            commission_id = commissions.enqueue(conn, citizen_id, body, at=now)
-            claimed = commissions.claim(conn, citizen_id, worker=worker, at=now)
-            # A claim can legitimately return another commission — anything
-            # already queued for this citizen is older and wins. That is correct
-            # queue behaviour, but it means the row we are about to close is the
-            # claimed one, not necessarily the one just enqueued.
-            if claimed is not None:
-                commission_id = claimed["id"]
-            else:
-                commission_id = None
+            # Already running + owned — never enters the drainable queue.
+            commission_id = commissions.begin_owned(
+                conn, citizen_id, body, worker=worker, at=now
+            )
         except Exception:
             logger.warning(
                 "pulse bookkeeping failed to open; the tick proceeds unrecorded",
@@ -96,7 +101,28 @@ def record_pulse(
     else:
         _close(conn, commission_id, ok=True, at=now,
                detail=result_ref or f"pulse:{worker}@{now}")
+        # Phase 3: a completed pulse is evidence she is present — advance
+        # last_seen without waiting for the next census. Best-effort only.
+        _note_present(conn, citizen_id, at=now, worker=worker)
         _release(ctx)
+
+
+def _note_present(conn, citizen_id: str, *, at: str, worker: str) -> None:
+    if conn is None:
+        return
+    try:
+        observe(
+            conn,
+            citizen_id,
+            OBSERVED_PRESENT,
+            at=at,
+            detail=f"duty pulse via {worker}",
+        )
+    except Exception:
+        logger.warning(
+            "pulse bookkeeping failed to observe %s present", citizen_id,
+            exc_info=True,
+        )
 
 
 def _close(conn, commission_id, *, ok: bool, at: str, detail: str) -> None:

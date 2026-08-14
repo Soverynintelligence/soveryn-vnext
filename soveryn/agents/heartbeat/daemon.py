@@ -290,7 +290,16 @@ class HeartbeatDaemon:
             self._tick_body(now=now, eligibility=eligibility)
             return
 
-        from soveryn.citizens.pulse import record_pulse
+        try:
+            from soveryn.citizens.pulse import record_pulse
+        except ImportError:
+            # pulse.py missing on this install — still run the tick unrecorded.
+            # test_repo_integrity is the check that catches the untracked file.
+            logger.exception(
+                "citizens pulse bookkeeping unavailable; tick proceeds unrecorded"
+            )
+            self._tick_body(now=now, eligibility=eligibility)
+            return
         with record_pulse(
             self._citizens_db,
             "aetheria",
@@ -458,23 +467,45 @@ class HeartbeatDaemon:
             # [heartbeat] session via the /chat round-trip above.
             note = (response_text or "").strip()
 
-            # Phase 1 (2026-07-17): her reflection ALSO lands in the Lattice as a
-            # PRIVATE node, so it becomes part of her associative memory
-            # (recallable via the Librarian embedder) instead of only living in
-            # the black-box thoughts-log + linear [heartbeat] session. Private =
-            # only she recalls it. Best-effort: a lattice/embed failure must never
-            # break the pulse.
+            # Memory Grades PR3: dual-write. Full note stays in thoughts log +
+            # [heartbeat] session (process/self preserved). Lattice gets only a
+            # dense reflection head so always-on writers do not re-bloat essays
+            # as the default self-model. Best-effort: never break the pulse.
             if note:
                 try:
+                    try:
+                        from soveryn.platform.lattice.distill import distill_for_lattice
+                    except ImportError:
+                        # distill module on-disk-only would crash the pulse —
+                        # fall back to a hard head so the tick still completes.
+                        logger.exception(
+                            "heartbeat tick %s: distill module missing; "
+                            "using hard truncation", tick_id,
+                        )
+                        def distill_for_lattice(node_type, text, **kw):  # type: ignore
+                            t = (text or "").strip()
+                            return t if len(t) <= 500 else t[:499].rstrip() + "…"
                     from soveryn.platform.lattice.legacy import LatticeStore, embed_text
-                    LatticeStore(self.lattice_db).write_node(
-                        agent="aetheria", content=note, node_type="reflection",
-                        layer="private", tags=("heartbeat", "reflection"),
-                        embedding=tuple(embed_text(note[:6000])),
-                        provenance={"cls": "witnessed",
-                                    "source": "heartbeat", "pulse_id": tick_id,
-                                    "ts": now.isoformat()},
-                    )
+                    head = distill_for_lattice("reflection", note)
+                    if head:
+                        LatticeStore(self.lattice_db).write_node(
+                            agent="aetheria",
+                            content=head,
+                            node_type="reflection",
+                            layer="private",
+                            tags=("heartbeat", "reflection", "grade:journal"),
+                            embedding=tuple(embed_text(head)),
+                            on_overflow="clamp",
+                            provenance={
+                                "cls": "witnessed",
+                                "source": "heartbeat",
+                                "pulse_id": tick_id,
+                                "ts": now.isoformat(),
+                                "grade": "journal",
+                                "full_text_ref": f"thoughts_log:pulse_id={tick_id}",
+                                "original_chars": len(note),
+                            },
+                        )
                 except Exception:
                     logger.exception(
                         "heartbeat tick %s: lattice private-node write failed "
