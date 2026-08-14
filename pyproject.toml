@@ -10,6 +10,12 @@ requires-python = ">=3.11"
 dependencies = [
     "Flask>=3.0",
     "jsonschema>=4.0",
+    # Lattice recall scores every embedded node against the query. In pure
+    # Python that is 2,638 x 4,096 float multiplications and takes 790 ms —
+    # 73% of recall. numpy does it as one matrix product in ~30 ms. The scorer
+    # falls back to the pure-Python loop if the import fails, so this is a
+    # performance dependency, not a correctness one.
+    "numpy>=1.26",
     "trafilatura>=2.0",  # web fetch + main-content extraction (soveryn.platform.web.fetch)
     "pipecat-ai[silero,webrtc,elevenlabs]>=1.3.0,<2",
     # vett-harness vendored deps (upstream pat-jj/harness-1)
