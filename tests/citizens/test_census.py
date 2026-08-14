@@ -2,8 +2,8 @@
 
 The trap this guards is the one that made Aetheria read as offline on the public
 Lab page: a citizen with nothing to probe rendering identically to a citizen
-that was probed and found dead. Scotty has no unit by design, so the census must
-leave him unobserved rather than manufacture an `absent` finding.
+that was probed and found dead. Every founding citizen now has units to probe;
+status is derived from those probes only.
 """
 from __future__ import annotations
 
@@ -42,6 +42,8 @@ def test_all_units_down_reports_offline(db, tmp_path):
     rows = take_census(db, workspaces=tmp_path,
                        unit_check=lambda u: False, now="2026-08-13T10:00:00Z")
     assert _by_id(rows)["aetheria"]["status"] == "offline"
+    assert _by_id(rows)["scotty"]["status"] == "offline"
+    assert _by_id(rows)["vett"]["status"] == "offline"
 
 
 def test_any_unit_up_reports_resident(db, tmp_path):
@@ -53,14 +55,17 @@ def test_any_unit_up_reports_resident(db, tmp_path):
     assert aetheria["last_observation"]["detail"] == "soveryn-heartbeat.service"
 
 
-def test_scotty_is_never_observed_because_there_is_nothing_to_observe(db, tmp_path):
-    """He has no unit. `offline` would assert a process that does not exist."""
-    rows = take_census(db, workspaces=tmp_path,
-                       unit_check=lambda u: False, now="2026-08-13T10:00:00Z")
+def test_scotty_resident_when_desk_worker_active(db, tmp_path):
+    """Scotty's process residence is soveryn-scotty-worker.service."""
+    rows = take_census(
+        db,
+        workspaces=tmp_path,
+        unit_check=lambda u: u == "soveryn-scotty-worker.service",
+        now="2026-08-13T10:00:00Z",
+    )
     scotty = _by_id(rows)["scotty"]
-    assert scotty["status"] == "unobserved"
-    assert scotty["last_observation"] is None
-    assert scotty["last_seen_at"] is None
+    assert scotty["status"] == "resident"
+    assert "soveryn-scotty-worker" in scotty["last_observation"]["detail"]
 
 
 def test_the_census_gives_every_citizen_a_desk(db, tmp_path):
