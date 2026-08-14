@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOVERYN — Company connectors</title>
+<style>
+  :root {
+    --bg: #0f1011;
+    --card: #1a1b1c;
+    --bone: #E7E5DC;
+    --muted: #a49f92;
+    --sage: #74856a;
+    --copper: #c0824f;
+    --warn: #c08a3c;
+    --gap: #6b675e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--bone);
+    padding: 40px 28px 56px;
+    line-height: 1.45;
+  }
+  h1 {
+    font-family: Barlow, Inter, sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .sub { color: var(--muted); font-size: 15px; max-width: 640px; margin-bottom: 36px; }
+  .sub strong { color: var(--sage); font-weight: 600; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 16px 24px;
+    margin-bottom: 28px; font-size: 13px; color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.strong { background: var(--sage); }
+  .dot.partial { background: var(--copper); }
+  .dot.gap { background: var(--gap); border: 1px solid #888; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid rgba(116,133,106,0.22);
+    border-radius: 10px;
+    padding: 18px 16px 16px;
+    min-height: 200px;
+  }
+  .card.strong { border-color: rgba(116,133,106,0.55); }
+  .card.partial { border-color: rgba(192,130,79,0.5); }
+  .card.gap { border-color: rgba(107,103,94,0.5); opacity: 0.95; }
+  .badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+  .badge.strong { color: var(--sage); }
+  .badge.partial { color: var(--copper); }
+  .badge.gap { color: var(--muted); }
+  .card h2 {
+    font-family: Barlow, Inter, sans-serif;
+    font-size: 20px; font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .card p { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .card ul { font-size: 12.5px; color: var(--bone); padding-left: 16px; }
+  .card li { margin-bottom: 5px; }
+  .core {
+    border: 1px solid rgba(116,133,106,0.35);
+    border-radius: 12px;
+    padding: 22px 24px;
+    background: linear-gradient(180deg, rgba(26,27,28,0.9), rgba(15,16,17,0.95));
+    margin-bottom: 28px;
+  }
+  .core h3 {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--sage); margin-bottom: 10px;
+  }
+  .core p { font-size: 14px; color: var(--muted); max-width: 720px; }
+  .core p em { color: var(--bone); font-style: normal; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    margin-top: 8px;
+  }
+  th, td {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid rgba(116,133,106,0.15);
+  }
+  th { color: var(--sage); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  td:first-child { font-weight: 600; color: var(--bone); }
+  .foot { margin-top: 28px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+  <h1>Company connectors</h1>
+  <p class="sub">
+    What a company agent stack must reach to do real work — and where SOVERYN stands today.
+    <strong>Self-sufficient inside</strong> is not enough without these plugs.
+  </p>
+
+  <div class="legend">
+    <span><i class="dot strong"></i> Strong / packaged</span>
+    <span><i class="dot partial"></i> Partial / single-tenant</span>
+    <span><i class="dot gap"></i> Gap for multi-user companies</span>
+  </div>
+
+  <div class="grid">
+    <article class="card strong">
+      <div class="badge strong">Strong</div>
+      <h2>Web</h2>
+      <p>Search, fetch, public research, vendor docs.</p>
+      <ul>
+        <li>SearXNG + fetch_url</li>
+        <li>SSRF guard (no internal free-for-all)</li>
+        <li>Aetheria + Vett only</li>
+      </ul>
+    </article>
+
+    <article class="card partial">
+      <div class="badge partial">Partial</div>
+      <h2>Files</h2>
+      <p>Contracts, tickets, shared drives, PDFs.</p>
+      <ul>
+        <li>Local roots per agent</li>
+        <li>Library + documents + PDF</li>
+        <li>No SharePoint / Drive / multi-tenant NAS yet</li>
+      </ul>
+    </article>
+
+    <article class="card partial">
+      <div class="badge partial">Partial</div>
+      <h2>Text</h2>
+      <p>Reach a human fast — SMS, chat, Signal-style.</p>
+      <ul>
+        <li>Signal → Jon (strong)</li>
+        <li>Messenger deliberate_share</li>
+        <li>No Slack / Teams / multi-user SMS</li>
+      </ul>
+    </article>
+
+    <article class="card gap">
+      <div class="badge gap">Gap</div>
+      <h2>Email</h2>
+      <p>Inbox, send, threads, attachments — B2B core.</p>
+      <ul>
+        <li>Not first-class in agent mesh</li>
+        <li>Form/SMTP elsewhere ≠ agent mail</li>
+        <li>Needs allowlist + audit</li>
+      </ul>
+    </article>
+
+    <article class="card partial">
+      <div class="badge partial">Partial</div>
+      <h2>Image</h2>
+      <p>Generate, edit, attach visuals to jobs.</p>
+      <ul>
+        <li>ComfyUI (now CPU/RAM)</li>
+        <li>Aetheria generate_image</li>
+        <li>No brand kit / multi-user asset store</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="core">
+    <h3>Architecture rule (same as web / Signal)</h3>
+    <p>
+      Every connector needs: <em>scoped access</em>, <em>audit trail</em>, and
+      <em>no silent invent</em> of facts that live outside the model
+      (dates, prices, citations, file contents, email claims).
+    </p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Connector</th>
+        <th>Company need</th>
+        <th>SOVERYN today</th>
+        <th>Product priority</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Web</td>
+        <td>Research without data egress chaos</td>
+        <td>Local metasearch + guarded fetch</td>
+        <td>Package &amp; document</td>
+      </tr>
+      <tr>
+        <td>Files</td>
+        <td>Work on their documents</td>
+        <td>Local allowlisted paths</td>
+        <td>NAS / mounted volumes next</td>
+      </tr>
+      <tr>
+        <td>Text</td>
+        <td>Escalate to the right person</td>
+        <td>Signal single-operator</td>
+        <td>Multi-recipient / Slack adapter</td>
+      </tr>
+      <tr>
+        <td>Email</td>
+        <td>Run the business inbox</td>
+        <td>Gap in agent tools</td>
+        <td>Highest B2B gap</td>
+      </tr>
+      <tr>
+        <td>Image</td>
+        <td>Proposals, pond viz, branding</td>
+        <td>Comfy on CPU; gen tool</td>
+        <td>Vertical (Pondwright watercolor) + brand constraints</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p class="foot">
+    SOVERYN · company connector map · generated for discussion · not a deploy artifact
+  </p>
+</body>
+</html>

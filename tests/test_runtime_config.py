@@ -82,11 +82,13 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     assert aetheria[0].port == 8090
     assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
     # 2026-08-02: Vett + Scotty moved OFF the local routers entirely, to the
-    # Spark (10.10.10.2:8000, Laguna on vLLM), freeing 30 GB on a Quadro that
-    # was alerting at <1 GB free and 82 C. That strengthens this invariant
-    # rather than weakening it — one fewer tenant able to leak onto her card.
+    # Spark, freeing 30 GB on a Quadro that was alerting at <1 GB free and
+    # 82 C. That strengthens this invariant rather than weakening it — one
+    # fewer tenant able to leak onto her card.
+    # 2026-08-12: the Spark port moved :8000 -> :8001 when laguna-serve was
+    # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
-    assert {s.port for s in others} == {8000, 8091, 8096}
+    assert {s.port for s in others} == {8001, 8091, 8096}
     # The load-bearing half: nothing local shares Aetheria's router, and the
     # remote entry is not even on this host.
     assert all(s.host == "127.0.0.1" for s in others if s.port in (8091, 8096))
@@ -107,7 +109,7 @@ def test_each_model_server_has_router_alias_populated():
     carries the alias that router-presets.ini knows about."""
     expected = {
         "aetheria_primary": "aetheria",
-        "vett_scotty_shared": "laguna",
+        "vett_scotty_shared": "qwen36-35b",
         "embeddings": "embeddings",
         "cognition": "cognition",
     }
@@ -132,8 +134,9 @@ def test_all_ports_includes_parakeet():
     and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    # 8000 = Spark vLLM (Vett + Scotty), added 2026-08-02.
-    assert ports == {8000, 8087, 8090, 8091, 8096}
+    # 8001 = Spark vLLM (qwen-serve), added 2026-08-02 on :8000 and moved to
+    # :8001 on 2026-08-12 when laguna-serve was stopped and disabled.
+    assert ports == {8001, 8087, 8090, 8091, 8096}
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():
@@ -228,15 +231,23 @@ def test_ares_daemon_is_a_process_not_an_agent():
     assert "ares" not in runtime.RETIRED
 
 
-def test_vett_scotty_shared_supports_multi_system_via_fixed_template():
-    """As of 2026-06-12 (commit 8c0726d), vett_scotty_shared uses
-    froggeric/Qwen-Fixed-Chat-Templates v20 (configured in router-presets.ini
-    [vett-scotty] via `chat-template-file`) which natively honors
-    messages[1:] role=system. The transport adapter `prepare_wire_messages`
-    becomes a pass-through. Sandbox + live-verified ('ALL_SURVIVED' probe)."""
+def test_vett_scotty_shared_does_not_support_multi_system_on_stock_qwen():
+    """INVERTED 2026-08-12, and the reason matters more than the value.
+
+    From 2026-06-12 this asserted True: the router child loaded
+    froggeric/Qwen-Fixed-Chat-Templates v20 via `chat-template-file`, which
+    natively honoured messages[1:] role=system, so `prepare_wire_messages`
+    was a pass-through.
+
+    That patched template went away with the router child. Vett and Scotty now
+    reach STOCK Qwen3.6 served by vLLM on the Spark, which returns
+    `400 System message must be at the beginning` for any system message after
+    position 0. True was only ever a property of the patched template, never of
+    the model — so the flag follows the server, and the adapter is load-bearing
+    again."""
     from soveryn.config.runtime import MODEL_SERVERS
     vs = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")
-    assert vs.supports_multi_system_messages is True
+    assert vs.supports_multi_system_messages is False
 
 
 def test_aetheria_primary_does_not_support_multi_system_qwen36_template():

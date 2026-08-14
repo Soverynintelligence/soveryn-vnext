@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | Target SSOT + live snapshot (§4 refreshed 2026-08-12 ~02:00 after the Blackwell CUDA fix and the Spark model swap) |
+| **Status** | Target SSOT + live snapshot |
 | **Date** | 2026-08-12 |
 | **Hardware** | Tower (~144 GiB VRAM, 512 GiB RAM) + DGX Spark (`10.10.10.2`) |
 | **Premise** | Local Grok-Bot-class fleet: models stay resident; agents work 24/7; Aetheria never shares her card |
@@ -57,9 +57,8 @@
 | | |
 |--|--|
 | Host | `10.10.10.2` (CX-7 link) |
-| Role | Always-on **worker** brain, shared by every Spark-served agent |
-| Stack | vLLM, alias **`qwen36-35b`**, port **8001** (`qwen-serve.service`) |
-| ⚠️ Laguna | `laguna-serve` **stopped and disabled** since 2026-08-12 — see §3.4. Weights remain on disk. Anything in this file still saying `laguna` / `:8000` is stale; §3.4 is the record. |
+| Role | Always-on **worker** brains (Vett + Scotty) |
+| Stack | vLLM, alias **`laguna`** (Laguna-S-2.1-NVFP4), port **8000** |
 
 ---
 
@@ -77,7 +76,7 @@ Not one model awake for everything — a **small permanent set** of resident mod
         ┌───────────────┐       ┌─────────────────────────┐       ┌───────────────┐
         │ BLACKWELL     │       │ QUADRO PAIR (NVLink)    │       │ DGX SPARK     │
         │ :8090 router  │       │ :8091 router            │       │ 10.10.10.2    │
-        │ Aetheria ONLY │       │ 96 GiB pool / multi-GPU │       │ :8001 vLLM    │
+        │ Aetheria ONLY │       │ 96 GiB pool / multi-GPU │       │ :8000 vLLM    │
         └───────────────┘       └─────────────────────────┘       └───────────────┘
                 │                       │                       │
                 │                       ├─ embed / cognition / reflection
@@ -92,7 +91,7 @@ Not one model awake for everything — a **small permanent set** of resident mod
 | Lane | Hardware | Always loaded | Consumers |
 |------|----------|---------------|-----------|
 | **Self** | Blackwell alone (no NVLink to Quadros) | **Aetheria** Gemma 4 31B Q6 | Chat, heartbeat, Signal, tools |
-| **Workers** | Spark | **`qwen36-35b`** — shared by Vett, Scotty, PondWright, Atticus, Seneca | Research, repair, patrol, delegation, products |
+| **Workers** | Spark | **Laguna** (Vett + Scotty) | Research, repair, patrol, delegation |
 | **Librarian** | One Quadro of the NVLink pair (`…990a` today) | **Nemotron-3-Embed-8B** :8096 | Lattice recall / write embeds |
 | **Cognition** | Other Quadro and/or NV-split small model | Small Gemma / dream surface | Dream multi-pass, background reason |
 | **Reflection** | Quadro pair (single-GPU slot) | Qwen 9B-class | Multi-voice / reflection tools |
@@ -115,24 +114,8 @@ Optional always-on (only if VRAM headroom after pins):
 | Agent | Logical server (`runtime.py`) | Endpoint | Alias | Hardware | Always-on? |
 |-------|------------------------------|----------|-------|----------|------------|
 | **Aetheria** | `aetheria_primary` | `http://127.0.0.1:8090` | `aetheria` | Blackwell via router | **YES — never unload** |
-| **Vett** | `vett_scotty_shared` | `http://10.10.10.2:8001` | `qwen36-35b` | Spark vLLM | **YES** |
-| **Scotty** | `vett_scotty_shared` | same | `qwen36-35b` | Spark vLLM | **YES** (shared weights OK) |
-
-⚠️ **This table is where INFERENCE happens, not where the PROCESS runs.** The two
-were conflated twice in one day (2026-08-13) and it changes decisions:
-
-| Agent | Process runs on | Inference from | HTTP endpoint of its own |
-|---|---|---|---|
-| Aetheria | tower — heartbeat / dream / cognition / signal-bridge units | Blackwell `:8090` | none |
-| **Vett** | **tower** — `soveryn-vett-patrol.service` | Spark `:8001` | **none** — she patrols, she does not listen |
-| **Scotty** | **tower**, and **not resident** — invoked on demand, no unit | Spark `:8001` | **none** |
-| PondWright | Spark `:8200` | Spark `:8001` | yes |
-| Atticus | Spark `:8500` | Spark `:8001` | yes |
-| Seneca | Spark `:8400` | Spark `:8001` | yes |
-
-Verified on both machines 2026-08-13: the Spark holds no vett/scotty unit,
-process, port or directory. "Vett and Scotty moved to the Spark" refers to their
-**model**, which is true and is what `runtime.py` encodes.
+| **Vett** | `vett_scotty_shared` | `http://10.10.10.2:8000` | `laguna` | Spark vLLM | **YES** |
+| **Scotty** | `vett_scotty_shared` | same | `laguna` | Spark vLLM | **YES** (shared weights OK) |
 
 ### 3.2 Supporting models
 
@@ -155,25 +138,16 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 | `ctx-size` | 32768 |
 | `cache-ram` | **≥ 32768** (host MiB) — never 0 on live path |
 | Co-tenants | **None** on Blackwell |
-| CUDA | Toolkit/driver that **supports Blackwell (sm_120)**. **Confirmed mechanism 2026-08-12:** `cuobjdump --list-elf libcublas.so.12` (CUDA 12.8) returns **sm_50…sm_90 and no sm_120**; cuBLAS 13.2 has it. Prefill is almost entirely cuBLAS GEMM, so it collapsed **13×**; decode runs ggml's *own* sm_120 kernels and only sagged. **That asymmetry is what disguised it as a prompt-size problem for three days.** |
-| Build | llama.cpp built against the **cuda131** toolkit. `~/llama.cpp_head/build` is a **symlink** → `build-cuda131`; the broken tree is kept at `build-cuda128-broken-20260808`. Both routers share that path. |
-| ✅ Verify after **every** rebuild | `ldd ~/llama.cpp_head/build/bin/libggml-cuda.so.0 \| grep cublas` **must print `.so.13`**. `LD_LIBRARY_PATH` cannot rescue a wrong build: a binary linked against 12.8 asks for soname `libcublas.so.12`, cuda131 ships only `.so.13`, so the loader falls through to `/usr/local/cuda-12.8`. |
-| `swa-full` | **false** (2026-08-12). Measured: +52% prefill, **13.2 GiB VRAM freed**, and checkpoint reuse did **not** break — 6-token warm re-prefill, same as with it on. The 2026-06-11 comment asked for a cold/warm probe before changing it; it has one. |
-| KV cache | `q8_0`. f16 tested and reverted: **166.5 vs 169.1 tok/s — no difference.** KV quantization is not a bottleneck here. Don't re-test. |
+| CUDA | Toolkit/driver that **supports Blackwell (sm_120)** — CUDA 12.1-class stacks without Blackwell support caused multi-minute “model loaded but glacial” prefills |
+| Build | llama.cpp with arch that includes Blackwell; runtime `LD_LIBRARY_PATH` must match that build |
 
 ### 3.4 Spark worker contract
 
 | Knob | Target |
 |------|--------|
-| Host | `10.10.10.2:8001` (was `:8000`) |
-| Alias | **`qwen36-35b`** (was `laguna`) — see the 2026-08-12 note below |
-| Unit | **`qwen-serve.service`** (systemd **user** unit, `Restart=always`, lingering on, survives reboot). `laguna-serve.service` is **stopped and disabled**. |
-| Agents | **Everything on the Spark shares this one model** (decided 2026-08-12): Vett, Scotty, PondWright (`:8200`), Atticus (`:8500`), Seneca (`soveryn-agent`, `:8400`). |
-| ⚠️ Stopping this unit | takes **all five** down. `laguna-serve`'s own description said "Vett, Scotty and PondWright" — it was **incomplete**, and trusting it meant Atticus and Seneca stayed pointed at a dead port. **Sweep for `:8001` consumers before stopping, don't read the description.** |
-| Per-agent wiring | each app's `config.json` (`laguna_url` + `model`) and `laguna.py`. **`chat_template_kwargs {"enable_thinking": false}` is required in `laguna.py`** — without it Qwen3.6 spends the whole `max_tokens` budget inside `<think>` and the app shows an empty reply or its fallback message. |
-| Laguna | `laguna-serve` **stopped and disabled** — it does not return on reboot, deliberately. Weights remain at `~/models/Laguna-S-2.1-NVFP4`. |
-| Multi-system messages | `supports_multi_system_messages=False`. Stock Qwen3.6 returns `400 System message must be at the beginning`; `True` was only ever correct for the patched Qwen template the old router child used. |
-| Why | Laguna (~85 GiB) and Qwen (~48 GiB) cannot coexist in 121 GiB, and the Spark was needed for the 2026-08-11 honesty bake-off. **Known tradeoff, recorded not buried:** on the self-report harness Qwen3.6-35B false-denies **30/30**, Laguna **18/30**. This is a knowing step onto the worse model for Vett's core failure mode; revisit when the next Qwen lands. |
+| Host | `10.10.10.2:8000` |
+| Alias | `laguna` |
+| Agents | Vett + Scotty share one model (or split later if needed) |
 | Thinking | `enable_thinking: false` unless a controlled A/B says otherwise |
 | Revert | Documented in `runtime.py` (local vett-scotty on Quadro) |
 
@@ -187,15 +161,11 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 |------|------|
 | Dual routers | `:8090` blackwell + `:8091` quadro — **active** |
 | Aetheria pin | Blackwell UUID on `soveryn-router.service` |
-| Spark workers | `runtime.py` → `10.10.10.2:8001` / `qwen36-35b` (**changed 2026-08-12**; `laguna-serve` stopped + disabled) |
-| Spark app agents | PondWright `:8200`, Atticus `:8500`, Seneca `:8400` — all repointed to `:8001` / `qwen36-35b` 2026-08-12 |
-| Ares surface probe | `qwen-spark` → `:8001`, expects `qwen36-35b` (was `laguna-spark` → `:8000`; left as-is it would page forever about a service stopped on purpose) |
+| Spark workers | `runtime.py` → `10.10.10.2:8000` / `laguna` |
 | Embeddings | `soveryn-embeddings.service` on Quadro `…990a` :8096 |
 | vNext | `:5001` active |
 | Heartbeat / dream / patrol / signal | user units active |
-| Aetheria `cache-ram` | 32768 in blackwell preset — **now committed** (`1a83cb8`); it had been working-tree-only, one `git checkout` from silently reverting to 0 |
-| Aetheria prefill | **1,592 tok/s** verified 2026-08-12 (was 111) |
-| PondWright | repointed to `qwen36-35b`; `laguna.py` now sends `chat_template_kwargs {"enable_thinking": false}` at both payload sites — without it Qwen3.6 spends the whole `max_tokens` budget inside `<think>` and returns **empty content** |
+| Aetheria `cache-ram` | 32768 in blackwell preset |
 
 ### Drift to fix (always-on hygiene)
 
@@ -243,7 +213,7 @@ Today three stories fight:
 | `soveryn-router-quadro.service` | :8091 Quadros | **YES** |
 | `soveryn-embeddings.service` | :8096 Librarian | **YES** |
 | `soveryn-cognition.service` | :8089 dream brain | **YES** (until unified) |
-| `qwen-serve.service` (on Spark host) | :8001 `qwen36-35b` | **YES** |
+| Spark vLLM (on Spark host) | :8000 Laguna | **YES** |
 
 ### Control plane
 
@@ -308,7 +278,7 @@ Today three stories fight:
 
 ## 9. Implementation checklist (bring live → target)
 
-- [x] **Confirm Blackwell prefill tok/s after CUDA fix — DONE 2026-08-12.** Same 14,899-token probe: **111 → 1,592 tok/s**. Router logs date the regression to the hour: Jun 25–Aug 7 steady 1,300–1,800; Aug 8 12h **1,383**; Aug 8 13h **97**; flat ~90–110 until fixed. The llama.cpp rebuild at 11:49 that morning is the delta.  
+- [ ] Confirm Blackwell prefill tok/s after CUDA fix; record baseline in this doc  
 - [ ] Watermark/delete `runtime/router-presets.ini` and `data/router-presets.ini` if they still ship `cache-ram = 0`  
 - [ ] Retire or comment out `[vett-scotty]` on quadro preset (Spark owns workers)  
 - [ ] Unify dream/cognition: one URL, one alias, one unit  
@@ -326,11 +296,7 @@ Today three stories fight:
 |-----:|-------|
 | 5001 | vNext Flask |
 | 5066 | messie (optional) |
-| 8000 | Spark Laguna (remote) — **stopped + disabled 2026-08-12** |
-| 8001 | Spark Qwen3.6-35B-A3B (remote) — Vett, Scotty, PondWright, Atticus, Seneca |
-| 8200 | PondWright agent (on Spark) |
-| 8400 | Seneca / soveryn-agent (on Spark) |
-| 8500 | Atticus (on Spark) |
+| 8000 | Spark Laguna (remote) |
 | 8087 | Parakeet STT |
 | 8089 | Dream/cognition surface (live unit alias `dream`) |
 | 8090 | Blackwell router (Aetheria) |
@@ -346,8 +312,7 @@ Today three stories fight:
 ```text
 ALWAYS ON
   Self:     Aetheria @ Blackwell :8090          (identity + chat + pulse)
-  Workers:  Qwen3.6-35B @ Spark :8001         (Vett, Scotty, PondWright,
-                                               Atticus, Seneca -- ALL of them)
+  Workers:  Laguna  @ Spark 10.10.10.2:8000   (Vett + Scotty)
   Helpers:  Quadro pair NVLink :8091           (embed / cognition / reflection;
             optional tensor-split mid model on BOTH Quadros only)
   Memory:   Embed   @ one Quadro :8096         (lattice)
@@ -361,7 +326,6 @@ NEVER
   Load cache-ram=0 presets in prod
   Keep dead 27B on Quadro after Spark move
   Trust "model loaded" without tok/s
-  Rebuild llama.cpp without checking `ldd ... | grep cublas` says .so.13
 ```
 
 ---

@@ -245,7 +245,7 @@ def test_a_persistent_failure_still_alarms(tmp_path, monkeypatch):
 def test_the_incident_surfaces_are_declared():
     """Every surface that failed silently this week is now watchable."""
     for name in ("atticus", "soveryn-agent", "shepherd",
-                 "soverynintelligence.com", "router-blackwell", "laguna-spark"):
+                 "soverynintelligence.com", "router-blackwell", "qwen-spark"):
         assert name in registry.BY_NAME, f"{name} is undeclared and therefore unwatched"
 
 
