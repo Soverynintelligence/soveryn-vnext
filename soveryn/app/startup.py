@@ -552,6 +552,23 @@ def create_app(
                 owner_agent=agent_name,
             )
 
+        # Email connector — arms only when SOVERYN_SMTP_* / IMAP_* set.
+        # Citizens board shows granted-but-unarmed until configured.
+        from soveryn.platform.email import register_email_tools
+        for agent_name in ("aetheria", "vett"):
+            try:
+                register_email_tools(tool_registry, owner_agent=agent_name)
+            except Exception:
+                pass  # already registered or agent inactive
+
+        # House Post tools — inter-citizen mail (all founding citizens).
+        from soveryn.platform.house_post_tools import register_house_post_tools
+        for agent_name in ("aetheria", "vett", "scotty"):
+            try:
+                register_house_post_tools(tool_registry, owner_agent=agent_name)
+            except Exception:
+                pass
+
         # system_probe — read-only LIVE host inventory (GPUs/CPU/mem/net/board)
         # over a FIXED command allowlist. Gives the "this machine" fact-class a
         # source to cite instead of a gap to confabulate (the failure the

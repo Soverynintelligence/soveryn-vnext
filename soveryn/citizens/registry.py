@@ -312,6 +312,27 @@ def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
             d.get("kind") == "chief_of_staff" and d.get("enabled")
             for d in duty_rows
         )
+        try:
+            from soveryn.citizens.connectors import for_citizen as connectors_for
+
+            conns = connectors_for(cid)
+            record["connectors"] = [
+                {
+                    "id": c.id,
+                    "title": c.title,
+                    "armed": c.armed,
+                    "granted": c.granted,
+                    "class": c.class_,
+                }
+                for c in conns
+                if c.granted
+            ]
+            record["connectors_armed"] = [
+                c.id for c in conns if c.granted and c.armed
+            ]
+        except Exception:
+            record["connectors"] = []
+            record["connectors_armed"] = []
         queued = commissions.for_citizen(conn, cid, state="queued", limit=200)
         running = commissions.for_citizen(conn, cid, state="running", limit=50)
         record["open_commissions"] = len(queued) + len(running)

@@ -195,6 +195,14 @@ def refresh_census():
     }), 200
 
 
+@bp.get("/api/citizens/connectors")
+def list_connectors():
+    """Catalog + per-citizen grants/armed status for web, email, signal, …"""
+    from soveryn.citizens.connectors import board_payload
+
+    return jsonify(board_payload()), 200
+
+
 @bp.get("/api/citizens/post")
 def list_house_post():
     """Recent House Post traffic (all citizens)."""

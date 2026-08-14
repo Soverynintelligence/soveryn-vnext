@@ -173,6 +173,9 @@
     color: var(--ink-3);
     line-height: 1.55;
   }
+  .chip.conn { border-color: var(--line); color: var(--ink-3); }
+  .chip.conn.armed { color: var(--ok, #6a9); border-color: rgba(100,160,120,.45); }
+  .chip.conn.unarmed { color: var(--gold, #c9a227); border-color: rgba(201,162,39,.4); }
   .spawn-row {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -246,9 +249,24 @@
   </div>
 </section>
 
-<section class="lab-panel" data-testid="spawned-panel">
+<section class="lab-panel">
   <div class="lab-panel-head">
     <span class="n">02</span>
+    <h2>Connectors</h2>
+    <span class="r" data-conn-reading>grants + armed state</span>
+  </div>
+  <p class="spawn-note" data-conn-note>
+    Web (house SearXNG), email (SMTP/IMAP when env is set), Signal, files, House Post, …
+    <strong>Granted</strong> is who may use it; <strong>armed</strong> means configured and live.
+    Email stays off until you set <code>SOVERYN_SMTP_HOST</code> / <code>SOVERYN_SMTP_FROM</code>
+    (and IMAP to list).
+  </p>
+  <div data-connectors-house class="spawn-note" style="border-top:1px solid var(--line)"></div>
+</section>
+
+<section class="lab-panel" data-testid="spawned-panel">
+  <div class="lab-panel-head">
+    <span class="n">02b</span>
     <h2>Spawned under Aetheria</h2>
     <span class="r" data-spawned-count>ephemeral · not citizens</span>
   </div>
@@ -368,6 +386,16 @@
     }).join("");
   }
 
+  function connChips(connectors) {
+    if (!connectors || !connectors.length) return '<span class="chip conn">no connectors granted</span>';
+    return connectors.map(c => {
+      const armed = !!c.armed;
+      const cls = "chip conn " + (armed ? "armed" : "unarmed");
+      const tip = armed ? "armed" : "granted — not configured yet";
+      return `<span class="${cls}" title="${esc((c.title || c.id) + " · " + tip)}">${esc(c.id)}${armed ? "" : " · off"}</span>`;
+    }).join("");
+  }
+
   function renderRoster(citizens) {
     if (!citizens.length) {
       rosterEl.innerHTML = '<div class="empty">no registry yet — run refresh census.</div>';
@@ -392,6 +420,7 @@
               · open commissions <strong>${open}</strong>${spawned}${(c.unread_post || 0) ? ` · <strong>${c.unread_post}</strong> unread post` : ""}
             </div>
             <div class="chips">${dutyChips(c.duties)}</div>
+            <div class="chips" style="margin-top:6px">${connChips(c.connectors)}</div>
             ${notes}${err}
           </div>
           <div class="side">
@@ -504,12 +533,32 @@
     }).join("");
   }
 
+  async function loadConnectors() {
+    try {
+      const res = await fetch("/api/citizens/connectors", { credentials: "same-origin" });
+      const data = await res.json();
+      const el = document.querySelector("[data-connectors-house]");
+      const reading = document.querySelector("[data-conn-reading]");
+      if (reading) reading.textContent = data.reading || "connectors";
+      if (!el) return;
+      const h = data.house || {};
+      el.innerHTML = `
+        <strong>House arms:</strong>
+        web ${h.web_armed ? "on" : "off"} (${esc(h.web_note || "")}) ·
+        email send ${h.email_send_armed ? "on" : "off"} (${esc(h.email_send_note || "")}) ·
+        email list ${h.email_list_armed ? "on" : "off"} (${esc(h.email_list_note || "")}).
+        Per-citizen grants show as chips on each roster row (green-ish = armed, gold = granted/off).
+      `;
+    } catch (e) { /* board still works without */ }
+  }
+
   async function loadBoard() {
     const res = await fetch("/api/citizens", { credentials: "same-origin" });
     const data = await res.json();
     readingEl.textContent = data.reading || "";
     renderRoster(data.citizens || []);
     renderSpawned(data.spawned);
+    await loadConnectors();
     const all = [];
     for (const c of (data.citizens || [])) {
       const r = await fetch(`/api/citizens/${encodeURIComponent(c.id)}/commissions?limit=5`, {
