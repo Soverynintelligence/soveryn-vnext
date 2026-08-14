@@ -112,8 +112,15 @@ class HeartbeatDaemon:
         daily_post_state_path: Path | None = None,
         daily_post_hour: int = DEFAULT_DAILY_POST_HOUR,
         active_context_db: Path | None = None,
+        citizens_db: Path | None = None,
     ) -> None:
         self.config = config
+        # Citizens commissions registry (charter §12.5). None disables the
+        # bookkeeping entirely and the pulse is unaffected — same posture as
+        # active_context above. record_pulse also swallows its own failures, so
+        # this is belt as well as braces: nothing about writing a commission row
+        # is allowed to cost her a heartbeat.
+        self._citizens_db = citizens_db
         # Cross-rail live thread. The daemon runs OUT OF PROCESS from the Flask
         # app, so it opens the same SQLite file rather than sharing an object —
         # which is exactly why the store was made connection-per-operation and
@@ -267,6 +274,33 @@ class HeartbeatDaemon:
     # ─── Per-tick work ──────────────────────────────────────────────────────
 
     def _do_tick(self, *, now: datetime, eligibility: TickEligibility) -> None:
+        """Run one tick, recorded as a commission when it is a real pulse.
+
+        Charter §12.5. The commission is BOOKKEEPING, not control: it does not
+        decide whether she acts, when she acts, or what she says. It writes down
+        that a pulse happened and how it ended, so `on_duty` is derivable and a
+        daemon that dies mid-pulse leaves a findable row instead of silence.
+
+        record_pulse never raises on its own — a missing, locked or corrupt
+        registry logs and the tick proceeds. A monitoring layer that can silence
+        her is worse than none, and this one wraps her spontaneous initiation.
+        """
+        if not eligibility.eligible:
+            # A skipped tick is not work, so it is not a commission.
+            self._tick_body(now=now, eligibility=eligibility)
+            return
+
+        from soveryn.citizens.pulse import record_pulse
+        with record_pulse(
+            self._citizens_db,
+            "aetheria",
+            "heartbeat pulse",
+            worker="heartbeat",
+            now=now.isoformat(),
+        ):
+            self._tick_body(now=now, eligibility=eligibility)
+
+    def _tick_body(self, *, now: datetime, eligibility: TickEligibility) -> None:
         tick_id = str(uuid.uuid4())
         triggered_at = now.isoformat()
         if not eligibility.eligible:
@@ -950,6 +984,17 @@ def _build_daemon_from_env() -> HeartbeatDaemon:
                 "SOVERYN_ACTIVE_CONTEXT_DB",
                 str(DEFAULT_CONV_DB.parent.parent / "active_context.db"),
             )
+        ),
+        # Charter §12.5. Set SOVERYN_CITIZENS_DB="" to switch the bookkeeping
+        # off entirely — the pulse is identical either way, and that is the
+        # point: this records her duty, it does not govern it.
+        citizens_db=(
+            Path(_citizens_db_env)
+            if (_citizens_db_env := os.environ.get(
+                "SOVERYN_CITIZENS_DB",
+                str(DEFAULT_CONV_DB.parent.parent / "citizens.db"),
+            ))
+            else None
         ),
     )
 
