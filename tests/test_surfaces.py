@@ -244,7 +244,10 @@ def test_a_persistent_failure_still_alarms(tmp_path, monkeypatch):
 
 def test_the_incident_surfaces_are_declared():
     """Every surface that failed silently this week is now watchable."""
-    for name in ("atticus", "soveryn-agent", "shepherd",
+    # `atticus` split into atticus-chat / atticus-health on 2026-08-13: both
+    # probes already ran, but they shared a name, so a finding could not say
+    # which had failed.
+    for name in ("atticus-chat", "atticus-health", "soveryn-agent", "shepherd",
                  "soverynintelligence.com", "router-blackwell", "qwen-spark"):
         assert name in registry.BY_NAME, f"{name} is undeclared and therefore unwatched"
 
@@ -259,7 +262,7 @@ def test_chat_surfaces_are_probed_on_the_path_they_actually_serve():
 
     A monitor is only worth its false-positive rate.
     """
-    for name in ("atticus", "soveryn-agent"):
+    for name in ("atticus-chat", "soveryn-agent"):
         s = registry.BY_NAME[name]
         assert s.method == "POST", f"{name} serves POST /chat, not GET"
         assert s.target.endswith("/chat"), f"{name} must be probed on /chat"
@@ -271,3 +274,29 @@ def test_every_surface_has_a_probe_target_and_owner():
         assert s.target.strip(), f"{s.name} has no probe target"
         assert s.owner.strip(), f"{s.name} has no owner"
         assert s.interval_s > 0, f"{s.name} has no staleness interval"
+
+
+def test_surface_names_are_unique():
+    """Two probes may not share a name.
+
+    BY_NAME is a dict, so a repeat silently drops one declaration — and Ares
+    keys findings as `surface.down:<name>`, so a shared name cannot say WHICH
+    probe failed. Found 2026-08-13: `atticus` and `pondwright-chat` were each
+    declared twice, a POST /chat probe and a GET /health probe, so an alert
+    could not distinguish a dead chat endpoint from a dead health endpoint.
+    Both probes were running; only their identity was ambiguous.
+    """
+    names = [s.name for s in registry.SURFACES]
+    assert len(names) == len(set(names)), \
+        f"duplicate surface names: {sorted({n for n in names if names.count(n) > 1})}"
+    assert len(registry.BY_NAME) == len(registry.SURFACES), \
+        "BY_NAME lost a surface — a name collided"
+
+
+def test_each_host_probe_pair_is_separately_addressable():
+    """A chat probe and a health probe on the same host are different facts."""
+    for chat, health in (("atticus-chat", "atticus-health"),
+                         ("pondwright-chat", "pondwright-health")):
+        assert registry.BY_NAME[chat].method == "POST"
+        assert registry.BY_NAME[chat].target.endswith("/chat")
+        assert registry.BY_NAME[health].target.endswith("/health")

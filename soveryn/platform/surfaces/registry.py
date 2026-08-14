@@ -90,7 +90,7 @@ SURFACES: tuple[Surface, ...] = (
               "paper until 2026-08-03 because nothing declared what it should serve.",
     ),
     Surface(
-        "atticus", Kind.FUNCTIONAL, "https://atticus.historysledger.com/chat",
+        "atticus-chat", Kind.FUNCTIONAL, "https://atticus.historysledger.com/chat",
         owner="vett", interval_s=1800,
         method="POST",
         payload={"session_id": "surface-probe",
@@ -203,7 +203,7 @@ SURFACES: tuple[Surface, ...] = (
     # visitor got the fallback message. /health now asks the backend whether it
     # serves the configured model, so a repeat says so instead of looking fine.
     Surface(
-        "pondwright-chat", Kind.HTTP, "https://chat.pondwright.com/health",
+        "pondwright-health", Kind.HTTP, "https://chat.pondwright.com/health",
         owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
         notes="CWG chat agent on the Spark; red means it lost its model backend.",
     ),
@@ -213,7 +213,7 @@ SURFACES: tuple[Surface, ...] = (
         notes="The public voice of SOVERYN. Visible to anyone reading the site.",
     ),
     Surface(
-        "atticus", Kind.HTTP, "https://atticus.historysledger.com/health",
+        "atticus-health", Kind.HTTP, "https://atticus.historysledger.com/health",
         owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
         notes="History's Ledger curator; cite-or-drop depends on a live model.",
     ),
@@ -250,6 +250,23 @@ SURFACES: tuple[Surface, ...] = (
               "recorded state, not an absence someone re-discovers in six months.",
     ),
 )
+
+_duplicate_names = sorted(
+    {s.name for s in SURFACES if sum(1 for t in SURFACES if t.name == s.name) > 1}
+)
+if _duplicate_names:
+    # BY_NAME is a dict, so a repeated name silently drops one declaration and
+    # any by-name lookup returns an arbitrary winner. Worse, Ares keys findings
+    # by surface name (`surface.down:<name>`), so two probes sharing a name
+    # cannot say WHICH one failed. Found 2026-08-13: `atticus` and
+    # `pondwright-chat` were each declared twice — a POST /chat probe and a GET
+    # /health probe — so an alert could not distinguish a dead chat endpoint
+    # from a dead health endpoint. Fail loudly at import rather than ship an
+    # ambiguous monitor.
+    raise ValueError(
+        "duplicate surface names: " + ", ".join(_duplicate_names) +
+        " — each surface needs its own name; findings are keyed by it"
+    )
 
 BY_NAME = {s.name: s for s in SURFACES}
 
