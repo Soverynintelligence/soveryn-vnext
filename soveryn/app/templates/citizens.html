@@ -237,6 +237,9 @@
   <button type="button" class="act primary" data-refresh>Refresh census</button>
   <span class="reading" data-reading>loading…</span>
 </div>
+<p class="spawn-note" data-house-health style="margin:0 0 1rem">
+  House health: loading…
+</p>
 
 <section class="lab-panel">
   <div class="lab-panel-head">
@@ -552,12 +555,39 @@
     } catch (e) { /* board still works without */ }
   }
 
+  async function loadHouseHealth() {
+    const el = document.querySelector("[data-house-health]");
+    if (!el) return;
+    try {
+      const res = await fetch("/api/citizens/health", { credentials: "same-origin" });
+      const h = await res.json();
+      const counts = (h.residents && h.residents.counts) || {};
+      const q = (h.commissions && h.commissions.queued) || 0;
+      const run = (h.commissions && h.commissions.running) || 0;
+      const loops = (h.runtime && h.runtime.agent_loops) || [];
+      const probs = (h.problems && h.problems.length)
+        ? ` · problems: ${h.problems.join("; ")}`
+        : "";
+      const mark = h.ok ? "ok" : "attention";
+      el.innerHTML =
+        `House health <strong>${mark}</strong> · loops ${esc(loops.join(", ") || "—")} · ` +
+        `resident ${counts.resident || 0} · on_duty ${counts.on_duty || 0} · ` +
+        `unobserved ${counts.unobserved || 0} · offline ${counts.offline || 0} · ` +
+        `queue ${q} running ${run} · ` +
+        `subagents ${((h.spawned && h.spawned.count) || 0)}` +
+        `${esc(probs)} · <a href="/api/citizens/health" style="color:var(--brass)">JSON</a>`;
+    } catch (e) {
+      el.textContent = "House health unavailable";
+    }
+  }
+
   async function loadBoard() {
     const res = await fetch("/api/citizens", { credentials: "same-origin" });
     const data = await res.json();
     readingEl.textContent = data.reading || "";
     renderRoster(data.citizens || []);
     renderSpawned(data.spawned);
+    await loadHouseHealth();
     await loadConnectors();
     const all = [];
     for (const c of (data.citizens || [])) {

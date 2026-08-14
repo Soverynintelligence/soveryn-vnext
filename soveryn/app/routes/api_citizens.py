@@ -109,6 +109,30 @@ def _spawned_under_aetheria() -> dict:
         return empty
 
 
+@bp.get("/api/citizens/health")
+def house_health():
+    """One-glance house health (Rakazo-style named path, Soveryn evidence rules).
+
+    Query:
+      probe=0  — list worker units without systemctl (faster / CI-friendly)
+    """
+    state = current_app.extensions.get("soveryn") or {}
+    loops = state.get("agent_loops") or {}
+    probe = request.args.get("probe", "1").lower() not in ("0", "false", "no")
+    from soveryn.citizens.house_health import assemble_house_health
+
+    payload = assemble_house_health(
+        db_path=_db_path(),
+        agent_loops=list(loops.keys()),
+        version=current_app.config.get("SOVERYN_VERSION", "0.0.0"),
+        spawned=_spawned_under_aetheria(),
+        probe_workers=probe,
+    )
+    # 200 even when ok=false — this is a status document, not a liveness probe.
+    # Use GET /health for process-up; this is "is the polity coherent?"
+    return jsonify(payload), 200
+
+
 @bp.route("/api/citizens", methods=["GET"])
 def citizens():
     path = _db_path()
