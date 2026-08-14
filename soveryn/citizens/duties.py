@@ -33,9 +33,11 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     ("vett:patrol", "vett", "patrol", "Patrol", "interval:patrol"),
     ("vett:commission_worker", "vett", "commission_worker",
      "Commission runtime", "continuous"),
-    ("scotty:chat", "scotty", "chat", "Chat (on demand)", None),
+    ("scotty:chat", "scotty", "chat", "Chat", None),
     ("scotty:commission_worker", "scotty", "commission_worker",
-     "Commission runtime", "on_demand"),
+     "Commission runtime (desk worker)", "continuous"),
+    ("scotty:presence", "scotty", "presence",
+     "Desk worker / residence", "continuous"),
 )
 
 

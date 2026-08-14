@@ -77,10 +77,13 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             soul_path="data/memory/souls/scotty.md",
             model_server="vett_scotty_shared",
             workspace_path=str(DEFAULT_WORKSPACES / "scotty"),
-            notes="Invoked on demand — no resident unit. Standing pending "
-                  "(charter §3, §6.3).",
+            notes=(
+                "Repair / execution desk. Inference on Spark :8001 (shared with "
+                "Vett). Process residence: soveryn-scotty-worker on the tower — "
+                "drains commissions and keeps the desk warm."
+            ),
         ),
-        (),
+        ("soveryn-scotty-worker.service",),
     ),
 )
 

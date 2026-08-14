@@ -195,6 +195,66 @@ def refresh_census():
     }), 200
 
 
+@bp.post("/api/citizens/runtime/drain")
+def runtime_drain():
+    """Drain one round of commissions (optional citizen_id). Localhost-only.
+
+    Used by soveryn-scotty-worker (and ops) so a citizen unit can pull work
+    without embedding AgentLoop in a second process.
+    """
+    _require_localhost()
+    body = request.get_json(silent=True) or {}
+    citizen_id = (body.get("citizen_id") or request.args.get("citizen_id") or "").strip()
+    state = current_app.extensions.get("soveryn") or {}
+    loops = state.get("agent_loops") or {}
+    env = state.get("env")
+    if not loops:
+        return jsonify({
+            "ok": False,
+            "error": {"code": "no_loops", "message": "agent loops not ready"},
+        }), 503
+    path = _db_path()
+    if not path.exists():
+        return jsonify({
+            "ok": False,
+            "error": {"code": "no_registry", "message": "no citizens registry"},
+        }), 503
+    try:
+        from soveryn.citizens.runtime import (
+            drain_once,
+            interactive_busy,
+            make_agent_process_fn,
+        )
+
+        conv_store = state.get("conv_store")
+        if conv_store is None:
+            return jsonify({
+                "ok": False,
+                "error": {"code": "no_conv", "message": "conversation store missing"},
+            }), 503
+
+        process_fn = make_agent_process_fn(loops, conv_store)
+        conv_db = getattr(env, "conversations_db", None) if env is not None else None
+
+        def busy(cid: str) -> bool:
+            return interactive_busy(conv_db, cid)
+
+        ids = [citizen_id] if citizen_id else None
+        closed = drain_once(
+            path,
+            process_fn=process_fn,
+            worker=f"citizens-runtime/{citizen_id or 'all'}",
+            citizen_ids=ids,
+            busy_fn=busy,
+        )
+        return jsonify({"ok": True, "closed": closed, "count": len(closed)}), 200
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": {"code": "drain_failed", "message": str(exc)},
+        }), 500
+
+
 @bp.get("/api/citizens/connectors")
 def list_connectors():
     """Catalog + per-citizen grants/armed status for web, email, signal, …"""
