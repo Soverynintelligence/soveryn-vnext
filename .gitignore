@@ -68,3 +68,22 @@ backups/
 # Thermal samples: a couple of MB a month of machine readings, regenerated
 # continuously. The collector is code and belongs in git; the log does not.
 data/thermal/
+
+# Operational noise (medic, watchdog, X capture, heartbeat) — live state only
+data/medic/
+data/watchdog/
+data/surfaces/
+data/xid_captures/
+data/x_daily_post_state.json
+data/x_rejections.jsonl
+data/heartbeat_thoughts.jsonl
+
+# Local scratch, Cloudflare wrangler cache, backup copies of configs
+scratch/
+.wrangler/
+*.bak
+*.bak-*
+**/*.bak
+**/*.bak-*
+runtime/*.bak*
+soveryn/config/*.bak*
