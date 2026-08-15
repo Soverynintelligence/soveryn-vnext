@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify
 
 from soveryn.app.services.gpu_stats import get_gpu_stats
+from soveryn.app.services.public_agents import get_public_agents
 from soveryn.app.services.rig_stats import get_rig_stats
 from soveryn.app.services.spark_stats import get_spark_stats
 
@@ -58,6 +59,17 @@ def api_system_spark():
         "fetched_at": r.fetched_at,
         "host_known": r.host_known,
     }), 200
+
+
+@bp.get("/api/system/public_agents")
+def api_system_public_agents():
+    """PondWright / Seneca / Atticus glance for Mission Control.
+
+    Probes Spark fabric ports directly (not public hostnames) so a Cloudflare
+    tunnel blip does not blank the panels. Summary payloads are counts + short
+    previews only — never full transcripts, never lattice writes.
+    """
+    return jsonify(get_public_agents()), 200
 
 
 @bp.get("/api/system/daemons")

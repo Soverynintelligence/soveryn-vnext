@@ -1478,6 +1478,7 @@ def _register_blueprints(app: Flask) -> None:
             "system/gpu":            _unwrap(_sys.api_system_gpu),
             "system/rig":            _unwrap(_sys.api_system_rig),
             "system/spark":          _unwrap(_sys.api_system_spark),
+            "system/public_agents":  _unwrap(_sys.api_system_public_agents),
             "system/daemons":        _unwrap(_sys.api_system_daemons),
             "delegation/pending":    _unwrap(_dele.delegation_pending),
             "heartbeat/recent":      _unwrap(_hb.api_heartbeat_recent),

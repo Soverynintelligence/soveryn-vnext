@@ -1329,73 +1329,79 @@
       </div>
     </section>
 
-    <!-- Pondwright — Carolina Water Gardens Intelligence. Read-only glance over the isolation
-         wall: counts only (no names, no chat content), fetched cross-origin from the Spark's
-         public /summary. The lead data itself never enters the lattice. -->
-    <section class="panel" data-testid="pondwright-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Pondwright — Carolina Water Gardens</h3>
-      <div class="pw-cc" data-pw-summary aria-live="polite"><div class="empty">loading…</div></div>
+    <!-- Public agents on Spark: PondWright, Seneca, Atticus.
+         Fetched via /api/system/public_agents (tower → fabric :8200/:8400/:8500)
+         so a Cloudflare tunnel blip does not blank the panel. Counts + short
+         previews only — never full transcripts, never lattice writes. -->
+    <section class="panel" data-testid="public-agents-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Public agents — who is talking</h3>
+      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
     </section>
     <script>
     (function(){
-      var el = document.querySelector('[data-pw-summary]');
+      var el = document.querySelector('[data-public-agents]');
       if(!el) return;
-      function stat(v,l){ return '<div><div style="font-size:22px;font-weight:600;color:#ece3d5;">'+v+'</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(232,227,213,0.4);">'+l+'</div></div>'; }
-      function paint(d){
-        var dot = d.enabled ? '#3f9a5f' : '#d4a827';
-        el.innerHTML =
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">'
-          + stat(d.conversations_today, 'chats today')
-          + stat(d.leads_captured, 'leads captured')
-          + stat(d.conversations_total, 'chats total')
-          + stat(d.last_activity ? d.last_activity.slice(11,16) : '—', 'last activity')
-          + '</div><div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(232,227,213,0.55);">'
-          + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
-          + (d.enabled ? 'live' : 'paused')
-          + ' · <a href="https://crm.pondwright.com/conversations" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">view conversations →</a></div>';
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
       }
-      function load(){ fetch('https://chat.pondwright.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">Pondwright offline</div>'; }); }
-      load(); setInterval(load, 30000);
-    })();
-    </script>
-
-    <!-- Seneca — the public voice of SOVERYN. Same read-only glance as Pondwright:
-         counts only, fetched cross-origin from the agent's public /summary. Seneca is
-         AIRGAPPED from the real fleet, so this is a window, not a data merge — nothing
-         a visitor types ever enters the lattice.
-         Added 2026-07-28: the endpoint was built for this panel and the panel was never
-         wired, so 25 public conversations had accumulated with nobody watching. -->
-    <section class="panel" data-testid="seneca-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Seneca — public agent</h3>
-      <div class="pw-cc" data-seneca-summary aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    <script>
-    (function(){
-      var el = document.querySelector('[data-seneca-summary]');
-      if(!el) return;
-      function stat(v,l){ return '<div><div style="font-size:22px;font-weight:600;color:#ece3d5;">'+v+'</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(232,227,213,0.45);margin-top:2px;">'+l+'</div></div>'; }
-      function paint(d){
-        var dot = d.enabled ? '#3f9a5f' : '#d4a827';
-        // Days since last activity — a public agent nobody reaches is the failure
-        // mode worth seeing at a glance, not the one you discover a month later.
-        var stale = '';
-        if(d.last_activity){
-          var days = Math.floor((Date.now() - new Date(d.last_activity).getTime())/86400000);
-          if(days >= 1) stale = ' · <span style="color:#d4a827;">quiet ' + days + 'd</span>';
+      function relTime(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso);
+        if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+        return Math.floor(sec/86400) + 'd ago';
+      }
+      function card(a){
+        var talking = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0 || (a.recent&&a.recent.length);
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (talking ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model issue' : (talking ? 'people talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        var rec = (a.recent||[]).slice(0,3).map(function(r){
+          return '<div style="font-size:12px;line-height:1.35;color:rgba(236,243,244,0.78);padding:6px 0;border-top:1px solid rgba(232,227,213,0.08);">'
+            + '<span style="opacity:.5;font-size:10px;margin-right:6px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'(no text)')
+            + (r.captured ? ' <span style="color:#c0824f;">· lead</span>' : '')
+            + '</div>';
+        }).join('');
+        if(!rec){
+          rec = '<div style="font-size:12px;color:rgba(232,227,213,0.4);padding-top:6px;border-top:1px solid rgba(232,227,213,0.08);">No visitor turns logged recently.</div>';
         }
-        el.innerHTML =
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">'
-          + stat(d.conversations_today, 'chats today')
-          + stat(d.leads_captured, 'leads captured')
-          + stat(d.conversations_total, 'chats total')
-          + stat(d.last_activity ? d.last_activity.slice(5,10) : '—', 'last activity')
-          + '</div><div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(232,227,213,0.55);">'
+        return '<div style="padding:12px 0;border-bottom:1px solid rgba(232,227,213,0.08);">'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;">'
+          + '<div><div style="font-size:15px;font-weight:600;color:#ece3d5;">'+esc(a.name)+'</div>'
+          + '<div style="font-size:11px;color:rgba(232,227,213,0.45);">'+esc(a.role||'')+'</div></div>'
+          + '<div style="font-size:11px;color:rgba(232,227,213,0.55);display:flex;align-items:center;gap:6px;">'
           + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
-          + (d.enabled ? 'live' : 'paused') + stale
-          + ' · <a href="https://soverynintelligence.com" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open site</a></div>';
+          + esc(status)+'</div></div>'
+          + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;">'
+          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.conversations_today==null?'—':a.conversations_today)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">chats today</div></div>'
+          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.turns_today==null?'—':a.turns_today)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">turns today</div></div>'
+          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.leads_captured==null?'—':a.leads_captured)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">leads</div></div>'
+          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+esc(relTime(a.last_activity))+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">last real</div></div>'
+          + '</div>'
+          + rec
+          + '<div style="margin-top:8px;font-size:11px;">'
+          + '<a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open →</a>'
+          + (a.model ? ' <span style="opacity:.4;">· '+esc(a.model)+'</span>' : '')
+          + '</div></div>';
       }
-      function load(){ fetch('https://ask.soverynintelligence.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">unreachable</div>'; }); }
-      load(); setInterval(load, 30000);
+      function paint(d){
+        var agents = (d && d.agents) || [];
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents configured</div>'; return; }
+        var banner = (d.talking && d.talking.length)
+          ? '<div style="margin-bottom:10px;font-size:12px;color:#3f9a5f;">Talking now: '+esc(d.talking.join(', '))+'</div>'
+          : '<div style="margin-bottom:10px;font-size:12px;color:rgba(232,227,213,0.4);">No visitor chats today yet (surface probes excluded).</div>';
+        el.innerHTML = banner + agents.map(card).join('');
+      }
+      function load(){
+        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
+      }
+      load(); setInterval(load, 20000);
     })();
     </script>
 
