@@ -11,8 +11,10 @@
 #   1. Writes ~/.vett-brain on Spark + ~/.soveryn/vett_brain on tower
 #   2. Restarts qwen-serve.service on Spark (loads the matching serve-*.sh)
 #   3. Restarts soveryn-vnext so runtime.py re-imports the model_alias
+#   4. Retargets public Spark agents (PondWright / Seneca / Atticus) to the
+#      same served model id and restarts their services
 #
-# Only ONE model fits on the single Spark at a time.
+# Only ONE vLLM brain on :8001 at a time. Those three public agents share it.
 set -euo pipefail
 
 SPARK_HOST="${SPARK_HOST:-spark}"
@@ -44,6 +46,14 @@ key = resolve_vett_brain()
 srv = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")
 print(f"{key} → alias={srv.model_alias}  {srv.base_url}")
 ' 2>/dev/null || echo "(import failed)"
+  echo "public agents (Spark):"
+  ssh -o BatchMode=yes -o ConnectTimeout=8 "$SPARK_HOST" '
+    for p in 8200 8400 8500; do
+      printf "  :%s  " "$p"
+      curl -sS -m 3 "http://127.0.0.1:$p/health" 2>/dev/null || echo "(down)"
+      echo
+    done
+  ' 2>/dev/null || echo "  (spark ssh failed)"
 }
 
 if [[ $# -eq 0 ]]; then
@@ -88,9 +98,31 @@ for i in $(seq 1 90); do
   body="$(curl -sS -m 3 http://10.10.10.2:8001/v1/models 2>/dev/null || true)"
   if echo "$body" | grep -q "\"$ALIAS\""; then
     echo "ready: $ALIAS (after ~$((i*5))s)"
+    echo "retargeting PondWright / Seneca / Atticus → $ALIAS …"
+    ssh -o BatchMode=yes -o ConnectTimeout=15 "$SPARK_HOST" bash -s <<REMOTE
+set -euo pipefail
+python3 -c '
+import json
+from pathlib import Path
+alias = "'"$ALIAS"'"
+for name in ("pondwright-agent", "soveryn-agent", "atticus"):
+    p = Path.home() / name / "config.json"
+    if not p.exists():
+        print(f"  skip {name} (no config)")
+        continue
+    cfg = json.loads(p.read_text())
+    cfg["model"] = alias
+    cfg["laguna_url"] = "http://10.10.10.2:8001"
+    p.write_text(json.dumps(cfg, indent=2) + "\n")
+    print(f"  {name}: model={alias}")
+'
+systemctl --user restart pondwright-agent.service soveryn-agent.service atticus.service
+sleep 1
+systemctl --user is-active pondwright-agent.service soveryn-agent.service atticus.service
+REMOTE
     current
     echo
-    echo "Chat with Vett — she is now on $BRAIN ($ALIAS)."
+    echo "Vett/Scotty + PondWright/Seneca/Atticus now on $BRAIN ($ALIAS)."
     exit 0
   fi
   # still loading if connection refused or empty list
