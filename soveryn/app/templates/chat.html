@@ -160,6 +160,25 @@
     transition:filter 0.14s ease;
   }
   .new-chat:hover { filter:brightness(1.08); }
+  /* Lab .act.primary is more specific (two classes) and was washing the
+     copper sheen + dark type into gold-on-transparent — blank until hover. */
+  body.lab .new-chat.act.primary,
+  body.lab [data-testid="new-chat"] {
+    background: rgba(198, 166, 100, 0.14) !important;
+    border: 1px solid var(--gold, #c6a664) !important;
+    color: var(--gold, #c6a664) !important;
+    border-radius: 3px !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.68rem !important;
+    font-weight: 600;
+    font-family: var(--mono) !important;
+  }
+  body.lab .new-chat.act.primary:hover {
+    background: rgba(198, 166, 100, 0.22) !important;
+    color: var(--ink, #e9e5dc) !important;
+    filter: none;
+  }
 
   .agent-pills { display:flex; gap:6px; }
   .agent-pill {
@@ -269,9 +288,84 @@
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
   .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
-  .chat-header .actions { display:flex; gap:6px; }
-  .chat-header .actions button { color:rgba(236,243,244,0.55); padding:6px 8px; border-radius:8px; font-size:14px; }
-  .chat-header .actions button:hover { background:rgba(255,255,255,0.02); color:var(--text); }
+  .chat-header .actions {
+    display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+  }
+  .chat-header .actions button {
+    color:rgba(236,243,244,0.55); padding:6px 10px; border-radius:8px;
+    font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+    font-family:var(--mono, ui-monospace, monospace);
+    border:1px solid transparent; background:transparent; cursor:pointer;
+  }
+  .chat-header .actions button:hover { background:rgba(255,255,255,0.04); color:var(--text); border-color:rgba(255,255,255,0.06); }
+  body.lab .chat-header .actions button {
+    color: var(--ink-2, #9a9384); border-radius: 3px; font-size: 0.58rem;
+  }
+  body.lab .chat-header .actions button:hover {
+    color: var(--gold, #c6a664); border-color: var(--line-lit, #38352e);
+    background: var(--panel-2, #151412);
+  }
+  .chat-header .actions .call-btn {
+    margin-left: 4px;
+    border-color: rgba(198,166,100,0.35) !important;
+    color: var(--sov-amber, #c6a664) !important;
+  }
+  .more-wrap { position: relative; }
+  .more-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+    min-width: 180px; padding: 6px;
+    background: #16181a; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  body.lab .more-menu {
+    background: var(--panel, #0a0a09); border-color: var(--line, #26241f); border-radius: 3px;
+  }
+  .more-menu[hidden] { display: none !important; }
+  .more-menu button, .more-menu a {
+    display: block; width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; background: transparent; cursor: pointer;
+    color: var(--text, #e7e5dc); font-size: 12px; text-decoration: none;
+    font-family: var(--mono, ui-monospace, monospace); border-radius: 4px;
+  }
+  .more-menu button:hover, .more-menu a:hover { background: rgba(255,255,255,0.06); }
+  .more-menu button.danger:hover { color: #c47a6e; }
+
+  /* Simple inspector / export panels */
+  .chat-modal-backdrop {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .chat-modal-backdrop[hidden] { display: none !important; }
+  .chat-modal {
+    width: min(560px, 100%); max-height: min(80vh, 720px);
+    overflow: auto; padding: 18px 20px 16px;
+    background: #16181a; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; color: var(--text, #e7e5dc);
+  }
+  body.lab .chat-modal {
+    background: var(--panel, #0a0a09); border-color: var(--line); border-radius: 3px;
+    font-family: var(--mono);
+  }
+  .chat-modal h3 {
+    margin: 0 0 10px; font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--sov-amber, #c6a664);
+  }
+  .chat-modal pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-size: 12px; line-height: 1.5; color: rgba(231,229,220,0.85);
+    max-height: 55vh; overflow: auto;
+  }
+  .chat-modal .modal-actions {
+    display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;
+  }
+  .chat-modal .modal-actions button {
+    padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.12); background: transparent;
+    color: var(--text); font-size: 12px;
+  }
 
   /* Thread */
   .thread {
@@ -803,13 +897,36 @@
         <div class="sub" data-session-meta>new session</div>
       </div>
       <div class="actions">
-        <button class="call-btn" data-testid="call-btn" data-agent="aetheria"
-                title="Voice call" aria-label="Voice call" hidden>&#9742;</button>
-        <button title="Persona inspector" aria-label="Persona">ⓘ</button>
-        <button title="Export" aria-label="Export">⤓</button>
-        <button title="More" aria-label="More">⋯</button>
+        <button type="button" data-testid="persona-btn" title="View persona"
+                aria-label="Persona">Persona</button>
+        <button type="button" data-testid="export-btn" title="Export this conversation"
+                aria-label="Export">Export</button>
+        <div class="more-wrap">
+          <button type="button" data-testid="more-btn" title="More actions"
+                  aria-label="More" aria-haspopup="true" aria-expanded="false">More</button>
+          <div class="more-menu" data-testid="more-menu" hidden role="menu">
+            <button type="button" role="menuitem" data-more="copy-id">Copy session id</button>
+            <button type="button" role="menuitem" data-more="delete" class="danger">Delete session</button>
+            <a href="/" role="menuitem">Mission Control</a>
+            <a href="/m/" role="menuitem">Mobile app</a>
+          </div>
+        </div>
+        <!-- Voice last: not a mystery phone glyph; only when voice is enabled for the agent. -->
+        <button type="button" class="call-btn" data-testid="call-btn" data-agent="aetheria"
+                title="Start a voice call with this agent" aria-label="Voice call" hidden>Voice</button>
       </div>
     </header>
+
+    <div class="chat-modal-backdrop" data-testid="chat-modal" hidden>
+      <div class="chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
+        <h3 id="chat-modal-title" data-modal-title>Details</h3>
+        <pre data-modal-body></pre>
+        <div class="modal-actions">
+          <button type="button" data-modal-copy>Copy</button>
+          <button type="button" data-modal-close>Close</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Voice call overlay — full-screen modal launched from the call button.
          Backend route: POST /voice/session/<session_id>/offer (binds to the
@@ -1752,6 +1869,148 @@
       window.history.replaceState({}, "", "/chat");
       elInput().focus();
     });
+
+    // ── Header actions: Persona / Export / More (were decorative until now) ──
+    function openChatModal(title, body) {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (!backdrop) return;
+      backdrop.querySelector("[data-modal-title]").textContent = title;
+      backdrop.querySelector("[data-modal-body]").textContent = body;
+      backdrop.hidden = false;
+    }
+    function closeChatModal() {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (backdrop) backdrop.hidden = true;
+    }
+    const modal = document.querySelector('[data-testid="chat-modal"]');
+    if (modal) {
+      modal.querySelector("[data-modal-close]")?.addEventListener("click", closeChatModal);
+      modal.addEventListener("click", (e) => { if (e.target === modal) closeChatModal(); });
+      modal.querySelector("[data-modal-copy]")?.addEventListener("click", async () => {
+        const text = modal.querySelector("[data-modal-body]")?.textContent || "";
+        try { await navigator.clipboard.writeText(text); } catch (_) {}
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal && !modal.hidden) {
+          e.preventDefault();
+          closeChatModal();
+        }
+      });
+    }
+
+    document.querySelector('[data-testid="persona-btn"]')?.addEventListener("click", async () => {
+      try {
+        const r = await fetch(`/api/persona/${encodeURIComponent(state.agent)}`);
+        if (!r.ok) {
+          openChatModal("Persona", `Could not load persona for ${state.agent} (HTTP ${r.status}).`);
+          return;
+        }
+        const data = await r.json();
+        openChatModal(
+          `Persona · ${data.agent || state.agent}`,
+          (data.persona || "").trim() || "(empty persona)"
+        );
+      } catch (e) {
+        openChatModal("Persona", String(e && e.message || e));
+      }
+    });
+
+    document.querySelector('[data-testid="export-btn"]')?.addEventListener("click", async () => {
+      if (!state.sessionId) {
+        openChatModal("Export", "No session yet — send a message first, then export.");
+        return;
+      }
+      try {
+        const r = await fetch(`/sessions/${state.sessionId}/history`);
+        if (!r.ok) {
+          openChatModal("Export", `Could not load history (HTTP ${r.status}).`);
+          return;
+        }
+        const data = await r.json();
+        const turns = data.turns || data.history || data.messages || [];
+        const lines = [
+          `# SOVERYN chat · ${state.agent}`,
+          `session: ${state.sessionId}`,
+          `exported: ${new Date().toISOString()}`,
+          "",
+        ];
+        for (const t of turns) {
+          const role = (t.role || t.speaker || "?").toUpperCase();
+          const content = t.content || t.text || "";
+          if (!content) continue;
+          lines.push(`## ${role}`, content, "");
+        }
+        const md = lines.join("\n");
+        const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `soveryn-${state.agent}-${state.sessionId.slice(0, 8)}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      } catch (e) {
+        openChatModal("Export", String(e && e.message || e));
+      }
+    });
+
+    const moreBtn = document.querySelector('[data-testid="more-btn"]');
+    const moreMenu = document.querySelector('[data-testid="more-menu"]');
+    function closeMoreMenu() {
+      if (moreMenu) moreMenu.hidden = true;
+      if (moreBtn) moreBtn.setAttribute("aria-expanded", "false");
+    }
+    if (moreBtn && moreMenu) {
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = moreMenu.hidden;
+        moreMenu.hidden = !open;
+        moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", (e) => {
+        if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) {
+          closeMoreMenu();
+        }
+      });
+      moreMenu.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-more]");
+        if (!btn) return;
+        const action = btn.getAttribute("data-more");
+        closeMoreMenu();
+        if (action === "copy-id") {
+          if (!state.sessionId) {
+            openChatModal("Session", "No session id yet — send a message first.");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(state.sessionId);
+            openChatModal("Session", `Copied:\n${state.sessionId}`);
+          } catch (_) {
+            openChatModal("Session", state.sessionId);
+          }
+        } else if (action === "delete") {
+          if (!state.sessionId) {
+            openChatModal("Delete", "Nothing to delete — this is already a new session.");
+            return;
+          }
+          if (!confirm("Delete this session permanently?")) return;
+          try {
+            const r = await fetch(`/sessions/${state.sessionId}`, { method: "DELETE" });
+            if (!r.ok) {
+              openChatModal("Delete", `Delete failed (HTTP ${r.status}).`);
+              return;
+            }
+            state.sessionId = null;
+            elThread().innerHTML = "";
+            elSessionMeta().textContent = "new session";
+            window.history.replaceState({}, "", "/chat");
+            loadSessions();
+          } catch (err) {
+            openChatModal("Delete", String(err && err.message || err));
+          }
+        }
+      });
+    }
 
     document.querySelector('[data-testid="search"]').addEventListener("input", renderHistory);
 
