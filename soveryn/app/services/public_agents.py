@@ -74,12 +74,16 @@ class AgentGlance:
 
 
 def _ssh_json_bundle(host: str) -> dict[str, Any] | None:
-    """One SSH: curl all three summary+health endpoints on Spark loopback."""
-    # JSON object of port -> {summary, health}. Shell must never fail on curl.
+    """One SSH: agent summary+health + PondWright CRM pipeline glance.
+
+    CRM leads are the real floor (form + chat capture). Chat audit
+    `leads_captured` alone misses form leads and can disagree with the CRM.
+    """
     remote = r"""
 python3 - <<'PY'
-import json, urllib.request
-out = {}
+import json, urllib.request, sqlite3, os
+from datetime import datetime, timezone
+out = {"agents": {}, "crm": {"ok": False}}
 for port in (8200, 8400, 8500):
     row = {"summary": None, "health": None, "error": None}
     for kind in ("summary", "health"):
@@ -88,7 +92,59 @@ for port in (8200, 8400, 8500):
                 row[kind] = json.loads(r.read().decode() or "{}")
         except Exception as e:
             row["error"] = f"{kind}:{type(e).__name__}"
-    out[str(port)] = row
+    out["agents"][str(port)] = row
+# PondWright CRM — pipeline truth (names/phones for Mission Control only)
+db = os.path.expanduser("~/pondwright-crm/leads.db")
+try:
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    rows = con.execute(
+        "SELECT id, created_at, name, phone, email, source, status, interest "
+        "FROM leads ORDER BY created_at DESC LIMIT 12"
+    ).fetchall()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    recent = []
+    new_count = 0
+    today_count = 0
+    for r in rows:
+        d = dict(r)
+        st = d.get("status") or "new"
+        if st == "new":
+            new_count += 1
+        ts = d.get("created_at") or ""
+        if ts.startswith(today) or (len(ts) >= 10 and ts[:10] == today):
+            today_count += 1
+        # Also count local-day EDT-ish by checking date substring loosely
+        recent.append({
+            "id": d.get("id"),
+            "created_at": ts,
+            "name": d.get("name") or "—",
+            "phone": d.get("phone") or "",
+            "email": d.get("email") or "",
+            "source": d.get("source") or "",
+            "status": st,
+            "interest": (d.get("interest") or "")[:80],
+        })
+    total = con.execute("SELECT count(*) FROM leads").fetchone()[0]
+    # leads today: UTC date match on created_at (ISO)
+    leads_today = con.execute(
+        "SELECT count(*) FROM leads WHERE created_at LIKE ?", (today + "%",)
+    ).fetchone()[0]
+    # Also catch offsets like 2026-08-15T... with local evening previous day
+    # by counting last 24h via string sort (good enough for glance)
+    out["crm"] = {
+        "ok": True,
+        "leads_total": int(total),
+        "leads_new": int(con.execute(
+            "SELECT count(*) FROM leads WHERE status='new'"
+        ).fetchone()[0]),
+        "leads_today": int(leads_today),
+        "recent": recent[:8],
+        "open": "https://crm.pondwright.com/",
+    }
+    con.close()
+except Exception as e:
+    out["crm"] = {"ok": False, "error": type(e).__name__}
 print(json.dumps(out))
 PY
 """
@@ -168,6 +224,17 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
             path = label
             break
 
+    # Bundle shape: {agents: {port: {summary,health}}, crm: {...}}
+    # Older shape was port-keyed only — keep reading both.
+    agent_rows: dict[str, Any] = {}
+    crm: dict[str, Any] = {"ok": False}
+    if isinstance(bundle, dict):
+        if "agents" in bundle and isinstance(bundle.get("agents"), dict):
+            agent_rows = bundle["agents"]
+            crm = bundle.get("crm") if isinstance(bundle.get("crm"), dict) else crm
+        else:
+            agent_rows = bundle
+
     agents: list[AgentGlance] = []
     for spec in PUBLIC_AGENTS:
         glance = AgentGlance(
@@ -182,10 +249,14 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
             glance.error = "spark_unreachable"
             agents.append(glance)
             continue
-        row = bundle.get(str(spec["port"])) or {}
+        row = agent_rows.get(str(spec["port"])) or {}
         if row.get("error") and not row.get("summary") and not row.get("health"):
             glance.error = row.get("error")
         _apply_summary(glance, row.get("summary"), row.get("health"))
+        # Prefer CRM pipeline counts for PondWright leads when available.
+        if spec["id"] == "pondwright" and crm.get("ok"):
+            if crm.get("leads_total") is not None:
+                glance.leads_captured = int(crm["leads_total"])
         agents.append(glance)
 
     # "Talking" = real visitor activity *today* (probes already stripped upstream).
@@ -199,6 +270,7 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
     payload = {
         "agents": [asdict(a) for a in agents],
         "talking": talking,
+        "crm": crm,
         "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "path": path,
     }

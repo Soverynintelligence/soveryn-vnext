@@ -1473,6 +1473,18 @@ def _register_blueprints(app: Flask) -> None:
             return out.get_json() if hasattr(out, "get_json") else out
         return provider
 
+    from soveryn.app.services import ops_control as _ops
+
+    def _ops_brain_post(body: dict):
+        result = _ops.start_brain_switch(str(body.get("brain") or ""))
+        code = 200 if result.get("ok") else (409 if result.get("error") == "busy" else 400)
+        return result, code
+
+    def _ops_tests_post(body: dict):
+        result = _ops.start_tests(str(body.get("suite") or ""))
+        code = 200 if result.get("ok") else (409 if result.get("error") == "busy" else 400)
+        return result, code
+
     register_mobile_api(
         app,
         messenger_store=ext["messenger_store"],
@@ -1486,6 +1498,19 @@ def _register_blueprints(app: Flask) -> None:
             "heartbeat/recent":      _unwrap(_hb.api_heartbeat_recent),
             "cognition/note":        _unwrap(_cog.api_cognition_note),
             "cognition/reflections": _unwrap(_cog.api_cognition_reflections),
+            # Ops reads (device-auth; same data as desktop /api/ops/*)
+            "ops/brain":             lambda: _ops.brain_status(),
+            "ops/tests":             lambda: {
+                "suites": _ops.list_test_suites(),
+                "job": (_ops.job_status("tests") or {}).get("job"),
+                "log_tail": (_ops.job_status("tests") or {}).get("log_tail") or "",
+            },
+            "ops/jobs/brain":        lambda: _ops.job_status("brain"),
+            "ops/jobs/tests":        lambda: _ops.job_status("tests"),
+        },
+        post_providers={
+            "ops/brain": _ops_brain_post,
+            "ops/tests": _ops_tests_post,
         },
     )
 

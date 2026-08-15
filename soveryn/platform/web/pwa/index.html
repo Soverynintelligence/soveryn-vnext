@@ -4,23 +4,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f1011">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
 <title>SOVERYN</title>
 <!-- iOS standalone mode + status bar styling -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SOVERYN">
+<!-- Force revalidation of the shell itself (Home Screen PWAs stick hard). -->
+<meta http-equiv="Cache-Control" content="no-store, max-age=0, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <!-- Home-screen icon (180x180 is iOS canonical) -->
-<link rel="apple-touch-icon" href="/m/pwa/icons/icon-180.png">
-<link rel="icon" type="image/png" sizes="192x192" href="/m/pwa/icons/icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="/m/pwa/icons/icon-512.png">
-<link rel="manifest" href="/m/pwa/manifest.json">
-<link rel="stylesheet" href="/m/pwa/style.css">
+<link rel="apple-touch-icon" href="/m/pwa/icons/icon-180.png?v=20260815-mc4">
+<link rel="icon" type="image/png" sizes="192x192" href="/m/pwa/icons/icon-192.png?v=20260815-mc4">
+<link rel="icon" type="image/png" sizes="512x512" href="/m/pwa/icons/icon-512.png?v=20260815-mc4">
+<link rel="manifest" href="/m/pwa/manifest.json?v=20260815-mc4">
+<!-- ?v= must match messenger._PWA_BUILD — bump both together. -->
+<link rel="stylesheet" href="/m/pwa/style.css?v=20260815-mc4">
 </head>
 <body>
 <main id="app"></main>
-<script src="/m/pwa/app.js" defer></script>
-<script src="/m/pwa/control.js" defer></script>
+<script src="/m/pwa/app.js?v=20260815-mc4" defer></script>
+<script src="/m/pwa/control.js?v=20260815-mc4" defer></script>
 </body>
 </html>

@@ -2,13 +2,26 @@
 <html lang="en" data-agent="{{ agent }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1011">
     <title>{{ agent | capitalize }} — SOVERYN Voice</title>
     <link rel="stylesheet" href="/static/voice/orb.css">
 </head>
-<body data-agent="{{ agent }}">
-    <div id="orb" class="orb-{{ agent }}" data-state="idle"></div>
-    <div id="status">click to begin</div>
-    <div id="error"></div>
+<body data-agent="{{ agent }}" class="orb-{{ agent }}">
+    <header class="voice-chrome">
+        <div class="voice-brand"><b>SOVERYN</b> · Voice</div>
+        <nav class="voice-nav">
+            <a href="/voice">All</a>
+            <a href="/">Command</a>
+            <a href="/m/">Mobile</a>
+        </nav>
+    </header>
+
+    <div id="orb" class="orb-{{ agent }}" data-state="idle" role="button" tabindex="0" aria-label="Start voice with {{ agent }}"></div>
+    <div id="agent-label">{{ agent }}</div>
+    <div id="status">tap to begin</div>
+    <div id="hint">microphone required · WebRTC</div>
+    <div id="error" role="alert"></div>
     <script src="/static/voice/voice_client.js"></script>
 </body>
 </html>

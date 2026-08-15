@@ -464,8 +464,9 @@ async function renderVoiceView($view, { tid, agent }) {
   });
 
   $view.classList.add('voice-view');
+  const agentClass = 'agent-' + String(agent || 'aetheria').toLowerCase().replace(/[^a-z0-9_-]/g, '');
   $view.innerHTML = `
-    <div class="voice-orb" id="voice-orb" data-state="idle"></div>
+    <div class="voice-orb ${escapeHtml(agentClass)}" id="voice-orb" data-state="idle"></div>
     <div class="voice-title">${escapeHtml(agent.toUpperCase())} &mdash; LIVE</div>
     <div class="voice-status" id="voice-status">connecting&hellip;</div>
     <div class="voice-error" id="voice-error"></div>
@@ -885,7 +886,9 @@ async function endVoiceCall() {
   if (!secret) {
     await reset({ kind: 'pairing' });
   } else {
-    await reset({ kind: 'thread-list' });
+    // Open on Mission Control (desktop parity: ops / public agents / cognition).
+    // Team remains one tab away. control.js owns the Control tab renderer.
+    await reset({ kind: 'control-home' });
   }
   showInstallBanner();
 })();

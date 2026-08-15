@@ -1,32 +1,36 @@
 /* soveryn/platform/web/pwa/style.css
 
-   Design contract v1 (Aetheria, 2026-06-14) was "Gold on Black. Geometric Mono.
-   No borders. Asymmetric weight." The gold is gone — the 2026-07-24 brand
-   rollout replaced it across Mission Control, chat and documents with
-   Carbon / Oxide-Sage / Aged-Copper / Bone, and copper alone was rejected as
-   reading too close to Anthropic. Sage is the live accent, copper the
-   secondary. The rest of v1 stands: mono for data, no decorative borders,
-   Aetheria weighted above the others.
+   Matches desktop Command Center / Lab console (lab-console.css):
+     pure black ground · gold accent · mono data · bone ink
+   Agent identity still uses the house hues (Aetheria gold, Vett steel,
+   Scotty maroon) so threads read correctly.
 
-   Tokens below are the same values Mission Control uses, so the phone, the
-   iPad and the desktop are one product rather than three that resemble each
-   other.
+   color-scheme: dark is required on iOS so Safari does not invert form
+   controls and wash the HUD with light-mode system colors.
 */
 :root {
-  --bg:          #0f1011;    /* carbon — Mission Control --sov-canvas */
-  --surface:     #16181a;    /* raised: cards, tab bar */
-  --surface-2:   #1c1f21;    /* pressed / selected */
-  --fg:          #E7E5DC;    /* bone */
-  --muted:       #9a988a;
-  --accent:      #8fa07f;    /* oxide sage, bright — the live accent */
-  --accent-dim:  #74856a;
-  --accent-deep: #566149;
-  --copper:      #c0824f;    /* secondary only, never the primary signal */
-  --bronze:      #8C5A3C;
-  --rule:        #1e2022;
-  --danger:      #c26a4c;
-  --font-mono: 'JetBrains Mono','IBM Plex Mono',ui-monospace,monospace;
-  --font-sans: 'Inter',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  /* Lab tokens (mirror soveryn/static/lab-console.css) */
+  --bg:          #000000;    /* pure black ground */
+  --surface:     #0a0a09;    /* panel */
+  --surface-2:   #151412;    /* raised / selected */
+  --fg:          #e9e5dc;    /* ink */
+  --muted:       #9a9384;    /* ink-2 */
+  --muted-2:     #655f55;    /* ink-3 */
+  --accent:      #c6a664;    /* lab gold — the live signal */
+  --accent-dim:  #7a6740;    /* gold-dim */
+  --accent-deep: #5a4a2e;
+  --ok:          #6fb98a;    /* status green */
+  --copper:      #c6a664;    /* secondary maps to gold on Lab */
+  --bronze:      #7a6740;
+  --rule:        #26241f;    /* line */
+  --rule-lit:    #38352e;
+  --danger:      #b4685c;    /* down */
+  /* Agent identity (not the HUD chrome) */
+  --agent-aetheria: #c6a664; /* gold */
+  --agent-vett:     #6b8290; /* steel */
+  --agent-scotty:   #c26a4c; /* terracotta / maroon-bright */
+  --font-mono: 'IBM Plex Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-sans: 'IBM Plex Sans',-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
 
   /* App furniture. Safe-area insets matter on both devices: the notch/Dynamic
      Island at the top, the home indicator at the bottom. viewport-fit=cover in
@@ -36,6 +40,8 @@
   --safe-top:    env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --sidebar-w: 232px;
+
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -46,6 +52,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
   /* Stop iOS rubber-band scroll from revealing white below. */
   overscroll-behavior-y: none;
+  color-scheme: dark;
+}
+/* Faint gold grid — same idiom as body.lab on Command Center */
+body {
+  background-image:
+    linear-gradient(rgba(198, 166, 100, 0.038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198, 166, 100, 0.038) 1px, transparent 1px);
+  background-size: 64px 64px, 64px 64px;
+  background-attachment: fixed;
 }
 
 /* App shell — the new architecture.
@@ -95,9 +110,9 @@ html, body {
   text-transform: uppercase;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.app-header-title.agent-aetheria { color: var(--accent); }
-.app-header-title.agent-vett,
-.app-header-title.agent-scotty { color: var(--muted); }
+.app-header-title.agent-aetheria { color: var(--agent-aetheria); }
+.app-header-title.agent-vett     { color: var(--agent-vett); }
+.app-header-title.agent-scotty   { color: var(--agent-scotty); }
 
 .icon-btn {
   background: transparent;
@@ -123,9 +138,9 @@ html, body {
   background: var(--muted);
   display: inline-block;
 }
-.agent-dot.agent-aetheria { background: var(--accent); }
-.agent-dot.agent-vett,
-.agent-dot.agent-scotty { background: var(--muted); }
+.agent-dot.agent-aetheria { background: var(--agent-aetheria); }
+.agent-dot.agent-vett     { background: var(--agent-vett); }
+.agent-dot.agent-scotty   { background: var(--agent-scotty); }
 
 /* --- View stack ---------------------------------------------------------- */
 /* Slides views in/out as a stack so navigation feels native, not page-swap.
@@ -201,19 +216,21 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
 .message.agent-aetheria {
   margin: 36px 0;                            /* wider breathing room */
   padding-left: 16px;
-  border-left: 2px solid var(--accent);      /* the Sovereign Edge */
+  border-left: 2px solid var(--agent-aetheria); /* the Sovereign Edge */
 }
 .message.agent-aetheria .agent-label {
-  color: var(--accent);                      /* her label in gold */
+  color: var(--agent-aetheria);
 }
 .message.agent-vett,
 .message.agent-scotty {
   margin: 12px 0;                            /* compact, utilitarian */
   opacity: 0.85;                             /* slightly dimmed */
 }
-.message.agent-vett .agent-label,
+.message.agent-vett .agent-label {
+  color: var(--agent-vett);
+}
 .message.agent-scotty .agent-label {
-  color: var(--muted);
+  color: var(--agent-scotty);
 }
 
 /* --- Thread cards (replaces .thread-list-item one-liner) ----------------- */
@@ -244,7 +261,9 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   text-transform: uppercase;
   color: var(--muted);
 }
-.thread-card-name.agent-aetheria { color: var(--accent); }
+.thread-card-name.agent-aetheria { color: var(--agent-aetheria); }
+.thread-card-name.agent-vett     { color: var(--agent-vett); }
+.thread-card-name.agent-scotty   { color: var(--agent-scotty); }
 .thread-card-time {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -301,7 +320,9 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   text-transform: uppercase;
   color: var(--muted);
 }
-.agent-pick-name.agent-aetheria { color: var(--accent); }
+.agent-pick-name.agent-aetheria { color: var(--agent-aetheria); }
+.agent-pick-name.agent-vett     { color: var(--agent-vett); }
+.agent-pick-name.agent-scotty   { color: var(--agent-scotty); }
 .agent-pick-tagline {
   margin-top: 4px;
   color: var(--fg);
@@ -401,26 +422,41 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
 .voice-view {
   position: absolute;
   inset: 0;
-  background: #0a0a0a;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 30%, rgba(198, 166, 100, 0.07), transparent 60%),
+    var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 10;
 }
+/* Default orb: lab gold (Aetheria). Agent-specific classes override. */
 .voice-orb {
   width: 240px;
   height: 240px;
   border-radius: 50%;
-  background: radial-gradient(circle at center, #d4b577 0%, #c5a059 60%, #8a6f3a 100%);
-  box-shadow: 0 0 80px rgba(197, 160, 89, 0.4);
+  background: radial-gradient(circle at center, #d4b577 0%, #c6a664 55%, #7a6740 100%);
+  box-shadow: 0 0 80px rgba(198, 166, 100, 0.4);
   transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
+}
+.voice-orb.agent-vett {
+  background: radial-gradient(circle at center, #7d94a3 0%, #5f7684 55%, #404e59 100%);
+  box-shadow: 0 0 80px rgba(107, 130, 144, 0.45);
+}
+.voice-orb.agent-scotty {
+  background: radial-gradient(circle at center, #c26a4c 0%, #a3543a 55%, #54271b 100%);
+  box-shadow: 0 0 80px rgba(163, 84, 58, 0.45);
 }
 .voice-orb[data-state="idle"]      { transform: scale(0.95); opacity: 0.45; }
 .voice-orb[data-state="listening"] { transform: scale(1.0); opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
-.voice-orb[data-state="hearing"]   { transform: scale(1.05); opacity: 1.0; box-shadow: 0 0 120px rgba(197, 160, 89, 0.6); }
+.voice-orb[data-state="hearing"]   { transform: scale(1.05); opacity: 1.0; box-shadow: 0 0 120px rgba(198, 166, 100, 0.55); }
+.voice-orb.agent-vett[data-state="hearing"]  { box-shadow: 0 0 120px rgba(107, 130, 144, 0.55); }
+.voice-orb.agent-scotty[data-state="hearing"]{ box-shadow: 0 0 120px rgba(163, 84, 58, 0.55); }
 .voice-orb[data-state="thinking"]  { transform: scale(1.0); opacity: 0.9; animation: voice-pulse-think 1.2s ease-in-out infinite; }
-.voice-orb[data-state="speaking"]  { opacity: 1.0; box-shadow: 0 0 160px rgba(197, 160, 89, 0.7); }
+.voice-orb[data-state="speaking"]  { opacity: 1.0; box-shadow: 0 0 160px rgba(198, 166, 100, 0.65); }
+.voice-orb.agent-vett[data-state="speaking"]  { box-shadow: 0 0 160px rgba(107, 130, 144, 0.65); }
+.voice-orb.agent-scotty[data-state="speaking"]{ box-shadow: 0 0 160px rgba(163, 84, 58, 0.65); }
 .voice-orb[data-state="interrupted"] { transform: scale(0.85); opacity: 0.6; transition: transform 100ms, opacity 100ms; }
 @keyframes voice-pulse-listen {
   0%, 100% { transform: scale(1.0); }
@@ -443,7 +479,7 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.25em;
-  color: rgba(212, 212, 212, 0.6);
+  color: rgba(231, 229, 220, 0.55);
   text-transform: uppercase;
 }
 .voice-hangup {
@@ -452,7 +488,7 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   left: 50%;
   transform: translateX(-50%);
   background: transparent;
-  border: 1px solid rgba(197, 160, 89, 0.6);
+  border: 1px solid rgba(198, 166, 100, 0.55);
   color: var(--accent);
   font-family: var(--font-mono);
   font-size: 12px;
@@ -462,7 +498,7 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   cursor: pointer;
   text-transform: uppercase;
 }
-.voice-hangup:active { background: rgba(197, 160, 89, 0.1); }
+.voice-hangup:active { background: rgba(198, 166, 100, 0.12); }
 .voice-error {
   position: absolute;
   bottom: calc(110px + env(safe-area-inset-bottom, 0px));
@@ -510,21 +546,24 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   transition: color .15s ease;
 }
 .mc-tab-glyph { font-size: 17px; line-height: 1; }
-.mc-tab.is-active { color: var(--accent); }        /* sage is the live signal */
+.mc-tab.is-active { color: var(--accent); }        /* gold is the live signal */
 .mc-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Give the stack room so the last card isn't trapped under the bar. */
 body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom)); }
 
+.mc-build {
+  margin: 0; padding: 8px 12px 0;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent); opacity: 0.85;
+}
 .mc-grid { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 12px; }
 
 .mc-card {
-  background: var(--surface); border-radius: 12px; padding: 12px 14px;
+  background: var(--surface); border-radius: 0; padding: 12px 14px;
   border: 1px solid var(--rule);
-  /* Grid and flex children default to min-width:auto, so they refuse to shrink
-     below their content and long values (GPU names, resident process paths,
-     heartbeat notes) push straight out of the card. Reported on iPad with a
-     hardware keyboard attached, 2026-08-03. */
+  /* Lab plates are square-cornered. Grid/flex children default to
+     min-width:auto and long values (GPU names, paths) overflow on iPad. */
   min-width: 0;
   overflow: hidden;
 }
@@ -550,10 +589,10 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
   min-width: 0; flex: 0 1 auto; text-align: right;
   overflow-wrap: break-word;   /* not `anywhere` — that shreds words when narrow */
 }
-.mc-stat-value.tone-hot  { color: var(--copper); }   /* 80C+ */
+.mc-stat-value.tone-hot  { color: var(--accent); }   /* 80C+ — gold signal */
 .mc-stat-value.tone-bad  { color: var(--danger); }
 
-.mc-ok        { margin: 0 0 6px; color: var(--accent);  font-size: 13px; }
+.mc-ok        { margin: 0 0 6px; color: var(--ok);     font-size: 13px; }
 .mc-alert     { margin: 0 0 6px; color: var(--danger);  font-size: 13px; font-weight: 600; }
 .mc-unavailable {
   margin: 0; color: var(--muted); font-size: 12px;
@@ -570,8 +609,146 @@ body.has-tabbar #view-stack { padding-bottom: calc(var(--tabbar-h) + var(--safe-
 }
 .mc-item-meta { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
 .mc-note {
-  margin: 0 0 6px; font-size: 14px; line-height: 1.55; color: var(--fg);
+  margin: 0 0 10px; font-size: 14px; line-height: 1.55; color: var(--fg);
   min-width: 0; overflow-wrap: break-word;
+}
+.mc-muted { opacity: 0.45; }
+.mc-card-hud {
+  border-color: rgba(198, 166, 100, 0.28);
+  box-shadow: 0 0 0 1px rgba(198, 166, 100, 0.05) inset;
+}
+
+/* Ops console — brain switch + test suites (mirrors desktop) */
+.mc-ops { display: flex; flex-direction: column; gap: 14px; }
+.mc-ops-block { min-width: 0; }
+.mc-ops-h {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
+}
+.mc-ops-meta {
+  font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4;
+}
+.mc-ops-meta b { color: var(--fg); font-weight: 600; }
+.mc-ops-meta code {
+  font-family: var(--font-mono); font-size: 11px; color: var(--accent-dim);
+}
+.mc-ops-row {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;
+}
+.mc-ops-btn {
+  appearance: none; cursor: pointer;
+  background: rgba(0,0,0,0.35); color: var(--fg);
+  border: 1px solid rgba(198, 166, 100, 0.35);
+  border-radius: 0; padding: 7px 10px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: .02em;
+  -webkit-tap-highlight-color: transparent;
+}
+.mc-ops-btn.is-active {
+  border-color: var(--accent);
+  background: rgba(198, 166, 100, 0.12);
+  color: var(--accent);
+}
+.mc-ops-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.mc-ops-btn:active:not(:disabled) { background: var(--surface-2); }
+.mc-ops-status {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+  min-height: 1.2em; margin-top: 2px;
+}
+.mc-ops-status.ok   { color: var(--ok); }
+.mc-ops-status.fail { color: var(--danger); }
+.mc-ops-status.run  { color: var(--accent); }
+.mc-ops-log {
+  margin: 6px 0 0; padding: 8px;
+  max-height: 120px; overflow: auto;
+  background: rgba(0,0,0,0.35); border-radius: 6px;
+  font-family: var(--font-mono); font-size: 10px; line-height: 1.35;
+  color: rgba(231,229,220,0.7); white-space: pre-wrap; word-break: break-word;
+}
+
+/* Public agents */
+.mc-pa-banner {
+  margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px;
+  color: var(--muted); letter-spacing: .02em;
+}
+.mc-pa-banner.hot { color: var(--ok); }
+.mc-pa-grid { display: flex; flex-direction: column; gap: 10px; }
+.mc-pa-card {
+  padding: 8px 0; border-bottom: 1px solid var(--rule);
+  min-width: 0;
+}
+.mc-pa-card:last-child { border-bottom: 0; padding-bottom: 0; }
+.mc-pa-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+}
+.mc-pa-name { font-size: 14px; font-weight: 600; color: var(--fg); }
+.mc-pa-status {
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+}
+.mc-pa-status.tone-hot { color: var(--ok); }
+.mc-pa-status.tone-bad { color: var(--danger); }
+.mc-pa-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(233,229,220,0.35);
+}
+.mc-pa-dot.offline { background: var(--danger); }
+.mc-pa-dot.model   { background: var(--accent); }
+.mc-pa-dot.talking { background: var(--ok); }
+.mc-pa-dot.paused  { background: rgba(233,229,220,0.25); }
+.mc-pa-dot.quiet   { background: rgba(233,229,220,0.35); }
+.mc-pa-role { font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+.mc-pa-stats {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  margin-bottom: 6px;
+}
+.mc-pa-stats b {
+  display: block; font-family: var(--font-mono); font-size: 13px; color: var(--fg);
+}
+.mc-pa-stats span {
+  font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+}
+.mc-pa-line {
+  font-size: 12px; color: rgba(231,229,220,0.78); line-height: 1.35;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 2px 0;
+}
+.mc-pa-when { opacity: 0.45; margin-right: 4px; font-family: var(--font-mono); font-size: 10px; }
+.mc-pa-foot {
+  margin-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+}
+.mc-crm {
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+/* Cognition */
+.mc-cog-label {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin: 10px 0 4px;
+}
+.mc-cog-label:first-child { margin-top: 0; }
+.mc-cog-item {
+  padding: 6px 0; border-bottom: 1px solid var(--rule);
+}
+.mc-cog-item:last-child { border-bottom: 0; }
+.mc-cog-head {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+}
+.mc-cog-scope {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+.mc-cog-scope[data-scope="value"]  { color: var(--accent); }
+.mc-cog-scope[data-scope="manner"] { color: var(--agent-vett); }
+.mc-cog-scope[data-scope="unsure"] { color: rgba(233,229,220,0.45); }
+.mc-jon-badge {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+  border: 1px solid rgba(198,166,100,0.4); border-radius: 0; padding: 0 4px;
+}
+.mc-cog-body {
+  font-size: 13px; color: rgba(233,229,220,0.85); line-height: 1.45;
+  overflow-wrap: break-word;
 }
 
 /* Loading placeholder. Pulses only if the viewer hasn't asked for less motion. */

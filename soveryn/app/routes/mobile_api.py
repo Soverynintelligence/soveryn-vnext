@@ -27,11 +27,13 @@ No new data, no new queries. Each route delegates to the same service functions
 the desktop routes call, so there is exactly one implementation of each read and
 this surface cannot drift into a second source of truth.
 
-Read-only by design. Mutating endpoints the desktop exposes (`/api/specialists/kill`,
-X approvals, delegation dispatch) are deliberately absent: a phone in a pocket is
-a different threat model from a desktop behind basic auth on a LAN, and consequential
-actions should stay where confirmation is deliberate. Revisit per-endpoint, never
-by opening the prefix wholesale.
+Mostly read-only. A short allowlist of POSTs (`ops/brain`, `ops/tests`) is wired
+so Mission Control on a paired phone can switch the Spark brain and run test
+suites without basic auth — same ops_control service as desktop, device bearer
+as the gate. Other mutating endpoints (`/api/specialists/kill`, X approvals,
+delegation dispatch) stay absent: a phone in a pocket is a different threat
+model, and consequential actions should stay where confirmation is deliberate.
+Revisit per-endpoint, never by opening the prefix wholesale.
 """
 from __future__ import annotations
 
@@ -68,12 +70,19 @@ def _require_device(messenger_store):
     return deco
 
 
-def register_mobile_api(app, *, messenger_store, providers: dict[str, callable]):
+def register_mobile_api(
+    app,
+    *,
+    messenger_store,
+    providers: dict[str, callable],
+    post_providers: dict[str, callable] | None = None,
+):
     """Mount /m/api/<name> for each provider, all behind device auth.
 
     providers maps a route name to a zero-arg callable returning JSON-able data.
-    Passing the callables in keeps this module free of service imports, so the
-    app decides what the phone can see and that decision lives in one place.
+    post_providers maps a route name to a callable(body: dict) -> JSON-able
+    for deliberate mutations (brain switch, test runs). Device auth is the
+    gate — paired phone is trusted the same way localhost is on desktop ops.
     """
     # Built per call, not at module scope: a module-level Blueprint cannot be
     # registered twice and silently couples every app instance in a test run to
@@ -82,6 +91,7 @@ def register_mobile_api(app, *, messenger_store, providers: dict[str, callable])
     bp_name = f"mobile_api_{len(app.blueprints)}"
     bp = Blueprint(bp_name, __name__, url_prefix="/m/api")
     require = _require_device(messenger_store)
+    post_providers = post_providers or {}
 
     def _make(name: str, fn):
         @require
@@ -95,8 +105,33 @@ def register_mobile_api(app, *, messenger_store, providers: dict[str, callable])
         view.__name__ = f"mobile_{name.replace('/', '_').replace('-', '_')}"
         return view
 
+    def _make_post(name: str, fn):
+        @require
+        def view():
+            try:
+                body = request.get_json(silent=True) or {}
+                result = fn(body if isinstance(body, dict) else {})
+                # Allow callables to return (payload, status) for 4xx.
+                if isinstance(result, tuple) and len(result) == 2:
+                    payload, status = result
+                    return jsonify(payload), status
+                return jsonify(result)
+            except Exception:
+                logger.exception("mobile api POST %s failed", name)
+                return jsonify({"error": "unavailable"}), 503
+        view.__name__ = f"mobile_post_{name.replace('/', '_').replace('-', '_')}"
+        return view
+
     for name, fn in providers.items():
         bp.add_url_rule(f"/{name}", view_func=_make(name, fn), methods=["GET"])
+
+    for name, fn in post_providers.items():
+        bp.add_url_rule(
+            f"/{name}",
+            view_func=_make_post(name, fn),
+            methods=["POST"],
+            endpoint=f"mobile_post_{name.replace('/', '_')}",
+        )
 
     @bp.get("/whoami", endpoint="whoami")
     @require
@@ -115,5 +150,8 @@ def register_mobile_api(app, *, messenger_store, providers: dict[str, callable])
         })
 
     app.register_blueprint(bp)
-    logger.info("mobile api mounted at /m/api with %d providers", len(providers))
+    logger.info(
+        "mobile api mounted at /m/api with %d GET + %d POST providers",
+        len(providers), len(post_providers),
+    )
     return bp

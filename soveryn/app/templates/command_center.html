@@ -2022,13 +2022,43 @@
           + (a.model ? ' <span style="opacity:.35;">· '+esc(a.model)+'</span>' : '')
           + '</div></div>';
       }
+      function crmBlock(crm){
+        if(!crm || !crm.ok){
+          return '<div class="cc-pa-crm" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(232,227,213,0.08);">'
+            + '<div class="cc-pa-banner">CRM pipeline unavailable'
+            + (crm && crm.error ? ' · '+esc(crm.error) : '')
+            + '</div></div>';
+        }
+        var lines = (crm.recent||[]).slice(0,5).map(function(L){
+          var bits = [L.name||'—'];
+          if(L.phone) bits.push(L.phone);
+          if(L.interest) bits.push(L.interest);
+          return '<div class="cc-pa-line" title="'+esc((L.source||'')+' · '+(L.status||''))+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(L.created_at))+'</span>'
+            + esc(bits.join(' · '))
+            + ' <span style="opacity:.4">· '+esc(L.status||'new')+'</span>'
+            + '</div>';
+        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No leads in pipeline</div>';
+        return '<div class="cc-pa-crm" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(232,227,213,0.08);">'
+          + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
+          + '<div class="cc-pa-banner" style="margin:0">PondWright CRM</div>'
+          + '<a href="'+(esc(crm.open||'https://crm.pondwright.com/'))+'" target="_blank" rel="noopener" style="font-size:10px;color:var(--sov-amber,#c0824f);text-decoration:none;">open CRM →</a>'
+          + '</div>'
+          + '<div class="cc-pa-stats" style="margin-bottom:8px;">'
+          + '<div><b>'+(crm.leads_new==null?'—':crm.leads_new)+'</b><span>new</span></div>'
+          + '<div><b>'+(crm.leads_today==null?'—':crm.leads_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(crm.leads_total==null?'—':crm.leads_total)+'</b><span>total</span></div>'
+          + '</div>'
+          + lines
+          + '</div>';
+      }
       function paint(d){
         var agents = (d && d.agents) || [];
         if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
         var banner = (d.talking && d.talking.length)
           ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
           : '<div class="cc-pa-banner">Quiet today (probes excluded)</div>';
-        el.innerHTML = banner + '<div class="cc-pa-grid">'+agents.map(card).join('')+'</div>';
+        el.innerHTML = banner + '<div class="cc-pa-grid">'+agents.map(card).join('')+'</div>' + crmBlock(d.crm);
       }
       function load(){
         fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)

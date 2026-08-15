@@ -2,38 +2,37 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>SOVERYN Voice</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1011">
+    <title>SOVERYN · Voice</title>
     <link rel="stylesheet" href="/static/voice/orb.css">
-    <style>
-        body { gap: 60px; }
-        .orbs { display: flex; gap: 80px; align-items: center; }
-        a.agent-link {
-            display: flex; flex-direction: column; align-items: center;
-            text-decoration: none; color: var(--text-soft);
-        }
-        .agent-link .preview-orb {
-            width: 120px; height: 120px; border-radius: 50%;
-            background: radial-gradient(circle, var(--orb-secondary), var(--orb-primary));
-            box-shadow: 0 0 40px var(--orb-glow);
-            margin-bottom: 20px;
-            transition: transform 200ms;
-        }
-        .agent-link:hover .preview-orb { transform: scale(1.05); }
-        .agent-name {
-            text-transform: uppercase; letter-spacing: 0.3em; font-size: 12px;
-        }
-        .empty {
-            opacity: 0.6;
-            font-style: italic;
-        }
-    </style>
 </head>
-<body>
+<body class="voice-landing">
+    <header class="voice-chrome">
+        <div class="voice-brand"><b>SOVERYN</b> · Voice</div>
+        <nav class="voice-nav">
+            <a href="/">Command</a>
+            <a href="/m/">Mobile</a>
+        </nav>
+    </header>
+
+    <div class="landing-head">
+        <h1>Choose a voice</h1>
+        <p>Same house as Mission Control. Tap an agent to open a live voice room.</p>
+    </div>
+
     <div class="orbs">
         {% for agent in agents %}
         <a class="agent-link orb-{{ agent }}" href="/voice/{{ agent }}">
-            <div class="preview-orb"></div>
+            <div class="preview-orb" aria-hidden="true"></div>
             <div class="agent-name">{{ agent }}</div>
+            {% if agent == 'aetheria' %}
+            <div class="agent-role">Sovereign</div>
+            {% elif agent == 'vett' %}
+            <div class="agent-role">Systems</div>
+            {% elif agent == 'scotty' %}
+            <div class="agent-role">Engineering</div>
+            {% endif %}
         </a>
         {% else %}
         <div class="empty">No voice agents configured.</div>

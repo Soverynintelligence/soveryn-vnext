@@ -1,18 +1,21 @@
-/* Orb colour theme + state machine.
+/* Orb colour theme + state machine + HUD chrome.
  *
- * 2026-07-25: brought onto the SOVERYN brand. Aetheria was twilight violet
- * (#5d3a8e), which predated the palette and matched nothing else she wears —
- * she is oxide sage everywhere now. Vett and Scotty were the "Phase 1.5"
- * TODO and had no classes at all, so the voice landing page rendered them
- * with no colour; both are defined here now.
- *
- * These mirror the agent hues in command_center/chat/documents. Keep them in
- * step: sage / steel / terracotta.
+ * Aligned with Mission Control / Command Center: carbon canvas, oxide sage
+ * (Aetheria), weathered steel (Vett), terracotta (Scotty). Keep these in step
+ * with command_center/chat/documents agent hues.
  */
 
 :root {
-    --bg-deep: #0f1011;        /* carbon */
+    --bg-deep: #0f1011;        /* carbon — Mission Control canvas */
+    --bg-raised: #16181a;
     --text-soft: #E7E5DC;      /* bone */
+    --text-dim: rgba(231, 229, 220, 0.55);
+    --rule: #1e2022;
+    --accent: #8fa07f;
+    --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .orb-aetheria {
@@ -33,28 +36,82 @@
     --orb-glow: rgba(163, 84, 58, 0.5);
 }
 
+* { box-sizing: border-box; }
+
 body {
-    background: var(--bg-deep);
+    background:
+        radial-gradient(ellipse 90% 55% at 50% 28%, rgba(116, 133, 106, 0.09), transparent 62%),
+        var(--bg-deep);
     color: var(--text-soft);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: var(--font-sans);
     margin: 0;
-    height: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Top chrome — same product family as Command Center */
+.voice-chrome {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(12px + var(--safe-top)) 16px 12px;
+    background: linear-gradient(180deg, rgba(15,16,17,0.92), transparent);
+    z-index: 5;
+    pointer-events: none;
+}
+.voice-chrome a,
+.voice-chrome .voice-brand {
+    pointer-events: auto;
+}
+.voice-brand {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+.voice-brand b {
+    color: var(--accent);
+    font-weight: 500;
+}
+.voice-nav {
+    display: flex;
+    gap: 14px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.voice-nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    padding-bottom: 2px;
+}
+.voice-nav a:hover {
+    color: var(--text-soft);
+    border-bottom-color: rgba(143, 160, 127, 0.45);
 }
 
 #orb {
-    width: 240px;
-    height: 240px;
+    width: min(240px, 56vw);
+    height: min(240px, 56vw);
     border-radius: 50%;
     background: radial-gradient(circle at center, var(--orb-secondary) 0%, var(--orb-primary) 100%);
     box-shadow: 0 0 80px var(--orb-glow);
     transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
-    cursor: default;
+    cursor: pointer;
     position: relative;
+    touch-action: manipulation;
 }
 
 /* State-driven visual transitions */
@@ -103,24 +160,140 @@ body {
     50%      { transform: scale(1.02); opacity: 1.0; }
 }
 
-#status {
-    margin-top: 40px;
+#agent-label {
+    margin-top: 28px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.28em;
     text-transform: uppercase;
-    letter-spacing: 0.3em;
+    color: var(--accent);
+}
+
+#status {
+    margin-top: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
     font-size: 11px;
-    opacity: 0.6;
+    font-family: var(--font-mono);
+    color: var(--text-dim);
+}
+
+#hint {
+    margin-top: 18px;
+    font-size: 12px;
+    color: rgba(231, 229, 220, 0.35);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
 }
 
 #error {
     position: fixed;
-    bottom: 20px;
+    bottom: calc(20px + var(--safe-bottom));
+    left: 16px;
+    right: 16px;
+    text-align: center;
     color: #ff8888;
-    font-family: monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     opacity: 0;
     transition: opacity 200ms;
+    pointer-events: none;
 }
 
 #error.visible {
     opacity: 1;
+}
+
+/* Landing page */
+body.voice-landing {
+    justify-content: flex-start;
+    padding: calc(72px + var(--safe-top)) 20px calc(32px + var(--safe-bottom));
+    overflow-y: auto;
+}
+
+.landing-head {
+    text-align: center;
+    margin-bottom: 36px;
+    max-width: 420px;
+}
+.landing-head h1 {
+    margin: 0 0 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+.landing-head p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+
+.orbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px 40px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 720px;
+}
+
+a.agent-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--text-dim);
+    min-width: 120px;
+    padding: 16px 12px;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: border-color 160ms, background 160ms, color 160ms;
+}
+a.agent-link:hover,
+a.agent-link:focus-visible {
+    color: var(--text-soft);
+    border-color: rgba(143, 160, 127, 0.28);
+    background: rgba(22, 24, 26, 0.65);
+    outline: none;
+}
+.agent-link .preview-orb {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--orb-secondary), var(--orb-primary));
+    box-shadow: 0 0 40px var(--orb-glow);
+    margin-bottom: 16px;
+    transition: transform 200ms;
+}
+.agent-link:hover .preview-orb { transform: scale(1.05); }
+.agent-name {
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    font-size: 11px;
+    font-family: var(--font-mono);
+}
+.agent-role {
+    margin-top: 6px;
+    font-size: 11px;
+    opacity: 0.55;
+    letter-spacing: 0.02em;
+    text-align: center;
+    max-width: 140px;
+}
+.empty {
+    opacity: 0.55;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+@media (max-width: 480px) {
+    .orbs { gap: 16px; }
+    a.agent-link { min-width: 100px; padding: 12px 8px; }
+    .agent-link .preview-orb { width: 96px; height: 96px; }
 }

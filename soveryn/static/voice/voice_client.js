@@ -180,12 +180,19 @@
     }
 
     // Browsers require a user gesture before getUserMedia + autoplay
-    orb.addEventListener("click", () => {
+    function beginIfIdle() {
         if (currentState === STATES.IDLE) {
             start();
+        }
+    }
+    orb.addEventListener("click", beginIfIdle);
+    orb.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            beginIfIdle();
         }
     });
 
     setState(STATES.IDLE);
-    if (statusEl) statusEl.textContent = "click to begin";
+    if (statusEl) statusEl.textContent = "tap to begin";
 })();

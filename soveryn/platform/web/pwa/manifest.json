@@ -2,21 +2,21 @@
   "name": "SOVERYN",
   "short_name": "SOVERYN",
   "description": "Mission Control and the team \u2014 Aetheria, Vett, Scotty.",
-  "start_url": "/m/",
+  "start_url": "/m/?b=20260815-mc4",
   "scope": "/m/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0f1011",
-  "theme_color": "#0f1011",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [
     {
-      "src": "/m/pwa/icons/icon-192.png",
+      "src": "/m/pwa/icons/icon-192.png?v=20260815-mc4",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/m/pwa/icons/icon-512.png",
+      "src": "/m/pwa/icons/icon-512.png?v=20260815-mc4",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

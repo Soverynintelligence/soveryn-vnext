@@ -1,13 +1,13 @@
 // soveryn/platform/web/pwa/control.js
 //
-// Mission Control inside the app.
+// Mission Control inside the app — parity with desktop Command Center.
 //
 // Loaded after app.js and deliberately additive: it registers its own view
 // renderers into VIEW_RENDERERS and adds a tab layer to the shell. The chat
 // code is not modified — a working, paired, installed messenger is not worth
 // risking to add a dashboard.
 //
-// Data comes from /m/api/* (device-bearer auth, read-only, see
+// Data comes from /m/api/* (device-bearer auth, see
 // soveryn/app/routes/mobile_api.py). NOT from /api/*, which is behind the
 // basic-auth gate the app cannot use.
 //
@@ -23,17 +23,38 @@
     { id: 'team',    label: 'Team',    view: 'thread-list',  glyph: '◗' },
   ];
 
+  // Ops poll timers live for the life of the Control view.
+  let brainPoll = null;
+  let testPoll = null;
+
+  function clearOpsPolls() {
+    if (brainPoll) { clearInterval(brainPoll); brainPoll = null; }
+    if (testPoll)  { clearInterval(testPoll);  testPoll = null; }
+  }
+
   // ── data ───────────────────────────────────────────────────────────────────
 
-  async function api(path) {
+  async function api(path, opts = {}) {
     const secret = await loadSecret();
     if (!secret) throw new Error('unpaired');
-    const r = await fetch(`/m/api/${path}`, {
-      headers: { Authorization: `Bearer ${secret}` },
-    });
+    const method = (opts.method || 'GET').toUpperCase();
+    const headers = { Authorization: `Bearer ${secret}` };
+    let body;
+    if (method !== 'GET' && opts.body != null) {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(opts.body);
+    }
+    const r = await fetch(`/m/api/${path}`, { method, headers, body });
     if (r.status === 401) throw new Error('unpaired');
-    if (!r.ok) throw new Error(`http ${r.status}`);
-    return r.json();
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (data && (data.message || data.error)) || `http ${r.status}`;
+      const err = new Error(msg);
+      err.status = r.status;
+      err.payload = data;
+      throw err;
+    }
+    return data;
   }
 
   // Every panel fetches independently. One slow or broken endpoint degrades its
@@ -48,7 +69,7 @@
 
   function card(title, bodyHtml, opts = {}) {
     return `
-      <section class="mc-card${opts.wide ? ' mc-card-wide' : ''}">
+      <section class="mc-card${opts.wide ? ' mc-card-wide' : ''}${opts.hud ? ' mc-card-hud' : ''}">
         <h2 class="mc-card-title">${escapeHtml(title)}</h2>
         <div class="mc-card-body">${bodyHtml}</div>
       </section>`;
@@ -71,7 +92,323 @@
     return Array.from({ length: n }, () => `<div class="mc-skel"></div>`).join('');
   }
 
+  function relTime(iso) {
+    if (!iso) return '—';
+    const t = Date.parse(iso);
+    if (!t) return String(iso);
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 90) return 'just now';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+    return Math.floor(sec / 86400) + 'd ago';
+  }
+
+  function statusClass(st) {
+    if (st === 'ok') return 'ok';
+    if (st === 'failed') return 'fail';
+    if (st === 'running' || st === 'starting') return 'run';
+    return '';
+  }
+
   // ── panels ─────────────────────────────────────────────────────────────────
+
+  async function panelOps($slot) {
+    // Brain switch + test runner — same ops as desktop Command Center, via
+    // device-auth POST /m/api/ops/* instead of localhost-only /api/ops/*.
+    const [brainR, testsR] = await Promise.all([
+      settled('ops/brain'),
+      settled('ops/tests'),
+    ]);
+
+    if (!brainR.ok && !testsR.ok) {
+      return ($slot.innerHTML = unavailable(brainR.error || testsR.error));
+    }
+
+    $slot.innerHTML = `
+      <div class="mc-ops">
+        <div class="mc-ops-block">
+          <div class="mc-ops-h">Spark brain</div>
+          <div class="mc-ops-meta" data-ops-brain-meta>…</div>
+          <div class="mc-ops-row" data-ops-brain-buttons></div>
+          <div class="mc-ops-status" data-ops-brain-status></div>
+          <pre class="mc-ops-log" data-ops-brain-log hidden></pre>
+        </div>
+        <div class="mc-ops-block">
+          <div class="mc-ops-h">Run tests</div>
+          <div class="mc-ops-meta">Presets hit real pytest — no agent required.</div>
+          <div class="mc-ops-row" data-ops-test-buttons></div>
+          <div class="mc-ops-status" data-ops-test-status></div>
+          <pre class="mc-ops-log" data-ops-test-log hidden></pre>
+        </div>
+      </div>`;
+
+    const $brainMeta = $slot.querySelector('[data-ops-brain-meta]');
+    const $brainBtns = $slot.querySelector('[data-ops-brain-buttons]');
+    const $brainStatus = $slot.querySelector('[data-ops-brain-status]');
+    const $brainLog = $slot.querySelector('[data-ops-brain-log]');
+    const $testBtns = $slot.querySelector('[data-ops-test-buttons]');
+    const $testStatus = $slot.querySelector('[data-ops-test-status]');
+    const $testLog = $slot.querySelector('[data-ops-test-log]');
+
+    function setStatus(el, cls, text) {
+      if (!el) return;
+      el.className = 'mc-ops-status' + (cls ? ' ' + cls : '');
+      el.textContent = text || '';
+    }
+    function setLog(el, text) {
+      if (!el) return;
+      if (text && String(text).trim()) {
+        el.textContent = text;
+        el.hidden = false;
+      } else {
+        el.textContent = '';
+        el.hidden = true;
+      }
+    }
+
+    function paintBrain(d) {
+      if (!d || brainR.ok === false && !d.brain) {
+        $brainMeta.textContent = 'ops brain unavailable · ' + (brainR.error || '');
+        return;
+      }
+      const cur = d.brain || '?';
+      $brainMeta.innerHTML =
+        'Active: <b>' + escapeHtml(cur) + '</b> · <code>' +
+        escapeHtml(d.routed_alias || d.alias || '—') + '</code>' +
+        (d.role ? '<br>' + escapeHtml(d.role) : '');
+      $brainBtns.innerHTML = (d.brains || []).map(b => {
+        const active = b.id === cur ? ' is-active' : '';
+        return `<button type="button" class="mc-ops-btn${active}" data-brain="${escapeHtml(b.id)}" title="${escapeHtml(b.role || '')}">${escapeHtml(b.id)}</button>`;
+      }).join('') || unavailable('no brains listed');
+      $brainBtns.querySelectorAll('[data-brain]').forEach($b => {
+        $b.onclick = () => switchBrain($b.getAttribute('data-brain'));
+      });
+      if (d.job && d.job.status) {
+        const st = d.job.status;
+        setStatus($brainStatus, statusClass(st), d.job.message || st);
+        if (st === 'running' || st === 'starting') startBrainPoll();
+      }
+    }
+
+    async function switchBrain(id) {
+      if (!id) return;
+      if (!confirm('Switch Spark brain to ' + id + '?\n\nThis reloads vLLM (minutes) and restarts the app briefly.')) return;
+      $brainBtns.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      setStatus($brainStatus, 'run', 'Starting switch to ' + id + '…');
+      setLog($brainLog, '');
+      try {
+        const j = await api('ops/brain', { method: 'POST', body: { brain: id } });
+        setStatus($brainStatus, 'run', (j.job && j.job.message) || 'switching…');
+        startBrainPoll();
+      } catch (e) {
+        setStatus($brainStatus, 'fail', e.message || String(e));
+        $brainBtns.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      }
+    }
+
+    function startBrainPoll() {
+      if (brainPoll) return;
+      brainPoll = setInterval(async () => {
+        try {
+          const d = await api('ops/jobs/brain');
+          setLog($brainLog, d.log_tail || '');
+          const j = d.job;
+          if (!j) return;
+          const st = j.status;
+          setStatus($brainStatus, statusClass(st), j.message || st);
+          if (st === 'ok' || st === 'failed') {
+            clearInterval(brainPoll); brainPoll = null;
+            const fresh = await settled('ops/brain');
+            if (fresh.ok) paintBrain(fresh.data);
+            else $brainBtns.querySelectorAll('button').forEach(b => { b.disabled = false; });
+          }
+        } catch (_) { /* app may be restarting */ }
+      }, 4000);
+    }
+
+    function paintTests(d) {
+      if (!d) {
+        $testStatus.textContent = 'ops tests unavailable';
+        return;
+      }
+      $testBtns.innerHTML = (d.suites || []).map(s =>
+        `<button type="button" class="mc-ops-btn" data-suite="${escapeHtml(s.id)}">${escapeHtml(s.label || s.id)}</button>`
+      ).join('') || unavailable('no suites');
+      $testBtns.querySelectorAll('[data-suite]').forEach($b => {
+        $b.onclick = () => runTests($b.getAttribute('data-suite'));
+      });
+      if (d.job && d.job.status) {
+        const st = d.job.status;
+        setStatus($testStatus, statusClass(st), d.job.message || st);
+        setLog($testLog, d.log_tail || d.job.summary || '');
+        if (st === 'running' || st === 'starting') startTestPoll();
+      }
+    }
+
+    async function runTests(suite) {
+      $testBtns.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      setStatus($testStatus, 'run', 'Starting ' + suite + '…');
+      setLog($testLog, '');
+      try {
+        const j = await api('ops/tests', { method: 'POST', body: { suite } });
+        setStatus($testStatus, 'run', (j.job && j.job.message) || 'running…');
+        startTestPoll();
+      } catch (e) {
+        setStatus($testStatus, 'fail', e.message || String(e));
+        $testBtns.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      }
+    }
+
+    function startTestPoll() {
+      if (testPoll) return;
+      testPoll = setInterval(async () => {
+        try {
+          const d = await api('ops/jobs/tests');
+          setLog($testLog, d.log_tail || '');
+          const j = d.job;
+          if (!j) return;
+          const st = j.status;
+          setStatus($testStatus, statusClass(st), j.message || st);
+          if (st === 'ok' || st === 'failed') {
+            clearInterval(testPoll); testPoll = null;
+            $testBtns.querySelectorAll('button').forEach(b => { b.disabled = false; });
+          }
+        } catch (_) {}
+      }, 2000);
+    }
+
+    if (brainR.ok) paintBrain(brainR.data);
+    else $brainMeta.textContent = 'unavailable · ' + brainR.error;
+    if (testsR.ok) paintTests(testsR.data);
+    else setStatus($testStatus, 'fail', testsR.error);
+  }
+
+  async function panelPublicAgents($slot) {
+    const r = await settled('system/public_agents');
+    if (!r.ok) return ($slot.innerHTML = unavailable(r.error));
+    const d = r.data || {};
+    const agents = d.agents || [];
+    if (!agents.length) return ($slot.innerHTML = `<p class="mc-unavailable">no public agents</p>`);
+
+    const banner = (d.talking && d.talking.length)
+      ? `<p class="mc-pa-banner hot">Talking today: ${escapeHtml(d.talking.join(', '))}</p>`
+      : `<p class="mc-pa-banner">Quiet today (probes excluded)</p>`;
+
+    const cards = agents.map(a => {
+      const hot = (a.conversations_today || 0) > 0 || (a.turns_today || 0) > 0;
+      const status = !a.reachable
+        ? 'offline'
+        : (a.model_ok === false
+          ? 'model'
+          : (hot ? 'talking' : (a.enabled === false ? 'paused' : 'quiet')));
+      const tone = !a.reachable ? 'bad' : (hot ? 'hot' : null);
+      const recent = (a.recent || []).slice(0, 2).map(x => `
+        <div class="mc-pa-line">
+          <span class="mc-pa-when">${escapeHtml(relTime(x.ts))}</span>
+          ${escapeHtml(x.preview || '…')}${x.captured ? ' · lead' : ''}
+        </div>`).join('') ||
+        `<div class="mc-pa-line mc-muted">No recent visitor lines</div>`;
+      return `
+        <div class="mc-pa-card">
+          <div class="mc-pa-head">
+            <span class="mc-pa-name">${escapeHtml(a.name)}</span>
+            <span class="mc-pa-status${tone ? ' tone-' + tone : ''}">
+              <span class="mc-pa-dot ${status}"></span>${escapeHtml(status)}
+            </span>
+          </div>
+          <div class="mc-pa-role">${escapeHtml(a.role || '')}</div>
+          <div class="mc-pa-stats">
+            <div><b>${a.conversations_today == null ? '—' : a.conversations_today}</b><span>today</span></div>
+            <div><b>${a.turns_today == null ? '—' : a.turns_today}</b><span>turns</span></div>
+            <div><b>${escapeHtml(relTime(a.last_activity))}</b><span>last</span></div>
+          </div>
+          ${recent}
+          ${a.model ? `<div class="mc-pa-foot">${escapeHtml(a.model)}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    let crmHtml = '';
+    const crm = d.crm;
+    if (crm && crm.ok) {
+      const lines = (crm.recent || []).slice(0, 5).map(L => {
+        const bits = [L.name || '—'];
+        if (L.phone) bits.push(L.phone);
+        if (L.interest) bits.push(L.interest);
+        return `
+          <div class="mc-pa-line">
+            <span class="mc-pa-when">${escapeHtml(relTime(L.created_at))}</span>
+            ${escapeHtml(bits.join(' · '))}
+            <span class="mc-muted"> · ${escapeHtml(L.status || 'new')}</span>
+          </div>`;
+      }).join('') || `<div class="mc-pa-line mc-muted">No leads in pipeline</div>`;
+      crmHtml = `
+        <div class="mc-crm">
+          <div class="mc-pa-head" style="margin-top:10px">
+            <span class="mc-pa-name" style="font-size:12px">PondWright CRM</span>
+            <span class="mc-pa-status">${escapeHtml(String(crm.leads_new ?? '—'))} new</span>
+          </div>
+          <div class="mc-pa-stats">
+            <div><b>${crm.leads_new == null ? '—' : crm.leads_new}</b><span>new</span></div>
+            <div><b>${crm.leads_today == null ? '—' : crm.leads_today}</b><span>today</span></div>
+            <div><b>${crm.leads_total == null ? '—' : crm.leads_total}</b><span>total</span></div>
+          </div>
+          ${lines}
+        </div>`;
+    } else if (crm && crm.error) {
+      crmHtml = `<p class="mc-unavailable">CRM · ${escapeHtml(crm.error)}</p>`;
+    }
+
+    $slot.innerHTML = banner + `<div class="mc-pa-grid">${cards}</div>` + crmHtml;
+  }
+
+  async function panelCognition($slot) {
+    const [noteR, reflR] = await Promise.all([
+      settled('cognition/note'),
+      settled('cognition/reflections'),
+    ]);
+    if (!noteR.ok && !reflR.ok) {
+      return ($slot.innerHTML = unavailable(noteR.error || reflR.error));
+    }
+
+    let html = '';
+    const note = noteR.ok && noteR.data && noteR.data.content;
+    html += `<div class="mc-cog-label">Sense of us</div>`;
+    if (note && String(note).trim()) {
+      html += `<p class="mc-note">${escapeHtml(note)}</p>`;
+    } else if (noteR.ok) {
+      html += `<p class="mc-unavailable">no note yet — the cognition engine hasn't run</p>`;
+    } else {
+      html += unavailable(noteR.error);
+    }
+
+    html += `<div class="mc-cog-label">Reflections</div>`;
+    if (!reflR.ok) {
+      html += unavailable(reflR.error);
+    } else {
+      const list = Array.isArray(reflR.data)
+        ? reflR.data
+        : (reflR.data && reflR.data.reflections) || [];
+      if (!list.length) {
+        html += `<p class="mc-unavailable">no reflections yet.</p>`;
+      } else {
+        html += list.slice(0, 8).map(r => {
+          const scope = r.scope || 'unsure';
+          const jon = r.jon_originated
+            ? `<span class="mc-jon-badge" title="originated from Jon">Jon</span>`
+            : '';
+          return `
+            <div class="mc-cog-item">
+              <div class="mc-cog-head">
+                <span class="mc-cog-scope" data-scope="${escapeHtml(scope)}">${escapeHtml(scope)}</span>
+                ${jon}
+              </div>
+              <div class="mc-cog-body">${escapeHtml(r.text || '')}</div>
+            </div>`;
+        }).join('');
+      }
+    }
+    $slot.innerHTML = html;
+  }
 
   async function panelRig($slot) {
     // /system/rig returns the same gpus[] as /system/gpu on this deployment,
@@ -179,35 +516,29 @@
     }).join('');
   }
 
-  async function panelCognition($slot) {
-    const r = await settled('cognition/note');
-    if (!r.ok) return ($slot.innerHTML = unavailable(r.error));
-    const d = r.data || {};
-    const text = d.content;   // endpoint returns {content, id}
-    if (!text) {
-      // Was true from June until 2026-08-01. Keep the honest empty state.
-      $slot.innerHTML = `<p class="mc-unavailable">no note yet — the cognition engine hasn't run</p>`;
-      return;
-    }
-    $slot.innerHTML = `<p class="mc-note">${escapeHtml(text)}</p>`;
-  }
-
+  // Order mirrors desktop Command Center priorities: ops first (actionable),
+  // public talk + cognition (mind), then fleet/machine.
   const PANELS = [
-    { id: 'daemons',    title: 'Fleet',      render: panelDaemons },
-    { id: 'gpu',        title: 'GPU',        render: panelGpu },
-    { id: 'rig',        title: 'Rig',        render: panelRig },
-    { id: 'delegation', title: 'In flight',  render: panelDelegation },
-    { id: 'cognition',  title: 'Sense of us', render: panelCognition },
-    { id: 'heartbeat',  title: 'Recent pulses', render: panelHeartbeat, wide: true },
+    { id: 'ops',          title: 'Ops console',    render: panelOps, wide: true, hud: true },
+    { id: 'public',       title: 'Public agents',  render: panelPublicAgents, wide: true },
+    { id: 'cognition',    title: 'Cognition',      render: panelCognition, wide: true },
+    { id: 'daemons',      title: 'Fleet',          render: panelDaemons },
+    { id: 'gpu',          title: 'GPU',            render: panelGpu },
+    { id: 'rig',          title: 'Rig',            render: panelRig },
+    { id: 'delegation',   title: 'In flight',      render: panelDelegation },
+    { id: 'heartbeat',    title: 'Recent pulses',  render: panelHeartbeat, wide: true },
   ];
 
   // ── views ──────────────────────────────────────────────────────────────────
 
   async function renderControlHome($view) {
     setHeader({ title: 'Mission Control' });
-    $view.innerHTML = `<div class="mc-grid">${
+    clearOpsPolls();
+    $view.innerHTML = `
+      <div class="mc-build" data-mc-build="20260815-mc4">lab gold · ops · public · cognition</div>
+      <div class="mc-grid">${
       PANELS.map(p => card(p.title, `<div id="mc-slot-${p.id}">${skeleton(2)}</div>`,
-                           { wide: p.wide })).join('')
+                           { wide: p.wide, hud: p.hud })).join('')
     }</div>`;
     // Fire all panels at once; each writes into its own slot as it lands, so the
     // screen fills progressively instead of waiting on the slowest endpoint.
@@ -251,6 +582,7 @@
     const tab = TABS.find(t => t.id === id);
     if (!tab) return;
     activeTab = id;
+    if (id !== 'control') clearOpsPolls();
     renderTabs();
     // Each tab resets to its own root. Switching tabs is not "back", so the
     // stack is replaced rather than pushed — otherwise the back arrow walks
@@ -278,7 +610,14 @@
     window.__mcOnViewChange = (view) => {
       const paired = view && view.kind !== 'pairing';
       showTabs(paired);
-      if (paired && !document.getElementById('mc-tabbar')) renderTabs();
+      // Keep the tab highlight honest when boot or back-stack lands on a view.
+      if (view && view.kind === 'control-home') activeTab = 'control';
+      else if (view && (view.kind === 'thread-list' || view.kind === 'thread'
+                        || view.kind === 'agent-pick' || view.kind === 'voice')) {
+        activeTab = 'team';
+      }
+      if (paired) renderTabs();
+      if (!paired || (view && view.kind !== 'control-home')) clearOpsPolls();
     };
     console.info('[control] Mission Control views registered');
   }

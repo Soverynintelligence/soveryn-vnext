@@ -10,7 +10,7 @@ from pathlib import Path as _P
 
 from flask import (
     Blueprint, Response, current_app, request, jsonify,
-    render_template_string, send_from_directory,
+    make_response, redirect, render_template_string, send_from_directory,
 )
 
 from soveryn.agents.loop import (
@@ -388,16 +388,50 @@ def build_messenger_blueprint(
     # Werkzeug orders rules by specificity at match time, so this is belt-and-
     # braces, not strictly required for correctness.
     _PWA_DIR = _P(__file__).resolve().parent.parent.parent / "platform" / "web" / "pwa"
+    # Bump this whenever the phone shell must invalidate. iOS Home Screen apps
+    # often ignore Cache-Control and keep the old index forever until the entry
+    # URL changes — so /m/ 302s to /m/?b=<build> and the HTML pins JS/CSS to it.
+    _PWA_BUILD = "20260815-mc4"
+
+    def _pwa_response(path: str):
+        """Serve a PWA file with cache policy that lets Home Screen apps update.
+
+        iOS standalone PWAs are sticky: they can keep an old index.html (and its
+        script tags) for days. HTML is no-store; JS/CSS revalidate every load.
+        index.html also pins assets with ?v= so a single shell refresh pulls a
+        new control.js even if an intermediate cache ignored ETag changes.
+        """
+        resp = make_response(send_from_directory(str(_PWA_DIR), path))
+        name = path.rsplit("/", 1)[-1]
+        if name == "index.html" or name.endswith(".html"):
+            resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        elif name.endswith((".js", ".css")):
+            # Query-string version on the HTML link is the real bust; this stops
+            # long-lived cache of unversioned URLs.
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return resp
 
     @bp.route("/pwa/<path:path>", methods=["GET"])
     def pwa_static(path: str):
-        return send_from_directory(str(_PWA_DIR), path)
+        return _pwa_response(path)
 
     @bp.route("/", methods=["GET"])
+    def pwa_shell():
+        # Force a new document URL on every build. Apple's home-screen web apps
+        # often never re-fetch /m/ once snapshotted; a 302 to ?b=<build> is the
+        # one server-side lever that consistently breaks that freeze.
+        if request.args.get("b") != _PWA_BUILD:
+            return redirect(f"/m/?b={_PWA_BUILD}", code=302)
+        return _pwa_response("index.html")
+
     @bp.route("/<path:path>", methods=["GET"])
-    def pwa_assets(path: str = ""):
-        if not path or path.endswith("/"):
-            path = "index.html"
-        return send_from_directory(str(_PWA_DIR), path)
+    def pwa_assets(path: str):
+        if path.endswith("/"):
+            path = path + "index.html" if path else "index.html"
+        if path in ("", "index.html"):
+            return pwa_shell()
+        return _pwa_response(path)
 
     return bp
