@@ -188,12 +188,12 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
         _apply_summary(glance, row.get("summary"), row.get("health"))
         agents.append(glance)
 
+    # "Talking" = real visitor activity *today* (probes already stripped upstream).
     talking = [
         a.id for a in agents
         if a.reachable and (
             (a.conversations_today or 0) > 0
             or (a.turns_today or 0) > 0
-            or bool(a.recent)
         )
     ]
     payload = {
