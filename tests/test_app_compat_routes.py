@@ -67,13 +67,13 @@ def test_api_models_aetheria_uses_gemma_4_31b(app_state):
 
 
 def test_api_models_vett_and_scotty_share_one_spark_backend(app_state):
+    from soveryn.config.runtime import resolve_vett_brain, _VETT_BRAIN_PROFILES
     payload = json.loads(app_state.get("/api/models").data)
-    # One shared backend on the Spark since 2026-08-02. It was Laguna until
-    # 2026-08-12, when laguna-serve was stopped and disabled and every
-    # Spark-served agent moved to the one qwen36-35b instance on :8001.
-    # The invariant under test is the SHARING, not which weights are loaded.
+    # One shared backend on the Spark since 2026-08-02. Brain is swappable
+    # (qwen36 / qwen38 / lightning); invariant is SHARING + active profile path.
     assert payload["vett"] == payload["scotty"]
-    assert "Qwen3.6-35B" in payload["vett"]
+    expected_path = _VETT_BRAIN_PROFILES[resolve_vett_brain()]["path"]
+    assert expected_path in payload["vett"]
 
 
 def test_api_models_excludes_retired_agents(app_state):

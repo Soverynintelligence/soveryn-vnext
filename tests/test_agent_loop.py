@@ -71,9 +71,10 @@ def test_default_chat_timeout_is_120_seconds(conv_store):
 
 def test_construction_routes_vett_to_vett_scotty_shared(conv_store):
     """Phase 7 — agent → logical identity, not port (all share :8090 now)."""
+    from soveryn.config.runtime import resolve_vett_brain, _VETT_BRAIN_PROFILES
     loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
     assert loop.server.name == "vett_scotty_shared"
-    assert loop.server.model_alias == "qwen36-35b"  # Spark; see runtime.py
+    assert loop.server.model_alias == _VETT_BRAIN_PROFILES[resolve_vett_brain()]["alias"]
 
 
 def test_construction_normalizes_name_case(conv_store):

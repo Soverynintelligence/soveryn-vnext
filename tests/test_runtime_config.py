@@ -106,10 +106,16 @@ def test_model_servers_have_distinct_logical_names():
 def test_each_model_server_has_router_alias_populated():
     """Under router mode, the chat/embeddings payload "model" field must match
     a preset alias registered in router-presets.ini. Verify each ModelServer
-    carries the alias that router-presets.ini knows about."""
+    carries the alias that router-presets.ini knows about.
+
+    Vett/Scotty alias is brain-swappable (qwen36 | qwen38 | lightning) via
+    ~/.soveryn/vett_brain — assert the active profile, not a fixed id.
+    """
+    brain = runtime.resolve_vett_brain()
+    vett_alias = runtime._VETT_BRAIN_PROFILES[brain]["alias"]
     expected = {
         "aetheria_primary": "aetheria",
-        "vett_scotty_shared": "qwen36-35b",
+        "vett_scotty_shared": vett_alias,
         "embeddings": "embeddings",
         "cognition": "cognition",
     }
