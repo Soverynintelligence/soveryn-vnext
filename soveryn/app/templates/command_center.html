@@ -356,8 +356,156 @@
   .activity-item .who[data-agent="scotty"]   { color:var(--sov-maroon); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
-  .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
-  .sparkline .bar { flex:1; background:var(--sov-amber); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+  /* Lattice telemetry chart (was an unlabeled sparkline) */
+  .telemetry {
+    margin-top: 14px;
+    padding: 12px 12px 10px;
+    border: 1px solid rgba(107,130,144,0.28);
+    background:
+      linear-gradient(180deg, rgba(64,78,89,0.12) 0%, rgba(0,0,0,0.35) 100%),
+      repeating-linear-gradient(
+        0deg,
+        transparent 0,
+        transparent 11px,
+        rgba(107,130,144,0.06) 11px,
+        rgba(107,130,144,0.06) 12px
+      );
+    position: relative;
+    overflow: hidden;
+  }
+  .telemetry::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      rgba(107,130,144,0.07) 50%,
+      transparent 60%
+    );
+    animation: telemetry-scan 7s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes telemetry-scan {
+    0% { transform: translateX(-40%); opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateX(40%); opacity: 0; }
+  }
+  .telemetry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-title {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(125,148,163,0.95);
+    font-weight: 600;
+  }
+  .telemetry-live {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #3f9a5f;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .telemetry-live::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3f9a5f;
+    box-shadow: 0 0 8px #3f9a5f;
+    animation: telemetry-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes telemetry-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .telemetry-sub {
+    font-size: 11px;
+    color: rgba(232,227,213,0.42);
+    margin: 0 0 10px;
+    line-height: 1.4;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-metrics div {
+    border: 1px solid rgba(232,227,213,0.08);
+    background: rgba(0,0,0,0.28);
+    padding: 6px 8px;
+  }
+  .telemetry-metrics b {
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+    font-weight: 600;
+    color: #e7e5dc;
+    text-shadow: 0 0 12px rgba(107,130,144,0.35);
+  }
+  .telemetry-metrics span {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.4);
+  }
+  .sparkline {
+    margin-top: 0;
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    height: 56px;
+    position: relative;
+    z-index: 1;
+    border-bottom: 1px solid rgba(107,130,144,0.35);
+    padding-bottom: 0;
+  }
+  .sparkline .bar {
+    flex: 1;
+    background: linear-gradient(180deg, #9eb4c2 0%, #5f7684 55%, #404e59 100%);
+    opacity: 0.9;
+    border-radius: 1px 1px 0 0;
+    min-height: 2px;
+    box-shadow: 0 0 6px rgba(107,130,144,0.25);
+    transition: filter 0.15s, opacity 0.15s;
+    cursor: default;
+  }
+  .sparkline .bar:hover,
+  .sparkline .bar.is-today {
+    filter: brightness(1.25);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(125,148,163,0.55);
+  }
+  .sparkline .bar.is-today {
+    background: linear-gradient(180deg, #d4a827 0%, #c0824f 60%, #8c5a3c 100%);
+  }
+  .telemetry-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: rgba(232,227,213,0.35);
+    font-variant-numeric: tabular-nums;
+    position: relative;
+    z-index: 1;
+  }
 
   .gpu-bars { display:flex; flex-direction:column; gap:10px; }
   .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
@@ -1185,6 +1333,51 @@
   /* Plate already carries nav + status; the second brand header is pure height. */
   header.top { display: none !important; }
 
+  /* High-tech HUD chrome */
+  .plate {
+    border-bottom: 1px solid rgba(107,130,144,0.35) !important;
+    box-shadow: 0 1px 0 rgba(192,130,79,0.12);
+  }
+  .plate .status-pill {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10px;
+  }
+  .panel, section.panel, .agent-card, .daemon-card {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .panel > h3:first-child,
+  section.panel > h3:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel > h3:first-child::before,
+  section.panel > h3:first-child::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    background: #6b8290;
+    box-shadow: 0 0 8px rgba(107,130,144,0.7);
+    flex-shrink: 0;
+  }
+  .agent-card .name,
+  .daemon-card .name {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .system-stats {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .system-stats span {
+    color: #9eb4c2;
+    text-shadow: 0 0 10px rgba(107,130,144,0.35);
+  }
+
   section.panel.greeting,
   section[data-testid="greeting"] {
     padding: 12px 16px !important;
@@ -1688,19 +1881,45 @@
 
     <section class="bottom-row">
       <div class="panel activity" data-testid="activity-feed">
-        <h3>Recent activity</h3>
-        <div class="activity-feed" data-feed aria-live="polite" aria-label="Recent activity">
+        <h3>Session traffic</h3>
+        <p style="font-size:11px;color:rgba(232,227,213,0.4);margin:-6px 0 10px;line-height:1.4;">
+          Latest agent chat sessions on this tower — who was last spoken to.</p>
+        <div class="activity-feed" data-feed aria-live="polite" aria-label="Recent agent sessions">
           <div class="activity-item" data-empty>nothing to report yet.</div>
         </div>
-        <div class="sparkline" data-sparkline aria-label="memory writes per day, last 14 days"></div>
+
+        <!-- Lattice write telemetry (was unlabeled bars) -->
+        <div class="telemetry" data-testid="lattice-telemetry" aria-label="Lattice memory write rate over 14 days">
+          <div class="telemetry-head">
+            <div class="telemetry-title">Lattice write rate · 14d</div>
+            <div class="telemetry-live">live</div>
+          </div>
+          <p class="telemetry-sub">
+            How many memory nodes the house wrote each day — Aetheria, Vett, Scotty, daemons.
+            Amber bar = today. Hover a bar for the exact count.
+          </p>
+          <div class="telemetry-metrics">
+            <div><b data-telemetry-today>—</b><span>today</span></div>
+            <div><b data-telemetry-peak>—</b><span>peak day</span></div>
+            <div><b data-telemetry-total>—</b><span>14d total</span></div>
+          </div>
+          <div class="sparkline" data-sparkline role="img" aria-label="Bar chart of lattice writes per day for the last 14 days"></div>
+          <div class="telemetry-axis">
+            <span data-telemetry-start>—</span>
+            <span>writes / day</span>
+            <span data-telemetry-end>—</span>
+          </div>
+        </div>
       </div>
 
       <div class="panel system" data-testid="system-panel">
-        <h3>System</h3>
+        <h3>Fleet telemetry</h3>
+        <p style="font-size:11px;color:rgba(232,227,213,0.4);margin:-6px 0 10px;line-height:1.4;">
+          GPU load on the tower + Spark brain path. Not public visitor chat.</p>
         <div class="gpu-bars" data-testid="gpu-bars" aria-live="polite" aria-label="GPU statistics">
           <div class="gpu-bar" data-empty>GPU stats loading…</div>
         </div>
-        <h3 style="margin-top:18px">Spark</h3>
+        <h3 style="margin-top:18px">Spark fabric</h3>
         <div class="spark-tile" data-testid="spark-tile" aria-live="polite" aria-label="DGX Spark status">
           <div style="opacity:0.5">Spark loading…</div>
         </div>
@@ -2097,30 +2316,59 @@
     renderSparkBay(spark);
   }
 
-  // ─── Sparkline (14d memory writes) ────────────────────────────────────────
+  // ─── Lattice write telemetry (14d) ───────────────────────────────────────
+  // Explicit HUD for memory-node writes. Not GPU, not public chat — how busy
+  // the lattice was each day (agents + daemons committing knowledge).
   async function renderSparkline() {
     const data = await fetchJson("/api/memory/activity?days=14");
     const container = document.querySelector("[data-sparkline]");
-    if (!container || !data) return;
-    const max = Math.max(1, ...data.buckets.map(b => b.count));
-    container.innerHTML = data.buckets.map(b => {
-      const h = Math.round((b.count / max) * 100);
-      return `<div class="bar" style="height:${h}%" title="${b.date}: ${b.count}"></div>`;
+    if (!container || !data || !data.buckets || !data.buckets.length) return;
+    const buckets = data.buckets;
+    const counts = buckets.map(b => b.count || 0);
+    const max = Math.max(1, ...counts);
+    const total = counts.reduce((a, b) => a + b, 0);
+    const today = buckets[buckets.length - 1];
+    const peak = Math.max(...counts);
+    const set = (sel, v) => {
+      const el = document.querySelector(sel);
+      if (el) el.textContent = v;
+    };
+    set("[data-telemetry-today]", String(today ? today.count : 0));
+    set("[data-telemetry-peak]", String(peak));
+    set("[data-telemetry-total]", String(total));
+    set("[data-telemetry-start]", buckets[0].date ? buckets[0].date.slice(5) : "—");
+    set("[data-telemetry-end]", today && today.date ? today.date.slice(5) : "—");
+
+    container.innerHTML = buckets.map((b, i) => {
+      const h = Math.max(3, Math.round((b.count / max) * 100));
+      const isToday = i === buckets.length - 1;
+      const label = `${b.date}: ${b.count} lattice write${b.count === 1 ? "" : "s"}`;
+      return `<div class="bar${isToday ? " is-today" : ""}" style="height:${h}%"
+                   title="${label}" role="presentation"></div>`;
     }).join("");
   }
 
-  // ─── Activity feed ────────────────────────────────────────────────────────
+  // ─── Session traffic (agent chats on this tower) ─────────────────────────
   async function renderFeed() {
     const sessions = await fetchJson("/sessions?limit=6");
     const container = document.querySelector("[data-feed]");
     if (!container || !sessions || !sessions.sessions || !sessions.sessions.length) return;
-    container.innerHTML = sessions.sessions.map(s => `
+    container.innerHTML = sessions.sessions.map(s => {
+      const when = new Date(s.updated_at);
+      const rel = (() => {
+        const sec = Math.max(0, Math.floor((Date.now() - when.getTime()) / 1000));
+        if (sec < 90) return "just now";
+        if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+        if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+        return when.toLocaleDateString();
+      })();
+      return `
       <div class="activity-item">
         <span class="who" data-agent="${s.agent}">${s.agent}</span>
         ${s.title ? `· ${s.title}` : "· (untitled session)"}
-        <span class="ts">${new Date(s.updated_at).toLocaleString()}</span>
-      </div>
-    `).join("");
+        <span class="ts">${rel}</span>
+      </div>`;
+    }).join("");
   }
 
   // ─── System stats ─────────────────────────────────────────────────────────
