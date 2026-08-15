@@ -1,0 +1,25 @@
+[Unit]
+Description=SSH port forwards: tower loopback → Spark agents (chat/crm/estimator/seneca/atticus)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Fabric-only path. Spark agents bind 127.0.0.1; this makes them available
+# on the tower so cloudflared can front them when Spark has no WiFi.
+ExecStart=/usr/bin/ssh -N \
+  -o BatchMode=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:8200:127.0.0.1:8200 \
+  -L 127.0.0.1:8100:127.0.0.1:8100 \
+  -L 127.0.0.1:8300:127.0.0.1:8300 \
+  -L 127.0.0.1:8400:127.0.0.1:8400 \
+  -L 127.0.0.1:8500:127.0.0.1:8500 \
+  soverynspark@10.10.10.2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

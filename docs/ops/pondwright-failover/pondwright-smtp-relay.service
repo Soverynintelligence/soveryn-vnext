@@ -1,0 +1,20 @@
+[Unit]
+Description=SSH reverse SMTP relay: Spark 127.0.0.1:2465 → tower → smtp.gmail.com:465
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# CRM on Spark has no internet when WiFi drops; lead emails still go out via tower.
+ExecStart=/usr/bin/ssh -N \
+  -o BatchMode=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -o ExitOnForwardFailure=yes \
+  -R 127.0.0.1:2465:smtp.gmail.com:465 \
+  soverynspark@10.10.10.2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
