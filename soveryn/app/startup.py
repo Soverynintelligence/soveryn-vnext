@@ -1419,6 +1419,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(compat_bp)
     from soveryn.app.routes.api_system import bp as api_system_bp
     app.register_blueprint(api_system_bp)
+    from soveryn.app.routes.api_ops import bp as api_ops_bp
+    app.register_blueprint(api_ops_bp)
     from soveryn.app.routes.api_memory import bp as api_memory_bp
     app.register_blueprint(api_memory_bp)
     from soveryn.app.routes.api_coord import bp as api_coord_bp

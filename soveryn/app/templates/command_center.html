@@ -1575,6 +1575,103 @@
     gap: 10px !important;
   }
 
+  /* Ops console — brain switch + test runner */
+  .ops-panel {
+    padding: 12px 14px !important;
+  }
+  .ops-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .ops-grid { grid-template-columns: 1fr; }
+  }
+  .ops-block h4 {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(125,148,163,0.95);
+    margin: 0 0 8px;
+  }
+  .ops-brain-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ops-brain-btn {
+    border: 1px solid rgba(192,130,79,0.35) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #e7e5dc !important;
+    font-size: 11px !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 12px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .ops-brain-btn:hover { border-color: rgba(192,130,79,0.7) !important; }
+  .ops-brain-btn.is-active {
+    background: rgba(192,130,79,0.18) !important;
+    border-color: #c0824f !important;
+    color: #f3e7db !important;
+    box-shadow: 0 0 12px rgba(192,130,79,0.25);
+  }
+  .ops-brain-btn:disabled {
+    opacity: 0.45;
+    cursor: wait;
+  }
+  .ops-meta {
+    font-size: 11px;
+    color: rgba(232,227,213,0.5);
+    line-height: 1.45;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ops-test-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .ops-test-btn {
+    border: 1px solid rgba(107,130,144,0.4) !important;
+    background: rgba(0,0,0,0.28) !important;
+    color: #cfd8de !important;
+    font-size: 11px !important;
+    padding: 7px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .ops-test-btn:hover { border-color: #7d94a3 !important; color: #fff !important; }
+  .ops-test-btn:disabled { opacity: 0.45; cursor: wait; }
+  .ops-status {
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(232,227,213,0.65);
+    min-height: 1.2em;
+  }
+  .ops-status.ok { color: #3f9a5f; }
+  .ops-status.fail { color: #c0392b; }
+  .ops-status.run { color: #d4a827; }
+  .ops-log {
+    margin-top: 8px;
+    max-height: 120px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    color: rgba(207,216,222,0.85);
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(107,130,144,0.25);
+    padding: 8px;
+    white-space: pre-wrap;
+    display: none;
+  }
+  .ops-log.show { display: block; }
+
 </style>
 </head>
 <body class="lab" data-lab data-testid="command-center">
@@ -1587,7 +1684,7 @@
       <nav>
         <a href="/citizens" class="keep">Citizens</a>
         <a href="/chat" class="keep">Chat</a>
-        <a href="/m">Messages</a>
+        <a href="/m/">Messages</a>
         <a href="/documents">Documents</a>
       </nav>
       <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
@@ -1603,7 +1700,7 @@
       </div>
       <nav class="nav-links">
         <a href="/chat">Chat</a>
-        <a href="/m">Messages</a>
+        <a href="/m/">Messages</a>
         <a href="/documents">Documents</a>
       </nav>
       <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
@@ -1653,6 +1750,181 @@
         <div class="meta" data-daemon-meta>loading…</div>
       </div>
     </section>
+
+    <!-- Ops: switch Spark brain + run test suites without leaving Mission Control -->
+    <section class="panel ops-panel" data-testid="ops-panel">
+      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
+      <div class="ops-grid">
+        <div class="ops-block">
+          <h4>Spark brain (Vett / Scotty / public agents)</h4>
+          <div class="ops-meta" data-ops-brain-meta>loading…</div>
+          <div class="ops-brain-row" data-ops-brain-buttons></div>
+          <div class="ops-status" data-ops-brain-status></div>
+          <pre class="ops-log" data-ops-brain-log></pre>
+        </div>
+        <div class="ops-block">
+          <h4>Run tests</h4>
+          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
+          <div class="ops-test-row" data-ops-test-buttons></div>
+          <div class="ops-status" data-ops-test-status></div>
+          <pre class="ops-log" data-ops-test-log></pre>
+        </div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var brainBtns = document.querySelector('[data-ops-brain-buttons]');
+      var brainMeta = document.querySelector('[data-ops-brain-meta]');
+      var brainStatus = document.querySelector('[data-ops-brain-status]');
+      var brainLog = document.querySelector('[data-ops-brain-log]');
+      var testBtns = document.querySelector('[data-ops-test-buttons]');
+      var testStatus = document.querySelector('[data-ops-test-status]');
+      var testLog = document.querySelector('[data-ops-test-log]');
+      if(!brainBtns) return;
+      var brainPoll = null, testPoll = null;
+
+      function setStatus(el, cls, text){
+        if(!el) return;
+        el.className = 'ops-status' + (cls ? ' '+cls : '');
+        el.textContent = text || '';
+      }
+      function setLog(el, text){
+        if(!el) return;
+        if(text && String(text).trim()){
+          el.textContent = text;
+          el.classList.add('show');
+        } else {
+          el.textContent = '';
+          el.classList.remove('show');
+        }
+      }
+      function paintBrain(d){
+        var cur = d.brain || '?';
+        brainMeta.innerHTML = 'Active: <b style="color:#e7e5dc">'+cur+'</b> · alias <code style="color:#9eb4c2">'
+          +(d.routed_alias||d.alias||'—')+'</code><br>'+(d.role||'');
+        brainBtns.innerHTML = (d.brains||[]).map(function(b){
+          var active = b.id === cur ? ' is-active' : '';
+          return '<button type="button" class="ops-brain-btn'+active+'" data-brain="'+b.id+'" title="'+(b.role||'')+'">'+b.id+'</button>';
+        }).join('');
+        brainBtns.querySelectorAll('[data-brain]').forEach(function(btn){
+          btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
+        });
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          setStatus(brainStatus, cls, d.job.message || st);
+          if(st==='running'||st==='starting') startBrainPoll();
+        }
+      }
+      function switchBrain(id){
+        if(!id) return;
+        if(!confirm('Switch Spark brain to '+id+'?\n\nThis reloads vLLM (minutes) and restarts the app briefly.')) return;
+        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(brainStatus, 'run', 'Starting switch to '+id+'…');
+        setLog(brainLog, '');
+        fetch('/api/ops/brain', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({brain:id})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
+              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
+            startBrainPoll();
+          })
+          .catch(function(e){
+            setStatus(brainStatus, 'fail', String(e));
+            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startBrainPoll(){
+        if(brainPoll) return;
+        brainPoll = setInterval(function(){
+          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
+            setLog(brainLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(brainStatus, cls, j.message || st);
+            if(st==='ok' || st==='failed'){
+              clearInterval(brainPoll); brainPoll = null;
+              loadBrain();
+            }
+          }).catch(function(){ /* app may be restarting */ });
+        }, 4000);
+      }
+      function loadBrain(){
+        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
+          .catch(function(){ brainMeta.textContent = 'ops brain API unavailable (localhost only)'; });
+      }
+
+      function paintSuites(d){
+        testBtns.innerHTML = (d.suites||[]).map(function(s){
+          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
+        }).join('');
+        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
+          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
+        });
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          setStatus(testStatus, cls, d.job.message || st);
+          setLog(testLog, d.log_tail || d.job.summary || '');
+          if(st==='running'||st==='starting') startTestPoll();
+        }
+      }
+      function runTests(suite){
+        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(testStatus, 'run', 'Starting '+suite+'…');
+        setLog(testLog, '');
+        fetch('/api/ops/tests', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({suite:suite})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
+            startTestPoll();
+          })
+          .catch(function(e){
+            setStatus(testStatus, 'fail', String(e));
+            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startTestPoll(){
+        if(testPoll) return;
+        testPoll = setInterval(function(){
+          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
+            setLog(testLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(testStatus, cls, j.message || st);
+            if(st==='ok' || st==='failed'){
+              clearInterval(testPoll); testPoll = null;
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            }
+          }).catch(function(){});
+        }, 2000);
+      }
+      function loadTests(){
+        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
+          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
+      }
+
+      loadBrain();
+      loadTests();
+    })();
+    </script>
 
     <!-- NOW strip: boards + public agents side by side (less scroll) -->
     <div class="cc-grid-2" data-testid="cc-now">
