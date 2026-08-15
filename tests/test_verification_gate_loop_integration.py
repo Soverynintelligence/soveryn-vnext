@@ -95,12 +95,19 @@ def test_vett_confab_is_held_and_forced_to_verify(conv_store):
 
     assert response.content == GROUNDED
     assert response.content != CONFAB
-    # A corrective system note was injected before round 2.
+    # A corrective system note was injected before round 2, and tool_choice
+    # was forced so the model cannot keep narrating without a tool call.
     round2_msgs = fake.calls[1].messages
     assert any(
-        m.role == "system" and "verifying" in (m.content or "").lower()
+        m.role == "system"
+        and (
+            "tool" in (m.content or "").lower()
+            or "verify" in (m.content or "").lower()
+            or "NOW" in (m.content or "")
+        )
         for m in round2_msgs
     ), "corrective note should be injected"
+    assert fake.calls[1].tool_choice == "required"
     # The confab was never persisted as an assistant turn.
     history = conv_store.load_history(sid)
     assert all(CONFAB not in (t.content or "") for t in history)
@@ -165,6 +172,44 @@ def test_gate_fails_open_on_detector_exception(conv_store):
     # Fail-open: emitted normally despite the detector blowing up.
     assert response.content == CONFAB
     assert len(fake.calls) == 1
+
+
+def test_intent_without_tool_forces_required_tool_choice(conv_store):
+    """'Let me pull the current info' with no tool_calls → hold + tool_choice=required."""
+    theater = "Let me pull the current info on that and I'll get back to you."
+    fake = _ScriptedChat([
+        ChatResponse(content=theater, finish_reason="stop", tool_calls=None, usage={}, raw={}),
+        ChatResponse(
+            content="", finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "web_search", {"query": "current info"}),),
+            usage={}, raw={},
+        ),
+        ChatResponse(content=GROUNDED, finish_reason="stop", tool_calls=None, usage={}, raw={}),
+    ])
+    # web_search must be registered so VERIFY_TOOLS can count it
+    registry = ToolRegistry(active_agents=("vett",), audit_hook=None)
+    registry.register(ToolSpec(
+        name="web_search",
+        owner="vett",
+        schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        handler=lambda args: {"results": []},
+        description="search",
+    ))
+    gate = VerificationGate()
+    sid = conv_store.new_session("vett")
+    loop = AgentLoop(
+        "vett", conv_store, chat_fn=fake, tool_registry=registry,
+        verification_gate=gate, soul_text="",
+    )
+    response = loop.process_message(sid, "what's the latest on that?")
+    assert response.content == GROUNDED
+    assert fake.calls[1].tool_choice == "required"
+    assert theater not in (response.content or "")
 
 
 def test_verified_turn_is_not_held(conv_store):

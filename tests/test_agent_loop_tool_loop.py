@@ -112,7 +112,12 @@ def test_max_tool_rounds_bounded_raises_loudly(conv_store):
     Diagnosed 2026-06-04 evening: Vett hit the cap on a 7-source research
     task, his empty content got persisted, and the failure mode was
     invisible. The loud raise + finish_reason capture closes that gap.
-    Still verifies the loop is bounded (calls limited to max+1)."""
+    Still verifies the loop is bounded (calls limited to max+1).
+
+    After the last tool dispatch the loop force-finals with tools disabled
+    (2026-08-14 Lightning thrash fix). That force-final is included in the
+    call count: 1 initial + (max-1) tool-enabled followups + 1 force-final.
+    """
     registry = _make_registry(lambda args: {"echoed": args["text"]})
 
     def looping_response():
@@ -128,16 +133,106 @@ def test_max_tool_rounds_bounded_raises_loudly(conv_store):
     loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=3)
     with pytest.raises(AgentLoopError, match="tool_round_limit"):
         loop.process_message(sid, "go")
+    # initial + after 3 dispatches (last is force-final, tools=None)
     assert len(fake.calls) == 4
+    # Last call must be the force-final (no tools offered).
+    assert fake.calls[-1]["request"].tools is None
     # No assistant turn should have been saved.
     history = conv_store.load_history(sid)
     assistant_turns = [t for t in history if t.role == "assistant"]
     assert assistant_turns == []
 
 
+def test_trivial_greeting_offers_no_tools(conv_store):
+    """Bare 'hey' must not advertise tools (Lightning house-inventory thrash)."""
+    registry = _make_registry(lambda args: {"echoed": args["text"]})
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="Hey — what's up?",
+            finish_reason="stop",
+            tool_calls=None,
+            usage={}, raw={},
+        ),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=4,
+    )
+    response = loop.process_message(sid, "hey")
+    assert response.content.startswith("Hey")
+    assert len(fake.calls) == 1
+    assert fake.calls[0]["request"].tools is None
+
+
+def test_research_request_still_gets_tools(conv_store):
+    registry = _make_registry(lambda args: {"echoed": args["text"]})
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="on it",
+            finish_reason="stop",
+            tool_calls=None,
+            usage={}, raw={},
+        ),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=4,
+    )
+    loop.process_message(sid, "look up Nemotron NVFP4")
+    assert fake.calls[0]["request"].tools is not None
+
+
+def test_max_tool_rounds_force_final_saves_answer(conv_store):
+    """After burning the tool budget, a force-final no-tools generation that
+    produces content must be saved — not raised as tool_round_limit.
+    This is the Lightning / greeting thrash fix (2026-08-14)."""
+    registry = _make_registry(lambda args: {"echoed": args["text"]})
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "echo", {"text": "a"}),),
+            usage={}, raw={},
+        ),
+        ChatResponse(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("c2", "echo", {"text": "b"}),),
+            usage={}, raw={},
+        ),
+        # force-final after max_tool_rounds=2 dispatches
+        ChatResponse(
+            content="Here's what I found after checking.",
+            finish_reason="stop",
+            tool_calls=None,
+            usage={}, raw={},
+        ),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake, tool_registry=registry, max_tool_rounds=2,
+    )
+    response = loop.process_message(sid, "hi")
+    assert "what I found" in response.content
+    assert response.finish_reason == "tool_round_limit"
+    assert response.tool_calls is None
+    assert fake.calls[-1]["request"].tools is None
+    # Synthesis note present on the force-final request.
+    last_msgs = fake.calls[-1]["request"].messages
+    assert any(
+        getattr(m, "role", None) == "system"
+        and "budget" in (m.content or "").lower()
+        for m in last_msgs
+    )
+    history = conv_store.load_history(sid)
+    saved = [t for t in history if t.role == "assistant"]
+    assert len(saved) == 1
+    assert "what I found" in saved[0].content
+
+
 def test_max_tool_rounds_with_content_still_saves(conv_store):
-    """If the model emits SOME content alongside its final tool_call before
-    the cap, we still save that content. The loud-raise is specifically for
+    """If the model emits SOME content on the force-final (or cap) generation,
+    we still save that content. The loud-raise is specifically for
     empty-content + tool_round_limit, not all tool_round_limit cases."""
     registry = _make_registry(lambda args: {"echoed": args["text"]})
     # Model keeps content="partial..." on each round, with tool_calls.
@@ -263,7 +358,8 @@ def test_tools_field_in_chat_request_when_registry_present(conv_store):
     ])
     sid = conv_store.new_session("aetheria")
     loop = AgentLoop("aetheria", conv_store, chat_fn=fake, tool_registry=registry)
-    loop.process_message(sid, "hi")
+    # Non-trivial message — bare "hi" intentionally omits tools (scope guard).
+    loop.process_message(sid, "research the echo tool surface")
     request = fake.calls[0]["request"]
     assert request.tools is not None
     assert len(request.tools) == 1

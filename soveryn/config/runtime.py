@@ -8,6 +8,8 @@ Derived from docs/CURRENT_TRUTH_2026-05-23.md § 1, 3, 4, 8, 10.
 """
 
 from __future__ import annotations
+
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -95,6 +97,64 @@ class ModelServer:
         return f"http://{self.host}:{self.port}"
 
 
+# Vett/Scotty Spark brains — one live model on :8001 at a time.
+# Switch:  scripts/switch_vett_brain.sh qwen36|qwen38|lightning
+# Precedence: SOVERYN_VETT_BRAIN env > ~/.soveryn/vett_brain > qwen36
+# Aliases must match Spark serve-*.sh --served-model-name.
+_VETT_BRAIN_PROFILES: dict[str, dict] = {
+    "qwen36": {
+        "alias": "qwen36-35b",
+        "role": "Vett + Scotty shared Qwen3.6-35B-A3B NVFP4 (Spark, vLLM, MTP)",
+        "path": "Qwen3.6-35B-A3B-NVFP4",
+    },
+    "qwen38": {
+        "alias": "qwen38-27b",
+        "role": "Vett + Scotty shared Qwen3.8-27B NVFP4 dense (Spark, vLLM)",
+        "path": "Qwen3.8-27B-NVFP4",
+    },
+    "lightning": {
+        "alias": "lightning-30b",
+        "role": "Vett + Scotty shared Nemotron 3.5 Lightning 30B-A3B NVFP4 (Spark, vLLM)",
+        "path": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+    },
+}
+_VETT_BRAIN_FILE = Path.home() / ".soveryn" / "vett_brain"
+
+
+def resolve_vett_brain() -> str:
+    """Return brain key: qwen36 | qwen38 | lightning."""
+    env = (os.environ.get("SOVERYN_VETT_BRAIN") or "").strip().lower()
+    if env in _VETT_BRAIN_PROFILES:
+        return env
+    try:
+        key = _VETT_BRAIN_FILE.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        key = ""
+    if key in _VETT_BRAIN_PROFILES:
+        return key
+    return "qwen36"
+
+
+def _vett_scotty_server() -> ModelServer:
+    """Build the Spark backend ModelServer for the currently selected brain."""
+    key = resolve_vett_brain()
+    prof = _VETT_BRAIN_PROFILES[key]
+    return ModelServer(
+        name="vett_scotty_shared",
+        host="10.10.10.2",  # Spark, over the CX-7 link
+        port=8001,  # vLLM via qwen-serve.service -> serve-active.sh
+        model_path=MODEL_ROOT / prof["path"],  # cosmetic; weights live on Spark
+        mmproj_path=None,
+        role=prof["role"],
+        # Stock Qwen/Nemotron on vLLM reject multi system messages (HTTP 400).
+        supports_multi_system_messages=False,
+        model_alias=prof["alias"],
+        # Thinking off: overnight harness showed enable_thinking=True raised
+        # false-deny of the agent's own action on some backends.
+        chat_template_kwargs={"enable_thinking": False},
+    )
+
+
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
 MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
@@ -115,63 +175,7 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         supports_multi_system_messages=False,
         model_alias="aetheria",
     ),
-    ModelServer(
-        name="vett_scotty_shared",
-        # MOVED TO THE SPARK 2026-08-02 (was 127.0.0.1:8091, Qwen3.6-27B Q8_0).
-        #
-        # Why: that Quadro sat at 45 of 49 GB with <1 GB free and 82 C, with
-        # Ares paging Signal about it. Qwen3.6-27B alone was 30 GB of it.
-        # Moving frees the card outright.
-        #
-        # Evidence it is not a downgrade: on the self-report harness Qwen3.6-27B
-        # denied its own action in 30/30 trials; Laguna in 20/30. And the
-        # 2026-07-28 delegation investigation found Scotty's failures were four
-        # harness defects, none of them the model. Measured latency on
-        # comparable prompts: Laguna/vLLM 1.6 s median vs Qwen3.6-27B/llama.cpp
-        # 11.2 s.
-        #
-        # Revert: host="127.0.0.1", port=8091, model_alias="vett-scotty".
-        # Backup at runtime.py.bak-before-spark-move.
-        # REPOINTED TO QWEN 2026-08-12, at Jon's direction. laguna-serve was
-        # stopped and disabled to free the Spark for the honesty bake-off, and
-        # Laguna (~85 GB) cannot coexist with Qwen (~48 GB) in 121 GB.
-        #
-        # KNOWN TRADEOFF, recorded rather than buried: the 08-02 note above
-        # justified moving TO Laguna because Qwen3.6-27B denied its own action
-        # 30/30 vs Laguna 20/30. The 2026-08-11 run reproduces that on the
-        # bigger model: Qwen3.6-35B 30/30 false-deny, Laguna 18/30. So this is
-        # a knowing step onto the worse model for Vett's core failure mode.
-        # Revert: port=8000, model_alias="laguna", after starting laguna-serve.
-        host="10.10.10.2",              # Spark, over the CX-7 link
-        port=8001,                      # vLLM (qwen-serve.service)
-        model_path=MODEL_ROOT / "Qwen3.6-35B-A3B-NVFP4",  # cosmetic for a remote server
-        mmproj_path=None,
-        role="Vett + Scotty shared Qwen3.6-35B-A3B (Spark, vLLM)",
-        # Flipped to True 2026-06-12: vett-scotty router child now uses
-        # froggeric/Qwen-Fixed-Chat-Templates v20 (configured via
-        # `chat-template-file = ...` in router-presets.ini [vett-scotty]),
-        # which natively honors messages[1:] role=system. Sandbox-verified
-        # + live-verified through router :8090 (multi-system probe returned
-        # "ALL_SURVIVED" exact). The transport adapter `prepare_wire_messages`
-        # becomes a pass-through for this server.
-        # FLIPPED BACK TO FALSE 2026-08-12 with the move to Qwen on :8001.
-        # True was correct only because the old vett-scotty router child ran
-        # froggeric/Qwen-Fixed-Chat-Templates v20, which honored messages[1:]
-        # role=system. Stock Qwen3.6 does not: it returns HTTP 400
-        # 'System message must be at the beginning.' False re-engages
-        # prepare_wire_messages to fold them into the leading system turn.
-        supports_multi_system_messages=False,
-        model_alias="qwen36-35b",       # the alias vLLM serves on the Spark
-        # FLIPPED TO FALSE 2026-08-03. Either value silences the </think> leak,
-        # so this is free to choose. Reasoning was ON from the move until now,
-        # and the overnight harness run showed reasoning is not a free good:
-        # on DeepSeek-V4-Flash-0731 it took false denial of the agent's own
-        # action from 0% to 79% (n=30/cell). Vett's judgement degraded over the
-        # same window — she picked the wrong tool, denied capabilities she held,
-        # and wrote in a consultant register. Testing whether that was the
-        # model or this flag, which I introduced.
-        chat_template_kwargs={"enable_thinking": False},
-    ),
+    _vett_scotty_server(),
     ModelServer(
         name="embeddings",
         # 2026-07-17 Librarian: repointed off the nomic router (:8091) to the

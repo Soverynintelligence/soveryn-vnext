@@ -26,7 +26,41 @@ def test_gate_holds_on_risky_no_verify_with_budget():
     assert decision.action == "hold"
     assert decision.note is not None
     assert "system_probe" in decision.note
+    # Must NOT coach the model to announce verification (permission theater).
+    assert "Tell the user" not in (decision.note or "")
+    assert "Call a tool NOW" in (decision.note or "")
     assert decision.verdict.risky is True
+
+
+def test_gate_holds_on_intent_without_tool():
+    """'Let me pull/verify…' with no tool call must HOLD, even if not a fact claim."""
+    gate = VerificationGate()
+    for text in (
+        "Let me pull the current info on that.",
+        "I'll check the latest specs and get back to you.",
+        "I am running verification now.",
+        "Shall I search for that?",
+        "Give me a moment to look that up.",
+    ):
+        decision = gate.evaluate(
+            answer_text=text, question_text="what's the latest?",
+            tool_ledger=(), budget=2,
+        )
+        assert decision.action == "hold", text
+        assert "NOW" in (decision.note or "")
+        assert "intent_without_tool" in decision.verdict.markers
+
+
+def test_gate_emits_intent_when_verify_tool_already_ran():
+    gate = VerificationGate()
+    decision = gate.evaluate(
+        answer_text="Let me summarize what I found.",
+        question_text="q",
+        tool_ledger=("web_search",),
+        budget=2,
+    )
+    # After a real tool ran, narration is fine — not theater.
+    assert decision.action == "emit"
 
 
 def test_gate_emits_when_verify_tool_ran():
@@ -46,6 +80,19 @@ def test_gate_emits_when_not_risky():
     )
     assert decision.action == "emit"
     assert decision.answer == CALM
+
+
+def test_gate_emits_trivial_user_turn_even_with_intent_narration():
+    """Greetings must not force tools — even if the draft says 'I'll check…'."""
+    gate = VerificationGate()
+    decision = gate.evaluate(
+        answer_text="Hey! Let me check the boards for you.",
+        question_text="hey",
+        tool_ledger=(),
+        budget=2,
+    )
+    assert decision.action == "emit"
+    assert decision.answer == "Hey! Let me check the boards for you."
 
 
 def test_gate_floors_on_budget_exhaustion():

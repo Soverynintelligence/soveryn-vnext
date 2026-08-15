@@ -36,6 +36,7 @@ from typing import Callable, Iterator
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
 from soveryn.agents.souls import get_soul
+from soveryn.agents.turn_scope import is_trivial_user_turn
 from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
@@ -68,6 +69,18 @@ StreamFn = Callable[..., Iterator[StreamChunk]]
 # valid JSON. Observed 2026-06-17: Qwen3.6 on the shared vett-scotty server
 # occasionally truncates tool-call args under heavy read_file use.
 _TOOLCALL_PARSE_MAX_ATTEMPTS = 3
+
+# Injected when the tool-round budget is spent so the model must answer from
+# results already in context instead of requesting more tools (and leaving the
+# user with tool_round_limit + empty content). Lightning / tool-eager MoEs hit
+# this often on greetings and light research (2026-08-14).
+_TOOL_CAP_SYNTH_NOTE = (
+    "Tool-call budget for this turn is exhausted. Do NOT call any tools. "
+    "Answer the user NOW using only the tool results already in this conversation. "
+    "If this was a greeting, chit-chat, or the tools added nothing useful, reply "
+    "naturally and briefly. This is your final message for this turn — emit "
+    "visible content only, no tool calls."
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -834,6 +847,59 @@ class AgentLoop:
             })
         return tuple(schemas)
 
+    def _tools_for_user_turn(self, user_message: str) -> tuple[dict, ...] | None:
+        """Tool schemas for this turn, or None when the turn should be tool-free.
+
+        Trivial social/ack messages (hey/ok/thanks) get no tools — Lightning
+        otherwise inventories the whole house on a greeting (2026-08-14).
+        """
+        if is_trivial_user_turn(user_message):
+            return None
+        return self._tool_schemas() or None
+
+    def _messages_for_tool_cap_synthesis(
+        self, messages: tuple[ChatMessage, ...]
+    ) -> tuple[ChatMessage, ...]:
+        """Append the force-final note and re-fit under the history budget."""
+        return self._fit(messages + (
+            ChatMessage(role="system", content=_TOOL_CAP_SYNTH_NOTE),
+        ))
+
+    @staticmethod
+    def _as_tool_cap_final(response: ChatResponse) -> ChatResponse:
+        """Normalize a force-final generation: drop tool_calls, mark the cap.
+
+        Content (if any) is preserved so the user still gets an answer after
+        the model burned the tool budget. Empty content stays empty so the
+        existing loud tool_round_limit / empty_generation guards fire.
+        """
+        return ChatResponse(
+            content=response.content or "",
+            finish_reason="tool_round_limit",
+            tool_calls=None,
+            usage=response.usage,
+            raw=response.raw,
+        )
+
+    def _synthesize_after_tool_cap(
+        self, messages: tuple[ChatMessage, ...]
+    ) -> ChatResponse:
+        """One no-tools generation after the tool budget is spent.
+
+        Used as a safety net when the model still requested tools at the cap
+        (or returned empty after the forced last round). Never re-offers tools.
+        """
+        request = ChatRequest(
+            messages=self._messages_for_tool_cap_synthesis(messages),
+            model=self.server.model_alias,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            tools=None,
+            tool_choice=None,
+            thinking_budget_tokens=self.thinking_budget_tokens,
+        )
+        return self._as_tool_cap_final(self._chat(request))
+
     def _chat(self, request: ChatRequest) -> ChatResponse:
         """Invoke the model, retrying ONLY the narrow, known-intermittent
         failure where the server rejects the model's own malformed tool-call
@@ -1056,12 +1122,14 @@ class AgentLoop:
             if self.black_box is not None else None
         )
         messages = self._fit(messages)
+        # Fixed for the whole turn: trivial "hey"/"ok" never see a tool menu.
+        turn_tools = self._tools_for_user_turn(user_message)
         request = ChatRequest(
             messages=messages,
             model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            tools=self._tool_schemas() or None,
+            tools=turn_tools,
             thinking_budget_tokens=self.thinking_budget_tokens,
         )
         response = self._chat(request)
@@ -1082,13 +1150,34 @@ class AgentLoop:
         while True:
             while response.tool_calls and self.tool_registry is not None:
                 if tool_rounds >= self.max_tool_rounds:
-                    response = ChatResponse(
-                        content=response.content,
-                        finish_reason="tool_round_limit",
-                        tool_calls=response.tool_calls,
-                        usage=response.usage,
-                        raw=response.raw,
-                    )
+                    # Cap hit with the model still asking for tools. Do NOT
+                    # dispatch those calls — force one no-tools synthesis from
+                    # results already in `messages` so the user gets an answer
+                    # instead of tool_round_limit + empty content (Lightning
+                    # thrash, 2026-08-14).
+                    if tool_rounds > 0 and not (response.content or "").strip():
+                        try:
+                            response = self._synthesize_after_tool_cap(messages)
+                        except Exception:
+                            logging.getLogger(__name__).exception(
+                                "tool-cap synthesis failed for %s; surfacing limit",
+                                self.agent_name,
+                            )
+                            response = ChatResponse(
+                                content=response.content or "",
+                                finish_reason="tool_round_limit",
+                                tool_calls=response.tool_calls,
+                                usage=response.usage,
+                                raw=response.raw,
+                            )
+                    else:
+                        response = ChatResponse(
+                            content=response.content or "",
+                            finish_reason="tool_round_limit",
+                            tool_calls=response.tool_calls,
+                            usage=response.usage,
+                            raw=response.raw,
+                        )
                     break
                 # Record tool names for the verification ledger BEFORE dispatch.
                 for _tc in response.tool_calls:
@@ -1119,16 +1208,36 @@ class AgentLoop:
                     )
                 messages = messages + tuple(result_messages)
                 messages = self._fit(messages)
-                request = ChatRequest(
-                    messages=messages,
-                    model=self.server.model_alias,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    tools=self._tool_schemas() or None,
-                    thinking_budget_tokens=self.thinking_budget_tokens,
-                )
+                # Last allowed tool dispatch → next generation is force-final
+                # (no tools). Prevents burning the final slot on another tool
+                # chain that leaves content empty.
+                force_final = (tool_rounds + 1) >= self.max_tool_rounds
+                if force_final:
+                    request = ChatRequest(
+                        messages=self._messages_for_tool_cap_synthesis(messages),
+                        model=self.server.model_alias,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        tools=None,
+                        tool_choice=None,
+                        thinking_budget_tokens=self.thinking_budget_tokens,
+                    )
+                else:
+                    request = ChatRequest(
+                        messages=messages,
+                        model=self.server.model_alias,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        tools=turn_tools,
+                        thinking_budget_tokens=self.thinking_budget_tokens,
+                    )
                 response = self._chat(request)
                 tool_rounds += 1
+                if force_final:
+                    # No-tools generation already requested; strip any sticky
+                    # tool_calls and stop the tool loop.
+                    response = self._as_tool_cap_final(response)
+                    break
 
             # ── Verification gate at final-answer finalization (Vett-only,
             # fail-open). Only a GENUINE final answer is gated: a
@@ -1152,20 +1261,24 @@ class AgentLoop:
                     and decision.action == "hold"
                     and tool_rounds < self.max_tool_rounds
                 ):
-                    # HOLD: do not emit. Inject the corrective note and let the
-                    # loop continue for one forced-verify round. Bounded by
-                    # verify_budget (default 2) → no infinite loop.
+                    # HOLD: do not emit. Inject the corrective note and force
+                    # tool_choice=required on the next chat so the model cannot
+                    # keep narrating "I'll verify…" without a real tool call
+                    # (prompt-only holds were still failing 2026-08-14).
+                    # Trivial turns keep tools=None (gate also emits for them).
                     verify_budget -= 1
                     messages = messages + (ChatMessage(
                         role="system", content=decision.note,
                     ),)
                     messages = self._fit(messages)
+                    schemas = turn_tools
                     request = ChatRequest(
                         messages=messages,
                         model=self.server.model_alias,
                         temperature=self.temperature,
                         max_tokens=self.max_tokens,
-                        tools=self._tool_schemas() or None,
+                        tools=schemas,
+                        tool_choice="required" if schemas else None,
                         thinking_budget_tokens=self.thinking_budget_tokens,
                     )
                     response = self._chat(request)
@@ -1516,16 +1629,36 @@ class AgentLoop:
             self.verification_gate.forced_verify_budget
             if gate_active and self.verification_gate is not None else 0
         )
+        # After a gate HOLD, next stream request uses tool_choice=required.
+        force_tool_choice: str | None = None
+        # After the last allowed tool dispatch, next stream is no-tools final.
+        force_final_stream: bool = False
+        # Fixed for the whole turn: trivial "hey"/"ok" never see a tool menu.
+        turn_tools = self._tools_for_user_turn(user_message)
 
         while True:
+            this_force_final = force_final_stream
+            force_final_stream = False  # one-shot
+            if this_force_final:
+                schemas = None
+                stream_messages = self._messages_for_tool_cap_synthesis(messages)
+                stream_tool_choice = None
+            else:
+                schemas = turn_tools
+                stream_messages = messages
+                stream_tool_choice = (
+                    force_tool_choice if (force_tool_choice and schemas) else None
+                )
             request = ChatRequest(
-                messages=messages,
+                messages=stream_messages,
                 model=self.server.model_alias,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                tools=self._tool_schemas() or None,
+                tools=schemas,
+                tool_choice=stream_tool_choice,
                 thinking_budget_tokens=self.thinking_budget_tokens,
             )
+            force_tool_choice = None  # one-shot unless another hold sets it
 
             # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).
             chunk_iter = self.stream_fn(request, self.server, timeout=self.chat_timeout_seconds)
@@ -1608,13 +1741,25 @@ class AgentLoop:
             round_content = "".join(round_content_parts)
             round_tc_tuple = tuple(round_tool_calls) if round_tool_calls else None
 
+            # Force-final stream after the last tool dispatch: never re-dispatch
+            # tools even if the model still emits tool_calls (tests / sticky
+            # models). Content is the answer. Empty falls through to the
+            # tool_round_limit ErrorEvent below (same as pre-fix-final).
+            if this_force_final:
+                if gate_active and round_content:
+                    yield TokenEvent(delta=round_content)
+                    _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                    if _s.strip():
+                        yield TTSTokenEvent(text=_s)
+                final_content_parts.append(round_content)
+                final_finish_reason = "tool_round_limit"
+                break
+
             # If the model wants tools and we're within the round budget, dispatch.
             if round_tc_tuple and self.tool_registry is not None:
                 if tool_rounds >= self.max_tool_rounds:
-                    # Cap hit: keep whatever content we have for this round, mark
-                    # the finish reason for the caller, and break out to save+done.
-                    # Gate-active turns buffered this content — release it now so
-                    # the user isn't left with a DoneEvent but no token stream.
+                    # Cap hit without a prior force-final (max_tool_rounds=0
+                    # edge, or a race). Keep any partial content; mark limit.
                     if gate_active and round_content:
                         yield TokenEvent(delta=round_content)
                         _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
@@ -1682,6 +1827,9 @@ class AgentLoop:
                     )
 
                 tool_rounds += 1
+                # After the last allowed tool dispatch, next stream is force-final.
+                if tool_rounds >= self.max_tool_rounds:
+                    force_final_stream = True
                 # Re-enter the round loop for the model's next response.
                 continue
 
@@ -1748,12 +1896,14 @@ class AgentLoop:
                     and tool_rounds < self.max_tool_rounds
                 ):
                     # HOLD: discard the buffered confab (never emitted), inject
-                    # the corrective note, continue for one forced-verify round.
+                    # the corrective note, continue for one forced-verify round
+                    # with tool_choice=required (API-level force, not just a note).
                     # Bounded by verify_budget → no infinite loop.
                     verify_budget -= 1
                     messages = messages + (ChatMessage(
                         role="system", content=decision.note,
                     ),)
+                    force_tool_choice = "required"
                     continue
                 if decision is not None and decision.action == "floor":
                     round_content = decision.answer or round_content

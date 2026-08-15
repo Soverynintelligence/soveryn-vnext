@@ -78,6 +78,10 @@ class ChatRequest:
     top_p: float | None = None
     stop: tuple[str, ...] | None = None
     tools: tuple[dict, ...] | None = None   # OpenAI-schema passthrough
+    # OpenAI tool_choice: "auto" | "none" | "required" | {type,function}.
+    # "required" is used after a verification-gate HOLD so Vett cannot keep
+    # narrating "I'll check…" without actually invoking a tool (2026-08-14).
+    tool_choice: str | dict | None = None
     # Cap on hidden reasoning tokens (llama-server `thinking_budget_tokens`).
     # None = unrestricted (server-side `--reasoning-budget` default applies).
     # int  = per-request cap; lets visible answer fit inside max_tokens.
@@ -270,6 +274,8 @@ def chat(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.tool_choice is not None and request.tools:
+        payload["tool_choice"] = request.tool_choice
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
     if server.chat_template_kwargs:
@@ -281,11 +287,22 @@ def chat(
     url = f"{server.base_url}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
 
-    # llama-server emits OpenAI-compat: choices[0].message.{content,tool_calls}, finish_reason
+    # llama-server / vLLM emit OpenAI-compat: choices[0].message.{content,tool_calls}
+    # Some backends put the user-visible text only in `reasoning` /
+    # `reasoning_content` when thinking mode is on and content is null/empty.
+    # Promote that so AgentLoop never saves a blank turn for a model that did
+    # answer — empty chat boxes on Vett 2026-08-14 when Lightning thought into
+    # reasoning and left content blank/whitespace.
     try:
         choice = parsed["choices"][0]
         message = choice["message"]
         content = message.get("content") or ""
+        if not str(content).strip():
+            for key in ("reasoning_content", "reasoning"):
+                alt = message.get(key)
+                if isinstance(alt, str) and alt.strip():
+                    content = alt
+                    break
         raw_tool_calls = message.get("tool_calls")
         tool_calls = tuple(raw_tool_calls) if raw_tool_calls else None
         finish_reason = choice.get("finish_reason", "")
@@ -359,6 +376,8 @@ def chat_stream(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.tool_choice is not None and request.tools:
+        payload["tool_choice"] = request.tool_choice
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
     if server.chat_template_kwargs:

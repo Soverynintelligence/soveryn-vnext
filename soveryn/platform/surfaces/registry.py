@@ -188,11 +188,13 @@ SURFACES: tuple[Surface, ...] = (
     ),
     Surface(
         "qwen-spark", Kind.HTTP, "http://10.10.10.2:8001/v1/models",
-        owner="vett", interval_s=600, expect_contains="qwen36-35b",
+        owner="vett", interval_s=600, expect_contains="owned_by",
         notes="Backend for Vett, Scotty, PondWright, Atticus and Seneca, over "
-              "the CX-7 fabric. Was laguna on :8000 until 2026-08-12; "
-              "laguna-serve is stopped and disabled, so probing :8000 would "
-              "page about a service we took down on purpose.",
+              "the CX-7 fabric. Brain is swappable (qwen36-35b / qwen38-27b / "
+              "lightning-30b) via scripts/switch_vett_brain.sh — expect_contains "
+              "is deliberately the stable vLLM list shape, not a model id. "
+              "Was laguna on :8000 until 2026-08-12; laguna-serve is stopped "
+              "and disabled, so probing :8000 would page on purpose-down service.",
     ),
     # The three Spark apps, probed through their public hostnames so the check
     # covers the whole path: Cloudflare -> app -> model. They bind 127.0.0.1 on

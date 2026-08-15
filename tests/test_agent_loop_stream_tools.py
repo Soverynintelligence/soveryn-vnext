@@ -165,7 +165,8 @@ def test_streaming_tools_field_present_in_chat_request_when_registry_present(con
     sid = conv_store.new_session("aetheria")
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream,
                     tool_registry=registry)
-    list(loop.process_message_stream(sid, "hi"))
+    # Non-trivial message — bare "hi" intentionally omits tools (scope guard).
+    list(loop.process_message_stream(sid, "research the echo tool surface"))
     req = stream.calls[0]["request"]
     assert req.tools is not None
     tool_names = [t["function"]["name"] for t in req.tools]
@@ -174,7 +175,11 @@ def test_streaming_tools_field_present_in_chat_request_when_registry_present(con
 
 def test_streaming_max_tool_rounds_cap_terminates(conv_store):
     """If the model keeps requesting tools forever, we cap at max_tool_rounds
-    and surface a 'tool_round_limit' finish reason."""
+    and surface a 'tool_round_limit' finish reason.
+
+    After the last allowed tool dispatch the next stream is force-final
+    (tools=None) so the model must answer rather than thrash tools forever.
+    """
     registry = _make_registry(lambda args: {"echoed": args["text"]})
 
     def _tool_call_round():
@@ -189,7 +194,7 @@ def test_streaming_max_tool_rounds_cap_terminates(conv_store):
                         tool_calls_delta=None, usage=None, raw={}),
         ]
 
-    # max_tool_rounds=2 → rounds 0 and 1 dispatch; round 2 hits the cap.
+    # max_tool_rounds=2 → 2 dispatches, then force-final stream (3rd call).
     stream = _MultiRoundStream([_tool_call_round() for _ in range(3)])
     sid = conv_store.new_session("aetheria")
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream,
@@ -199,8 +204,10 @@ def test_streaming_max_tool_rounds_cap_terminates(conv_store):
     done = events[-1]
     assert isinstance(done, DoneEvent)
     assert done.finish_reason == "tool_round_limit"
-    # The round-3 content "loop" is preserved when the cap fires (not lost).
+    # Force-final stream content is preserved (not lost).
     assert "loop" in done.content
+    assert len(stream.calls) == 3
+    assert stream.calls[-1]["request"].tools is None
 
 
 def test_streaming_tool_handler_exception_becomes_tool_result_not_crash(conv_store):
