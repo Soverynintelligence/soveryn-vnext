@@ -1176,6 +1176,186 @@
   a { color: var(--gold); }
   a:hover { color: var(--ink); }
 
+  /* ── Dense command center (2026-08-15) — less scroll, more at a glance ── */
+  .page {
+    max-width: 1400px !important;
+    padding: 12px 20px 40px !important;
+    gap: 10px !important;
+  }
+  /* Plate already carries nav + status; the second brand header is pure height. */
+  header.top { display: none !important; }
+
+  section.panel.greeting,
+  section[data-testid="greeting"] {
+    padding: 12px 16px !important;
+  }
+  section.panel.greeting h1,
+  [data-greeting-heading] {
+    font-size: 1.15rem !important;
+    margin: 0 0 4px !important;
+  }
+  section.panel.greeting p,
+  [data-greeting-body] {
+    font-size: 13px !important;
+    margin: 0 !important;
+    opacity: 0.75;
+  }
+
+  .agent-row {
+    gap: 8px !important;
+  }
+  .agent-card .body { padding: 10px 12px !important; }
+  .daemon-row {
+    gap: 8px !important;
+  }
+  .daemon-card { padding: 8px 10px !important; }
+
+  /* Two-column strips for mid-page work */
+  .cc-grid-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    align-items: start !important;
+  }
+  .cc-grid-2 > .panel,
+  .cc-grid-2 > section {
+    margin: 0 !important;
+    min-width: 0;
+  }
+  @media (max-width: 960px) {
+    .cc-grid-2 { grid-template-columns: 1fr !important; }
+  }
+
+  /* Foldable deep panels — default closed to cut scroll */
+  details.cc-fold {
+    border: 1px solid var(--line, rgba(192,130,79,0.22));
+    background: rgba(12,12,14,0.55);
+  }
+  details.cc-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    user-select: none;
+  }
+  details.cc-fold > summary::-webkit-details-marker { display: none; }
+  details.cc-fold > summary::after {
+    content: "+";
+    font-family: var(--mono, monospace);
+    color: var(--gold, #c0824f);
+    font-size: 14px;
+  }
+  details.cc-fold[open] > summary::after { content: "−"; }
+  details.cc-fold > summary .cc-fold-hint {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: rgba(232,227,213,0.4);
+    font-weight: 400;
+  }
+  details.cc-fold > .cc-fold-body {
+    padding: 0 12px 12px;
+    border-top: 1px solid rgba(232,227,213,0.08);
+  }
+  /* When folded, the original panel chrome is flattened */
+  details.cc-fold .panel,
+  details.cc-fold section.panel {
+    border: none !important;
+    background: transparent !important;
+    padding: 10px 0 0 !important;
+    box-shadow: none !important;
+  }
+  details.cc-fold .panel > h3:first-child {
+    display: none; /* summary already names the section */
+  }
+
+  /* Public agents: compact three-up cards, not a tall stack */
+  [data-public-agents] .cc-pa-banner {
+    font-size: 11px;
+    margin-bottom: 8px;
+    color: rgba(232,227,213,0.5);
+  }
+  [data-public-agents] .cc-pa-banner.hot { color: #3f9a5f; }
+  /* Stacked in the right column of the NOW strip (boards | public) */
+  [data-public-agents] .cc-pa-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  [data-public-agents] .cc-pa-card {
+    border: 1px solid rgba(232,227,213,0.1);
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.2);
+    min-height: 0;
+  }
+  [data-public-agents] .cc-pa-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 2px;
+    color: #ece3d5;
+  }
+  [data-public-agents] .cc-pa-meta {
+    font-size: 10px;
+    color: rgba(232,227,213,0.45);
+    margin-bottom: 8px;
+  }
+  [data-public-agents] .cc-pa-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  [data-public-agents] .cc-pa-stats b {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ece3d5;
+  }
+  [data-public-agents] .cc-pa-stats span {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.45;
+  }
+  [data-public-agents] .cc-pa-line {
+    font-size: 11px;
+    line-height: 1.35;
+    color: rgba(236,243,244,0.72);
+    padding: 4px 0;
+    border-top: 1px solid rgba(232,227,213,0.07);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  [data-public-agents] .cc-pa-foot {
+    margin-top: 8px;
+    font-size: 11px;
+  }
+
+  /* Cap tall feeds so one panel cannot force a marathon scroll */
+  .mem-feed,
+  .library-feed,
+  .activity-feed,
+  .cognition-feed,
+  .steward-feed,
+  .scotty-approvals-feed,
+  .specialists-feed,
+  .commbus-feed {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .rig { padding: 12px 14px !important; }
+  .bottom-row, .orch-row, .cognition-approvals-row {
+    gap: 10px !important;
+  }
+
 </style>
 </head>
 <body class="lab" data-lab data-testid="command-center">
@@ -1255,6 +1435,8 @@
       </div>
     </section>
 
+    <!-- NOW strip: boards + public agents side by side (less scroll) -->
+    <div class="cc-grid-2" data-testid="cc-now">
     <!-- Coordination Boards panel — live state of the work surface. -->
     <section class="panel" data-testid="boards-panel">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
@@ -1296,47 +1478,12 @@
       </div>
     </section>
 
-    <!-- Heartbeat panel — Aetheria's pulse rendered as rhythm, not chat.
-         Added 2026-06-15 closing the Coordination Blackout arc: every tick
-         lands here regardless of [SURFACE]/[NO_OP] decision. The amber
-         "→ chat" indicator marks pulses Aetheria chose to surface into
-         her primary chat thread. -->
-    <div class="pulse-row">
-    <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
-      <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
-        <div class="empty">no pulses yet.</div>
-      </div>
-    </section>
-    <section class="panel ares-panel" data-testid="ares-panel">
-      <h3>Ares — host findings</h3>
-      <div class="ares-counts" data-ares-counts></div>
-      <div class="ares-feed" data-ares-feed aria-live="polite" aria-label="Active Ares findings"></div>
-    </section>
-    </div>
-
-    <!-- Steward — Funding Board panel.
-         Grant obligation list (upcoming + overdue + applied/pending, sorted by due_date).
-         Data from /api/steward/board. Dot colors: amber=near (<30d), red=overdue,
-         blue=applied/pending (submitted application, awaiting decision — NOT overdue),
-         neutral=far. Each item has a status control that POSTs /api/steward/status to
-         mark applied/pending or clear back to auto. config-absent state renders when
-         grants.json not yet seeded. -->
-    <section class="panel" data-testid="steward-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
-      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
-        <div class="empty">loading…</div>
-      </div>
-    </section>
-
-    <!-- Public agents on Spark: PondWright, Seneca, Atticus.
-         Fetched via /api/system/public_agents (tower → fabric :8200/:8400/:8500)
-         so a Cloudflare tunnel blip does not blank the panel. Counts + short
-         previews only — never full transcripts, never lattice writes. -->
+    <!-- Public agents (compact, beside boards) -->
     <section class="panel" data-testid="public-agents-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Public agents — who is talking</h3>
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:10px;">Public agents</h3>
       <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
     </section>
+    </div><!-- /.cc-grid-2 now -->
     <script>
     (function(){
       var el = document.querySelector('[data-public-agents]');
@@ -1357,45 +1504,40 @@
         return Math.floor(sec/86400) + 'd ago';
       }
       function card(a){
-        var talking = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0 || (a.recent&&a.recent.length);
-        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (talking ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
-        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model issue' : (talking ? 'people talking' : (a.enabled===false ? 'paused' : 'quiet')));
-        var rec = (a.recent||[]).slice(0,3).map(function(r){
-          return '<div style="font-size:12px;line-height:1.35;color:rgba(236,243,244,0.78);padding:6px 0;border-top:1px solid rgba(232,227,213,0.08);">'
-            + '<span style="opacity:.5;font-size:10px;margin-right:6px;">'+esc(relTime(r.ts))+'</span>'
-            + esc(r.preview||'(no text)')
-            + (r.captured ? ' <span style="color:#c0824f;">· lead</span>' : '')
+        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        var rec = (a.recent||[]).slice(0,2).map(function(r){
+          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'…')
+            + (r.captured ? ' · lead' : '')
             + '</div>';
         }).join('');
-        if(!rec){
-          rec = '<div style="font-size:12px;color:rgba(232,227,213,0.4);padding-top:6px;border-top:1px solid rgba(232,227,213,0.08);">No visitor turns logged recently.</div>';
-        }
-        return '<div style="padding:12px 0;border-bottom:1px solid rgba(232,227,213,0.08);">'
-          + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;">'
-          + '<div><div style="font-size:15px;font-weight:600;color:#ece3d5;">'+esc(a.name)+'</div>'
-          + '<div style="font-size:11px;color:rgba(232,227,213,0.45);">'+esc(a.role||'')+'</div></div>'
-          + '<div style="font-size:11px;color:rgba(232,227,213,0.55);display:flex;align-items:center;gap:6px;">'
-          + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
-          + esc(status)+'</div></div>'
-          + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;">'
-          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.conversations_today==null?'—':a.conversations_today)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">chats today</div></div>'
-          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.turns_today==null?'—':a.turns_today)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">turns today</div></div>'
-          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+(a.leads_captured==null?'—':a.leads_captured)+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">leads</div></div>'
-          + '<div><div style="font-size:18px;font-weight:600;color:#ece3d5;">'+esc(relTime(a.last_activity))+'</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.08em;opacity:.45;">last real</div></div>'
+        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent visitor lines</div>';
+        return '<div class="cc-pa-card">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">'
+          + '<h4>'+esc(a.name)+'</h4>'
+          + '<span style="font-size:10px;display:flex;align-items:center;gap:5px;color:rgba(232,227,213,0.55);">'
+          + '<span style="width:6px;height:6px;border-radius:50%;background:'+dot+';"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
+          + '<div><b>'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
           + '</div>'
           + rec
-          + '<div style="margin-top:8px;font-size:11px;">'
-          + '<a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open →</a>'
-          + (a.model ? ' <span style="opacity:.4;">· '+esc(a.model)+'</span>' : '')
+          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open →</a>'
+          + (a.model ? ' <span style="opacity:.35;">· '+esc(a.model)+'</span>' : '')
           + '</div></div>';
       }
       function paint(d){
         var agents = (d && d.agents) || [];
-        if(!agents.length){ el.innerHTML='<div class="empty">no public agents configured</div>'; return; }
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
         var banner = (d.talking && d.talking.length)
-          ? '<div style="margin-bottom:10px;font-size:12px;color:#3f9a5f;">Talking now: '+esc(d.talking.join(', '))+'</div>'
-          : '<div style="margin-bottom:10px;font-size:12px;color:rgba(232,227,213,0.4);">No visitor chats today yet (surface probes excluded).</div>';
-        el.innerHTML = banner + agents.map(card).join('');
+          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
+          : '<div class="cc-pa-banner">Quiet today (probes excluded)</div>';
+        el.innerHTML = banner + '<div class="cc-pa-grid">'+agents.map(card).join('')+'</div>';
       }
       function load(){
         fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
@@ -1405,12 +1547,38 @@
     })();
     </script>
 
+    <!-- Heartbeat + Ares -->
+    <div class="pulse-row">
+    <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
+      <div class="heartbeat-feed" data-heartbeat-feed aria-live="polite" aria-label="Recent heartbeat pulses">
+        <div class="empty">no pulses yet.</div>
+      </div>
+    </section>
+    <section class="panel ares-panel" data-testid="ares-panel">
+      <h3>Ares — host findings</h3>
+      <div class="ares-counts" data-ares-counts></div>
+      <div class="ares-feed" data-ares-feed aria-live="polite" aria-label="Active Ares findings"></div>
+    </section>
+    </div>
 
-    <!-- Memory — the read path into the lattice. Jon, 2026-07-30: "i should be
-         able to see all memory." Everything else here is aggregate; this reads
-         the actual nodes. Private is EXCLUDED by default and the hidden count is
-         stated on screen, because 88% of the lattice is private and showing 12%
-         of it unlabelled would misrepresent what you are looking at. -->
+    <!-- Steward folded by default (deep / infrequent) -->
+    <details class="cc-fold" data-testid="steward-fold">
+      <summary>Steward — Funding Board <span class="cc-fold-hint" data-steward-hint></span></summary>
+      <div class="cc-fold-body">
+    <section class="panel" data-testid="steward-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
+      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
+        <div class="empty">loading…</div>
+      </div>
+    </section>
+      </div>
+    </details>
+
+    <!-- Memory folded by default -->
+    <details class="cc-fold" data-testid="memory-fold">
+      <summary>Memory <span class="cc-fold-hint">browse the lattice</span></summary>
+      <div class="cc-fold-body">
     <section class="panel" data-testid="memory-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Memory</h3>
       <div class="mem-controls">
@@ -1483,6 +1651,8 @@
       loadFacets(); load();
     })();
     </script>
+      </div><!-- /.cc-fold-body memory -->
+    </details>
 
     <!-- Cognition + Scotty Approvals — twin-column row.
          Left: Aetheria's Sense-of-Us note + recent reflections (read-only, Phase 4.2).
@@ -1569,10 +1739,10 @@
       </div>
     </section>
 
-    <!-- Library writes — what the agents are committing to the library layer.
-         Surfaces type='library' nodes only (deliberate synthesis writes, not
-         the document-chunk bootstrap). Polled at the same cadence as the
-         rest of mission control. -->
+    <!-- Library writes — folded by default -->
+    <details class="cc-fold" data-testid="library-fold">
+      <summary>Library writes <span class="cc-fold-hint">deliberate synthesis</span></summary>
+      <div class="cc-fold-body">
     <section class="panel library-writes" data-testid="library-writes">
       <div class="library-header">
         <h3>Library writes</h3>
@@ -1591,6 +1761,8 @@
         <div class="library-item" data-empty>nothing in the library yet.</div>
       </div>
     </section>
+      </div>
+    </details>
 
     <!-- THE RIG — the sovereign compute as a HEADROOM map. The tower's three
          GPUs come from /api/system/rig (which, unlike /api/system/gpu, can say
