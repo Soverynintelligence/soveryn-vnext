@@ -432,7 +432,7 @@ sequenceDiagram
 |-------|---------|-------------------------|
 | STT | Full segment after silence | Keep segment STT; tune `stop_secs` from **measured** baseline |
 | LLM | Token stream via `TTSTokenEvent` | Already streaming; bridge flush at sentence / ~40 chars |
-| TTS aggregation | Pipecat default **`TextAggregationMode.SENTENCE`** | **PR3 must set explicitly**: prefer `TOKEN` for lower first-audio **or** keep SENTENCE but document double-buffer cost vs bridge flush; no silent default |
+| TTS aggregation | Was implicit SENTENCE | **PR3 landed:** explicit `TextAggregationMode` via `SOVERYN_VOICE_TTS_AGG` (default **`token`**); `sentence` still available. Bridge flush_chars 16 (token) / 40 (sentence) |
 | F5 | Clause-level frames (~700 ms first clause claimed in service comments) | Prefer short first clause; pre-warm model |
 
 Critical path:

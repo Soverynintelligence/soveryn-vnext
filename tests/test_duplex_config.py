@@ -21,6 +21,8 @@ def test_duplex_defaults_preserve_half_duplex_vad():
     assert cfg.stop_secs == 0.3
     assert cfg.metrics_enabled is True
     assert cfg.adapter == "agent_loop"
+    assert cfg.tts_agg == "token"  # PR3 Phase 1 latency default
+    assert cfg.bridge_flush_chars == 16
 
 
 def test_duplex_barge_in_raises_vad_confidence():
@@ -40,6 +42,12 @@ def test_duplex_vad_confidence_override():
 def test_metrics_disabled_env():
     assert metrics_enabled({"SOVERYN_VOICE_METRICS": "0"}) is False
     assert metrics_enabled({"SOVERYN_VOICE_METRICS": "1"}) is True
+
+
+def test_tts_agg_sentence_widens_flush():
+    cfg = DuplexConfig.from_env({"SOVERYN_VOICE_TTS_AGG": "sentence"})
+    assert cfg.tts_agg == "sentence"
+    assert cfg.bridge_flush_chars == 40
 
 
 def test_emit_turn_metric_jsonl(tmp_path: Path):

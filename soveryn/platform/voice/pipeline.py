@@ -294,11 +294,15 @@ class AgentLoopBridge(AgentAdapterBridge):
         stt: ParakeetSTTService | None = None,
         agent_name: str = "aetheria",
         voice_id: str | None = None,
+        flush_chars: int = 16,
+        tts_agg: str = "token",
     ):
         adapter = AgentLoopAdapter(
             agent_loop,
             agent_id=agent_name,
             voice_id=voice_id or agent_name,
+            flush_chars=flush_chars,
+            tts_agg=tts_agg,
         )
         super().__init__(
             adapter=adapter,
@@ -410,6 +414,7 @@ def build_voice_pipeline(
         elevenlabs_voice_id=elevenlabs_voice_id or adapter.voice_id,
         elevenlabs_api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
+        tts_agg=duplex.tts_agg,
     )
 
     first_audio = FirstAudioMetricsProbe(metrics=metrics)
@@ -458,10 +463,13 @@ def build_aetheria_voice_pipeline(
     duplex: DuplexConfig | None = None,
 ) -> tuple[Pipeline, PipelineWorker]:
     """Thin wrapper: AgentLoopAdapter + build_voice_pipeline (PR2)."""
+    duplex = duplex or DuplexConfig.from_env()
     adapter = AgentLoopAdapter(
         agent_loop,
         agent_id=agent_name,
         voice_id=voice_id or agent_name,
+        flush_chars=duplex.bridge_flush_chars,
+        tts_agg=duplex.tts_agg,
     )
     return build_voice_pipeline(
         adapter=adapter,
@@ -515,10 +523,13 @@ async def run_aetheria_voice_session(
     duplex: DuplexConfig | None = None,
 ) -> None:
     """Run one AgentLoop voice session (wrapper for dispatch compat)."""
+    duplex = duplex or DuplexConfig.from_env()
     adapter = AgentLoopAdapter(
         agent_loop,
         agent_id=agent_name,
         voice_id=voice_id or agent_name,
+        flush_chars=duplex.bridge_flush_chars,
+        tts_agg=duplex.tts_agg,
     )
     await run_voice_session(
         webrtc_connection=webrtc_connection,

@@ -48,7 +48,10 @@ class DuplexConfig:
     backchannel_max_ms: int = 600
     metrics_enabled: bool = True
     adapter: str = "agent_loop"
-    tts_agg: str = "sentence"  # PR3 may switch default to token; keep current path
+    # Phase 1 (PR3): default TOKEN for lower first-audio latency. SENTENCE
+    # remains available via SOVERYN_VOICE_TTS_AGG=sentence for prosody-first.
+    tts_agg: str = "token"
+    bridge_flush_chars: int = 16  # adapter buffer before flush (token mode default)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "DuplexConfig":
@@ -62,9 +65,12 @@ class DuplexConfig:
             confidence = conf_default
         metrics_enabled = _truthy(e.get("SOVERYN_VOICE_METRICS"), default=True)
         adapter = (e.get("SOVERYN_VOICE_ADAPTER") or "agent_loop").strip().lower()
-        tts_agg = (e.get("SOVERYN_VOICE_TTS_AGG") or "sentence").strip().lower()
+        tts_agg = (e.get("SOVERYN_VOICE_TTS_AGG") or "token").strip().lower()
         if tts_agg not in ("token", "sentence"):
-            tts_agg = "sentence"
+            tts_agg = "token"
+        # Sentence mode keeps a larger bridge buffer to avoid one-token TTS spam
+        # if aggregation is also sentence; token mode flushes sooner.
+        flush_default = 40 if tts_agg == "sentence" else 16
         return cls(
             barge_in=barge_in,
             stop_secs=_float_env(e, "SOVERYN_VOICE_STOP_SECS", 0.3),
@@ -76,4 +82,7 @@ class DuplexConfig:
             metrics_enabled=metrics_enabled,
             adapter=adapter,
             tts_agg=tts_agg,
+            bridge_flush_chars=_int_env(
+                e, "SOVERYN_VOICE_BRIDGE_FLUSH_CHARS", flush_default
+            ),
         )

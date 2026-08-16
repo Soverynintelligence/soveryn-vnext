@@ -22,6 +22,10 @@ class AgentLoopAdapter(AgentAdapterBase):
     """Wraps AgentLoop.process_message_stream for the duplex shell.
 
     Always passes ``source="voice"`` so conversation_store tags voice turns.
+
+    ``flush_chars`` controls how soon token stream is emitted to TTS (PR3).
+    Lower values + TOKEN aggregation reduce first-audio latency; higher values
+    (or sentence mode) favor prosody and fewer F5 calls.
     """
 
     supports_streaming = True
@@ -32,11 +36,15 @@ class AgentLoopAdapter(AgentAdapterBase):
         *,
         agent_id: str,
         voice_id: str | None = None,
+        flush_chars: int = 16,
+        tts_agg: str = "token",
     ):
         self._agent_loop = agent_loop
         self.agent_id = agent_id
         # F5 keys on agent name; ElevenLabs UUID may be separate via build_tts_service.
         self.voice_id = voice_id or agent_id
+        self.flush_chars = max(4, int(flush_chars))
+        self.tts_agg = (tts_agg or "token").strip().lower()
 
     async def start_turn(
         self,
@@ -48,6 +56,8 @@ class AgentLoopAdapter(AgentAdapterBase):
     ) -> AsyncIterator[AgentTextChunk]:
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+        flush_chars = self.flush_chars
+        sentence_only = self.tts_agg == "sentence"
 
         def _producer() -> None:
             pending = ""
@@ -74,10 +84,15 @@ class AgentLoopAdapter(AgentAdapterBase):
                     if not chunk.strip():
                         continue
                     pending += chunk
-                    if (
-                        chunk.rstrip()[-1] in ".!?;:"
-                        or len(pending.strip()) >= 40
-                    ):
+                    at_sentence = chunk.rstrip()[-1] in ".!?;:"
+                    # TOKEN mode: flush at sentence OR flush_chars (first clause
+                    # snappier). SENTENCE mode: only sentence boundaries, with
+                    # a large safety flush to avoid unbounded buffers.
+                    if at_sentence:
+                        _flush()
+                    elif not sentence_only and len(pending.strip()) >= flush_chars:
+                        _flush()
+                    elif sentence_only and len(pending.strip()) >= max(flush_chars, 80):
                         _flush()
             except Exception:  # noqa: BLE001
                 logger.exception(

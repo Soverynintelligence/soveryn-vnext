@@ -32,7 +32,7 @@ from pipecat.frames.frames import (
     TTSStartedFrame,
     TTSStoppedFrame,
 )
-from pipecat.services.tts_service import TTSService
+from pipecat.services.tts_service import TTSService, TextAggregationMode
 
 from soveryn.platform.voice.providers.base import TTSError, TTSProvider
 from soveryn.platform.voice.providers.elevenlabs import (
@@ -68,12 +68,22 @@ class ProviderBackedTTSService(TTSService):
         provider: TTSProvider,
         voice_id: str,
         sample_rate: int,
+        text_aggregation_mode: TextAggregationMode | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(sample_rate=sample_rate, **kwargs)
+        # Explicit aggregation mode (PR3). Default TOKEN for lower first-audio
+        # latency; SENTENCE available via SOVERYN_VOICE_TTS_AGG=sentence.
+        if text_aggregation_mode is None:
+            text_aggregation_mode = TextAggregationMode.TOKEN
+        super().__init__(
+            sample_rate=sample_rate,
+            text_aggregation_mode=text_aggregation_mode,
+            **kwargs,
+        )
         self._provider = provider
         self._voice_id = voice_id
         self._native_sample_rate = sample_rate
+        self._text_aggregation_mode = text_aggregation_mode
 
     @property
     def provider_name(self) -> str:
@@ -82,6 +92,10 @@ class ProviderBackedTTSService(TTSService):
     @property
     def voice_id(self) -> str:
         return self._voice_id
+
+    @property
+    def text_aggregation_mode(self) -> TextAggregationMode:
+        return self._text_aggregation_mode
 
     async def run_tts(
         self,
@@ -168,6 +182,18 @@ def _decode_chunk_to_pcm(audio_bytes: bytes, expected_sr: int) -> bytes:
         return audio_bytes
 
 
+def resolve_text_aggregation_mode(
+    tts_agg: str | TextAggregationMode | None = None,
+) -> TextAggregationMode:
+    """Map DuplexConfig / env string to Pipecat TextAggregationMode."""
+    if isinstance(tts_agg, TextAggregationMode):
+        return tts_agg
+    raw = (tts_agg or os.environ.get("SOVERYN_VOICE_TTS_AGG") or "token").strip().lower()
+    if raw in ("sentence", "sent"):
+        return TextAggregationMode.SENTENCE
+    return TextAggregationMode.TOKEN
+
+
 def build_tts_service(
     *,
     agent_name: str,
@@ -176,6 +202,7 @@ def build_tts_service(
     aiohttp_session: Any | None = None,
     primary: str | None = None,
     f5tts_url: str | None = None,
+    tts_agg: str | TextAggregationMode | None = None,
 ) -> ProviderBackedTTSService:
     """Construct the Pipecat TTSService, selecting provider via env / arg.
 
@@ -186,12 +213,16 @@ def build_tts_service(
     (e.g. ``"aetheria"``); ``elevenlabs_voice_id`` is the cloud UUID for
     the fallback provider. Each provider gets the voice_id shape it expects.
 
+    ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``token`` (default, lower first
+    audio) or ``sentence`` (buffer to sentence boundary before synthesize).
+
     ``f5tts_url`` overrides the local service URL; useful for tests.
     ``aiohttp_session`` is accepted for API parity with the previous
     ElevenLabsHttpTTSService construction shape and currently unused
     (httpx is used internally by the providers).
     """
     selection = (primary or os.environ.get("SOVEREIGN_TTS_PRIMARY") or DEFAULT_PRIMARY).lower()
+    agg_mode = resolve_text_aggregation_mode(tts_agg)
 
     if selection == "f5tts":
         provider = F5TTSProvider(
@@ -202,6 +233,7 @@ def build_tts_service(
             provider=provider,
             voice_id=agent_name,
             sample_rate=F5TTS_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
         )
 
     if selection == "elevenlabs":
@@ -217,6 +249,7 @@ def build_tts_service(
             provider=provider,
             voice_id=elevenlabs_voice_id,
             sample_rate=ELEVENLABS_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
         )
 
     raise ValueError(
@@ -228,5 +261,7 @@ def build_tts_service(
 __all__ = [
     "DEFAULT_PRIMARY",
     "ProviderBackedTTSService",
+    "TextAggregationMode",
     "build_tts_service",
+    "resolve_text_aggregation_mode",
 ]
