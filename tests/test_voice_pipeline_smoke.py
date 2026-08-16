@@ -126,12 +126,14 @@ def test_build_pipeline_constructs_all_processors():
     assert "ParakeetSTTService" in type_names
     assert "AgentLoopBridge" in type_names
     assert "ProviderBackedTTSService" in type_names
+    assert "FirstAudioMetricsProbe" in type_names
 
     vad_idx = type_names.index("VADProcessor")
     stt_idx = type_names.index("ParakeetSTTService")
     bridge_idx = type_names.index("AgentLoopBridge")
     tts_idx = type_names.index("ProviderBackedTTSService")
-    assert vad_idx < stt_idx < bridge_idx < tts_idx
+    probe_idx = type_names.index("FirstAudioMetricsProbe")
+    assert vad_idx < stt_idx < bridge_idx < tts_idx < probe_idx
 
     # Bridge holds the agent_loop + session_id passed at construction
     bridge = processors[bridge_idx]
@@ -156,6 +158,51 @@ def test_build_pipeline_passes_parakeet_url_through_to_stt_service():
     pipeline, _ = asyncio.run(_build())
     stt = next(p for p in pipeline._processors if isinstance(p, ParakeetSTTService))
     assert stt.transcribe_url == "http://10.0.0.5:9999/transcribe"
+
+
+def test_pipeline_params_omit_allow_interruptions():
+    """Pipecat 1.3.0 dropped allow_interruptions; must not pass the dead kwarg."""
+    import inspect
+    from pipecat.pipeline.worker import PipelineParams
+
+    sig = inspect.signature(PipelineParams)
+    # Field absent from constructor / model
+    assert "allow_interruptions" not in sig.parameters
+    # Building with only enable_metrics must succeed
+    p = PipelineParams(enable_metrics=True)
+    assert p is not None
+
+
+def test_build_pipeline_uses_duplex_vad_and_first_audio_probe():
+    """Factory applies DuplexConfig and inserts FirstAudioMetricsProbe."""
+    from soveryn.platform.voice.duplex_config import DuplexConfig
+
+    async def _build():
+        connection = SmallWebRTCConnection()
+        duplex = DuplexConfig(
+            barge_in=False,
+            confidence=0.3,
+            start_secs=0.1,
+            stop_secs=0.3,
+            metrics_enabled=False,
+        )
+        return build_aetheria_voice_pipeline(
+            agent_loop=_FakeAgentLoop(),
+            agent_name="aetheria",
+            voice_id="vid",
+            parakeet_url="http://127.0.0.1:8087",
+            elevenlabs_api_key="key",
+            session_id="s1",
+            webrtc_connection=connection,
+            duplex=duplex,
+        )
+
+    pipeline, worker = asyncio.run(_build())
+    assert isinstance(pipeline, Pipeline)
+    assert isinstance(worker, PipelineWorker)
+    names = [type(p).__name__ for p in pipeline._processors]
+    assert "FirstAudioMetricsProbe" in names
+    assert "AgentLoopBridge" in names
 
 
 def test_build_pipeline_wires_voice_id_into_tts_service():

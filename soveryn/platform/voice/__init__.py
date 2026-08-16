@@ -11,9 +11,15 @@ from soveryn.platform.voice.config import (
     DEFAULT_VOICE_ROOT_NAME,
     VoiceConfig,
 )
+from soveryn.platform.voice.duplex_config import DuplexConfig
+from soveryn.platform.voice.metrics import TurnMetric, TurnMetricsTracker, emit_turn_metric
 
 __all__ = [
     "AgentVoiceCharacter",
     "DEFAULT_VOICE_ROOT_NAME",
+    "DuplexConfig",
+    "TurnMetric",
+    "TurnMetricsTracker",
     "VoiceConfig",
+    "emit_turn_metric",
 ]

@@ -1,41 +1,35 @@
-"""Pipecat-based voice pipeline factory — Phase 1 (Aetheria, ElevenLabs).
+"""Pipecat-based voice pipeline factory.
 
-Architecture (verified via pipecat 1.3.0 spike, 2026-06-10):
+Architecture (pipecat 1.3.0):
 
     browser mic
         |
     SmallWebRTCTransport.input()
         | AudioRawFrame
-    SileroVADAnalyzer  (in TransportParams, emits VAD*SpeakingFrames)
+    SileroVADAnalyzer  (VAD*SpeakingFrames)
         |
     ParakeetSTTService (SegmentedSTTService subclass)
-        | TranscriptionFrame (finalized=True)
-    AgentLoopBridge   (plain FrameProcessor — NOT an LLMService subclass)
-        | LLMFullResponseStartFrame, LLMTextFrame*, LLMFullResponseEndFrame
-    ElevenLabsHttpTTSService  (Pipecat built-in)
+        | TranscriptionFrame
+    AgentLoopBridge
+        | LLMFullResponseStart/Text/End
+    TTS (F5 primary / ElevenLabs fallback)
         | TTSAudioRawFrame
-    SmallWebRTCTransport.output()
+    FirstAudioMetricsProbe (PR1)
         |
-    browser speakers
+    SmallWebRTCTransport.output()
 
-Interruption: when SileroVAD detects user speech mid-bot-talk, the transport
-emits InterruptionFrame downstream. AgentLoopBridge cancels its in-flight
-AgentLoop generator; TTS drops pending audio.
+Interruption: AgentLoopBridge handles InterruptionFrame when present.
+Pipecat 1.3.0 removed PipelineParams.allow_interruptions — that kwarg is a
+no-op and must not be passed. Live barge-in emission is Phase 2 (TurnController).
 
-AgentLoop.process_message_stream is a sync generator; the bridge runs it on
-a worker thread and bridges its TTSTokenEvents back onto the asyncio loop
-via an asyncio.Queue. This keeps the cancel-on-InterruptionFrame contract
-clean (cancel the queue-drain task; the producer thread shuts down on the
-next iteration via a sentinel).
-
-See: docs/superpowers/notes/2026-06-10-pipecat-spike.md (Section 10 for the
-canonical skeleton this file fills in).
+See: docs/designs/2026-08-16-duplex-voice-shell.md
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -49,6 +43,7 @@ from pipecat.frames.frames import (
     LLMFullResponseStartFrame,
     LLMTextFrame,
     TranscriptionFrame,
+    TTSAudioRawFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
@@ -62,6 +57,8 @@ from pipecat.utils.time import time_now_iso8601
 from pipecat.workers.runner import WorkerRunner
 
 from soveryn.agents.loop import AgentLoop, TTSTokenEvent
+from soveryn.platform.voice.duplex_config import DuplexConfig
+from soveryn.platform.voice.metrics import TurnMetricsTracker
 from soveryn.platform.voice.sanitize import sanitize_for_tts
 from soveryn.platform.voice.sovereign_tts import (
     ProviderBackedTTSService,
@@ -99,6 +96,7 @@ class ParakeetSTTService(SegmentedSTTService):
         url: str = DEFAULT_PARAKEET_URL,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         aiohttp_session: aiohttp.ClientSession | None = None,
+        metrics: TurnMetricsTracker | None = None,
         **kwargs: Any,
     ):
         # Pipecat's STTSettings.validate_complete() fails the pipeline at
@@ -114,6 +112,8 @@ class ParakeetSTTService(SegmentedSTTService):
         super().__init__(sample_rate=sample_rate, **kwargs)
         self._url = url.rstrip("/") + "/transcribe"
         self._aiohttp_session = aiohttp_session
+        self._metrics = metrics
+        self.last_stt_ms: int | None = None
 
     @property
     def transcribe_url(self) -> str:
@@ -125,6 +125,9 @@ class ParakeetSTTService(SegmentedSTTService):
             return
         if self._aiohttp_session is None:
             self._aiohttp_session = aiohttp.ClientSession()
+        if self._metrics is not None:
+            self._metrics.mark_stt_start()
+        t0 = time.perf_counter()
         try:
             async with self._aiohttp_session.post(
                 self._url,
@@ -140,6 +143,10 @@ class ParakeetSTTService(SegmentedSTTService):
                     return
                 payload = await response.json()
                 text = (payload.get("text") or "").strip()
+                elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
+                self.last_stt_ms = elapsed_ms
+                if self._metrics is not None:
+                    self._metrics.mark_stt_end()
                 if text:
                     yield TranscriptionFrame(
                         text=text,
@@ -180,16 +187,28 @@ class AgentLoopBridge(FrameProcessor):
 
     _QUEUE_SENTINEL = object()
 
-    def __init__(self, *, agent_loop: AgentLoop, session_id: str):
+    def __init__(
+        self,
+        *,
+        agent_loop: AgentLoop,
+        session_id: str,
+        metrics: TurnMetricsTracker | None = None,
+        stt: ParakeetSTTService | None = None,
+    ):
         super().__init__()
         self._agent_loop = agent_loop
         self._session_id = session_id
         self._inflight_task: asyncio.Task | None = None
+        self._metrics = metrics
+        self._stt = stt
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
         if isinstance(frame, InterruptionFrame):
+            if self._metrics is not None:
+                self._metrics.note_cancel("interruption")
+                self._metrics.finish()
             await self._cancel_inflight()
             await self.push_frame(frame, direction)
             return
@@ -198,6 +217,9 @@ class AgentLoopBridge(FrameProcessor):
             text = (frame.text or "").strip()
             if text:
                 await self._cancel_inflight()
+                stt_ms = self._stt.last_stt_ms if self._stt is not None else None
+                if self._metrics is not None:
+                    self._metrics.begin_user_turn(text, stt_ms=stt_ms)
                 self._inflight_task = asyncio.create_task(self._run_turn(text))
             return
 
@@ -224,6 +246,7 @@ class AgentLoopBridge(FrameProcessor):
         await self.push_frame(LLMFullResponseStartFrame())
         queue: asyncio.Queue = asyncio.Queue()
         loop = asyncio.get_running_loop()
+        first_token = True
 
         def _producer() -> None:
             pending_tts = ""
@@ -273,11 +296,20 @@ class AgentLoopBridge(FrameProcessor):
                 item = await queue.get()
                 if item is self._QUEUE_SENTINEL:
                     break
+                if self._metrics is not None:
+                    if first_token:
+                        self._metrics.mark_llm_first_token(item)
+                        first_token = False
+                    else:
+                        self._metrics.note_assistant_chars(item)
                 await self.push_frame(LLMTextFrame(text=item))
         except asyncio.CancelledError:
             # Drain queue silently; producer thread will hit the sentinel on
             # its next iteration (or has already finished). We don't join the
             # thread — call_soon_threadsafe is non-blocking either way.
+            if self._metrics is not None:
+                self._metrics.note_cancel("llm_cancelled")
+                self._metrics.finish()
             raise
         finally:
             # Best-effort: wait for the producer task so cancellation is
@@ -290,6 +322,35 @@ class AgentLoopBridge(FrameProcessor):
                 except (asyncio.TimeoutError, asyncio.CancelledError):
                     pass
             await self.push_frame(LLMFullResponseEndFrame())
+            # Do not finish metrics here — wait for first TTS audio (probe) so
+            # e2e_first_audio_ms is populated. Orphan turns flush on next turn
+            # / disconnect / cancel.
+
+
+# --------------------------------------------------------------------------
+# First-audio metrics probe (after TTS)
+# --------------------------------------------------------------------------
+
+
+class FirstAudioMetricsProbe(FrameProcessor):
+    """Marks first TTSAudioRawFrame of a turn for e2e / tts_first_audio metrics."""
+
+    def __init__(self, metrics: TurnMetricsTracker | None = None):
+        super().__init__()
+        self._metrics = metrics
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+        if (
+            self._metrics is not None
+            and isinstance(frame, TTSAudioRawFrame)
+            and direction == FrameDirection.DOWNSTREAM
+            and self._metrics.has_open_turn()
+        ):
+            # First audio of turn closes the metric row (includes e2e).
+            if self._metrics.mark_tts_first_audio():
+                self._metrics.finish()
+        await self.push_frame(frame, direction)
 
 
 # --------------------------------------------------------------------------
@@ -307,6 +368,7 @@ def build_aetheria_voice_pipeline(
     session_id: str,
     webrtc_connection: SmallWebRTCConnection,
     aiohttp_session: aiohttp.ClientSession | None = None,
+    duplex: DuplexConfig | None = None,
 ) -> tuple[Pipeline, PipelineWorker]:
     """Construct the Pipecat pipeline for one Aetheria voice session.
 
@@ -314,27 +376,29 @@ def build_aetheria_voice_pipeline(
     (see run_aetheria_voice_session below for the canonical run pattern).
 
     Component order, downstream:
-        transport.input() -> stt -> bridge -> tts -> transport.output()
-
-    The VAD analyzer lives inside TransportParams (not as a separate
-    pipeline stage) per Pipecat 1.3.0 convention; SileroVAD detects speech
-    boundaries and emits VAD*SpeakingFrames the STT service consumes.
-
-    audio_in + audio_out are enabled. The browser is expected to attach
-    BOTH audio AND video transceivers — SmallWebRTCTransport requires
-    both for SDP negotiation, even for voice-only sessions. The orb UI JS
-    (Task 6) handles that contract on the browser side.
+        transport.input() -> VAD -> stt -> bridge -> tts -> first_audio_probe
+        -> transport.output()
     """
     if aiohttp_session is None:
         aiohttp_session = aiohttp.ClientSession()
 
+    duplex = duplex or DuplexConfig.from_env()
+    metrics: TurnMetricsTracker | None = None
+    if duplex.metrics_enabled:
+        metrics = TurnMetricsTracker(
+            agent=agent_name,
+            session_id=session_id,
+            adapter=duplex.adapter,
+            enabled=True,
+        )
+
     vad_analyzer = SileroVADAnalyzer(
         sample_rate=DEFAULT_SAMPLE_RATE,
-        # Lowered confidence from 0.7 → 0.3 and start_secs 0.2 → 0.1
-        # as diagnostic — if nothing fires at this level, audio isn't
-        # reaching Silero at all; if voice fires, threshold was too
-        # restrictive. Tune back up after we confirm audio path.
-        params=VADParams(confidence=0.3, start_secs=0.1, stop_secs=0.3),
+        params=VADParams(
+            confidence=duplex.confidence,
+            start_secs=duplex.start_secs,
+            stop_secs=duplex.stop_secs,
+        ),
     )
 
     transport = SmallWebRTCTransport(
@@ -356,9 +420,15 @@ def build_aetheria_voice_pipeline(
         url=parakeet_url,
         sample_rate=DEFAULT_SAMPLE_RATE,
         aiohttp_session=aiohttp_session,
+        metrics=metrics,
     )
 
-    bridge = AgentLoopBridge(agent_loop=agent_loop, session_id=session_id)
+    bridge = AgentLoopBridge(
+        agent_loop=agent_loop,
+        session_id=session_id,
+        metrics=metrics,
+        stt=stt,
+    )
 
     # TTS provider is selected via SOVEREIGN_TTS_PRIMARY (default "f5tts",
     # local F5-TTS on :8088). Set SOVEREIGN_TTS_PRIMARY=elevenlabs to roll
@@ -371,25 +441,31 @@ def build_aetheria_voice_pipeline(
         aiohttp_session=aiohttp_session,
     )
 
+    first_audio = FirstAudioMetricsProbe(metrics=metrics)
+
     pipeline = Pipeline([
         transport.input(),
         VADProcessor(vad_analyzer=vad_analyzer),
         stt,
         bridge,
         tts,
+        first_audio,
         transport.output(),
     ])
 
+    # Pipecat 1.3.0: do NOT pass allow_interruptions — field removed; was a silent no-op.
     worker = PipelineWorker(
         pipeline,
         params=PipelineParams(
-            allow_interruptions=True,
             enable_metrics=True,
         ),
     )
 
     @transport.event_handler("on_client_disconnected")
     async def on_disconnected(t, client):  # pragma: no cover — exercised live
+        if metrics is not None:
+            metrics.note_cancel("client_disconnect")
+            metrics.finish()
         await worker.cancel()
 
     return pipeline, worker
@@ -405,6 +481,7 @@ async def run_aetheria_voice_session(
     voice_id: str,
     parakeet_url: str = DEFAULT_PARAKEET_URL,
     aiohttp_session: aiohttp.ClientSession | None = None,
+    duplex: DuplexConfig | None = None,
 ) -> None:
     """Run one voice session end-to-end. Returns when the client disconnects.
 
@@ -422,6 +499,7 @@ async def run_aetheria_voice_session(
         session_id=session_id,
         webrtc_connection=webrtc_connection,
         aiohttp_session=aiohttp_session,
+        duplex=duplex,
     )
     runner = WorkerRunner(handle_sigint=False)
     await runner.add_workers(worker)
@@ -432,7 +510,10 @@ __all__ = [
     "AgentLoopBridge",
     "DEFAULT_PARAKEET_URL",
     "DEFAULT_SAMPLE_RATE",
+    "DuplexConfig",
+    "FirstAudioMetricsProbe",
     "ParakeetSTTService",
+    "TurnMetricsTracker",
     "build_aetheria_voice_pipeline",
     "run_aetheria_voice_session",
 ]
