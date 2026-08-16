@@ -36,6 +36,7 @@ class FakeAsyncStreamingResponse:
     def __init__(self, status_code: int, chunks: list[bytes]):
         self.status_code = status_code
         self._chunks = chunks
+        self.aclose_calls = 0
 
     async def aiter_bytes(self):
         for c in self._chunks:
@@ -43,6 +44,9 @@ class FakeAsyncStreamingResponse:
 
     async def aread(self):
         return b"".join(self._chunks)
+
+    async def aclose(self):
+        self.aclose_calls += 1
 
     async def __aenter__(self):
         return self
@@ -244,3 +248,82 @@ def test_name_is_f5tts():
 def test_default_sample_rate_is_24khz():
     p = F5TTSProvider()
     assert p.sample_rate == 24000
+
+
+# ---------------------------------------------------------------------------
+# PR4b — abort / cancel_event
+# ---------------------------------------------------------------------------
+
+
+def test_cancel_event_stops_yielding_and_aclose():
+    """Once cancel_event is set, further frames are dropped and stream acloses."""
+
+    async def run():
+        # Two WAV frames; cancel after first is consumed by checking event
+        # mid-iteration via a slow path: set event before starting and ensure
+        # zero audio yields + aclose.
+        body = _frame(b"WAV1") + _frame(b"WAV2") + _eos()
+        resp = FakeAsyncStreamingResponse(200, [body])
+        fake = FakeHTTPClient(resp)
+        provider = F5TTSProvider(http_client=fake)
+        cancel = asyncio.Event()
+        cancel.set()  # already cancelled before first frame
+        out = []
+        async for chunk in provider.synthesize(
+            "hello there friend", voice_id="aetheria", cancel_event=cancel
+        ):
+            out.append(chunk)
+        return out, resp, provider
+
+    out, resp, provider = asyncio.run(run())
+    audio = [c for c in out if not c.is_final]
+    assert audio == []  # nothing spoken after cancel
+    assert out[-1].is_final is True
+    assert resp.aclose_calls >= 1
+    assert provider.clauses_completed_after_cancel >= 1
+
+
+def test_abort_aclose_active_response():
+    async def run():
+        body = _frame(b"WAV1") + _eos()
+        resp = FakeAsyncStreamingResponse(200, [body])
+        provider = F5TTSProvider(http_client=FakeHTTPClient(resp))
+        # Simulate in-flight response
+        provider._active_response = resp
+        await provider.abort()
+        return resp.aclose_calls, provider._cancel_observed
+
+    calls, observed = asyncio.run(run())
+    assert calls == 1
+    assert observed is True
+
+
+def test_midstream_cancel_yields_first_then_stops():
+    """First clause plays; cancel before second is read from buffer.
+
+    With both frames in one network read, cancel after first yield:
+    we need cooperative cancel_event checked between yields.
+    """
+
+    async def run():
+        body = _frame(b"FIRST") + _frame(b"SECOND") + _eos()
+        resp = FakeAsyncStreamingResponse(200, [body])
+        provider = F5TTSProvider(http_client=FakeHTTPClient(resp))
+        cancel = asyncio.Event()
+        out = []
+        agen = provider.synthesize(
+            "one. two.", voice_id="aetheria", cancel_event=cancel
+        )
+        # Manual drive: first audio chunk, then cancel, then drain rest
+        first = await agen.__anext__()
+        out.append(first)
+        cancel.set()
+        async for chunk in agen:
+            out.append(chunk)
+        return out, provider
+
+    out, provider = asyncio.run(run())
+    audio = [c.audio_bytes for c in out if not c.is_final]
+    assert audio == [b"FIRST"]
+    assert out[-1].is_final is True
+    assert provider.clauses_completed_after_cancel >= 1

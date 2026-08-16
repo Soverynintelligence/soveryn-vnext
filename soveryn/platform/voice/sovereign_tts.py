@@ -19,6 +19,7 @@ Cutover / rollback is a single env-var change — no code changes required.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -28,10 +29,12 @@ from typing import Any
 from pipecat.frames.frames import (
     ErrorFrame,
     Frame,
+    InterruptionFrame,
     TTSAudioRawFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
 )
+from pipecat.processors.frame_processor import FrameDirection
 from pipecat.services.tts_service import TTSService, TextAggregationMode
 
 from soveryn.platform.voice.providers.base import TTSError, TTSProvider
@@ -85,6 +88,9 @@ class ProviderBackedTTSService(TTSService):
         self._voice_id = voice_id
         self._native_sample_rate = sample_rate
         self._text_aggregation_mode = text_aggregation_mode
+        # PR4b: set on InterruptionFrame so F5 stream acloses and stops PCM.
+        self._cancel_event = asyncio.Event()
+        self.last_f5_clauses_after_cancel: int | None = None
 
     @property
     def provider_name(self) -> str:
@@ -98,6 +104,29 @@ class ProviderBackedTTSService(TTSService):
     def text_aggregation_mode(self) -> TextAggregationMode:
         return self._text_aggregation_mode
 
+    async def _handle_interruption(
+        self, frame: InterruptionFrame, direction: FrameDirection
+    ) -> None:
+        """Abort in-flight provider stream, then Pipecat's queue drop."""
+        self._cancel_event.set()
+        abort = getattr(self._provider, "abort", None)
+        if abort is not None:
+            try:
+                await abort()
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "ProviderBackedTTSService(%s) abort failed",
+                    self._provider.name,
+                )
+        after = getattr(self._provider, "clauses_completed_after_cancel", None)
+        if isinstance(after, int) and after > 0:
+            self.last_f5_clauses_after_cancel = after
+            logger.info(
+                "F5 clauses completed after cancel=%s (playout dropped them)",
+                after,
+            )
+        await super()._handle_interruption(frame, direction)
+
     async def run_tts(
         self,
         text: str,
@@ -110,9 +139,26 @@ class ProviderBackedTTSService(TTSService):
             self._provider.name, text[:80],
         )
 
+        # Fresh cancel gate per utterance; interruptions set it.
+        self._cancel_event = asyncio.Event()
+        self.last_f5_clauses_after_cancel = None
+
         yield TTSStartedFrame()
         try:
-            async for chunk in self._provider.synthesize(text, voice_id=self._voice_id):
+            # Prefer cancel_event when provider supports it (F5 PR4b).
+            try:
+                stream = self._provider.synthesize(
+                    text,
+                    voice_id=self._voice_id,
+                    cancel_event=self._cancel_event,
+                )
+            except TypeError:
+                stream = self._provider.synthesize(
+                    text, voice_id=self._voice_id
+                )
+            async for chunk in stream:
+                if self._cancel_event.is_set():
+                    break
                 if chunk.is_final:
                     continue  # EOS marker — TTSStoppedFrame fires in finally
                 if not chunk.audio_bytes:
@@ -125,12 +171,28 @@ class ProviderBackedTTSService(TTSService):
                     sample_rate=chunk.sample_rate,
                     num_channels=1,
                 )
+        except asyncio.CancelledError:
+            self._cancel_event.set()
+            abort = getattr(self._provider, "abort", None)
+            if abort is not None:
+                await abort()
+            raise
         except TTSError as e:
-            logger.warning(
-                "ProviderBackedTTSService(%s) failed: %s", self._provider.name, e,
-            )
-            yield ErrorFrame(error=f"{self._provider.name} TTS failed: {e}")
+            if self._cancel_event.is_set():
+                logger.debug(
+                    "ProviderBackedTTSService(%s) ended after cancel: %s",
+                    self._provider.name, e,
+                )
+            else:
+                logger.warning(
+                    "ProviderBackedTTSService(%s) failed: %s",
+                    self._provider.name, e,
+                )
+                yield ErrorFrame(error=f"{self._provider.name} TTS failed: {e}")
         finally:
+            after = getattr(self._provider, "clauses_completed_after_cancel", None)
+            if isinstance(after, int) and after > 0:
+                self.last_f5_clauses_after_cancel = after
             yield TTSStoppedFrame()
 
 
