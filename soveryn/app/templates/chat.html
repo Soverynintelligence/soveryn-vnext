@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
+<link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
 <style>
 
   :root {
@@ -533,80 +534,44 @@
 
   .voice-overlay {
     position: fixed; inset: 0;
-    background: rgba(5, 5, 5, 0.92);
-    backdrop-filter: blur(14px) saturate(120%);
-    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    background: rgba(0, 0, 0, 0.94);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
     display: none;
     flex-direction: column; align-items: center; justify-content: center;
     z-index: 100;
   }
   .voice-overlay.visible { display: flex; }
 
+  /* Mount host for the living orb (presence.js). */
   .voice-orb {
-    width: 280px; height: 280px;
-    border-radius: 50%;
-    /* Default = Aetheria's tri-stop spectrum. setAgentForVoice() rewrites
-       this per agent so the orb carries each agent's brand identity. */
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-sage) 0%,
-                  var(--sov-gray) 50%,
-                  var(--sov-electric-blue) 100%);
-    box-shadow: 0 0 90px rgba(148, 164, 85, 0.35);
-    transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
-  }
-  .voice-orb[data-agent="aetheria"] {
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-sage-bright) 0%,
-                  var(--sov-sage) 50%,
-                  var(--sov-sage-deep) 100%);
-    box-shadow: 0 0 90px rgba(116, 133, 106, 0.40);
-  }
-  .voice-orb[data-agent="vett"] {
-    background: radial-gradient(circle at center,
-                  #7d94a3 0%,
-                  var(--sov-deep-blue) 70%);
-    box-shadow: 0 0 90px rgba(107, 130, 144, 0.28);
-  }
-  .voice-orb[data-agent="scotty"] {
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-maroon-bright) 0%,
-                  var(--sov-maroon) 60%,
-                  #54271b 100%);
-    box-shadow: 0 0 90px rgba(163, 84, 58, 0.35);
-  }
-  .voice-orb[data-state="idle"]        { transform: scale(0.95); opacity: 0.5; }
-  .voice-orb[data-state="listening"]   { transform: scale(1.0);  opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
-  .voice-orb[data-state="hearing"]     { transform: scale(1.05); opacity: 1.0; }
-  .voice-orb[data-state="thinking"]    { transform: scale(1.0);  opacity: 0.9; animation: voice-pulse-think 1.2s ease-in-out infinite; }
-  .voice-orb[data-state="speaking"]    { opacity: 1.0; }
-  .voice-orb[data-state="interrupted"] { transform: scale(0.85); opacity: 0.6; transition: transform 100ms, opacity 100ms; }
-  @keyframes voice-pulse-listen {
-    0%, 100% { transform: scale(1.0); }
-    50%      { transform: scale(1.04); }
-  }
-  @keyframes voice-pulse-think {
-    0%, 100% { transform: scale(1.0); opacity: 0.85; }
-    50%      { transform: scale(1.02); opacity: 1.0; }
+    width: min(280px, 68vw);
+    height: min(280px, 68vw);
+    position: relative;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
   .voice-title {
     margin-top: 36px;
-    font-family: "SF Mono","Menlo",monospace;
+    font-family: var(--mono), "IBM Plex Mono", ui-monospace, monospace;
     font-size: 12px;
     letter-spacing: 0.3em;
     color: var(--text);
     text-transform: uppercase;
     opacity: 0.85;
   }
-  .voice-title[data-agent="aetheria"] { color: var(--sov-amber); }
-  .voice-title[data-agent="vett"]     { color: var(--sov-electric-blue); }
-  .voice-title[data-agent="scotty"]   { color: var(--sov-maroon-bright); }
+  .voice-title[data-agent="aetheria"] { color: var(--gold); }
+  .voice-title[data-agent="vett"]     { color: #9eb4c2; }
+  .voice-title[data-agent="scotty"]   { color: #c47a6e; }
   .voice-status {
-    margin-top: 8px;
-    font-family: "SF Mono","Menlo",monospace;
-    font-size: 10px;
-    letter-spacing: 0.25em;
-    color: rgba(236, 243, 244, 0.55);
+    margin-top: 10px;
+    font-family: var(--mono), "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ink-2);
     text-transform: uppercase;
+    min-height: 1.2em;
   }
   .voice-error {
     position: absolute;
@@ -889,7 +854,8 @@
     <div class="voice-overlay" data-testid="voice-overlay" role="dialog"
          aria-modal="true" aria-label="Voice call" aria-hidden="true">
       <div class="voice-orb" data-testid="voice-orb"
-           data-state="idle" data-agent="aetheria"></div>
+           data-state="idle" data-agent="aetheria"
+           role="img" aria-label="Living presence"></div>
       <div class="voice-title" data-testid="voice-title"
            data-agent="aetheria">aetheria &mdash; LIVE</div>
       <div class="voice-status" data-testid="voice-status">connecting&hellip;</div>
@@ -917,6 +883,7 @@
       </div>
     </form>
   </main>
+<script src="/static/voice/presence.js?v=alive5"></script>
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
@@ -1196,6 +1163,7 @@
     if (callBtn) callBtn.dataset.agent = name;
     const orb = elVoiceOrb();
     if (orb) orb.dataset.agent = name;
+    if (voice.presence) voice.presence.setAgent(name);
     const vTitle = elVoiceTitle();
     if (vTitle) {
       vTitle.dataset.agent = name;
@@ -1521,14 +1489,34 @@
   // The server binds the WebRTC peer to the SAME session_id the chat is
   // already using, so transcribed voice turns flow into the conversation
   // history rendered above. On hangup we reload that history so any new
-  // turns appear without a full page reload. Lifted from the messenger PWA's
-  // app.js (Void-Gold styling stripped — desktop uses per-agent brand tints).
+  // turns appear without a full page reload.
+  //
+  // UX notes (2026-08-15):
+  //   - Status labels are human ("Listening…") not raw machine tokens.
+  //   - Amplitude is EMA-smoothed with enter/leave hysteresis so listen/hear
+  //     doesn't thrash on breath noise or brief pauses.
+  //   - Offer waits for ICE gather (capped) so the first hop is less laggy.
   const VOICE_STATE = {
-    IDLE: "idle", LISTENING: "listening", HEARING: "hearing",
-    THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted",
+    IDLE: "idle", CONNECTING: "connecting", LISTENING: "listening",
+    HEARING: "hearing", THINKING: "thinking", SPEAKING: "speaking",
+    INTERRUPTED: "interrupted",
   };
-  const VOICE_THRESHOLD = 0.04;
-  const VOICE_SILENCE_MS = 800;
+  const VOICE_LABEL = {
+    idle: "Ready",
+    connecting: "Connecting…",
+    listening: "Listening…",
+    hearing: "Hearing you…",
+    thinking: "Thinking…",
+    speaking: "Speaking…",
+    interrupted: "You first…",
+  };
+  // Hysteresis: higher to enter "speaking", lower to leave (reduces thrash).
+  const VOICE_ENTER = 0.055;
+  const VOICE_LEAVE = 0.028;
+  const VOICE_SILENCE_MS = 1400;       // hold HEARING through short pauses
+  const VOICE_MIN_DWELL_MS = 280;      // min time in a state before flip
+  const VOICE_THINK_FALLBACK_MS = 8000;
+  const VOICE_EMA_ALPHA = 0.22;        // amplitude smoother
   const voice = {
     pc: null,
     micStream: null,
@@ -1538,15 +1526,57 @@
     state: VOICE_STATE.IDLE,
     raf: null,
     lastSpokenAt: 0,
+    stateChangedAt: 0,
+    outEma: 0,
+    inEma: 0,
+    userActive: false,
+    botActive: false,
+    presence: null,  // LivingPresence — living orb
     sessionAtStart: null,  // sessionId we called against, so post-hangup reload targets the right thread
   };
 
-  function voiceSetState(s) {
+  function voiceEnsurePresence() {
+    const orb = elVoiceOrb();
+    if (!orb || typeof LivingPresence === "undefined") return null;
+    // Reuse instance — destroy/remount was a big part of open lag + glitch.
+    if (!voice.presence) {
+      voice.presence = LivingPresence.mount(orb, { agent: state.agent || "aetheria" });
+    } else {
+      voice.presence.setAgent(state.agent || "aetheria");
+      voice.presence.start();
+    }
+    return voice.presence;
+  }
+
+  function voicePausePresence() {
+    // Keep DOM; just stop the rAF while overlay is closed.
+    if (voice.presence) {
+      try { voice.presence.stop(); } catch (e) { /* noop */ }
+      voice.presence.setState("idle");
+    }
+  }
+
+  function voiceSetState(s, force) {
+    if (!force && s === voice.state) return;
+    const now = performance.now();
+    // Don't thrash between listening/hearing/thinking on every frame.
+    if (!force && voice.state !== VOICE_STATE.IDLE && voice.state !== VOICE_STATE.CONNECTING) {
+      const elapsed = now - voice.stateChangedAt;
+      const sticky = (
+        (voice.state === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+        (voice.state === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING)
+      );
+      if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+    }
     voice.state = s;
+    voice.stateChangedAt = now;
     const orb = elVoiceOrb();
     const st = elVoiceStatus();
     if (orb) orb.dataset.state = s;
-    if (st) st.textContent = s;
+    if (st) st.textContent = VOICE_LABEL[s] || s;
+    if (voice.presence) voice.presence.setState(s);
   }
 
   function voiceShowError(msg) {
@@ -1568,39 +1598,72 @@
     return Math.sqrt(sum / data.length);
   }
 
+  function voiceGate(ema, wasActive) {
+    // Schmitt trigger: enter high, leave low — stops edge chatter.
+    if (wasActive) return ema > VOICE_LEAVE;
+    return ema > VOICE_ENTER;
+  }
+
   function voiceTick() {
     if (!voice.outAnalyser) return;
     const orb = elVoiceOrb();
     if (!orb) return;
-    const out = voiceAmp(voice.outAnalyser);
-    const inn = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    const outRaw = voiceAmp(voice.outAnalyser);
+    const innRaw = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    voice.outEma = voice.outEma + VOICE_EMA_ALPHA * (outRaw - voice.outEma);
+    voice.inEma  = voice.inEma  + VOICE_EMA_ALPHA * (innRaw - voice.inEma);
     const now = performance.now();
-    const userSpeaking = out > VOICE_THRESHOLD;
-    const botSpeaking  = inn > VOICE_THRESHOLD;
+    const userSpeaking = voiceGate(voice.outEma, voice.userActive);
+    const botSpeaking  = voiceGate(voice.inEma, voice.botActive);
+    voice.userActive = userSpeaking;
+    voice.botActive = botSpeaking;
+
+    // Drive the living presence every frame — breath + face from amplitude.
+    if (voice.presence) {
+      voice.presence.setLevels({ out: voice.outEma, inn: voice.inEma });
+    }
 
     if (botSpeaking && userSpeaking && voice.state === VOICE_STATE.SPEAKING) {
-      voiceSetState(VOICE_STATE.INTERRUPTED);
-      setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+      voiceSetState(VOICE_STATE.INTERRUPTED, true);
+      setTimeout(() => {
+        if (voice.pc) voiceSetState(VOICE_STATE.HEARING, true);
+      }, 220);
       voice.lastSpokenAt = now;
     } else if (botSpeaking) {
       voiceSetState(VOICE_STATE.SPEAKING);
-      const scale = 1.0 + Math.min(0.15, inn * 1.5);
-      orb.style.transform = `scale(${scale})`;
     } else if (userSpeaking) {
       voiceSetState(VOICE_STATE.HEARING);
       voice.lastSpokenAt = now;
-      orb.style.transform = "";
     } else {
       if (voice.state === VOICE_STATE.HEARING && now - voice.lastSpokenAt > VOICE_SILENCE_MS) {
         voiceSetState(VOICE_STATE.THINKING);
       } else if (voice.state === VOICE_STATE.SPEAKING) {
         voiceSetState(VOICE_STATE.LISTENING);
-        orb.style.transform = "";
-      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > 6000) {
+      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > VOICE_THINK_FALLBACK_MS) {
         voiceSetState(VOICE_STATE.LISTENING);
       }
     }
     voice.raf = requestAnimationFrame(voiceTick);
+  }
+
+  function waitForIceGathering(pc, timeoutMs = 1500) {
+    // Prefer a complete candidate set before signaling — early offers work
+    // but often stall the first audio path. Cap wait so slow STUN never hangs.
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => {
+        if (pc.iceGatheringState === "complete") finish();
+      };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      setTimeout(finish, timeoutMs);
+    });
   }
 
   function openVoiceOverlay() {
@@ -1608,6 +1671,9 @@
     if (!ov) return;
     ov.classList.add("visible");
     ov.setAttribute("aria-hidden", "false");
+    // Mount living presence immediately so connecting feels inhabited.
+    const p = voiceEnsurePresence();
+    if (p) p.setState("connecting");
   }
 
   function closeVoiceOverlay() {
@@ -1615,9 +1681,12 @@
     if (!ov) return;
     ov.classList.remove("visible");
     ov.setAttribute("aria-hidden", "true");
-    // Reset orb to idle so the next call starts from a clean visual state.
+    voicePausePresence();
     const orb = elVoiceOrb();
-    if (orb) { orb.dataset.state = "idle"; orb.style.transform = ""; }
+    if (orb) {
+      orb.dataset.state = "idle";
+      orb.style.transform = "";
+    }
   }
 
   async function startVoiceCall() {
@@ -1630,14 +1699,24 @@
       return;
     }
     voice.sessionAtStart = state.sessionId;
-    voiceSetState(VOICE_STATE.IDLE);
+    voice.outEma = 0;
+    voice.inEma = 0;
+    voice.userActive = false;
+    voice.botActive = false;
     openVoiceOverlay();
+    voiceSetState(VOICE_STATE.CONNECTING, true);
     const status = elVoiceStatus();
-    if (status) status.textContent = "connecting…";
+    if (status) status.textContent = "Microphone…";
 
     try {
       voice.micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Prefer voice-optimized constraints when supported.
+          channelCount: 1,
+        },
         video: false,
       });
     } catch (e) {
@@ -1645,6 +1724,8 @@
       await endVoiceCall({ reloadHistory: false });
       return;
     }
+
+    if (status) status.textContent = "Connecting…";
 
     // AudioContext + mic playback init must happen INSIDE the user gesture
     // path (the click handler that called us). iOS Safari otherwise leaves
@@ -1655,7 +1736,8 @@
     }
     const outSrc = voice.audioCtx.createMediaStreamSource(voice.micStream);
     voice.outAnalyser = voice.audioCtx.createAnalyser();
-    voice.outAnalyser.fftSize = 256;
+    voice.outAnalyser.fftSize = 512;
+    voice.outAnalyser.smoothingTimeConstant = 0.65;
     outSrc.connect(voice.outAnalyser);
 
     voice.pc = new RTCPeerConnection({
@@ -1680,18 +1762,26 @@
         audioEl.srcObject = stream;
         audioEl.play().catch(() => {});
       }
-      voice.inAnalyser = voice.audioCtx.createAnalyser();
-      voice.inAnalyser.fftSize = 256;
-      voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      if (voice.audioCtx) {
+        voice.inAnalyser = voice.audioCtx.createAnalyser();
+        voice.inAnalyser.fftSize = 512;
+        voice.inAnalyser.smoothingTimeConstant = 0.65;
+        voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      }
     };
 
     try {
       const offer = await voice.pc.createOffer();
       await voice.pc.setLocalDescription(offer);
+      if (status) status.textContent = "Negotiating…";
+      // Wait for ICE candidates (capped) so the SDP isn't half-empty — reduces
+      // first-packet lag once the remote answers.
+      await waitForIceGathering(voice.pc, 600);
+      const local = voice.pc.localDescription || offer;
       const resp = await fetch(`/voice/session/${voice.sessionAtStart}/offer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sdp: offer.sdp, type: offer.type, agent: state.agent }),
+        body: JSON.stringify({ sdp: local.sdp, type: local.type, agent: state.agent }),
       });
       if (!resp.ok) {
         const txt = await resp.text();
@@ -1699,7 +1789,7 @@
       }
       const answer = await resp.json();
       await voice.pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
-      voiceSetState(VOICE_STATE.LISTENING);
+      voiceSetState(VOICE_STATE.LISTENING, true);
       voiceTick();
     } catch (e) {
       console.error("voice start failed:", e);
@@ -1721,6 +1811,10 @@
     if (voice.audioCtx) { try { await voice.audioCtx.close(); } catch (e) {} voice.audioCtx = null; }
     voice.outAnalyser = null;
     voice.inAnalyser = null;
+    voice.outEma = 0;
+    voice.inEma = 0;
+    voice.userActive = false;
+    voice.botActive = false;
     voice.state = VOICE_STATE.IDLE;
     closeVoiceOverlay();
     // Re-fetch the conversation so the voice turns the backend persisted

@@ -1,46 +1,49 @@
 /* Orb colour theme + state machine + HUD chrome.
  *
- * Aligned with Mission Control / Command Center: carbon canvas, oxide sage
- * (Aetheria), weathered steel (Vett), terracotta (Scotty). Keep these in step
- * with command_center/chat/documents agent hues.
+ * Aligned with Lab console / Command Center: pure black ground, gold
+ * instrument chrome. Aetheria = Lab gold (not status-green sage).
+ * Vett = weathered steel, Scotty = terracotta.
  */
 
 :root {
-    --bg-deep: #0f1011;        /* carbon — Mission Control canvas */
-    --bg-raised: #16181a;
-    --text-soft: #E7E5DC;      /* bone */
-    --text-dim: rgba(231, 229, 220, 0.55);
-    --rule: #1e2022;
-    --accent: #8fa07f;
-    --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --bg-deep: #000000;        /* Lab ground */
+    --bg-raised: #0a0a09;
+    --text-soft: #e9e5dc;      /* bone */
+    --text-dim: rgba(233, 229, 220, 0.55);
+    --rule: #26241f;
+    --accent: #c6a664;         /* Lab gold */
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .orb-aetheria {
-    --orb-primary: #566149;    /* oxide sage, deep */
-    --orb-secondary: #8fa07f;  /* sage, light */
-    --orb-glow: rgba(116, 133, 106, 0.5);
+    --orb-primary: #7a6740;    /* gold dim */
+    --orb-secondary: #e0c98a;  /* gold highlight */
+    --orb-mid: #c6a664;
+    --orb-glow: rgba(198, 166, 100, 0.48);
 }
 
 .orb-vett {
     --orb-primary: #404e59;    /* weathered steel, deep */
-    --orb-secondary: #7d94a3;  /* steel, light */
-    --orb-glow: rgba(107, 130, 144, 0.5);
+    --orb-secondary: #9eb4c2;  /* steel, light */
+    --orb-mid: #6b8290;
+    --orb-glow: rgba(107, 130, 144, 0.48);
 }
 
 .orb-scotty {
     --orb-primary: #54271b;    /* terracotta, deep */
-    --orb-secondary: #c26a4c;  /* terracotta, light */
-    --orb-glow: rgba(163, 84, 58, 0.5);
+    --orb-secondary: #c47a6e;  /* terracotta, light */
+    --orb-mid: #a3543a;
+    --orb-glow: rgba(163, 84, 58, 0.48);
 }
 
 * { box-sizing: border-box; }
 
 body {
     background:
-        radial-gradient(ellipse 90% 55% at 50% 28%, rgba(116, 133, 106, 0.09), transparent 62%),
+        radial-gradient(ellipse 90% 55% at 50% 28%, rgba(198, 166, 100, 0.08), transparent 62%),
         var(--bg-deep);
     color: var(--text-soft);
     font-family: var(--font-sans);
@@ -102,62 +105,21 @@ body {
     border-bottom-color: rgba(143, 160, 127, 0.45);
 }
 
+/* #orb is the LivingPresence mount host (presence.js). Flat blob styles retired. */
 #orb {
-    width: min(240px, 56vw);
-    height: min(240px, 56vw);
-    border-radius: 50%;
-    background: radial-gradient(circle at center, var(--orb-secondary) 0%, var(--orb-primary) 100%);
-    box-shadow: 0 0 80px var(--orb-glow);
-    transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
+    width: min(320px, 72vw);
+    height: min(320px, 72vw);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
     cursor: pointer;
     position: relative;
     touch-action: manipulation;
+    transition: opacity 220ms ease-out;
 }
-
-/* State-driven visual transitions */
-#orb[data-state="idle"] {
-    transform: scale(0.95);
-    opacity: 0.5;
-}
-
-#orb[data-state="listening"] {
-    transform: scale(1.0);
-    opacity: 0.8;
-    animation: pulse-listen 2.4s ease-in-out infinite;
-}
-
-#orb[data-state="hearing"] {
-    transform: scale(1.05);
-    opacity: 1.0;
-    box-shadow: 0 0 120px var(--orb-glow);
-}
-
-#orb[data-state="thinking"] {
-    transform: scale(1.0);
-    opacity: 0.9;
-    animation: pulse-think 1.2s ease-in-out infinite;
-}
-
-#orb[data-state="speaking"] {
-    /* JS sets transform: scale(...) directly based on amplitude */
-    opacity: 1.0;
-    box-shadow: 0 0 160px var(--orb-glow);
-}
-
-#orb[data-state="interrupted"] {
-    transform: scale(0.85);
-    opacity: 0.6;
-    transition: transform 100ms, opacity 100ms;
-}
-
-@keyframes pulse-listen {
-    0%, 100% { transform: scale(1.0); }
-    50%      { transform: scale(1.04); }
-}
-
-@keyframes pulse-think {
-    0%, 100% { transform: scale(1.0); opacity: 0.8; }
-    50%      { transform: scale(1.02); opacity: 1.0; }
+#orb:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 8px;
 }
 
 #agent-label {

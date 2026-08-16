@@ -1,0 +1,92 @@
+/* Living voice orb chrome */
+
+.voice-presence {
+  --vp-pulse: 0.45;
+  --vp-energy: 0.55;
+  --vp-face: 0.5;
+  --vp-hue: 198, 166, 100;
+  position: relative;
+  width: min(280px, 68vw);
+  height: min(280px, 68vw);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.voice-presence[data-agent="aetheria"] { --vp-hue: 198, 166, 100; }
+.voice-presence[data-agent="vett"]     { --vp-hue: 107, 130, 144; }
+.voice-presence[data-agent="scotty"]   { --vp-hue: 196, 122, 110; }
+
+.voice-presence-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.voice-presence-canvas {
+  position: relative;
+  z-index: 2;
+  display: block;
+  filter: drop-shadow(0 0 calc(28px + var(--vp-energy) * 20px) rgba(var(--vp-hue), 0.38));
+  will-change: filter;
+}
+
+.voice-presence-rings {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+
+.voice-presence-rings .r {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--vp-hue), calc(0.1 + var(--vp-pulse) * 0.1));
+  animation: vp-ring-breathe 3.8s ease-in-out infinite;
+}
+
+.voice-presence-rings .r1 { width: 82%; height: 82%; animation-duration: 3.2s; }
+.voice-presence-rings .r2 {
+  width: 96%; height: 96%;
+  animation-duration: 4.2s;
+  animation-delay: -0.7s;
+  border-color: rgba(var(--vp-hue), calc(0.07 + var(--vp-pulse) * 0.08));
+}
+.voice-presence-rings .r3 {
+  width: 112%; height: 112%;
+  animation-duration: 5.4s;
+  animation-delay: -1.5s;
+  border-color: rgba(var(--vp-hue), calc(0.04 + var(--vp-pulse) * 0.06));
+}
+
+@keyframes vp-ring-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50%      { transform: scale(1.03); opacity: 1; }
+}
+
+.voice-presence[data-state="speaking"] .voice-presence-canvas {
+  filter: drop-shadow(0 0 56px rgba(var(--vp-hue), 0.5))
+          drop-shadow(0 0 18px rgba(255, 230, 180, 0.22));
+}
+.voice-presence[data-state="hearing"] .voice-presence-canvas {
+  filter: drop-shadow(0 0 44px rgba(var(--vp-hue), 0.45));
+}
+.voice-presence[data-state="listening"] .voice-presence-canvas,
+.voice-presence[data-state="idle"] .voice-presence-canvas,
+.voice-presence[data-state="thinking"] .voice-presence-canvas {
+  filter: drop-shadow(0 0 36px rgba(var(--vp-hue), 0.38));
+  opacity: 1;
+}
+.voice-presence[data-state="connecting"] .voice-presence-canvas {
+  opacity: 0.9;
+}
+
+.voice-overlay {
+  background:
+    radial-gradient(ellipse 55% 48% at 50% 42%, rgba(var(--vp-hue, 198, 166, 100), 0.07), transparent 60%),
+    rgba(0, 0, 0, 0.95) !important;
+}

@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0f1011">
+    <meta name="theme-color" content="#000000">
     <title>{{ agent | capitalize }} — SOVERYN Voice</title>
-    <link rel="stylesheet" href="/static/voice/orb.css">
+    <link rel="stylesheet" href="/static/voice/orb.css?v=alive5">
+    <link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
 </head>
 <body data-agent="{{ agent }}" class="orb-{{ agent }}">
     <header class="voice-chrome">
@@ -17,11 +18,14 @@
         </nav>
     </header>
 
-    <div id="orb" class="orb-{{ agent }}" data-state="idle" role="button" tabindex="0" aria-label="Start voice with {{ agent }}"></div>
+    <div id="orb" class="orb-{{ agent }} voice-orb" data-state="idle"
+         role="button" tabindex="0"
+         aria-label="Start voice with {{ agent }}"></div>
     <div id="agent-label">{{ agent }}</div>
     <div id="status">tap to begin</div>
-    <div id="hint">microphone required · WebRTC</div>
+    <div id="hint">microphone required · WebRTC · living orb</div>
     <div id="error" role="alert"></div>
-    <script src="/static/voice/voice_client.js"></script>
+    <script src="/static/voice/presence.js?v=alive5"></script>
+    <script src="/static/voice/voice_client.js?v=alive5"></script>
 </body>
 </html>

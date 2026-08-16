@@ -1,0 +1,15 @@
+[Unit]
+Description=NAT Spark CX-7 fabric (10.10.10.0/30) out house uplink
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=UPLINK=enp66s0f0np0
+Environment=FABRIC=enp130s0f1np1
+ExecStart=/home/jon-deoliveira/soveryn_vnext/docs/ops/pondwright-failover/apply-spark-fabric-nat.sh
+# No teardown on stop — leave NAT up until reboot/manual flush
+
+[Install]
+WantedBy=multi-user.target

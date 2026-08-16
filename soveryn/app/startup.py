@@ -1255,8 +1255,43 @@ def create_app(
     _register_guards(app)
     _register_error_handlers(app)
     _register_blueprints(app)
+    _register_access_log(app)
 
     return app
+
+
+def _register_access_log(app: Flask) -> None:
+    """House-wide access log (CF / X-Forwarded-For real IP) → ~/access-logs/soveryn.log."""
+    import sys
+    from pathlib import Path
+
+    log_dir = Path.home() / "access-logs"
+    if str(log_dir) not in sys.path:
+        sys.path.insert(0, str(log_dir))
+    try:
+        import house_accesslog
+    except ImportError:
+        return
+
+    def _who() -> str:
+        # Public gate already logs basic-auth identity; here tag local fleet vs edge.
+        from flask import request
+
+        remote = (request.remote_addr or "").strip()
+        if remote in ("127.0.0.1", "::1"):
+            xff = (request.headers.get("X-Forwarded-For")
+                   or request.headers.get("CF-Connecting-IP") or "")
+            if xff:
+                return "via-proxy"
+            return "local"
+        return "direct"
+
+    house_accesslog.install_flask(
+        app,
+        site="soveryn",
+        who_fn=_who,
+        skip_paths=frozenset({"/health", "/healthz", "/favicon.ico"}),
+    )
 
 
 def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None:

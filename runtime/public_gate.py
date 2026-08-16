@@ -13,11 +13,20 @@ password-protects only the public door.
 Credentials come from env: SOVERYN_GATE_USER / SOVERYN_GATE_PASS.
 Listens on 127.0.0.1:SOVERYN_GATE_PORT (default 5099); Tailscale Funnel proxies to it.
 """
-import os
 import hmac
+import os
+import sys
+from pathlib import Path
 
 import requests
-from flask import Flask, request, Response, stream_with_context
+from flask import Flask, Response, request, stream_with_context
+
+# House access log (CF real IP / country) — shared with TGTHRmess + PondWright proxy.
+sys.path.insert(0, str(Path.home() / "access-logs"))
+try:
+    import house_accesslog
+except ImportError:
+    house_accesslog = None  # type: ignore
 
 UPSTREAM = os.environ.get("SOVERYN_GATE_UPSTREAM", "http://127.0.0.1:5001")
 USER = os.environ.get("SOVERYN_GATE_USER", "")
@@ -52,6 +61,19 @@ def _self_authed_path(path: str) -> bool:
     return path == "m" or path.startswith("m/")
 
 
+def _who() -> str:
+    if _self_authed_path(request.path.lstrip("/")):
+        return "messenger"
+    a = request.authorization
+    if a and a.username:
+        return f"basic:{a.username}"
+    return "-"
+
+
+if house_accesslog is not None:
+    house_accesslog.install_flask(app, site="soveryn-gate", who_fn=_who)
+
+
 @app.route("/", defaults={"path": ""},
            methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
 @app.route("/<path:path>",
@@ -65,9 +87,19 @@ def proxy(path):
 
     url = f"{UPSTREAM}/{path}"
     fwd_headers = {k: v for k, v in request.headers if k.lower() not in _HOP}
-    # let the app see the real client + that it's proxied
-    fwd_headers["X-Forwarded-For"] = request.headers.get(
-        "X-Forwarded-For", request.remote_addr or "")
+    # Real client for the app (Funnel / CF / plain).
+    if house_accesslog is not None:
+        ip = house_accesslog.client_ip(request.headers, request.remote_addr)
+    else:
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr or "")
+    fwd_headers["X-Forwarded-For"] = ip
+    fwd_headers["X-Real-IP"] = ip
+    cf_ip = request.headers.get("CF-Connecting-IP")
+    if cf_ip:
+        fwd_headers["CF-Connecting-IP"] = cf_ip
+    cf_cc = request.headers.get("CF-IPCountry")
+    if cf_cc:
+        fwd_headers["CF-IPCountry"] = cf_cc
 
     upstream = requests.request(
         method=request.method,

@@ -725,11 +725,25 @@ function renderInstallBanner(ios) {
 // thread-bound offer route and renders into .voice-orb / #voice-status.
 
 const VOICE_STATE = {
-  IDLE: 'idle', LISTENING: 'listening', HEARING: 'hearing',
+  IDLE: 'idle', CONNECTING: 'connecting', LISTENING: 'listening', HEARING: 'hearing',
   THINKING: 'thinking', SPEAKING: 'speaking', INTERRUPTED: 'interrupted',
 };
-const VOICE_THRESHOLD = 0.04;
-const VOICE_SILENCE_MS = 800;
+const VOICE_LABEL = {
+  idle: 'Ready',
+  connecting: 'Connecting…',
+  listening: 'Listening…',
+  hearing: 'Hearing you…',
+  thinking: 'Thinking…',
+  speaking: 'Speaking…',
+  interrupted: 'You first…',
+};
+// Hysteresis + EMA — stops thrashy listen/hear flicker.
+const VOICE_ENTER = 0.055;
+const VOICE_LEAVE = 0.028;
+const VOICE_SILENCE_MS = 1400;
+const VOICE_MIN_DWELL_MS = 280;
+const VOICE_THINK_FALLBACK_MS = 8000;
+const VOICE_EMA_ALPHA = 0.22;
 
 let voicePC = null;
 let voiceMicStream = null;
@@ -739,13 +753,30 @@ let voiceInAnalyser = null;
 let voiceState = VOICE_STATE.IDLE;
 let voiceRAF = null;
 let voiceLastSpokenAt = 0;
+let voiceStateChangedAt = 0;
+let voiceOutEma = 0;
+let voiceInEma = 0;
+let voiceUserActive = false;
+let voiceBotActive = false;
 
-function voiceSetState(s) {
+function voiceSetState(s, force) {
+  if (!force && s === voiceState) return;
+  const now = performance.now();
+  if (!force && voiceState !== VOICE_STATE.IDLE && voiceState !== VOICE_STATE.CONNECTING) {
+    const elapsed = now - voiceStateChangedAt;
+    const sticky =
+      (voiceState === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+      (voiceState === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+      (voiceState === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+      (voiceState === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING);
+    if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+  }
   voiceState = s;
+  voiceStateChangedAt = now;
   const orb = document.getElementById('voice-orb');
   const st = document.getElementById('voice-status');
   if (orb) orb.dataset.state = s;
-  if (st) st.textContent = s;
+  if (st) st.textContent = VOICE_LABEL[s] || s;
 }
 
 function voiceShowError(msg) {
@@ -767,23 +798,50 @@ function voiceAmp(an) {
   return Math.sqrt(sum / data.length);
 }
 
+function voiceGate(ema, wasActive) {
+  if (wasActive) return ema > VOICE_LEAVE;
+  return ema > VOICE_ENTER;
+}
+
+function voiceWaitIce(pc, timeoutMs = 1500) {
+  if (pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      pc.removeEventListener('icegatheringstatechange', onChange);
+      resolve();
+    };
+    const onChange = () => {
+      if (pc.iceGatheringState === 'complete') finish();
+    };
+    pc.addEventListener('icegatheringstatechange', onChange);
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 function voiceTick() {
   if (!voiceOutAnalyser) return;
   const orb = document.getElementById('voice-orb');
   if (!orb) return;  // view torn down
-  const out = voiceAmp(voiceOutAnalyser);
-  const inn = voiceInAnalyser ? voiceAmp(voiceInAnalyser) : 0;
+  const outRaw = voiceAmp(voiceOutAnalyser);
+  const innRaw = voiceInAnalyser ? voiceAmp(voiceInAnalyser) : 0;
+  voiceOutEma = voiceOutEma + VOICE_EMA_ALPHA * (outRaw - voiceOutEma);
+  voiceInEma = voiceInEma + VOICE_EMA_ALPHA * (innRaw - voiceInEma);
   const now = performance.now();
-  const userSpeaking = out > VOICE_THRESHOLD;
-  const botSpeaking  = inn > VOICE_THRESHOLD;
+  const userSpeaking = voiceGate(voiceOutEma, voiceUserActive);
+  const botSpeaking  = voiceGate(voiceInEma, voiceBotActive);
+  voiceUserActive = userSpeaking;
+  voiceBotActive = botSpeaking;
 
   if (botSpeaking && userSpeaking && voiceState === VOICE_STATE.SPEAKING) {
-    voiceSetState(VOICE_STATE.INTERRUPTED);
-    setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+    voiceSetState(VOICE_STATE.INTERRUPTED, true);
+    setTimeout(() => { if (voicePC) voiceSetState(VOICE_STATE.HEARING, true); }, 220);
     voiceLastSpokenAt = now;
   } else if (botSpeaking) {
     voiceSetState(VOICE_STATE.SPEAKING);
-    const scale = 1.0 + Math.min(0.15, inn * 1.5);
+    const scale = 1.0 + Math.min(0.12, voiceInEma * 1.2);
     orb.style.transform = `scale(${scale})`;
   } else if (userSpeaking) {
     voiceSetState(VOICE_STATE.HEARING);
@@ -795,7 +853,7 @@ function voiceTick() {
     } else if (voiceState === VOICE_STATE.SPEAKING) {
       voiceSetState(VOICE_STATE.LISTENING);
       orb.style.transform = '';
-    } else if (voiceState === VOICE_STATE.THINKING && now - voiceLastSpokenAt > 6000) {
+    } else if (voiceState === VOICE_STATE.THINKING && now - voiceLastSpokenAt > VOICE_THINK_FALLBACK_MS) {
       voiceSetState(VOICE_STATE.LISTENING);
     }
   }
@@ -804,9 +862,19 @@ function voiceTick() {
 
 async function startVoiceCall({ tid, agent }) {
   const secret = await loadSecret();
+  voiceOutEma = 0;
+  voiceInEma = 0;
+  voiceUserActive = false;
+  voiceBotActive = false;
+  voiceSetState(VOICE_STATE.CONNECTING, true);
   try {
     voiceMicStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
       video: false,
     });
   } catch (e) {
@@ -814,9 +882,13 @@ async function startVoiceCall({ tid, agent }) {
     return;
   }
   voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (voiceAudioCtx.state === 'suspended') {
+    try { await voiceAudioCtx.resume(); } catch (e) { /* best effort */ }
+  }
   const outSrc = voiceAudioCtx.createMediaStreamSource(voiceMicStream);
   voiceOutAnalyser = voiceAudioCtx.createAnalyser();
-  voiceOutAnalyser.fftSize = 256;
+  voiceOutAnalyser.fftSize = 512;
+  voiceOutAnalyser.smoothingTimeConstant = 0.65;
   outSrc.connect(voiceOutAnalyser);
 
   voicePC = new RTCPeerConnection({
@@ -838,20 +910,23 @@ async function startVoiceCall({ tid, agent }) {
     audioEl.autoplay = true;
     audioEl.play().catch(() => {});
     voiceInAnalyser = voiceAudioCtx.createAnalyser();
-    voiceInAnalyser.fftSize = 256;
+    voiceInAnalyser.fftSize = 512;
+    voiceInAnalyser.smoothingTimeConstant = 0.65;
     voiceAudioCtx.createMediaStreamSource(stream).connect(voiceInAnalyser);
   };
 
   try {
     const offer = await voicePC.createOffer();
     await voicePC.setLocalDescription(offer);
+    await voiceWaitIce(voicePC, 1500);
+    const local = voicePC.localDescription || offer;
     const resp = await fetch(`/m/threads/${tid}/voice/offer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${secret}`,
       },
-      body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+      body: JSON.stringify({ sdp: local.sdp, type: local.type }),
     });
     if (!resp.ok) {
       const txt = await resp.text();
@@ -859,7 +934,7 @@ async function startVoiceCall({ tid, agent }) {
     }
     const answer = await resp.json();
     await voicePC.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
-    voiceSetState(VOICE_STATE.LISTENING);
+    voiceSetState(VOICE_STATE.LISTENING, true);
     voiceTick();
   } catch (e) {
     console.error('voice start failed:', e);
@@ -878,6 +953,10 @@ async function endVoiceCall() {
   if (voiceAudioCtx) { try { await voiceAudioCtx.close(); } catch (e) {} voiceAudioCtx = null; }
   voiceOutAnalyser = null;
   voiceInAnalyser = null;
+  voiceOutEma = 0;
+  voiceInEma = 0;
+  voiceUserActive = false;
+  voiceBotActive = false;
   voiceState = VOICE_STATE.IDLE;
 }
 

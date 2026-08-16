@@ -1,8 +1,7 @@
 // soveryn/app/static/voice/voice_client.js
 //
-// Pipecat WebRTC client for the SOVERYN orb UI. Phase 1: Aetheria-only.
-// State machine driven from audio amplitude analysis (Phase 3 may parse
-// Pipecat's data channel for richer state events).
+// Pipecat WebRTC client for the SOVERYN living presence UI.
+// Amplitude state machine + LivingPresence particle face field.
 
 (() => {
     const agent = document.body.dataset.agent || "aetheria";
@@ -12,12 +11,29 @@
 
     const STATES = {
         IDLE: "idle",
+        CONNECTING: "connecting",
         LISTENING: "listening",
         HEARING: "hearing",
         THINKING: "thinking",
         SPEAKING: "speaking",
         INTERRUPTED: "interrupted",
     };
+    const LABELS = {
+        idle: "Tap to begin",
+        connecting: "Connecting…",
+        listening: "Listening…",
+        hearing: "Hearing you…",
+        thinking: "Thinking…",
+        speaking: "Speaking…",
+        interrupted: "You first…",
+    };
+
+    const VOICE_ENTER = 0.055;
+    const VOICE_LEAVE = 0.028;
+    const SILENCE_TIMEOUT_MS = 1400;
+    const MIN_DWELL_MS = 280;
+    const THINK_FALLBACK_MS = 8000;
+    const EMA_ALPHA = 0.22;
 
     let pc = null;
     let micStream = null;
@@ -26,11 +42,45 @@
     let inboundAnalyser = null;
     let currentState = STATES.IDLE;
     let speakingFrame = null;
+    let lastSpeakingAt = 0;
+    let stateChangedAt = 0;
+    let outEma = 0;
+    let inEma = 0;
+    let userActive = false;
+    let botActive = false;
+    let presence = null;
 
-    function setState(state) {
+    function ensurePresence() {
+        if (!orb || typeof LivingPresence === "undefined") return null;
+        if (!presence) {
+            presence = LivingPresence.mount(orb, { agent });
+            // Keep tap-to-start on the host after mount (canvas shouldn't steal forever).
+            orb.style.cursor = "pointer";
+        }
+        return presence;
+    }
+
+    // Mount immediately so idle feels alive before first tap.
+    ensurePresence();
+    if (presence) presence.setState(STATES.IDLE);
+
+    function setState(state, force) {
+        if (!force && state === currentState) return;
+        const now = performance.now();
+        if (!force && currentState !== STATES.IDLE && currentState !== STATES.CONNECTING) {
+            const elapsed = now - stateChangedAt;
+            const sticky =
+                (currentState === STATES.SPEAKING && state === STATES.LISTENING) ||
+                (currentState === STATES.HEARING && state === STATES.THINKING) ||
+                (currentState === STATES.THINKING && state === STATES.LISTENING) ||
+                (currentState === STATES.LISTENING && state === STATES.HEARING);
+            if (sticky && elapsed < MIN_DWELL_MS) return;
+        }
         currentState = state;
-        orb.dataset.state = state;
-        if (statusEl) statusEl.textContent = state;
+        stateChangedAt = now;
+        if (orb) orb.dataset.state = state;
+        if (statusEl) statusEl.textContent = LABELS[state] || state;
+        if (presence) presence.setState(state);
     }
 
     function showError(msg) {
@@ -43,7 +93,12 @@
     async function getMic() {
         try {
             return await navigator.mediaDevices.getUserMedia({
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                },
                 video: false,
             });
         } catch (err) {
@@ -55,7 +110,8 @@
     function makeAnalyser(audioCtx, stream) {
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.65;
         source.connect(analyser);
         return analyser;
     }
@@ -71,45 +127,62 @@
         return Math.sqrt(sum / data.length);
     }
 
-    const VOICE_THRESHOLD = 0.04;
-    const SILENCE_TIMEOUT_MS = 800;
-    let lastSpeakingAt = 0;
+    function gate(ema, wasActive) {
+        if (wasActive) return ema > VOICE_LEAVE;
+        return ema > VOICE_ENTER;
+    }
+
+    function waitForIceGathering(peer, timeoutMs = 1500) {
+        if (peer.iceGatheringState === "complete") return Promise.resolve();
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                peer.removeEventListener("icegatheringstatechange", onChange);
+                resolve();
+            };
+            const onChange = () => {
+                if (peer.iceGatheringState === "complete") finish();
+            };
+            peer.addEventListener("icegatheringstatechange", onChange);
+            setTimeout(finish, timeoutMs);
+        });
+    }
 
     function tickStateMachine() {
         if (!outboundAnalyser) return;
-        const outAmp = avgAmplitude(outboundAnalyser);
-        const inAmp = inboundAnalyser ? avgAmplitude(inboundAnalyser) : 0;
+        const outRaw = avgAmplitude(outboundAnalyser);
+        const inRaw = inboundAnalyser ? avgAmplitude(inboundAnalyser) : 0;
+        outEma = outEma + EMA_ALPHA * (outRaw - outEma);
+        inEma = inEma + EMA_ALPHA * (inRaw - inEma);
         const now = performance.now();
 
-        const userSpeaking = outAmp > VOICE_THRESHOLD;
-        const botSpeaking = inAmp > VOICE_THRESHOLD;
+        const userSpeaking = gate(outEma, userActive);
+        const botSpeaking = gate(inEma, botActive);
+        userActive = userSpeaking;
+        botActive = botSpeaking;
+
+        if (presence) presence.setLevels({ out: outEma, inn: inEma });
 
         if (botSpeaking && userSpeaking && currentState === STATES.SPEAKING) {
-            // Barge-in detection
-            setState(STATES.INTERRUPTED);
-            setTimeout(() => setState(STATES.HEARING), 200);
+            setState(STATES.INTERRUPTED, true);
+            setTimeout(() => {
+                if (pc) setState(STATES.HEARING, true);
+            }, 220);
             lastSpeakingAt = now;
         } else if (botSpeaking) {
             setState(STATES.SPEAKING);
-            // Drive scale from amplitude (subtle pulse)
-            const scale = 1.0 + Math.min(0.15, inAmp * 1.5);
-            orb.style.transform = `scale(${scale})`;
         } else if (userSpeaking) {
             setState(STATES.HEARING);
             lastSpeakingAt = now;
-            orb.style.transform = "";
         } else {
-            // No one speaking
             if (currentState === STATES.HEARING && now - lastSpeakingAt > SILENCE_TIMEOUT_MS) {
                 setState(STATES.THINKING);
             } else if (currentState === STATES.SPEAKING) {
                 setState(STATES.LISTENING);
-                orb.style.transform = "";
-            } else if (currentState === STATES.THINKING && now - lastSpeakingAt > 6000) {
-                // Backend didn't respond — fall back to listening
+            } else if (currentState === STATES.THINKING && now - lastSpeakingAt > THINK_FALLBACK_MS) {
                 setState(STATES.LISTENING);
-            } else if (currentState === STATES.IDLE) {
-                // wait for user gesture
             }
         }
 
@@ -118,31 +191,32 @@
 
     async function start() {
         try {
+            ensurePresence();
+            setState(STATES.CONNECTING, true);
+            if (statusEl) statusEl.textContent = "Microphone…";
             micStream = await getMic();
+            if (statusEl) statusEl.textContent = "Connecting…";
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === "suspended") {
+                try { await audioContext.resume(); } catch (e) { /* best effort */ }
+            }
             outboundAnalyser = makeAnalyser(audioContext, micStream);
+            outEma = 0;
+            inEma = 0;
+            userActive = false;
+            botActive = false;
 
             pc = new RTCPeerConnection({
                 iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
             });
 
-            // CRITICAL: BOTH audio AND video transceivers required by SmallWebRTCTransport.
-            // (Per docs/superpowers/notes/2026-06-10-pipecat-spike.md Q4.)
-            //
-            // Audio: create the transceiver explicitly and attach the mic track
-            // via replaceTrack on its sender. Do NOT also call pc.addTrack(track) —
-            // that would auto-create a SECOND audio transceiver, leaving one
-            // empty and one with the mic, and Pipecat may subscribe to the
-            // wrong one. Single-transceiver-per-direction is the right shape.
             const audioTransceiver = pc.addTransceiver("audio", { direction: "sendrecv" });
             const micTrack = micStream.getAudioTracks()[0];
             if (micTrack) {
                 await audioTransceiver.sender.replaceTrack(micTrack);
             }
-            // Video transceiver required even for voice-only sessions
             pc.addTransceiver("video", { direction: "sendrecv" });
 
-            // Handle inbound TTS audio
             pc.ontrack = (event) => {
                 if (event.track.kind === "audio") {
                     const stream = new MediaStream([event.track]);
@@ -154,14 +228,16 @@
                 }
             };
 
-            // Negotiate SDP
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
+            if (statusEl) statusEl.textContent = "Negotiating…";
+            await waitForIceGathering(pc, 600);
+            const local = pc.localDescription || offer;
 
             const resp = await fetch(`/voice/${agent}/offer`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+                body: JSON.stringify({ sdp: local.sdp, type: local.type }),
             });
             if (!resp.ok) {
                 const err = await resp.text();
@@ -170,16 +246,15 @@
             const answer = await resp.json();
             await pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
 
-            setState(STATES.LISTENING);
+            setState(STATES.LISTENING, true);
             tickStateMachine();
         } catch (err) {
             console.error("voice client start failed:", err);
             showError(err.message || "voice connection failed");
-            setState(STATES.IDLE);
+            setState(STATES.IDLE, true);
         }
     }
 
-    // Browsers require a user gesture before getUserMedia + autoplay
     function beginIfIdle() {
         if (currentState === STATES.IDLE) {
             start();
@@ -193,6 +268,5 @@
         }
     });
 
-    setState(STATES.IDLE);
-    if (statusEl) statusEl.textContent = "tap to begin";
+    setState(STATES.IDLE, true);
 })();

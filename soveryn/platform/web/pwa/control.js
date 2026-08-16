@@ -535,7 +535,7 @@
     setHeader({ title: 'Mission Control' });
     clearOpsPolls();
     $view.innerHTML = `
-      <div class="mc-build" data-mc-build="20260815-mc4">lab gold · ops · public · cognition</div>
+      <div class="mc-build" data-mc-build="20260815-voice1">lab gold · ops · public · cognition</div>
       <div class="mc-grid">${
       PANELS.map(p => card(p.title, `<div id="mc-slot-${p.id}">${skeleton(2)}</div>`,
                            { wide: p.wide, hud: p.hud })).join('')
