@@ -208,6 +208,55 @@ def test_build_pipeline_uses_duplex_vad_and_first_audio_probe():
     assert "AgentAdapterBridge" in names
 
 
+def test_house_metrics_do_not_clobber_pipecat_frame_metrics():
+    """PR1 regression: TurnMetricsTracker must not overwrite FrameProcessor._metrics.
+
+    Pipecat setup() calls self._metrics.setup(task_manager). Storing our
+    house tracker on that attribute kills the voice pipeline on start
+    with AttributeError — Aetheria connects but never speaks.
+    """
+    from pipecat.processors.metrics.frame_processor_metrics import (
+        FrameProcessorMetrics,
+    )
+
+    from soveryn.platform.voice.metrics import TurnMetricsTracker
+    from soveryn.platform.voice.pipeline import (
+        AgentAdapterBridge,
+        FirstAudioMetricsProbe,
+        ParakeetSTTService,
+    )
+
+    house = TurnMetricsTracker(agent="aetheria", session_id="s", enabled=False)
+
+    probe = FirstAudioMetricsProbe(metrics=house)
+    assert isinstance(probe._metrics, FrameProcessorMetrics)
+    assert probe._turn_metrics is house
+
+    stt = ParakeetSTTService(metrics=house)
+    assert isinstance(stt._metrics, FrameProcessorMetrics)
+    assert stt._turn_metrics is house
+
+    class _Adapter:
+        agent_id = "aetheria"
+        voice_id = "aetheria"
+        supports_streaming = True
+
+        async def start_turn(self, **kwargs):
+            if False:  # pragma: no cover
+                yield None
+            return
+
+        async def on_cancelled(self, **kwargs):
+            pass
+
+        async def on_session_end(self, **kwargs):
+            pass
+
+    bridge = AgentAdapterBridge(adapter=_Adapter(), session_id="s", metrics=house)
+    assert isinstance(bridge._metrics, FrameProcessorMetrics)
+    assert bridge._turn_metrics is house
+
+
 def test_build_pipeline_wires_voice_id_into_tts_service():
     """The configured voice_id reaches the provider-backed TTS service.
 

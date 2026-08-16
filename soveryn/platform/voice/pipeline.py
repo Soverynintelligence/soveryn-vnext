@@ -114,7 +114,7 @@ class ParakeetSTTService(SegmentedSTTService):
         super().__init__(sample_rate=sample_rate, **kwargs)
         self._url = url.rstrip("/") + "/transcribe"
         self._aiohttp_session = aiohttp_session
-        self._metrics = metrics
+        self._turn_metrics = metrics
         self.last_stt_ms: int | None = None
 
     @property
@@ -127,8 +127,8 @@ class ParakeetSTTService(SegmentedSTTService):
             return
         if self._aiohttp_session is None:
             self._aiohttp_session = aiohttp.ClientSession()
-        if self._metrics is not None:
-            self._metrics.mark_stt_start()
+        if self._turn_metrics is not None:
+            self._turn_metrics.mark_stt_start()
         t0 = time.perf_counter()
         try:
             async with self._aiohttp_session.post(
@@ -147,8 +147,8 @@ class ParakeetSTTService(SegmentedSTTService):
                 text = (payload.get("text") or "").strip()
                 elapsed_ms = int(round((time.perf_counter() - t0) * 1000))
                 self.last_stt_ms = elapsed_ms
-                if self._metrics is not None:
-                    self._metrics.mark_stt_end()
+                if self._turn_metrics is not None:
+                    self._turn_metrics.mark_stt_end()
                 if text:
                     yield TranscriptionFrame(
                         text=text,
@@ -187,7 +187,7 @@ class AgentAdapterBridge(FrameProcessor):
         self._session_id = session_id
         self._inflight_task: asyncio.Task | None = None
         self._cancel_event: asyncio.Event | None = None
-        self._metrics = metrics
+        self._turn_metrics = metrics
         self._stt = stt
         self.turn_epoch = 0
 
@@ -213,9 +213,9 @@ class AgentAdapterBridge(FrameProcessor):
                 stt_ms = self._stt.last_stt_ms if self._stt is not None else None
                 # New user turn — bump epoch so late tokens from prior turn drop.
                 self.turn_epoch += 1
-                if self._metrics is not None:
-                    self._metrics.turn_epoch = self.turn_epoch
-                    self._metrics.begin_user_turn(text, stt_ms=stt_ms)
+                if self._turn_metrics is not None:
+                    self._turn_metrics.turn_epoch = self.turn_epoch
+                    self._turn_metrics.begin_user_turn(text, stt_ms=stt_ms)
                 self._inflight_task = asyncio.create_task(self._run_turn(text))
             return
 
@@ -231,13 +231,13 @@ class AgentAdapterBridge(FrameProcessor):
             await self._cancel_inflight()
             return
         self.turn_epoch += 1
-        if self._metrics is not None:
+        if self._turn_metrics is not None:
             if reason == "barge_in":
-                self._metrics.note_barge_in(reason)
+                self._turn_metrics.note_barge_in(reason)
             else:
-                self._metrics.note_cancel(reason)
-            self._metrics.turn_epoch = self.turn_epoch
-            self._metrics.finish()
+                self._turn_metrics.note_cancel(reason)
+            self._turn_metrics.turn_epoch = self.turn_epoch
+            self._turn_metrics.finish()
         if self._cancel_event is not None:
             self._cancel_event.set()
         await self._cancel_inflight()
@@ -279,17 +279,17 @@ class AgentAdapterBridge(FrameProcessor):
                 text = chunk.text or ""
                 if not text.strip():
                     continue
-                if self._metrics is not None:
+                if self._turn_metrics is not None:
                     if first_token:
-                        self._metrics.mark_llm_first_token(text)
+                        self._turn_metrics.mark_llm_first_token(text)
                         first_token = False
                     else:
-                        self._metrics.note_assistant_chars(text)
+                        self._turn_metrics.note_assistant_chars(text)
                 await self.push_frame(LLMTextFrame(text=text))
         except asyncio.CancelledError:
-            if self._metrics is not None:
-                self._metrics.note_cancel("llm_cancelled")
-                self._metrics.finish()
+            if self._turn_metrics is not None:
+                self._turn_metrics.note_cancel("llm_cancelled")
+                self._turn_metrics.finish()
             raise
         finally:
             self._cancel_event = None
@@ -336,19 +336,19 @@ class FirstAudioMetricsProbe(FrameProcessor):
 
     def __init__(self, metrics: TurnMetricsTracker | None = None):
         super().__init__()
-        self._metrics = metrics
+        self._turn_metrics = metrics
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if (
-            self._metrics is not None
+            self._turn_metrics is not None
             and isinstance(frame, TTSAudioRawFrame)
             and direction == FrameDirection.DOWNSTREAM
-            and self._metrics.has_open_turn()
+            and self._turn_metrics.has_open_turn()
         ):
             # First audio of turn closes the metric row (includes e2e).
-            if self._metrics.mark_tts_first_audio():
-                self._metrics.finish()
+            if self._turn_metrics.mark_tts_first_audio():
+                self._turn_metrics.finish()
         await self.push_frame(frame, direction)
 
 
