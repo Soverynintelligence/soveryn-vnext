@@ -308,8 +308,8 @@ class AgentLoopBridge(AgentAdapterBridge):
         stt: ParakeetSTTService | None = None,
         agent_name: str = "aetheria",
         voice_id: str | None = None,
-        flush_chars: int = 16,
-        tts_agg: str = "token",
+        flush_chars: int = 40,
+        tts_agg: str = "sentence",
     ):
         adapter = AgentLoopAdapter(
             agent_loop,
@@ -471,6 +471,21 @@ def build_voice_pipeline(
     return pipeline, worker
 
 
+def _f5_safe_adapter_agg(duplex: DuplexConfig) -> tuple[str, int]:
+    """F5 is clause/HTTP — TOKEN bridge flush chops playout. Force sentence."""
+    import os
+
+    primary = (os.environ.get("SOVEREIGN_TTS_PRIMARY") or "f5tts").strip().lower()
+    tts_agg = duplex.tts_agg
+    flush = duplex.bridge_flush_chars
+    if primary == "f5tts" and tts_agg == "token":
+        logger.info(
+            "F5-TTS: coercing adapter tts_agg token→sentence (avoids choppy speech)"
+        )
+        return "sentence", max(flush, 40)
+    return tts_agg, flush
+
+
 def build_aetheria_voice_pipeline(
     *,
     agent_loop,  # AgentLoop
@@ -485,12 +500,13 @@ def build_aetheria_voice_pipeline(
 ) -> tuple[Pipeline, PipelineWorker]:
     """Thin wrapper: AgentLoopAdapter + build_voice_pipeline (PR2)."""
     duplex = duplex or DuplexConfig.from_env()
+    tts_agg, flush_chars = _f5_safe_adapter_agg(duplex)
     adapter = AgentLoopAdapter(
         agent_loop,
         agent_id=agent_name,
         voice_id=voice_id or agent_name,
-        flush_chars=duplex.bridge_flush_chars,
-        tts_agg=duplex.tts_agg,
+        flush_chars=flush_chars,
+        tts_agg=tts_agg,
     )
     return build_voice_pipeline(
         adapter=adapter,
@@ -545,12 +561,13 @@ async def run_aetheria_voice_session(
 ) -> None:
     """Run one AgentLoop voice session (wrapper for dispatch compat)."""
     duplex = duplex or DuplexConfig.from_env()
+    tts_agg, flush_chars = _f5_safe_adapter_agg(duplex)
     adapter = AgentLoopAdapter(
         agent_loop,
         agent_id=agent_name,
         voice_id=voice_id or agent_name,
-        flush_chars=duplex.bridge_flush_chars,
-        tts_agg=duplex.tts_agg,
+        flush_chars=flush_chars,
+        tts_agg=tts_agg,
     )
     await run_voice_session(
         webrtc_connection=webrtc_connection,

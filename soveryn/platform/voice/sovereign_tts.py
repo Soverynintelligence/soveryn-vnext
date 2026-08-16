@@ -71,10 +71,11 @@ class ProviderBackedTTSService(TTSService):
         text_aggregation_mode: TextAggregationMode | None = None,
         **kwargs: Any,
     ) -> None:
-        # Explicit aggregation mode (PR3). Default TOKEN for lower first-audio
-        # latency; SENTENCE available via SOVERYN_VOICE_TTS_AGG=sentence.
+        # Explicit aggregation mode. Default SENTENCE — F5 is clause/HTTP and
+        # TOKEN fragments sound broken. TOKEN via SOVERYN_VOICE_TTS_AGG for
+        # streaming providers.
         if text_aggregation_mode is None:
-            text_aggregation_mode = TextAggregationMode.TOKEN
+            text_aggregation_mode = TextAggregationMode.SENTENCE
         super().__init__(
             sample_rate=sample_rate,
             text_aggregation_mode=text_aggregation_mode,
@@ -185,13 +186,16 @@ def _decode_chunk_to_pcm(audio_bytes: bytes, expected_sr: int) -> bytes:
 def resolve_text_aggregation_mode(
     tts_agg: str | TextAggregationMode | None = None,
 ) -> TextAggregationMode:
-    """Map DuplexConfig / env string to Pipecat TextAggregationMode."""
+    """Map DuplexConfig / env string to Pipecat TextAggregationMode.
+
+    Default is SENTENCE (safe for F5 clause synthesis).
+    """
     if isinstance(tts_agg, TextAggregationMode):
         return tts_agg
-    raw = (tts_agg or os.environ.get("SOVERYN_VOICE_TTS_AGG") or "token").strip().lower()
-    if raw in ("sentence", "sent"):
-        return TextAggregationMode.SENTENCE
-    return TextAggregationMode.TOKEN
+    raw = (tts_agg or os.environ.get("SOVERYN_VOICE_TTS_AGG") or "sentence").strip().lower()
+    if raw in ("token", "tok"):
+        return TextAggregationMode.TOKEN
+    return TextAggregationMode.SENTENCE
 
 
 def build_tts_service(
@@ -213,8 +217,10 @@ def build_tts_service(
     (e.g. ``"aetheria"``); ``elevenlabs_voice_id`` is the cloud UUID for
     the fallback provider. Each provider gets the voice_id shape it expects.
 
-    ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``token`` (default, lower first
-    audio) or ``sentence`` (buffer to sentence boundary before synthesize).
+    ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``sentence`` (default — whole
+    clauses for F5) or ``token`` (streaming providers / latency experiments).
+    **F5 always uses SENTENCE**: token fragments create choppy playout
+    because each fragment is a full HTTP synthesize with its own prosody.
 
     ``f5tts_url`` overrides the local service URL; useful for tests.
     ``aiohttp_session`` is accepted for API parity with the previous
@@ -225,6 +231,11 @@ def build_tts_service(
     agg_mode = resolve_text_aggregation_mode(tts_agg)
 
     if selection == "f5tts":
+        if agg_mode == TextAggregationMode.TOKEN:
+            logger.info(
+                "F5-TTS ignores TOKEN aggregation (clause HTTP synth); using SENTENCE"
+            )
+            agg_mode = TextAggregationMode.SENTENCE
         provider = F5TTSProvider(
             url=f5tts_url or os.environ.get("F5TTS_URL", F5TTS_DEFAULT_URL),
             sample_rate=F5TTS_SAMPLE_RATE,

@@ -23,9 +23,9 @@ class AgentLoopAdapter(AgentAdapterBase):
 
     Always passes ``source="voice"`` so conversation_store tags voice turns.
 
-    ``flush_chars`` controls how soon token stream is emitted to TTS (PR3).
-    Lower values + TOKEN aggregation reduce first-audio latency; higher values
-    (or sentence mode) favor prosody and fewer F5 calls.
+    ``flush_chars`` controls how soon the token stream is emitted to TTS.
+    Sentence mode (default) flushes on ``.!?;:`` — fewer F5 calls, natural
+    prosody. Token mode flushes sooner for streaming TTS latency experiments.
     """
 
     supports_streaming = True
@@ -36,15 +36,15 @@ class AgentLoopAdapter(AgentAdapterBase):
         *,
         agent_id: str,
         voice_id: str | None = None,
-        flush_chars: int = 16,
-        tts_agg: str = "token",
+        flush_chars: int = 40,
+        tts_agg: str = "sentence",
     ):
         self._agent_loop = agent_loop
         self.agent_id = agent_id
         # F5 keys on agent name; ElevenLabs UUID may be separate via build_tts_service.
         self.voice_id = voice_id or agent_id
         self.flush_chars = max(4, int(flush_chars))
-        self.tts_agg = (tts_agg or "token").strip().lower()
+        self.tts_agg = (tts_agg or "sentence").strip().lower()
 
     async def start_turn(
         self,

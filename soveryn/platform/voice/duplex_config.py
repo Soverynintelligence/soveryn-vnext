@@ -48,10 +48,11 @@ class DuplexConfig:
     backchannel_max_ms: int = 600
     metrics_enabled: bool = True
     adapter: str = "agent_loop"
-    # Phase 1 (PR3): default TOKEN for lower first-audio latency. SENTENCE
-    # remains available via SOVERYN_VOICE_TTS_AGG=sentence for prosody-first.
-    tts_agg: str = "token"
-    bridge_flush_chars: int = 16  # adapter buffer before flush (token mode default)
+    # F5-TTS is clause/HTTP synthesis — TOKEN aggregation (~16-char fragments)
+    # produces choppy playout. Default SENTENCE; TOKEN only for streaming TTS
+    # providers (e.g. ElevenLabs) via SOVERYN_VOICE_TTS_AGG=token.
+    tts_agg: str = "sentence"
+    bridge_flush_chars: int = 40  # adapter buffer before flush (sentence default)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "DuplexConfig":
@@ -65,11 +66,10 @@ class DuplexConfig:
             confidence = conf_default
         metrics_enabled = _truthy(e.get("SOVERYN_VOICE_METRICS"), default=True)
         adapter = (e.get("SOVERYN_VOICE_ADAPTER") or "agent_loop").strip().lower()
-        tts_agg = (e.get("SOVERYN_VOICE_TTS_AGG") or "token").strip().lower()
+        tts_agg = (e.get("SOVERYN_VOICE_TTS_AGG") or "sentence").strip().lower()
         if tts_agg not in ("token", "sentence"):
-            tts_agg = "token"
-        # Sentence mode keeps a larger bridge buffer to avoid one-token TTS spam
-        # if aggregation is also sentence; token mode flushes sooner.
+            tts_agg = "sentence"
+        # Sentence mode buffers longer; token mode flushes sooner for streaming TTS.
         flush_default = 40 if tts_agg == "sentence" else 16
         return cls(
             barge_in=barge_in,
