@@ -64,10 +64,10 @@ class _FakeAgentLoop:
 
     def __init__(self, events=None):
         self.events = events or []
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, dict]] = []
 
     def process_message_stream(self, session_id, user_message, **kwargs):
-        self.calls.append((session_id, user_message))
+        self.calls.append((session_id, user_message, dict(kwargs)))
         for e in self.events:
             yield e
 
@@ -124,18 +124,18 @@ def test_build_pipeline_constructs_all_processors():
 
     assert "VADProcessor" in type_names
     assert "ParakeetSTTService" in type_names
-    assert "AgentLoopBridge" in type_names
+    assert "AgentAdapterBridge" in type_names
     assert "ProviderBackedTTSService" in type_names
     assert "FirstAudioMetricsProbe" in type_names
 
     vad_idx = type_names.index("VADProcessor")
     stt_idx = type_names.index("ParakeetSTTService")
-    bridge_idx = type_names.index("AgentLoopBridge")
+    bridge_idx = type_names.index("AgentAdapterBridge")
     tts_idx = type_names.index("ProviderBackedTTSService")
     probe_idx = type_names.index("FirstAudioMetricsProbe")
     assert vad_idx < stt_idx < bridge_idx < tts_idx < probe_idx
 
-    # Bridge holds the agent_loop + session_id passed at construction
+    # Bridge holds the adapter wrapping agent_loop + session_id
     bridge = processors[bridge_idx]
     assert bridge._agent_loop is agent_loop
     assert bridge._session_id == "session-1"
@@ -202,7 +202,7 @@ def test_build_pipeline_uses_duplex_vad_and_first_audio_probe():
     assert isinstance(worker, PipelineWorker)
     names = [type(p).__name__ for p in pipeline._processors]
     assert "FirstAudioMetricsProbe" in names
-    assert "AgentLoopBridge" in names
+    assert "AgentAdapterBridge" in names
 
 
 def test_build_pipeline_wires_voice_id_into_tts_service():
@@ -373,8 +373,11 @@ def test_agent_loop_bridge_emits_llm_text_frames_for_each_tts_token_event():
 
     captured, agent_loop = asyncio.run(_run())
 
-    # AgentLoop was called with the transcribed user utterance
-    assert agent_loop.calls == [("sid-1", "user utterance")]
+    # AgentLoop was called with the transcribed user utterance + source=voice
+    assert len(agent_loop.calls) == 1
+    assert agent_loop.calls[0][0] == "sid-1"
+    assert agent_loop.calls[0][1] == "user utterance"
+    assert agent_loop.calls[0][2].get("source") == "voice"
 
     # Captured: response wrapper Start, one aggregated LLMTextFrame, response End.
     # Sentence aggregation flushes "hello" + " world" + "." as one frame.

@@ -1,10 +1,12 @@
 """Sovereign voice — Pipecat-based voice agent for SOVERYN.
 
-Phase 1: Aetheria on ElevenLabs through a modern orchestrator with
-VAD-based continuous listening + interruption + sanitization-at-source.
-Replaces the patched cloud pipeline from the legacy (pre-vNext) system.
+See docs/superpowers/specs/2026-06-10-sovereign-voice-design.md and
+docs/designs/2026-08-16-duplex-voice-shell.md.
 
-See docs/superpowers/specs/2026-06-10-sovereign-voice-design.md."""
+Adapters live in ``soveryn.platform.voice.adapters`` — not re-exported here
+to avoid circular imports with ``soveryn.agents.loop`` (which imports
+``sanitize`` from this package).
+"""
 
 from soveryn.platform.voice.config import (
     AgentVoiceCharacter,

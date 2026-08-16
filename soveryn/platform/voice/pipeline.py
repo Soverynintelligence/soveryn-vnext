@@ -56,10 +56,10 @@ from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 from pipecat.utils.time import time_now_iso8601
 from pipecat.workers.runner import WorkerRunner
 
-from soveryn.agents.loop import AgentLoop, TTSTokenEvent
+from soveryn.platform.voice.adapters.agent_loop import AgentLoopAdapter
+from soveryn.platform.voice.adapters.base import AgentAdapter
 from soveryn.platform.voice.duplex_config import DuplexConfig
 from soveryn.platform.voice.metrics import TurnMetricsTracker
-from soveryn.platform.voice.sanitize import sanitize_for_tts
 from soveryn.platform.voice.sovereign_tts import (
     ProviderBackedTTSService,
     build_tts_service,
@@ -159,57 +159,46 @@ class ParakeetSTTService(SegmentedSTTService):
 
 
 # --------------------------------------------------------------------------
-# AgentLoop bridge — FrameProcessor
+# Agent adapter bridge — FrameProcessor
 # --------------------------------------------------------------------------
 
 
-class AgentLoopBridge(FrameProcessor):
-    """Bridges Pipecat <-> AgentLoop.process_message_stream.
+class AgentAdapterBridge(FrameProcessor):
+    """Bridges Pipecat <-> AgentAdapter (text brain).
 
-    Consumes TranscriptionFrame (finalized utterance) and emits
+    Consumes TranscriptionFrame and emits
     LLMFullResponseStartFrame -> LLMTextFrame* -> LLMFullResponseEndFrame.
 
-    AgentLoop.process_message_stream is a SYNC generator (existing chat
-    contract). We run it on a worker thread and forward its TTSTokenEvents
-    onto the asyncio loop via an asyncio.Queue. Cancelling the in-flight
-    asyncio task drops queued items and signals the producer thread to
-    drain its inner generator (the cancellation surfaces on the next
-    queue.put()).
-
-    InterruptionFrame mid-turn: cancel the in-flight task, emit
-    LLMFullResponseEndFrame so the downstream TTS service flushes cleanly,
-    then propagate the frame so siblings can drop their pending audio.
-
-    NB: we deliberately skip Pipecat's LLMContextAggregatorPair — AgentLoop
-    owns all conversation state (lattice, conv_store, persona). The voice
-    bridge is output-only with respect to context.
+    Sole owner of turn_epoch for PR4a barge-in drop (bumped via begin_interrupt).
     """
-
-    _QUEUE_SENTINEL = object()
 
     def __init__(
         self,
         *,
-        agent_loop: AgentLoop,
+        adapter: AgentAdapter,
         session_id: str,
         metrics: TurnMetricsTracker | None = None,
         stt: ParakeetSTTService | None = None,
     ):
         super().__init__()
-        self._agent_loop = agent_loop
+        self._adapter = adapter
         self._session_id = session_id
         self._inflight_task: asyncio.Task | None = None
+        self._cancel_event: asyncio.Event | None = None
         self._metrics = metrics
         self._stt = stt
+        self.turn_epoch = 0
+
+    # Back-compat for tests that inspected AgentLoopBridge._agent_loop
+    @property
+    def _agent_loop(self):
+        return getattr(self._adapter, "_agent_loop", None)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
         if isinstance(frame, InterruptionFrame):
-            if self._metrics is not None:
-                self._metrics.note_cancel("interruption")
-                self._metrics.finish()
-            await self._cancel_inflight()
+            await self.begin_interrupt(reason="interruption")
             await self.push_frame(frame, direction)
             return
 
@@ -225,6 +214,28 @@ class AgentLoopBridge(FrameProcessor):
 
         await self.push_frame(frame, direction)
 
+    async def begin_interrupt(self, *, reason: str = "barge_in") -> None:
+        """Sole epoch owner: bump turn_epoch, cancel in-flight, notify adapter."""
+        self.turn_epoch += 1
+        if self._metrics is not None:
+            if reason == "barge_in":
+                self._metrics.note_barge_in(reason)
+            else:
+                self._metrics.note_cancel(reason)
+            self._metrics.turn_epoch = self.turn_epoch
+            self._metrics.finish()
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        await self._cancel_inflight()
+        try:
+            await self._adapter.on_cancelled(
+                session_id=self._session_id,
+                reason=reason,
+                turn_epoch=self.turn_epoch,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("adapter on_cancelled failed")
+
     async def _cancel_inflight(self) -> None:
         if self._inflight_task is None or self._inflight_task.done():
             self._inflight_task = None
@@ -237,94 +248,64 @@ class AgentLoopBridge(FrameProcessor):
         self._inflight_task = None
 
     async def _run_turn(self, user_text: str) -> None:
-        """Run one AgentLoop turn, streaming TTSTokenEvents into LLMTextFrames.
-
-        Always emits LLMFullResponseStartFrame at the start and
-        LLMFullResponseEndFrame at the end (including on cancellation /
-        error) so the downstream TTS service knows when to flush.
-        """
         await self.push_frame(LLMFullResponseStartFrame())
-        queue: asyncio.Queue = asyncio.Queue()
-        loop = asyncio.get_running_loop()
+        cancel_event = asyncio.Event()
+        self._cancel_event = cancel_event
+        epoch = self.turn_epoch
         first_token = True
-
-        def _producer() -> None:
-            pending_tts = ""
-
-            def _flush_pending() -> None:
-                nonlocal pending_tts
-                if pending_tts.strip():
-                    loop.call_soon_threadsafe(queue.put_nowait, pending_tts)
-                pending_tts = ""
-
-            try:
-                for event in self._agent_loop.process_message_stream(
-                    self._session_id, user_text,
-                ):
-                    if isinstance(event, TTSTokenEvent):
-                        # Already sanitized at source; re-sanitize is a cheap
-                        # idempotent safety net in case a future code path
-                        # emits a raw chunk. We then buffer tiny pieces into
-                        # phrase-sized chunks so the TTS service does not get
-                        # one-character requests.
-                        chunk = sanitize_for_tts(event.text, preserve_outer_whitespace=True)
-                        if not chunk.strip():
-                            continue
-                        pending_tts += chunk
-                        # Flush at sentence boundaries OR at a buffer threshold
-                        # large enough for prosody coherence. The previous
-                        # `len >= 4` flush was firing on essentially every
-                        # token, which combined with TTS TOKEN-mode aggregation
-                        # produced ~13 ElevenLabs API calls per short reply.
-                        # SENTENCE-level TTS aggregation downstream makes this
-                        # less critical, but a larger bridge buffer still
-                        # reduces frame thrash.
-                        if (
-                            chunk.rstrip()[-1] in ".!?;:"
-                            or len(pending_tts.strip()) >= 40
-                        ):
-                            _flush_pending()
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("agent_loop bridge producer failed: %s", exc)
-            finally:
-                _flush_pending()
-                loop.call_soon_threadsafe(queue.put_nowait, self._QUEUE_SENTINEL)
-
-        producer_task = asyncio.create_task(asyncio.to_thread(_producer))
         try:
-            while True:
-                item = await queue.get()
-                if item is self._QUEUE_SENTINEL:
+            async for chunk in self._adapter.start_turn(
+                session_id=self._session_id,
+                user_text=user_text,
+                cancel_event=cancel_event,
+                turn_epoch=epoch,
+            ):
+                if cancel_event.is_set() or epoch != self.turn_epoch:
                     break
+                text = chunk.text or ""
+                if not text.strip():
+                    continue
                 if self._metrics is not None:
                     if first_token:
-                        self._metrics.mark_llm_first_token(item)
+                        self._metrics.mark_llm_first_token(text)
                         first_token = False
                     else:
-                        self._metrics.note_assistant_chars(item)
-                await self.push_frame(LLMTextFrame(text=item))
+                        self._metrics.note_assistant_chars(text)
+                await self.push_frame(LLMTextFrame(text=text))
         except asyncio.CancelledError:
-            # Drain queue silently; producer thread will hit the sentinel on
-            # its next iteration (or has already finished). We don't join the
-            # thread — call_soon_threadsafe is non-blocking either way.
             if self._metrics is not None:
                 self._metrics.note_cancel("llm_cancelled")
                 self._metrics.finish()
             raise
         finally:
-            # Best-effort: wait for the producer task so cancellation is
-            # observable. If it's still running (sync iterator blocked on a
-            # network call), we let it complete naturally — the next chunk
-            # it produces lands on a dead queue but won't crash the pipeline.
-            if not producer_task.done():
-                try:
-                    await asyncio.wait_for(asyncio.shield(producer_task), timeout=0.001)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
+            self._cancel_event = None
             await self.push_frame(LLMFullResponseEndFrame())
-            # Do not finish metrics here — wait for first TTS audio (probe) so
-            # e2e_first_audio_ms is populated. Orphan turns flush on next turn
-            # / disconnect / cancel.
+
+
+class AgentLoopBridge(AgentAdapterBridge):
+    """Back-compat constructor wrapping AgentLoop in AgentLoopAdapter."""
+
+    def __init__(
+        self,
+        *,
+        agent_loop,  # AgentLoop — untyped to avoid import cycle in type checkers
+        session_id: str,
+        metrics: TurnMetricsTracker | None = None,
+        stt: ParakeetSTTService | None = None,
+        agent_name: str = "aetheria",
+        voice_id: str | None = None,
+    ):
+        adapter = AgentLoopAdapter(
+            agent_loop,
+            agent_id=agent_name,
+            voice_id=voice_id or agent_name,
+        )
+        super().__init__(
+            adapter=adapter,
+            session_id=session_id,
+            metrics=metrics,
+            stt=stt,
+        )
 
 
 # --------------------------------------------------------------------------
@@ -358,26 +339,25 @@ class FirstAudioMetricsProbe(FrameProcessor):
 # --------------------------------------------------------------------------
 
 
-def build_aetheria_voice_pipeline(
+def build_voice_pipeline(
     *,
-    agent_loop: AgentLoop,
-    agent_name: str,
-    voice_id: str,
-    parakeet_url: str,
-    elevenlabs_api_key: str,
+    adapter: AgentAdapter,
     session_id: str,
     webrtc_connection: SmallWebRTCConnection,
-    aiohttp_session: aiohttp.ClientSession | None = None,
+    parakeet_url: str = DEFAULT_PARAKEET_URL,
     duplex: DuplexConfig | None = None,
+    elevenlabs_api_key: str | None = None,
+    elevenlabs_voice_id: str | None = None,
+    aiohttp_session: aiohttp.ClientSession | None = None,
 ) -> tuple[Pipeline, PipelineWorker]:
-    """Construct the Pipecat pipeline for one Aetheria voice session.
-
-    Returns (pipeline, worker) — caller drives the worker via WorkerRunner
-    (see run_aetheria_voice_session below for the canonical run pattern).
+    """Construct the Pipecat pipeline for one voice session (any AgentAdapter).
 
     Component order, downstream:
         transport.input() -> VAD -> stt -> bridge -> tts -> first_audio_probe
         -> transport.output()
+
+    F5-TTS uses ``adapter.agent_id`` as the voice registry key. ElevenLabs
+    keys are optional when ``SOVEREIGN_TTS_PRIMARY=f5tts``.
     """
     if aiohttp_session is None:
         aiohttp_session = aiohttp.ClientSession()
@@ -386,7 +366,7 @@ def build_aetheria_voice_pipeline(
     metrics: TurnMetricsTracker | None = None
     if duplex.metrics_enabled:
         metrics = TurnMetricsTracker(
-            agent=agent_name,
+            agent=adapter.agent_id,
             session_id=session_id,
             adapter=duplex.adapter,
             enabled=True,
@@ -405,11 +385,6 @@ def build_aetheria_voice_pipeline(
         webrtc_connection=webrtc_connection,
         params=TransportParams(
             audio_in_enabled=True,
-            # Browser sends Opus at 48kHz; SileroVADAnalyzer only handles
-            # 8000 or 16000 Hz. Pipe Pipecat to resample to 16kHz at the
-            # transport input boundary so VAD sees the right rate. Without
-            # this, audio reaches the pipeline at 48kHz, Silero silently
-            # produces no voice activations, and nothing downstream fires.
             audio_in_sample_rate=DEFAULT_SAMPLE_RATE,
             audio_out_enabled=True,
             audio_out_10ms_chunks=1,
@@ -423,20 +398,16 @@ def build_aetheria_voice_pipeline(
         metrics=metrics,
     )
 
-    bridge = AgentLoopBridge(
-        agent_loop=agent_loop,
+    bridge = AgentAdapterBridge(
+        adapter=adapter,
         session_id=session_id,
         metrics=metrics,
         stt=stt,
     )
 
-    # TTS provider is selected via SOVEREIGN_TTS_PRIMARY (default "f5tts",
-    # local F5-TTS on :8088). Set SOVEREIGN_TTS_PRIMARY=elevenlabs to roll
-    # back to the cloud provider without touching code. The wrapper handles
-    # sample-rate negotiation; both paths emit TTSAudioRawFrame downstream.
     tts = build_tts_service(
-        agent_name=agent_name,
-        elevenlabs_voice_id=voice_id,
+        agent_name=adapter.agent_id,
+        elevenlabs_voice_id=elevenlabs_voice_id or adapter.voice_id,
         elevenlabs_api_key=elevenlabs_api_key,
         aiohttp_session=aiohttp_session,
     )
@@ -453,7 +424,6 @@ def build_aetheria_voice_pipeline(
         transport.output(),
     ])
 
-    # Pipecat 1.3.0: do NOT pass allow_interruptions — field removed; was a silent no-op.
     worker = PipelineWorker(
         pipeline,
         params=PipelineParams(
@@ -466,47 +436,104 @@ def build_aetheria_voice_pipeline(
         if metrics is not None:
             metrics.note_cancel("client_disconnect")
             metrics.finish()
+        try:
+            await adapter.on_session_end(session_id=session_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("adapter on_session_end failed")
         await worker.cancel()
 
     return pipeline, worker
 
 
-async def run_aetheria_voice_session(
+def build_aetheria_voice_pipeline(
+    *,
+    agent_loop,  # AgentLoop
+    agent_name: str,
+    voice_id: str | None,
+    parakeet_url: str,
+    elevenlabs_api_key: str | None,
+    session_id: str,
+    webrtc_connection: SmallWebRTCConnection,
+    aiohttp_session: aiohttp.ClientSession | None = None,
+    duplex: DuplexConfig | None = None,
+) -> tuple[Pipeline, PipelineWorker]:
+    """Thin wrapper: AgentLoopAdapter + build_voice_pipeline (PR2)."""
+    adapter = AgentLoopAdapter(
+        agent_loop,
+        agent_id=agent_name,
+        voice_id=voice_id or agent_name,
+    )
+    return build_voice_pipeline(
+        adapter=adapter,
+        session_id=session_id,
+        webrtc_connection=webrtc_connection,
+        parakeet_url=parakeet_url,
+        duplex=duplex,
+        elevenlabs_api_key=elevenlabs_api_key,
+        elevenlabs_voice_id=voice_id,
+        aiohttp_session=aiohttp_session,
+    )
+
+
+async def run_voice_session(
     *,
     webrtc_connection: SmallWebRTCConnection,
-    agent_loop: AgentLoop,
-    agent_name: str,
+    adapter: AgentAdapter,
     session_id: str,
-    elevenlabs_api_key: str,
-    voice_id: str,
     parakeet_url: str = DEFAULT_PARAKEET_URL,
+    elevenlabs_api_key: str | None = None,
+    elevenlabs_voice_id: str | None = None,
     aiohttp_session: aiohttp.ClientSession | None = None,
     duplex: DuplexConfig | None = None,
 ) -> None:
-    """Run one voice session end-to-end. Returns when the client disconnects.
-
-    Called from the /voice/<agent>/offer endpoint after
-    SmallWebRTCRequestHandler hands us a connection. Builds the pipeline +
-    worker, hands them to WorkerRunner, and awaits run() until the worker
-    cancels (on client disconnect).
-    """
-    _, worker = build_aetheria_voice_pipeline(
-        agent_loop=agent_loop,
-        agent_name=agent_name,
-        voice_id=voice_id,
-        parakeet_url=parakeet_url,
-        elevenlabs_api_key=elevenlabs_api_key,
+    """Run one voice session for any adapter until client disconnect."""
+    _, worker = build_voice_pipeline(
+        adapter=adapter,
         session_id=session_id,
         webrtc_connection=webrtc_connection,
-        aiohttp_session=aiohttp_session,
+        parakeet_url=parakeet_url,
         duplex=duplex,
+        elevenlabs_api_key=elevenlabs_api_key,
+        elevenlabs_voice_id=elevenlabs_voice_id,
+        aiohttp_session=aiohttp_session,
     )
     runner = WorkerRunner(handle_sigint=False)
     await runner.add_workers(worker)
     await runner.run()
 
 
+async def run_aetheria_voice_session(
+    *,
+    webrtc_connection: SmallWebRTCConnection,
+    agent_loop,  # AgentLoop
+    agent_name: str,
+    session_id: str,
+    elevenlabs_api_key: str | None,
+    voice_id: str | None,
+    parakeet_url: str = DEFAULT_PARAKEET_URL,
+    aiohttp_session: aiohttp.ClientSession | None = None,
+    duplex: DuplexConfig | None = None,
+) -> None:
+    """Run one AgentLoop voice session (wrapper for dispatch compat)."""
+    adapter = AgentLoopAdapter(
+        agent_loop,
+        agent_id=agent_name,
+        voice_id=voice_id or agent_name,
+    )
+    await run_voice_session(
+        webrtc_connection=webrtc_connection,
+        adapter=adapter,
+        session_id=session_id,
+        parakeet_url=parakeet_url,
+        elevenlabs_api_key=elevenlabs_api_key,
+        elevenlabs_voice_id=voice_id,
+        aiohttp_session=aiohttp_session,
+        duplex=duplex,
+    )
+
+
 __all__ = [
+    "AgentAdapterBridge",
     "AgentLoopBridge",
     "DEFAULT_PARAKEET_URL",
     "DEFAULT_SAMPLE_RATE",
@@ -515,5 +542,7 @@ __all__ = [
     "ParakeetSTTService",
     "TurnMetricsTracker",
     "build_aetheria_voice_pipeline",
+    "build_voice_pipeline",
     "run_aetheria_voice_session",
+    "run_voice_session",
 ]
