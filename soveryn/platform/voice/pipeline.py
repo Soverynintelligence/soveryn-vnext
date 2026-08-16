@@ -20,7 +20,8 @@ Architecture (pipecat 1.3.0):
 
 Interruption: AgentLoopBridge handles InterruptionFrame when present.
 Pipecat 1.3.0 removed PipelineParams.allow_interruptions — that kwarg is a
-no-op and must not be passed. Live barge-in emission is Phase 2 (TurnController).
+no-op and must not be passed. Live barge-in emission is Phase 2
+(TurnController, PR4a — flag SOVERYN_VOICE_BARGE_IN, default off).
 
 See: docs/designs/2026-08-16-duplex-voice-shell.md
 """
@@ -64,6 +65,7 @@ from soveryn.platform.voice.sovereign_tts import (
     ProviderBackedTTSService,
     build_tts_service,
 )
+from soveryn.platform.voice.turn_controller import TurnController
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +200,8 @@ class AgentAdapterBridge(FrameProcessor):
         await super().process_frame(frame, direction)
 
         if isinstance(frame, InterruptionFrame):
+            # TurnController may already have called begin_interrupt; keep
+            # idempotent so broadcast_interruption does not double-bump epoch.
             await self.begin_interrupt(reason="interruption")
             await self.push_frame(frame, direction)
             return
@@ -207,7 +211,10 @@ class AgentAdapterBridge(FrameProcessor):
             if text:
                 await self._cancel_inflight()
                 stt_ms = self._stt.last_stt_ms if self._stt is not None else None
+                # New user turn — bump epoch so late tokens from prior turn drop.
+                self.turn_epoch += 1
                 if self._metrics is not None:
+                    self._metrics.turn_epoch = self.turn_epoch
                     self._metrics.begin_user_turn(text, stt_ms=stt_ms)
                 self._inflight_task = asyncio.create_task(self._run_turn(text))
             return
@@ -215,7 +222,14 @@ class AgentAdapterBridge(FrameProcessor):
         await self.push_frame(frame, direction)
 
     async def begin_interrupt(self, *, reason: str = "barge_in") -> None:
-        """Sole epoch owner: bump turn_epoch, cancel in-flight, notify adapter."""
+        """Sole epoch owner: bump turn_epoch, cancel in-flight, notify adapter.
+
+        Idempotent while an interrupt is already in flight for this turn.
+        """
+        if self._cancel_event is not None and self._cancel_event.is_set():
+            # Already cancelled this turn's producer; still ensure task is gone.
+            await self._cancel_inflight()
+            return
         self.turn_epoch += 1
         if self._metrics is not None:
             if reason == "barge_in":
@@ -402,12 +416,17 @@ def build_voice_pipeline(
         metrics=metrics,
     )
 
+    # TurnController before STT so it sees VAD frames; bot_* arrives UPSTREAM
+    # from transport.output. Bridge is bound after construction.
+    turn_controller = TurnController(duplex=duplex, bridge=None)
+
     bridge = AgentAdapterBridge(
         adapter=adapter,
         session_id=session_id,
         metrics=metrics,
         stt=stt,
     )
+    turn_controller.bind_bridge(bridge)
 
     tts = build_tts_service(
         agent_name=adapter.agent_id,
@@ -419,9 +438,11 @@ def build_voice_pipeline(
 
     first_audio = FirstAudioMetricsProbe(metrics=metrics)
 
+    # Order: VAD → TurnController → STT → bridge → TTS → probe → out
     pipeline = Pipeline([
         transport.input(),
         VADProcessor(vad_analyzer=vad_analyzer),
+        turn_controller,
         stt,
         bridge,
         tts,
@@ -551,6 +572,7 @@ __all__ = [
     "DuplexConfig",
     "FirstAudioMetricsProbe",
     "ParakeetSTTService",
+    "TurnController",
     "TurnMetricsTracker",
     "build_aetheria_voice_pipeline",
     "build_voice_pipeline",

@@ -123,17 +123,20 @@ def test_build_pipeline_constructs_all_processors():
     type_names = [type(p).__name__ for p in processors]
 
     assert "VADProcessor" in type_names
+    assert "TurnController" in type_names  # PR4a barge-in emitter
     assert "ParakeetSTTService" in type_names
     assert "AgentAdapterBridge" in type_names
     assert "ProviderBackedTTSService" in type_names
     assert "FirstAudioMetricsProbe" in type_names
 
     vad_idx = type_names.index("VADProcessor")
+    tc_idx = type_names.index("TurnController")
     stt_idx = type_names.index("ParakeetSTTService")
     bridge_idx = type_names.index("AgentAdapterBridge")
     tts_idx = type_names.index("ProviderBackedTTSService")
     probe_idx = type_names.index("FirstAudioMetricsProbe")
-    assert vad_idx < stt_idx < bridge_idx < tts_idx < probe_idx
+    # Order: VAD → TurnController → STT → bridge → TTS → probe
+    assert vad_idx < tc_idx < stt_idx < bridge_idx < tts_idx < probe_idx
 
     # Bridge holds the adapter wrapping agent_loop + session_id
     bridge = processors[bridge_idx]
