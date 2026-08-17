@@ -75,3 +75,12 @@ def chat_index():
 def chat_session(session_id: str):  # noqa: ARG001 - client reads session from URL
     """Serve the chat page; the client JS reads the session_id from the URL."""
     return _serve_chat_html()
+
+
+BUILD_TEMPLATE = Path(__file__).parent.parent / "templates" / "build_chat.html"
+
+
+@bp.get("/build")
+def build_chat():
+    """Kernel — house build brain chat (no agent tools)."""
+    return _serve_html(BUILD_TEMPLATE, missing_label="Kernel build chat")

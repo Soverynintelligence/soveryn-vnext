@@ -97,23 +97,32 @@ class ModelServer:
         return f"http://{self.host}:{self.port}"
 
 
-# Vett/Scotty Spark brains — one live model on :8001 at a time.
+# Vett/Scotty Spark "hard brains" — one live model on :8001 at a time.
+# Side-by-side as named peers (not dual-load). Does NOT touch Aetheria / Kernel.
 # Switch:  scripts/switch_vett_brain.sh qwen36|qwen38|lightning
+#          or CC Ops / Hard-brain strip → POST /api/ops/brain
 # Precedence: SOVERYN_VETT_BRAIN env > ~/.soveryn/vett_brain > qwen36
 # Aliases must match Spark serve-*.sh --served-model-name.
 _VETT_BRAIN_PROFILES: dict[str, dict] = {
     "qwen36": {
         "alias": "qwen36-35b",
+        "house_name": "Qwen 3.6",
+        "blurb": "MoE 35B-A3B · MTP · prior hard brain",
         "role": "Vett + Scotty shared Qwen3.6-35B-A3B NVFP4 (Spark, vLLM, MTP)",
         "path": "Qwen3.6-35B-A3B-NVFP4",
     },
     "qwen38": {
         "alias": "qwen38-27b",
-        "role": "Vett + Scotty shared Qwen3.8-27B NVFP4 dense (Spark, vLLM)",
+        "house_name": "Qwen 3.8",
+        "blurb": "Dense 27B · local-class peak · NVFP4 on Spark",
+        "role": "Vett + Scotty shared Qwen3.8-27B NVFP4 dense (Spark, vLLM) — "
+                "named peer to Lightning; not Aetheria soul, not Kernel",
         "path": "Qwen3.8-27B-NVFP4",
     },
     "lightning": {
         "alias": "lightning-30b",
+        "house_name": "Lightning",
+        "blurb": "Nemotron 3.5 · MoE ~3B active · daily default",
         "role": "Vett + Scotty shared Nemotron 3.5 Lightning 30B-A3B NVFP4 (Spark, vLLM)",
         "path": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
     },
@@ -178,14 +187,15 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     _vett_scotty_server(),
     ModelServer(
         name="embeddings",
-        # 2026-07-17 Librarian: repointed off the nomic router (:8091) to the
-        # standalone Nemotron-3-Embed-8B server (:8096, sentence-transformers in
-        # the isolated nemo-embed env). 4096-dim; lattice fully re-embedded.
-        # model_path below is cosmetic now — the :8096 server is self-contained.
+        # 2026-08-17: Lattice librarian moved to Spark (fabric). Same Nemotron-Embed-8B
+        # weights — NOT Lightning chat. Lightning stays hard-brain on :8001; embed is a
+        # separate process on :8096 so vectors stay in the 4096-d space the Lattice
+        # already uses. Frees ~15G Quadro on the tower for Kernel.
+        host="10.10.10.2",
         port=8096,
-        model_path=MODEL_ROOT / "nomic-embed-text-v1.5.Q8_0.gguf",
-        role="Embedding backend: Nemotron-3-Embed-8B on :8096, used by Lattice",
-        model_alias="embeddings",
+        model_path=MODEL_ROOT / "Nemotron-3-Embed-8B-BF16",
+        role="Lattice librarian: Nemotron-3-Embed-8B on Spark :8096 (fabric)",
+        model_alias="nemotron-embed-8b",
     ),
     ModelServer(
         name="cognition",

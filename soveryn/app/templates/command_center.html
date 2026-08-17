@@ -157,7 +157,13 @@
   .hero .greeting-text h1 { font-size:34px; font-weight:500; letter-spacing:-0.01em; }
   .hero .greeting-text p { margin-top:8px; color:var(--text-dim); line-height:1.55; font-size:14px; max-width:600px; margin-left:auto; margin-right:auto; }
 
-  .agent-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .agent-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  @media (max-width: 1100px) {
+    .agent-row { grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width: 640px) {
+    .agent-row { grid-template-columns:1fr; }
+  }
   .agent-card {
     display:flex; align-items:center; gap:16px;
     padding:20px 22px;
@@ -589,7 +595,22 @@
   .daemon-card[data-status="active"]::after, .daemon-card[data-status="stale"]::after { content:""; }
 
   /* ─── Boards panel ──────────────────────────────────────────────────────── */
-  .boards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .boards {
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:10px;
+    min-width:0;
+    max-width:100%;
+  }
+  [data-testid="boards-panel"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  .board-col {
+    min-width: 0;
+    overflow: hidden;
+  }
   .board-col h4 {
     font-size:10px; text-transform:uppercase; letter-spacing:0.14em;
     color:rgba(232,227,213,0.5);
@@ -666,6 +687,10 @@
   .board-item-lesson {
     margin-top:6px; padding-top:6px;
     display:flex; flex-direction:column; gap:4px;
+  }
+  /* class display:flex would otherwise override the HTML hidden attribute */
+  .board-item-lesson[hidden] {
+    display: none !important;
   }
   .board-item-lesson textarea {
     background:rgba(0,0,0,0.2);
@@ -769,6 +794,61 @@
   .ares-counts { font-size:11px; color:rgba(232,227,213,0.6); margin-bottom:8px; }
   .ares-counts .sev-emergency { color:#ef4444; }
   .ares-counts .sev-critical  { color:#f59e0b; }
+  .ares-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 10px;
+    align-items: center;
+  }
+  .ares-clear-btn {
+    font-family: var(--font, inherit) !important;
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255,107,107,0.35) !important;
+    background: rgba(255,107,107,0.08) !important;
+    color: #f0c4c4 !important;
+    cursor: pointer;
+  }
+  .ares-clear-btn:hover {
+    background: rgba(255,107,107,0.16) !important;
+  }
+  .ares-clear-btn.warn {
+    border-color: rgba(240,193,74,0.4) !important;
+    background: rgba(240,193,74,0.08) !important;
+    color: #f0d9a0 !important;
+  }
+  .ares-clear-btn:disabled {
+    opacity: 0.45;
+    cursor: wait;
+  }
+  .ares-finding-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .ares-finding-row .ares-dismiss {
+    flex-shrink: 0;
+    font-size: 10px !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(198,166,100,0.28) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: rgba(232,227,213,0.7) !important;
+    cursor: pointer;
+  }
+  .ares-finding-row .ares-dismiss:hover {
+    border-color: rgba(198,166,100,0.5) !important;
+    color: #e9e5dc !important;
+  }
+  .ares-status-note {
+    font-size: 11px;
+    color: rgba(232,227,213,0.45);
+    margin-top: 4px;
+    min-height: 1.2em;
+  }
   .ares-finding {
     display:flex; align-items:flex-start; gap:8px; padding:7px 10px;
     background:rgba(255,255,255,0.0125); border:1px solid rgba(255,255,255,0.02);
@@ -1429,20 +1509,29 @@
   }
   .daemon-card { padding: 8px 10px !important; }
 
-  /* Two-column strips for mid-page work */
+  /* Two-column strips for mid-page work.
+     minmax(0,1fr) is required — plain 1fr still mins to content width, so
+     public-agent cards were blowing past the right edge of the page. */
   .cc-grid-2 {
     display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     gap: 10px !important;
     align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
   }
   .cc-grid-2 > .panel,
   .cc-grid-2 > section {
     margin: 0 !important;
-    min-width: 0;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
   }
   @media (max-width: 960px) {
-    .cc-grid-2 { grid-template-columns: 1fr !important; }
+    .cc-grid-2 { grid-template-columns: minmax(0, 1fr) !important; }
   }
 
   /* Foldable deep panels — default closed to cut scroll */
@@ -1495,47 +1584,166 @@
     display: none; /* summary already names the section */
   }
 
-  /* Public agents: compact three-up cards, not a tall stack */
+  /* Boards — full-width narrow strip */
+  .boards-strip {
+    padding: 12px 16px !important;
+  }
+  .boards-strip-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .boards-strip-head h3 {
+    font-size: 11px !important;
+    color: rgba(232,227,213,0.45) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    margin: 0 !important;
+  }
+  .boards-strip .boards {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    min-width: 0;
+  }
+  .boards-strip .board-col [data-board-list] {
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .boards-strip .empty {
+    font-size: 11px;
+    opacity: 0.45;
+    padding: 4px 0;
+  }
+
+  /* Public agents + intake — four equal columns */
+  .public-agents-strip {
+    padding: 12px 16px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-testid="public-agents-panel"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-public-agents],
+  [data-public-agents] .cc-pa-grid,
+  [data-public-agents] .cc-pa-crm {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
   [data-public-agents] .cc-pa-banner {
     font-size: 11px;
     margin-bottom: 8px;
     color: rgba(232,227,213,0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   [data-public-agents] .cc-pa-banner.hot { color: #3f9a5f; }
-  /* Stacked in the right column of the NOW strip (boards | public) */
   [data-public-agents] .cc-pa-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch;
+  }
+  @media (max-width: 1100px) {
+    [data-public-agents] .cc-pa-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    [data-public-agents] .cc-pa-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .boards-strip .boards {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
   }
   [data-public-agents] .cc-pa-card {
     border: 1px solid rgba(232,227,213,0.1);
     padding: 10px 12px;
     background: rgba(0,0,0,0.2);
-    min-height: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  [data-public-agents] .cc-pa-card > div:first-child {
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-status {
+    flex-shrink: 0;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(232,227,213,0.55);
+  }
+  [data-public-agents] .cc-pa-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  [data-public-agents] .cc-pa-model { opacity: 0.35; }
+  [data-public-agents] .cc-pa-foot a {
+    color: var(--sov-amber, #c6a664);
+    text-decoration: none;
   }
   [data-public-agents] .cc-pa-card h4 {
     font-size: 13px;
     font-weight: 600;
-    margin: 0 0 2px;
+    margin: 0;
     color: #ece3d5;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   [data-public-agents] .cc-pa-meta {
     font-size: 10px;
     color: rgba(232,227,213,0.45);
     margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   [data-public-agents] .cc-pa-stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 8px;
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-stats > div {
+    min-width: 0;
+    overflow: hidden;
   }
   [data-public-agents] .cc-pa-stats b {
     display: block;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     color: #ece3d5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   [data-public-agents] .cc-pa-stats span {
     font-size: 9px;
@@ -1552,10 +1760,86 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-asks-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.38);
+    margin: 6px 0 2px;
+  }
+  [data-public-agents] .cc-pa-asks {
+    max-height: 130px;
+    overflow-y: auto;
+    min-width: 0;
   }
   [data-public-agents] .cc-pa-foot {
     margin-top: 8px;
     font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Cross-agent live ask feed (PondWright + Seneca + Atticus) */
+  [data-public-agents] .cc-pa-live {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(198,166,100,0.16);
+    border-radius: 12px;
+    background: rgba(0,0,0,0.35);
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live .cc-pa-banner {
+    margin-bottom: 6px;
+  }
+  [data-public-agents] .cc-pa-live-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  [data-public-agents] .cc-pa-live-row {
+    display: grid;
+    grid-template-columns: 88px 56px minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 3px 0;
+    border-top: 1px solid rgba(232,227,213,0.06);
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live-row:first-child { border-top: none; }
+  [data-public-agents] .cc-pa-live-who {
+    color: var(--cc-phosphor, #c6a664);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-public-agents] .cc-pa-live-when {
+    color: rgba(232,227,213,0.4);
+    font-variant-numeric: tabular-nums;
+  }
+  [data-public-agents] .cc-pa-live-q {
+    color: rgba(236,243,244,0.78);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live-q em {
+    font-style: normal;
+    color: #6fb98a;
+    opacity: 0.9;
+  }
+  @media (max-width: 720px) {
+    [data-public-agents] .cc-pa-live-row {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    [data-public-agents] .cc-pa-live-when { display: none; }
   }
 
   /* Cap tall feeds so one panel cannot force a marathon scroll */
@@ -1672,9 +1956,721 @@
   }
   .ops-log.show { display: block; }
 
+
+  /* ════════════════════════════════════════════════════════════════════════
+     Command Center 2050 — operator HUD on pure black (not blue HUD chrome)
+     ════════════════════════════════════════════════════════════════════════ */
+  body.lab[data-testid="command-center"],
+  body.lab.cc-2050 {
+    overflow-x: hidden !important;
+    /* Pure black canvas — lab ground. Accents warm (gold/sage), not cyan. */
+    --cc-void: #000000;
+    --cc-panel: #0a0a09;
+    --cc-panel-solid: #0a0a09;
+    --cc-line: rgba(198, 166, 100, 0.14);
+    --cc-line-hot: rgba(198, 166, 100, 0.32);
+    --cc-glow: rgba(198, 166, 100, 0.10);
+    --cc-phosphor: #c6a664;          /* gold signal, not cyan */
+    --cc-mint: #6fb98a;
+    --cc-warn: #d4a827;
+    --cc-hot: #c26a5c;
+    --cc-amber: #c6a664;
+    --cc-text: #e9e5dc;
+    --cc-dim: rgba(233, 229, 220, 0.58);
+    --cc-mute: rgba(233, 229, 220, 0.34);
+    --cc-radius: 16px;
+    --cc-radius-sm: 10px;
+    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #000000 !important;
+    background-image: none !important;
+    color: var(--cc-text);
+    font-family: var(--font) !important;
+    letter-spacing: 0.01em;
+  }
+  /* Kill lab-console gold grid on this page — pure black only. */
+  body.lab.cc-2050 {
+    background-image: none !important;
+  }
+  body.lab.cc-2050::before {
+    opacity: 0.18 !important;
+    filter: brightness(1.05) saturate(0.9) !important;
+    background-color: #000000 !important;
+    background-size: auto min(42vh, 380px) !important;
+  }
+  body.lab.cc-2050::after {
+    background: radial-gradient(100% 80% at 50% 40%, transparent 35%, rgba(0,0,0,0.55) 100%) !important;
+  }
+  html:has(body.lab.cc-2050) {
+    background: #000000 !important;
+  }
+
+  body.lab.cc-2050 .page {
+    max-width: 1180px !important;
+    padding: 16px 22px 56px !important;
+    gap: 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  body.lab.cc-2050 .cc-operator-zone,
+  body.lab.cc-2050 .cc-grid-2,
+  body.lab.cc-2050 .cognition-approvals-row,
+  body.lab.cc-2050 .pulse-row,
+  body.lab.cc-2050 .orch-row,
+  body.lab.cc-2050 .bottom-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  body.lab.cc-2050 .cognition-approvals-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  /* Soft panels — no hard 0-radius lab slabs */
+  body.lab.cc-2050 .panel,
+  body.lab.cc-2050 section.panel,
+  body.lab.cc-2050 .agent-card,
+  body.lab.cc-2050 .daemon-card {
+    background: var(--cc-panel) !important;
+    backdrop-filter: blur(18px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(120%) !important;
+    border: 1px solid var(--cc-line) !important;
+    border-radius: var(--cc-radius) !important;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.02) inset,
+      0 12px 40px rgba(0,0,0,0.35) !important;
+  }
+  body.lab.cc-2050 .page > section.panel,
+  body.lab.cc-2050 .page > .panel,
+  body.lab.cc-2050 .page > .agent-row,
+  body.lab.cc-2050 .page > .daemon-row,
+  body.lab.cc-2050 .page > .bottom-row,
+  body.lab.cc-2050 .page > .orch-row,
+  body.lab.cc-2050 .page > .pulse-row,
+  body.lab.cc-2050 .page > .cognition-approvals-row,
+  body.lab.cc-2050 .page > section[data-testid] {
+    border-radius: var(--cc-radius) !important;
+    margin: 0 !important;
+  }
+  body.lab.cc-2050 .bottom-row,
+  body.lab.cc-2050 .orch-row,
+  body.lab.cc-2050 .pulse-row,
+  body.lab.cc-2050 .cognition-approvals-row {
+    border: none !important;
+    gap: 12px !important;
+  }
+  body.lab.cc-2050 .bottom-row > .panel,
+  body.lab.cc-2050 .orch-row > .panel,
+  body.lab.cc-2050 .pulse-row > .panel,
+  body.lab.cc-2050 .cognition-approvals-row > .panel,
+  body.lab.cc-2050 .cognition-approvals-row > section {
+    border: 1px solid var(--cc-line) !important;
+    border-right: 1px solid var(--cc-line) !important;
+  }
+
+  body.lab.cc-2050 h3,
+  body.lab.cc-2050 .library-header h3,
+  body.lab.cc-2050 .activity h3,
+  body.lab.cc-2050 .system h3 {
+    font-family: var(--font) !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.16em !important;
+    font-weight: 500 !important;
+    color: var(--cc-mute) !important;
+  }
+  body.lab.cc-2050 .panel > h3:first-child::before,
+  body.lab.cc-2050 section.panel > h3:first-child::before {
+    background: var(--cc-phosphor) !important;
+    box-shadow: 0 0 10px rgba(198,166,100,0.65) !important;
+    border-radius: 50% !important;
+    width: 5px !important;
+    height: 5px !important;
+  }
+
+  /* Plate — slim floating bar */
+  body.lab.cc-2050 .plate {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 16px !important;
+    border: 1px solid var(--cc-line) !important;
+    border-radius: 999px !important;
+    background: rgba(0, 0, 0, 0.88) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    border-bottom: 1px solid var(--cc-line) !important;
+  }
+  body.lab.cc-2050 .plate .id {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font);
+  }
+  body.lab.cc-2050 .plate .id img {
+    width: 28px; height: 28px;
+    filter: drop-shadow(0 0 8px rgba(198,166,100,0.25));
+  }
+  body.lab.cc-2050 .plate .id b {
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    font-size: 11px;
+    color: var(--cc-text);
+  }
+  body.lab.cc-2050 .plate .id i {
+    font-style: normal;
+    font-size: 11px;
+    color: var(--cc-dim);
+    letter-spacing: 0.06em;
+    margin-left: 6px;
+  }
+  body.lab.cc-2050 .plate nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  body.lab.cc-2050 .plate nav a {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.02em !important;
+    text-transform: none !important;
+    color: var(--cc-dim) !important;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  body.lab.cc-2050 .plate nav a:hover {
+    color: var(--cc-text) !important;
+    background: rgba(198,166,100,0.08);
+    border-color: var(--cc-line);
+  }
+  body.lab.cc-2050 .plate .status-pill {
+    border-radius: 999px !important;
+    border: 1px solid var(--cc-line) !important;
+    background: rgba(0,0,0,0.35) !important;
+    font-family: var(--mono) !important;
+    font-size: 10px !important;
+    color: var(--cc-dim) !important;
+  }
+  body.lab.cc-2050 .plate .status-pill .dot {
+    background: var(--cc-mint) !important;
+    box-shadow: 0 0 10px rgba(111,185,138,0.7) !important;
+  }
+  body.lab.cc-2050 .plate .status-pill[data-needs="hot"] .dot {
+    background: var(--cc-hot) !important;
+    box-shadow: 0 0 10px rgba(255,107,107,0.7) !important;
+  }
+
+  /* Needs-you strip */
+  .needs-you {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--cc-radius);
+    border: 1px solid var(--cc-line);
+    background: #000000;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  }
+  .needs-you[data-state="clear"] {
+    border-color: rgba(111,185,138,0.22);
+    background: #000000;
+  }
+  .needs-you[data-state="hot"] {
+    border-color: rgba(255,107,107,0.35);
+    box-shadow: 0 0 24px rgba(255,107,107,0.08), 0 8px 28px rgba(0,0,0,0.3);
+  }
+  .needs-you .ny-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+    margin-right: 4px;
+  }
+  .needs-you .ny-clear {
+    font-size: 13px;
+    color: var(--cc-mint);
+    font-weight: 500;
+  }
+  .needs-you .ny-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--cc-line-hot);
+    background: rgba(198,166,100,0.06);
+    color: var(--cc-text);
+    font-size: 12px;
+    font-family: var(--font);
+    text-decoration: none;
+    transition: transform .12s, background .12s, border-color .12s;
+    cursor: pointer;
+  }
+  .needs-you .ny-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(198,166,100,0.12);
+    border-color: rgba(198,166,100,0.45);
+  }
+  .needs-you .ny-chip .n {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cc-phosphor);
+    min-width: 1.2em;
+    text-align: center;
+  }
+  .needs-you .ny-chip[data-tone="hot"] {
+    border-color: rgba(255,107,107,0.4);
+    background: rgba(255,107,107,0.08);
+  }
+  .needs-you .ny-chip[data-tone="hot"] .n { color: var(--cc-hot); }
+  .needs-you .ny-chip[data-tone="warn"] {
+    border-color: rgba(240,193,74,0.4);
+    background: rgba(240,193,74,0.08);
+  }
+  .needs-you .ny-chip[data-tone="warn"] .n { color: var(--cc-warn); }
+  .needs-you .ny-chip[data-tone="ok"] {
+    border-color: rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.07);
+  }
+  .needs-you .ny-chip[data-tone="ok"] .n { color: var(--cc-mint); }
+
+  /* Briefing greeting */
+  body.lab.cc-2050 .greeting,
+  body.lab.cc-2050 section[data-testid="greeting"] {
+    padding: 18px 20px !important;
+    position: relative;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 .greeting::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--cc-phosphor), transparent 80%);
+    opacity: 0.85;
+  }
+  body.lab.cc-2050 .greeting h1,
+  body.lab.cc-2050 [data-greeting-heading] {
+    font-family: var(--font) !important;
+    font-size: 1.55rem !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--cc-text) !important;
+    margin: 0 0 6px !important;
+  }
+  body.lab.cc-2050 .greeting p,
+  body.lab.cc-2050 [data-greeting-body] {
+    font-family: var(--font) !important;
+    font-size: 13.5px !important;
+    line-height: 1.55 !important;
+    color: var(--cc-dim) !important;
+    max-width: 62ch;
+    margin: 0 !important;
+  }
+  .brief-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .brief-list li {
+    font-size: 12.5px;
+    color: var(--cc-dim);
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    line-height: 1.4;
+  }
+  .brief-list li::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--cc-phosphor);
+    box-shadow: 0 0 8px rgba(198,166,100,0.5);
+    flex-shrink: 0;
+    transform: translateY(-1px);
+  }
+  .brief-list li[data-tone="hot"]::before { background: var(--cc-hot); box-shadow: 0 0 8px rgba(255,107,107,0.5); }
+  .brief-list li[data-tone="warn"]::before { background: var(--cc-warn); box-shadow: 0 0 8px rgba(240,193,74,0.45); }
+  .brief-list li[data-tone="ok"]::before { background: var(--cc-mint); box-shadow: 0 0 8px rgba(111,185,138,0.45); }
+  .brief-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .brief-act {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: var(--font) !important;
+    text-decoration: none;
+    border: 1px solid var(--cc-line);
+    color: var(--cc-text) !important;
+    background: rgba(255,255,255,0.03);
+    transition: background .15s, border-color .15s, transform .12s;
+  }
+  .brief-act:hover {
+    background: rgba(198,166,100,0.1);
+    border-color: rgba(198,166,100,0.35);
+    transform: translateY(-1px);
+  }
+  .brief-act.primary {
+    background: linear-gradient(135deg, rgba(198,166,100,0.2), rgba(111,185,138,0.12));
+    border-color: rgba(198,166,100,0.4);
+    color: #f3efe6 !important;
+  }
+  .brief-act.ghost { color: var(--cc-dim) !important; }
+
+  /* Agent cards — action tiles (Aetheria / Vett / Scotty / Kernel) */
+  body.lab.cc-2050 .agent-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  @media (max-width: 1100px) {
+    body.lab.cc-2050 .agent-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+  }
+  body.lab.cc-2050 .agent-card {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 16px 16px 14px !important;
+    text-decoration: none !important;
+    position: relative;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 .agent-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0.75;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="aetheria"]::before {
+    background: linear-gradient(90deg, #c6a664, #6fb98a);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="vett"]::before {
+    background: linear-gradient(90deg, #6b8cae, #c6a664);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="scotty"]::before {
+    background: linear-gradient(90deg, #c26a4c, #e8a86a);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"]::before {
+    background: linear-gradient(90deg, #7eb8d4, #c6a664);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="warm"] {
+    border-color: rgba(111,185,138,0.4) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="loading"] {
+    border-color: rgba(198,166,100,0.45) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="missing"],
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="router_down"] {
+    border-color: rgba(255,107,107,0.4) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"] .agent-act[data-kernel-warm] {
+    cursor: pointer;
+    border: 1px solid rgba(126,184,212,0.4) !important;
+    background: rgba(126,184,212,0.1) !important;
+    color: #d7eaf5 !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"] .agent-act[data-kernel-warm]:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+  /* Spark hard-brain strip (Lightning / Qwen 3.8 / Qwen 3.6) */
+  .hard-brain-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 12px 14px;
+    border-radius: var(--cc-radius-sm, 12px);
+    border: 1px solid var(--cc-line);
+    background: rgba(0,0,0,0.4);
+  }
+  .hard-brain-strip .hb-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    flex: 1 1 180px;
+  }
+  .hard-brain-strip .hb-kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+  }
+  .hard-brain-strip .hb-active {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--cc-text);
+  }
+  .hard-brain-strip .hb-note {
+    font-size: 11px;
+    color: var(--cc-dim);
+  }
+  .hard-brain-strip .hb-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .hard-brain-strip .hb-btn {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--cc-line);
+    background: rgba(0,0,0,0.35);
+    color: var(--cc-dim);
+    cursor: pointer;
+  }
+  .hard-brain-strip .hb-btn:hover {
+    border-color: var(--cc-line-hot);
+    color: var(--cc-text);
+  }
+  .hard-brain-strip .hb-btn.is-active {
+    border-color: rgba(126,184,212,0.5);
+    background: rgba(126,184,212,0.12);
+    color: #e8f4fb;
+  }
+  .hard-brain-strip .hb-btn:disabled { opacity: 0.5; cursor: wait; }
+  .hard-brain-strip .hb-status {
+    width: 100%;
+    font-size: 11px;
+    color: var(--cc-mute);
+    min-height: 1em;
+  }
+  .hard-brain-strip .hb-status.run { color: var(--cc-warn, #f0c14a); }
+  .hard-brain-strip .hb-status.ok { color: var(--cc-mint); }
+  .hard-brain-strip .hb-status.fail { color: var(--cc-hot); }
+  body.lab.cc-2050 .agent-card:hover {
+    transform: translateY(-2px) !important;
+    border-color: var(--cc-line-hot) !important;
+  }
+  body.lab.cc-2050 .agent-card .name {
+    font-family: var(--font) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    color: var(--cc-text) !important;
+  }
+  body.lab.cc-2050 .agent-card .role {
+    font-size: 11px !important;
+    color: var(--cc-mute) !important;
+    margin-top: 2px !important;
+  }
+  body.lab.cc-2050 .agent-card .state {
+    font-size: 12px !important;
+    color: var(--cc-dim) !important;
+    margin-top: 8px !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .agent-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+  }
+  button.agent-act {
+    font: inherit;
+    cursor: pointer;
+  }
+  .agent-act {
+    flex: 1;
+    text-align: center;
+    padding: 7px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: var(--font) !important;
+    border: 1px solid var(--cc-line);
+    color: var(--cc-dim) !important;
+    background: rgba(0,0,0,0.25);
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .agent-act:hover {
+    color: var(--cc-text) !important;
+    border-color: var(--cc-line-hot);
+    background: rgba(198,166,100,0.08);
+  }
+  .agent-act.primary {
+    color: #f3efe6 !important;
+    border-color: rgba(198,166,100,0.35);
+    background: rgba(198,166,100,0.12);
+  }
+
+  body.lab.cc-2050 .daemon-row {
+    gap: 10px !important;
+  }
+  body.lab.cc-2050 .daemon-card {
+    padding: 12px 14px !important;
+    border-radius: var(--cc-radius-sm) !important;
+  }
+  body.lab.cc-2050 .daemon-card .name {
+    font-family: var(--font) !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    font-size: 12px !important;
+  }
+
+  /* Folds */
+  body.lab.cc-2050 details.cc-fold {
+    border: 1px solid var(--cc-line) !important;
+    border-radius: var(--cc-radius) !important;
+    background: rgba(0,0,0,0.55) !important;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 details.cc-fold > summary {
+    font-family: var(--font) !important;
+    letter-spacing: 0.1em !important;
+    color: var(--cc-dim) !important;
+    padding: 12px 16px !important;
+  }
+  body.lab.cc-2050 details.cc-fold > summary::after {
+    color: var(--cc-phosphor) !important;
+  }
+
+  /* Zone labels */
+  .cc-zone {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 2px -4px;
+  }
+  .cc-zone span {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+  }
+  .cc-zone::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--cc-line), transparent);
+  }
+
+  /* Mini dispatch */
+  .dispatch-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--cc-line);
+  }
+  .dispatch-box form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .dispatch-box select,
+  .dispatch-box input[type="text"] {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--cc-line) !important;
+    background: rgba(0,0,0,0.35) !important;
+    color: var(--cc-text) !important;
+    padding: 8px 12px !important;
+  }
+  .dispatch-box select { min-width: 120px; }
+  .dispatch-box input[type="text"] { flex: 1; min-width: 180px; }
+  .dispatch-box button {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    padding: 8px 14px !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(198,166,100,0.35) !important;
+    background: rgba(198,166,100,0.12) !important;
+    color: #f3efe6 !important;
+    cursor: pointer;
+  }
+  .dispatch-box button:hover { background: rgba(198,166,100,0.2) !important; }
+  .dispatch-box .dispatch-err {
+    width: 100%;
+    font-size: 11px;
+    color: var(--cc-hot);
+    min-height: 1em;
+  }
+
+  body.lab.cc-2050 .ops-brain-btn,
+  body.lab.cc-2050 .ops-test-btn,
+  body.lab.cc-2050 .board-item-action,
+  body.lab.cc-2050 button.board-item-action {
+    border-radius: 8px !important;
+    font-family: var(--font) !important;
+    text-transform: none !important;
+    letter-spacing: 0.03em !important;
+  }
+  body.lab.cc-2050 input,
+  body.lab.cc-2050 textarea,
+  body.lab.cc-2050 select {
+    font-family: var(--font) !important;
+    border-radius: 8px !important;
+  }
+  body.lab.cc-2050 a { color: var(--cc-phosphor); }
+  body.lab.cc-2050 a:hover { color: #e0c98a; }
+
+  /* Approvals elevated */
+  body.lab.cc-2050 .cognition-approvals-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  @media (max-width: 960px) {
+    body.lab.cc-2050 .agent-row { grid-template-columns: 1fr !important; }
+    body.lab.cc-2050 .cognition-approvals-row { grid-template-columns: 1fr; }
+    body.lab.cc-2050 .plate { border-radius: 16px !important; flex-wrap: wrap; }
+  }
+
+  /* Section mode tabs (visual only for now / light filter) */
+  .cc-modes {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--cc-line);
+  }
+  .cc-modes button {
+    font-family: var(--font) !important;
+    font-size: 11px !important;
+    padding: 6px 12px !important;
+    border-radius: 999px !important;
+    color: var(--cc-dim) !important;
+    border: none !important;
+    background: transparent !important;
+  }
+  .cc-modes button.is-active {
+    background: rgba(198,166,100,0.14) !important;
+    color: var(--cc-text) !important;
+  }
+  body.lab.cc-2050 .page[data-mode="fleet"] .cc-operator-zone { display: none !important; }
+  body.lab.cc-2050 .page[data-mode="now"] .cc-fleet-zone { opacity: 0.55; }
+  body.lab.cc-2050 .page[data-mode="now"] .cc-fleet-zone:not([open]) summary { opacity: 0.7; }
+
+
 </style>
 </head>
-<body class="lab" data-lab data-testid="command-center">
+<body class="lab cc-2050" data-lab data-testid="command-center">
   <div class="page">
     <div class="plate">
       <a class="id" href="/">
@@ -1687,7 +2683,14 @@
         <a href="/m/">Messages</a>
         <a href="/documents">Documents</a>
       </nav>
-      <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="cc-modes" data-cc-modes role="tablist" aria-label="View mode">
+          <button type="button" data-mode="now" class="is-active">Now</button>
+          <button type="button" data-mode="today">Today</button>
+          <button type="button" data-mode="fleet">Fleet</button>
+        </div>
+        <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all systems quiet</span></div>
+      </div>
     </div>
 
 
@@ -1706,33 +2709,101 @@
       <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
     </header>
 
+    <!-- ═══ Operator zone: needs-you + briefing + agents + approvals ═══ -->
+    <div class="cc-operator-zone">
+
+    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
+      <span class="ny-label">Needs you</span>
+      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
+      <div data-needs-chips style="display:contents"></div>
+    </section>
+
     <section class="panel greeting" data-testid="greeting">
-      <h1 data-greeting-heading>Morning, Jon.</h1>
-      <p data-greeting-body>Loading recent activity…</p>
+      <h1 data-greeting-heading>…</h1>
+      <p data-greeting-body>Loading house briefing…</p>
+      <ul class="brief-list" data-brief-list hidden></ul>
+      <div class="brief-actions">
+        <a class="brief-act primary" href="/chat?agent=aetheria">Talk to Aetheria</a>
+        <a class="brief-act" href="/build">Build · Kernel</a>
+        <a class="brief-act" href="#approvals-anchor">Review queue</a>
+        <a class="brief-act" href="#boards-anchor">Boards</a>
+        <a class="brief-act ghost" href="/m/">Messages</a>
+        <a class="brief-act ghost" href="/voice">Voice</a>
+      </div>
+      <div class="dispatch-box" data-testid="dispatch-box">
+        <form data-dispatch-form>
+          <select data-dispatch-target aria-label="Dispatch to">
+            <option value="chat:aetheria">Aetheria · chat</option>
+            <option value="chat:vett">Vett · chat</option>
+            <option value="chat:scotty">Scotty · chat</option>
+            <option value="board:Signal">Board · Signal</option>
+            <option value="board:Blueprint">Board · Blueprint</option>
+            <option value="board:Friction">Board · Friction</option>
+          </select>
+          <input type="text" data-dispatch-text placeholder="Dispatch a note or open chat with a prompt…" aria-label="Dispatch message" maxlength="500" required>
+          <button type="submit">Send</button>
+          <div class="dispatch-err" data-dispatch-err></div>
+        </form>
+      </div>
     </section>
 
     <section class="agent-row" data-testid="agent-row">
-      <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria" aria-label="Open chat with Aetheria">
+      <div class="agent-card" data-agent="aetheria" aria-label="Aetheria">
         <div class="body">
-          <div class="name">aetheria</div>
+          <div class="name">Aetheria</div>
           <div class="role">primary · cathedral</div>
           <div class="state" data-agent-state>—</div>
         </div>
-      </a>
-      <a href="/chat?agent=vett" class="agent-card" data-agent="vett" aria-label="Open chat with Vett">
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/chat?agent=aetheria">Talk</a>
+          <a class="agent-act" href="/voice">Voice</a>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="vett" aria-label="Vett">
         <div class="body">
-          <div class="name">vett</div>
-          <div class="role">verifier</div>
+          <div class="name">Vett</div>
+          <div class="role">verifier · research</div>
           <div class="state" data-agent-state>—</div>
         </div>
-      </a>
-      <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty" aria-label="Open chat with Scotty">
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/chat?agent=vett">Talk</a>
+          <a class="agent-act" href="/citizens">Duties</a>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="scotty" aria-label="Scotty">
         <div class="body">
-          <div class="name">scotty</div>
-          <div class="role">executor</div>
+          <div class="name">Scotty</div>
+          <div class="role">executor · proposals</div>
           <div class="state" data-agent-state>—</div>
         </div>
-      </a>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/chat?agent=scotty">Talk</a>
+          <a class="agent-act" href="#approvals-anchor">Queue</a>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — build brain">
+        <div class="body">
+          <div class="name">Kernel</div>
+          <div class="role">build · local core</div>
+          <div class="state" data-kernel-state-text>checking…</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/build">Talk</a>
+          <button type="button" class="agent-act" data-kernel-warm>Warm</button>
+          <button type="button" class="agent-act" data-kernel-copy-aider title="Copy soveryn-aider --kernel">Aider</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
+    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
+      <div class="hb-label">
+        <span class="hb-kicker">Spark hard brain</span>
+        <span class="hb-active" data-hard-brain-active>…</span>
+        <span class="hb-note" data-hard-brain-note></span>
+      </div>
+      <div class="hb-buttons" data-hard-brain-buttons></div>
+      <div class="hb-status" data-hard-brain-status></div>
     </section>
 
     <!-- Daemon status strip — autonomous fleet at a glance. -->
@@ -1751,7 +2822,234 @@
       </div>
     </section>
 
-    <!-- Ops: switch Spark brain + run test suites without leaving Mission Control -->
+    <div class="cc-zone"><span>Approvals &amp; gates</span></div>
+    <div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
+      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
+        <div class="empty">Nothing staged.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
+      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
+        <div class="empty">No proposals awaiting review.</div>
+      </div>
+    </section>
+    <section class="panel" data-testid="cognition-panel" data-cognition-panel>
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
+      <div class="cognition-note" data-cognition-note data-empty
+           aria-label="Aetheria's current Sense-of-Us note">
+        no note yet — the cognition engine hasn't run
+      </div>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:8px;">Recent reflections</div>
+      <div class="cognition-feed" data-cognition-feed aria-live="polite" aria-label="Recent cognition reflections">
+        <div class="cognition-item" data-empty>no reflections yet.</div>
+      </div>
+    </section>
+    </div>
+
+    <div class="cc-zone"><span>Work surface</span></div>
+
+    <!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
+    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
+      <div class="boards-strip-head">
+        <h3>Boards</h3>
+        <span style="flex:1;"></span>
+        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
+      </div>
+      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
+        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
+          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="Signal">Signal</option>
+            <option value="Blueprint">Blueprint</option>
+            <option value="Friction">Friction</option>
+          </select>
+          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" data-board-create-notify checked> notify team
+          </label>
+        </div>
+        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
+        <div class="row">
+          <span class="err" data-board-create-err></span>
+          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
+          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
+        </div>
+      </form>
+      <div class="boards">
+        <div class="board-col" data-board="signal">
+          <h4>Signal <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open signals.</div></div>
+        </div>
+        <div class="board-col" data-board="blueprint">
+          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open blueprints.</div></div>
+        </div>
+        <div class="board-col" data-board="friction">
+          <h4>Friction <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open friction.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Public agents + web intake: four equal columns across the width -->
+    <section class="panel public-agents-strip" data-testid="public-agents-panel">
+      <div class="boards-strip-head">
+        <h3>Public agents &amp; web intake</h3>
+        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
+          chat · waitlist · CRM — tracked here, not only email
+        </span>
+      </div>
+      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var el = document.querySelector('[data-public-agents]');
+      if(!el) return;
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function relTime(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso);
+        if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+        return Math.floor(sec/86400) + 'd ago';
+      }
+      function card(a){
+        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        // Same live-ask stream PondWright has — Seneca/Atticus already publish
+        // recent visitor previews on /summary (polled every 20s).
+        var rec = (a.recent||[]).slice(0,5).map(function(r){
+          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'…')
+            + (r.captured ? ' · lead' : '')
+            + '</div>';
+        }).join('');
+        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
+        return '<div class="cc-pa-card">'
+          + '<div class="cc-pa-head">'
+          + '<h4>'+esc(a.name)+'</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
+          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
+          + '</div>'
+          + '<div class="cc-pa-asks-label">Recent asks</div>'
+          + '<div class="cc-pa-asks">'+rec+'</div>'
+          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
+          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
+          + '</div></div>';
+      }
+      function liveAsksStrip(agents){
+        // Cross-agent feed — same previews, newest first, so you scan all
+        // public desks the way you scan PondWright CRM lines.
+        var rows = [];
+        (agents||[]).forEach(function(a){
+          (a.recent||[]).forEach(function(r){
+            rows.push({
+              agent: a.name || a.id,
+              id: a.id,
+              ts: r.ts || '',
+              preview: r.preview || '',
+              captured: !!r.captured,
+            });
+          });
+        });
+        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
+        rows = rows.slice(0, 10);
+        if(!rows.length){
+          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
+        }
+        var body = rows.map(function(r){
+          return '<div class="cc-pa-live-row">'
+            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
+            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
+            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
+            + (r.captured ? ' <em>· lead</em>' : '')
+            + '</span></div>';
+        }).join('');
+        return '<div class="cc-pa-live">'
+          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
+          + '<div class="cc-pa-live-list">'+body+'</div>'
+          + '</div>';
+      }
+      function intakeCard(d){
+        var intake = (d && d.intake) || {};
+        var crm = (d && d.crm) || {};
+        var wl = (d && d.waitlist) || {};
+        var ok = !!intake.ok;
+        var pending = intake.pending || 0;
+        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
+        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
+        var lines = (intake.recent || []).slice(0, 4).map(function(r){
+          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
+          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
+            + esc(r.who || '—')
+            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
+            + '</div>';
+        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
+        return '<div class="cc-pa-card cc-pa-intake">'
+          + '<div class="cc-pa-head">'
+          + '<h4>Web intake</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
+          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
+          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
+          + '</div>'
+          + lines
+          + '<div class="cc-pa-foot">'
+          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
+          + ' <span class="cc-pa-model">·</span> '
+          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
+          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
+          + '</div></div>';
+      }
+      function paint(d){
+        var agents = (d && d.agents) || [];
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
+        var banner = (d.talking && d.talking.length)
+          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
+          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
+        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
+        el.innerHTML = banner
+          + liveAsksStrip(agents)
+          + '<div class="cc-pa-grid">'
+          + agents.map(card).join('')
+          + intakeCard(d)
+          + '</div>';
+      }
+      function load(){
+        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
+      }
+      load(); setInterval(load, 20000);
+    })();
+    </script>
+
+    </div><!-- /.cc-operator-zone -->
+
+    <!-- Ops folded — power tools, not the default face -->
+    <details class="cc-fold" data-testid="ops-fold">
+      <summary>Ops console <span class="cc-fold-hint">Spark brain · pytest</span></summary>
+      <div class="cc-fold-body">
     <section class="panel ops-panel" data-testid="ops-panel">
       <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
       <div class="ops-grid">
@@ -1798,29 +3096,63 @@
           el.classList.remove('show');
         }
       }
+      var hardActive = document.querySelector('[data-hard-brain-active]');
+      var hardNote = document.querySelector('[data-hard-brain-note]');
+      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
+      var hardStatus = document.querySelector('[data-hard-brain-status]');
+
       function paintBrain(d){
         var cur = d.brain || '?';
-        brainMeta.innerHTML = 'Active: <b style="color:#e7e5dc">'+cur+'</b> · alias <code style="color:#9eb4c2">'
-          +(d.routed_alias||d.alias||'—')+'</code><br>'+(d.role||'');
+        var hname = d.house_name || cur;
+        brainMeta.innerHTML = 'Active: <b style="color:#e7e5dc">'+hname+'</b> <span style="opacity:0.6">('+cur+')</span> · alias <code style="color:#9eb4c2">'
+          +(d.routed_alias||d.alias||'—')+'</code><br>'+(d.role||'')
+          +(d.note ? '<br><span style="opacity:0.7">'+d.note+'</span>' : '');
         brainBtns.innerHTML = (d.brains||[]).map(function(b){
           var active = b.id === cur ? ' is-active' : '';
-          return '<button type="button" class="ops-brain-btn'+active+'" data-brain="'+b.id+'" title="'+(b.role||'')+'">'+b.id+'</button>';
+          var label = b.house_name || b.id;
+          return '<button type="button" class="ops-brain-btn'+active+'" data-brain="'+b.id+'" title="'+(b.role||'')+'">'+label+'</button>';
         }).join('');
         brainBtns.querySelectorAll('[data-brain]').forEach(function(btn){
           btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
         });
+        // Operator-zone strip (always visible)
+        if(hardActive){
+          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
+        }
+        if(hardNote){
+          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
+        }
+        if(hardBtns){
+          hardBtns.innerHTML = (d.brains||[]).map(function(b){
+            var active = b.id === cur ? ' is-active' : '';
+            var label = b.house_name || b.id;
+            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
+          }).join('');
+          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
+            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
+          });
+        }
         if(d.job && d.job.status){
           var st = d.job.status;
           var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
           setStatus(brainStatus, cls, d.job.message || st);
+          if(hardStatus){
+            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+            hardStatus.textContent = d.job.message || st;
+          }
           if(st==='running'||st==='starting') startBrainPoll();
         }
       }
       function switchBrain(id){
         if(!id) return;
-        if(!confirm('Switch Spark brain to '+id+'?\n\nThis reloads vLLM (minutes) and restarts the app briefly.')) return;
+        var label = id;
+        var btn = document.querySelector('[data-brain="'+id+'"]');
+        if(btn) label = btn.textContent || id;
+        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
         brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        setStatus(brainStatus, 'run', 'Starting switch to '+id+'…');
+        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
+        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
         setLog(brainLog, '');
         fetch('/api/ops/brain', {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -1829,15 +3161,20 @@
           .then(function(x){
             if(!x.ok){
               setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
+              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
               brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
               return;
             }
             setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
+            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
             startBrainPoll();
           })
           .catch(function(e){
             setStatus(brainStatus, 'fail', String(e));
+            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
             brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
           });
       }
       function startBrainPoll(){
@@ -1850,6 +3187,10 @@
             var st = j.status;
             var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
             setStatus(brainStatus, cls, j.message || st);
+            if(hardStatus){
+              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+              hardStatus.textContent = j.message || st;
+            }
             if(st==='ok' || st==='failed'){
               clearInterval(brainPoll); brainPoll = null;
               loadBrain();
@@ -1859,7 +3200,10 @@
       }
       function loadBrain(){
         fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
-          .catch(function(){ brainMeta.textContent = 'ops brain API unavailable (localhost only)'; });
+          .catch(function(){
+            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
+            if(hardActive) hardActive.textContent = 'unavailable';
+          });
       }
 
       function paintSuites(d){
@@ -1878,6 +3222,7 @@
         }
       }
       function runTests(suite){
+        if(!suite) return;
         testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
         setStatus(testStatus, 'run', 'Starting '+suite+'…');
         setLog(testLog, '');
@@ -1925,148 +3270,8 @@
       loadTests();
     })();
     </script>
-
-    <!-- NOW strip: boards + public agents side by side (less scroll) -->
-    <div class="cc-grid-2" data-testid="cc-now">
-    <!-- Coordination Boards panel — live state of the work surface. -->
-    <section class="panel" data-testid="boards-panel">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-        <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:0;">Boards</h3>
-        <span style="flex:1;"></span>
-        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
       </div>
-      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:14px;">
-        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
-          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
-            <option value="Signal">Signal</option>
-            <option value="Blueprint">Blueprint</option>
-            <option value="Friction">Friction</option>
-          </select>
-          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
-            <input type="checkbox" data-board-create-notify checked> notify team
-          </label>
-        </div>
-        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
-        <div class="row">
-          <span class="err" data-board-create-err></span>
-          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
-          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
-        </div>
-      </form>
-      <div class="boards">
-        <div class="board-col" data-board="signal">
-          <h4>Signal <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open signals.</div></div>
-        </div>
-        <div class="board-col" data-board="blueprint">
-          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open blueprints.</div></div>
-        </div>
-        <div class="board-col" data-board="friction">
-          <h4>Friction <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open friction.</div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Public agents (compact, beside boards) -->
-    <section class="panel" data-testid="public-agents-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:10px;">Public agents</h3>
-      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    </div><!-- /.cc-grid-2 now -->
-    <script>
-    (function(){
-      var el = document.querySelector('[data-public-agents]');
-      if(!el) return;
-      function esc(s){
-        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
-          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-        });
-      }
-      function relTime(iso){
-        if(!iso) return '—';
-        var t = Date.parse(iso);
-        if(!t) return esc(iso);
-        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
-        if(sec < 90) return 'just now';
-        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
-        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
-        return Math.floor(sec/86400) + 'd ago';
-      }
-      function card(a){
-        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
-        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
-        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
-        var rec = (a.recent||[]).slice(0,2).map(function(r){
-          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
-            + esc(r.preview||'…')
-            + (r.captured ? ' · lead' : '')
-            + '</div>';
-        }).join('');
-        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent visitor lines</div>';
-        return '<div class="cc-pa-card">'
-          + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">'
-          + '<h4>'+esc(a.name)+'</h4>'
-          + '<span style="font-size:10px;display:flex;align-items:center;gap:5px;color:rgba(232,227,213,0.55);">'
-          + '<span style="width:6px;height:6px;border-radius:50%;background:'+dot+';"></span>'+esc(status)+'</span></div>'
-          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
-          + '<div class="cc-pa-stats">'
-          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
-          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
-          + '<div><b>'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
-          + '</div>'
-          + rec
-          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open →</a>'
-          + (a.model ? ' <span style="opacity:.35;">· '+esc(a.model)+'</span>' : '')
-          + '</div></div>';
-      }
-      function crmBlock(crm){
-        if(!crm || !crm.ok){
-          return '<div class="cc-pa-crm" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(232,227,213,0.08);">'
-            + '<div class="cc-pa-banner">CRM pipeline unavailable'
-            + (crm && crm.error ? ' · '+esc(crm.error) : '')
-            + '</div></div>';
-        }
-        var lines = (crm.recent||[]).slice(0,5).map(function(L){
-          var bits = [L.name||'—'];
-          if(L.phone) bits.push(L.phone);
-          if(L.interest) bits.push(L.interest);
-          return '<div class="cc-pa-line" title="'+esc((L.source||'')+' · '+(L.status||''))+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(L.created_at))+'</span>'
-            + esc(bits.join(' · '))
-            + ' <span style="opacity:.4">· '+esc(L.status||'new')+'</span>'
-            + '</div>';
-        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No leads in pipeline</div>';
-        return '<div class="cc-pa-crm" style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(232,227,213,0.08);">'
-          + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px;">'
-          + '<div class="cc-pa-banner" style="margin:0">PondWright CRM</div>'
-          + '<a href="'+(esc(crm.open||'https://crm.pondwright.com/'))+'" target="_blank" rel="noopener" style="font-size:10px;color:var(--sov-amber,#c0824f);text-decoration:none;">open CRM →</a>'
-          + '</div>'
-          + '<div class="cc-pa-stats" style="margin-bottom:8px;">'
-          + '<div><b>'+(crm.leads_new==null?'—':crm.leads_new)+'</b><span>new</span></div>'
-          + '<div><b>'+(crm.leads_today==null?'—':crm.leads_today)+'</b><span>today</span></div>'
-          + '<div><b>'+(crm.leads_total==null?'—':crm.leads_total)+'</b><span>total</span></div>'
-          + '</div>'
-          + lines
-          + '</div>';
-      }
-      function paint(d){
-        var agents = (d && d.agents) || [];
-        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
-        var banner = (d.talking && d.talking.length)
-          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
-          : '<div class="cc-pa-banner">Quiet today (probes excluded)</div>';
-        el.innerHTML = banner + '<div class="cc-pa-grid">'+agents.map(card).join('')+'</div>' + crmBlock(d.crm);
-      }
-      function load(){
-        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
-          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
-      }
-      load(); setInterval(load, 20000);
-    })();
-    </script>
+    </details>
 
     <!-- Heartbeat + Ares -->
     <div class="pulse-row">
@@ -2076,12 +3281,45 @@
         <div class="empty">no pulses yet.</div>
       </div>
     </section>
-    <section class="panel ares-panel" data-testid="ares-panel">
+    <section class="panel ares-panel" data-testid="ares-panel" id="ares-anchor" style="scroll-margin-top:24px">
       <h3>Ares — host findings</h3>
       <div class="ares-counts" data-ares-counts></div>
+      <div class="ares-toolbar" data-ares-toolbar hidden>
+        <button type="button" class="ares-clear-btn" data-ares-clear="hot"
+                title="Dismiss all emergency + critical findings (localhost)">Clear emergencies &amp; critical</button>
+        <button type="button" class="ares-clear-btn warn" data-ares-clear="warning"
+                title="Dismiss all warning-level findings">Clear warnings</button>
+        <button type="button" class="ares-clear-btn" data-ares-clear="all"
+                title="Dismiss every active finding">Clear all</button>
+      </div>
+      <div class="ares-status-note" data-ares-note></div>
       <div class="ares-feed" data-ares-feed aria-live="polite" aria-label="Active Ares findings"></div>
     </section>
     </div>
+
+    <div class="cc-zone"><span>House talking</span></div>
+    <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
+         Specialists shows active ephemeral DSL specialists she's spawned,
+         each with a kill switch (Jon's authoritative override per her
+         spec); comm bus shows recent direct_command / direct_query edges
+         so the conversation between agents is visible in real time. -->
+    <section class="orch-row">
+      <div class="panel specialists" data-testid="specialists-panel">
+        <h3>Spawned under Aetheria</h3>
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin:-6px 0 10px;">
+          ephemeral · not citizens · <a href="/citizens">citizens board →</a>
+        </div>
+        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Specialists spawned under Aetheria">
+          <div class="specialist-item" data-empty>none active — empty most days is fine.</div>
+        </div>
+      </div>
+      <div class="panel commbus" data-testid="commbus-panel">
+        <h3>Comm bus</h3>
+        <div class="commbus-feed" data-commbus-feed aria-live="polite" aria-label="Recent direct messages between agents">
+          <div class="commbus-item" data-empty>no recent traffic.</div>
+        </div>
+      </div>
+    </section>
 
     <!-- Steward folded by default (deep / infrequent) -->
     <details class="cc-fold" data-testid="steward-fold">
@@ -2175,38 +3413,12 @@
       </div><!-- /.cc-fold-body memory -->
     </details>
 
-    <!-- Cognition + Scotty Approvals — twin-column row.
-         Left: Aetheria's Sense-of-Us note + recent reflections (read-only, Phase 4.2).
-         Right: Scotty proposals awaiting Jon's Approve/Reject (Task 6).
-         Data: /api/cognition/* and /api/delegation/pending. -->
-    <div class="cognition-approvals-row">
-    <section class="panel" data-testid="cognition-panel" data-cognition-panel>
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
-      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
-      <div class="cognition-note" data-cognition-note data-empty
-           aria-label="Aetheria's current Sense-of-Us note">
-        no note yet — the cognition engine hasn't run
-      </div>
-      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:8px;">Recent reflections</div>
-      <div class="cognition-feed" data-cognition-feed aria-live="polite" aria-label="Recent cognition reflections">
-        <div class="cognition-item" data-empty>no reflections yet.</div>
-      </div>
-    </section>
-    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
-      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
-        <div class="empty">Nothing staged.</div>
-      </div>
-    </section>
-
-    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
-      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
-        <div class="empty">No proposals awaiting review.</div>
-      </div>
-    </section>
     </div>
 
+    <div class="cc-zone cc-fleet-zone-label"><span>Fleet &amp; traffic</span></div>
+    <details class="cc-fold cc-fleet-zone" data-testid="fleet-fold">
+      <summary>Fleet telemetry <span class="cc-fold-hint">GPU · Spark · sessions · lattice</span></summary>
+      <div class="cc-fold-body">
     <section class="bottom-row">
       <div class="panel activity" data-testid="activity-feed">
         <h3>Session traffic</h3>
@@ -2259,29 +3471,6 @@
         </div>
         <div class="attention" data-attention aria-live="polite">
           <div class="empty">nothing needs attention.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
-         Specialists shows active ephemeral DSL specialists she's spawned,
-         each with a kill switch (Jon's authoritative override per her
-         spec); comm bus shows recent direct_command / direct_query edges
-         so the conversation between agents is visible in real time. -->
-    <section class="orch-row">
-      <div class="panel specialists" data-testid="specialists-panel">
-        <h3>Spawned under Aetheria</h3>
-        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin:-6px 0 10px;">
-          ephemeral · not citizens · <a href="/citizens">citizens board →</a>
-        </div>
-        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Specialists spawned under Aetheria">
-          <div class="specialist-item" data-empty>none active — empty most days is fine.</div>
-        </div>
-      </div>
-      <div class="panel commbus" data-testid="commbus-panel">
-        <h3>Comm bus</h3>
-        <div class="commbus-feed" data-commbus-feed aria-live="polite" aria-label="Recent direct messages between agents">
-          <div class="commbus-item" data-empty>no recent traffic.</div>
         </div>
       </div>
     </section>
@@ -2352,7 +3541,8 @@
         </div>
       </div>
     </section>
-
+      </div><!-- /.cc-fold-body fleet -->
+    </details>
   </div>
 <script>
 (() => {
@@ -2367,7 +3557,106 @@
     } catch { return null; }
   };
 
-  // ─── Greeting (client builds it from /sessions + /api/memory/activity) ────
+  // Relative time helper (shared by greeting / agents / needs-you)
+  function relAgo(iso) {
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    if (!t) return null;
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 60) return "just now";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
+
+  // ─── Needs-you strip (operator priority) ──────────────────────────────────
+  async function renderNeedsYou() {
+    const root = document.querySelector("[data-testid='needs-you']");
+    const chipsEl = document.querySelector("[data-needs-chips]");
+    const clearEl = document.querySelector("[data-needs-clear]");
+    const pill = document.querySelector("[data-status-pill]") || document.querySelector(".plate .status-pill");
+    if (!root || !chipsEl) return;
+
+    const [pending, staged, coord, publicA, ares, daemons] = await Promise.all([
+      fetchJson("/api/delegation/pending"),
+      fetchJson("/api/x/staged"),
+      fetchJson("/api/coord/summary"),
+      fetchJson("/api/system/public_agents"),
+      fetchJson("/api/ares/findings?limit=1"),
+      fetchJson("/api/system/daemons"),
+    ]);
+
+    const chips = [];
+    const scottyN = Array.isArray(pending) ? pending.length : 0;
+    const xN = Array.isArray(staged) ? staged.length : 0;
+    if (scottyN > 0) chips.push({ n: scottyN, label: "Scotty proposals", href: "#approvals-anchor", tone: "hot" });
+    if (xN > 0) chips.push({ n: xN, label: "X posts staged", href: "#approvals-anchor", tone: "hot" });
+
+    const frOpen = (coord && coord.friction && coord.friction.open) || 0;
+    const sigOpen = (coord && coord.signal && coord.signal.open) || 0;
+    const bpOpen = (coord && coord.blueprint && ((coord.blueprint.open || 0) + (coord.blueprint.refining || 0) + (coord.blueprint.ready || 0))) || 0;
+    if (frOpen > 0) chips.push({ n: frOpen, label: "Friction open", href: "#boards-anchor", tone: "warn" });
+    if (sigOpen > 0) chips.push({ n: sigOpen, label: "Signals", href: "#boards-anchor", tone: "ok" });
+    if (bpOpen > 0) chips.push({ n: bpOpen, label: "Blueprints", href: "#boards-anchor", tone: "ok" });
+
+    const talking = (publicA && publicA.talking) || [];
+    if (talking.length) chips.push({ n: talking.length, label: "Public talking", href: "#boards-anchor", tone: "ok" });
+    const intake = publicA && publicA.intake;
+    const crmNew = (intake && intake.crm_new) || (publicA && publicA.crm && publicA.crm.leads_new) || 0;
+    const wlToday = (intake && intake.waitlist_today) || 0;
+    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn" });
+    if (wlToday > 0) chips.push({ n: wlToday, label: "HL waitlist today", href: (intake && intake.waitlist_open) || "https://historysledger.com/family#waitlist", tone: "ok" });
+
+    const crit = ares && ares.counts && ((ares.counts.emergency || 0) + (ares.counts.critical || 0));
+    if (crit > 0) chips.push({ n: crit, label: "Ares critical", href: "#ares-anchor", tone: "hot", scroll: "[data-testid='ares-panel']" });
+
+    if (daemons) {
+      for (const key of ["heartbeat", "patrol", "ares"]) {
+        const d = daemons[key];
+        if (d && (d.status === "stale" || d.status === "error" || d.error)) {
+          chips.push({ n: "!", label: `${key} ${d.status || "issue"}`, href: "#", tone: "warn", scroll: "[data-testid='daemon-strip']" });
+        }
+      }
+    }
+
+    // Cache for greeting briefing
+    window.__ccNeeds = { chips, scottyN, xN, frOpen, sigOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
+
+    if (!chips.length) {
+      root.setAttribute("data-state", "clear");
+      chipsEl.innerHTML = "";
+      if (clearEl) clearEl.style.display = "";
+      if (pill) {
+        pill.removeAttribute("data-needs");
+        const st = pill.querySelector("[data-status-text]");
+        if (st) st.textContent = "all systems quiet";
+      }
+      return;
+    }
+
+    root.setAttribute("data-state", "hot");
+    if (clearEl) clearEl.style.display = "none";
+    chipsEl.innerHTML = chips.map((c) => {
+      const n = (typeof c.n === "number") ? c.n : c.n;
+      const href = c.href || "#";
+      const scroll = c.scroll ? ` data-scroll="${c.scroll}"` : "";
+      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span></a>`;
+    }).join("");
+    chipsEl.querySelectorAll("[data-scroll]").forEach((a) => {
+      a.addEventListener("click", (ev) => {
+        const sel = a.getAttribute("data-scroll");
+        const el = sel && document.querySelector(sel);
+        if (el) { ev.preventDefault(); el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+      });
+    });
+    if (pill) {
+      pill.setAttribute("data-needs", "hot");
+      const st = pill.querySelector("[data-status-text]");
+      if (st) st.textContent = `${chips.length} need${chips.length === 1 ? "s" : ""} you`;
+    }
+  }
+
+  // ─── Greeting briefing ────────────────────────────────────────────────────
   async function renderGreeting() {
     const hour = new Date().getHours();
     let heading = "Late, Jon.";
@@ -2375,24 +3664,63 @@
     else if (hour < 12) heading = "Morning, Jon.";
     else if (hour < 17) heading = "Afternoon, Jon.";
     else if (hour < 22) heading = "Evening, Jon.";
-    document.querySelector("[data-greeting-heading]").textContent = heading;
+    const hEl = document.querySelector("[data-greeting-heading]");
+    if (hEl) hEl.textContent = heading;
 
     const activity = await fetchJson("/api/memory/activity?days=1");
     const sessions = await fetchJson("/sessions?limit=10");
-    const parts = [];
-    const today = activity && activity.buckets && activity.buckets[activity.buckets.length-1];
+    const needs = window.__ccNeeds || {};
+
+    const bodyParts = [];
+    if (needs.scottyN || needs.xN) {
+      const bits = [];
+      if (needs.scottyN) bits.push(`${needs.scottyN} proposal${needs.scottyN === 1 ? "" : "s"}`);
+      if (needs.xN) bits.push(`${needs.xN} staged post${needs.xN === 1 ? "" : "s"}`);
+      bodyParts.push(`You have ${bits.join(" and ")} waiting.`);
+    } else {
+      bodyParts.push("Nothing is gated on you right now.");
+    }
+
+    const brief = [];
+    if (needs.scottyN > 0) brief.push({ t: `${needs.scottyN} Scotty proposal${needs.scottyN === 1 ? "" : "s"} need a decision.`, tone: "hot" });
+    if (needs.xN > 0) brief.push({ t: `${needs.xN} X post${needs.xN === 1 ? "" : "s"} staged for your word.`, tone: "hot" });
+    if (needs.frOpen > 0) brief.push({ t: `${needs.frOpen} open friction item${needs.frOpen === 1 ? "" : "s"} on the board.`, tone: "warn" });
+    if (needs.talking && needs.talking.length) brief.push({ t: `Public agents talking: ${needs.talking.join(", ")}.`, tone: "ok" });
+    if (needs.crmNew > 0) brief.push({ t: `${needs.crmNew} new CRM lead${needs.crmNew === 1 ? "" : "s"} in the pipeline.`, tone: "warn" });
+    if (needs.wlToday > 0) brief.push({ t: `${needs.wlToday} History’s Ledger waitlist signup${needs.wlToday === 1 ? "" : "s"} today.`, tone: "ok" });
+    if (needs.crit > 0) brief.push({ t: `Ares has ${needs.crit} critical/emergency finding${needs.crit === 1 ? "" : "s"}.`, tone: "hot" });
+
+    const today = activity && activity.buckets && activity.buckets[activity.buckets.length - 1];
     if (today && today.count > 0) {
-      for (const [agent, n] of Object.entries(today.by_agent || {})) {
-        const noun = n === 1 ? "note" : "notes";
-        parts.push(`${agent[0].toUpperCase() + agent.slice(1)} wrote ${n} ${noun}.`);
-      }
+      const agents = Object.entries(today.by_agent || {})
+        .map(([a, n]) => `${a[0].toUpperCase() + a.slice(1)} ${n}`)
+        .join(", ");
+      brief.push({ t: `Lattice today: ${today.count} write${today.count === 1 ? "" : "s"}${agents ? ` (${agents})` : ""}.`, tone: "ok" });
     }
     if (sessions && sessions.sessions && sessions.sessions.length) {
-      const n = sessions.sessions.length;
-      parts.push(`${n} recent session${n === 1 ? "" : "s"}.`);
+      const last = sessions.sessions[0];
+      const ago = relAgo(last.updated_at);
+      brief.push({ t: `Last session: ${last.agent || "agent"}${ago ? ` · ${ago}` : ""}.`, tone: "" });
+      bodyParts.push(`${sessions.sessions.length} recent session${sessions.sessions.length === 1 ? "" : "s"} on the tower.`);
+    } else if (!brief.length) {
+      bodyParts.push("It's been quiet since you were last here.");
     }
-    document.querySelector("[data-greeting-body]").textContent =
-      parts.length ? parts.join(" ") : "It's been quiet since you were last here.";
+
+    const bEl = document.querySelector("[data-greeting-body]");
+    if (bEl) bEl.textContent = bodyParts.join(" ");
+
+    const list = document.querySelector("[data-brief-list]");
+    if (list) {
+      if (!brief.length) {
+        list.hidden = true;
+        list.innerHTML = "";
+      } else {
+        list.hidden = false;
+        list.innerHTML = brief.slice(0, 5).map((b) =>
+          `<li${b.tone ? ` data-tone="${b.tone}"` : ""}>${b.t}</li>`
+        ).join("");
+      }
+    }
   }
 
   // ─── Agent cards (state from /sessions per agent) ─────────────────────────
@@ -2402,8 +3730,77 @@
       const recent = data && data.sessions && data.sessions[0];
       const el = document.querySelector(`.agent-card[data-agent="${agent}"] [data-agent-state]`);
       if (!el) continue;
-      el.textContent = recent ? `last active ${new Date(recent.updated_at).toLocaleString()}` : "idle";
+      if (!recent) {
+        el.textContent = "Quiet — no recent session";
+        continue;
+      }
+      const ago = relAgo(recent.updated_at) || "recently";
+      el.textContent = `Last talk ${ago}`;
     }
+  }
+
+  // ─── Dispatch box (chat deep-link or board create) ────────────────────────
+  function wireDispatch() {
+    const form = document.querySelector("[data-dispatch-form]");
+    if (!form || form.dataset.wired) return;
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const target = (form.querySelector("[data-dispatch-target]") || {}).value || "";
+      const text = ((form.querySelector("[data-dispatch-text]") || {}).value || "").trim();
+      const err = form.querySelector("[data-dispatch-err]");
+      if (err) err.textContent = "";
+      if (!text) return;
+      if (target.startsWith("chat:")) {
+        const agent = target.slice(5);
+        const q = encodeURIComponent(text);
+        window.location.href = `/chat?agent=${agent}&q=${q}`;
+        return;
+      }
+      if (target.startsWith("board:")) {
+        const board = target.slice(6);
+        try {
+          const res = await fetch("/api/coord", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ board, content: text, notify: true }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (err) err.textContent = body.error || body.message || `Failed (${res.status})`;
+            return;
+          }
+          form.querySelector("[data-dispatch-text]").value = "";
+          if (err) err.textContent = "";
+          if (typeof renderBoards === "function") renderBoards();
+          renderNeedsYou();
+        } catch (e) {
+          if (err) err.textContent = String(e);
+        }
+      }
+    });
+  }
+
+  // ─── Now / Today / Fleet mode switch ──────────────────────────────────────
+  function wireModes() {
+    const page = document.querySelector(".page");
+    const bar = document.querySelector("[data-cc-modes]");
+    if (!page || !bar || bar.dataset.wired) return;
+    bar.dataset.wired = "1";
+    const apply = (mode) => {
+      page.setAttribute("data-mode", mode);
+      bar.querySelectorAll("button").forEach((b) => {
+        b.classList.toggle("is-active", b.getAttribute("data-mode") === mode);
+      });
+      if (mode === "fleet") {
+        const fleet = document.querySelector("[data-testid='fleet-fold']");
+        if (fleet) fleet.open = true;
+      }
+    };
+    bar.querySelectorAll("button").forEach((b) => {
+      b.addEventListener("click", () => apply(b.getAttribute("data-mode") || "now"));
+    });
+    apply("now");
   }
 
   // ─── GPU bars ─────────────────────────────────────────────────────────────
@@ -3173,21 +4570,101 @@
     return parts.join(" · ");
   }
 
+  async function clearAresFindings({ keys, severities, reason }) {
+    const note = document.querySelector("[data-ares-note]");
+    const toolbar = document.querySelector("[data-ares-toolbar]");
+    if (toolbar) toolbar.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    if (note) note.textContent = "Clearing…";
+    try {
+      const res = await fetch("/api/ares/findings/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys, severities, reason: reason || "human_clear" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false) {
+        if (note) note.textContent = body.error || body.message || `Clear failed (${res.status})`;
+        return;
+      }
+      const n = body.count || 0;
+      if (note) {
+        note.textContent = n
+          ? `Cleared ${n} finding${n === 1 ? "" : "s"}. Reappears only if Ares re-detects it as new.`
+          : "Nothing matched.";
+      }
+      await renderAres();
+      if (typeof renderNeedsYou === "function") await renderNeedsYou();
+      if (typeof renderGreeting === "function") await renderGreeting();
+    } catch (e) {
+      if (note) note.textContent = String(e);
+    } finally {
+      if (toolbar) toolbar.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function wireAresClear() {
+    const toolbar = document.querySelector("[data-ares-toolbar]");
+    if (!toolbar || toolbar.dataset.wired) return;
+    toolbar.dataset.wired = "1";
+    toolbar.querySelectorAll("[data-ares-clear]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-ares-clear");
+        let severities = null;
+        let label = "findings";
+        if (mode === "hot") {
+          severities = ["emergency", "critical"];
+          label = "all emergency + critical findings";
+        } else if (mode === "warning") {
+          severities = ["warning"];
+          label = "all warnings";
+        } else if (mode === "all") {
+          severities = ["emergency", "critical", "warning"];
+          label = "ALL active findings";
+        }
+        if (!severities) return;
+        if (!confirm(`Clear ${label}?\n\nThis marks them cleared in the Ares bus (you, not the agent).\nThey return only if Ares re-detects them as new.`)) return;
+        clearAresFindings({ severities, reason: `human_clear:${mode}` });
+      });
+    });
+  }
+
   async function renderAres() {
     const data = await fetchJson("/api/ares/findings");
     const feed = document.querySelector("[data-ares-feed]");
     const counts = document.querySelector("[data-ares-counts]");
+    const toolbar = document.querySelector("[data-ares-toolbar]");
     if (!feed) return;
+    wireAresClear();
     const d = data || { findings: [], counts: { emergency: 0, critical: 0, warning: 0 } };
     if (counts) counts.innerHTML = severityLabel(d.counts || {});
+    const total = (d.findings && d.findings.length) || 0;
+    if (toolbar) toolbar.hidden = total === 0;
     if (!d.findings || d.findings.length === 0) {
       feed.innerHTML = '<div class="empty">All clear — no active findings.</div>';
       return;
     }
-    feed.innerHTML = d.findings.map(f => `
-      <div class="ares-finding" data-sev="${f.severity}">
-        <div><span class="ftype">${f.finding_type}</span><br><span class="ev">${(f.evidence || "").replace(/</g, "&lt;")}</span></div>
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    feed.innerHTML = d.findings.map((f) => `
+      <div class="ares-finding" data-sev="${esc(f.severity)}" data-key="${esc(f.key)}">
+        <div class="ares-finding-row">
+          <div>
+            <span class="ftype">${esc(f.finding_type)}</span>
+            <span style="opacity:.4;font-size:10px;margin-left:6px">${esc(f.severity)}</span>
+            <br><span class="ev">${esc(f.evidence || "")}</span>
+          </div>
+          <button type="button" class="ares-dismiss" data-ares-dismiss="${esc(f.key)}" title="Clear this finding">Clear</button>
+        </div>
       </div>`).join("");
+    feed.querySelectorAll("[data-ares-dismiss]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-ares-dismiss");
+        if (!key) return;
+        if (!confirm(`Clear this finding?\n\n${key}`)) return;
+        clearAresFindings({ keys: [key], reason: "human_clear:one" });
+      });
+    });
   }
 
   // ─── Comm bus (recent DAC traffic) ───────────────────────────────────────
@@ -3532,10 +5009,87 @@
     });
   }
 
+  // ─── Kernel — house build brain (DeepSeek V4 on NVMe / quadro :8091) ────
+  let _kernelAiderCmd = "soveryn-aider --kernel";
+  let _kernelWarmPoll = null;
+
+  async function refreshKernel() {
+    const card = document.querySelector('[data-testid="kernel-card"]');
+    if (!card) return;
+    const stateEl = card.querySelector("[data-kernel-state-text]");
+    const warmBtn = card.querySelector("[data-kernel-warm]");
+    const d = await fetchJson("/api/system/bench_flash");
+    if (!d) {
+      card.setAttribute("data-kernel-state", "router_down");
+      if (stateEl) stateEl.textContent = "status unavailable";
+      return;
+    }
+    const st = d.state || "cold";
+    card.setAttribute("data-kernel-state", st);
+    if (d.soveryn_aider_flash) _kernelAiderCmd = d.soveryn_aider_flash;
+    else if (d.aider_cmd) _kernelAiderCmd = d.aider_cmd;
+    const parts = [];
+    if (st === "warm") parts.push("warm · ready");
+    else if (st === "loading") parts.push("loading… (can take minutes)");
+    else if (st === "cold") parts.push("cold · on NVMe");
+    else if (st === "missing") parts.push("weights missing");
+    else if (st === "router_down") parts.push("router down");
+    else parts.push(st);
+    if (d.model_status && st !== "loading") parts.push(d.model_status);
+    if (d.warm_job && d.warm_job.status === "error" && d.warm_job.error) {
+      parts.push(String(d.warm_job.error).slice(0, 80));
+    }
+    if (stateEl) stateEl.textContent = parts.join(" · ");
+    if (warmBtn) {
+      warmBtn.disabled = (st === "loading" || st === "warm" || st === "missing");
+      warmBtn.textContent = st === "warm" ? "Warm" : (st === "loading" ? "…" : "Warm");
+    }
+    if (st !== "loading" && _kernelWarmPoll) {
+      clearInterval(_kernelWarmPoll);
+      _kernelWarmPoll = null;
+    }
+  }
+
+  function wireKernelCard() {
+    const card = document.querySelector('[data-testid="kernel-card"]');
+    if (!card || card.dataset.wired === "1") return;
+    card.dataset.wired = "1";
+    const warmBtn = card.querySelector("[data-kernel-warm]");
+    const copyBtn = card.querySelector("[data-kernel-copy-aider]");
+    if (warmBtn) {
+      warmBtn.addEventListener("click", async () => {
+        warmBtn.disabled = true;
+        warmBtn.textContent = "…";
+        try {
+          await fetch("/api/system/bench_flash/warm", { method: "POST" });
+        } catch (_) { /* status poll will surface */ }
+        await refreshKernel();
+        if (!_kernelWarmPoll) {
+          _kernelWarmPoll = setInterval(refreshKernel, 4000);
+        }
+      });
+    }
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(_kernelAiderCmd);
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = "Copied";
+          setTimeout(() => { copyBtn.textContent = prev || "Aider"; }, 1400);
+        } catch (_) {
+          window.prompt("Copy Aider command:", _kernelAiderCmd);
+        }
+      });
+    }
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
-  function refreshAll() {
-    renderGreeting();
+  async function refreshAll() {
+    // Needs-you first so greeting can use the cached operator state.
+    await renderNeedsYou();
+    await renderGreeting();
     renderAgentStates();
+    refreshKernel();
     renderGpu();
     refreshSpark();
     refreshRig();
@@ -3548,7 +5102,8 @@
     renderAres();
     renderSteward();
     renderCognition();
-    renderScottyApprovals(); renderXApprovals();
+    renderScottyApprovals();
+    renderXApprovals();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();
@@ -3567,6 +5122,9 @@
       });
     }
     wireBoardCreate();
+    wireDispatch();
+    wireModes();
+    wireKernelCard();
     refreshAll();
     setInterval(refreshAll, 10000);  // poll every 10s
   });

@@ -83,7 +83,7 @@ def _ssh_json_bundle(host: str) -> dict[str, Any] | None:
 python3 - <<'PY'
 import json, urllib.request, sqlite3, os
 from datetime import datetime, timezone
-out = {"agents": {}, "crm": {"ok": False}}
+out = {"agents": {}, "crm": {"ok": False}, "waitlist": {"ok": False}}
 for port in (8200, 8400, 8500):
     row = {"summary": None, "health": None, "error": None}
     for kind in ("summary", "health"):
@@ -104,17 +104,10 @@ try:
     ).fetchall()
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     recent = []
-    new_count = 0
-    today_count = 0
     for r in rows:
         d = dict(r)
         st = d.get("status") or "new"
-        if st == "new":
-            new_count += 1
         ts = d.get("created_at") or ""
-        if ts.startswith(today) or (len(ts) >= 10 and ts[:10] == today):
-            today_count += 1
-        # Also count local-day EDT-ish by checking date substring loosely
         recent.append({
             "id": d.get("id"),
             "created_at": ts,
@@ -126,12 +119,9 @@ try:
             "interest": (d.get("interest") or "")[:80],
         })
     total = con.execute("SELECT count(*) FROM leads").fetchone()[0]
-    # leads today: UTC date match on created_at (ISO)
     leads_today = con.execute(
         "SELECT count(*) FROM leads WHERE created_at LIKE ?", (today + "%",)
     ).fetchone()[0]
-    # Also catch offsets like 2026-08-15T... with local evening previous day
-    # by counting last 24h via string sort (good enough for glance)
     out["crm"] = {
         "ok": True,
         "leads_total": int(total),
@@ -141,10 +131,55 @@ try:
         "leads_today": int(leads_today),
         "recent": recent[:8],
         "open": "https://crm.pondwright.com/",
+        "label": "PondWright CRM",
     }
     con.close()
 except Exception as e:
     out["crm"] = {"ok": False, "error": type(e).__name__}
+
+# History's Ledger Family waitlist (Atticus) — emails Jon; also on disk
+wl_path = os.path.expanduser("~/atticus/waitlist.jsonl")
+try:
+    lines = []
+    if os.path.isfile(wl_path):
+        with open(wl_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    recent = []
+    today_count = 0
+    for raw in lines[-40:]:
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            rec = json.loads(raw)
+        except Exception:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        ts = str(rec.get("ts") or "")
+        if ts.startswith(today) or (len(ts) >= 10 and ts[:10] == today):
+            today_count += 1
+        recent.append({
+            "ts": ts,
+            "email": (rec.get("email") or "")[:120],
+            "name": (rec.get("name") or "")[:80] or "—",
+            "note": (rec.get("note") or "")[:100],
+            "price_interest": rec.get("price_interest") or "",
+            "source": rec.get("source") or "",
+            "list": rec.get("list") or "family-year",
+        })
+    recent = list(reversed(recent[-12:]))  # newest first
+    out["waitlist"] = {
+        "ok": True,
+        "total": len(lines),
+        "today": int(today_count),
+        "recent": recent[:8],
+        "open": "https://historysledger.com/family#waitlist",
+        "label": "HL Family waitlist",
+    }
+except Exception as e:
+    out["waitlist"] = {"ok": False, "error": type(e).__name__}
 print(json.dumps(out))
 PY
 """
@@ -224,14 +259,19 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
             path = label
             break
 
-    # Bundle shape: {agents: {port: {summary,health}}, crm: {...}}
-    # Older shape was port-keyed only — keep reading both.
+    # Bundle shape: {agents, crm, waitlist}. Older shape was port-keyed only.
     agent_rows: dict[str, Any] = {}
     crm: dict[str, Any] = {"ok": False}
+    waitlist: dict[str, Any] = {"ok": False}
     if isinstance(bundle, dict):
         if "agents" in bundle and isinstance(bundle.get("agents"), dict):
             agent_rows = bundle["agents"]
             crm = bundle.get("crm") if isinstance(bundle.get("crm"), dict) else crm
+            waitlist = (
+                bundle.get("waitlist")
+                if isinstance(bundle.get("waitlist"), dict)
+                else waitlist
+            )
         else:
             agent_rows = bundle
 
@@ -267,10 +307,70 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
             or (a.turns_today or 0) > 0
         )
     ]
+
+    # Unified web intake glance for Mission Control (CRM + HL waitlist).
+    intake_items: list[dict[str, Any]] = []
+    if crm.get("ok"):
+        for L in (crm.get("recent") or [])[:6]:
+            if not isinstance(L, dict):
+                continue
+            intake_items.append({
+                "channel": "pondwright",
+                "kind": "crm_lead",
+                "ts": L.get("created_at") or "",
+                "who": L.get("name") or "—",
+                "detail": " · ".join(
+                    x for x in (
+                        L.get("phone") or "",
+                        L.get("interest") or "",
+                        L.get("status") or "",
+                    ) if x
+                )[:100],
+                "status": L.get("status") or "",
+            })
+    if waitlist.get("ok"):
+        for W in (waitlist.get("recent") or [])[:6]:
+            if not isinstance(W, dict):
+                continue
+            intake_items.append({
+                "channel": "historysledger",
+                "kind": "waitlist",
+                "ts": W.get("ts") or "",
+                "who": W.get("name") or W.get("email") or "—",
+                "detail": " · ".join(
+                    x for x in (
+                        W.get("email") or "",
+                        W.get("note") or "",
+                        (f"${W['price_interest']}" if W.get("price_interest") else ""),
+                    ) if x
+                )[:100],
+                "status": "waitlist",
+            })
+    # Newest first by timestamp string (ISO-ish)
+    intake_items.sort(key=lambda r: r.get("ts") or "", reverse=True)
+
+    intake = {
+        "ok": bool(crm.get("ok") or waitlist.get("ok")),
+        "crm_new": int(crm.get("leads_new") or 0) if crm.get("ok") else 0,
+        "crm_today": int(crm.get("leads_today") or 0) if crm.get("ok") else 0,
+        "waitlist_today": int(waitlist.get("today") or 0) if waitlist.get("ok") else 0,
+        "waitlist_total": int(waitlist.get("total") or 0) if waitlist.get("ok") else 0,
+        "pending": (
+            (int(crm.get("leads_new") or 0) if crm.get("ok") else 0)
+            + (int(waitlist.get("today") or 0) if waitlist.get("ok") else 0)
+        ),
+        "recent": intake_items[:10],
+        "crm_open": crm.get("open") or "https://crm.pondwright.com/",
+        "waitlist_open": waitlist.get("open")
+        or "https://historysledger.com/family#waitlist",
+    }
+
     payload = {
         "agents": [asdict(a) for a in agents],
         "talking": talking,
         "crm": crm,
+        "waitlist": waitlist,
+        "intake": intake,
         "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "path": path,
     }

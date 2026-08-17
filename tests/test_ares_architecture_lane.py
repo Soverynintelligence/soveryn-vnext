@@ -73,6 +73,24 @@ def test_raw_io_in_platform_is_ignored():
     assert findings == []
 
 
+def test_raw_io_in_ares_infrastructure_is_exempt():
+    """Ares lanes use sqlite3 on purpose — not cognition-path debt."""
+    findings = check_no_raw_io_in_agents({
+        Path("soveryn/agents/ares/lanes/observability.py"): "import sqlite3\n",
+        Path("soveryn/agents/dream/writeback.py"): "import sqlite3\n",
+        Path("soveryn/agents/presence/x_client.py"): "import requests\n",
+        Path("soveryn/agents/heartbeat/daemon.py"): "import sqlite3\n",
+    })
+    assert findings == []
+
+
+def test_raw_io_in_agent_cognition_path_still_flagged():
+    findings = check_no_raw_io_in_agents({
+        Path("soveryn/agents/aetheria/loop_helpers.py"): "import sqlite3\n",
+    })
+    assert len(findings) == 1
+
+
 def test_syntax_error_source_is_skipped_not_crashed():
     findings = check_no_raw_io_in_agents({
         Path("soveryn/agents/aetheria/broken.py"): "if True print('bad')\n",

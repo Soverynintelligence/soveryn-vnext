@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOVERYN · Kernel</title>
+<style>
+  :root {
+    --bg: #050608;
+    --panel: rgba(10,12,16,0.92);
+    --line: rgba(232,227,213,0.12);
+    --text: #e8e3d5;
+    --dim: rgba(232,227,213,0.55);
+    --mute: rgba(232,227,213,0.35);
+    --gold: #c6a664;
+    --mint: #6fb98a;
+    --hot: #ff6b6b;
+    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(198,166,100,0.08), transparent 55%),
+                radial-gradient(900px 500px at 90% 0%, rgba(80,120,160,0.06), transparent 50%),
+                var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .brand .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+  .brand h1 {
+    margin: 4px 0 0;
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .brand p {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--dim);
+    max-width: 48ch;
+    line-height: 1.45;
+  }
+  .nav a {
+    color: var(--gold);
+    text-decoration: none;
+    font-size: 13px;
+    border: 1px solid rgba(198,166,100,0.3);
+    padding: 7px 12px;
+    border-radius: 10px;
+    background: rgba(198,166,100,0.08);
+  }
+  .nav a:hover { background: rgba(198,166,100,0.16); }
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.35);
+  }
+  .pill[data-state="warm"] { border-color: rgba(111,185,138,0.45); color: var(--mint); }
+  .pill[data-state="loading"] { border-color: rgba(198,166,100,0.45); color: var(--gold); }
+  .pill[data-state="cold"] { border-color: var(--line); color: var(--dim); }
+  .pill[data-state="missing"],
+  .pill[data-state="router_down"] { border-color: rgba(255,107,107,0.4); color: var(--hot); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .actions button {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.4);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .actions button.primary {
+    border-color: rgba(198,166,100,0.4);
+    background: rgba(198,166,100,0.12);
+    color: #f3efe6;
+  }
+  .actions button:disabled { opacity: 0.45; cursor: wait; }
+  .log {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    padding: 14px;
+    overflow-y: auto;
+    min-height: 360px;
+    max-height: calc(100vh - 280px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 92%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: rgba(198,166,100,0.12);
+    border: 1px solid rgba(198,166,100,0.25);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+  }
+  .msg.meta {
+    align-self: center;
+    font-size: 12px;
+    color: var(--mute);
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  .msg.err { color: var(--hot); border-color: rgba(255,107,107,0.35); }
+  form.composer {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  form.composer textarea {
+    flex: 1;
+    min-height: 52px;
+    max-height: 160px;
+    resize: vertical;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.45);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 12px;
+  }
+  form.composer button {
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(198,166,100,0.4);
+    background: rgba(198,166,100,0.16);
+    color: #f3efe6;
+    cursor: pointer;
+  }
+  form.composer button:disabled { opacity: 0.5; cursor: wait; }
+  .hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--mute);
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="eyebrow">SOVERYN · local</div>
+        <h1>Kernel</h1>
+        <p>House build brain — make and mend. Direct model chat, no house tools, no cloud. (DeepSeek V4 Flash under the hood.)</p>
+      </div>
+      <div class="nav"><a href="/">← Command Center</a></div>
+    </header>
+
+    <div class="status">
+      <span class="pill" data-state-pill data-state="cold">…</span>
+      <span data-status-detail>checking…</span>
+      <div class="actions">
+        <button type="button" class="primary" data-warm>Warm up</button>
+        <button type="button" data-copy-aider title="Copy soveryn-aider --kernel">Copy Aider cmd</button>
+      </div>
+    </div>
+
+    <div class="log" data-log aria-live="polite">
+      <div class="msg meta">Ask for code help, patches, or build steps. First message may load ~145G if cold.</div>
+    </div>
+
+    <form class="composer" data-form>
+      <textarea data-input rows="2" placeholder="What should we build or fix?" required></textarea>
+      <button type="submit" data-send>Send</button>
+    </form>
+    <div class="hint" data-aider-hint></div>
+  </div>
+<script>
+(() => {
+  const log = document.querySelector("[data-log]");
+  const pill = document.querySelector("[data-state-pill]");
+  const detail = document.querySelector("[data-status-detail]");
+  const warmBtn = document.querySelector("[data-warm]");
+  const copyBtn = document.querySelector("[data-copy-aider]");
+  const form = document.querySelector("[data-form]");
+  const input = document.querySelector("[data-input]");
+  const sendBtn = document.querySelector("[data-send]");
+  const aiderHint = document.querySelector("[data-aider-hint]");
+  const history = [];
+  let aiderCmd = "soveryn-aider --kernel";
+  let busy = false;
+
+  function addMsg(role, text, cls) {
+    const el = document.createElement("div");
+    el.className = "msg " + (cls || role);
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  async function refreshStatus() {
+    try {
+      const r = await fetch("/api/system/bench_flash");
+      const d = await r.json();
+      pill.dataset.state = d.state || "cold";
+      pill.textContent = d.state || "?";
+      const bits = [];
+      if (d.model_status) bits.push("router: " + d.model_status);
+      if (d.warm_job && d.warm_job.status && d.warm_job.status !== "idle") {
+        bits.push("job: " + d.warm_job.status + (d.warm_job.error ? " — " + d.warm_job.error : ""));
+      }
+      if (!d.weights_ok) bits.push("weights missing");
+      if (!d.router_ok) bits.push("router down");
+      detail.textContent = bits.join(" · ") || "ready";
+      if (d.soveryn_aider_flash) aiderCmd = d.soveryn_aider_flash;
+      if (d.aider_cmd) aiderHint.textContent = "Aider: " + d.aider_cmd;
+      warmBtn.disabled = d.state === "loading" || d.state === "warm" || d.state === "missing";
+      warmBtn.textContent = d.state === "warm" ? "Warm" : (d.state === "loading" ? "Loading…" : "Warm up");
+      return d;
+    } catch {
+      pill.dataset.state = "router_down";
+      pill.textContent = "error";
+      detail.textContent = "status fetch failed";
+      return null;
+    }
+  }
+
+  warmBtn.addEventListener("click", async () => {
+    warmBtn.disabled = true;
+    warmBtn.textContent = "Loading…";
+    addMsg("meta", "Warming Kernel — first load can take several minutes…", "meta");
+    try {
+      await fetch("/api/system/bench_flash/warm", { method: "POST" });
+    } catch {}
+    const poll = setInterval(async () => {
+      const d = await refreshStatus();
+      if (d && d.state !== "loading") {
+        clearInterval(poll);
+        if (d.state === "warm") addMsg("meta", "Kernel is warm.", "meta");
+        else if (d.warm_job && d.warm_job.error) addMsg("err", "Warm failed: " + d.warm_job.error, "err");
+      }
+    }, 4000);
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(aiderCmd);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => { copyBtn.textContent = "Copy Aider cmd"; }, 1500);
+    } catch {
+      addMsg("meta", aiderCmd, "meta");
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    const text = (input.value || "").trim();
+    if (!text) return;
+    busy = true;
+    sendBtn.disabled = true;
+    addMsg("user", text);
+    input.value = "";
+    const waiting = addMsg("meta", "…", "meta");
+    try {
+      const r = await fetch("/api/system/bench_flash/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history }),
+      });
+      const d = await r.json();
+      waiting.remove();
+      if (!d.ok) {
+        addMsg("err", "Error: " + (d.error || r.status), "err");
+      } else {
+        const content = d.content || "(empty)";
+        addMsg("assistant", content);
+        history.push({ role: "user", content: text });
+        history.push({ role: "assistant", content });
+        if (history.length > 24) history.splice(0, history.length - 24);
+      }
+    } catch (err) {
+      waiting.remove();
+      addMsg("err", "Request failed: " + err, "err");
+    }
+    busy = false;
+    sendBtn.disabled = false;
+    refreshStatus();
+    input.focus();
+  });
+
+  refreshStatus();
+  setInterval(refreshStatus, 8000);
+})();
+</script>
+</body>
+</html>

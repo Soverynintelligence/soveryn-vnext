@@ -23,6 +23,36 @@ RETIRED_AGENTS: frozenset[str] = frozenset({
     "aetheria_public",
 })
 
+# Infrastructure that lives under soveryn/agents/ but is not "agent cognition
+# that should only talk through platform." Flagging these forever made Mission
+# Control show ~40 permanent WARNING rows (dream writeback, Ares lanes,
+# presence stores, daemons) — noise that trained Jon to ignore the bus.
+#
+# Still flag: persona/loop/tools modules that import sqlite3/requests directly.
+# Exempt: daemons, *store*, writeback, Ares itself, known HTTP clients.
+_RAW_IO_EXEMPT_PATH_SUBSTRINGS: tuple[str, ...] = (
+    "/agents/ares/",           # host sentinel — I/O is the job
+    "/agents/presence/",       # X client + staged/candidate stores
+    "/agents/signal_bridge/",  # bridge process
+    "/agents/heartbeat/",      # daemon
+    "/agents/cognition/",      # store
+    "/agents/representation/", # writeback path
+    "/agents/dream/",          # dream writeback + archive
+    "/agents/vett/patrol/",    # patrol daemon
+    "/agents/specialists/",    # concurrency + tools that shell out
+    "/agents/direct_communication/",
+    "/agents/aetheria/tools/", # tool implementations may use HTTP
+    "/agents/aetheria/reflection/",
+    "/agents/vett/harness/",   # vendor harness
+)
+
+_RAW_IO_EXEMPT_FILENAMES: frozenset[str] = frozenset({
+    "daemon.py",
+    "writeback.py",
+    "x_client.py",
+    "store.py",
+})
+
 DEFAULT_VNEXT_SOVERYN_ROOT = Path.home() / "soveryn_vnext" / "soveryn"
 
 
@@ -32,12 +62,17 @@ def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:
     Agents route SQLite and HTTP access through platform boundaries. This pure
     checker consumes an explicit {path: contents} mapping so tests do not scan
     the live filesystem.
+
+    Infrastructure packages (Ares, daemons, stores) are exempt — they are not
+    the cognition path this invariant was written for.
     """
 
     findings: list[AresFinding] = []
     for path, text in sources.items():
         posix = path.as_posix()
         if "soveryn/agents/" not in posix:
+            continue
+        if _is_raw_io_exempt(posix):
             continue
         try:
             tree = ast.parse(text, filename=posix)
@@ -53,6 +88,16 @@ def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:
                         key=f"{posix}:{node.lineno}:{module}",
                     ))
     return findings
+
+
+def _is_raw_io_exempt(posix: str) -> bool:
+    """True for agent-tree infrastructure that is allowed raw I/O."""
+    name = Path(posix).name
+    if name in _RAW_IO_EXEMPT_FILENAMES:
+        return True
+    if name.endswith("_store.py") or name.endswith("_client.py"):
+        return True
+    return any(part in posix for part in _RAW_IO_EXEMPT_PATH_SUBSTRINGS)
 
 
 def check_no_retired_agent_packages(

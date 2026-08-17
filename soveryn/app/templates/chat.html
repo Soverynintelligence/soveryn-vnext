@@ -1049,9 +1049,14 @@
   function parseUrl() {
     const path = window.location.pathname;
     const m = path.match(/^\/chat\/([^/]+)$/);
-    if (m) return { sessionId: m[1], agent: null };
+    if (m) return { sessionId: m[1], agent: null, q: null };
     const sp = new URLSearchParams(window.location.search);
-    return { sessionId: null, agent: sp.get("agent") };
+    return {
+      sessionId: null,
+      agent: sp.get("agent"),
+      // Prefill from Command Center dispatch (?q=…) — do not auto-send.
+      q: sp.get("q"),
+    };
   }
 
   function pickInitialAgent(urlAgent) {
@@ -2148,7 +2153,7 @@
   // ─── Boot ──────────────────────────────────────────────────────────────────
   function boot() {
     initSidebar();
-    const { sessionId, agent } = parseUrl();
+    const { sessionId, agent, q } = parseUrl();
     setAgent(pickInitialAgent(agent));
     state.sessionId = sessionId;
     elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
@@ -2156,6 +2161,16 @@
     loadSessions();
     if (sessionId) loadHistory(sessionId);
     else resumeLatestThread();
+    // Command Center dispatch deep-link: prefill composer, user hits send.
+    if (q && elInput()) {
+      elInput().value = q;
+      elInput().focus();
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("q");
+        window.history.replaceState({}, "", url.pathname + (url.search || "") + url.hash);
+      } catch (e) { /* ignore */ }
+    }
   }
   document.addEventListener("DOMContentLoaded", boot);
 })();

@@ -58,7 +58,8 @@ class MedicDecision:
 
 TARGETS: dict[str, MedicTarget] = {
     "vnext":      MedicTarget("vnext", "soveryn-vnext.service", 300.0, escalation_priority=True),
-    "embeddings": MedicTarget("embeddings", "soveryn-embeddings.service", 300.0, escalation_priority=False),
+    # embeddings: 2026-08-17 moved to Spark fabric (soveryn-embed.service there).
+    # Tower unit soveryn-embeddings.service is retired — do not restart it.
     "heartbeat":  MedicTarget("heartbeat", "soveryn-heartbeat.service", 600.0, escalation_priority=False),
     "dream":      MedicTarget("dream", "soveryn-dream.service", 300.0, escalation_priority=False),
     "x-feed":     MedicTarget("x-feed", "soveryn-x-feed.service", 300.0, escalation_priority=False),
@@ -94,6 +95,15 @@ def decide(
     """
     decisions: list[MedicDecision] = []
     for key in sorted(unhealthy_keys):
+        # Keys probed but not in TARGETS (e.g. Spark embeddings) — escalate only
+        # via visibility; no local unit to restart.
+        if key not in targets:
+            decisions.append(MedicDecision(
+                key, "remote", "escalate",
+                "unhealthy remote surface (no tower unit) — check Spark soveryn-embed",
+                priority=False,
+            ))
+            continue
         target = targets[key]
         if key == "vnext" and not router_healthy:
             decisions.append(MedicDecision(key, target.unit, "skip_router_down",
@@ -119,7 +129,9 @@ def decide(
 
 
 # ── probe classification (pure) ─────────────────────────────────────────────
-_HTTP_PORTS = {"vnext": 5001, "embeddings": 8096, "router": 8090}
+_HTTP_PORTS = {"vnext": 5001, "router": 8090}
+# Spark librarian (fabric) — health only; no tower unit to restart.
+_HTTP_URLS = {"embeddings": "http://10.10.10.2:8096/health"}
 _UNIT_KEYS = ("dream", "x-feed", "parakeet", "vett-patrol", "representation")
 
 
@@ -134,6 +146,8 @@ def probe_unhealthy(
     unhealthy: set[str] = set()
     if not http_ok.get("vnext", True):
         unhealthy.add("vnext")
+    # Embeddings on Spark: report unhealthy for visibility, but TARGETS no longer
+    # restarts a tower unit (would thrash the retired soveryn-embeddings.service).
     if not http_ok.get("embeddings", True):
         unhealthy.add("embeddings")
     for key in _UNIT_KEYS:
@@ -150,6 +164,14 @@ def probe_unhealthy(
 def _http_ok(port: int, timeout: float = 2.0) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def _http_url_ok(url: str, timeout: float = 3.0) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
             return 200 <= resp.status < 300
     except (urllib.error.URLError, OSError):
         return False
@@ -194,6 +216,7 @@ def _comfyui_on_her_card() -> bool:
 def _probe() -> tuple[set[str], bool]:
     now = time.time()
     http_ok = {k: _http_ok(p) for k, p in _HTTP_PORTS.items()}
+    http_ok.update({k: _http_url_ok(u) for k, u in _HTTP_URLS.items()})
     unit_active = {k: _unit_is_active(TARGETS[k].unit) for k in _UNIT_KEYS}
     return probe_unhealthy(
         http_ok=http_ok,

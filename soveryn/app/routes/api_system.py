@@ -5,8 +5,11 @@ import sqlite3
 from dataclasses import asdict
 from datetime import datetime
 
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, request
 
+from soveryn.app.services.bench_flash import chat as bench_flash_chat
+from soveryn.app.services.bench_flash import get_status as bench_flash_status
+from soveryn.app.services.bench_flash import start_warm as bench_flash_warm
 from soveryn.app.services.gpu_stats import get_gpu_stats
 from soveryn.app.services.public_agents import get_public_agents
 from soveryn.app.services.rig_stats import get_rig_stats
@@ -90,6 +93,38 @@ def api_system_daemons():
         "ares":      _ares_summary(lattice_db),
         "fetched_at": datetime.now().isoformat(),
     }), 200
+
+
+@bp.get("/api/system/bench_flash")
+def api_system_bench_flash():
+    """Kernel (build brain) — weights, router, warm/cold state."""
+    return jsonify(bench_flash_status().as_dict()), 200
+
+
+@bp.post("/api/system/bench_flash/warm")
+def api_system_bench_flash_warm():
+    """Start loading Kernel (bench-flash) on the quadro router (background)."""
+    result = bench_flash_warm()
+    code = 200 if result.get("ok") else 409
+    return jsonify(result), code
+
+
+@bp.post("/api/system/bench_flash/chat")
+def api_system_bench_flash_chat():
+    """Simple chat proxy to Kernel (no house agent tools)."""
+    body = request.get_json(silent=True) or {}
+    message = str(body.get("message") or body.get("content") or "")
+    history = body.get("history") if isinstance(body.get("history"), list) else None
+    max_tokens = body.get("max_tokens")
+    temperature = body.get("temperature")
+    kwargs: dict = {}
+    if isinstance(max_tokens, int) and 1 <= max_tokens <= 8192:
+        kwargs["max_tokens"] = max_tokens
+    if isinstance(temperature, (int, float)) and 0 <= float(temperature) <= 2:
+        kwargs["temperature"] = float(temperature)
+    result = bench_flash_chat(message, history=history, **kwargs)
+    code = 200 if result.get("ok") else 400
+    return jsonify(result), code
 
 
 # Per-daemon "stale" thresholds (seconds). If the last tick is older than this,
