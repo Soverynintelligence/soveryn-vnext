@@ -61,6 +61,11 @@ class AgentLoopAdapter(AgentAdapterBase):
 
         def _producer() -> None:
             pending = ""
+            # F5 duplex: ONE continuous render per turn for normal replies.
+            # Early "first sentence" flush caused the gap users hate: she says
+            # a line, then ~5s silence while the LLM finishes + F5 runs again.
+            # Hold everything until stream end (or a very large safety chunk).
+            safety_chars = 320 if sentence_only else flush_chars
 
             def _flush() -> None:
                 nonlocal pending
@@ -84,16 +89,16 @@ class AgentLoopAdapter(AgentAdapterBase):
                     if not chunk.strip():
                         continue
                     pending += chunk
-                    at_sentence = chunk.rstrip()[-1] in ".!?;:"
-                    # TOKEN mode: flush at sentence OR flush_chars (first clause
-                    # snappier). SENTENCE mode: only sentence boundaries, with
-                    # a large safety flush to avoid unbounded buffers.
-                    if at_sentence:
-                        _flush()
-                    elif not sentence_only and len(pending.strip()) >= flush_chars:
-                        _flush()
-                    elif sentence_only and len(pending.strip()) >= max(flush_chars, 80):
-                        _flush()
+                    n = len(pending.strip())
+                    if sentence_only:
+                        # Only mid-turn flush for long monologues; never for
+                        # short witty multi-sentence replies.
+                        if n >= safety_chars:
+                            _flush()
+                    else:
+                        at_sentence = chunk.rstrip()[-1] in ".!?"
+                        if at_sentence or n >= flush_chars:
+                            _flush()
             except Exception:  # noqa: BLE001
                 logger.exception(
                     "AgentLoopAdapter producer failed agent=%s session=%s",

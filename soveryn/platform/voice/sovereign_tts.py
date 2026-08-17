@@ -79,6 +79,16 @@ class ProviderBackedTTSService(TTSService):
         # streaming providers.
         if text_aggregation_mode is None:
             text_aggregation_mode = TextAggregationMode.SENTENCE
+        # Pipecat 1.3: TTSSettings.validate_complete() errors if model/voice/
+        # language stay NOT_GIVEN (same class of bug as Parakeet STTSettings).
+        from pipecat.services.settings import TTSSettings
+
+        if "settings" not in kwargs:
+            kwargs["settings"] = TTSSettings(
+                model=getattr(provider, "name", None) or "sovereign_tts",
+                voice=voice_id,
+                language="en",
+            )
         super().__init__(
             sample_rate=sample_rate,
             text_aggregation_mode=text_aggregation_mode,
@@ -293,11 +303,16 @@ def build_tts_service(
     agg_mode = resolve_text_aggregation_mode(tts_agg)
 
     if selection == "f5tts":
-        if agg_mode == TextAggregationMode.TOKEN:
+        # CRITICAL: Pipecat SENTENCE mode re-splits "A. B. C." into three
+        # run_tts calls → three F5 HTTP renders with ~1.5s gaps (choppy).
+        # TOKEN mode synthesizes each adapter chunk as one continuous clip.
+        # The adapter controls batch size (first line + remainder).
+        if agg_mode != TextAggregationMode.TOKEN:
             logger.info(
-                "F5-TTS ignores TOKEN aggregation (clause HTTP synth); using SENTENCE"
+                "F5-TTS uses TOKEN aggregation (one continuous synth per "
+                "adapter chunk; SENTENCE re-split caused choppy playout)"
             )
-            agg_mode = TextAggregationMode.SENTENCE
+            agg_mode = TextAggregationMode.TOKEN
         provider = F5TTSProvider(
             url=f5tts_url or os.environ.get("F5TTS_URL", F5TTS_DEFAULT_URL),
             sample_rate=F5TTS_SAMPLE_RATE,
