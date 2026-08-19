@@ -4,6 +4,7 @@ import pytest
 
 from soveryn.agents.personas import (
     AETHERIA_PERSONA,
+    KERNEL_PERSONA,
     PERSONAS,
     PersonaError,
     SCOTTY_PERSONA,
@@ -13,8 +14,10 @@ from soveryn.agents.personas import (
 from soveryn.config.runtime import ACTIVE_AGENTS
 
 
-def test_personas_has_exactly_the_three_active_agents():
-    assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {"aetheria", "vett", "scotty"}
+def test_personas_cover_all_active_agents():
+    assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
+        "aetheria", "vett", "scotty", "kernel",
+    }
 
 
 def test_personas_is_read_only():
@@ -33,6 +36,10 @@ def test_get_persona_returns_vett_string():
 
 def test_get_persona_returns_scotty_string():
     assert get_persona("scotty") == SCOTTY_PERSONA
+
+
+def test_get_persona_returns_kernel_string():
+    assert get_persona("kernel") == KERNEL_PERSONA
 
 
 def test_get_persona_normalizes_case_and_whitespace():

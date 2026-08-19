@@ -8,6 +8,7 @@ version = "0.0.0"
 description = "SOVERYN vNext — clean rebuild of the multi-agent system"
 requires-python = ">=3.11"
 dependencies = [
+    "soveryn-acttruth @ file:packages/soveryn-acttruth",
     "Flask>=3.0",
     "jsonschema>=4.0",
     # Lattice recall scores every embedded node against the query. In pure
@@ -46,3 +47,7 @@ markers = [
     "integration: tests that hit live services (router, lattice, etc.); opt-in with --run-integration",
     "rig: runs against real GPUs; fleet must be down",
 ]
+
+# Editable path dep for ActTruth portable package (pip/uv).
+[tool.uv.sources]
+soveryn-acttruth = { path = "packages/soveryn-acttruth", editable = true }

@@ -182,7 +182,7 @@ def create_app(
                 build_search_by_embedding_tool,
                 build_search_by_keywords_tool,
             )
-            for _agent in ("vett", "scotty"):
+            for _agent in ("vett", "scotty", "kernel"):
                 tool_registry.register(build_search_by_embedding_tool(
                     store=recall_lattice, embed_fn=_default_embed,
                     owner_agent=_agent,
@@ -468,13 +468,16 @@ def create_app(
         tool_registry.register(
             build_list_directory_tool(owner_agent="vett", root=Path.home())
         )
+        # Kernel — build brain: Lattice search (above) + read/list in house
+        # workspaces. No write/exec/git in AgentLoop — those stay Aider/HITL.
+        tool_registry.register(build_read_file_tool(owner_agent="kernel"))
+        tool_registry.register(build_list_directory_tool(owner_agent="kernel"))
 
         # Library layer tools — shared write surface for verified reference
         # material (per the 2026-06-02 design discussion, "Option B": passive
         # surface, library writes don't fire coord webhooks, agents see new
-        # entries via heartbeat lattice-activity summary). All three agents
-        # get write+search; the library is reference material owned by no
-        # single agent, with author attribution preserved on each node.
+        # entries via heartbeat lattice-activity summary). Soul peers get
+        # write+search; Kernel gets search-only via Lattice tools above.
         if recall_lattice is not None:
             from soveryn.platform.library import register_library_tools
             for agent_name in ("aetheria", "vett", "scotty"):

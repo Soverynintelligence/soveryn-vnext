@@ -75,6 +75,62 @@ def api_system_public_agents():
     return jsonify(get_public_agents()), 200
 
 
+@bp.get("/api/system/acttruth")
+def api_system_acttruth():
+    """ActTruth by SOVERYN — crew act ledger + unprompted spend budgets.
+
+    Thin glance for Mission Control. Not Lattice; not black_box forensics.
+    """
+    from soveryn.platform.acttruth.unprompted import crew_status
+
+    try:
+        snap = crew_status(limit=4)
+        return jsonify({
+            "available": True,
+            "brand": "ActTruth by SOVERYN",
+            "site": "https://acttruth.com",
+            **snap,
+            "fetched_at": datetime.now().isoformat(),
+        }), 200
+    except Exception as exc:  # noqa: BLE001 — glance must never 500 the CC
+        return jsonify({
+            "available": False,
+            "message": f"{type(exc).__name__}: {exc}",
+            "fetched_at": datetime.now().isoformat(),
+        }), 200
+
+
+@bp.get("/api/system/acttruth/proof")
+def api_system_acttruth_proof():
+    """Honest ActTruth stats + shareable proof blurb (ledger receipts only)."""
+    from soveryn.platform.acttruth.proof import collect_proof, format_proof_post
+
+    try:
+        hours = request.args.get("hours", "24")
+        try:
+            window = float(hours)
+        except ValueError:
+            window = 24.0
+        window = max(1.0, min(window, 24 * 30))
+        run_tests = request.args.get("pytest", "0") in ("1", "true", "yes")
+        style = request.args.get("style", "x")
+        if style not in ("x", "markdown"):
+            style = "x"
+        proof = collect_proof(window_hours=window, include_pytest=run_tests)
+        return jsonify({
+            "available": True,
+            "brand": "ActTruth by SOVERYN",
+            "proof": proof.to_dict(),
+            "post": format_proof_post(proof, style=style),
+            "fail_rate_pct": proof.fail_rate(),
+        }), 200
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({
+            "available": False,
+            "message": f"{type(exc).__name__}: {exc}",
+        }), 200
+
+
 @bp.get("/api/system/daemons")
 def api_system_daemons():
     """Last-tick state of each autonomous daemon (heartbeat, vett patrol, ares).
@@ -111,20 +167,71 @@ def api_system_bench_flash_warm():
 
 @bp.post("/api/system/bench_flash/chat")
 def api_system_bench_flash_chat():
-    """Simple chat proxy to Kernel (no house agent tools)."""
+    """Kernel chat with optional HITL tools (default on)."""
     body = request.get_json(silent=True) or {}
     message = str(body.get("message") or body.get("content") or "")
     history = body.get("history") if isinstance(body.get("history"), list) else None
     max_tokens = body.get("max_tokens")
     temperature = body.get("temperature")
-    kwargs: dict = {}
+    tools = body.get("tools")
+    if tools is None:
+        tools = True
+    kwargs: dict = {"tools": bool(tools)}
     if isinstance(max_tokens, int) and 1 <= max_tokens <= 8192:
         kwargs["max_tokens"] = max_tokens
     if isinstance(temperature, (int, float)) and 0 <= float(temperature) <= 2:
         kwargs["temperature"] = float(temperature)
+    mtr = body.get("max_tool_rounds")
+    if isinstance(mtr, int) and 1 <= mtr <= 8:
+        kwargs["max_tool_rounds"] = mtr
     result = bench_flash_chat(message, history=history, **kwargs)
     code = 200 if result.get("ok") else 400
     return jsonify(result), code
+
+
+@bp.get("/api/system/bench_flash/proposals")
+def api_system_bench_flash_proposals():
+    """List Kernel HITL proposals (default: pending)."""
+    from soveryn.app.services.kernel_hitl import list_proposals, workspaces
+
+    status = request.args.get("status", "pending")
+    if status in ("", "all", "*"):
+        status = None
+    return jsonify(
+        {
+            "proposals": list_proposals(status=status, limit=50),
+            "workspaces": [str(w) for w in workspaces()],
+        }
+    ), 200
+
+
+@bp.post("/api/system/bench_flash/proposals/<proposal_id>/approve")
+def api_system_bench_flash_proposal_approve(proposal_id: str):
+    """Operator approved a Kernel write/shell proposal — execute it."""
+    from soveryn.app.services.kernel_hitl import execute_proposal, load_proposal
+
+    prop = load_proposal(proposal_id)
+    if prop is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if prop.status not in ("pending", "approved"):
+        return jsonify({"ok": False, "error": f"status={prop.status}", "proposal": prop.as_dict()}), 409
+    done = execute_proposal(prop)
+    code = 200 if done.status == "executed" else 400
+    return jsonify({"ok": done.status == "executed", "proposal": done.as_dict()}), code
+
+
+@bp.post("/api/system/bench_flash/proposals/<proposal_id>/reject")
+def api_system_bench_flash_proposal_reject(proposal_id: str):
+    """Operator rejected a Kernel proposal."""
+    from soveryn.app.services.kernel_hitl import load_proposal, reject_proposal
+
+    prop = load_proposal(proposal_id)
+    if prop is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    body = request.get_json(silent=True) or {}
+    reason = str(body.get("reason") or "")
+    done = reject_proposal(prop, reason=reason)
+    return jsonify({"ok": True, "proposal": done.as_dict()}), 200
 
 
 # Per-daemon "stale" thresholds (seconds). If the last tick is older than this,

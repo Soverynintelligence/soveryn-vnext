@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Fleet</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
+<style>
+  body { min-height: 100vh; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 0 48px; }
+  .lab-panel { border-bottom: 1px solid var(--line); }
+  
+  .lab-panel-body { padding: 16px 18px 22px; }
+  .bottom-row { display:grid; grid-template-columns:1.6fr 1fr; gap:0; border:1px solid var(--line); }
+  .bottom-row > .lab-panel { border:none; border-right:1px solid var(--line); }
+  .bottom-row > .lab-panel:last-child { border-right:none; }
+  @media (max-width:900px){ .bottom-row { grid-template-columns:1fr; } .bottom-row > .lab-panel { border-right:none; border-bottom:1px solid var(--line); } }
+  .activity-feed { display:flex; flex-direction:column; gap:0; max-height:320px; overflow-y:auto; }
+  .activity-item { padding:10px 0; border-top:1px solid var(--line); font-size:12px; color:var(--ink-2); }
+  .activity-item:first-child { border-top:none; }
+  .activity-item .who { color:var(--gold); text-transform:uppercase; letter-spacing:0.08em; font-size:11px; }
+  .activity-item .ts { float:right; color:var(--ink-3); font-size:11px; }
+  .system-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; font-size:12px; color:var(--ink-2); }
+  .system-stats span { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .empty { color:var(--ink-3); font-style:italic; padding:12px 0; }
+
+  /* Rig (from command center) */
+  .rig { display:flex; flex-direction:column; gap:16px; }
+  .rig-head {
+    display:flex; align-items:baseline; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
+  }
+  .rig-head h3 {
+    font-size:11px; color:rgba(236,243,244,0.45);
+    text-transform:uppercase; letter-spacing:0.12em;
+  }
+  .rig-totals {
+    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+    color:rgba(236,243,244,0.42); font-variant-numeric:tabular-nums;
+  }
+  .rig-totals .fabric-state[data-state="live"]     { color:var(--sov-electric-blue); }
+  .rig-totals .fabric-state[data-state="degraded"] { color:#d4a827; }
+  .rig-totals .fabric-state[data-state="dead"]     { color:#c0392b; }
+
+  /* Bays — the hairline plates the hardware sits on. */
+  .rig-bay {
+    border:1px solid rgba(192,130,79,0.16);
+    border-radius:var(--r-md);
+    padding:16px 18px 18px;
+  }
+  .rig-bay .bay-label {
+    font-size:9px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(236,243,244,0.38); margin-bottom:16px;
+  }
+
+  .rig-cards { display:flex; flex-direction:column; gap:18px; }
+  .rig-card { display:flex; flex-direction:column; gap:9px; }
+  .rig-card .rc-top {
+    display:grid; align-items:center; gap:16px;
+    grid-template-columns:186px 1fr auto auto;
+    grid-template-areas:"name rail head temp";
+  }
+  .rc-name {
+    grid-area:name; font-size:11px; letter-spacing:0.1em;
+    text-transform:uppercase; color:rgba(236,243,244,0.82);
+  }
+  .rc-headroom { grid-area:head; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; }
+  .rc-headroom .hl { color:rgba(236,243,244,0.40); margin-right:7px; }
+  .rc-headroom .hv { color:var(--text); font-weight:600; font-variant-numeric:tabular-nums; }
+  .rc-temp {
+    grid-area:temp; font-size:11px; color:rgba(236,243,244,0.40);
+    font-variant-numeric:tabular-nums; min-width:46px; text-align:right;
+  }
+  /* Temperature is a quiet number. It only earns colour when it's actually hot. */
+  .rc-temp[data-hot="true"] { color:var(--sov-amber); }
+
+  /* THE RAIL. `ink` = occupied (dark). `lit` = FREE (gold, glowing). Deliberately
+     no overflow:hidden — the lit block's glow must be allowed to bloom past the
+     plate, which is the whole point: an open card lights up the panel. */
+  .rail {
+    grid-area:rail; display:flex; gap:0; height:14px; padding:1px;
+    border:1px solid rgba(192,130,79,0.14); border-radius:4px;
+    background:rgba(0,0,0,0.35); min-width:80px;
+  }
+  .rail .ink { border-radius:2px; background:rgba(232,227,213,0.10); }
+  .rail .lit {
+    border-radius:2px; background:var(--copper-sheen);
+    opacity:calc(0.40 + 0.60 * var(--lit, 0));
+    box-shadow:0 0 calc(3px + 17px * var(--lit, 0))
+               rgba(143,160,127, calc(0.12 + 0.38 * var(--lit, 0)));
+  }
+
+  /* Residents — small chips, one per process actually holding VRAM. */
+  .rc-residents { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:22px; }
+  .res-chip {
+    font-size:10px; letter-spacing:0.03em;
+    color:rgba(236,243,244,0.66);
+    background:rgba(255,255,255,0.015);
+    border:1px solid rgba(255,255,255,0.03);
+    border-radius:4px; padding:3px 9px;
+    font-variant-numeric:tabular-nums;
+  }
+  .res-chip .caret { color:rgba(192,130,79,0.8); margin-right:6px; }
+  .res-chip .mem { color:rgba(236,243,244,0.42); margin-left:7px; }
+  .res-idle { font-size:10px; color:rgba(236,243,244,0.35); letter-spacing:0.1em; }
+  /* residents_known === false: the list is UNKNOWN, not empty. Muted, and the
+     OPEN treatment is suppressed — see refreshRig(). */
+  .res-unknown {
+    font-size:10px; color:rgba(236,243,244,0.32);
+    letter-spacing:0.12em; text-transform:uppercase;
+  }
+  .open-marker {
+    margin-left:auto; font-size:10px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--sov-sage-bright);
+  }
+
+  /* Fabric spine — tower to Sparks. */
+  .rig-spine { display:flex; align-items:center; gap:14px; padding:0 6px; }
+  .rig-spine .line {
+    flex:1; height:1px; position:relative; overflow:hidden;
+    background:rgba(236,243,244,0.12);
+  }
+  .rig-spine .copy {
+    font-size:9px; letter-spacing:0.2em; text-transform:uppercase;
+    color:rgba(236,243,244,0.42); white-space:nowrap;
+  }
+  .rig-spine[data-state="live"] .line {
+    background:linear-gradient(90deg, rgba(62,168,232,0.10), rgba(62,168,232,0.55), rgba(62,168,232,0.10));
+  }
+  .rig-spine[data-state="live"] .copy { color:var(--sov-electric-blue); }
+  .rig-spine[data-state="degraded"] .line { background:rgba(212,168,39,0.45); }
+  .rig-spine[data-state="degraded"] .copy { color:#d4a827; }
+  .rig-spine[data-state="dead"] .line {
+    background:repeating-linear-gradient(90deg, rgba(192,57,43,0.55) 0 6px, transparent 6px 12px);
+  }
+  .rig-spine[data-state="dead"] .copy { color:#c0392b; }
+  /* The ONE moment of motion on this panel: a slow packet travelling the spine,
+     and only while the fabric is genuinely live. Nothing else animates. */
+  .rig-spine[data-state="live"] .line::after {
+    content:""; position:absolute; top:0; bottom:0; left:0; width:32%;
+    background:linear-gradient(90deg, transparent, rgba(168,222,255,0.95), transparent);
+    transform:translateX(-120%);
+    animation:rig-fabric-flow 3.8s linear infinite;
+  }
+  @keyframes rig-fabric-flow {
+    from { transform:translateX(-120%); }
+    to   { transform:translateX(420%); }
+  }
+
+  /* Sparks — A is live hardware, B is an empty bay (an invitation, not an apology). */
+  .rig-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .spark-hw {
+    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
+    color:rgba(236,243,244,0.5); margin-bottom:12px;
+    font-variant-numeric:tabular-nums;
+  }
+  .spark-foot { display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-top:11px; }
+  .rig-bay.spark .rc-residents { margin-top:12px; }
+  .rig-bay.empty-bay {
+    border-style:dashed; border-color:rgba(236,243,244,0.13);
+    display:flex; flex-direction:column;
+  }
+  .empty-bay .bay-empty {
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:7px; padding:14px 0 8px;
+  }
+  .empty-bay .eb-title {
+    font-size:11px; letter-spacing:0.26em; text-transform:uppercase;
+    color:rgba(236,243,244,0.45);
+  }
+  .empty-bay .eb-sub { font-size:10px; letter-spacing:0.08em; color:rgba(236,243,244,0.3); }
+  .rig-dead { font-size:11px; letter-spacing:0.16em; text-transform:uppercase; color:#c0392b; }
+  .rig-note { font-size:10px; color:rgba(236,243,244,0.38); margin-top:7px; line-height:1.5; }
+
+  @media (max-width: 860px) {
+    .rig-card .rc-top {
+      grid-template-columns:1fr auto;
+      grid-template-areas:"name temp" "rail rail" "head head";
+      gap:9px 12px;
+    }
+    .rig-sparks { grid-template-columns:1fr; }
+    .rig-spine .copy { white-space:normal; text-align:center; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rig-spine[data-state="live"] .line::after { animation:none; display:none; }
+  }
+
+
+  .panel.rig, section.panel.rig {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    padding: 18px 20px 22px;
+  }
+</style>
+</head>
+<body class="lab" data-testid="fleet-page">
+
+<div class="plate">
+  <a class="id" href="/">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Fleet</i></span>
+  </a>
+  <nav>
+    <a href="/">Command</a>
+    <a href="/fleet" class="active">Fleet</a>
+    <a href="/citizens" class="keep">Citizens</a>
+    <a href="/chat" class="keep">Chat</a>
+    <a href="/documents">Docs</a>
+  </nav>
+</div>
+
+<div class="page">
+
+  <section class="lab-panel">
+    <div class="lab-panel-head">
+      <span class="n">01</span>
+      <h2>The Rig</h2>
+      <span class="r" data-rig-totals>reading…</span>
+    </div>
+    <div class="lab-panel-body">
+      <section class="panel rig" data-testid="rig" aria-label="The rig — live GPU headroom">
+        <div class="rig-bay tower">
+          <div class="bay-label">SOVERYN Tower</div>
+          <div class="rig-cards" data-rig-gpus>
+            <div class="rig-note">reading the rig…</div>
+          </div>
+        </div>
+        <div class="rig-spine" data-rig-spine data-state="dead">
+          <span class="line"></span>
+          <span class="copy" data-rig-spine-copy>checking the fabric…</span>
+          <span class="line"></span>
+        </div>
+        <div class="rig-sparks">
+          <div class="rig-bay spark" data-testid="rig-spark-a">
+            <div class="bay-label">DGX Spark A</div>
+            <div data-rig-spark-a><div class="rig-note">reading the Spark…</div></div>
+          </div>
+          <div class="rig-bay empty-bay" data-testid="rig-spark-b">
+            <div class="bay-label">Spark B</div>
+            <div class="bay-empty">
+              <div class="eb-title">Empty bay</div>
+              <div class="eb-sub">awaiting hardware</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <div class="bottom-row">
+    <section class="lab-panel" data-testid="activity-feed">
+      <div class="lab-panel-head">
+        <span class="n">02</span>
+        <h2>Session traffic</h2>
+        <span class="r">latest agent chats</span>
+      </div>
+      <div class="lab-panel-body">
+        <div class="activity-feed" data-feed aria-live="polite">
+          <div class="empty">nothing to report yet.</div>
+        </div>
+      </div>
+    </section>
+    <section class="lab-panel" data-testid="system-panel">
+      <div class="lab-panel-head">
+        <span class="n">03</span>
+        <h2>House counts</h2>
+        <span class="r">nodes · sessions · boards</span>
+      </div>
+      <div class="lab-panel-body">
+        <div class="system-stats" data-stats>
+          <div>memory nodes <span data-stat="nodes">—</span></div>
+          <div>sessions <span data-stat="sessions">—</span></div>
+          <div>last backup <span data-stat="backup">—</span></div>
+          <div>boards <span data-stat="boards">—</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</div>
+<footer class="lab-foot">Fleet · metal headroom · session traffic · house counts</footer>
+
+<script>
+async function fetchJson(url) {
+  try { const r = await fetch(url); if (!r.ok) return null; return await r.json(); }
+  catch { return null; }
+}
+function htmlEscape(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  // ─── THE RIG — headroom map (tower GPUs + Spark A) ─────────────────────────
+  // The rail is INVERTED: what is LIT is what is FREE. `--lit` (0..1) is the
+  // free fraction and drives both the gold block's width and its glow, so a
+  // full card goes dark and an idle card blazes. See the .rig CSS block.
+  const GIB = 1073741824;
+  const gbFromMib = mib => (mib / 1024);
+  const gbFromBytes = b => (b / GIB);
+
+  function railHtml(freeFrac, label) {
+    const lit = Math.max(0, Math.min(1, freeFrac || 0));
+    const litPct = (lit * 100).toFixed(2);
+    const inkPct = (100 - lit * 100).toFixed(2);
+    return `<div class="rail" role="img" aria-label="${htmlEscape(label)}" style="--lit:${lit.toFixed(3)}">
+        <div class="ink" style="width:${inkPct}%"></div>
+        <div class="lit" style="width:${litPct}%"></div>
+      </div>`;
+  }
+
+  function rigGpuCardHtml(g, residentsKnown) {
+    const total = g.mem_total_mib || 0;
+    const used = Math.max(0, Math.min(g.mem_used_mib || 0, total));
+    const freeMib = total - used;
+    const freeFrac = total > 0 ? freeMib / total : 0;
+    const freeGb = gbFromMib(freeMib).toFixed(1);
+    const totalGb = Math.round(gbFromMib(total));
+    // "NVIDIA RTX PRO 5000 Blackwell" -> "RTX PRO 5000 Blackwell". The vendor
+    // prefix is noise on a rig where every card is an NVIDIA card.
+    const name = String(g.name || "GPU").replace(/^NVIDIA\s+/i, "");
+    const hot = (g.temp_c != null && g.temp_c >= 75);
+
+    // residents_known === false means the resident list is UNKNOWN, not empty.
+    // Rendering those cards as idle/OPEN would light every card as available
+    // and lie confidently — so the OPEN treatment is suppressed entirely. The
+    // rail still shows: the memory numbers are real regardless.
+    let residents;
+    if (!residentsKnown) {
+      residents = `<span class="res-unknown">residents unknown</span>`;
+    } else if (!g.residents || !g.residents.length) {
+      residents = `<span class="res-idle">— idle —</span>
+        <span class="open-marker">◆ open</span>`;
+    } else {
+      residents = g.residents.map(r => `
+        <span class="res-chip"><span class="caret">›</span>${htmlEscape(r.name)}<span class="mem">${
+          gbFromMib(r.mem_mib || 0).toFixed(1)}G</span></span>`).join("");
+    }
+
+    return `
+      <div class="rig-card" data-gpu-index="${Number(g.index)}">
+        <div class="rc-top">
+          <span class="rc-name">${htmlEscape(name)}</span>
+          ${railHtml(freeFrac, `headroom ${freeGb} gigabytes free of ${totalGb}`)}
+          <span class="rc-headroom"><span class="hl">headroom</span><span class="hv">${freeGb} GB</span></span>
+          <span class="rc-temp" data-hot="${hot}">${g.temp_c == null ? "—" : g.temp_c + "°C"}</span>
+        </div>
+        <div class="rc-residents">${residents}</div>
+      </div>`;
+  }
+
+  function renderSparkBay(d) {
+    const el = document.querySelector("[data-rig-spark-a]");
+    if (!el) return;
+    if (!d || !d.available) {
+      el.innerHTML = `<div class="rig-dead">unreachable</div>
+        <div class="rig-note">${htmlEscape((d && d.message) || "no answer from the Spark")}</div>`;
+      return;
+    }
+    // host_known=false (SSH enrichment failed — e.g. a wedged sshd) must
+    // render as "unknown", never as zero and never as the red/unreachable
+    // state below: the box answered over HTTP and is genuinely up.
+    const hostKnown = d.host_known !== false;
+    const h = hostKnown ? (d.host || {}) : {};
+    const haveMem = (h.mem_total_bytes != null && h.mem_used_bytes != null && h.mem_total_bytes > 0);
+    let rail = "", headroom = "—", hw = "GB10 · unified memory";
+    if (haveMem) {
+      const totalB = h.mem_total_bytes;
+      const freeB = Math.max(0, totalB - h.mem_used_bytes);
+      const totalGb = Math.round(gbFromBytes(totalB));
+      headroom = `${gbFromBytes(freeB).toFixed(1)} GB`;
+      hw = `GB10 · ${totalGb} GB unified`;
+      rail = railHtml(freeB / totalB, `headroom ${headroom} free of ${totalGb} gigabytes unified`);
+    } else if (!hostKnown) {
+      hw = "GB10 · host metrics unavailable";
+    }
+    const hot = (h.gpu_temp_c != null && h.gpu_temp_c >= 75);
+    const v = d.vllm || {};
+    const running = Math.round(v.requests_running ?? 0);
+    const waiting = Math.round(v.requests_waiting ?? 0);
+    const kv = v.kv_cache_pct == null ? null : (v.kv_cache_pct * 100).toFixed(0);
+    const vllmLine = v.up
+      ? `<span class="res-chip"><span class="caret">›</span>${htmlEscape(v.model || "vllm")}<span class="mem">${
+          running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}</span></span>`
+      : `<span class="res-unknown">vllm down</span>`;
+
+    el.innerHTML = `
+      <div class="spark-hw">${htmlEscape(hw)}</div>
+      ${rail}
+      <div class="spark-foot">
+        <span class="rc-headroom"><span class="hl">headroom</span><span class="hv">${headroom}</span></span>
+        <span class="rc-temp" data-hot="${hot}">${h.gpu_temp_c == null ? "—" : h.gpu_temp_c + "°C"}</span>
+      </div>
+      <div class="rc-residents">${vllmLine}</div>`;
+  }
+
+  async function refreshRig() {
+    const bay = document.querySelector("[data-rig-gpus]");
+    if (!bay) return;
+    const [rig, spark] = await Promise.all([
+      fetchJson("/api/system/rig"),
+      fetchJson("/api/system/spark"),
+    ]);
+
+    // --- Tower ---------------------------------------------------------------
+    let gpuCount = 0, totalMib = 0;
+    if (!rig || !rig.available || !rig.gpus || !rig.gpus.length) {
+      bay.innerHTML = `<div class="rig-note">${
+        htmlEscape((rig && rig.message) || "rig stats unavailable")}</div>`;
+    } else {
+      const gpus = rig.gpus.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+      gpuCount = gpus.length;
+      totalMib = gpus.reduce((sum, g) => sum + (g.mem_total_mib || 0), 0);
+      bay.innerHTML = gpus.map(g => rigGpuCardHtml(g, rig.residents_known === true)).join("");
+    }
+
+    // --- Fabric --------------------------------------------------------------
+    // Same polarity as refreshSpark(): ONLY an exact "fabric" path is live.
+    // Anything else — wifi, null, an unforeseen future value — is degraded. A
+    // silent fallback to the ~100x slower path must never be allowed to render
+    // green, so the branch is on "fabric", never on "wifi".
+    let fabricState, fabricCopy, fabricShort;
+    if (!spark || !spark.available) {
+      fabricState = "dead";
+      fabricCopy = "Spark unreachable";
+      fabricShort = "Spark unreachable";
+    } else if (spark.path === "fabric") {
+      fabricState = "live";
+      fabricCopy = "200G ConnectX-7 · fabric live";
+      fabricShort = "fabric live";
+    } else {
+      fabricState = "degraded";
+      fabricCopy = "Fabric down — on wifi";
+      fabricShort = "fabric down — on wifi";
+    }
+
+    const spine = document.querySelector("[data-rig-spine]");
+    if (spine) {
+      spine.setAttribute("data-state", fabricState);
+      const copy = spine.querySelector("[data-rig-spine-copy]");
+      if (copy) copy.textContent = fabricCopy;
+    }
+
+    // --- Header totals — computed live, never hardcoded. ----------------------
+    const totalsEl = document.querySelector("[data-rig-totals]");
+    if (totalsEl) {
+      const bits = [
+        `${gpuCount || "—"} GPU${gpuCount === 1 ? "" : "s"}`,
+        `${totalMib ? Math.round(gbFromMib(totalMib)) : "—"} GB VRAM`,
+      ];
+      if (spark && spark.available) bits.push("1 Spark");
+      totalsEl.innerHTML = `${htmlEscape(bits.join(" · "))} · <span class="fabric-state" data-state="${
+        fabricState}">${htmlEscape(fabricShort)}</span>`;
+    }
+
+    renderSparkBay(spark);
+  }
+
+
+  async function renderFeed() {
+    const sessions = await fetchJson("/sessions?limit=6");
+    const container = document.querySelector("[data-feed]");
+    if (!container || !sessions || !sessions.sessions || !sessions.sessions.length) return;
+    container.innerHTML = sessions.sessions.map(s => {
+      const when = new Date(s.updated_at);
+      const rel = (() => {
+        const sec = Math.max(0, Math.floor((Date.now() - when.getTime()) / 1000));
+        if (sec < 90) return "just now";
+        if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+        if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+        return when.toLocaleDateString();
+      })();
+      return `
+      <div class="activity-item">
+        <span class="who" data-agent="${s.agent}">${s.agent}</span>
+        ${s.title ? `· ${s.title}` : "· (untitled session)"}
+        <span class="ts">${rel}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // ─── System stats ─────────────────────────────────────────────────────────
+  async function renderStats() {
+    const [activity, sessions, health] = await Promise.all([
+      fetchJson("/api/memory/activity?days=1"),
+      fetchJson("/sessions?limit=200"),
+      fetchJson("/health"),
+    ]);
+    const set = (k, v) => {
+      const el = document.querySelector(`[data-stat="${k}"]`);
+      if (el) el.textContent = v;
+    };
+    if (activity) set("nodes", activity.total_nodes);
+    if (sessions) set("sessions", (sessions.sessions || []).length);
+    if (health && health.boards !== undefined) set("boards", health.boards);
+    set("backup", "—");  // TODO(vnext-backup-mtime): wire when backup daemon exposes a status route
+  }
+
+
+
+async function refreshFleet() {
+  await Promise.all([refreshRig(), renderFeed(), renderStats()]);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  refreshFleet();
+  setInterval(refreshFleet, 10000);
+});
+</script>
+</body>
+</html>

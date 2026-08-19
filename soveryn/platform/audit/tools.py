@@ -33,15 +33,17 @@ MAX_RECORDS = 200
 AUDIT_COVERAGE_NOTE = (
     "Coverage: EVERY tool call you make through the registry is recorded — "
     "including searches, file reads and directory listings — plus the COORD "
-    "board event log, COORD read references, LIBRARY writes, and DELEGATION "
-    "dispatches with their status. "
+    "board event log, COORD read references, LIBRARY writes, DELEGATION "
+    "dispatches, and ACTTRUTH episodic truth (timeouts, tool failures, "
+    "heartbeat budget spends — the quiet-failure ledger). "
     "NOT covered: anything you did outside a tool call (reasoning, text you "
     "wrote, decisions you narrated), and any window before 2026-05-31 when "
     "tool auditing began. "
     "If this returns 'audit.source_unavailable', the log could not be read "
     "this query and an empty result means NOTHING — not that you took no "
     "actions. Absence of a record is evidence only when the source was "
-    "readable and in scope."
+    "readable and in scope. Prefer acttruth.* FAIL rows over inventing "
+    "what happened."
 )
 
 
@@ -226,6 +228,40 @@ def build_recent_self_audit_tool(
                                 "that none occurred",
                     },
                 })
+
+        # ── Continuum episodic truth (quiet failures become visible) ─────
+        try:
+            from soveryn.platform.acttruth.hooks import get_acttruth
+
+            acttruth = get_acttruth()
+            for ev in acttruth.ledger.recent(
+                owner_agent,
+                limit=50,
+                since=datetime.fromisoformat(since),
+            ):
+                actions.append({
+                    "kind": f"acttruth.{ev.kind}",
+                    "timestamp": ev.ts,
+                    "node_id": ev.id,
+                    "details": {
+                        "summary": ev.summary,
+                        "ok": ev.ok,
+                        "tool": ev.tool,
+                        "action": ev.action,
+                        "tags": list(ev.tags),
+                        "evidence_ref": ev.evidence_ref,
+                    },
+                })
+        except Exception:
+            actions.append({
+                "kind": "audit.source_unavailable",
+                "timestamp": now.isoformat(),
+                "node_id": None,
+                "details": {
+                    "source": "acttruth",
+                    "note": "acttruth ledger unreadable this query",
+                },
+            })
 
         # Sort unified timeline most-recent first; cap at MAX_RECORDS.
         actions.sort(key=lambda a: a["timestamp"], reverse=True)

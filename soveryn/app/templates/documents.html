@@ -4,231 +4,251 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Documents</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
 <style>
-  :root {
-    --sov-canvas:#0f1011;
-    --sov-olive:#74856a;
-    --sov-bronze:#8C5A3C;
-    --sov-deep-blue:#404e59;
-    --sov-electric-blue:#6b8290;
-    --sov-sage:#74856a;
-    --sov-amber:#c0824f;
-    --text:#E7E5DC;
-    --glass-bg:rgba(18,16,12,0.40);
-    --glass-border:rgba(225,210,170,0.10);
-    --glass-blur:blur(30px) saturate(140%);
-    --r-lg:22px;
-    --r-md:14px;
-    --r-sm:10px;
-    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+  body { min-height: 100vh; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 0 48px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1.8fr;
+    gap: 0;
+    border-top: 1px solid var(--line);
   }
-  *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
-  html,body { background:var(--sov-canvas); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
-
-  body::before {
-    content:"";
-    position:fixed; inset:0;
-    background:url("/static/soveryn-mark.png") no-repeat center 54%;
-    background-size:auto min(58vh,520px);
-    opacity:0.42;
-    /* lift the copper/sage out of the carbon rather than just fading it up */
-    filter:brightness(1.18) saturate(1.15);
-    pointer-events:none;
-    z-index:0;
-  }
-  .page { position:relative; z-index:1; max-width:1280px; margin:0 auto; padding:32px 40px 64px; display:flex; flex-direction:column; gap:24px; }
-
-  a { color:inherit; text-decoration:none; }
-  button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
-
-  header.top {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:12px 4px 24px;
-  }
-  header.top .brand-text { display:flex; flex-direction:column; gap:6px; }
-  header.top .wordmark { color:var(--sov-bronze); font-weight:600; letter-spacing:0.32em; font-size:18px; }
-  header.top .tagline { color:rgba(232,227,213,0.55); font-size:10px; letter-spacing:0.28em; text-transform:uppercase; }
-  header.top .tagline .dot { color:var(--sov-olive); margin:0 6px; }
-  header.top .nav-links { display:flex; gap:16px; align-items:center; font-size:12px; color:rgba(232,227,213,0.55); }
-  header.top .nav-links a:hover { color:var(--text); }
-  header.top .nav-links .active { color:var(--sov-olive); }
-
-  .panel {
-    background:var(--glass-bg);
-    backdrop-filter:var(--glass-blur);
-    -webkit-backdrop-filter:var(--glass-blur);
-    border:1px solid var(--glass-border);
-    border-radius:var(--r-lg);
-    padding:24px 28px;
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
   }
 
-  .panel-header {
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:18px;
+  .layout > .lab-panel {
+    border-right: 1px solid var(--line);
+    min-height: 60vh;
   }
-  .panel-title {
-    font-size:11px; color:rgba(236,243,244,0.45);
-    text-transform:uppercase; letter-spacing:0.12em;
+  @media (max-width: 900px) {
+    .layout > .lab-panel { border-right: none; border-bottom: 1px solid var(--line); }
   }
-  .panel-count { font-size:11px; color:rgba(236,243,244,0.35); }
+  .layout > .lab-panel:last-child { border-right: none; }
+
+  .lab-panel-body { padding: 16px 18px 22px; }
 
   .filter-row {
-    display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap;
+    display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
   }
   .filter-row select, .filter-row input[type="text"] {
-    background:rgba(255,255,255,0.02); color:var(--text);
-    border:1px solid rgba(255,255,255,0.04); border-radius:6px;
-    padding:6px 10px; font-size:12px; font-family:inherit; outline:none;
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+    font-family: var(--mono);
+    outline: none;
   }
   .filter-row select:focus, .filter-row input[type="text"]:focus {
-    border-color:rgba(148,164,85,0.5);
+    border-color: var(--gold-dim);
   }
-  .filter-row input[type="text"]::placeholder { color:rgba(236,243,244,0.35); }
 
-  .doc-list { display:flex; flex-direction:column; gap:10px; }
+  .doc-list { display: flex; flex-direction: column; gap: 0; }
 
   .doc-item {
-    display:flex; align-items:center; gap:16px;
-    padding:14px 16px;
-    background:rgba(255,255,255,0.0125);
-    border:1px solid rgba(255,255,255,0.025);
-    border-radius:var(--r-md);
-    cursor:pointer;
-    transition:border-color 0.15s ease, background 0.15s ease;
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 4px;
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+    transition: background 0.12s ease;
   }
-  .doc-item:hover { border-color:rgba(148,164,85,0.25); background:rgba(255,255,255,0.02); }
-  .doc-item.active { border-color:rgba(148,164,85,0.5); background:rgba(148,164,85,0.06); }
+  .doc-item:first-child { border-top: none; }
+  .doc-item:hover { background: rgba(198, 166, 100, 0.04); }
+  .doc-item.active { background: rgba(198, 166, 100, 0.08); }
 
   .doc-item .agent-disc {
-    width:32px; height:32px; border-radius:50%; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    font-size:10px; font-weight:600; letter-spacing:0.06em;
-    text-transform:uppercase;
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid var(--line-lit);
+    background: var(--panel-2);
+    color: var(--gold);
   }
-  .doc-item[data-agent="aetheria"] .agent-disc { background:linear-gradient(135deg,var(--sov-olive),var(--sov-sage)); }
-  .doc-item[data-agent="vett"]     .agent-disc { background:linear-gradient(135deg,var(--sov-deep-blue),#2c3d5c); }
-  .doc-item[data-agent="scotty"]   .agent-disc { background:linear-gradient(135deg,#a3543a,#54271b); }
+  .doc-item[data-agent="aetheria"] .agent-disc { color: var(--ok); }
+  .doc-item[data-agent="vett"] .agent-disc { color: var(--ink); }
+  .doc-item[data-agent="scotty"] .agent-disc { color: var(--down); }
 
-  .doc-item .doc-meta { flex:1; min-width:0; }
-  .doc-item .doc-title { font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .doc-item .doc-sub { font-size:11px; color:rgba(236,243,244,0.45); margin-top:3px; }
-  .doc-item .doc-sub .status { text-transform:uppercase; letter-spacing:0.08em; font-size:10px; }
-  .doc-item .doc-sub .status[data-status="draft"]     { color:var(--sov-amber); }
-  .doc-item .doc-sub .status[data-status="final"]     { color:var(--sov-olive); }
-  .doc-item .doc-sub .status[data-status="archived"]  { color:rgba(236,243,244,0.3); }
+  .doc-item .doc-meta { flex: 1; min-width: 0; }
+  .doc-item .doc-title {
+    font-size: 13px; font-weight: 500; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .doc-item .doc-sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+  .doc-item .doc-sub .status { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+  .doc-item .doc-sub .status[data-status="draft"] { color: var(--gold); }
+  .doc-item .doc-sub .status[data-status="final"] { color: var(--ok); }
+  .doc-item .doc-sub .status[data-status="archived"] { color: var(--ink-3); }
 
-  .doc-item .download-group { display:flex; gap:6px; flex-shrink:0; }
+  .doc-item .download-group { display: flex; gap: 6px; flex-shrink: 0; }
   .dl-btn {
-    padding:5px 10px; border-radius:6px; font-size:11px;
-    border:1px solid rgba(255,255,255,0.04);
-    color:rgba(236,243,244,0.6);
-    transition:border-color 0.12s ease, color 0.12s ease;
+    padding: 4px 8px;
+    border-radius: var(--r-sm);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--line);
+    color: var(--ink-2);
   }
-  .dl-btn:hover { border-color:rgba(148,164,85,0.4); color:var(--sov-olive); }
+  .dl-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
 
-  /* Empty state */
-  .empty-state { padding:32px 0; text-align:center; color:rgba(236,243,244,0.3); font-style:italic; }
+  .empty-state {
+    padding: 28px 0;
+    text-align: center;
+    color: var(--ink-3);
+    font-style: italic;
+  }
 
-  /* ─── Viewer panel ───────────────────────────────────────────────────────── */
-  .layout { display:grid; grid-template-columns:1fr 1.8fr; gap:16px; align-items:start; }
-  @media (max-width:900px) { .layout { grid-template-columns:1fr; } }
-
-  .viewer-panel { position:sticky; top:24px; }
+  .viewer-panel { position: sticky; top: 56px; }
   .viewer-panel .viewer-placeholder {
-    padding:48px 24px; text-align:center;
-    color:rgba(236,243,244,0.25); font-style:italic;
+    padding: 48px 24px;
+    text-align: center;
+    color: var(--ink-3);
+    font-style: italic;
   }
-  .viewer-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
-  .viewer-header .viewer-title { font-size:16px; font-weight:500; line-height:1.35; }
-  .viewer-header .viewer-meta { font-size:11px; color:rgba(236,243,244,0.45); margin-top:4px; }
-  .viewer-header .viewer-downloads { display:flex; gap:6px; flex-shrink:0; }
+  .viewer-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .viewer-header .viewer-title { font-size: 15px; font-weight: 500; line-height: 1.35; color: var(--ink); }
+  .viewer-header .viewer-meta { font-size: 11px; color: var(--ink-3); margin-top: 4px; letter-spacing: 0.04em; }
+  .viewer-header .viewer-downloads { display: flex; gap: 6px; flex-shrink: 0; }
 
   .doc-content {
-    max-height:60vh; overflow-y:auto; padding-right:4px;
-    font-size:13px; line-height:1.65; color:rgba(236,243,244,0.85);
+    max-height: 65vh; overflow-y: auto; padding-right: 4px;
+    font-family: var(--sans);
+    font-size: 13px; line-height: 1.65; color: var(--ink-2);
   }
-  .doc-content h1 { font-size:18px; font-weight:600; margin:0 0 12px; color:var(--text); }
-  .doc-content h2 { font-size:15px; font-weight:600; margin:16px 0 8px; color:var(--text); }
-  .doc-content h3 { font-size:13px; font-weight:600; margin:12px 0 6px; color:var(--text); }
-  .doc-content p  { margin:6px 0; }
-  .doc-content ul, .doc-content ol { margin:6px 0 6px 18px; }
-  .doc-content li { margin:2px 0; }
-  .doc-content pre { background:rgba(255,255,255,0.02); padding:10px 14px; border-radius:6px; font-size:12px; overflow-x:auto; }
-  .doc-content code { font-size:12px; background:rgba(255,255,255,0.03); padding:1px 5px; border-radius:3px; }
-  .doc-content pre code { background:none; padding:0; }
-  .doc-content blockquote { border-left:3px solid rgba(148,164,85,0.4); padding:4px 12px; margin:8px 0; color:rgba(236,243,244,0.6); }
-  .doc-content table { border-collapse:collapse; width:100%; font-size:12px; margin:10px 0; }
-  .doc-content th, .doc-content td { border:1px solid rgba(255,255,255,0.04); padding:6px 10px; text-align:left; }
-  .doc-content th { background:rgba(255,255,255,0.02); }
+  .doc-content h1 { font-size: 18px; font-weight: 600; margin: 0 0 12px; color: var(--ink); font-family: var(--mono); }
+  .doc-content h2 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; color: var(--ink); font-family: var(--mono); }
+  .doc-content h3 { font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: var(--ink); font-family: var(--mono); }
+  .doc-content p  { margin: 6px 0; }
+  .doc-content ul, .doc-content ol { margin: 6px 0 6px 18px; }
+  .doc-content li { margin: 2px 0; }
+  .doc-content pre {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    padding: 10px 14px;
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    overflow-x: auto;
+    font-family: var(--mono);
+  }
+  .doc-content code {
+    font-size: 12px;
+    background: var(--panel-2);
+    padding: 1px 5px;
+    border-radius: var(--r-sm);
+    font-family: var(--mono);
+  }
+  .doc-content pre code { background: none; padding: 0; }
+  .doc-content blockquote {
+    border-left: 2px solid var(--gold-dim);
+    padding: 4px 12px;
+    margin: 8px 0;
+    color: var(--ink-3);
+  }
+  .doc-content table { border-collapse: collapse; width: 100%; font-size: 12px; margin: 10px 0; }
+  .doc-content th, .doc-content td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+  .doc-content th { background: var(--panel-2); color: var(--ink); }
 
-  .loading-spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(148,164,85,0.2); border-top-color:var(--sov-olive); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:8px; }
-  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--line-lit);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .panel-count {
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.08em;
+  }
 </style>
 </head>
-<body>
+<body class="lab">
+
+<div class="plate">
+  <a class="id" href="/">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Documents</i></span>
+  </a>
+  <nav>
+    <a href="/">Command</a>
+    <a href="/fleet">Fleet</a>
+    <a href="/citizens" class="keep">Citizens</a>
+    <a href="/chat" class="keep">Chat</a>
+    <a href="/documents" class="active">Docs</a>
+  </nav>
+</div>
+
 <div class="page">
-
-  <header class="top">
-    <div class="brand-text">
-      <div class="wordmark">SOVERYN</div>
-      <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
-    </div>
-    <nav class="nav-links">
-      <a href="/">Command Center</a>
-      <a href="/chat">Chat</a>
-      <a href="/m">Messages</a>
-      <a href="/documents" class="active">Documents</a>
-    </nav>
-  </header>
-
   <div class="layout">
 
-    <!-- ─── List panel ────────────────────────────────────────────────────── -->
-    <section class="panel" id="list-panel">
-      <div class="panel-header">
-        <span class="panel-title">Agent Documents</span>
-        <span class="panel-count" id="doc-count">—</span>
+    <section class="lab-panel" id="list-panel">
+      <div class="lab-panel-head">
+        <span class="n">01</span>
+        <h2>Agent documents</h2>
+        <span class="r panel-count" id="doc-count">—</span>
       </div>
-
-      <div class="filter-row">
-        <select id="agent-filter">
-          <option value="">All agents</option>
-          <option value="aetheria">Aetheria</option>
-          <option value="vett">Vett</option>
-        </select>
-        <select id="status-filter">
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="final">Final</option>
-          <option value="archived">Archived</option>
-        </select>
-      </div>
-
-      <div class="doc-list" id="doc-list">
-        <div class="empty-state">Loading…</div>
+      <div class="lab-panel-body">
+        <div class="filter-row">
+          <select id="agent-filter">
+            <option value="">All agents</option>
+            <option value="aetheria">Aetheria</option>
+            <option value="vett">Vett</option>
+          </select>
+          <select id="status-filter">
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="final">Final</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+        <div class="doc-list" id="doc-list">
+          <div class="empty-state">Loading…</div>
+        </div>
       </div>
     </section>
 
-    <!-- ─── Viewer panel ──────────────────────────────────────────────────── -->
-    <section class="panel viewer-panel" id="viewer-panel">
-      <div class="viewer-placeholder" id="viewer-placeholder">
-        Select a document to view its content.
+    <section class="lab-panel viewer-panel" id="viewer-panel">
+      <div class="lab-panel-head">
+        <span class="n">02</span>
+        <h2>Viewer</h2>
+        <span class="r">select a document</span>
       </div>
-      <div id="viewer-body" style="display:none">
-        <div class="viewer-header">
-          <div>
-            <div class="viewer-title" id="viewer-title"></div>
-            <div class="viewer-meta" id="viewer-meta"></div>
-          </div>
-          <div class="viewer-downloads" id="viewer-downloads"></div>
+      <div class="lab-panel-body">
+        <div class="viewer-placeholder" id="viewer-placeholder">
+          Select a document to view its content.
         </div>
-        <div class="doc-content" id="viewer-content"></div>
+        <div id="viewer-body" style="display:none">
+          <div class="viewer-header">
+            <div>
+              <div class="viewer-title" id="viewer-title"></div>
+              <div class="viewer-meta" id="viewer-meta"></div>
+            </div>
+            <div class="viewer-downloads" id="viewer-downloads"></div>
+          </div>
+          <div class="doc-content" id="viewer-content"></div>
+        </div>
       </div>
     </section>
 
   </div>
-
 </div>
+
+<footer class="lab-foot">House network · my data is my data · no corporate call-home</footer>
 
 <script>
 // ─── Tiny markdown renderer (no external deps) ────────────────────────────

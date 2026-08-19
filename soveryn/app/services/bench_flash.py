@@ -28,6 +28,7 @@ AIDER_CMD = (
     "AIDER_BASE=http://127.0.0.1:8091/v1 "
     "AIDER_MODEL=openai/bench-flash soveryn-aider"
 )
+OPENCODE_CMD = "soveryn-opencode"
 HOUSE_NAME = "Kernel"
 # First load of ~145G multi-shard GGUF can take a long time.
 WARM_TIMEOUT_S = 900
@@ -58,10 +59,12 @@ class BenchFlashStatus:
     warm_job: dict[str, Any] = field(default_factory=dict)
     aider_cmd: str = AIDER_CMD
     soveryn_aider_flash: str = "soveryn-aider --kernel"
+    soveryn_opencode: str = OPENCODE_CMD
     talk_path: str = "/build"
     note: str = (
-        "Kernel — house build brain (DeepSeek V4 Flash). "
-        "145G multi-shard GGUF, Quadros + system RAM spill. "
+        "Kernel — autonomous house build brain (DeepSeek V4 Flash). "
+        "Default write path: OpenCode (`soveryn-opencode`). "
+        "Aider (`soveryn-aider --kernel`) is surgical fallback. "
         "First warm can take several minutes."
     )
     fetched_at: str = ""
@@ -249,8 +252,10 @@ def chat(
     history: list[dict[str, str]] | None = None,
     max_tokens: int = 1024,
     temperature: float = 0.2,
+    tools: bool = True,
+    max_tool_rounds: int = 6,
 ) -> dict[str, Any]:
-    """One-shot chat proxy to Kernel (no agent loop / tools)."""
+    """Chat with Kernel. tools=True enables HITL tool loop (default)."""
     msg = (message or "").strip()
     if not msg:
         return {"ok": False, "error": "empty_message"}
@@ -260,14 +265,18 @@ def chat(
     if not status.router_ok:
         return {"ok": False, "error": "router_down"}
 
-    system = (
-        "You are Kernel, the SOVERYN house build brain. "
-        "You run locally (DeepSeek V4 Flash weights). "
-        "You make and mend code — patches, refactors, technical work. "
-        "You are not the soul, not the verifier, not the political executor. "
-        "Be direct. Prefer concrete patches and commands over essays."
+    if not tools:
+        return _chat_plain(msg, history=history, max_tokens=max_tokens,
+                           temperature=temperature, status=status)
+
+    from soveryn.app.services.kernel_hitl import (
+        handle_tool_call,
+        parse_tool_calls,
+        strip_tool_fences,
+        tool_system_prompt,
     )
-    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": tool_system_prompt()}]
     for h in history or []:
         role = h.get("role")
         content = (h.get("content") or "").strip()
@@ -275,6 +284,160 @@ def chat(
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": msg})
 
+    timeout = CHAT_TIMEOUT_S if status.state == "warm" else WARM_TIMEOUT_S
+    transcript: list[dict[str, Any]] = []
+    proposals: list[dict[str, Any]] = []
+    total_lat = 0.0
+    last_usage = None
+    final_content = ""
+
+    for _round in range(max(1, min(max_tool_rounds, 8))):
+        try:
+            data = _post_chat(
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=timeout,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "ok": False,
+                "error": str(exc)[:500],
+                "transcript": transcript,
+                "proposals": proposals,
+            }
+
+        total_lat += float(data.get("_client_latency_s") or 0)
+        last_usage = data.get("usage")
+        choice = (data.get("choices") or [{}])[0]
+        message_out = choice.get("message") or {}
+        content = (message_out.get("content") or "").strip()
+        reasoning = (
+            message_out.get("reasoning_content")
+            or message_out.get("reasoning")
+            or ""
+        )
+        if not content and reasoning:
+            content = str(reasoning).strip()
+
+        messages.append({"role": "assistant", "content": content})
+        transcript.append({"role": "assistant", "content": content})
+
+        calls = parse_tool_calls(content)
+        if not calls:
+            final_content = strip_tool_fences(content) or content
+            break
+
+        # Execute tools; feed results back
+        tool_notes: list[str] = []
+        for call in calls:
+            result = handle_tool_call(call)
+            transcript.append({"role": "tool", "content": result})
+            if result.get("proposal_id"):
+                proposals.append(
+                    {
+                        "id": result["proposal_id"],
+                        "tool": result.get("tool"),
+                        "summary": result.get("summary"),
+                        "status": result.get("status") or "pending",
+                    }
+                )
+            if result.get("ok"):
+                tool_notes.append(
+                    f"Tool {result.get('tool')} → {result.get('result', '')[:6000]}"
+                )
+            else:
+                tool_notes.append(
+                    f"Tool {result.get('tool')} ERROR → {result.get('error')}"
+                )
+
+        # If only approval tools (no auto results to continue on), stop after proposing
+        only_pending = all(
+            (not c.get("auto")) and c.get("proposal_id")
+            for c in (transcript[i]["content"] for i in range(len(transcript))
+                      if transcript[i].get("role") == "tool"
+                      and isinstance(transcript[i].get("content"), dict))
+            if isinstance(c, dict)
+        )
+        # Simpler: if any auto tool ran, continue; if only proposals, one more model turn to summarize
+        any_auto = any(
+            isinstance(t.get("content"), dict) and t["content"].get("auto")
+            for t in transcript
+            if t.get("role") == "tool"
+        )
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Tool results:\n" + "\n\n".join(tool_notes) + "\n\n"
+                    "Continue. If proposals are pending, list their ids and wait — "
+                    "do not invent outcomes. If you have enough, summarize for the operator."
+                ),
+            }
+        )
+        if not any_auto and proposals:
+            # one more model turn for summary then stop after next loop iteration sets final
+            try:
+                data2 = _post_chat(
+                    messages,
+                    max_tokens=min(max_tokens, 600),
+                    temperature=temperature,
+                    timeout=timeout,
+                )
+                total_lat += float(data2.get("_client_latency_s") or 0)
+                last_usage = data2.get("usage") or last_usage
+                c2 = ((data2.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+                final_content = strip_tool_fences(c2) or c2
+                transcript.append({"role": "assistant", "content": c2})
+            except Exception:
+                final_content = strip_tool_fences(content) or content
+            break
+    else:
+        final_content = strip_tool_fences(
+            next(
+                (t["content"] for t in reversed(transcript) if t.get("role") == "assistant"),
+                "",
+            )
+        )
+
+    return {
+        "ok": True,
+        "content": final_content,
+        "transcript": transcript,
+        "proposals": proposals,
+        "tools_enabled": True,
+        "usage": last_usage,
+        "latency_s": round(total_lat, 3),
+        "model": MODEL_ALIAS,
+    }
+
+
+def _chat_plain(
+    msg: str,
+    *,
+    history: list[dict[str, str]] | None,
+    max_tokens: int,
+    temperature: float,
+    status: BenchFlashStatus,
+) -> dict[str, Any]:
+    try:
+        from soveryn.agents.personas import get_persona
+        system = get_persona("kernel")
+    except Exception:
+        system = (
+            "You are Kernel, the SOVERYN house build brain. "
+            "You run locally (DeepSeek V4 Flash weights). "
+            "You make and mend code — patches, refactors, technical work. "
+            "You are not the soul, not the verifier, not the political executor. "
+            "Be direct. Prefer concrete patches and commands over essays."
+        )
+    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+    for h in history or []:
+        role = h.get("role")
+        content = (h.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": msg})
     try:
         data = _post_chat(
             messages,
@@ -284,7 +447,6 @@ def chat(
         )
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)[:500]}
-
     choice = (data.get("choices") or [{}])[0]
     message_out = choice.get("message") or {}
     content = (message_out.get("content") or "").strip()
@@ -298,6 +460,7 @@ def chat(
     return {
         "ok": True,
         "content": content,
+        "tools_enabled": False,
         "usage": data.get("usage"),
         "latency_s": data.get("_client_latency_s"),
         "model": MODEL_ALIAS,

@@ -379,7 +379,8 @@ ContinuityTailFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | No
 # coordination boards (new directive, status flip, archive) invalidates the
 # cache exactly the same way a new session tail does — the brief never goes
 # stale relative to the work actually in flight.
-ContinuityFingerprint = tuple[ContinuityTailFingerprint, str]
+# (tails_fp, active_focus_text, acttruth_act_truth_text)
+ContinuityFingerprint = tuple[ContinuityTailFingerprint, str, str]
 
 
 @dataclass(frozen=True)
@@ -638,15 +639,45 @@ class AgentLoop:
             )
             return ""
 
+    def _acttruth_act_truth_brief(self) -> str:
+        """Episodic act-truth + soft lessons for this agent (ActTruth by SOVERYN).
+
+        Crew-wide: each agent sees quiet failures and recent tool outcomes —
+        not vibe memory. Repeat FAILs become LESSONS so they stop blind loops.
+        Best-effort; never raises.
+        """
+        try:
+            from soveryn.platform.acttruth.hooks import get_acttruth
+            from soveryn.platform.acttruth.lessons import lessons_brief
+
+            truth = get_acttruth().ledger.recall_brief(
+                self.agent_name, limit=6, window_hours=24.0, max_chars=900,
+            )
+            lessons = lessons_brief(self.agent_name)
+            if truth and lessons:
+                return f"{truth}\n\n{lessons}"
+            return truth or lessons
+        except Exception:
+            return ""
+
+    def _with_acttruth_brief(self, text: str) -> str:
+        block = self._acttruth_act_truth_brief()
+        if not block:
+            return text
+        return f"{text}\n\n{block}" if text else block
+
     def _build_continuity_brief(self, session_id: str) -> str:
         """Build or reuse the Cross-Surface Recent Activity Brief.
 
         Cache invalidation is keyed to the underlying cross-session activity,
         not the clock. Relative-time strings are rendered once and stay stable
         until a different session tail appears.
+
+        Continuum act-truth is folded in for every agent (including when
+        cross-surface continuity is disabled) so quiet failures stay visible.
         """
         if self.continuity_config is None or not self.continuity_config.enabled:
-            return ""
+            return self._with_acttruth_brief("")
         # Cross-session tails (multi-rail conversation continuity) stay
         # Aetheria-only. Active Focus (board awareness) also goes to any agent
         # wired with a coord_store — Vett, so she can see what's in flight and
@@ -656,7 +687,7 @@ class AgentLoop:
             # A peer with no coord_store still gets its own live thread —
             # otherwise "the whole team is whole" is false for exactly the
             # agent with the fewest other continuity sources (Scotty).
-            return self._render_active_context()
+            return self._with_acttruth_brief(self._render_active_context())
         try:
             session = self.conv_store.get_session(session_id)
             # Autonomous sessions ([heartbeat], [dream], [patrol]) are excluded
@@ -671,7 +702,7 @@ class AgentLoop:
                 and self.continuity_config.session_is_autonomous(session.title)
             )
             if autonomous:
-                return self._render_active_context()
+                return self._with_acttruth_brief(self._render_active_context())
             tails = ()
             if is_aetheria:
                 from soveryn.platform.continuity.store import recent_cross_session_tails
@@ -710,9 +741,11 @@ class AgentLoop:
                     dispatch_states=dispatch_states,
                     self_agent=self.agent_name,
                 )
+            acttruth_block = self._acttruth_act_truth_brief()
             fingerprint: ContinuityFingerprint = (
                 _continuity_fingerprint(tails),
                 active_focus,
+                acttruth_block,
             )
             cached = self.session_context_cache.continuity.get(session_id)
             if cached is not None and cached.fingerprint == fingerprint:
@@ -726,6 +759,8 @@ class AgentLoop:
             active_context = self._render_active_context()
             if active_context:
                 text = f"{text}\n\n{active_context}" if text else active_context
+            if acttruth_block:
+                text = f"{text}\n\n{acttruth_block}" if text else acttruth_block
             self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(
                 fingerprint=fingerprint,
                 text=text,
@@ -736,7 +771,7 @@ class AgentLoop:
             logging.getLogger(__name__).exception(
                 "continuity brief build failed; serving without it"
             )
-            return ""
+            return self._with_acttruth_brief("")
 
     def _build_recall_context(self, session_id: str, user_message: str) -> str:
         """Build or reuse live recall across a coherent local thread."""
@@ -1453,6 +1488,35 @@ class AgentLoop:
                 # crashes the whole turn. BaseException stays unhandled —
                 # SystemExit / KeyboardInterrupt propagate as intended.
                 result = {"error": type(exc).__name__, "message": str(exc)}
+
+        # ActTruth soft lesson — if this failure continues a streak, tell the
+        # model in-band so same-turn retry loops can stop.
+        try:
+            from soveryn.platform.acttruth.lessons import maybe_lesson_for_tool_result
+
+            ok_flag = not (
+                isinstance(result, dict)
+                and (result.get("error") or result.get("ok") is False)
+            )
+            err = None
+            if isinstance(result, dict):
+                err = result.get("message") or result.get("error")
+                if result.get("error"):
+                    ok_flag = False
+            lesson = maybe_lesson_for_tool_result(
+                self.agent_name,
+                tool=tool_name,
+                ok=ok_flag,
+                error=str(err) if err else None,
+                result=result,
+            )
+            if lesson and isinstance(result, dict):
+                result = dict(result)
+                result["acttruth_lesson"] = lesson
+            elif lesson and not isinstance(result, dict):
+                result = {"result": result, "acttruth_lesson": lesson}
+        except Exception:
+            pass
 
         result_content = json.dumps(result, sort_keys=True)
 

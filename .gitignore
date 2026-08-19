@@ -88,3 +88,18 @@ scratch/
 **/*.bak-*
 runtime/*.bak*
 soveryn/config/*.bak*
+
+# ActTruth / Continuum / Kernel HITL live ledgers (regenerated)
+data/acttruth/
+data/continuum/
+data/kernel_proposals/
+
+# Local bake / spike scratch
+tmp/
+
+# OpenCode local install deps (config + plugins are tracked)
+config/opencode/node_modules/
+
+# Package build artifacts
+packages/*/build/
+packages/*/dist/

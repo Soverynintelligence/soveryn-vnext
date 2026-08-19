@@ -1,19 +1,19 @@
 """Aetheria's `generate_image` tool — wraps ComfyUI's API.
 
-ComfyUI runs on :8188 (see soveryn-comfyui.service). The tool builds a
-minimal SDXL Lightning workflow JSON, POSTs to /prompt, polls /history
-until done, and returns the output image path.
+ComfyUI listens on :8188 when running (soveryn-comfyui.service). As of
+2026-08-17 it is **on-demand**: this tool starts the unit (Quadro 0 GPU),
+runs the gen, then stops the unit so Kernel keeps Quadro headroom.
 
-Defaults to JuggernautXL Lightning (6-step Lightning variant of SDXL) for
-fast generation (~5s on Blackwell). Falls back to vanilla SDXL with more
-steps if the Lightning checkpoint is missing.
+Workflow: minimal SDXL Lightning JSON → POST /prompt → poll /history.
 
-Output images land in ~/ComfyUI/output/ — Aetheria gets the file path
-back so she can describe what she made / reference it / pass it along.
+Defaults to JuggernautXL Lightning (6-step). Falls back to vanilla SDXL
+if Lightning is missing. Output: ~/ComfyUI/output/.
 """
 from __future__ import annotations
 
 import json
+import logging
+import subprocess
 import time
 import urllib.parse
 import urllib.request
@@ -25,11 +25,16 @@ from typing import Any
 
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
+log = logging.getLogger(__name__)
 
 DEFAULT_COMFYUI_URL = "http://127.0.0.1:8188"
 DEFAULT_CHECKPOINT = "juggernautXL_v9Rdphoto2Lightning.safetensors"
 FALLBACK_CHECKPOINT = "sd_xl_base_1.0.safetensors"
 DEFAULT_OUTPUT_DIR = Path.home() / "ComfyUI" / "output"
+COMFY_SYSTEMD_UNIT = "soveryn-comfyui.service"
+# Cold start (systemd + torch) + Lightning gen; keep under agent patience.
+COMFY_READY_TIMEOUT_SECONDS = 90.0
+COMFY_POLL_TIMEOUT_SECONDS = 300.0
 
 # Lightning checkpoints want few steps + low CFG + dpmpp_sde sampler
 LIGHTNING_DEFAULTS = {
@@ -168,11 +173,68 @@ def _is_lightning_checkpoint(name: str) -> bool:
     return "lightning" in lower or "lcm" in lower or "turbo" in lower
 
 
+def _comfy_reachable(comfyui_url: str) -> bool:
+    try:
+        _http_get_json(f"{comfyui_url}/system_stats", timeout=2.0)
+        return True
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+        return False
+
+
+def _systemctl_user(*args: str, timeout: float = 60.0) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["systemctl", "--user", *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _ensure_comfy_running(comfyui_url: str) -> bool:
+    """Start soveryn-comfyui if needed. Returns True if this call started it
+    (caller should stop when done). Returns False if it was already up."""
+    if _comfy_reachable(comfyui_url):
+        return False
+    log.info("ComfyUI down — starting %s (on-demand Quadro)", COMFY_SYSTEMD_UNIT)
+    started = _systemctl_user("start", COMFY_SYSTEMD_UNIT, timeout=30.0)
+    if started.returncode != 0:
+        raise ToolArgError(
+            f"failed to start {COMFY_SYSTEMD_UNIT}: "
+            f"{(started.stderr or started.stdout or '').strip()[:400]}"
+        )
+    deadline = time.monotonic() + COMFY_READY_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if _comfy_reachable(comfyui_url):
+            return True
+        time.sleep(1.0)
+    raise ToolArgError(
+        f"ComfyUI did not become ready within {COMFY_READY_TIMEOUT_SECONDS:.0f}s "
+        f"after starting {COMFY_SYSTEMD_UNIT}"
+    )
+
+
+def _stop_comfy() -> None:
+    """Best-effort stop — free Quadro VRAM for Kernel."""
+    try:
+        stopped = _systemctl_user("stop", COMFY_SYSTEMD_UNIT, timeout=60.0)
+        if stopped.returncode != 0:
+            log.warning(
+                "ComfyUI stop returned %s: %s",
+                stopped.returncode,
+                (stopped.stderr or stopped.stdout or "").strip()[:300],
+            )
+        else:
+            log.info("ComfyUI stopped (on-demand teardown)")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log.warning("ComfyUI stop failed: %s", e)
+
+
 def _poll_until_complete(
     comfyui_url: str,
     prompt_id: str,
     *,
-    timeout_seconds: float = 180.0,
+    timeout_seconds: float = COMFY_POLL_TIMEOUT_SECONDS,
     poll_interval: float = 1.0,
 ) -> dict:
     """Poll /history/<prompt_id> until the job appears. Returns the history
@@ -257,86 +319,95 @@ def build_generate_image_tool(
         height = (height // 64) * 64
         seed_raw = args.get("seed")
         seed = int(seed_raw) if seed_raw is not None else int(uuid.uuid4().int & 0xFFFF_FFFF_FFFF_FFFF)
-        requested_checkpoint = args.get("checkpoint")
-        checkpoint = _resolve_checkpoint(comfyui_url, requested_checkpoint)
-        # Pick defaults based on whether it's a Lightning variant
-        defaults = LIGHTNING_DEFAULTS if _is_lightning_checkpoint(checkpoint) else VANILLA_DEFAULTS
-        steps = int(args.get("steps", defaults["steps"]))
-        cfg = float(args.get("cfg", defaults["cfg"]))
-        sampler_name = str(args.get("sampler_name", defaults["sampler_name"]))
-        scheduler = str(args.get("scheduler", defaults["scheduler"]))
 
-        workflow = _build_workflow(
-            checkpoint=checkpoint,
-            prompt=prompt,
-            negative_prompt=negative_prompt,
-            width=width, height=height,
-            seed=seed, steps=steps, cfg=cfg,
-            sampler_name=sampler_name, scheduler=scheduler,
-        )
-
-        client_id = str(uuid.uuid4())
+        # On-demand: spin Quadro Comfy only for this gen, then tear down.
+        started_here = False
         try:
-            queued = _http_post_json(
-                f"{comfyui_url}/prompt",
-                {"prompt": workflow, "client_id": client_id},
-                timeout=15.0,
+            started_here = _ensure_comfy_running(comfyui_url)
+
+            requested_checkpoint = args.get("checkpoint")
+            checkpoint = _resolve_checkpoint(comfyui_url, requested_checkpoint)
+            # Pick defaults based on whether it's a Lightning variant
+            defaults = LIGHTNING_DEFAULTS if _is_lightning_checkpoint(checkpoint) else VANILLA_DEFAULTS
+            steps = int(args.get("steps", defaults["steps"]))
+            cfg = float(args.get("cfg", defaults["cfg"]))
+            sampler_name = str(args.get("sampler_name", defaults["sampler_name"]))
+            scheduler = str(args.get("scheduler", defaults["scheduler"]))
+
+            workflow = _build_workflow(
+                checkpoint=checkpoint,
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                width=width, height=height,
+                seed=seed, steps=steps, cfg=cfg,
+                sampler_name=sampler_name, scheduler=scheduler,
             )
-        except urllib.error.URLError as e:
-            return {
-                "error": "comfyui_unreachable",
-                "message": f"could not reach ComfyUI at {comfyui_url}: {e}",
-            }
-        prompt_id = queued.get("prompt_id")
-        if not prompt_id:
-            return {
-                "error": "comfyui_rejected",
-                "message": f"ComfyUI did not return a prompt_id: {queued}",
-            }
-        node_errors = queued.get("node_errors", {})
-        if node_errors:
-            return {
-                "error": "comfyui_workflow_error",
-                "message": "ComfyUI flagged workflow errors",
-                "node_errors": node_errors,
-            }
 
-        history_entry = _poll_until_complete(comfyui_url, prompt_id)
-        image_paths = _extract_image_paths(history_entry)
-        if not image_paths:
+            client_id = str(uuid.uuid4())
+            try:
+                queued = _http_post_json(
+                    f"{comfyui_url}/prompt",
+                    {"prompt": workflow, "client_id": client_id},
+                    timeout=15.0,
+                )
+            except urllib.error.URLError as e:
+                return {
+                    "error": "comfyui_unreachable",
+                    "message": f"could not reach ComfyUI at {comfyui_url}: {e}",
+                }
+            prompt_id = queued.get("prompt_id")
+            if not prompt_id:
+                return {
+                    "error": "comfyui_rejected",
+                    "message": f"ComfyUI did not return a prompt_id: {queued}",
+                }
+            node_errors = queued.get("node_errors", {})
+            if node_errors:
+                return {
+                    "error": "comfyui_workflow_error",
+                    "message": "ComfyUI flagged workflow errors",
+                    "node_errors": node_errors,
+                }
+
+            history_entry = _poll_until_complete(comfyui_url, prompt_id)
+            image_paths = _extract_image_paths(history_entry)
+            if not image_paths:
+                return {
+                    "error": "no_images_returned",
+                    "message": "Generation completed but no output images were recorded",
+                    "prompt_id": prompt_id,
+                }
+
+            image_urls = [_path_to_chat_url(p) for p in image_paths]
+            # Pair (path, url) results so callers can pick whichever they need.
+            # The chat UI auto-renders any `/aetheria/img/...` URL it sees in
+            # assistant content, so Aetheria should include the URL in her
+            # natural-language response.
             return {
-                "error": "no_images_returned",
-                "message": "Generation completed but no output images were recorded",
+                "images": [str(p) for p in image_paths],
+                "urls": [u for u in image_urls if u is not None],
+                "count": len(image_paths),
+                "checkpoint": checkpoint,
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
                 "prompt_id": prompt_id,
+                "comfy_on_demand": started_here,
             }
-
-        image_urls = [_path_to_chat_url(p) for p in image_paths]
-        # Pair (path, url) results so callers can pick whichever they need.
-        # The chat UI auto-renders any `/aetheria/img/...` URL it sees in
-        # assistant content, so Aetheria should include the URL in her
-        # natural-language response.
-        return {
-            "images": [str(p) for p in image_paths],
-            "urls": [u for u in image_urls if u is not None],
-            "count": len(image_paths),
-            "checkpoint": checkpoint,
-            "seed": seed,
-            "steps": steps,
-            "cfg": cfg,
-            "prompt_id": prompt_id,
-        }
+        finally:
+            if started_here:
+                _stop_comfy()
 
     return ToolSpec(
         name="generate_image",
         owner="aetheria",
         description=(
-            "Generate an image from a text prompt via ComfyUI. Defaults to "
-            "JuggernautXL Lightning for fast generation (~5s). Returns both a "
-            "file path and a UI-renderable URL (`/aetheria/img/<filename>`). "
-            "When you finish, include the URL inline in your response — the "
-            "chat UI will auto-render any `/aetheria/img/...` URL as the "
-            "image itself. So just write the URL plainly in your reply and "
-            "Jon sees the picture in the chat."
+            "Generate an image from a text prompt via ComfyUI (on-demand GPU: "
+            "starts Quadro Comfy for this call, then stops so Kernel keeps "
+            "VRAM). Defaults to JuggernautXL Lightning (~5–15s once warm; "
+            "cold start adds a bit). Returns file path + UI URL "
+            "(`/aetheria/img/<filename>`). Include the URL inline in your "
+            "reply — the chat UI auto-renders it."
         ),
         schema={
             "type": "object",

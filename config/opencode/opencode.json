@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "kernel-flash/bench-flash",
+  "small_model": "kernel-flash/bench-flash",
+  "enabled_providers": ["kernel-flash"],
+  "provider": {
+    "kernel-flash": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kernel Flash (local :8091)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8091/v1",
+        "apiKey": "sk-local-soveryn"
+      },
+      "models": {
+        "bench-flash": {
+          "name": "Kernel · DeepSeek V4 Flash",
+          "limit": {
+            "context": 16384,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "kernel": {
+      "description": "SOVERYN house build brain — autonomous mend/patch on local Flash",
+      "mode": "primary",
+      "model": "kernel-flash/bench-flash",
+      "temperature": 0.2,
+      "prompt": "{file:./agents/kernel.md}",
+      "color": "#6aa84f",
+      "permission": {
+        "edit": "allow",
+        "bash": {
+          "*": "allow",
+          "rm -rf *": "deny",
+          "sudo *": "ask",
+          "git push*": "ask",
+          "git push --force*": "deny"
+        },
+        "external_directory": "ask",
+        "webfetch": "ask",
+        "websearch": "ask"
+      }
+    },
+    "build": {
+      "model": "kernel-flash/bench-flash"
+    },
+    "plan": {
+      "model": "kernel-flash/bench-flash"
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "sudo *": "ask",
+      "git push --force*": "deny"
+    },
+    "external_directory": "ask"
+  }
+}

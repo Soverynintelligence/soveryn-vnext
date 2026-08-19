@@ -18,6 +18,7 @@ bp = Blueprint("ui", __name__)
 
 COMMAND_CENTER_TEMPLATE = Path(__file__).parent.parent / "templates" / "command_center.html"
 CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
+FLEET_TEMPLATE = Path(__file__).parent.parent / "templates" / "fleet.html"
 
 
 def _serve_html(path: Path, *, missing_label: str):
@@ -47,6 +48,12 @@ def command_center():
 def citizens_board():
     """Serve the Citizens board (Phase 3 console)."""
     return _serve_html(CITIZENS_TEMPLATE, missing_label="Citizens board")
+
+
+@bp.get("/fleet")
+def fleet_page():
+    """Fleet — Rig headroom, session traffic, house counts (not on Command home)."""
+    return _serve_html(FLEET_TEMPLATE, missing_label="Fleet")
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"

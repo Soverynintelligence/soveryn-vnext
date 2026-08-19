@@ -76,18 +76,23 @@
      height. dvh shrinks with the mobile URL bar so the composer never falls
      below the visible area. */
   body {
-    display:grid; grid-template-columns:280px 1fr 0;
-    grid-template-rows:100vh; height:100vh;
-    overflow:hidden;
-    transition:grid-template-columns 0.18s ease;
+    display:flex; flex-direction:column;
+    height:100vh; overflow:hidden;
   }
   @supports (height: 100dvh) {
-    body { grid-template-rows:100dvh; height:100dvh; }
+    body { height:100dvh; }
+  }
+  /* Shell under the shared lab plate: sidebar + main */
+  .chat-shell {
+    flex:1; min-height:0;
+    display:grid; grid-template-columns:280px 1fr;
+    overflow:hidden;
+    transition:grid-template-columns 0.18s ease;
   }
   /* Collapsed sidebar: the column goes to 0 and the sidebar's overflow
      hides its contents during the slide. The toggle in the chat-header
      stays visible because it lives in <main>, not in <aside>. */
-  body.sidebar-collapsed { grid-template-columns:0 1fr 0; }
+  body.sidebar-collapsed .chat-shell { grid-template-columns:0 1fr; }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
   /* Sidebar */
@@ -516,21 +521,11 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  /* ─── Voice call (in-page) ──────────────────────────────────────────────
-     Call button sits in .chat-header .actions next to persona/export/more.
-     Click → full-screen overlay with a pulsing per-agent orb + END CALL.
+  /* ─── Voice call (in-page) — entry is Chat → Menu → Voice ───────────────
      Backend route is /voice/session/<session_id>/offer; the WebRTC peer
      binds to the existing chat session so transcribed turns land in the
      same conversation history. */
-  .chat-header .actions .call-btn[hidden] { display: none; }
-  .chat-header .actions .call-btn {
-    font-size: 15px;
-    line-height: 1;
-  }
-  /* Subtle per-agent hover tint — keeps the action row uniform at rest. */
-  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--gold); background: rgba(198,166,100,0.10); }
-  .chat-header .actions .call-btn[data-agent="vett"]:hover     { color: #9eb4c2; background: rgba(107,130,144,0.10); }
-  .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: #c47a6e; background: rgba(196,122,110,0.10); }
+  .chat-menu .call-btn[hidden] { display: none !important; }
 
   .voice-overlay {
     position: fixed; inset: 0;
@@ -631,49 +626,46 @@
     padding: 0 !important;
     gap: 0 !important;
   }
-  .lab-chat-plate {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--line);
-    background: rgba(0,0,0,.92);
-  }
-  .lab-chat-plate img { width: 40px; height: 40px; display: block; }
-  .lab-chat-plate b {
-    font-size: .72rem; letter-spacing: .22em; display: block; color: var(--ink); font-weight: 600;
-  }
-  .lab-chat-plate i {
-    font-style: normal; font-size: .58rem; letter-spacing: .2em; color: var(--gold); display: block;
-  }
-  .lab-chat-nav {
-    display: flex; border-bottom: 1px solid var(--line); background: var(--panel);
-  }
-  .lab-chat-nav a {
-    flex: 1; text-align: center; padding: 10px 6px;
-    font-size: .58rem; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--ink-3); border-right: 1px solid var(--line);
-  }
-  .lab-chat-nav a:last-child { border-right: none; }
-  .lab-chat-nav a:hover, .lab-chat-nav a.active {
-    color: var(--gold); background: var(--panel-2);
-  }
-  .lab-chat-tools {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--line);
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  .lab-chat-tools .act { width: 100%; text-align: center; }
-  .lab-chat-hist {
-    flex: 1; overflow: auto; min-height: 0;
-    border-top: 1px solid var(--line);
-  }
-  .lab-chat-hist-head {
-    padding: 10px 14px; font-size: .58rem; letter-spacing: .18em;
-    text-transform: uppercase; color: var(--ink-3);
-    border-bottom: 1px solid var(--line); background: var(--panel);
+  /* Shared .plate sits above .chat-shell — same chrome as CC / Citizens / Docs / Fleet */
+  body.lab > .plate {
+    flex-shrink: 0;
+    position: relative; /* not sticky inside chat viewport grid */
   }
 
-  /* hide old brand block once plate is present */
+  /* hide old brand block */
   aside[data-testid="sidebar"] > .brand { display: none !important; }
+
+  /* Chat tools menu (persona / export / voice / …) */
+  .chat-menu-wrap { position: relative; }
+  .chat-menu-btn {
+    min-width: 72px;
+  }
+  .chat-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 50;
+    min-width: 200px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .chat-menu[hidden] { display: none !important; }
+  .chat-menu button, .chat-menu a {
+    display: block; width: 100%; text-align: left;
+    padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line);
+    background: transparent; cursor: pointer;
+    color: var(--ink); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; text-decoration: none;
+    font-family: var(--mono); border-radius: 0;
+  }
+  .chat-menu button:last-child, .chat-menu a:last-child { border-bottom: none; }
+  .chat-menu button:hover, .chat-menu a:hover {
+    background: var(--panel-2); color: var(--gold);
+  }
+  .chat-menu button.danger:hover { color: var(--down); }
+  .chat-menu button[hidden] { display: none !important; }
+  .chat-menu .menu-sep {
+    height: 1px; background: var(--line); margin: 2px 0; border: 0; padding: 0;
+  }
 
   main[data-testid="main"] {
     background: transparent !important;
@@ -759,17 +751,23 @@
 </style>
 </head>
 <body class="lab" data-lab>
-  <aside data-testid="sidebar">
-    <div class="lab-chat-plate">
-      <img src="/static/lab-seal.png" alt="" width="40" height="40">
-      <span><b>SOVERYN</b><i>Chat console</i></span>
-    </div>
-    <nav class="lab-chat-nav">
-      <a href="/">Command</a>
-      <a href="/citizens">Citizens</a>
-      <a href="/chat" class="active">Chat</a>
-    </nav>
 
+<div class="plate">
+  <a class="id" href="/">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Chat</i></span>
+  </a>
+  <nav>
+    <a href="/">Command</a>
+    <a href="/fleet">Fleet</a>
+    <a href="/citizens" class="keep">Citizens</a>
+    <a href="/chat" class="active keep">Chat</a>
+    <a href="/documents">Docs</a>
+  </nav>
+</div>
+
+<div class="chat-shell">
+  <aside data-testid="sidebar">
     <div class="brand">
       <div class="wordmark">SOVERYN</div>
       <a href="/" class="home" data-testid="mission-control-link">⌂ mission control</a>
@@ -781,6 +779,7 @@
       <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>
       <button class="agent-pill" data-agent="vett"     role="tab" aria-pressed="false">vett</button>
       <button class="agent-pill" data-agent="scotty"   role="tab" aria-pressed="false">scotty</button>
+      <button class="agent-pill" data-agent="kernel"   role="tab" aria-pressed="false">kernel</button>
     </div>
 
     <div class="search"><input type="search" placeholder="Search chats" data-testid="search"></div>
@@ -816,23 +815,23 @@
         <div class="sub" data-session-meta>new session</div>
       </div>
       <div class="actions">
-        <button type="button" data-testid="persona-btn" title="View persona"
-                aria-label="Persona">Persona</button>
-        <button type="button" data-testid="export-btn" title="Export this conversation"
-                aria-label="Export">Export</button>
-        <div class="more-wrap">
-          <button type="button" data-testid="more-btn" title="More actions"
-                  aria-label="More" aria-haspopup="true" aria-expanded="false">More</button>
-          <div class="more-menu" data-testid="more-menu" hidden role="menu">
+        <div class="chat-menu-wrap more-wrap">
+          <button type="button" class="chat-menu-btn" data-testid="more-btn"
+                  title="Chat menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">Menu</button>
+          <div class="chat-menu more-menu" data-testid="more-menu" hidden role="menu">
+            <button type="button" role="menuitem" data-testid="persona-btn" data-more="persona">Persona</button>
+            <button type="button" role="menuitem" data-testid="export-btn" data-more="export">Export</button>
+            <button type="button" role="menuitem" class="call-btn" data-testid="call-btn" data-more="voice"
+                    data-agent="aetheria" hidden>Voice</button>
+            <div class="menu-sep" role="separator"></div>
             <button type="button" role="menuitem" data-more="copy-id">Copy session id</button>
             <button type="button" role="menuitem" data-more="delete" class="danger">Delete session</button>
-            <a href="/" role="menuitem">Mission Control</a>
-            <a href="/m/" role="menuitem">Mobile app</a>
+            <div class="menu-sep" role="separator"></div>
+            <a href="/" role="menuitem">Command</a>
+            <a href="/fleet" role="menuitem">Fleet</a>
+            <a href="/m/" role="menuitem">Mobile</a>
           </div>
         </div>
-        <!-- Voice last: not a mystery phone glyph; only when voice is enabled for the agent. -->
-        <button type="button" class="call-btn" data-testid="call-btn" data-agent="aetheria"
-                title="Start a voice call with this agent" aria-label="Voice call" hidden>Voice</button>
       </div>
     </header>
 
@@ -883,10 +882,11 @@
       </div>
     </form>
   </main>
+</div><!-- /.chat-shell -->
 <script src="/static/voice/presence.js?v=alive5"></script>
 <script>
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel"];
   // Full background-value per agent (applied directly on the agent disc).
   // Aetheria carries the brand olive — she's the central voice, so the
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
@@ -895,9 +895,11 @@
     aetheria: "var(--sage-sheen)",                              /* primary voice → brushed SOVERYN gold */
     vett:     "var(--steel-sheen)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
+    kernel:   "var(--steel-sheen)",   /* build brain — cool steel */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
+    kernel:   "var(--sov-electric-blue)",
     aetheria: "var(--sov-sage)",
     vett:     "var(--sov-deep-blue)",
     scotty:   "var(--sov-maroon)",
@@ -2029,6 +2031,16 @@
         const btn = e.target.closest("[data-more]");
         if (!btn) return;
         const action = btn.getAttribute("data-more");
+        // Persona / Export / Voice keep their own button listeners — just close menu.
+        if (action === "persona" || action === "export") {
+          closeMoreMenu();
+          return; // let the button's own handler run
+        }
+        if (action === "voice") {
+          closeMoreMenu();
+          return; // call-btn listener starts the call
+        }
+        e.preventDefault();
         closeMoreMenu();
         if (action === "copy-id") {
           if (!state.sessionId) {

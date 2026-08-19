@@ -458,10 +458,46 @@ class HeartbeatDaemon:
         # pulse (empty note) leaves nothing. Material signals stay visible on
         # the Mission Control tile regardless.
         try:
+            # Continuum competence budget — whole-crew API; this rail is Aetheria.
+            from soveryn.platform.acttruth.unprompted import (
+                apply_budget_to_prompt,
+                record_unprompted_tick,
+            )
+
+            prompt, _budget = apply_budget_to_prompt(
+                "aetheria", prompt, rail="heartbeat",
+            )
+
             session_id = self._ensure_heartbeat_session()
             response = self._call_vnext_chat(session_id, prompt)
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
+
+            record_unprompted_tick(
+                "aetheria",
+                rail="heartbeat",
+                tick_id=tick_id,
+                action_taken=bool(action_taken),
+                tool_call_count=int(tool_call_count or 0),
+                note_head=(response_text or "")[:120],
+            )
+            if action_taken:
+                try:
+                    from soveryn.platform.acttruth.earned_keep import record_earned_keep
+
+                    # Heartbeat durable delta is weak without side-effect
+                    # counters; treat any tool use as provisional keep, score
+                    # low durable until we wire richer signals.
+                    record_earned_keep(
+                        "aetheria",
+                        rail="heartbeat",
+                        tick_id=tick_id,
+                        durable_delta=False,
+                    )
+                except Exception:
+                    logger.exception(
+                        "heartbeat tick %s: earned_keep record failed", tick_id,
+                    )
 
             # Her whole response is her note; it already persists in the
             # [heartbeat] session via the /chat round-trip above.

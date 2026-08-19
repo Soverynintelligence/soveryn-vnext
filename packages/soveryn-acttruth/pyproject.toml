@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soveryn-acttruth"
+version = "0.1.0"
+description = "ActTruth by SOVERYN — act ledger + unprompted spend allowance for tool-using agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SOVERYN" }]
+keywords = ["agents", "audit", "tools", "soveryn", "acttruth"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://acttruth.com"
+Documentation = "https://acttruth.com/proof.html"
+Repository = "https://github.com/Soverynintelligence/acttruth"
+Issues = "https://github.com/Soverynintelligence/acttruth/issues"
+
+[project.scripts]
+acttruth = "acttruth.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+acttruth = ["py.typed"]

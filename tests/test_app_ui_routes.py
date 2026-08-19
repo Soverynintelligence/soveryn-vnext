@@ -46,19 +46,21 @@ def test_root_has_agent_row_with_active_agents(app_state):
         assert f'data-agent="{agent}"' in body
 
 
-def test_root_has_activity_feed(app_state):
+def test_root_has_lattice_telemetry(app_state):
+    """Lattice write rate stays on Command with the other memory surfaces."""
     body = app_state.get("/").data.decode("utf-8")
+    assert 'data-testid="lattice-telemetry"' in body
+
+
+def test_fleet_page_has_rig_sessions_and_counts(app_state):
+    """Fleet page owns Rig + session traffic + house counts."""
+    resp = app_state.get("/fleet")
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert 'data-testid="fleet-page"' in body
+    assert 'data-testid="rig"' in body
     assert 'data-testid="activity-feed"' in body
-
-
-def test_root_has_system_panel(app_state):
-    body = app_state.get("/").data.decode("utf-8")
     assert 'data-testid="system-panel"' in body
-
-
-def test_root_has_gpu_bars(app_state):
-    body = app_state.get("/").data.decode("utf-8")
-    assert 'data-testid="gpu-bars"' in body
 
 
 def test_root_no_hardcoded_retired_agents(app_state):
@@ -67,22 +69,15 @@ def test_root_no_hardcoded_retired_agents(app_state):
         assert retired not in body, f"hardcoded retired {retired!r} in command center"
 
 
-def test_root_no_hardcoded_gpu_labels_in_stats_panel(app_state):
-    """Guards against hardcoded GPU model names in the GPU stats area —
-    those should come from /api/system/gpu, not the template. The topology
-    view (added 2026-06-04) legitimately names hardware architecture
-    (e.g. "Blackwell 96GB · live" on the SOVERYN tower node), so we scope
-    the check to the GPU bars panel rather than the whole body."""
-    body = app_state.get("/").data.decode("utf-8").lower()
-    # Slice to the gpu-bars section only.
-    gpu_section_start = body.find('data-testid="gpu-bars"')
-    assert gpu_section_start >= 0, "gpu-bars panel missing from command center"
-    # The gpu-bars section ends at the next closing </div> of the system panel.
-    gpu_section_end = body.find('class="system-stats"', gpu_section_start)
-    gpu_section = body[gpu_section_start:gpu_section_end if gpu_section_end > 0 else gpu_section_start + 2000]
+def test_fleet_no_hardcoded_gpu_labels_in_rig_cards(app_state):
+    """Guards against hardcoded GPU model names in Fleet Rig cards."""
+    body = app_state.get("/fleet").data.decode("utf-8").lower()
+    start = body.find('data-rig-gpus')
+    assert start >= 0, "rig GPU cards container missing from fleet page"
+    end = body.find('</div>', start)
+    section = body[start : end if end > 0 else start + 800]
     for label in ("blackwell", "rtx 8000", "rtx pro 5000", "quadro"):
-        assert label not in gpu_section, \
-            f"hardcoded GPU label {label!r} in the GPU stats panel"
+        assert label not in section, f"hardcoded GPU label {label!r} in rig cards"
 
 
 def test_root_no_external_resources(app_state):
@@ -116,9 +111,9 @@ def test_ui_source_metadata_still_works(app_state):
     assert resp.status_code == 200
 
 
-def test_root_javascript_fetches_gpu(app_state):
-    body = app_state.get("/").data.decode("utf-8")
-    assert "/api/system/gpu" in body
+def test_fleet_javascript_fetches_rig(app_state):
+    body = app_state.get("/fleet").data.decode("utf-8")
+    assert "/api/system/rig" in body
 
 
 def test_root_javascript_fetches_memory_activity(app_state):
@@ -126,8 +121,8 @@ def test_root_javascript_fetches_memory_activity(app_state):
     assert "/api/memory/activity" in body
 
 
-def test_root_javascript_fetches_sessions(app_state):
-    body = app_state.get("/").data.decode("utf-8")
+def test_fleet_javascript_fetches_sessions(app_state):
+    body = app_state.get("/fleet").data.decode("utf-8")
     assert "/sessions" in body
 
 

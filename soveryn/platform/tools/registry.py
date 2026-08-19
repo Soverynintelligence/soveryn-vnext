@@ -65,7 +65,14 @@ class ToolRegistry:
         audit_hook: AuditHook | None = None,
     ) -> None:
         self._active_agents = frozenset(active_agents)
-        self._audit_hook = telemetry_audit_hook if audit_hook is None else audit_hook
+        # Default: Continuum ledger + telemetry — quiet tool failures become
+        # visible truth events (timeouts / soft errors), not silence.
+        if audit_hook is None:
+            from soveryn.platform.acttruth.hooks import acttruth_and_telemetry_audit_hook
+
+            self._audit_hook = acttruth_and_telemetry_audit_hook
+        else:
+            self._audit_hook = audit_hook
         self._tools: dict[tuple[str, str], ToolSpec] = {}
 
     def register(self, spec: ToolSpec) -> None:

@@ -463,6 +463,15 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         content_delta = delta_obj.get("content") or ""
         if not isinstance(content_delta, str):
             content_delta = ""
+        # Mirror sync-path fallback: some vLLM thinking parsers stream only
+        # into reasoning / reasoning_content with content=null. Without this,
+        # AgentLoop sees empty_generation and Vett/Scotty look "not responding."
+        if not content_delta.strip():
+            for key in ("reasoning_content", "reasoning"):
+                alt = delta_obj.get(key)
+                if isinstance(alt, str) and alt.strip():
+                    content_delta = alt
+                    break
         finish_reason = choice.get("finish_reason")
         tc_delta = delta_obj.get("tool_calls")
         if tc_delta is not None and not isinstance(tc_delta, list):

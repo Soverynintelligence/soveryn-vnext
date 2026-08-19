@@ -48,9 +48,9 @@
     --glass-bg:rgba(16,16,19,0.92);
     --glass-border:rgba(192,130,79,0.30);
     --glass-blur:blur(3px) saturate(105%);
-    --r-lg:22px;
-    --r-md:14px;
-    --r-sm:10px;
+    --r-lg:0;
+    --r-md:0;
+    --r-sm:3px;
     --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
@@ -388,36 +388,32 @@
   .activity-item .who[data-agent="scotty"]   { color:var(--sov-maroon); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
-  /* Lattice telemetry chart (was an unlabeled sparkline) */
+  /* Lattice + cognition: full page width, same panel language */
+  section[data-testid="lattice-telemetry-panel"],
+  section[data-testid="cognition-panel"] {
+    width: 100% !important;
+    max-width: none !important;
+    display: block !important;
+    box-sizing: border-box !important;
+  }
+  section[data-testid="lattice-telemetry-panel"] > h3,
+  section[data-testid="cognition-panel"] > h3 {
+    font-size: 11px !important;
+    color: var(--ink-3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    margin: 0 0 14px !important;
+  }
   .telemetry {
-    margin-top: 14px;
-    padding: 12px 12px 10px;
-    border: 1px solid rgba(107,130,144,0.28);
-    background:
-      linear-gradient(180deg, rgba(64,78,89,0.12) 0%, rgba(0,0,0,0.35) 100%),
-      repeating-linear-gradient(
-        0deg,
-        transparent 0,
-        transparent 11px,
-        rgba(107,130,144,0.06) 11px,
-        rgba(107,130,144,0.06) 12px
-      );
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    width: 100%;
   }
-  .telemetry::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      105deg,
-      transparent 40%,
-      rgba(107,130,144,0.07) 50%,
-      transparent 60%
-    );
-    animation: telemetry-scan 7s linear infinite;
-    pointer-events: none;
-  }
+  .telemetry::before { display:none !important; content:none !important; }
   @keyframes telemetry-scan {
     0% { transform: translateX(-40%); opacity: 0; }
     15% { opacity: 1; }
@@ -547,6 +543,21 @@
   .gpu-bar .fill { height:100%; background:linear-gradient(90deg,#3dba6f,#d4a827,#c0392b); }
 
   .spark-tile { font-size:11px; color:rgba(236,243,244,0.7); }
+  .acttruth-tile { font-size:11px; color:rgba(236,243,244,0.72); }
+  .acttruth-tile .agent-row {
+    display:flex; justify-content:space-between; gap:8px;
+    padding:5px 0; border-bottom:1px solid rgba(94,225,160,0.12);
+  }
+  .acttruth-tile .agent-row:last-child { border-bottom:0; }
+  .acttruth-tile .name { color:#5ee1a0; font-weight:600; letter-spacing:0.02em; }
+  .acttruth-tile .budget { font-variant-numeric:tabular-nums; color:rgba(236,243,244,0.9); }
+  .acttruth-tile .budget.exhausted { color:#e07a6a; }
+  .acttruth-tile .fail {
+    margin-top:2px; color:rgba(224,122,106,0.95); font-size:10px; line-height:1.35;
+  }
+  .acttruth-tile .ok-note {
+    margin-top:2px; color:rgba(143,173,154,0.9); font-size:10px; line-height:1.35;
+  }
   .spark-tile .link { display:inline-block; padding:2px 7px; border-radius:3px;
     font-weight:600; letter-spacing:0.04em; font-size:10px; margin-bottom:8px; }
   .spark-tile .link.fabric { background:rgba(61,186,111,0.15); color:#3dba6f; }
@@ -2024,8 +2035,8 @@
     min-width: 0 !important;
     box-sizing: border-box !important;
   }
-  body.lab.cc-2050 .cognition-approvals-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+  body.lab .cognition-approvals-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   }
 
   /* Soft panels — no hard 0-radius lab slabs */
@@ -2488,24 +2499,34 @@
   }
   .agent-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     margin-top: auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
   button.agent-act {
     font: inherit;
     cursor: pointer;
   }
   .agent-act {
-    flex: 1;
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     text-align: center;
-    padding: 7px 8px;
-    border-radius: 8px;
+    padding: 7px 6px;
+    border-radius: 0;
     font-size: 11px;
     font-family: var(--font) !important;
     border: 1px solid var(--cc-line);
     color: var(--cc-dim) !important;
     background: rgba(0,0,0,0.25);
     transition: background .12s, color .12s, border-color .12s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .agent-act:hover {
     color: var(--cc-text) !important;
@@ -2516,6 +2537,36 @@
     color: #f3efe6 !important;
     border-color: rgba(198,166,100,0.35);
     background: rgba(198,166,100,0.12);
+  }
+  /* Kernel overflow menu — keeps card inside the grid cell */
+  .agent-more {
+    position: relative;
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+  .agent-more > summary {
+    list-style: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .agent-more > summary::-webkit-details-marker { display: none; }
+  .agent-more-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border: 1px solid var(--cc-line);
+    background: #0a0a0a;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  }
+  .agent-more-menu .agent-act {
+    flex: none;
+    width: 100%;
   }
 
   body.lab.cc-2050 .daemon-row {
@@ -2641,36 +2692,192 @@
     body.lab.cc-2050 .plate { border-radius: 16px !important; flex-wrap: wrap; }
   }
 
-  /* Section mode tabs (visual only for now / light filter) */
-  .cc-modes {
+  /* ActTruth badge — top-right of each crew agent card (square, not pill) */
+  .agent-card .acttruth-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
     display: inline-flex;
-    gap: 4px;
-    padding: 3px;
-    border-radius: 999px;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid var(--cc-line);
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 0;
+    border: 1px solid rgba(94, 225, 160, 0.35);
+    background: rgba(94, 225, 160, 0.1);
+    color: #5ee1a0;
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    line-height: 1.2;
   }
-  .cc-modes button {
-    font-family: var(--font) !important;
-    font-size: 11px !important;
-    padding: 6px 12px !important;
-    border-radius: 999px !important;
-    color: var(--cc-dim) !important;
-    border: none !important;
-    background: transparent !important;
+  .agent-card .acttruth-badge:hover {
+    background: rgba(94, 225, 160, 0.18);
+    border-color: rgba(94, 225, 160, 0.55);
   }
-  .cc-modes button.is-active {
-    background: rgba(198,166,100,0.14) !important;
-    color: var(--cc-text) !important;
+  .agent-card .acttruth-badge[data-exhausted="1"] {
+    color: #e07a6a;
+    border-color: rgba(224, 122, 106, 0.45);
+    background: rgba(224, 122, 106, 0.1);
   }
-  body.lab.cc-2050 .page[data-mode="fleet"] .cc-operator-zone { display: none !important; }
-  body.lab.cc-2050 .page[data-mode="now"] .cc-fleet-zone { opacity: 0.55; }
-  body.lab.cc-2050 .page[data-mode="now"] .cc-fleet-zone:not([open]) summary { opacity: 0.7; }
+  .agent-card .acttruth-badge .pip {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #5ee1a0;
+  }
+  .agent-card .acttruth-badge[data-fail="1"] .pip {
+    background: #e07a6a;
+    box-shadow: 0 0 6px rgba(224, 122, 106, 0.7);
+  }
+  .agent-card .acttruth-badge .lbl { opacity: 0.75; font-weight: 500; }
 
+  /* ActTruth drawer (opened from badge) */
+  .acttruth-drawer {
+    position: fixed; inset: 0; z-index: 80;
+    display: none; align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,0.55);
+    padding: 16px;
+  }
+  .acttruth-drawer[open] { display: flex; }
+  .acttruth-drawer .sheet {
+    width: min(520px, 100%);
+    max-height: min(70vh, 640px);
+    overflow: auto;
+    background: #0a120e;
+    border: 1px solid rgba(94, 225, 160, 0.28);
+    border-radius: 14px 14px 10px 10px;
+    padding: 16px 16px 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+  .acttruth-drawer .sheet-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 12px; margin-bottom: 12px;
+  }
+  .acttruth-drawer .sheet-head h2 {
+    margin: 0; font-size: 14px; color: #5ee1a0; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .acttruth-drawer .sheet-head a { color: #5ee1a0; font-size: 11px; }
+  .acttruth-drawer .sheet-head button {
+    background: transparent; border: 0; color: rgba(236,243,244,0.6);
+    cursor: pointer; font-size: 18px; line-height: 1;
+  }
+
+
+
+  /* ── Full tidy: Citizens-matched square chrome (no cc-2050 soft HUD) ── */
+  body.lab .plate {
+    border-radius: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid var(--line) !important;
+    background: rgba(0,0,0,0.92) !important;
+    padding: 0 !important;
+  }
+  body.lab .plate .status-pill {
+    border-radius: 0 !important;
+    color: rgba(232, 227, 213, 0.55) !important;
+  }
+  body.lab .plate .status-pill .dot {
+    background: var(--cc-mint, #6fb98a) !important;
+    box-shadow: 0 0 8px rgba(111, 185, 138, 0.55) !important;
+  }
+  /* Real action items only — pill text + dot go hot, not muted gray */
+  body.lab .plate .status-pill[data-needs="hot"] {
+    color: var(--cc-text, #e9e5dc) !important;
+  }
+  body.lab .plate .status-pill[data-needs="hot"] .dot {
+    background: var(--cc-hot, #c26a5c) !important;
+    box-shadow: 0 0 10px rgba(194, 106, 92, 0.7) !important;
+  }
+  body.lab .panel,
+  body.lab section.panel,
+  body.lab .agent-card,
+  body.lab .daemon-card,
+  body.lab .needs-you,
+  body.lab .hard-brain-strip,
+  body.lab .acttruth-drawer .sheet,
+  body.lab .agent-card .acttruth-badge {
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* AT badge is position:absolute — cards are the containing block.
+     Column layout + wrapping actions keep Kernel’s buttons inside the cell. */
+  body.lab .agent-card {
+    position: relative !important;
+    overflow: visible !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-width: 0 !important;
+  }
+  body.lab .agent-card > .body,
+  body.lab .agent-card > .agent-actions {
+    max-width: 100%;
+    min-width: 0;
+  }
+  body.lab .agent-card .acttruth-badge {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 5 !important;
+  }
+  body.lab .page {
+    max-width: 1280px !important;
+    padding: 0 0 48px !important;
+    gap: 0 !important;
+  }
+
+
+  /* Calm chapters — People open; Gates/Work/Memory as labeled folds */
+  details.cc-chapter {
+    border: 1px solid var(--line);
+    border-top: none;
+    background: var(--panel);
+  }
+  details.cc-chapter > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 18px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--panel);
+    border-bottom: 1px solid transparent;
+  }
+  details.cc-chapter[open] > summary {
+    border-bottom: 1px solid var(--line);
+    color: var(--gold);
+  }
+  details.cc-chapter > summary::-webkit-details-marker { display: none; }
+  details.cc-chapter > summary::before {
+    content: "▸ ";
+    color: var(--ink-3);
+  }
+  details.cc-chapter[open] > summary::before { content: "▾ "; color: var(--gold); }
+  details.cc-chapter .cc-fold-body {
+    padding: 0;
+  }
+  /* Hard hide — some dense-HUD CSS was letting closed fold bodies paint */
+  details.cc-chapter:not([open]) > .cc-fold-body,
+  details.cc-fold:not([open]) > .cc-fold-body {
+    display: none !important;
+  }
+  details.cc-chapter .cc-fold-body > .panel,
+  details.cc-chapter .cc-fold-body > section.panel,
+  details.cc-chapter .cc-fold-body > .cognition-approvals-row,
+  details.cc-chapter .cc-fold-body > .orch-row,
+  details.cc-chapter .cc-fold-body > .pulse-row,
+  details.cc-chapter .cc-fold-body > .daemon-row,
+  details.cc-chapter .cc-fold-body > details.cc-fold {
+    border-left: none !important;
+    border-right: none !important;
+  }
 
 </style>
 </head>
-<body class="lab cc-2050" data-lab data-testid="command-center">
+<body class="lab" data-lab data-testid="command-center">
   <div class="page">
     <div class="plate">
       <a class="id" href="/">
@@ -2678,36 +2885,16 @@
         <span><b>SOVERYN</b><i>Command Center</i></span>
       </a>
       <nav>
+        <a href="/" class="active">Command</a>
+        <a href="/fleet">Fleet</a>
         <a href="/citizens" class="keep">Citizens</a>
         <a href="/chat" class="keep">Chat</a>
-        <a href="/m/">Messages</a>
-        <a href="/documents">Documents</a>
+        <a href="/documents">Docs</a>
       </nav>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div class="cc-modes" data-cc-modes role="tablist" aria-label="View mode">
-          <button type="button" data-mode="now" class="is-active">Now</button>
-          <button type="button" data-mode="today">Today</button>
-          <button type="button" data-mode="fleet">Fleet</button>
-        </div>
         <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all systems quiet</span></div>
       </div>
     </div>
-
-
-    <header class="top">
-      <!-- Logo lives in the ambient page background; header carries the
-           typographic identity (wordmark + tagline) only. -->
-      <div class="brand-text">
-        <div class="wordmark">SOVERYN</div>
-        <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
-      </div>
-      <nav class="nav-links">
-        <a href="/chat">Chat</a>
-        <a href="/m/">Messages</a>
-        <a href="/documents">Documents</a>
-      </nav>
-      <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
-    </header>
 
     <!-- ═══ Operator zone: needs-you + briefing + agents + approvals ═══ -->
     <div class="cc-operator-zone">
@@ -2724,11 +2911,9 @@
       <ul class="brief-list" data-brief-list hidden></ul>
       <div class="brief-actions">
         <a class="brief-act primary" href="/chat?agent=aetheria">Talk to Aetheria</a>
-        <a class="brief-act" href="/build">Build · Kernel</a>
-        <a class="brief-act" href="#approvals-anchor">Review queue</a>
-        <a class="brief-act" href="#boards-anchor">Boards</a>
-        <a class="brief-act ghost" href="/m/">Messages</a>
-        <a class="brief-act ghost" href="/voice">Voice</a>
+        <a class="brief-act" href="/chat?agent=kernel">Talk to Kernel</a>
+        <a class="brief-act" href="/build">Kernel build</a>
+        <a class="brief-act" href="#approvals-anchor" data-open-chapter="chapter-gates">Review queue</a>
       </div>
       <div class="dispatch-box" data-testid="dispatch-box">
         <form data-dispatch-form>
@@ -2749,6 +2934,11 @@
 
     <section class="agent-row" data-testid="agent-row">
       <div class="agent-card" data-agent="aetheria" aria-label="Aetheria">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="aetheria" title="ActTruth — click for crew ledger" aria-label="ActTruth for Aetheria">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
         <div class="body">
           <div class="name">Aetheria</div>
           <div class="role">primary · cathedral</div>
@@ -2760,6 +2950,11 @@
         </div>
       </div>
       <div class="agent-card" data-agent="vett" aria-label="Vett">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="vett" title="ActTruth — click for crew ledger" aria-label="ActTruth for Vett">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
         <div class="body">
           <div class="name">Vett</div>
           <div class="role">verifier · research</div>
@@ -2771,6 +2966,11 @@
         </div>
       </div>
       <div class="agent-card" data-agent="scotty" aria-label="Scotty">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="scotty" title="ActTruth — click for crew ledger" aria-label="ActTruth for Scotty">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
         <div class="body">
           <div class="name">Scotty</div>
           <div class="role">executor · proposals</div>
@@ -2782,48 +2982,42 @@
         </div>
       </div>
       <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — build brain">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="kernel" title="ActTruth — click for crew ledger" aria-label="ActTruth for Kernel">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
         <div class="body">
           <div class="name">Kernel</div>
           <div class="role">build · local core</div>
           <div class="state" data-kernel-state-text>checking…</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/build">Talk</a>
+          <a class="agent-act primary" href="/chat?agent=kernel">Talk</a>
+          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (autonomous)">OpenCode</button>
           <button type="button" class="agent-act" data-kernel-warm>Warm</button>
-          <button type="button" class="agent-act" data-kernel-copy-aider title="Copy soveryn-aider --kernel">Aider</button>
+          <details class="agent-more">
+            <summary class="agent-act" title="Build / Aider">More</summary>
+            <div class="agent-more-menu" role="menu">
+              <a class="agent-act" href="/build" role="menuitem">Build (HITL)</a>
+              <button type="button" class="agent-act" data-kernel-copy-aider role="menuitem" title="Copy soveryn-aider --kernel">Copy Aider</button>
+            </div>
+          </details>
         </div>
       </div>
     </section>
 
-    <!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
-    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
-      <div class="hb-label">
-        <span class="hb-kicker">Spark hard brain</span>
-        <span class="hb-active" data-hard-brain-active>…</span>
-        <span class="hb-note" data-hard-brain-note></span>
-      </div>
-      <div class="hb-buttons" data-hard-brain-buttons></div>
-      <div class="hb-status" data-hard-brain-status></div>
-    </section>
+    
 
-    <!-- Daemon status strip — autonomous fleet at a glance. -->
-    <section class="daemon-row" data-testid="daemon-strip">
-      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-      <div class="daemon-card" data-daemon="ares" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-    </section>
+    </div><!-- /.cc-operator-zone -->
 
-    <div class="cc-zone"><span>Approvals &amp; gates</span></div>
-    <div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+
+    
+    <!-- ═══ 2. Gates ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
+      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
+      <div class="cc-fold-body">
+<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
     <section class="panel scotty-approvals" data-testid="x-approvals-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
       <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
@@ -2836,23 +3030,17 @@
         <div class="empty">No proposals awaiting review.</div>
       </div>
     </section>
-    <section class="panel" data-testid="cognition-panel" data-cognition-panel>
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
-      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
-      <div class="cognition-note" data-cognition-note data-empty
-           aria-label="Aetheria's current Sense-of-Us note">
-        no note yet — the cognition engine hasn't run
-      </div>
-      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:8px;">Recent reflections</div>
-      <div class="cognition-feed" data-cognition-feed aria-live="polite" aria-label="Recent cognition reflections">
-        <div class="cognition-item" data-empty>no reflections yet.</div>
-      </div>
-    </section>
     </div>
 
-    <div class="cc-zone"><span>Work surface</span></div>
+    
+      </div>
+    </details>
 
-    <!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
+    <!-- ═══ 3. Work ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-work">
+      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
+      <div class="cc-fold-body">
+<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
     <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
       <div class="boards-strip-head">
         <h3>Boards</h3>
@@ -3044,22 +3232,29 @@
     })();
     </script>
 
-    </div><!-- /.cc-operator-zone -->
 
-    <!-- Ops folded — power tools, not the default face -->
+    
+      </div>
+    </details>
+
+<!-- Ops folded — power tools, not the default face -->
     <details class="cc-fold" data-testid="ops-fold">
-      <summary>Ops console <span class="cc-fold-hint">Spark brain · pytest</span></summary>
+      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
       <div class="cc-fold-body">
+<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
+    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
+      <div class="hb-label">
+        <span class="hb-kicker">Spark hard brain</span>
+        <span class="hb-active" data-hard-brain-active>…</span>
+        <span class="hb-note" data-hard-brain-note></span>
+      </div>
+      <div class="hb-buttons" data-hard-brain-buttons></div>
+      <div class="hb-status" data-hard-brain-status></div>
+    </section>
+
     <section class="panel ops-panel" data-testid="ops-panel">
       <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
       <div class="ops-grid">
-        <div class="ops-block">
-          <h4>Spark brain (Vett / Scotty / public agents)</h4>
-          <div class="ops-meta" data-ops-brain-meta>loading…</div>
-          <div class="ops-brain-row" data-ops-brain-buttons></div>
-          <div class="ops-status" data-ops-brain-status></div>
-          <pre class="ops-log" data-ops-brain-log></pre>
-        </div>
         <div class="ops-block">
           <h4>Run tests</h4>
           <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
@@ -3071,14 +3266,18 @@
     </section>
     <script>
     (function(){
-      var brainBtns = document.querySelector('[data-ops-brain-buttons]');
-      var brainMeta = document.querySelector('[data-ops-brain-meta]');
-      var brainStatus = document.querySelector('[data-ops-brain-status]');
-      var brainLog = document.querySelector('[data-ops-brain-log]');
+      var hardActive = document.querySelector('[data-hard-brain-active]');
+      var hardNote = document.querySelector('[data-hard-brain-note]');
+      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
+      var hardStatus = document.querySelector('[data-hard-brain-status]');
+      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
+      var brainMeta = null;
+      var brainStatus = hardStatus;
+      var brainLog = null;
       var testBtns = document.querySelector('[data-ops-test-buttons]');
       var testStatus = document.querySelector('[data-ops-test-status]');
       var testLog = document.querySelector('[data-ops-test-log]');
-      if(!brainBtns) return;
+      if(!brainBtns && !testBtns) return;
       var brainPoll = null, testPoll = null;
 
       function setStatus(el, cls, text){
@@ -3096,26 +3295,9 @@
           el.classList.remove('show');
         }
       }
-      var hardActive = document.querySelector('[data-hard-brain-active]');
-      var hardNote = document.querySelector('[data-hard-brain-note]');
-      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
-      var hardStatus = document.querySelector('[data-hard-brain-status]');
-
       function paintBrain(d){
         var cur = d.brain || '?';
         var hname = d.house_name || cur;
-        brainMeta.innerHTML = 'Active: <b style="color:#e7e5dc">'+hname+'</b> <span style="opacity:0.6">('+cur+')</span> · alias <code style="color:#9eb4c2">'
-          +(d.routed_alias||d.alias||'—')+'</code><br>'+(d.role||'')
-          +(d.note ? '<br><span style="opacity:0.7">'+d.note+'</span>' : '');
-        brainBtns.innerHTML = (d.brains||[]).map(function(b){
-          var active = b.id === cur ? ' is-active' : '';
-          var label = b.house_name || b.id;
-          return '<button type="button" class="ops-brain-btn'+active+'" data-brain="'+b.id+'" title="'+(b.role||'')+'">'+label+'</button>';
-        }).join('');
-        brainBtns.querySelectorAll('[data-brain]').forEach(function(btn){
-          btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
-        });
-        // Operator-zone strip (always visible)
         if(hardActive){
           hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
         }
@@ -3135,7 +3317,6 @@
         if(d.job && d.job.status){
           var st = d.job.status;
           var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
-          setStatus(brainStatus, cls, d.job.message || st);
           if(hardStatus){
             hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
             hardStatus.textContent = d.job.message || st;
@@ -3273,7 +3454,30 @@
       </div>
     </details>
 
-    <!-- Heartbeat + Ares -->
+    
+
+    <!-- ═══ Pulse (folded) ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
+      <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
+      <div class="cc-fold-body">
+<!-- Daemon status strip — autonomous fleet at a glance. -->
+    <section class="daemon-row" data-testid="daemon-strip">
+      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="ares" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+    </section>
+
+    
+<!-- Heartbeat + Ares -->
     <div class="pulse-row">
     <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
@@ -3297,8 +3501,15 @@
     </section>
     </div>
 
-    <div class="cc-zone"><span>House talking</span></div>
-    <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
+    
+      </div>
+    </details>
+
+    <!-- ═══ 4. Memory ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-memory">
+      <summary>Memory &amp; lattice <span class="cc-fold-hint">cognition · bus · writes</span></summary>
+      <div class="cc-fold-body">
+<!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
          Specialists shows active ephemeral DSL specialists she's spawned,
          each with a kill switch (Jon's authoritative override per her
          spec); comm bus shows recent direct_command / direct_query edges
@@ -3307,10 +3518,10 @@
       <div class="panel specialists" data-testid="specialists-panel">
         <h3>Spawned under Aetheria</h3>
         <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin:-6px 0 10px;">
-          ephemeral · not citizens · <a href="/citizens">citizens board →</a>
+          ephemeral · full roster on <a href="/citizens">citizens →</a>
         </div>
         <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Specialists spawned under Aetheria">
-          <div class="specialist-item" data-empty>none active — empty most days is fine.</div>
+          <div class="specialist-item" data-empty>none active.</div>
         </div>
       </div>
       <div class="panel commbus" data-testid="commbus-panel">
@@ -3321,20 +3532,8 @@
       </div>
     </section>
 
-    <!-- Steward folded by default (deep / infrequent) -->
-    <details class="cc-fold" data-testid="steward-fold">
-      <summary>Steward — Funding Board <span class="cc-fold-hint" data-steward-hint></span></summary>
-      <div class="cc-fold-body">
-    <section class="panel" data-testid="steward-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
-      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
-        <div class="empty">loading…</div>
-      </div>
-    </section>
-      </div>
-    </details>
-
-    <!-- Memory folded by default -->
+    
+<!-- Memory folded by default -->
     <details class="cc-fold" data-testid="memory-fold">
       <summary>Memory <span class="cc-fold-hint">browse the lattice</span></summary>
       <div class="cc-fold-body">
@@ -3413,65 +3612,37 @@
       </div><!-- /.cc-fold-body memory -->
     </details>
 
-    </div>
-
-    <div class="cc-zone cc-fleet-zone-label"><span>Fleet &amp; traffic</span></div>
-    <details class="cc-fold cc-fleet-zone" data-testid="fleet-fold">
-      <summary>Fleet telemetry <span class="cc-fold-hint">GPU · Spark · sessions · lattice</span></summary>
-      <div class="cc-fold-body">
-    <section class="bottom-row">
-      <div class="panel activity" data-testid="activity-feed">
-        <h3>Session traffic</h3>
-        <p style="font-size:11px;color:rgba(232,227,213,0.4);margin:-6px 0 10px;line-height:1.4;">
-          Latest agent chat sessions on this tower — who was last spoken to.</p>
-        <div class="activity-feed" data-feed aria-live="polite" aria-label="Recent agent sessions">
-          <div class="activity-item" data-empty>nothing to report yet.</div>
-        </div>
-
-        <!-- Lattice write telemetry (was unlabeled bars) -->
-        <div class="telemetry" data-testid="lattice-telemetry" aria-label="Lattice memory write rate over 14 days">
-          <div class="telemetry-head">
-            <div class="telemetry-title">Lattice write rate · 14d</div>
-            <div class="telemetry-live">live</div>
-          </div>
-          <p class="telemetry-sub">
-            How many memory nodes the house wrote each day — Aetheria, Vett, Scotty, daemons.
-            Amber bar = today. Hover a bar for the exact count.
-          </p>
-          <div class="telemetry-metrics">
-            <div><b data-telemetry-today>—</b><span>today</span></div>
-            <div><b data-telemetry-peak>—</b><span>peak day</span></div>
-            <div><b data-telemetry-total>—</b><span>14d total</span></div>
-          </div>
-          <div class="sparkline" data-sparkline role="img" aria-label="Bar chart of lattice writes per day for the last 14 days"></div>
-          <div class="telemetry-axis">
-            <span data-telemetry-start>—</span>
-            <span>writes / day</span>
-            <span data-telemetry-end>—</span>
-          </div>
-        </div>
+    <section class="panel" data-testid="lattice-telemetry-panel">
+      <h3>Lattice write rate · 14d</h3>
+      <div class="telemetry" data-testid="lattice-telemetry" aria-label="Lattice memory write rate over 14 days">
+      <div class="telemetry-head">
+        <span class="telemetry-sub" style="margin:0">Nodes written per day · amber = today</span>
+        <div class="telemetry-live">live</div>
       </div>
+      <div class="telemetry-metrics">
+        <div><b data-telemetry-today>—</b><span>today</span></div>
+        <div><b data-telemetry-peak>—</b><span>peak day</span></div>
+        <div><b data-telemetry-total>—</b><span>14d total</span></div>
+      </div>
+      <div class="sparkline" data-sparkline role="img" aria-label="Bar chart of lattice writes per day for the last 14 days"></div>
+      <div class="telemetry-axis">
+        <span data-telemetry-start>—</span>
+        <span>writes / day</span>
+        <span data-telemetry-end>—</span>
+      </div>
+    </div>
+    </section>
 
-      <div class="panel system" data-testid="system-panel">
-        <h3>Fleet telemetry</h3>
-        <p style="font-size:11px;color:rgba(232,227,213,0.4);margin:-6px 0 10px;line-height:1.4;">
-          GPU load on the tower + Spark brain path. Not public visitor chat.</p>
-        <div class="gpu-bars" data-testid="gpu-bars" aria-live="polite" aria-label="GPU statistics">
-          <div class="gpu-bar" data-empty>GPU stats loading…</div>
-        </div>
-        <h3 style="margin-top:18px">Spark fabric</h3>
-        <div class="spark-tile" data-testid="spark-tile" aria-live="polite" aria-label="DGX Spark status">
-          <div style="opacity:0.5">Spark loading…</div>
-        </div>
-        <div class="system-stats" data-stats>
-          <div>memory nodes <span data-stat="nodes">—</span></div>
-          <div>sessions <span data-stat="sessions">—</span></div>
-          <div>last backup <span data-stat="backup">—</span></div>
-          <div>boards <span data-stat="boards">—</span></div>
-        </div>
-        <div class="attention" data-attention aria-live="polite">
-          <div class="empty">nothing needs attention.</div>
-        </div>
+    <section class="panel" data-testid="cognition-panel" data-cognition-panel>
+      <h3>Cognition</h3>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
+      <div class="cognition-note" data-cognition-note data-empty
+           aria-label="Aetheria's current Sense-of-Us note">
+        no note yet — the cognition engine hasn't run
+      </div>
+      <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:8px;">Recent reflections</div>
+      <div class="cognition-feed" data-cognition-feed aria-live="polite" aria-label="Recent cognition reflections">
+        <div class="cognition-item" data-empty>no reflections yet.</div>
       </div>
     </section>
 
@@ -3499,52 +3670,28 @@
     </section>
       </div>
     </details>
-
-    <!-- THE RIG — the sovereign compute as a HEADROOM map. The tower's three
-         GPUs come from /api/system/rig (which, unlike /api/system/gpu, can say
-         WHAT occupies each card). Spark A comes from /api/system/spark and is
-         never drawn alive unless path === "fabric". Spark B doesn't exist yet:
-         a dashed empty bay, no fake status. The memory rails are inverted —
-         free VRAM is the lit part. See the .rig CSS block. -->
-    <section class="panel rig" data-testid="rig" aria-label="The rig — live GPU headroom">
-      <div class="rig-head">
-        <h3>The Rig</h3>
-        <div class="rig-totals" data-rig-totals>reading the rig…</div>
-      </div>
-
-      <div class="rig-bay tower">
-        <div class="bay-label">SOVERYN Tower</div>
-        <div class="rig-cards" data-rig-gpus>
-          <div class="rig-note">reading the rig…</div>
-        </div>
-      </div>
-
-      <div class="rig-spine" data-rig-spine data-state="dead">
-        <span class="line"></span>
-        <span class="copy" data-rig-spine-copy>checking the fabric…</span>
-        <span class="line"></span>
-      </div>
-
-      <div class="rig-sparks">
-        <div class="rig-bay spark" data-testid="rig-spark-a">
-          <div class="bay-label">DGX Spark A</div>
-          <div data-rig-spark-a>
-            <div class="rig-note">reading the Spark…</div>
-          </div>
-        </div>
-        <div class="rig-bay empty-bay" data-testid="rig-spark-b">
-          <div class="bay-label">Spark B</div>
-          <div class="bay-empty">
-            <div class="eb-title">Empty bay</div>
-            <div class="eb-sub">awaiting hardware</div>
-          </div>
-        </div>
+<!-- Steward folded by default (deep / infrequent) -->
+    <details class="cc-fold" data-testid="steward-fold">
+      <summary>Steward — Funding Board <span class="cc-fold-hint" data-steward-hint></span></summary>
+      <div class="cc-fold-body">
+    <section class="panel" data-testid="steward-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
+      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
+        <div class="empty">loading…</div>
       </div>
     </section>
-      </div><!-- /.cc-fold-body fleet -->
+      </div>
     </details>
+
+    
+      </div>
+    </details>
+
+
+
   </div>
 <script>
+
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
 
@@ -3586,6 +3733,8 @@
       fetchJson("/api/system/daemons"),
     ]);
 
+    // Needs-you = action only (you must decide / fix). Soft glance items
+    // (public talking, signals, blueprints, waitlist) stay in the briefing.
     const chips = [];
     const scottyN = Array.isArray(pending) ? pending.length : 0;
     const xN = Array.isArray(staged) ? staged.length : 0;
@@ -3596,16 +3745,12 @@
     const sigOpen = (coord && coord.signal && coord.signal.open) || 0;
     const bpOpen = (coord && coord.blueprint && ((coord.blueprint.open || 0) + (coord.blueprint.refining || 0) + (coord.blueprint.ready || 0))) || 0;
     if (frOpen > 0) chips.push({ n: frOpen, label: "Friction open", href: "#boards-anchor", tone: "warn" });
-    if (sigOpen > 0) chips.push({ n: sigOpen, label: "Signals", href: "#boards-anchor", tone: "ok" });
-    if (bpOpen > 0) chips.push({ n: bpOpen, label: "Blueprints", href: "#boards-anchor", tone: "ok" });
 
     const talking = (publicA && publicA.talking) || [];
-    if (talking.length) chips.push({ n: talking.length, label: "Public talking", href: "#boards-anchor", tone: "ok" });
     const intake = publicA && publicA.intake;
     const crmNew = (intake && intake.crm_new) || (publicA && publicA.crm && publicA.crm.leads_new) || 0;
     const wlToday = (intake && intake.waitlist_today) || 0;
     if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn" });
-    if (wlToday > 0) chips.push({ n: wlToday, label: "HL waitlist today", href: (intake && intake.waitlist_open) || "https://historysledger.com/family#waitlist", tone: "ok" });
 
     const crit = ares && ares.counts && ((ares.counts.emergency || 0) + (ares.counts.critical || 0));
     if (crit > 0) chips.push({ n: crit, label: "Ares critical", href: "#ares-anchor", tone: "hot", scroll: "[data-testid='ares-panel']" });
@@ -3619,8 +3764,8 @@
       }
     }
 
-    // Cache for greeting briefing
-    window.__ccNeeds = { chips, scottyN, xN, frOpen, sigOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
+    // Cache for greeting briefing (includes soft glance fields)
+    window.__ccNeeds = { chips, scottyN, xN, frOpen, sigOpen, bpOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
 
     if (!chips.length) {
       root.setAttribute("data-state", "clear");
@@ -3636,18 +3781,40 @@
 
     root.setAttribute("data-state", "hot");
     if (clearEl) clearEl.style.display = "none";
+    if (chips.some((c) => (c.href || "").includes("approvals"))) {
+      const gates = document.querySelector('[data-testid="chapter-gates"]');
+      if (gates) gates.open = true;
+    }
     chipsEl.innerHTML = chips.map((c) => {
       const n = (typeof c.n === "number") ? c.n : c.n;
       const href = c.href || "#";
       const scroll = c.scroll ? ` data-scroll="${c.scroll}"` : "";
       return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span></a>`;
     }).join("");
-    chipsEl.querySelectorAll("[data-scroll]").forEach((a) => {
+    const openChapter = (id) => {
+      const ch = document.querySelector(`[data-testid="${id}"]`);
+      if (ch && ch.tagName === "DETAILS") ch.open = true;
+    };
+    chipsEl.querySelectorAll("a.ny-chip").forEach((a) => {
       a.addEventListener("click", (ev) => {
+        const href = a.getAttribute("href") || "";
+        if (href.includes("approvals") || (a.getAttribute("data-scroll") || "").includes("ares") || href.includes("boards")) {
+          if (href.includes("approvals")) openChapter("chapter-gates");
+          if (href.includes("boards")) openChapter("chapter-work");
+          if ((a.getAttribute("data-scroll") || "").includes("ares")) openChapter("chapter-pulse");
+        }
         const sel = a.getAttribute("data-scroll");
-        const el = sel && document.querySelector(sel);
-        if (el) { ev.preventDefault(); el.scrollIntoView({ behavior: "smooth", block: "start" }); }
+        if (sel) {
+          const el = document.querySelector(sel);
+          if (el) {
+            ev.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
       });
+    });
+    document.querySelectorAll("[data-open-chapter]").forEach((a) => {
+      a.addEventListener("click", () => openChapter(a.getAttribute("data-open-chapter")));
     });
     if (pill) {
       pill.setAttribute("data-needs", "hot");
@@ -3781,32 +3948,11 @@
     });
   }
 
-  // ─── Now / Today / Fleet mode switch ──────────────────────────────────────
-  function wireModes() {
-    const page = document.querySelector(".page");
-    const bar = document.querySelector("[data-cc-modes]");
-    if (!page || !bar || bar.dataset.wired) return;
-    bar.dataset.wired = "1";
-    const apply = (mode) => {
-      page.setAttribute("data-mode", mode);
-      bar.querySelectorAll("button").forEach((b) => {
-        b.classList.toggle("is-active", b.getAttribute("data-mode") === mode);
-      });
-      if (mode === "fleet") {
-        const fleet = document.querySelector("[data-testid='fleet-fold']");
-        if (fleet) fleet.open = true;
-      }
-    };
-    bar.querySelectorAll("button").forEach((b) => {
-      b.addEventListener("click", () => apply(b.getAttribute("data-mode") || "now"));
-    });
-    apply("now");
-  }
-
   // ─── GPU bars ─────────────────────────────────────────────────────────────
   async function renderGpu() {
     const data = await fetchJson("/api/system/gpu");
     const container = document.querySelector('[data-testid="gpu-bars"]');
+    if (!container) return;
     if (!data || !data.available) {
       container.innerHTML = `<div class="gpu-bar" style="opacity:0.5">${(data && data.message) || "GPU stats unavailable"}</div>`;
       return;
@@ -3820,6 +3966,111 @@
           <div class="track"><div class="fill" style="width:${g.util_pct}%"></div></div>
         </div>
       `);
+    }
+  }
+
+  // ─── ActTruth badges on agent cards + clickable crew drawer ───────────────
+  let _acttruthCache = null;
+
+  function renderActTruthDrawer(d, focusAgent) {
+    const body = document.querySelector("[data-acttruth-drawer-body]");
+    if (!body) return;
+    if (!d || !d.available) {
+      body.innerHTML = `<div style="opacity:0.6">${htmlEscape((d && d.message) || "ActTruth unavailable")}</div>`;
+      return;
+    }
+    const agents = d.agents || {};
+    const order = focusAgent
+      ? [focusAgent, ...Object.keys(agents).filter((n) => n !== focusAgent)]
+      : Object.keys(agents);
+    body.innerHTML = order.map((name) => {
+      const block = agents[name] || {};
+      const b = block.budget || {};
+      const used = b.used != null ? b.used : "—";
+      const limit = b.limit != null ? b.limit : "—";
+      const allowed = b.allowed !== false;
+      const events = (block.recent || []).slice(0, 4);
+      const evHtml = events.length
+        ? events.map((ev) => {
+            const mark = ev.ok === false ? "FAIL" : "ok";
+            const head = htmlEscape(String(ev.summary || ev.kind || "").slice(0, 100));
+            const color = ev.ok === false ? "#e07a6a" : "rgba(143,173,154,0.95)";
+            return `<div style="font-size:11px;color:${color};margin:3px 0;line-height:1.35">${mark}: ${head}</div>`;
+          }).join("")
+        : `<div style="font-size:11px;opacity:0.5">no recent acts</div>`;
+      return `<div class="agent-row" style="display:block;padding:10px 0;border-bottom:1px solid rgba(94,225,160,0.12)">
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <span class="name">${htmlEscape(name)}</span>
+          <span class="budget ${allowed ? "" : "exhausted"}">${used}/${limit}</span>
+        </div>
+        ${evHtml}
+      </div>`;
+    }).join("");
+  }
+
+  function openActTruthDrawer(focusAgent) {
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (!drawer) return;
+    drawer.setAttribute("open", "");
+    renderActTruthDrawer(_acttruthCache, focusAgent || null);
+  }
+
+  function closeActTruthDrawer() {
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer) drawer.removeAttribute("open");
+  }
+
+  function wireActTruthBadges() {
+    document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = "1";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openActTruthDrawer(btn.getAttribute("data-acttruth-badge"));
+      });
+    });
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer && !drawer.dataset.wired) {
+      drawer.dataset.wired = "1";
+      drawer.addEventListener("click", (e) => {
+        if (e.target === drawer) closeActTruthDrawer();
+      });
+      const x = drawer.querySelector("[data-acttruth-close]");
+      if (x) x.addEventListener("click", closeActTruthDrawer);
+    }
+  }
+
+  async function refreshActTruth() {
+    wireActTruthBadges();
+    const d = await fetchJson("/api/system/acttruth");
+    _acttruthCache = d;
+    if (!d || !d.available) {
+      document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+        const slot = btn.querySelector("[data-at-budget]");
+        if (slot) slot.textContent = "—";
+      });
+      return;
+    }
+    const agents = d.agents || {};
+    document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+      const name = btn.getAttribute("data-acttruth-badge");
+      const block = agents[name] || {};
+      const b = block.budget || {};
+      const used = b.used != null ? b.used : "—";
+      const limit = b.limit != null ? b.limit : "—";
+      const slot = btn.querySelector("[data-at-budget]");
+      if (slot) slot.textContent = `${used}/${limit}`;
+      btn.dataset.exhausted = b.allowed === false ? "1" : "0";
+      const recent = (block.recent || [])[0];
+      btn.dataset.fail = recent && recent.ok === false ? "1" : "0";
+      if (recent) {
+        btn.title = `ActTruth ${name}: ${recent.ok === false ? "FAIL" : "ok"} — ${String(recent.summary || "").slice(0, 80)}`;
+      }
+    });
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer && drawer.hasAttribute("open")) {
+      renderActTruthDrawer(d, null);
     }
   }
 
@@ -5009,8 +5260,9 @@
     });
   }
 
-  // ─── Kernel — house build brain (DeepSeek V4 on NVMe / quadro :8091) ────
+  // ─── Kernel — autonomous build brain (Flash :8091 · OpenCode default) ───
   let _kernelAiderCmd = "soveryn-aider --kernel";
+  let _kernelOpenCodeCmd = "soveryn-opencode";
   let _kernelWarmPoll = null;
 
   async function refreshKernel() {
@@ -5026,10 +5278,11 @@
     }
     const st = d.state || "cold";
     card.setAttribute("data-kernel-state", st);
+    if (d.soveryn_opencode) _kernelOpenCodeCmd = d.soveryn_opencode;
     if (d.soveryn_aider_flash) _kernelAiderCmd = d.soveryn_aider_flash;
     else if (d.aider_cmd) _kernelAiderCmd = d.aider_cmd;
     const parts = [];
-    if (st === "warm") parts.push("warm · ready");
+    if (st === "warm") parts.push("warm · OpenCode ready");
     else if (st === "loading") parts.push("loading… (can take minutes)");
     else if (st === "cold") parts.push("cold · on NVMe");
     else if (st === "missing") parts.push("weights missing");
@@ -5055,7 +5308,8 @@
     if (!card || card.dataset.wired === "1") return;
     card.dataset.wired = "1";
     const warmBtn = card.querySelector("[data-kernel-warm]");
-    const copyBtn = card.querySelector("[data-kernel-copy-aider]");
+    const copyOpen = card.querySelector("[data-kernel-copy-opencode]");
+    const copyAider = card.querySelector("[data-kernel-copy-aider]");
     if (warmBtn) {
       warmBtn.addEventListener("click", async () => {
         warmBtn.disabled = true;
@@ -5069,18 +5323,22 @@
         }
       });
     }
-    if (copyBtn) {
-      copyBtn.addEventListener("click", async () => {
+    const wireCopy = (btn, getCmd, label) => {
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const cmd = typeof getCmd === "function" ? getCmd() : getCmd;
         try {
-          await navigator.clipboard.writeText(_kernelAiderCmd);
-          const prev = copyBtn.textContent;
-          copyBtn.textContent = "Copied";
-          setTimeout(() => { copyBtn.textContent = prev || "Aider"; }, 1400);
+          await navigator.clipboard.writeText(cmd);
+          const prev = btn.textContent;
+          btn.textContent = "Copied";
+          setTimeout(() => { btn.textContent = prev || label; }, 1400);
         } catch (_) {
-          window.prompt("Copy Aider command:", _kernelAiderCmd);
+          window.prompt("Copy " + label + " command:", cmd);
         }
       });
-    }
+    };
+    wireCopy(copyOpen, () => _kernelOpenCodeCmd, "OpenCode");
+    wireCopy(copyAider, () => _kernelAiderCmd, "Aider");
   }
 
   // ─── Boot + polling ───────────────────────────────────────────────────────
@@ -5092,6 +5350,7 @@
     refreshKernel();
     renderGpu();
     refreshSpark();
+    refreshActTruth();
     refreshRig();
     renderSparkline();
     renderFeed();
@@ -5123,12 +5382,28 @@
     }
     wireBoardCreate();
     wireDispatch();
-    wireModes();
+    wireActTruthBadges();
     wireKernelCard();
     refreshAll();
     setInterval(refreshAll, 10000);  // poll every 10s
   });
 })();
 </script>
+    </div><!-- /.page -->
+<div class="acttruth-drawer" data-acttruth-drawer aria-label="ActTruth crew ledger">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-head">
+        <div>
+          <h2>ActTruth</h2>
+          <a href="https://acttruth.com" target="_blank" rel="noopener">acttruth.com</a>
+        </div>
+        <button type="button" data-acttruth-close aria-label="Close">×</button>
+      </div>
+      <div class="acttruth-tile" data-acttruth-drawer-body>
+        <div style="opacity:0.5">Loading…</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
+

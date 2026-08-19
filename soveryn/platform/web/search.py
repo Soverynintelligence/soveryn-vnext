@@ -29,30 +29,70 @@ class SearchResult:
     engine: str
 
 
+# Prefer engines that still answer from house IPs. DDG/Brave/Startpage often
+# CAPTCHA or suspend; Bing has been the reliable default (2026-08-19).
+DEFAULT_ENGINES = "bing,wikipedia"
+
+
+@dataclass(frozen=True)
+class SearchResponse:
+    results: tuple[SearchResult, ...]
+    unresponsive_engines: tuple[tuple[str, str], ...] = ()
+
+
 def search_via_searxng(
     query: str,
     *,
     searxng_url: str,
     max_results: int = 5,
     timeout: float = 10.0,
+    engines: str | None = DEFAULT_ENGINES,
 ) -> tuple[SearchResult, ...]:
     """Hit SearXNG's JSON API and return at most `max_results` parsed results.
 
     Raises SearchError on connection failure, non-2xx response, JSON parse
-    failure, or unexpected schema. The caller's tool handler should map
-    SearchError into a structured error result for the agent.
+    failure, unexpected schema, or zero hits when engines report failures.
+    The caller's tool handler should map SearchError into a structured error.
     """
+    resp = search_via_searxng_detailed(
+        query,
+        searxng_url=searxng_url,
+        max_results=max_results,
+        timeout=timeout,
+        engines=engines,
+    )
+    if resp.results:
+        return resp.results
+    if resp.unresponsive_engines:
+        detail = "; ".join(f"{n}: {why}" for n, why in resp.unresponsive_engines[:6])
+        raise SearchError(
+            f"SearXNG returned 0 results; engines unresponsive: {detail}"
+        )
+    raise SearchError("SearXNG returned 0 results (no engine errors reported)")
+
+
+def search_via_searxng_detailed(
+    query: str,
+    *,
+    searxng_url: str,
+    max_results: int = 5,
+    timeout: float = 10.0,
+    engines: str | None = DEFAULT_ENGINES,
+) -> SearchResponse:
+    """Like search_via_searxng but keeps unresponsive_engines metadata."""
     if not isinstance(query, str) or not query.strip():
         raise SearchError("query must be a non-empty string")
     if max_results <= 0:
         raise SearchError("max_results must be positive")
 
     base = searxng_url.rstrip("/")
-    params = urllib.parse.urlencode({
+    params: dict[str, str] = {
         "q": query.strip(),
         "format": "json",
-    })
-    url = f"{base}/search?{params}"
+    }
+    if engines:
+        params["engines"] = engines
+    url = f"{base}/search?{urllib.parse.urlencode(params)}"
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "soveryn-vnext/0 (+local)"},
@@ -75,7 +115,22 @@ def search_via_searxng(
         raise SearchError(
             f"SearXNG response was not JSON (is `json` in settings.search.formats?): {e}"
         ) from e
-    return _parse_results(payload, max_results=max_results)
+    results = _parse_results(payload, max_results=max_results)
+    unresp = _parse_unresponsive(payload)
+    return SearchResponse(results=results, unresponsive_engines=unresp)
+
+
+def _parse_unresponsive(payload: Any) -> tuple[tuple[str, str], ...]:
+    raw = payload.get("unresponsive_engines") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return ()
+    out: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            out.append((str(item[0]), str(item[1])))
+        elif isinstance(item, str):
+            out.append((item, "unresponsive"))
+    return tuple(out)
 
 
 def _parse_results(payload: Any, *, max_results: int) -> tuple[SearchResult, ...]:

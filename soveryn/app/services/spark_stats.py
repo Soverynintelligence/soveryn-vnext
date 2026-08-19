@@ -30,7 +30,11 @@ from dataclasses import dataclass, field
 SPARK_SSH_USER = "soverynspark"
 SPARK_FABRIC_HOST = "10.10.10.2"
 SPARK_WIFI_HOST = "192.168.86.26"
-SPARK_VLLM_PORT = 8000
+# Hard brain (Lightning / Qwen switch) is qwen-serve on :8001.
+# Laguna on :8000 was retired 2026-08-12; keep as fallback if someone
+# brings it back. CC was still probing 8000 → false "vllm down".
+SPARK_VLLM_PORT = 8001
+SPARK_VLLM_PORTS = (8001, 8000)
 
 # Worst case: _SSH_TIMEOUT_SECONDS * 2 hosts + _HTTP_TIMEOUT_SECONDS * 2 calls
 # (models + metrics) = 4*2 + 3*2 = 14s, comfortably inside the cache TTL so a
@@ -202,24 +206,29 @@ def _http_text(url: str) -> str | None:
 
 
 def _fetch_vllm(host: str) -> SparkVllm:
-    """A dead vLLM must not hide a live box — degrade to up=False, never raise."""
-    base = f"http://{host}:{SPARK_VLLM_PORT}"
-    models = _http_json(f"{base}/v1/models")
-    if not models:
-        return SparkVllm(up=False)
-    try:
-        model = models["data"][0]["id"]
-    except (KeyError, IndexError, TypeError):
-        model = None
+    """A dead vLLM must not hide a live box — degrade to up=False, never raise.
 
-    m = _parse_prometheus(_http_text(f"{base}/metrics") or "")
-    return SparkVllm(
-        up=True,
-        model=model,
-        requests_running=m.get("vllm:num_requests_running"),
-        requests_waiting=m.get("vllm:num_requests_waiting"),
-        kv_cache_pct=m.get("vllm:kv_cache_usage_perc"),
-    )
+    Probes SPARK_VLLM_PORTS in order (:8001 hard brain, then :8000 legacy).
+    """
+    for port in SPARK_VLLM_PORTS:
+        base = f"http://{host}:{port}"
+        models = _http_json(f"{base}/v1/models")
+        if not models:
+            continue
+        try:
+            model = models["data"][0]["id"]
+        except (KeyError, IndexError, TypeError):
+            model = None
+
+        m = _parse_prometheus(_http_text(f"{base}/metrics") or "")
+        return SparkVllm(
+            up=True,
+            model=model,
+            requests_running=m.get("vllm:num_requests_running"),
+            requests_waiting=m.get("vllm:num_requests_waiting"),
+            kv_cache_pct=m.get("vllm:kv_cache_usage_perc"),
+        )
+    return SparkVllm(up=False)
 
 
 def _probe() -> SparkStatsResult:

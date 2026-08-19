@@ -17,8 +17,10 @@ from pathlib import Path
 # Agent identity
 # ─────────────────────────────────────────────────────────────────────────────
 
-#: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A)
-ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
+#: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
+#: Kernel is the house build brain (bench-flash on :8091) — chat + memory + read;
+#: file writes stay via Aider / HITL, not free exec tools.
+ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel")
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
@@ -169,20 +171,18 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="aetheria_primary",
         port=8090,
-        # Gemma 4 31B + its mmproj. Swapped off Qwen3.6-35B-A3B on
-        # 2026-06-01 — see project_soveryn_aetheria_gemma4.md. The router
-        # preset at ~/soveryn_vnext/runtime/router-presets.ini [aetheria] is
-        # what actually loads the model; this metadata only needs to
-        # agree with the preset.
-        model_path=MODEL_ROOT / "google_gemma-4-31B-it-Q8_0.gguf",
-        mmproj_path=MODEL_ROOT / "mmproj-google_gemma-4-31B-it-bf16.gguf",
-        role="Aetheria primary (Gemma 4 31B + mmproj on Blackwell)",
-        # Kept False for safety — the prelude fold is a pass-through when
-        # the template supports multi-system, so leaving it on costs
-        # nothing structurally. Flip to True only after a controlled probe
-        # confirms Gemma 4's template honors messages[1:] role=system.
+        # CUTOVER 2026-08-17: Qwen3.8-27B UD-Q6_K_XL (was Gemma 4 31B).
+        # Live weights come from router-presets-blackwell.ini [aetheria];
+        # this metadata must agree. Gemma rollback: model=aetheria-gemma.
+        model_path=MODEL_ROOT / "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
+        role="Aetheria primary (Qwen3.8-27B + mmproj on Blackwell)",
+        # Kept False for safety — prelude fold is pass-through when multi-system
+        # works. Stock Qwen on some backends rejects multi system (vett path).
         supports_multi_system_messages=False,
         model_alias="aetheria",
+        # Thinking off for soul/desk feel (Qwen overthink was why we left before).
+        chat_template_kwargs={"enable_thinking": False},
     ),
     _vett_scotty_server(),
     ModelServer(
@@ -204,6 +204,18 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         role="Cognition layer — dream consolidation, background dispatch worker",
         model_alias="cognition",
     ),
+    ModelServer(
+        name="kernel_build",
+        port=8091,
+        # Live weights: router-presets-quadro.ini [bench-flash] (DeepSeek V4 Flash).
+        model_path=MODEL_ROOT
+        / "DeepSeek-V4-Flash-0731"
+        / "UD-Q4_K_XL"
+        / "DeepSeek-V4-Flash-0731-UD-Q4_K_XL-00001-of-00005.gguf",
+        role="Kernel — house build brain (DeepSeek V4 Flash on Quadros :8091)",
+        model_alias="bench-flash",
+        supports_multi_system_messages=False,
+    ),
 )
 
 #: Per-agent routing: agent name → MODEL_SERVERS.name
@@ -211,6 +223,7 @@ AGENT_TO_SERVER: dict[str, str] = {
     "aetheria": "aetheria_primary",
     "vett":     "vett_scotty_shared",
     "scotty":   "vett_scotty_shared",
+    "kernel":   "kernel_build",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

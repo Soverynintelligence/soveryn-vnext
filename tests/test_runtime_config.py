@@ -4,9 +4,10 @@ import pytest
 from soveryn.config import runtime
 
 
-def test_active_agents_is_exactly_three():
-    """Spec §1, §8 Bucket A: Aetheria, Vett, Scotty. No more, no less."""
-    assert set(runtime.ACTIVE_AGENTS) == {"aetheria", "vett", "scotty"}
+def test_active_agents_includes_crew_and_kernel():
+    """Aetheria, Vett, Scotty + Kernel (build brain). Kernel is chat+memory;
+    writes stay Aider/HITL."""
+    assert set(runtime.ACTIVE_AGENTS) == {"aetheria", "vett", "scotty", "kernel"}
 
 
 def test_retired_includes_known_retired_agents():
@@ -47,9 +48,9 @@ def test_app_port_is_5001_during_side_by_side():
 
 
 def test_embeddings_url_resolves():
-    # 2026-07-17 — Librarian: embeddings moved to its own Nemotron-3-Embed-8B
-    # server on :8096 (off the Quadro router). Only aetheria_primary stays on :8090.
-    assert runtime.embeddings_url() == "http://127.0.0.1:8096"
+    # 2026-08-17 — Librarian on Spark fabric :8096 (was tower loopback).
+    # Only aetheria_primary stays on :8090.
+    assert runtime.embeddings_url() == "http://10.10.10.2:8096"
 
 
 # ─── Service endpoints (spec §2, §3) ─────────────────────────────────────────
@@ -89,18 +90,24 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
     assert {s.port for s in others} == {8001, 8091, 8096}
-    # The load-bearing half: nothing local shares Aetheria's router, and the
-    # remote entry is not even on this host.
-    assert all(s.host == "127.0.0.1" for s in others if s.port in (8091, 8096))
+    # Local quadro slots stay on loopback; Spark tenants are remote.
+    assert all(s.host == "127.0.0.1" for s in others if s.port == 8091)
+    assert all(s.host != "127.0.0.1" for s in others if s.port in (8001, 8096))
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
 
 
 def test_model_servers_have_distinct_logical_names():
-    """Even though they share a port, the four MODEL_SERVERS remain distinct
+    """Even though some share a port, MODEL_SERVERS remain distinct
     logical identities — that's the whole point of the (port, name) pair."""
     names = {s.name for s in runtime.MODEL_SERVERS}
-    assert names == {"aetheria_primary", "vett_scotty_shared", "embeddings", "cognition"}
+    assert names == {
+        "aetheria_primary",
+        "vett_scotty_shared",
+        "embeddings",
+        "cognition",
+        "kernel_build",
+    }
 
 
 def test_each_model_server_has_router_alias_populated():
@@ -116,8 +123,9 @@ def test_each_model_server_has_router_alias_populated():
     expected = {
         "aetheria_primary": "aetheria",
         "vett_scotty_shared": vett_alias,
-        "embeddings": "embeddings",
+        "embeddings": "nemotron-embed-8b",
         "cognition": "cognition",
+        "kernel_build": "bench-flash",
     }
     actual = {s.name: s.model_alias for s in runtime.MODEL_SERVERS}
     assert actual == expected

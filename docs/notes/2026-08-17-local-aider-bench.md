@@ -61,6 +61,7 @@ curl -sS http://127.0.0.1:8091/v1/models | python3 -c \
 # API: GET /api/system/bench_flash  POST …/warm  POST …/chat  (tech path)
 
 # Aider via Kernel (first call can take several minutes to load 145G)
+# Loads data/memory/souls/kernel.md via --read automatically
 soveryn-aider --kernel
 # equivalent:
 AIDER_BASE=http://127.0.0.1:8091/v1 AIDER_MODEL=openai/bench-flash soveryn-aider
