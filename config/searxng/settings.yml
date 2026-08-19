@@ -5,7 +5,8 @@
 # IP, so default web_search returned 0 hits while ActTruth still logged OK.
 # Prefer Bing (+ Wikipedia) until those recover.
 #
-# Deploy: soveryn-searxng.service mounts this directory at /etc/searxng.
+# secret_key is NOT stored here — provided at runtime via
+# ~/.config/soveryn/searxng.env → SEARXNG_SECRET_KEY (see systemd unit).
 
 use_default_settings: true
 
@@ -19,8 +20,8 @@ general:
 server:
   bind_address: "0.0.0.0"
   port: 8080
-  # Local loopback instance only — not a public SearXNG.
-  secret_key: "99ca29bf6d17f7b8108b2db62c8e23dc9fbd50adab7923137915b5a6bc8420ec"
+  # Overridden by SEARXNG_SECRET_KEY from EnvironmentFile at container start.
+  secret_key: "change-me-via-searxng-env"
   base_url: false
   limiter: false
   public_instance: false
