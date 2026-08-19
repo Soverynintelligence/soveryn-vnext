@@ -1,0 +1,26 @@
+# SOVERYN SearXNG metasearch — user service.
+# Self-hosted privacy-respecting search backend for Aetheria + Vett web tools.
+# Bound to 127.0.0.1:8095 only — no external exposure.
+#
+# Settings live in-repo: config/searxng/settings.yml
+
+[Unit]
+Description=SOVERYN SearXNG metasearch (:8095)
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/docker rm -f soveryn-searxng
+ExecStart=/usr/bin/docker run --rm --name soveryn-searxng \
+  -p 127.0.0.1:8095:8080 \
+  -v /home/jon-deoliveira/soveryn_vnext/config/searxng:/etc/searxng \
+  -e BASE_URL=http://127.0.0.1:8095/ \
+  -e INSTANCE_NAME=soveryn-searxng \
+  searxng/searxng:latest
+ExecStop=/usr/bin/docker stop soveryn-searxng
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+
+[Install]
+WantedBy=soveryn.target
