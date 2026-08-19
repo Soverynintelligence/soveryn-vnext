@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Kernel via OpenCode against the house Flash router (:8091).
+# Autonomous build lane — Aider remains the surgical fallback:
+#   soveryn-aider --kernel
+#
+# Usage:
+#   soveryn-opencode                         # TUI in cwd, Kernel agent
+#   soveryn-opencode /path/to/repo           # TUI in that project
+#   soveryn-opencode run "mend X"            # headless one-shot
+#   soveryn-opencode run --auto "…"          # auto-approve non-denied perms
+#
+# Nothing leaves the machine unless you change the provider baseURL.
+
+set -euo pipefail
+
+OPENCODE_BIN="${OPENCODE_BIN:-$HOME/.opencode/bin/opencode}"
+if [[ ! -x "$OPENCODE_BIN" ]]; then
+  OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
+fi
+if [[ -z "${OPENCODE_BIN}" || ! -x "$OPENCODE_BIN" ]]; then
+  echo "opencode not found. Install: curl -fsSL https://opencode.ai/install | bash" >&2
+  exit 1
+fi
+
+CFG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/soveryn_vnext/config/opencode}"
+CFG_FILE="${OPENCODE_CONFIG:-$CFG_DIR/opencode.json}"
+if [[ ! -f "$CFG_FILE" ]]; then
+  echo "soveryn-opencode: missing config at $CFG_FILE" >&2
+  exit 1
+fi
+
+export OPENCODE_CONFIG="$CFG_FILE"
+export OPENCODE_CONFIG_DIR="$CFG_DIR"
+# Local Flash — keep keys fake/local only
+export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-soveryn}"
+
+# Ensure Flash is up (warn only)
+if ! curl -sf --max-time 2 "http://127.0.0.1:8091/v1/models" >/dev/null; then
+  echo "soveryn-opencode: WARN — :8091 not answering; warm Kernel/Flash first" >&2
+fi
+
+echo "soveryn-opencode: Kernel · Flash @ http://127.0.0.1:8091/v1" >&2
+echo "soveryn-opencode: config $CFG_FILE" >&2
+
+# Default agent = kernel when launching TUI or run without --agent
+ARGS=("$@")
+HAS_AGENT=0
+HAS_MODEL=0
+SUB=""
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+  case "${ARGS[0]}" in
+    run|attach|serve|web|models|agent|providers|auth|mcp|session|stats|upgrade|uninstall|debug|completion|acp|github|pr|plugin|db|export|import)
+      SUB="${ARGS[0]}"
+      ;;
+  esac
+fi
+for a in "${ARGS[@]+"${ARGS[@]}"}"; do
+  [[ "$a" == "--agent" || "$a" == --agent=* ]] && HAS_AGENT=1
+  [[ "$a" == "--model" || "$a" == --model=* || "$a" == "-m" ]] && HAS_MODEL=1
+done
+
+EXTRA=()
+if [[ "$SUB" == "run" ]]; then
+  [[ $HAS_AGENT -eq 0 ]] && EXTRA+=(--agent kernel)
+  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model kernel-flash/bench-flash)
+elif [[ -z "$SUB" ]]; then
+  # Interactive TUI — agent selectable; seed model
+  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model kernel-flash/bench-flash)
+fi
+
+exec "$OPENCODE_BIN" "${EXTRA[@]+"${EXTRA[@]}"}" "${ARGS[@]+"${ARGS[@]}"}"

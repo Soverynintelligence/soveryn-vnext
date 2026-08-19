@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Local-only Aider against the SOVERYN house routers.
+# Default: Blackwell router :8090, model alias "aetheria" (Qwen3.8-27B as of 2026-08-17).
+#
+# Usage:
+#   soveryn-aider                    # current dir, aetheria @ 8090
+#   soveryn-aider --kernel           # Kernel (DeepSeek V4 Flash) on :8091 + persona
+#   soveryn-aider --flash            # same as --kernel (legacy flag)
+#   soveryn-aider --model openai/vett-scotty
+#   soveryn-aider path/to/file.py
+#
+# Nothing leaves the machine unless you change AIDER_BASE to a cloud URL.
+
+set -euo pipefail
+
+AIDER_BIN="${AIDER_BIN:-$HOME/.venvs/aider/bin/aider}"
+if [[ ! -x "$AIDER_BIN" ]]; then
+  AIDER_BIN="${HOME}/miniconda3/envs/soveryn/bin/aider"
+fi
+if [[ ! -x "$AIDER_BIN" ]]; then
+  echo "aider not found. Install: $HOME/.venvs/aider/bin/pip install aider-chat" >&2
+  exit 1
+fi
+
+KERNEL_SOUL="${KERNEL_SOUL:-$HOME/soveryn_vnext/data/memory/souls/kernel.md}"
+EXTRA_READ=()
+
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "--kernel" || "$arg" == "--flash" ]]; then
+    export AIDER_BASE="${AIDER_BASE:-http://127.0.0.1:8091/v1}"
+    export AIDER_MODEL="${AIDER_MODEL:-openai/bench-flash}"
+    echo "soveryn-aider: using Kernel (bench-flash) @ ${AIDER_BASE}" >&2
+    if [[ -f "$KERNEL_SOUL" ]]; then
+      EXTRA_READ+=(--read "$KERNEL_SOUL")
+      echo "soveryn-aider: loading Kernel persona from $KERNEL_SOUL" >&2
+    else
+      echo "soveryn-aider: WARN — Kernel soul missing at $KERNEL_SOUL" >&2
+    fi
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+export OPENAI_API_BASE="${AIDER_BASE:-http://127.0.0.1:8090/v1}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-soveryn}"
+
+DEFAULT_MODEL="${AIDER_MODEL:-openai/aetheria}"
+
+exec "$AIDER_BIN" \
+  --model "$DEFAULT_MODEL" \
+  --no-auto-commits \
+  --no-gitignore \
+  "${EXTRA_READ[@]+"${EXTRA_READ[@]}"}" \
+  "$@"
