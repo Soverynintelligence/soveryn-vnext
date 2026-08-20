@@ -204,6 +204,25 @@ def create_app(
                     store=recall_lattice, owner_agent=_agent,
                 ))
 
+            # Kernel gets the full read set, not just search (2026-08-20,
+            # Jon's call). He is the local coding agent behind
+            # `soveryn-opencode` and is chatted with directly; search alone
+            # left him able to see that a memory existed with no way to open
+            # it, and no chronological view of his own build notes at all.
+            #
+            # Deliberately Kernel only for now: get_lattice_node and
+            # recent_lattice_entries were Aetheria-only until today, and
+            # widening them agent by agent keeps each grant a decision.
+            from soveryn.agents.aetheria.tools.lookup import build_get_node_tool
+            from soveryn.agents.aetheria.tools.recent import build_recent_tool
+
+            tool_registry.register(build_get_node_tool(
+                store=recall_lattice, owner_agent="kernel",
+            ))
+            tool_registry.register(build_recent_tool(
+                store=recall_lattice, owner_agent="kernel",
+            ))
+
         # Personal-file browser — bounded read access to Jon's content
         # directories (~/Pictures, ~/Desktop, ~/Documents, ~/Downloads).
         # Surfaced during signal-images T8 verification when Aetheria

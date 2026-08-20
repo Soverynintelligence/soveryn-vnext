@@ -93,3 +93,33 @@ def test_get_node_schema_requires_node_id(node_ids) -> None:
     assert schema["type"] == "object"
     assert schema["properties"]["node_id"]["type"] == "string"
     assert "node_id" in schema["required"]
+
+
+def test_get_node_is_owner_parameterised(node_ids) -> None:
+    """Kernel/Vett/Scotty/Eve get the same deep read Aetheria has (2026-08-20).
+
+    They already had the two search tools; without get_lattice_node a truncated
+    search hit was a dead end for every agent but Aetheria — the same
+    can't-see-my-own-memory shape as the 2026-08-02 Vett fix.
+    """
+    store, _channel_a_id, _channel_b_id = node_ids
+    spec = build_get_node_tool(store=store, owner_agent="kernel")
+
+    assert spec.owner == "kernel"
+    assert spec.name == "get_lattice_node"
+
+
+def test_get_node_reads_any_agents_node_by_id(node_ids) -> None:
+    """Lookup is by id and stays id-addressed regardless of owner.
+
+    Visibility is enforced upstream at search time; a node id the agent already
+    holds resolves. Pinning this so a later "scope lookup to owner" change is a
+    deliberate decision rather than a silent one.
+    """
+    store, channel_a_id, _channel_b_id = node_ids
+    spec = build_get_node_tool(store=store, owner_agent="kernel")
+
+    result = spec.handler({"node_id": channel_a_id})
+
+    (entry,) = result["stateable"]
+    assert entry["id"] == channel_a_id

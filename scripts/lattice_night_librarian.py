@@ -26,14 +26,23 @@ def _find_db(explicit: str | None) -> Path:
         p = Path(explicit)
         if p.is_file():
             return p
+    # The live Lattice is data/memory/lattice_vnext.db. The three bare
+    # "lattice.db" paths below never existed, so this pass had been exiting 1
+    # every night since it was installed (fixed 2026-08-20). Real path first,
+    # legacy names kept as fallbacks.
     for cand in (
+        REPO / "data" / "memory" / "lattice_vnext.db",
+        Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db",
         REPO / "data" / "lattice.db",
         Path.home() / "soveryn_vnext" / "data" / "lattice.db",
         Path.home() / "soveryn_data" / "lattice.db",
     ):
         if cand.is_file():
             return cand
-    raise SystemExit("lattice.db not found")
+    raise SystemExit(
+        "lattice db not found; looked for data/memory/lattice_vnext.db "
+        "(and legacy lattice.db paths). Pass --db to override."
+    )
 
 
 def main() -> int:

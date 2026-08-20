@@ -11,6 +11,7 @@ def _insert_node(
     content: str,
     created_at: str,
     provenance_cls: str = "witnessed",
+    agent: str = "aetheria",
 ) -> None:
     store.write_node(
         "aetheria",
@@ -29,10 +30,11 @@ def _insert_node(
             "INSERT INTO nodes "
             "(id, type, layer, agent, content, intensity, salience, access_count, "
             "tags, created_at, updated_at, embedding, intent, provenance) "
-            "VALUES (?, 'memory', 'private', 'aetheria', ?, 0.5, 0.5, 0, "
+            "VALUES (?, 'memory', 'private', ?, ?, 0.5, 0.5, 0, "
             "?, ?, ?, NULL, NULL, ?)",
             (
                 node_id,
+                agent,
                 content,
                 json.dumps([]),
                 created_at,
@@ -90,3 +92,41 @@ def test_recent_limit_caps_total_result_count(tmp_path) -> None:
     total = len(result["stateable"]) + sum(result["uncertain_count_by_class"].values())
     assert total == 1
     assert result["stateable"][0]["id"] == "new"
+
+
+def test_recent_returns_the_owners_own_entries_not_aetherias(tmp_path) -> None:
+    """The whole point of parameterising this one (2026-08-20).
+
+    `recent_lattice_entries` called `iter_nodes(agent="aetheria")` literally.
+    Registering it for another agent by flipping only `ToolSpec.owner` would
+    have handed Kernel *Aetheria's* private memories and labelled them his.
+    """
+    store = LatticeStore(tmp_path / "lattice.db")
+    _insert_node(
+        store, node_id="a1", content="aetheria private thought",
+        created_at="2026-08-19T00:00:00Z", agent="aetheria",
+    )
+    _insert_node(
+        store, node_id="k1", content="kernel build note",
+        created_at="2026-08-18T00:00:00Z", agent="kernel",
+    )
+
+    result = build_recent_tool(store=store, owner_agent="kernel").handler({"limit": 10})
+
+    assert [entry["id"] for entry in result["stateable"]] == ["k1"]
+    assert "aetheria private thought" not in repr(result)
+
+
+def test_recent_is_owner_parameterised(tmp_path) -> None:
+    store = LatticeStore(tmp_path / "lattice.db")
+
+    spec = build_recent_tool(store=store, owner_agent="kernel")
+
+    assert spec.owner == "kernel"
+    assert spec.name == "recent_lattice_entries"
+
+
+def test_recent_defaults_to_aetheria(tmp_path) -> None:
+    store = LatticeStore(tmp_path / "lattice.db")
+
+    assert build_recent_tool(store=store).owner == "aetheria"

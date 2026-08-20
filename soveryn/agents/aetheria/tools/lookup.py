@@ -10,8 +10,21 @@ from soveryn.platform.lattice.legacy import LatticeStore
 from soveryn.platform.tools.registry import ToolSpec
 
 
-def build_get_node_tool(*, store: LatticeStore) -> ToolSpec:
-    """Build Aetheria's single-node lattice lookup tool."""
+def build_get_node_tool(
+    *,
+    store: LatticeStore,
+    owner_agent: str = "aetheria",
+) -> ToolSpec:
+    """Build a single-node lattice lookup tool for `owner_agent`.
+
+    Parameterised 2026-08-20. Vett/Scotty/Kernel/Eve already had the two search
+    tools (2026-08-02) but not this one, so a truncated search hit was a dead
+    end for everyone but Aetheria: they could see that a memory existed and had
+    no way to open it. Same shape as the fix in search.py — an instrument that
+    half-works reads, from the inside, like a memory that isn't there.
+
+    Lookup stays id-addressed: visibility is enforced upstream at search time.
+    """
 
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         node = store.get_node(str(args["node_id"]))
@@ -30,7 +43,7 @@ def build_get_node_tool(*, store: LatticeStore) -> ToolSpec:
 
     return ToolSpec(
         name="get_lattice_node",
-        owner="aetheria",
+        owner=owner_agent,
         description=(
             "Look up one lattice node by id (full content, deep read). "
             "Use after search/recent when a truncated list hit needs the whole note."

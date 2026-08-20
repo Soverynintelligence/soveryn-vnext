@@ -2,8 +2,46 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | Target SSOT + live snapshot (§4 refreshed 2026-08-12 ~02:00 after the Blackwell CUDA fix and the Spark model swap) |
-| **Date** | 2026-08-12 |
+| **Status** | Target SSOT + live snapshot. **§4 is a dated 2026-08-12 snapshot and is now partly stale — read §0 first.** |
+| **Date** | 2026-08-12 · corrections appended 2026-08-20 |
+
+---
+
+## 0. ⚠️ Corrections since 2026-08-12 (verified live 2026-08-20)
+
+Four things moved after this document was written. The 08-12 rows below are left
+intact deliberately — this file's own convention is *recorded, not buried* — but
+**where they disagree with this section, this section is right.**
+
+| What | Doc says (08-12) | Live 2026-08-20 | Verify with |
+|------|------------------|-----------------|-------------|
+| **Spark worker model** | `qwen36-35b` | **`lightning-30b`** — Nemotron-3.5-Lightning-30B-A3B-NVFP4 | `curl 10.10.10.2:8001/v1/models` |
+| **Aetheria's soul** | Gemma 4 31B Q6 | **Qwen3.8-27B-UD-Q6_K_XL**, ctx 65536 (cutover 08-17, ctx raised 08-19) | `curl 127.0.0.1:8090/v1/models` |
+| **Embeddings** | `soveryn-embeddings.service`, Quadro `…990a` :8096 | **`soveryn-embed.service` on the SPARK**, `10.10.10.2:8096` | `embeddings_url()` |
+| **Quadro router tenants** | vett-scotty / cognition / reflection | + **Kernel** (`bench-flash`, DeepSeek-V4-Flash) — the house build brain and Eve's brain | `router-presets-quadro.ini` |
+
+### The Spark alias is now a switch, not a constant
+
+This is why the `qwen36-35b` rows below rotted. `runtime.py` resolves the Spark
+worker brain at import from **`~/.soveryn/vett_brain`** (override:
+`$SOVERYN_VETT_BRAIN`), across three profiles:
+
+| Key | Alias | Weights |
+|-----|-------|---------|
+| `qwen36` | `qwen36-35b` | Qwen3.6-35B-A3B-NVFP4 |
+| `qwen38` | `qwen38-27b` | Qwen3.8-27B-NVFP4 |
+| `lightning` | `lightning-30b` | Nemotron-3.5-Lightning-30B-A3B-NVFP4 ← **current** |
+
+⚠️ **`resolve_vett_brain()` falls back to `qwen36` if that file is missing or
+unreadable.** The file currently reads `lightning` (set 2026-08-17). If it is
+ever lost, the config silently claims an alias the Spark is not serving.
+
+⚠️ **The unit is still named `qwen-serve.service` and still describes itself as
+the "Qwen" brain. It has not served Qwen since 08-17.** Do not read the unit
+name, the unit description, or this document to learn which model is loaded —
+**ask the port.** The same class of drift put `qwen36-35b` in Vett's census note
+for eight days; that note is now *derived* from the resolver
+(`citizens/census.py::_alias_of`) so it cannot lie again.
 | **Hardware** | Tower (~144 GiB VRAM, 512 GiB RAM) + DGX Spark (`10.10.10.2`) |
 | **Premise** | Local Grok-Bot-class fleet: models stay resident; agents work 24/7; Aetheria never shares her card |
 | **Related** | `soveryn/config/runtime.py`, `runtime/router-presets-blackwell.ini`, `runtime/router-presets-quadro.ini`, user systemd units |
@@ -58,7 +96,7 @@
 |--|--|
 | Host | `10.10.10.2` (CX-7 link) |
 | Role | Always-on **worker** brain, shared by every Spark-served agent |
-| Stack | vLLM, alias **`qwen36-35b`**, port **8001** (`qwen-serve.service`) |
+| Stack | vLLM, port **8001** (`qwen-serve.service` — ⚠️ the name is historical). Alias is **resolved at import**, currently **`lightning-30b`**; see §0. |
 | ⚠️ Laguna | `laguna-serve` **stopped and disabled** since 2026-08-12 — see §3.4. Weights remain on disk. Anything in this file still saying `laguna` / `:8000` is stale; §3.4 is the record. |
 
 ---
@@ -91,8 +129,8 @@ Not one model awake for everything — a **small permanent set** of resident mod
 
 | Lane | Hardware | Always loaded | Consumers |
 |------|----------|---------------|-----------|
-| **Self** | Blackwell alone (no NVLink to Quadros) | **Aetheria** Gemma 4 31B Q6 | Chat, heartbeat, Signal, tools |
-| **Workers** | Spark | **`qwen36-35b`** — shared by Vett, Scotty, PondWright, Atticus, Seneca | Research, repair, patrol, delegation, products |
+| **Self** | Blackwell alone (no NVLink to Quadros) | **Aetheria** — Qwen3.8-27B UD-Q6_K_XL, ctx 65k (was Gemma 4 31B Q6 until 08-17, §0) | Chat, heartbeat, Signal, tools |
+| **Workers** | Spark | **resolved alias** (`lightning-30b` as of 08-17, §0) — shared by Vett, Scotty, PondWright, Atticus, Seneca | Research, repair, patrol, delegation, products |
 | **Librarian** | One Quadro of the NVLink pair (`…990a` today) | **Nemotron-3-Embed-8B** :8096 | Lattice recall / write embeds |
 | **Cognition** | Other Quadro and/or NV-split small model | Small Gemma / dream surface | Dream multi-pass, background reason |
 | **Reflection** | Quadro pair (single-GPU slot) | Qwen 9B-class | Multi-voice / reflection tools |
@@ -115,8 +153,10 @@ Optional always-on (only if VRAM headroom after pins):
 | Agent | Logical server (`runtime.py`) | Endpoint | Alias | Hardware | Always-on? |
 |-------|------------------------------|----------|-------|----------|------------|
 | **Aetheria** | `aetheria_primary` | `http://127.0.0.1:8090` | `aetheria` | Blackwell via router | **YES — never unload** |
-| **Vett** | `vett_scotty_shared` | `http://10.10.10.2:8001` | `qwen36-35b` | Spark vLLM | **YES** |
-| **Scotty** | `vett_scotty_shared` | same | `qwen36-35b` | Spark vLLM | **YES** (shared weights OK) |
+| **Vett** | `vett_scotty_shared` | `http://10.10.10.2:8001` | resolved — `lightning-30b` (§0) | Spark vLLM | **YES** |
+| **Scotty** | `vett_scotty_shared` | same | resolved — `lightning-30b` (§0) | Spark vLLM | **YES** (shared weights OK) |
+| **Kernel** | `kernel_build` | `http://127.0.0.1:8091` | `bench-flash` | Quadros via router | On demand |
+| **Eve** | `kernel_build` | `http://127.0.0.1:8091` | `bench-flash` | Quadros via router | On demand |
 
 ⚠️ **This table is where INFERENCE happens, not where the PROCESS runs.** The two
 were conflated twice in one day (2026-08-13) and it changes decisions:
@@ -166,7 +206,7 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 | Knob | Target |
 |------|--------|
 | Host | `10.10.10.2:8001` (was `:8000`) |
-| Alias | **`qwen36-35b`** (was `laguna`) — see the 2026-08-12 note below |
+| Alias | **Resolved, not fixed** — `resolve_vett_brain()` → `qwen36` \| `qwen38` \| **`lightning`** (current, 08-17). See §0. Was `laguna` before 08-12. |
 | Unit | **`qwen-serve.service`** (systemd **user** unit, `Restart=always`, lingering on, survives reboot). `laguna-serve.service` is **stopped and disabled**. |
 | Agents | **Everything on the Spark shares this one model** (decided 2026-08-12): Vett, Scotty, PondWright (`:8200`), Atticus (`:8500`), Seneca (`soveryn-agent`, `:8400`). |
 | ⚠️ Stopping this unit | takes **all five** down. `laguna-serve`'s own description said "Vett, Scotty and PondWright" — it was **incomplete**, and trusting it meant Atticus and Seneca stayed pointed at a dead port. **Sweep for `:8001` consumers before stopping, don't read the description.** |
@@ -179,7 +219,7 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 
 ---
 
-## 4. Live snapshot vs target (2026-08-12)
+## 4. Live snapshot vs target (2026-08-12 — **historical; see §0 for corrections**)
 
 ### What matches target
 
@@ -189,7 +229,7 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 | Aetheria pin | Blackwell UUID on `soveryn-router.service` |
 | Spark workers | `runtime.py` → `10.10.10.2:8001` / `qwen36-35b` (**changed 2026-08-12**; `laguna-serve` stopped + disabled) |
 | Spark app agents | PondWright `:8200`, Atticus `:8500`, Seneca `:8400` — all repointed to `:8001` / `qwen36-35b` 2026-08-12 |
-| Ares surface probe | `qwen-spark` → `:8001`, expects `qwen36-35b` (was `laguna-spark` → `:8000`; left as-is it would page forever about a service stopped on purpose) |
+| Ares surface probe | `qwen-spark` → `:8001` (was `laguna-spark` → `:8000`; left as-is it would page forever about a service stopped on purpose). **Correction 08-20:** it does *not* expect `qwen36-35b` — `expect_contains="owned_by"` matches the stable vLLM list shape on purpose, so a brain swap doesn't page. Ares was right; this row was wrong. |
 | Embeddings | `soveryn-embeddings.service` on Quadro `…990a` :8096 |
 | vNext | `:5001` active |
 | Heartbeat / dream / patrol / signal | user units active |
@@ -241,9 +281,9 @@ Today three stories fight:
 |------|-------------|-----------|
 | `soveryn-router.service` | :8090 Blackwell | **YES** |
 | `soveryn-router-quadro.service` | :8091 Quadros | **YES** |
-| `soveryn-embeddings.service` | :8096 Librarian | **YES** |
-| `soveryn-cognition.service` | :8089 dream brain | **YES** (until unified) |
-| `qwen-serve.service` (on Spark host) | :8001 `qwen36-35b` | **YES** |
+| `soveryn-embed.service` (**on Spark**) | `10.10.10.2:8096` Librarian — Nemotron-3-Embed-8B. Moved off the tower; `soveryn-embeddings.service` here is **inactive**. | **YES** |
+| `soveryn-cognition.service` | :8089 dream brain — Gemma-4-26B-A4B, **CPU-only** (`--device none`, 48 threads) | **YES** (until unified) |
+| `qwen-serve.service` (on Spark host) | :8001 — ⚠️ **name lies**, serves `lightning-30b` (§0) | **YES** |
 
 ### Control plane
 

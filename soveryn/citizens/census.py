@@ -34,10 +34,26 @@ from soveryn.citizens.registry import (
     observe,
     register,
 )
+from soveryn.config.runtime import MODEL_SERVERS
 
 DEFAULT_DB = Path("data/citizens.db")
 DEFAULT_WORKSPACES = Path.home() / "soveryn_citizens"
 DESK_DIRS = ("inbox", "outbox", "work", "notes")
+
+
+def _alias_of(server_name: str) -> str:
+    """Current model alias for a ModelServer, so notes can't go stale.
+
+    Added 2026-08-20. Vett's note read "Inference on Spark :8001 (qwen36-35b)"
+    for eight days after the brain moved to Lightning — a hand-typed model name
+    beside a switch (`resolve_vett_brain`) that had already changed. Same class
+    as `qwen-serve.service` still being called qwen-serve: the label is not the
+    model. Derive it, and it can never drift again.
+    """
+    for server in MODEL_SERVERS:
+        if server.name == server_name:
+            return server.model_alias or server_name
+    return server_name
 
 # Charter §3, corrected 2026-08-13. `units` is the PROCESS residence on this
 # machine — the only thing this module can actually verify. An empty tuple means
@@ -66,7 +82,10 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             soul_path="data/memory/souls/vett.md",
             model_server="vett_scotty_shared",
             workspace_path=str(DEFAULT_WORKSPACES / "vett"),
-            notes="Inference on Spark :8001 (qwen36-35b); patrols from the tower.",
+            notes=(
+                f"Inference on Spark :8001 ({_alias_of('vett_scotty_shared')}); "
+                "patrols from the tower."
+            ),
         ),
         ("soveryn-vett-patrol.service",),
     ),
