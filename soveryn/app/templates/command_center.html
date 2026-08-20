@@ -3052,25 +3052,97 @@
     border-right: none !important;
   }
 
+  /* ═══ Easy mode (default) — Grok-Bot-simple front door ═══ */
+  body.cc-easy .cc-advanced { display: none !important; }
+  body.cc-easy .acttruth-badge { display: none !important; }
+  body.cc-easy .dispatch-box { display: none !important; }
+  body.cc-easy .agent-more,
+  body.cc-easy [data-kernel-warm] { display: none !important; }
+  body.cc-easy .brief-list { display: none !important; }
+  body.cc-easy .brief-act[data-easy-hide] { display: none !important; }
+  body.cc-easy nav a.cc-nav-advanced { display: none !important; }
+  body.cc-easy .plate .id i { letter-spacing: 0.08em; }
+  body.cc-easy .agent-card .role {
+    font-size: 12px !important;
+    color: rgba(232,227,213,0.72) !important;
+    text-transform: none !important;
+    letter-spacing: 0.02em !important;
+  }
+  body.cc-easy .agent-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  @media (max-width: 1100px) {
+    body.cc-easy .agent-row { grid-template-columns: repeat(3, 1fr) !important; }
+  }
+  @media (max-width: 720px) {
+    body.cc-easy .agent-row { grid-template-columns: 1fr 1fr !important; }
+  }
+  .easy-results {
+    margin: 8px 0 4px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  body:not(.cc-easy) .easy-results { display: none !important; }
+  .easy-results .er-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .easy-results .er-head h3 {
+    margin: 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: rgba(232,227,213,0.5); font-weight: 500;
+  }
+  .easy-results .er-head .er-hint {
+    font-size: 12px; color: rgba(232,227,213,0.4); margin-left: auto;
+  }
+  .easy-results .er-list { display: flex; flex-direction: column; gap: 8px; }
+  .easy-results .er-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-left: 3px solid rgba(192,130,79,0.5);
+    background: rgba(0,0,0,0.18);
+    font-size: 13px; color: rgba(232,227,213,0.88);
+  }
+  .easy-results .er-item .er-meta {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .easy-results .er-empty {
+    font-size: 13px; color: rgba(232,227,213,0.45); padding: 6px 0;
+  }
+  .cc-mode-toggle {
+    border: 1px solid rgba(232,227,213,0.22);
+    background: rgba(0,0,0,0.25);
+    color: rgba(232,227,213,0.75);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 6px 10px; border-radius: 4px; cursor: pointer;
+  }
+  .cc-mode-toggle:hover { border-color: rgba(192,130,79,0.55); color: #f3e7db; }
+  body:not(.cc-easy) .cc-mode-toggle { border-color: rgba(94,225,160,0.35); color: #9ee0b8; }
+
 </style>
 </head>
-<body class="lab" data-lab data-testid="command-center">
+<body class="lab cc-easy" data-lab data-testid="command-center" data-cc-mode="easy">
   <div class="page">
     <div class="plate">
       <a class="id" href="/">
         <img src="/static/lab-seal.png" alt="" width="44" height="44">
-        <span><b>SOVERYN</b><i>Command Center</i></span>
+        <span><b>SOVERYN</b><i data-cc-subtitle>Your team</i></span>
       </a>
       <nav>
-        <a href="/" class="active">Command</a>
-        <a href="/fleet">Fleet</a>
-        <a href="/citizens" class="keep">Citizens</a>
+        <a href="/" class="active">Home</a>
         <a href="/chat" class="keep">Chat</a>
-        <a href="/documents">Docs</a>
-          <a href="/charters" class="keep">Charters</a>
+        <a href="/citizens" class="cc-nav-advanced">Citizens</a>
+        <a href="/fleet" class="cc-nav-advanced">Fleet</a>
+        <a href="/documents" class="cc-nav-advanced">Docs</a>
+        <a href="/charters" class="cc-nav-advanced">Charters</a>
   </nav>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all systems quiet</span></div>
+        <button type="button" class="cc-mode-toggle" data-cc-mode-toggle title="Show or hide house ops">Advanced</button>
+        <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all quiet</span></div>
       </div>
     </div>
 
@@ -3085,13 +3157,14 @@
 
     <section class="panel greeting" data-testid="greeting">
       <h1 data-greeting-heading>…</h1>
-      <p data-greeting-body>Loading house briefing…</p>
+      <p data-greeting-body>Loading your team…</p>
       <ul class="brief-list" data-brief-list hidden></ul>
       <div class="brief-actions">
         <a class="brief-act primary" href="/chat?agent=aetheria">Talk to Aetheria</a>
+        <a class="brief-act" href="/chat?agent=eve">Talk to Eve</a>
         <a class="brief-act" href="/chat?agent=kernel">Talk to Kernel</a>
-        <a class="brief-act" href="/build">Kernel build</a>
-        <a class="brief-act" href="#approvals-anchor" data-open-chapter="chapter-gates">Review queue</a>
+        <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
+        <a class="brief-act" data-easy-hide href="#approvals-anchor" data-open-chapter="chapter-gates">Review queue</a>
       </div>
       <div class="dispatch-box" data-testid="dispatch-box">
         <form data-dispatch-form>
@@ -3110,8 +3183,8 @@
       </div>
     </section>
 
-    <section class="agent-row" data-testid="agent-row">
-      <div class="agent-card" data-agent="aetheria" aria-label="Aetheria">
+    <section class="agent-row" data-testid="agent-row" aria-label="Your team">
+      <div class="agent-card" data-agent="aetheria" aria-label="Aetheria — runs the house">
         <button type="button" class="acttruth-badge" data-acttruth-badge="aetheria" title="ActTruth — click for crew ledger" aria-label="ActTruth for Aetheria">
           <span class="pip" aria-hidden="true"></span>
           <span class="lbl">AT</span>
@@ -3119,7 +3192,7 @@
         </button>
         <div class="body">
           <div class="name">Aetheria</div>
-          <div class="role">primary · cathedral</div>
+          <div class="role">Runs the house</div>
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
@@ -3127,7 +3200,7 @@
           <a class="agent-act" href="/voice">Voice</a>
         </div>
       </div>
-      <div class="agent-card" data-agent="vett" aria-label="Vett">
+      <div class="agent-card" data-agent="vett" aria-label="Vett — checks the work">
         <button type="button" class="acttruth-badge" data-acttruth-badge="vett" title="ActTruth — click for crew ledger" aria-label="ActTruth for Vett">
           <span class="pip" aria-hidden="true"></span>
           <span class="lbl">AT</span>
@@ -3135,15 +3208,15 @@
         </button>
         <div class="body">
           <div class="name">Vett</div>
-          <div class="role">verifier · research</div>
+          <div class="role">Checks the work</div>
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/chat?agent=vett">Talk</a>
-          <a class="agent-act" href="/citizens">Duties</a>
+          <a class="agent-act cc-advanced" href="/citizens">Duties</a>
         </div>
       </div>
-      <div class="agent-card" data-agent="scotty" aria-label="Scotty">
+      <div class="agent-card" data-agent="scotty" aria-label="Scotty — gets things done">
         <button type="button" class="acttruth-badge" data-acttruth-badge="scotty" title="ActTruth — click for crew ledger" aria-label="ActTruth for Scotty">
           <span class="pip" aria-hidden="true"></span>
           <span class="lbl">AT</span>
@@ -3151,15 +3224,15 @@
         </button>
         <div class="body">
           <div class="name">Scotty</div>
-          <div class="role">executor · proposals</div>
+          <div class="role">Gets things done</div>
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/chat?agent=scotty">Talk</a>
-          <a class="agent-act" href="#approvals-anchor">Queue</a>
+          <a class="agent-act" href="#approvals-anchor" data-open-chapter="chapter-gates">Queue</a>
         </div>
       </div>
-      <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — build brain">
+      <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — builds and fixes code">
         <button type="button" class="acttruth-badge" data-acttruth-badge="kernel" title="ActTruth — click for crew ledger" aria-label="ActTruth for Kernel">
           <span class="pip" aria-hidden="true"></span>
           <span class="lbl">AT</span>
@@ -3167,12 +3240,12 @@
         </button>
         <div class="body">
           <div class="name">Kernel</div>
-          <div class="role">build · local core</div>
+          <div class="role">Builds &amp; fixes code</div>
           <div class="state" data-kernel-state-text>checking…</div>
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/chat?agent=kernel">Talk</a>
-          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (Qwen coding default)">OpenCode</button>
+          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (Flash coding default)">OpenCode</button>
           <button type="button" class="agent-act" data-kernel-warm>Warm</button>
           <details class="agent-more">
             <summary class="agent-act" title="Build / Aider">More</summary>
@@ -3183,7 +3256,7 @@
           </details>
         </div>
       </div>
-      <div class="agent-card" data-agent="eve" aria-label="Eve — Head of Marketing">
+      <div class="agent-card" data-agent="eve" aria-label="Eve — marketing and posts">
         <button type="button" class="acttruth-badge" data-acttruth-badge="eve" title="ActTruth — click for crew ledger" aria-label="ActTruth for Eve">
           <span class="pip" aria-hidden="true"></span>
           <span class="lbl">AT</span>
@@ -3191,17 +3264,25 @@
         </button>
         <div class="body">
           <div class="name">Eve</div>
-          <div class="role">marketing · IG/FB</div>
+          <div class="role">Marketing &amp; posts</div>
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/chat?agent=eve">Talk</a>
-          <a class="agent-act" href="/citizens">Duties</a>
+          <a class="agent-act" href="/charters">Charters</a>
         </div>
       </div>
     </section>
 
-    
+    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
+      <div class="er-head">
+        <h3>Results</h3>
+        <span class="er-hint">from your team · automations</span>
+      </div>
+      <div class="er-list" data-easy-results-list>
+        <div class="er-empty">Loading results…</div>
+      </div>
+    </section>
 
     </div><!-- /.cc-operator-zone -->
 
@@ -3231,7 +3312,7 @@
     </details>
 
     <!-- ═══ 3. Work ═══ -->
-    <details class="cc-fold cc-chapter" data-testid="chapter-work">
+    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-work">
       <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
       <div class="cc-fold-body">
 <!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
@@ -3432,7 +3513,7 @@
     </details>
 
 <!-- Ops folded — power tools, not the default face -->
-    <details class="cc-fold" data-testid="ops-fold">
+    <details class="cc-fold cc-advanced" data-testid="ops-fold">
       <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
       <div class="cc-fold-body">
 <!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
@@ -3649,7 +3730,7 @@
     </details>
 
     <!-- Automations — scheduler + CC inbox; Signal preview only -->
-    <details class="cc-fold" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
+    <details class="cc-fold cc-advanced" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
       <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
       <div class="cc-fold-body">
     <section class="panel auto-panel" data-testid="automations-panel">
@@ -3980,7 +4061,7 @@
     </details>
 
     <!-- ═══ Pulse (folded) ═══ -->
-    <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
+    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-pulse">
       <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
       <div class="cc-fold-body">
 <!-- Daemon status strip — autonomous fleet at a glance. -->
@@ -4029,7 +4110,7 @@
     </details>
 
     <!-- ═══ 4. Memory ═══ -->
-    <details class="cc-fold cc-chapter" data-testid="chapter-memory">
+    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-memory">
       <summary>Memory &amp; lattice <span class="cc-fold-hint">cognition · bus · writes</span></summary>
       <div class="cc-fold-body">
 <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
@@ -4368,7 +4449,9 @@
       if (needs.xN) bits.push(`${needs.xN} staged post${needs.xN === 1 ? "" : "s"}`);
       bodyParts.push(`You have ${bits.join(" and ")} waiting.`);
     } else {
-      bodyParts.push("Nothing is gated on you right now.");
+      bodyParts.push(document.body.classList.contains("cc-easy")
+        ? "Your team is ready — pick someone below."
+        : "Nothing is gated on you right now.");
     }
 
     const brief = [];
@@ -4391,7 +4474,9 @@
       const last = sessions.sessions[0];
       const ago = relAgo(last.updated_at);
       brief.push({ t: `Last session: ${last.agent || "agent"}${ago ? ` · ${ago}` : ""}.`, tone: "" });
-      bodyParts.push(`${sessions.sessions.length} recent session${sessions.sessions.length === 1 ? "" : "s"} on the tower.`);
+      if (!document.body.classList.contains("cc-easy")) {
+        bodyParts.push(`${sessions.sessions.length} recent session${sessions.sessions.length === 1 ? "" : "s"} on the tower.`);
+      }
     } else if (!brief.length) {
       bodyParts.push("It's been quiet since you were last here.");
     }
@@ -4401,7 +4486,7 @@
 
     const list = document.querySelector("[data-brief-list]");
     if (list) {
-      if (!brief.length) {
+      if (!brief.length || document.body.classList.contains("cc-easy")) {
         list.hidden = true;
         list.innerHTML = "";
       } else {
@@ -4411,6 +4496,56 @@
         ).join("");
       }
     }
+  }
+
+  // ─── Easy Results (automations inbox, front door) ─────────────────────────
+  async function renderEasyResults() {
+    const list = document.querySelector("[data-easy-results-list]");
+    if (!list || !document.body.classList.contains("cc-easy")) return;
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+    const rel = (iso) => {
+      if (!iso) return "—";
+      const t = Date.parse(iso); if (!t) return esc(iso);
+      const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (sec < 90) return "just now";
+      if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+      if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+      return Math.floor(sec / 86400) + "d ago";
+    };
+    try {
+      const d = await fetchJson("/api/automations/inbox?limit=8");
+      const items = (d && d.inbox) || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="er-empty">No results yet — your team will land work here.</div>';
+        return;
+      }
+      list.innerHTML = items.slice(0, 6).map((it) => {
+        const head = (it.content || it.error || "").replace(/\s+/g, " ").slice(0, 140);
+        return '<div class="er-item">'
+          + '<div class="er-meta">' + esc(rel(it.fired_at)) + " · " + esc(it.agent || "—")
+          + " · " + esc(it.status || "—") + "</div>"
+          + "<div><strong>" + esc(it.title || it.automation_id || "run") + "</strong>"
+          + (head ? " — " + esc(head) + (head.length >= 140 ? "…" : "") : "")
+          + "</div></div>";
+      }).join("");
+    } catch (_) {
+      list.innerHTML = '<div class="er-empty">Results unavailable.</div>';
+    }
+  }
+
+  function applyCcMode(mode) {
+    const easy = mode !== "advanced";
+    document.body.classList.toggle("cc-easy", easy);
+    document.body.setAttribute("data-cc-mode", easy ? "easy" : "advanced");
+    const sub = document.querySelector("[data-cc-subtitle]");
+    if (sub) sub.textContent = easy ? "Your team" : "Command Center";
+    const btn = document.querySelector("[data-cc-mode-toggle]");
+    if (btn) btn.textContent = easy ? "Advanced" : "Simple";
+    try { localStorage.setItem("soveryn-cc-mode", easy ? "easy" : "advanced"); } catch (_) {}
+    if (easy) renderEasyResults();
+    try { renderGreeting(); } catch (_) {}
   }
 
   // ─── Agent cards (state from /sessions per agent) ─────────────────────────
@@ -5879,6 +6014,8 @@
     await renderGreeting();
     renderAgentStates();
     refreshKernel();
+    renderEasyResults();
+    // Advanced house panels — still refresh so toggling Advanced is live.
     renderGpu();
     refreshSpark();
     refreshActTruth();
@@ -5899,6 +6036,18 @@
     renderCommBus();
   }
   document.addEventListener("DOMContentLoaded", () => {
+    // Easy / Advanced front door (default: easy)
+    let saved = "easy";
+    try { saved = localStorage.getItem("soveryn-cc-mode") || "easy"; } catch (_) {}
+    applyCcMode(saved);
+    const modeBtn = document.querySelector("[data-cc-mode-toggle]");
+    if (modeBtn) {
+      modeBtn.addEventListener("click", () => {
+        const next = document.body.classList.contains("cc-easy") ? "advanced" : "easy";
+        applyCcMode(next);
+      });
+    }
+
     // Library filter inputs trigger an immediate refresh on change so the
     // panel updates without waiting for the next 10s tick.
     const agentSel = document.querySelector("[data-library-agent-filter]");
