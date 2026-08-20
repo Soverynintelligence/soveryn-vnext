@@ -85,6 +85,22 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
         ),
         ("soveryn-scotty-worker.service",),
     ),
+    (
+        Citizen(
+            id="eve",
+            display_name="Eve",
+            soul_path="data/memory/souls/eve.md",
+            model_server="kernel_build",
+            workspace_path=str(DEFAULT_WORKSPACES / "eve"),
+            notes=(
+                "Head of Marketing for the house. Inference on Quadros :8091 "
+                "(shared with Kernel). Draft-and-drop marketing for SOVERYN, "
+                "ActTruth, and Carolina Water Gardens — no Meta API, no "
+                "credentials, Signal drop only."
+            ),
+        ),
+        (),
+    ),
 )
 
 

@@ -19,6 +19,7 @@ bp = Blueprint("ui", __name__)
 COMMAND_CENTER_TEMPLATE = Path(__file__).parent.parent / "templates" / "command_center.html"
 CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
 FLEET_TEMPLATE = Path(__file__).parent.parent / "templates" / "fleet.html"
+CHARTERS_TEMPLATE = Path(__file__).parent.parent / "templates" / "charters.html"
 
 
 def _serve_html(path: Path, *, missing_label: str):
@@ -54,6 +55,12 @@ def citizens_board():
 def fleet_page():
     """Fleet — Rig headroom, session traffic, house counts (not on Command home)."""
     return _serve_html(FLEET_TEMPLATE, missing_label="Fleet")
+
+
+@bp.get("/charters")
+def charters_board():
+    """Imported botdirectory job charters — review only, never live."""
+    return _serve_html(CHARTERS_TEMPLATE, missing_label="Charters board")
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"

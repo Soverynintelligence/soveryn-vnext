@@ -16,9 +16,16 @@ global error handler in soveryn/app/startup.py.
 
 from __future__ import annotations
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
-from soveryn.agents.personas import PERSONAS, PersonaError, get_persona
+from soveryn.agents.personas import (
+    PersonaError,
+    baked_persona,
+    clear_persona_override,
+    get_persona,
+    persona_source,
+    save_persona_override,
+)
 from soveryn.app.routes.chat import _resolve_agent
 from soveryn.config.runtime import (
     ACTIVE_AGENTS, AGENT_TO_SERVER, MODEL_SERVERS, RETIRED,
@@ -57,20 +64,84 @@ def api_models():
 
 # ─── /api/persona/<agent>  (REAL — production-compatible shape) ──────────────
 
+def _hot_reload_persona(agent: str, text: str) -> None:
+    """Push edited persona into the live AgentLoop if the app has one."""
+    try:
+        ext = current_app.extensions.get("soveryn") or {}
+        loops = ext.get("agent_loops") or {}
+        loop = loops.get(agent)
+        if loop is not None:
+            loop.system_prompt = text
+    except Exception:
+        # Best-effort — disk write already succeeded.
+        pass
+
+
 @bp.get("/api/persona/<agent_name>")
 def api_persona(agent_name: str):
-    """Return {agent: name, persona: text} for an active agent.
+    """Return {agent, persona, source, baked} for an active agent.
 
-    Same retired/unknown rejection as /chat for defense in depth.
+    ``source`` is ``override`` when a disk edit is active, else ``baked``.
+    ``baked`` is always the committed default (for Reset in the UI).
     """
     agent, err = _resolve_agent(agent_name)
     if err:
         return err
     try:
         text = get_persona(agent)
+        source = persona_source(agent)
+        baked = baked_persona(agent)
     except PersonaError as e:
         return _err("internal_error", f"persona lookup failed: {e}", 500)
-    return jsonify({"agent": agent, "persona": text}), 200
+    return jsonify({
+        "agent": agent,
+        "persona": text,
+        "source": source,
+        "baked": baked,
+    }), 200
+
+
+@bp.put("/api/persona/<agent_name>")
+def api_persona_put(agent_name: str):
+    """Save a persona override and hot-reload the live agent loop."""
+    agent, err = _resolve_agent(agent_name)
+    if err:
+        return err
+    body = request.get_json(silent=True) or {}
+    text = body.get("persona")
+    if not isinstance(text, str):
+        return _err("bad_request", "body.persona must be a string", 400)
+    try:
+        save_persona_override(agent, text)
+        effective = get_persona(agent)
+    except PersonaError as e:
+        return _err("bad_request", str(e), 400)
+    _hot_reload_persona(agent, effective)
+    return jsonify({
+        "ok": True,
+        "agent": agent,
+        "persona": effective,
+        "source": "override",
+        "baked": baked_persona(agent),
+    }), 200
+
+
+@bp.delete("/api/persona/<agent_name>")
+def api_persona_delete(agent_name: str):
+    """Clear override and restore the baked-in persona."""
+    agent, err = _resolve_agent(agent_name)
+    if err:
+        return err
+    clear_persona_override(agent)
+    text = get_persona(agent)
+    _hot_reload_persona(agent, text)
+    return jsonify({
+        "ok": True,
+        "agent": agent,
+        "persona": text,
+        "source": "baked",
+        "baked": baked_persona(agent),
+    }), 200
 
 
 # ─── /api/message_board  (STUB — TODO(vnext-message-board)) ──────────────────

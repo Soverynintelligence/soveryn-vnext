@@ -35,6 +35,7 @@ from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
+from soveryn.agents.skills import get_skill_index
 from soveryn.agents.souls import get_soul
 from soveryn.agents.turn_scope import is_trivial_user_turn
 from soveryn.inference.llama_server_client import (
@@ -57,6 +58,11 @@ from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 from soveryn.platform.verification.gate import GateDecision, VerificationGate
 from soveryn.platform.voice.sanitize import sanitize_for_tts
+
+try:
+    from soveryn.platform.approval.store import ApprovalBroker
+except ImportError:  # pragma: no cover
+    ApprovalBroker = None  # type: ignore[assignment]
 
 
 ChatFn = Callable[..., ChatResponse]
@@ -478,12 +484,14 @@ class AgentLoop:
         embed_fn: EmbedFn = _default_embed,
         soul_text: str | None = "",
         souls_dir: Path | None = None,
+        skills_dir: Path | None = None,
         pinned_text: str = "",
         continuity_config: ContinuityConfig | None = None,
         coord_store: "CoordinationStore | None" = None,
         black_box: BlackBox | None = None,
         steering_rack: SteeringRack | None = None,
         verification_gate: "VerificationGate | None" = None,
+        approval_gate: "ApprovalBroker | None" = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
@@ -552,6 +560,11 @@ class AgentLoop:
             self.soul_text: str = get_soul(self.agent_name, souls_dir=souls_dir)
         else:
             self.soul_text = soul_text
+        # Skills are disk-first + hot-reload: the index is re-read from disk
+        # every turn (see _build_skills_index) so a freshly-learned skill is
+        # visible next turn without a restart. skills_dir=None falls back to
+        # the config default inside get_skill_index.
+        self.skills_dir = skills_dir
 
         # Pinned memory is Aetheria's relationship substrate (third identity
         # layer between persona and soul). Default empty = skip — Vett and
@@ -577,6 +590,11 @@ class AgentLoop:
             verification_gate is not None
             and verification_gate.applies_to(self.agent_name)
         )
+        # Deterministic approval gate (egress boundary). None → no gate; every
+        # egress tool call passes through unimpeded. When wired, the gate
+        # intercepts `optional_egress` tools at the tool-dispatch boundary,
+        # blocks until a human approves, and denies on timeout (fail-safe).
+        self.approval_gate = approval_gate
         # Cross-rail live thread (ActiveContextService | None). Optional so
         # every existing construction site and test keeps working unchanged.
         self.active_context = active_context
@@ -865,6 +883,28 @@ class AgentLoop:
             identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
         )
 
+    def _build_skills_index(self) -> str:
+        """Skills index is disk-first, re-read every turn (hot-reload).
+
+        Tiny (one line per skill) so the per-turn read is negligible. A
+        skill learned mid-session appears next turn with no restart. Empty
+        (no skills on disk yet) → "" so the prelude block is skipped entirely.
+        Labeled for the model; soft-capped so a fat index cannot bloat prelude.
+        """
+        raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        if not raw:
+            return ""
+        # ~2k tokens soft budget for the index (design: citizen skill capture).
+        max_chars = 8000
+        if len(raw) > max_chars:
+            raw = raw[: max_chars - 1].rstrip() + "…"
+        return (
+            "[PROCEDURAL SKILLS — house craft for this citizen]\n"
+            "Index only. Call recall_skill with a name below to load the full how-to.\n"
+            f"{raw}\n"
+            "[/PROCEDURAL SKILLS]"
+        )
+
     def _tool_schemas(self) -> tuple[dict, ...]:
         """Return OpenAI-compatible tool schemas for this agent."""
 
@@ -1070,6 +1110,7 @@ class AgentLoop:
         continuity_brief = self._build_continuity_brief(session_id)
         recall_context = self._build_recall_context(session_id, user_message)
         identity_context = self._build_identity_context()
+        skills_index = self._build_skills_index()
 
         # 3. Build immutable tuple[ChatMessage, ...] (constraint 7).
         # System message is prepended at request build time — NOT persisted
@@ -1097,6 +1138,8 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+        if skills_index:
+            prelude = prelude + (ChatMessage(role="system", content=skills_index),)
 
         elided_turns = 0
         if self.history_token_budget is not None:
@@ -1230,7 +1273,9 @@ class AgentLoop:
                     tool_calls=response.tool_calls,
                 ),)
                 result_messages = [
-                    self._tool_result_message(tool_call, session_id=session_id)
+                    self._tool_result_message(
+                        tool_call, session_id=session_id, source=source,
+                    )
                     for tool_call in response.tool_calls
                 ]
                 if recorder is not None:
@@ -1445,7 +1490,11 @@ class AgentLoop:
         }
 
     def _tool_result_message(
-        self, tool_call: dict, *, session_id: str | None = None,
+        self,
+        tool_call: dict,
+        *,
+        session_id: str | None = None,
+        source: str = "direct",
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1471,6 +1520,45 @@ class AgentLoop:
                 content=json.dumps(result, sort_keys=True),
                 tool_call_id=call_id,
             )
+
+        # ── Approval gate pre-dispatch check.
+        # Intercept egress tool calls before they leave the house. The gate
+        # creates a pending approval request, blocks until a human decides,
+        # and denies on timeout (fail-safe: no egress without a yes). The
+        # model sees the synthetic result and can re-plan or stop.
+        # Automations (source=automation) auto-pass read-only tools so the
+        # scheduler never hangs on web_search — writes stay gated.
+        if self.approval_gate is not None and tool_name:
+            from soveryn.citizens.connectors import requires_approval
+
+            if requires_approval(tool_name, source=source):
+                from datetime import datetime as _dt
+
+                now = _dt.now().isoformat()
+                req = self.approval_gate.request(
+                    citizen=self.agent_name,
+                    tool=tool_name,
+                    args=json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args),
+                    now=now,
+                )
+                terminal = self.approval_gate.wait(req.id)
+                if terminal.state != "approved":
+                    result = {
+                        "error": "ApprovalDenied",
+                        "tool": tool_name,
+                        "approval_id": req.id,
+                        "state": terminal.state,
+                        "message": (
+                            "This egress tool call was not approved. "
+                            "It will not be sent. Re-plan without this call, "
+                            "or inform the user it was denied."
+                        ),
+                    }
+                    return ChatMessage(
+                        role="tool",
+                        content=json.dumps(result, sort_keys=True),
+                        tool_call_id=call_id,
+                    )
 
         try:
             args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
@@ -1515,6 +1603,23 @@ class AgentLoop:
                 result["acttruth_lesson"] = lesson
             elif lesson and not isinstance(result, dict):
                 result = {"result": result, "acttruth_lesson": lesson}
+            # Step 3: park a bug-triage candidate (deduped). Never auto-fixes.
+            if lesson:
+                try:
+                    from soveryn.platform.acttruth.triage import enqueue_if_lesson
+
+                    triage_row = enqueue_if_lesson(
+                        agent=self.agent_name,
+                        tool=tool_name,
+                        lesson_text=str(lesson),
+                        error=str(err) if err else None,
+                        result=result,
+                    )
+                    if triage_row and isinstance(result, dict):
+                        result = dict(result)
+                        result["acttruth_triage_id"] = triage_row.get("id")
+                except Exception:
+                    pass
         except Exception:
             pass
 
@@ -1595,6 +1700,7 @@ class AgentLoop:
         continuity_brief = self._build_continuity_brief(session_id)
         recall_context = self._build_recall_context(session_id, user_message)
         identity_context = self._build_identity_context()
+        skills_index = self._build_skills_index()
 
         # ── Build messages
         history_messages = tuple(
@@ -1615,6 +1721,8 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+        if skills_index:
+            prelude = prelude + (ChatMessage(role="system", content=skills_index),)
 
         elided_turns = 0
         if self.history_token_budget is not None:
@@ -1873,7 +1981,9 @@ class AgentLoop:
                         name=str(function.get("name") or ""),
                         args=str(function.get("arguments") or ""),
                     )
-                    result_message = self._tool_result_message(tool_call, session_id=session_id)
+                    result_message = self._tool_result_message(
+                        tool_call, session_id=session_id, source=source,
+                    )
                     yield ToolResultEvent(
                         call_id=str(tool_call.get("id") or ""),
                         name=str(function.get("name") or ""),

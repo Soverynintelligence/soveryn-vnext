@@ -1,0 +1,33 @@
+[
+  {
+    "slug": "carousel-publisher",
+    "name": "Carousel Publisher",
+    "category": "Marketing",
+    "integrations": [
+      "PostNitro",
+      "LinkedIn",
+      "Instagram",
+      "Threads",
+      "TikTok"
+    ],
+    "contributor": "postnitro",
+    "detail_url": "https://botdirectory.ai/bots/carousel-publisher/",
+    "imported_at": "2026-08-20T09:40:37",
+    "scheduled": false,
+    "live": false
+  },
+  {
+    "slug": "buyer-intent-reply-queue",
+    "name": "Buyer Intent Reply Queue",
+    "category": "Marketing",
+    "integrations": [
+      "HotMention",
+      "Slack"
+    ],
+    "contributor": "alexandr-belogubov",
+    "detail_url": "https://botdirectory.ai/bots/buyer-intent-reply-queue/",
+    "imported_at": "2026-08-20T09:29:29",
+    "scheduled": false,
+    "live": false
+  }
+]

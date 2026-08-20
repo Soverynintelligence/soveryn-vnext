@@ -157,6 +157,19 @@ def create_app(
             )
 
         tool_registry = ToolRegistry()
+
+        # recall_skill — on-demand skill body loader. Every agent gets it:
+        # each is owner-scoped so an agent can only recall its own skills.
+        # The skills INDEX (tiny) is always in the prelude; this tool loads
+        # the full <name>.md when the model decides to run that skill.
+        from soveryn.agents.recall_skill_tool import build_recall_skill_tool
+
+        for _agent in ACTIVE_AGENTS:
+            tool_registry.register(build_recall_skill_tool(
+                skills_dir=env.skills_dir,
+                owner_agent=_agent,
+            ))
+
         if recall_lattice is not None:
             from soveryn.agents.aetheria.tools import register_aetheria_tools
 
@@ -182,7 +195,7 @@ def create_app(
                 build_search_by_embedding_tool,
                 build_search_by_keywords_tool,
             )
-            for _agent in ("vett", "scotty", "kernel"):
+            for _agent in ("vett", "scotty", "kernel", "eve"):
                 tool_registry.register(build_search_by_embedding_tool(
                     store=recall_lattice, embed_fn=_default_embed,
                     owner_agent=_agent,
@@ -544,7 +557,7 @@ def create_app(
         from soveryn.platform.inference.spark_status_tool import (
             register_spark_status_tool,
         )
-        for agent_name in ("aetheria", "vett", "scotty"):
+        for agent_name in ("aetheria", "vett", "scotty", "eve"):
             register_spark_status_tool(tool_registry, owner_agent=agent_name)
 
         from soveryn.platform.web import register_web_tools
@@ -566,7 +579,7 @@ def create_app(
 
         # House Post tools — inter-citizen mail (all founding citizens).
         from soveryn.platform.house_post_tools import register_house_post_tools
-        for agent_name in ("aetheria", "vett", "scotty"):
+        for agent_name in ("aetheria", "vett", "scotty", "eve"):
             try:
                 register_house_post_tools(tool_registry, owner_agent=agent_name)
             except Exception:
@@ -805,6 +818,28 @@ def create_app(
             )
         )
 
+        # Eve — compose_post: draft-and-drop Instagram/Facebook posts to Signal.
+        # Delivers via the signal bridge (send_once); no Meta API, no creds.
+        # signal_config is only defined when lattice_db exists (line 634-637).
+        if env.lattice_db.is_file():
+            from soveryn.agents.marketing_tools import register_compose_post_tool
+            register_compose_post_tool(
+                tool_registry,
+                config=signal_config,
+                lattice_db_path=env.lattice_db,
+                owner_agent="eve",
+            )
+
+        # botdirectory.ai — browse public bot charters + import to local disk
+        # for review. NEVER auto-schedules. Eve (marketing) + Kernel (build).
+        from soveryn.platform.botdirectory.tools import register_botdirectory_tools
+        for _bd_owner in ("eve", "kernel"):
+            register_botdirectory_tools(
+                tool_registry,
+                owner_agent=_bd_owner,
+                data_root=env.data_root,
+            )
+
         # Aetheria-only dream-recall tools (recent_dreams + search_dreams).
         # NOT auto-injected — she queries her own dream layer when she
         # chooses to look. Restricted to layer='dream' on the nodes table.
@@ -861,6 +896,16 @@ def create_app(
         from soveryn.platform.verification import VerificationGate
         verification_gate = VerificationGate()
 
+        # Approval gate — human-in-the-loop interceptor for optional_egress
+        # tools. Shared across all agents; the broker's wait() blocks the
+        # agent loop until a human decides (or the request times out to a
+        # fail-safe denial). DB lives beside the other memory stores so a
+        # SOVERYN_DATA_ROOT cascade covers it. See
+        # project_soveryn_approval_gate.md for the design rationale.
+        from soveryn.platform.approval.store import ApprovalBroker, ApprovalStore
+        approval_store = ApprovalStore(env.data_root / "memory" / "approvals.db")
+        approval_broker = ApprovalBroker(approval_store)
+
         agent_loops = {}
         for name in ACTIVE_AGENTS:
             kwargs = {"soul_text": None}
@@ -868,11 +913,20 @@ def create_app(
             # _tool_schemas() filters to only its own owner-keyed tools, so
             # sharing the registry doesn't leak capability across agents.
             kwargs["tool_registry"] = tool_registry
+            # Skills index: disk-first, every agent. Reads
+            # <skills_dir>/<agent>/_index.md each turn (see
+            # AgentLoop._build_skills_index); empty string when absent, so no
+            # system message is added until a skill is written to disk.
+            kwargs["skills_dir"] = env.skills_dir
             kwargs["continuity_config"] = _continuity_for(name)
             kwargs["black_box"] = black_box
             kwargs["steering_rack"] = steering_rack
             # Owner-scoped to Vett (v1); a no-op for other agents.
             kwargs["verification_gate"] = verification_gate
+            # Approval gate — shared broker; the loop only blocks for tools
+            # that require_approval() (optional_egress class + explicit
+            # send tools). No-op for non-egress tool calls.
+            kwargs["approval_gate"] = approval_broker
             # 32K-context llama-server slots across the fleet (Aetheria on
             # blackwell router :8090 with cache-ram store; Vett+Scotty remote /
             # quadro as configured). Every loop gets the server window + a
@@ -1214,6 +1268,16 @@ def create_app(
         _x_publisher_ext = None
         _x_memory_ext = None
         _x_rejection_ext = None
+    # Approval gate — constructed inside the build block above. When
+    # agent_loops is injected externally (test fixtures), the build block is
+    # skipped and these stay None — the /approvals/* routes treat a missing
+    # broker as "nothing to decide" rather than KeyError'ing.
+    try:
+        _approval_store_ext = approval_store  # type: ignore[name-defined]
+        _approval_broker_ext = approval_broker  # type: ignore[name-defined]
+    except NameError:
+        _approval_store_ext = None
+        _approval_broker_ext = None
     from soveryn.platform.delegation.worktree import (
         merge_worktree as _merge_worktree,
         remove_worktree as _remove_worktree,
@@ -1246,6 +1310,10 @@ def create_app(
         # Cross-rail live thread — the X approval routes clear the staged-post
         # marker from it on approve/reject.
         "active_context": active_context_service,
+        # Approval gate — human-in-the-loop for optional_egress tools. The
+        # /approvals/* routes read pending requests and post decisions here.
+        "approval_store": _approval_store_ext,
+        "approval_broker": _approval_broker_ext,
     }
 
     # Voice — Phase 1: Aetheria only. Gated on ELEVENLABS_API_KEY +
@@ -1467,6 +1535,10 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_cognition_bp)
     from soveryn.app.routes.api_heartbeat import bp as api_heartbeat_bp
     app.register_blueprint(api_heartbeat_bp)
+    from soveryn.app.routes.api_automations import bp as api_automations_bp
+    app.register_blueprint(api_automations_bp)
+    from soveryn.app.routes.api_botdirectory import bp as api_botdirectory_bp
+    app.register_blueprint(api_botdirectory_bp)
     from soveryn.app.routes.api_citizens import bp as api_citizens_bp
     app.register_blueprint(api_citizens_bp)
     from soveryn.app.routes.api_ares import bp as api_ares_bp

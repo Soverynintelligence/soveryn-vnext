@@ -592,9 +592,10 @@ def test_prepare_wire_messages_handles_single_prelude_system():
 
 
 def test_prepare_wire_messages_only_folds_prelude_not_interior_system():
-    """A 'system' message that appears AFTER user/assistant turns is part of
-    history (e.g. tool injection), not the prelude — adapter must not fold
-    it into the front."""
+    """A 'system' message AFTER user/assistant turns is not prelude — must not
+    fold into the front. Qwen3.x jinja also rejects mid-conversation system
+    roles, so the adapter rewrites them to user-role [System note] markers.
+    """
     msgs = (
         ChatMessage(role="system", content="persona"),
         ChatMessage(role="system", content="soul"),
@@ -603,12 +604,14 @@ def test_prepare_wire_messages_only_folds_prelude_not_interior_system():
         ChatMessage(role="user", content="follow-up"),
     )
     out = prepare_wire_messages(msgs, _server(supports_multi=False))
-    # The prelude (positions 0,1) folds into 1 system message; everything
-    # from position 2 onward is preserved exactly.
+    # Prelude (positions 0,1) folds into 1 system message; interior system
+    # becomes a user-role note so Qwen's template does not raise.
     assert out[0].role == "system"
     assert "persona" in out[0].content and "soul" in out[0].content
     assert out[1] == ChatMessage(role="user", content="q")
-    assert out[2] == ChatMessage(role="system", content="tool result note")
+    assert out[2].role == "user"
+    assert "tool result note" in (out[2].content or "")
+    assert "[System note]" in (out[2].content or "")
     assert out[3] == ChatMessage(role="user", content="follow-up")
 
 

@@ -62,10 +62,11 @@ class BenchFlashStatus:
     soveryn_opencode: str = OPENCODE_CMD
     talk_path: str = "/build"
     note: str = (
-        "Kernel — autonomous house build brain (DeepSeek V4 Flash). "
-        "Default write path: OpenCode (`soveryn-opencode`). "
-        "Aider (`soveryn-aider --kernel`) is surgical fallback. "
-        "First warm can take several minutes."
+        "Kernel — house build brain. "
+        "OpenCode coding default: Qwen 3.8 on :8090 (`soveryn-opencode`). "
+        "Chat/dig warm here: DeepSeek Flash on :8091. "
+        "Flash dig via OpenCode: `soveryn-opencode --flash`. "
+        "Aider Flash: `soveryn-aider --kernel`. First Flash warm can take minutes."
     )
     fetched_at: str = ""
 

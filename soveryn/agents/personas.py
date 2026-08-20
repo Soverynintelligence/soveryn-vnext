@@ -1,20 +1,22 @@
 """SOVERYN vNext — agent personas.
 
-System prompts injected at request-build time by AgentLoop. Frozen at
-import — production deployment does not mutate these; updates require a
-new commit.
+System prompts injected at request-build time by AgentLoop. Baked-in
+defaults live in this module (committed). Live edits from Command Center
+/ chat land under ``<data_root>/memory/personas/<agent>.md`` and take
+precedence via :func:`get_persona`; saving also hot-reloads the running
+AgentLoop's ``system_prompt``.
 
 Per Jon's guidance for the first persona commit: keep them short and
-operational. Voice refinement is a later layer. The point of this
-commit is the *plumbing* — that AgentLoop wires a system message into
-every chat — not the literary craft.
+operational. Voice refinement is a later layer.
 
-These strings are the canonical source. Do NOT auto-resurrect text from
-recovered .pyc dumps in soveryn_PRESERVE_*. Old prompt scar tissue
-stays out of vNext.
+Do NOT auto-resurrect text from recovered .pyc dumps in soveryn_PRESERVE_*.
+Old prompt scar tissue stays out of vNext.
 """
 
 from __future__ import annotations
+
+import os
+from pathlib import Path
 from types import MappingProxyType
 
 from soveryn.agents.aetheria.persona import AETHERIA_PERSONA
@@ -61,18 +63,18 @@ Stay factual and brief. Strategy belongs to Aetheria and Jon; research belongs t
 When Jon gives a task that needs tools you already have, use them in this turn. Do not ask "should I run that?" or announce work and wait for confirmation. Clarifying questions only for real ambiguity or destructive scope outside what he asked."""
 
 
-KERNEL_PERSONA = """You are Kernel, the SOVERYN house build brain (local DeepSeek V4 Flash).
+KERNEL_PERSONA = """You are Kernel, the SOVERYN house build brain.
 
 Voice: stoic, reserved, sparse. When you speak, people listen. Few words. No filler, no pep talk, no “happy to help,” no narration theater. State the result; do not perform enthusiasm. Warmth is Aetheria’s lane — you are the steel under the floor.
 
-You make and mend code — **autonomous by default**. Not the soul (Aetheria), not the verifier (Vett), not politics (Scotty). Prefer concrete patches, file reads, and commands over essays. If one sentence answers it, stop.
+You make and mend code — **autonomous by default**. Coding lane: DeepSeek V4 Flash via OpenCode (`:8091`). Large-ctx/speed lane: Qwen 3.8 (`soveryn-opencode --qwen`). Not the soul (Aetheria), not the verifier (Vett), not politics (Scotty). Prefer concrete patches, file reads, and commands over essays. If one sentence answers it, stop. Flash is on 16k ctx — three precise greps, then rethink; do not thrash with dozens of blind file searches.
 
 ## Memory
 Chat history + Lattice search when prior decisions matter. Do not invent house lore.
 
 ## Writes
-- Default autonomous path: OpenCode (`soveryn-opencode`) — plan → edit → run → fix.
-- Surgical fallback: Aider (`soveryn-aider --kernel`).
+- Default autonomous path: OpenCode on Flash (`soveryn-opencode`) — plan → edit → run → fix.
+- Qwen lane: `soveryn-opencode --qwen`. Surgical: `soveryn-aider --kernel` (Flash) or `soveryn-aider` (Qwen).
 - Optional gate: `/build` when Jon wants approve-before-apply.
 - In crew chat: memory/search/read (and list) only — heavy mends go through OpenCode.
 - Never touch secrets (.ssh, .env, credentials). Escalate on secrets, sudo, force-push, or outside the allowed tree.
@@ -81,31 +83,136 @@ Chat history + Lattice search when prior decisions matter. Do not invent house l
 Lookups, patches, and verification happen this turn. No permission theater."""
 
 
+EVE_PERSONA = """You are Eve, SOVERYN's Head of Marketing.
+
+Your job is to draft posts that make the house seen — for SOVERYN, ActTruth, and Carolina Water Gardens. You never post to Meta directly. You compose, you drop on Signal, Jon publishes.
+
+Voice: warm but direct. Short sentences. Concrete nouns. If it sounds like a brand agency wrote it, rewrite it.
+
+## What You Write
+- Instagram: hook in the first line, caption ≤ 2,200 chars, hashtag block at bottom, one image path.
+- Facebook: longer-form, conversational, 3–5 hashtags max.
+- Every draft includes: caption, hashtags, image path, best-time note, brand purpose.
+
+## Rules
+1. No fabrication. No invented stats, testimonials, or specs. No source = no number.
+2. One post, one brand, one job. Never mix SOVERYN / ActTruth / CWG in a single draft.
+3. Image first. Suggest a specific file path from data/media/. No good image? Say so.
+4. Scope discipline: greetings, "ok", thanks → plain reply, zero tools.
+5. Act, don't ask: when Jon requests a draft, call compose_post this turn. No "I'll write that up" theater.
+6. Stop on command: "hold off," "pause," "we're good" → acknowledge and halt."""
+
+
 _PERSONAS_BY_AGENT: dict[str, str] = {
     "aetheria": AETHERIA_PERSONA,
     "vett":     VETT_PERSONA,
     "scotty":   SCOTTY_PERSONA,
     "kernel":   KERNEL_PERSONA,
+    "eve":      EVE_PERSONA,
 }
 
-#: Read-only mapping — callers can't mutate the dict.
+#: Read-only mapping of baked-in defaults — callers can't mutate the dict.
+#: Live edits land under ``<data_root>/memory/personas/<agent>.md`` and
+#: take precedence via :func:`get_persona` (and hot-reload into AgentLoop).
 PERSONAS: MappingProxyType = MappingProxyType(_PERSONAS_BY_AGENT)
 
 
-def get_persona(agent_name: str) -> str:
-    """Return the persona string for an active agent.
-
-    Raises PersonaError for retired or unknown names. (Defense in depth:
-    even if some future code path skipped the registry, the persona
-    lookup also rejects retired identities.)
-    """
+def _normalize_agent(agent_name: str) -> str:
     name = agent_name.lower().strip()
     if name in RETIRED:
-        raise PersonaError(
-            f"{name!r} is retired; no persona available"
-        )
+        raise PersonaError(f"{name!r} is retired; no persona available")
     if name not in PERSONAS:
         raise PersonaError(
             f"No persona for {name!r}; active agents: {sorted(ACTIVE_AGENTS)}"
         )
+    return name
+
+
+def personas_dir(data_root: Path | None = None) -> Path:
+    """Directory for on-disk persona overrides."""
+    if data_root is None:
+        raw = os.environ.get("SOVERYN_DATA_ROOT")
+        if raw:
+            data_root = Path(raw)
+        else:
+            from soveryn.config.loader import DEFAULT_DATA_ROOT
+
+            data_root = Path(DEFAULT_DATA_ROOT)
+    return Path(data_root) / "memory" / "personas"
+
+
+def persona_override_path(agent_name: str, *, data_root: Path | None = None) -> Path:
+    name = _normalize_agent(agent_name)
+    return personas_dir(data_root) / f"{name}.md"
+
+
+def baked_persona(agent_name: str) -> str:
+    """Return the committed default persona (ignore on-disk overrides)."""
+    return PERSONAS[_normalize_agent(agent_name)]
+
+
+def read_persona_override(
+    agent_name: str, *, data_root: Path | None = None
+) -> str | None:
+    """Return override text if present and non-empty, else None."""
+    path = persona_override_path(agent_name, data_root=data_root)
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    # Writers append a trailing newline for POSIX text files; strip only that.
+    if text.endswith("\n"):
+        text = text[:-1]
+    return text if text.strip() else None
+
+
+def save_persona_override(
+    agent_name: str, text: str, *, data_root: Path | None = None
+) -> Path:
+    """Write an override. Empty / whitespace-only raises PersonaError."""
+    name = _normalize_agent(agent_name)
+    body = (text or "").strip()
+    if not body:
+        raise PersonaError("persona text must be non-empty")
+    path = persona_override_path(name, data_root=data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(body + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return path
+
+
+def clear_persona_override(
+    agent_name: str, *, data_root: Path | None = None
+) -> bool:
+    """Remove override file if present. Returns True if a file was removed."""
+    path = persona_override_path(agent_name, data_root=data_root)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
+def get_persona(agent_name: str, *, data_root: Path | None = None) -> str:
+    """Return the effective persona for an active agent.
+
+    Prefers ``<data_root>/memory/personas/<agent>.md`` when present;
+    otherwise the baked-in :data:`PERSONAS` string.
+
+    Raises PersonaError for retired or unknown names.
+    """
+    name = _normalize_agent(agent_name)
+    override = read_persona_override(name, data_root=data_root)
+    if override is not None:
+        return override
     return PERSONAS[name]
+
+
+def persona_source(agent_name: str, *, data_root: Path | None = None) -> str:
+    """``\"override\"`` if a disk file is active, else ``\"baked\"``."""
+    if read_persona_override(agent_name, data_root=data_root) is not None:
+        return "override"
+    _normalize_agent(agent_name)
+    return "baked"

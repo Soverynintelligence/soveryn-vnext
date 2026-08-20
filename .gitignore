@@ -44,6 +44,8 @@ data/telemetry/
 data/memory/*
 !data/memory/souls/
 !data/memory/souls/**
+!data/memory/skills/
+!data/memory/skills/**
 data/aetheria_heartbeat_thoughts*
 data/heartbeat_deploy_started_at
 data/black_box/
@@ -91,6 +93,8 @@ soveryn/config/*.bak*
 
 # ActTruth / Continuum / Kernel HITL live ledgers (regenerated)
 data/acttruth/
+data/automations/
+data/media/
 data/continuum/
 data/kernel_proposals/
 

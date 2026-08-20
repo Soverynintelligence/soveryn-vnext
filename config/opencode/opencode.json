@@ -2,20 +2,37 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "kernel-flash/bench-flash",
   "small_model": "kernel-flash/bench-flash",
-  "enabled_providers": ["kernel-flash"],
+  "enabled_providers": ["kernel-flash", "kernel-qwen"],
   "provider": {
     "kernel-flash": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel Flash (local :8091)",
+      "name": "Kernel coding · DeepSeek Flash (:8091)",
       "options": {
         "baseURL": "http://127.0.0.1:8091/v1",
         "apiKey": "sk-local-soveryn"
       },
       "models": {
         "bench-flash": {
-          "name": "Kernel · DeepSeek V4 Flash",
+          "name": "Kernel · DeepSeek V4 Flash (OpenCode default)",
           "limit": {
             "context": 16384,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "kernel-qwen": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kernel alt · Qwen 3.8 (:8090)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8090/v1",
+        "apiKey": "sk-local-soveryn"
+      },
+      "models": {
+        "aetheria": {
+          "name": "Kernel · Qwen 3.8 (large-ctx / speed lane)",
+          "limit": {
+            "context": 49152,
             "output": 8192
           }
         }
@@ -24,7 +41,7 @@
   },
   "agent": {
     "kernel": {
-      "description": "SOVERYN house build brain — autonomous mend/patch on local Flash",
+      "description": "SOVERYN house build brain — autonomous mend/patch on DeepSeek Flash",
       "mode": "primary",
       "model": "kernel-flash/bench-flash",
       "temperature": 0.2,

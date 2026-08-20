@@ -135,6 +135,14 @@ CATALOG: dict[str, ConnectorDef] = {
         class_="house",
         sovereignty_note="Sandbox/jail; Scotty's mechanical surface.",
     ),
+    "social": ConnectorDef(
+        id="social",
+        title="Social (draft-and-drop)",
+        description="Compose Instagram/Facebook post drafts, delivered via Signal for manual publishing.",
+        tools=("compose_post",),
+        class_="channel",
+        sovereignty_note="Draft-only; Jon is the publisher. No Meta API, no credentials.",
+    ),
 }
 
 
@@ -151,6 +159,9 @@ FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     ),
     "scotty": (
         "files", "system", "house_post", "code",
+    ),
+    "eve": (
+        "social", "signal", "files", "documents", "house_post",
     ),
 }
 
@@ -171,6 +182,44 @@ class ConnectorStatus:
         d = asdict(self)
         d["class"] = d.pop("class_")
         return d
+
+
+# Read-only tools that scheduled/manual automations may use without blocking
+# on the Approval Gate. Writes (email_send, x_post, messenger_send, …) stay
+# gated even for source=automation — fail-safe egress still needs a yes.
+AUTOMATION_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "web_search",
+    "fetch_url",
+    "x_feed",
+    "email_list",
+})
+
+
+def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
+    """True when a tool call must pass the Approval Gate before egress.
+
+    Gates every tool in the ``optional_egress`` sovereignty class plus the
+    human-facing channels (email/messenger) — the set Jon locked in.
+    ``signal_send`` is ungated: Signal is Jon's direct line to himself, so it
+    bypasses the Approval Gate (he is already the approver).
+
+    When ``source="automation"`` (scheduler or Run now), read-only tools in
+    ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass — news digests cannot hang
+    waiting for a human click every morning. Write egress stays gated.
+
+    Fail-safe: unknown tools return False (house-local, never egress).
+    """
+    if source == "automation" and tool_name in AUTOMATION_AUTO_APPROVE_TOOLS:
+        return False
+    for defn in CATALOG.values():
+        if defn.class_ != "optional_egress":
+            continue
+        if tool_name in defn.tools:
+            return True
+    # human-facing channels: outbound to the world — gated
+    if tool_name in ("email_send", "messenger_send"):
+        return True
+    return False
 
 
 def email_config() -> dict[str, str | None]:
@@ -232,6 +281,9 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
         if os.environ.get("SOVERYN_X_DISABLED", "").lower() in ("1", "true", "yes"):
             return False, "X disabled"
         return True, "X stack when services armed"
+    if connector_id == "social":
+        # Draft-and-drop: armed when signal bridge is up (delivery channel)
+        return signal_armed()
     # house connectors always "armed" as local
     if connector_id in (
         "files", "documents", "system", "delegation", "house_post", "git",

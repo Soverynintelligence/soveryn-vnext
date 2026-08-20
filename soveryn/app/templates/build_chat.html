@@ -262,7 +262,7 @@
       <div class="brand">
         <div class="eyebrow">SOVERYN · local · HITL</div>
         <h1>Kernel</h1>
-        <p>Build brain with hands. This page is the <strong>approve-before-apply</strong> lane. Autonomous default: <code>soveryn-opencode</code>. DeepSeek Flash under the hood.</p>
+        <p>Build brain with hands. This page is the <strong>approve-before-apply</strong> Flash chat lane. Coding default: <code>soveryn-opencode</code> (Qwen 3.8). Flash dig: <code>soveryn-opencode --flash</code>.</p>
       </div>
       <div class="nav"><a href="/">← Command Center</a></div>
     </header>
@@ -273,7 +273,7 @@
       <div class="actions">
         <button type="button" class="primary" data-warm>Warm up</button>
         <button type="button" data-refresh-props>Refresh proposals</button>
-        <button type="button" data-copy-opencode title="Copy soveryn-opencode">Copy OpenCode</button>
+        <button type="button" data-copy-opencode title="Copy soveryn-opencode (Qwen 3.8 coding)">Copy OpenCode</button>
         <button type="button" data-copy-aider title="Copy soveryn-aider --kernel">Copy Aider</button>
       </div>
     </div>
@@ -430,7 +430,7 @@
       if (d.soveryn_opencode) openCodeCmd = d.soveryn_opencode;
       if (d.soveryn_aider_flash) aiderCmd = d.soveryn_aider_flash;
       const hintBits = [];
-      if (openCodeCmd) hintBits.push("OpenCode (autonomous): " + openCodeCmd);
+      if (openCodeCmd) hintBits.push("OpenCode (Qwen coding): " + openCodeCmd);
       if (d.aider_cmd || aiderCmd) hintBits.push("Aider (surgical): " + (d.aider_cmd || aiderCmd));
       if (aiderHint) aiderHint.textContent = hintBits.join(" · ");
       warmBtn.disabled = d.state === "loading" || d.state === "warm" || d.state === "missing";

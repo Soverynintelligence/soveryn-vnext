@@ -19,7 +19,7 @@
 
 Does **not** require Lattice. Does **not** replace black_box / telemetry. Soft lessons only in v0 (no hard refuse-after-×3 yet).
 
-**Step 1** = wrongness becomes visible. **Step 2** = repeated wrongness becomes a lesson so autonomous agents stop blind retry loops.
+**Step 1** = wrongness becomes visible. **Step 2** = repeated wrongness becomes a lesson so autonomous agents stop blind retry loops. **Step 3 (house)** = lesson streak enqueues a **bug-triage candidate** for durable fix (skill / code / ops) — see `docs/designs/2026-08-20-acttruth-bug-triage.md`. Soft lessons only in the portable package; triage queue is SOVERYN house.
 
 ## Install
 

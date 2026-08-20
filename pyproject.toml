@@ -18,6 +18,7 @@ dependencies = [
     # performance dependency, not a correctness one.
     "numpy>=1.26",
     "trafilatura>=2.0",  # web fetch + main-content extraction (soveryn.platform.web.fetch)
+    "croniter>=2.0",  # automations scheduler due detection
     "pipecat-ai[silero,webrtc,elevenlabs]>=1.3.0,<2",
     # vett-harness vendored deps (upstream pat-jj/harness-1)
     "anthropic>=0.86.0",
@@ -39,6 +40,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["soveryn*"]
+
+[tool.setuptools.package-data]
+soveryn = ["automations/routines/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

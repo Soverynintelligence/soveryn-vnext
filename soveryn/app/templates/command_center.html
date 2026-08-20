@@ -1870,6 +1870,183 @@
     gap: 10px !important;
   }
 
+  /* Automations v0 — catalog + dry-run (never live Signal) */
+  .auto-panel { padding: 12px 14px !important; }
+  .auto-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .auto-head h3 {
+    font-size: 11px; color: rgba(232,227,213,0.45);
+    text-transform: uppercase; letter-spacing: 0.12em; margin: 0;
+  }
+  .auto-badge {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #c0824f; border: 1px solid rgba(192,130,79,0.35);
+    padding: 2px 7px; border-radius: 3px;
+  }
+  .auto-meta {
+    font-size: 11px; color: rgba(232,227,213,0.45); margin-left: auto;
+  }
+  .auto-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 340px; overflow-y: auto;
+  }
+  .auto-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 6px;
+  }
+  .auto-row[data-enabled="false"] { opacity: 0.45; }
+  .auto-title {
+    font-size: 13px; color: rgba(232,227,213,0.9); font-weight: 500;
+  }
+  .auto-sub {
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-top: 2px;
+  }
+  .auto-sub .ag { color: #8fae8f; }
+  .auto-sub .cat { color: #c0824f; }
+  .auto-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .auto-chans { display: flex; gap: 4px; }
+  .auto-chan {
+    border: 1px solid rgba(232,227,213,0.18) !important;
+    background: rgba(0,0,0,0.2) !important;
+    color: rgba(232,227,213,0.55) !important;
+    font-size: 9px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 8px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-chan.is-on {
+    border-color: rgba(192,130,79,0.65) !important;
+    background: rgba(192,130,79,0.16) !important;
+    color: #f3e7db !important;
+  }
+  .auto-chan:disabled { opacity: 0.45; cursor: wait; }
+  .auto-run-btn {
+    border: 1px solid rgba(192,130,79,0.4) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #e7e5dc !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-run-btn:hover { border-color: rgba(192,130,79,0.75) !important; }
+  .auto-run-btn:disabled { opacity: 0.45; cursor: wait; }
+  @media (max-width: 720px) {
+    .auto-row { grid-template-columns: 1fr; }
+    .auto-actions { justify-content: flex-start; }
+  }
+  .auto-preview {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(232,227,213,0.08);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(232,227,213,0.78);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .auto-preview[hidden] { display: none; }
+  .auto-preview .ph {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 6px;
+  }
+  .auto-empty { font-size: 11px; color: rgba(232,227,213,0.4); padding: 10px; }
+  .auto-inbox {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 260px; overflow-y: auto;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(232,227,213,0.08);
+  }
+  .auto-inbox-item {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-left: 3px solid rgba(192,130,79,0.45);
+    border-radius: 6px;
+    font-size: 12px; color: rgba(232,227,213,0.82);
+  }
+  .auto-inbox-item .ih {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .auto-inbox-item .ih .ag { color: #8fae8f; }
+  .auto-inbox-item .ih .st { color: #c0824f; }
+  .auto-inbox-item details summary {
+    cursor: pointer; color: rgba(232,227,213,0.7); font-size: 12px;
+  }
+  .auto-inbox-item .ibody {
+    margin-top: 8px; white-space: pre-wrap; font-size: 12px;
+    color: rgba(232,227,213,0.78); max-height: 160px; overflow-y: auto;
+  }
+  .auto-triage {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 200px; overflow-y: auto;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(232,227,213,0.08);
+  }
+  .auto-triage-label {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 2px;
+  }
+  .auto-triage-item {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-left: 3px solid rgba(180,80,80,0.55);
+    border-radius: 6px;
+    font-size: 12px; color: rgba(232,227,213,0.82);
+  }
+  .auto-triage-item .ih {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .auto-triage-item .ih .ag { color: #8fae8f; }
+  .auto-triage-item .ih .ct { color: #e08a8a; }
+  .auto-live-btn {
+    border: 1px solid rgba(94,225,160,0.35) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #9ee0b8 !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-live-btn:hover { border-color: rgba(94,225,160,0.7) !important; }
+  .auto-routine-btn {
+    border: 1px solid rgba(143,174,143,0.4) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #b8c9b8 !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-routine-btn:hover { border-color: rgba(143,174,143,0.75) !important; }
+  .auto-routine-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .auto-live-btn:disabled { opacity: 0.45; cursor: wait; }
+
   /* Ops console — brain switch + test runner */
   .ops-panel {
     padding: 12px 14px !important;
@@ -2890,7 +3067,8 @@
         <a href="/citizens" class="keep">Citizens</a>
         <a href="/chat" class="keep">Chat</a>
         <a href="/documents">Docs</a>
-      </nav>
+          <a href="/charters" class="keep">Charters</a>
+  </nav>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all systems quiet</span></div>
       </div>
@@ -2994,7 +3172,7 @@
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/chat?agent=kernel">Talk</a>
-          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (autonomous)">OpenCode</button>
+          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (Qwen coding default)">OpenCode</button>
           <button type="button" class="agent-act" data-kernel-warm>Warm</button>
           <details class="agent-more">
             <summary class="agent-act" title="Build / Aider">More</summary>
@@ -3003,6 +3181,22 @@
               <button type="button" class="agent-act" data-kernel-copy-aider role="menuitem" title="Copy soveryn-aider --kernel">Copy Aider</button>
             </div>
           </details>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="eve" aria-label="Eve — Head of Marketing">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="eve" title="ActTruth — click for crew ledger" aria-label="ActTruth for Eve">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
+        <div class="body">
+          <div class="name">Eve</div>
+          <div class="role">marketing · IG/FB</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/chat?agent=eve">Talk</a>
+          <a class="agent-act" href="/citizens">Duties</a>
         </div>
       </div>
     </section>
@@ -3454,7 +3648,336 @@
       </div>
     </details>
 
-    
+    <!-- Automations — scheduler + CC inbox; Signal preview only -->
+    <details class="cc-fold" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
+      <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
+      <div class="cc-fold-body">
+    <section class="panel auto-panel" data-testid="automations-panel">
+      <div class="auto-head">
+        <h3>Automations</h3>
+        <span class="auto-badge">CC inbox · Signal not armed</span>
+        <span class="auto-meta" data-auto-meta>loading…</span>
+      </div>
+      <div class="auto-inbox" data-auto-inbox aria-live="polite" aria-label="Automation inbox">
+        <div class="auto-empty">loading inbox…</div>
+      </div>
+      <div class="auto-triage" data-auto-triage aria-live="polite" aria-label="ActTruth triage">
+        <div class="auto-empty">loading triage…</div>
+      </div>
+      <div class="auto-list" data-auto-list aria-live="polite" aria-label="Automation catalog">
+        <div class="auto-empty">loading catalog…</div>
+      </div>
+      <div class="auto-preview" data-auto-preview hidden>
+        <div class="ph">Run preview</div>
+        <div data-auto-preview-body></div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var list = document.querySelector('[data-auto-list]');
+      var inbox = document.querySelector('[data-auto-inbox]');
+      var triage = document.querySelector('[data-auto-triage]');
+      var meta = document.querySelector('[data-auto-meta]');
+      var preview = document.querySelector('[data-auto-preview]');
+      var previewBody = document.querySelector('[data-auto-preview-body]');
+      if(!list) return;
+      var CHAN_LABELS = {command_center:'CC', signal:'Signal'};
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function rel(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso); if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60)+'m ago';
+        if(sec < 86400) return Math.floor(sec/3600)+'h ago';
+        return Math.floor(sec/86400)+'d ago';
+      }
+      function channelsOf(a){
+        if(a && Array.isArray(a.channels) && a.channels.length) return a.channels.slice();
+        if(a && a.delivery_effective && Array.isArray(a.delivery_effective.channels))
+          return a.delivery_effective.channels.slice();
+        return ['command_center'];
+      }
+      function chanButtons(a){
+        var on = channelsOf(a);
+        var avail = (a && a.available_channels) || ['command_center','signal'];
+        return '<div class="auto-chans" data-auto-chans="'+esc(a.id)+'">'
+          + avail.map(function(ch){
+              var active = on.indexOf(ch) >= 0;
+              return '<button type="button" class="auto-chan'+(active?' is-on':'')+'"'
+                + ' data-auto-chan="'+esc(ch)+'" data-auto-id="'+esc(a.id)+'"'
+                + ' aria-pressed="'+(active?'true':'false')+'">'
+                + esc(CHAN_LABELS[ch] || ch)
+                + '</button>';
+            }).join('')
+          + '</div>';
+      }
+      function paintInbox(d){
+        if(!inbox) return;
+        var items = (d && d.inbox) || [];
+        if(!items.length){
+          inbox.innerHTML = '<div class="auto-empty">inbox empty — scheduler or Run now lands here.</div>';
+          return;
+        }
+        inbox.innerHTML = items.slice(0, 12).map(function(it){
+          var head = (it.content || it.signal_preview || '').replace(/\s+/g,' ').slice(0, 110);
+          var body = it.content || it.signal_preview || '(no content)';
+          return '<div class="auto-inbox-item">'
+            + '<div class="ih"><span>'+esc(rel(it.fired_at))+'</span>'
+            + '<span class="ag">'+esc(it.agent||'—')+'</span>'
+            + '<span class="st">'+esc(it.status||'—')+'</span>'
+            + '<span>'+esc(it.source||'')+'</span></div>'
+            + '<details><summary>'+esc(it.title||it.automation_id||'run')
+            + (head ? ' — '+esc(head)+(head.length>=110?'…':'') : '')
+            + '</summary><div class="ibody">'+esc(body)+'</div></details>'
+            + '</div>';
+        }).join('');
+      }
+      function paintTriage(d){
+        if(!triage) return;
+        var items = (d && d.triage) || [];
+        if(!items.length){
+          triage.innerHTML = '<div class="auto-triage-label">ActTruth triage</div>'
+            + '<div class="auto-empty">no open lessons — FAIL streaks land here for durable fix.</div>';
+          return;
+        }
+        triage.innerHTML = '<div class="auto-triage-label">ActTruth triage · '
+          + items.length + ' open</div>'
+          + items.slice(0, 8).map(function(it){
+            var head = (it.summary || it.lesson || '').replace(/\s+/g,' ').slice(0, 100);
+            return '<div class="auto-triage-item">'
+              + '<div class="ih"><span>'+esc(rel(it.created_at))+'</span>'
+              + '<span class="ag">'+esc(it.agent||'—')+'</span>'
+              + '<span class="ct">'+esc(it.correction_type||'—')+'</span>'
+              + '<span>→ '+esc(it.owner||'vett')+'</span>'
+              + '<span>'+esc(it.tool||'')+' · '+esc(String(it.streak||'')+'×')+'</span></div>'
+              + '<div>'+esc(it.error_class||'')+(head ? ' — '+esc(head)+(head.length>=100?'…':'') : '')
+              + '</div></div>';
+          }).join('');
+      }
+      function paint(d){
+        var items = (d && d.automations) || [];
+        if(meta){
+          meta.textContent = (d && d.count != null ? d.count : items.length)
+            + ' · CC inbox · Signal not armed';
+        }
+        if(!items.length){
+          list.innerHTML = '<div class="auto-empty">no automations in catalog.</div>';
+          return;
+        }
+        list.innerHTML = items.map(function(a){
+          var en = a.enabled !== false;
+          return '<div class="auto-row" data-id="'+esc(a.id)+'" data-enabled="'+(en?'true':'false')+'">'
+            + '<div>'
+            + '<div class="auto-title">'+esc(a.title||a.id)+'</div>'
+            + '<div class="auto-sub">'
+            + '<span class="cat">'+esc(a.category||'—')+'</span> · '
+            + '<span class="ag">'+esc(a.agent||'—')+'</span> · '
+            + esc(a.cron||'')
+            + (en ? '' : ' · disabled')
+            + '</div></div>'
+            + '<div class="auto-actions">'
+            + chanButtons(a)
+            + '<button type="button" class="auto-routine-btn" data-auto-routine="'+esc(a.id)+'"'
+            + (a.has_routine ? '' : ' disabled title="no routine doc"')
+            + '>Routine</button>'
+            + '<button type="button" class="auto-run-btn" data-auto-run="'+esc(a.id)+'"'
+            + (en ? '' : ' disabled')
+            + '>Dry-run</button>'
+            + '<button type="button" class="auto-live-btn" data-auto-live="'+esc(a.id)+'"'
+            + (en ? '' : ' disabled')
+            + '>Run now</button>'
+            + '</div></div>';
+        }).join('');
+        list.querySelectorAll('[data-auto-run]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            runDry(btn.getAttribute('data-auto-run'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-live]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            runLive(btn.getAttribute('data-auto-live'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-routine]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            showRoutine(btn.getAttribute('data-auto-routine'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-chan]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            toggleChan(btn);
+          });
+        });
+      }
+      function rowChannels(row){
+        return Array.prototype.map.call(
+          row.querySelectorAll('.auto-chan.is-on'),
+          function(b){ return b.getAttribute('data-auto-chan'); }
+        );
+      }
+      function toggleChan(btn){
+        var id = btn.getAttribute('data-auto-id');
+        var row = btn.closest('.auto-row');
+        if(!id || !row) return;
+        var ch = btn.getAttribute('data-auto-chan');
+        var on = btn.classList.contains('is-on');
+        var next = rowChannels(row).slice();
+        if(on){
+          if(next.length <= 1) return; // keep at least one
+          next = next.filter(function(c){ return c !== ch; });
+        } else {
+          next.push(ch);
+        }
+        row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = true; });
+        fetch('/api/automations/'+encodeURIComponent(id)+'/channels', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({channels: next}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = false; });
+            if(!x.ok || !x.j || !x.j.ok) return;
+            var saved = x.j.channels || next;
+            row.querySelectorAll('.auto-chan').forEach(function(b){
+              var active = saved.indexOf(b.getAttribute('data-auto-chan')) >= 0;
+              b.classList.toggle('is-on', active);
+              b.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          })
+          .catch(function(){
+            row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function showPreview(result){
+        if(!preview || !previewBody) return;
+        preview.hidden = false;
+        var del = (result && result.delivery) || {};
+        var chans = (result && result.channels)
+          || del.channels
+          || (del.channel ? [del.channel] : []);
+        var body = (result && result.content)
+          || (del.preview)
+          || (result && result.prompt)
+          || '(no content)';
+        var lines = [
+          (result && result.title ? result.title : result && result.id) || '—',
+          'status: ' + ((result && result.status) || '—')
+            + ' · agent: ' + ((result && result.agent) || '—')
+            + ' · dry_run: ' + !!(result && result.dry_run),
+          'channels → ' + (chans.length ? chans.join(' + ') : '?')
+            + ' / ' + (del.target||'jon'),
+          '',
+          body,
+        ];
+        previewBody.textContent = lines.join('\n');
+      }
+      function showRoutine(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/routine')
+          .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Routine'; }
+            if(!preview || !previewBody) return;
+            preview.hidden = false;
+            if(!x.ok || !x.j || !x.j.ok){
+              previewBody.textContent = (x.j && x.j.message) || 'routine unavailable';
+              return;
+            }
+            previewBody.textContent = [
+              (x.j.id || id) + ' · routine (' + (x.j.source || '?') + ')',
+              '',
+              x.j.markdown || '(empty)',
+            ].join('\n');
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Routine'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'routine request failed';
+            }
+          });
+      }
+      function runDry(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/run', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({live:false}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Dry-run'; }
+            if(x.j && x.j.result) showPreview(x.j.result);
+            else if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = (x.j && x.j.message) || 'dry-run failed';
+            }
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Dry-run'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'dry-run request failed';
+            }
+          });
+      }
+      function runLive(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/run', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({live:true, source:'manual'}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Run now'; }
+            if(x.j && x.j.result) showPreview(x.j.result);
+            loadInbox();
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Run now'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'live run failed';
+            }
+          });
+      }
+      function loadInbox(){
+        if(!inbox) return;
+        fetch('/api/automations/inbox?limit=20').then(function(r){ return r.json(); }).then(paintInbox)
+          .catch(function(){
+            inbox.innerHTML = '<div class="auto-empty">inbox unavailable</div>';
+          });
+      }
+      function loadTriage(){
+        if(!triage) return;
+        fetch('/api/system/acttruth/triage?limit=20').then(function(r){ return r.json(); }).then(paintTriage)
+          .catch(function(){
+            triage.innerHTML = '<div class="auto-empty">triage unavailable</div>';
+          });
+      }
+      function load(){
+        fetch('/api/automations').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){
+            list.innerHTML = '<div class="auto-empty">automations API unavailable</div>';
+            if(meta) meta.textContent = 'offline';
+          });
+        loadInbox();
+        loadTriage();
+      }
+      load();
+      setInterval(loadInbox, 30000);
+      setInterval(loadTriage, 30000);
+    })();
+    </script>
+      </div>
+    </details>
 
     <!-- ═══ Pulse (folded) ═══ -->
     <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
@@ -3693,7 +4216,7 @@
 <script>
 
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
 
   // ─── Fetch helpers ─────────────────────────────────────────────────────────
   const fetchJson = async (url) => {
@@ -4376,7 +4899,9 @@
   function describeHeartbeat(d) {
     if (d.status === "unknown") return "no heartbeat ticks recorded.";
     const age = formatRelativeAge(d.age_seconds);
-    if (!d.eligible) return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    if (d.skip_reason || !d.eligible) {
+      return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    }
     // Same correction as the feed: no tool call is not silence. The tile has no
     // note to check, so infer from response_length — she wrote something or she didn't.
     const action = d.action_taken
@@ -4753,6 +5278,12 @@
   // surface into her primary chat thread via the [SURFACE] marker
   // (2026-06-15 Coordination Blackout arc close).
   function describeHeartbeatPulse(p) {
+    // Unchanged / backoff / quiet skips can still be eligible=true with an
+    // echoed prior note — never label those "reflected" (Sandbox failure-sit
+    // spam, 2026-08-19).
+    if (p.skip_reason) {
+      return `skipped (${p.skip_reason})${p.dry_run ? " · dry-run" : ""}`;
+    }
     if (!p.eligible) {
       return `skipped (${p.skip_reason || "?"})${p.dry_run ? " · dry-run" : ""}`;
     }
@@ -4804,7 +5335,7 @@
           <span class="when">${htmlEscape(when)}</span>
           <span class="state">${describeHeartbeatPulse(p)}</span>
           ${surfaceBadge}
-          ${p.note ? `<details class="pulse-note">
+          ${(!p.skip_reason && p.note) ? `<details class="pulse-note">
             <summary>${htmlEscape(p.note.replace(/\s+/g, " ").slice(0, 92))}${p.note.length > 92 ? "…" : ""}</summary>
             <div class="pulse-note-body">${htmlEscape(p.note)}</div>
           </details>` : ""}

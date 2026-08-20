@@ -4,10 +4,12 @@ import pytest
 from soveryn.config import runtime
 
 
-def test_active_agents_includes_crew_and_kernel():
-    """Aetheria, Vett, Scotty + Kernel (build brain). Kernel is chat+memory;
-    writes stay Aider/HITL."""
-    assert set(runtime.ACTIVE_AGENTS) == {"aetheria", "vett", "scotty", "kernel"}
+def test_active_agents_includes_crew_kernel_and_eve():
+    """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
+    Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
+    assert set(runtime.ACTIVE_AGENTS) == {
+        "aetheria", "vett", "scotty", "kernel", "eve",
+    }
 
 
 def test_retired_includes_known_retired_agents():

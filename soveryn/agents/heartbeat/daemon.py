@@ -33,6 +33,7 @@ from soveryn.agents.heartbeat.daily_post import (
 )
 from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.delta import compute_delta
+from soveryn.agents.heartbeat.failure_sit import detect_failure_avoidance
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
     detect_materiality,
@@ -407,6 +408,10 @@ class HeartbeatDaemon:
             except Exception:
                 logger.exception("heartbeat tick: daily post nudge failed, omitting")
                 daily_post_invite = ""
+
+            # Walk past empty unchanged-skip rows to the last real note.
+            last_note = self._thoughts_log.last_standing_note()
+            failure_sit_label = detect_failure_avoidance(last_note)
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -416,6 +421,8 @@ class HeartbeatDaemon:
                 delta=delta,
                 x_digest=x_digest,
                 daily_post_invite=daily_post_invite,
+                last_note=last_note,
+                failure_sit_label=failure_sit_label,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")
@@ -448,6 +455,58 @@ class HeartbeatDaemon:
                 response_length=len(prompt),  # log prompt size as a sanity check
                 error=None,
             )
+            return
+
+        # Unchanged world + no morning invite + she already left a note →
+        # skip the model. 2026-08-19: without this, Aetheria re-emitted the
+        # identical "stop the Project Sandbox loop" note every 30m (ActTruth).
+        # Exception: failure-avoidance loops still wake her once to admit/sit.
+        skip_unchanged = os.environ.get(
+            "SOVERYN_HEARTBEAT_SKIP_UNCHANGED", "true"
+        ).strip().lower() in ("1", "true", "yes", "on")
+        if (
+            skip_unchanged
+            and not daily_post_invite
+            and not failure_sit_label
+            and isinstance(delta, dict)
+            and not delta.get("changed", True)
+            and last_note.strip()
+        ):
+            logger.info(
+                "heartbeat tick %s skip unchanged (delta empty, prior note set); "
+                "not invoking model",
+                tick_id,
+            )
+            self._write_log_row(
+                tick_id=tick_id,
+                triggered_at=triggered_at,
+                completed_at=datetime.now().isoformat(),
+                eligible=True,
+                skip_reason=SkipReason.UNCHANGED.value,
+                action_taken=False,
+                tool_call_count=0,
+                response_length=0,
+                error=None,
+            )
+            try:
+                # Do NOT echo last_note — that made CC show the same Sandbox
+                # failure admission as "reflected" every 30m. Snapshot stays so
+                # delta still works; standing note lives on the prior real pulse.
+                self._thoughts_log.append({
+                    "pulse_id": tick_id,
+                    "ts": now.isoformat(),
+                    "snapshot": current_snapshot,
+                    "material_signals": current_snapshot.get("material_signals") or [],
+                    "delta": delta,
+                    "note": "",
+                    "tool_calls": 0,
+                    "surfaced": False,
+                    "skipped": SkipReason.UNCHANGED.value,
+                })
+            except Exception:
+                logger.exception(
+                    "heartbeat tick %s: thoughts-log skip write failed", tick_id
+                )
             return
 
         # Live: invoke Aetheria via /chat with the durable heartbeat session.

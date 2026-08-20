@@ -4,6 +4,7 @@ import pytest
 
 from soveryn.agents.personas import (
     AETHERIA_PERSONA,
+    EVE_PERSONA,
     KERNEL_PERSONA,
     PERSONAS,
     PersonaError,
@@ -14,9 +15,15 @@ from soveryn.agents.personas import (
 from soveryn.config.runtime import ACTIVE_AGENTS
 
 
+@pytest.fixture
+def no_persona_overrides(tmp_path, monkeypatch):
+    """Isolate from live data/memory/personas overrides."""
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
+
+
 def test_personas_cover_all_active_agents():
     assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel",
+        "aetheria", "vett", "scotty", "kernel", "eve",
     }
 
 
@@ -26,23 +33,45 @@ def test_personas_is_read_only():
         PERSONAS["aetheria"] = "hacked"  # type: ignore[index]
 
 
-def test_get_persona_returns_aetheria_string():
+def test_get_persona_returns_aetheria_string(no_persona_overrides):
     assert get_persona("aetheria") == AETHERIA_PERSONA
 
 
-def test_get_persona_returns_vett_string():
+def test_get_persona_returns_vett_string(no_persona_overrides):
     assert get_persona("vett") == VETT_PERSONA
 
 
-def test_get_persona_returns_scotty_string():
+def test_get_persona_returns_scotty_string(no_persona_overrides):
     assert get_persona("scotty") == SCOTTY_PERSONA
 
 
-def test_get_persona_returns_kernel_string():
+def test_get_persona_returns_kernel_string(no_persona_overrides):
     assert get_persona("kernel") == KERNEL_PERSONA
 
 
-def test_get_persona_normalizes_case_and_whitespace():
+def test_get_persona_returns_eve_string(no_persona_overrides):
+    assert get_persona("eve") == EVE_PERSONA
+
+
+def test_persona_override_round_trip(tmp_path, monkeypatch):
+    from soveryn.agents.personas import (
+        clear_persona_override,
+        persona_source,
+        save_persona_override,
+    )
+
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
+    assert persona_source("eve") == "baked"
+    assert get_persona("eve") == EVE_PERSONA
+    save_persona_override("eve", "Eve override for tests.")
+    assert persona_source("eve") == "override"
+    assert get_persona("eve") == "Eve override for tests."
+    clear_persona_override("eve")
+    assert persona_source("eve") == "baked"
+    assert get_persona("eve") == EVE_PERSONA
+
+
+def test_get_persona_normalizes_case_and_whitespace(no_persona_overrides):
     assert get_persona("  Aetheria  ") == AETHERIA_PERSONA
 
 

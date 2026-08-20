@@ -1,0 +1,27 @@
+# SOVERYN Automations scheduler — fires due catalog jobs into vNext (CC inbox).
+# Signal egress is NOT armed in this pass (CC delivery only).
+
+[Unit]
+Description=SOVERYN Automations scheduler (cron → live run → CC inbox)
+Documentation=file:///home/jon-deoliveira/soveryn_vnext/soveryn/automations/daemon.py
+PartOf=soveryn.target
+After=soveryn-vnext.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin
+Environment=SOVERYN_AUTOMATIONS_ENABLED=true
+Environment=SOVERYN_AUTOMATIONS_TICK_SECONDS=60
+Environment=SOVERYN_AUTOMATIONS_VNEXT_BASE=http://127.0.0.1:5001
+Environment=SOVERYN_AUTOMATIONS_SIGNAL_LIVE=false
+ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 60
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.automations
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=soveryn.target

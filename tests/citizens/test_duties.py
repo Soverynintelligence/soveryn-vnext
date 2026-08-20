@@ -14,6 +14,7 @@ def db(tmp_path):
             ("aetheria", "Aetheria"),
             ("vett", "V.E.T.T."),
             ("scotty", "Scotty"),
+            ("eve", "Eve"),
         ):
             register(conn, Citizen(id=cid, display_name=name))
         yield conn

@@ -234,11 +234,38 @@ def prepare_wire_messages(
             prelude_end += 1
         else:
             break
-    if prelude_end <= 1:
-        return messages
-    joined = "\n\n".join(_content_as_str(m.content) for m in messages[:prelude_end] if m.content)
-    folded = ChatMessage(role="system", content=joined)
-    return (folded,) + messages[prelude_end:]
+    if prelude_end == 0:
+        head: tuple[ChatMessage, ...] = ()
+        rest = messages
+    elif prelude_end == 1:
+        head = messages[:1]
+        rest = messages[1:]
+    else:
+        joined = "\n\n".join(
+            _content_as_str(m.content) for m in messages[:prelude_end] if m.content
+        )
+        head = (ChatMessage(role="system", content=joined),)
+        rest = messages[prelude_end:]
+
+    # Qwen3.x jinja raises "System message must be at the beginning" on any
+    # mid-conversation role=system (tool-cap synth note, verification HOLD,
+    # etc.). Rewrite those to user-role notes so tool loops and force-final
+    # can still inject guidance without blowing up the template.
+    if not any(m.role == "system" for m in rest):
+        return head + rest
+    rewritten: list[ChatMessage] = []
+    for m in rest:
+        if m.role == "system":
+            note = _content_as_str(m.content)
+            rewritten.append(
+                ChatMessage(
+                    role="user",
+                    content=f"[System note]\n{note}" if note else "[System note]",
+                )
+            )
+        else:
+            rewritten.append(m)
+    return head + tuple(rewritten)
 
 
 def _wire_message(m: ChatMessage) -> dict[str, Any]:

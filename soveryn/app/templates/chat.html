@@ -152,14 +152,26 @@
     filter: none;
   }
 
-  .agent-pills { display:flex; gap:6px; }
+  /* 5 agents no longer fit one row in the 280px sidebar — wrap 3+2 so
+     Eve (and anyone after kernel) isn't clipped by aside { overflow:hidden }. */
+  .agent-pills {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 12px;
+    box-sizing: border-box;
+  }
   .agent-pill {
-    flex:1; padding:8px 10px; border-radius:var(--r-sm);
-    background:rgba(255,255,255,0.015);
-    border:1px solid var(--glass-border);
-    font-size:11px; font-weight:500;
-    text-align:center;
-    color:rgba(236,243,244,0.7);
+    min-width: 0;
+    padding: 8px 6px; border-radius: var(--r-sm);
+    background: rgba(255,255,255,0.015);
+    border: 1px solid var(--glass-border);
+    font-size: 11px; font-weight: 500;
+    text-align: center;
+    color: rgba(236,243,244,0.7);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .agent-pill[aria-pressed="true"] {
     background:rgba(198,166,100,0.12);
@@ -169,6 +181,8 @@
   .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(198,166,100,0.55); }
   .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(107,130,144,0.55); color:#9eb4c2; }
   .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(196,122,110,0.55); color:#c47a6e; }
+  .agent-pill[data-agent="kernel"][aria-pressed="true"]   { border-color:rgba(80,140,200,0.55); color:#8eb4d4; }
+  .agent-pill[data-agent="eve"][aria-pressed="true"]      { border-color:rgba(180,120,160,0.55); color:#c9a0b8; }
 
   .search input {
     width:100%; padding:8px 12px; border-radius:var(--r-sm);
@@ -326,14 +340,35 @@
     font-size: 12px; line-height: 1.5; color: rgba(231,229,220,0.85);
     max-height: 55vh; overflow: auto;
   }
+  .chat-modal textarea[data-modal-edit] {
+    display: block; width: 100%; min-height: 42vh; max-height: 55vh;
+    margin: 0; padding: 10px 12px; box-sizing: border-box;
+    white-space: pre-wrap; word-break: break-word;
+    font-size: 12px; line-height: 1.5; font-family: inherit;
+    color: rgba(231,229,220,0.92);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(198,166,100,0.35); border-radius: 6px;
+    resize: vertical;
+  }
+  .chat-modal textarea[data-modal-edit]:focus {
+    outline: none; border-color: rgba(198,166,100,0.7);
+  }
+  .chat-modal .modal-source {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.4); margin: 0 0 8px;
+  }
   .chat-modal .modal-actions {
-    display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;
+    display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap;
   }
   .chat-modal .modal-actions button {
     padding: 7px 12px; border-radius: 6px; cursor: pointer;
     border: 1px solid rgba(255,255,255,0.12); background: transparent;
     color: var(--text); font-size: 12px;
   }
+  .chat-modal .modal-actions button.primary {
+    border-color: rgba(198,166,100,0.45); color: var(--sov-amber, #c6a664);
+  }
+  .chat-modal .modal-actions button[hidden] { display: none !important; }
 
   /* Thread */
   .thread {
@@ -559,6 +594,8 @@
   .voice-title[data-agent="aetheria"] { color: var(--gold); }
   .voice-title[data-agent="vett"]     { color: #9eb4c2; }
   .voice-title[data-agent="scotty"]   { color: #c47a6e; }
+  .voice-title[data-agent="kernel"]   { color: #8eb4d4; }
+  .voice-title[data-agent="eve"]      { color: #c9a0b8; }
   .voice-status {
     margin-top: 10px;
     font-family: var(--mono), "IBM Plex Mono", ui-monospace, monospace;
@@ -737,8 +774,12 @@
     border-color: var(--line) !important;
     font-family: var(--mono) !important;
     font-size: .62rem !important;
-    letter-spacing: .1em;
+    letter-spacing: .08em;
     text-transform: uppercase;
+  }
+  /* Lab zeros aside padding — keep the pill grid inset so edges don't clip. */
+  body.lab .agent-pills {
+    padding: 8px 12px 10px !important;
   }
   .wordmark {
     background: none !important;
@@ -763,6 +804,7 @@
     <a href="/citizens" class="keep">Citizens</a>
     <a href="/chat" class="active keep">Chat</a>
     <a href="/documents">Docs</a>
+    <a href="/charters" class="keep">Charters</a>
   </nav>
 </div>
 
@@ -780,6 +822,7 @@
       <button class="agent-pill" data-agent="vett"     role="tab" aria-pressed="false">vett</button>
       <button class="agent-pill" data-agent="scotty"   role="tab" aria-pressed="false">scotty</button>
       <button class="agent-pill" data-agent="kernel"   role="tab" aria-pressed="false">kernel</button>
+      <button class="agent-pill" data-agent="eve"      role="tab" aria-pressed="false">eve</button>
     </div>
 
     <div class="search"><input type="search" placeholder="Search chats" data-testid="search"></div>
@@ -838,8 +881,14 @@
     <div class="chat-modal-backdrop" data-testid="chat-modal" hidden>
       <div class="chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
         <h3 id="chat-modal-title" data-modal-title>Details</h3>
+        <div class="modal-source" data-modal-source hidden></div>
         <pre data-modal-body></pre>
+        <textarea data-modal-edit hidden aria-label="Edit persona"></textarea>
         <div class="modal-actions">
+          <button type="button" data-modal-edit-btn hidden>Edit</button>
+          <button type="button" data-modal-save class="primary" hidden>Save</button>
+          <button type="button" data-modal-cancel-edit hidden>Cancel</button>
+          <button type="button" data-modal-reset hidden>Reset default</button>
           <button type="button" data-modal-copy>Copy</button>
           <button type="button" data-modal-close>Close</button>
         </div>
@@ -886,7 +935,7 @@
 <script src="/static/voice/presence.js?v=alive5"></script>
 <script>
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel"];
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
   // Full background-value per agent (applied directly on the agent disc).
   // Aetheria carries the brand olive — she's the central voice, so the
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
@@ -896,6 +945,7 @@
     vett:     "var(--steel-sheen)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
     kernel:   "var(--steel-sheen)",   /* build brain — cool steel */
+    eve:      "var(--maroon-sheen)",  /* marketing — warm rose/maroon cast */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
@@ -903,6 +953,7 @@
     aetheria: "var(--sov-sage)",
     vett:     "var(--sov-deep-blue)",
     scotty:   "var(--sov-maroon)",
+    eve:      "var(--sov-maroon)",
   };
 
   // ─── Attachments config ───────────────────────────────────────────────────
@@ -1926,28 +1977,159 @@
     });
 
     // ── Header actions: Persona / Export / More (were decorative until now) ──
-    function openChatModal(title, body) {
+    let personaModal = null; // { agent, text, baked, source, editing }
+
+    function openChatModal(title, body, opts) {
       const backdrop = document.querySelector('[data-testid="chat-modal"]');
       if (!backdrop) return;
+      opts = opts || {};
+      personaModal = opts.persona
+        ? {
+            agent: opts.agent,
+            text: body,
+            baked: opts.baked || body,
+            source: opts.source || "baked",
+            editing: false,
+          }
+        : null;
       backdrop.querySelector("[data-modal-title]").textContent = title;
-      backdrop.querySelector("[data-modal-body]").textContent = body;
+      const pre = backdrop.querySelector("[data-modal-body]");
+      const ta = backdrop.querySelector("[data-modal-edit]");
+      const src = backdrop.querySelector("[data-modal-source]");
+      pre.textContent = body;
+      pre.hidden = false;
+      if (ta) { ta.hidden = true; ta.value = ""; }
+      if (src) {
+        if (personaModal) {
+          src.hidden = false;
+          src.textContent = personaModal.source === "override"
+            ? "edited · saved on disk"
+            : "default · committed";
+        } else {
+          src.hidden = true;
+          src.textContent = "";
+        }
+      }
+      setPersonaActionVisibility(false);
       backdrop.hidden = false;
+    }
+    function setPersonaActionVisibility(editing) {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (!backdrop) return;
+      const show = !!personaModal;
+      const editBtn = backdrop.querySelector("[data-modal-edit-btn]");
+      const saveBtn = backdrop.querySelector("[data-modal-save]");
+      const cancelBtn = backdrop.querySelector("[data-modal-cancel-edit]");
+      const resetBtn = backdrop.querySelector("[data-modal-reset]");
+      if (editBtn) editBtn.hidden = !show || editing;
+      if (saveBtn) saveBtn.hidden = !show || !editing;
+      if (cancelBtn) cancelBtn.hidden = !show || !editing;
+      if (resetBtn) resetBtn.hidden = !show || editing || (personaModal && personaModal.source !== "override");
     }
     function closeChatModal() {
       const backdrop = document.querySelector('[data-testid="chat-modal"]');
       if (backdrop) backdrop.hidden = true;
+      personaModal = null;
+      setPersonaActionVisibility(false);
     }
     const modal = document.querySelector('[data-testid="chat-modal"]');
     if (modal) {
       modal.querySelector("[data-modal-close]")?.addEventListener("click", closeChatModal);
       modal.addEventListener("click", (e) => { if (e.target === modal) closeChatModal(); });
       modal.querySelector("[data-modal-copy]")?.addEventListener("click", async () => {
-        const text = modal.querySelector("[data-modal-body]")?.textContent || "";
+        const ta = modal.querySelector("[data-modal-edit]");
+        const text = (ta && !ta.hidden) ? ta.value : (modal.querySelector("[data-modal-body]")?.textContent || "");
         try { await navigator.clipboard.writeText(text); } catch (_) {}
+      });
+      modal.querySelector("[data-modal-edit-btn]")?.addEventListener("click", () => {
+        if (!personaModal) return;
+        const pre = modal.querySelector("[data-modal-body]");
+        const ta = modal.querySelector("[data-modal-edit]");
+        if (!ta) return;
+        ta.value = personaModal.text;
+        pre.hidden = true;
+        ta.hidden = false;
+        personaModal.editing = true;
+        setPersonaActionVisibility(true);
+        ta.focus();
+      });
+      modal.querySelector("[data-modal-cancel-edit]")?.addEventListener("click", () => {
+        if (!personaModal) return;
+        const pre = modal.querySelector("[data-modal-body]");
+        const ta = modal.querySelector("[data-modal-edit]");
+        if (ta) { ta.hidden = true; ta.value = ""; }
+        if (pre) { pre.hidden = false; pre.textContent = personaModal.text; }
+        personaModal.editing = false;
+        setPersonaActionVisibility(false);
+      });
+      modal.querySelector("[data-modal-save]")?.addEventListener("click", async () => {
+        if (!personaModal) return;
+        const ta = modal.querySelector("[data-modal-edit]");
+        const next = (ta && ta.value || "").trim();
+        if (!next) {
+          openChatModal("Persona", "Persona cannot be empty.");
+          return;
+        }
+        const saveBtn = modal.querySelector("[data-modal-save]");
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
+        try {
+          const r = await fetch(`/api/persona/${encodeURIComponent(personaModal.agent)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ persona: next }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+          }
+          openChatModal(
+            `Persona · ${data.agent || personaModal.agent}`,
+            (data.persona || next).trim(),
+            {
+              persona: true,
+              agent: data.agent || personaModal.agent,
+              source: data.source || "override",
+              baked: data.baked || personaModal.baked,
+            }
+          );
+        } catch (e) {
+          openChatModal("Persona", String(e && e.message || e));
+        } finally {
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save"; }
+        }
+      });
+      modal.querySelector("[data-modal-reset]")?.addEventListener("click", async () => {
+        if (!personaModal) return;
+        if (!confirm(`Reset ${personaModal.agent}'s persona to the committed default?`)) return;
+        try {
+          const r = await fetch(`/api/persona/${encodeURIComponent(personaModal.agent)}`, {
+            method: "DELETE",
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+          }
+          openChatModal(
+            `Persona · ${data.agent || personaModal.agent}`,
+            (data.persona || "").trim() || "(empty persona)",
+            {
+              persona: true,
+              agent: data.agent || personaModal.agent,
+              source: "baked",
+              baked: data.baked || data.persona,
+            }
+          );
+        } catch (e) {
+          openChatModal("Persona", String(e && e.message || e));
+        }
       });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && modal && !modal.hidden) {
           e.preventDefault();
+          if (personaModal && personaModal.editing) {
+            modal.querySelector("[data-modal-cancel-edit]")?.click();
+            return;
+          }
           closeChatModal();
         }
       });
@@ -1963,7 +2145,13 @@
         const data = await r.json();
         openChatModal(
           `Persona · ${data.agent || state.agent}`,
-          (data.persona || "").trim() || "(empty persona)"
+          (data.persona || "").trim() || "(empty persona)",
+          {
+            persona: true,
+            agent: data.agent || state.agent,
+            source: data.source || "baked",
+            baked: data.baked || data.persona,
+          }
         );
       } catch (e) {
         openChatModal("Persona", String(e && e.message || e));

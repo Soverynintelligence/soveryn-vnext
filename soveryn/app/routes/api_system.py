@@ -100,6 +100,45 @@ def api_system_acttruth():
         }), 200
 
 
+@bp.get("/api/system/acttruth/triage")
+def api_system_acttruth_triage():
+    """ActTruth Step 3 — open bug-triage candidates (lesson streaks → durable-fix queue).
+
+    Does not auto-fix. See docs/designs/2026-08-20-acttruth-bug-triage.md.
+    """
+    from soveryn.platform.acttruth.triage import list_triage
+
+    try:
+        limit = int(request.args.get("limit") or 40)
+    except ValueError:
+        limit = 40
+    status = request.args.get("status")
+    if status is None:
+        status = "open"
+    if status in ("", "all", "*"):
+        status = None
+    try:
+        items = list_triage(limit=limit, status=status)
+        return jsonify({
+            "ok": True,
+            "available": True,
+            "brand": "ActTruth by SOVERYN",
+            "count": len(items),
+            "status_filter": status or "all",
+            "triage": items,
+            "note": "Step 3 candidates — classify then skill/code/ops; no auto-fix",
+            "fetched_at": datetime.now().isoformat(),
+        }), 200
+    except Exception as exc:  # noqa: BLE001 — glance must never 500 the CC
+        return jsonify({
+            "ok": False,
+            "available": False,
+            "message": f"{type(exc).__name__}: {exc}",
+            "triage": [],
+            "fetched_at": datetime.now().isoformat(),
+        }), 200
+
+
 @bp.get("/api/system/acttruth/proof")
 def api_system_acttruth_proof():
     """Honest ActTruth stats + shareable proof blurb (ledger receipts only)."""

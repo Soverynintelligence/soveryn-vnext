@@ -117,9 +117,9 @@ def record_unprompted_tick(
         )
 
 
-# Chat agents + Kernel (HITL tools). Kernel has no unprompted pulse budget,
-# but still gets a ledger stream and a CC badge.
-CREW_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel")
+# Chat agents + Kernel (HITL) + Eve (marketing). Kernel/Eve have no
+# unprompted pulse budget, but still get ledger streams and CC badges.
+CREW_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel", "eve")
 
 
 def crew_status(*, agents: tuple[str, ...] | None = None, limit: int = 5) -> dict[str, Any]:

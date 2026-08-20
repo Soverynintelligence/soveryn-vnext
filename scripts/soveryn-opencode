@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Kernel via OpenCode against the house Flash router (:8091).
-# Autonomous build lane — Aider remains the surgical fallback:
-#   soveryn-aider --kernel
+# Kernel via OpenCode.
+# Default coding brain: DeepSeek V4 Flash on Quadros :8091 (better long-repo feel).
+# Optional large-ctx / speed lane: Qwen 3.8 on Blackwell :8090 — pass --qwen.
+# Aider surgical fallback:
+#   soveryn-aider --kernel   # Flash @ :8091
+#   soveryn-aider            # Qwen / aetheria @ :8090
 #
 # Usage:
-#   soveryn-opencode                         # TUI in cwd, Kernel agent
+#   soveryn-opencode                         # TUI, Kernel agent, Flash
+#   soveryn-opencode --qwen                  # TUI on Qwen instead (49k ctx lane)
+#   soveryn-opencode --flash                 # explicit Flash (same as default)
 #   soveryn-opencode /path/to/repo           # TUI in that project
-#   soveryn-opencode run "mend X"            # headless one-shot
+#   soveryn-opencode run "mend X"            # headless one-shot (Flash)
 #   soveryn-opencode run --auto "…"          # auto-approve non-denied perms
 #
+# Note: Flash preset is ctx-size 16384 today — precise greps beat blind hunts.
 # Nothing leaves the machine unless you change the provider baseURL.
 
 set -euo pipefail
@@ -31,19 +37,39 @@ fi
 
 export OPENCODE_CONFIG="$CFG_FILE"
 export OPENCODE_CONFIG_DIR="$CFG_DIR"
-# Local Flash — keep keys fake/local only
 export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-soveryn}"
 
-# Ensure Flash is up (warn only)
-if ! curl -sf --max-time 2 "http://127.0.0.1:8091/v1/models" >/dev/null; then
-  echo "soveryn-opencode: WARN — :8091 not answering; warm Kernel/Flash first" >&2
+# Parse --qwen / --flash; strip before forwarding to opencode
+USE_QWEN=0
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "--qwen" ]]; then
+    USE_QWEN=1
+  elif [[ "$arg" == "--flash" ]]; then
+    USE_QWEN=0
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+if [[ "$USE_QWEN" -eq 1 ]]; then
+  MODEL="kernel-qwen/aetheria"
+  CHECK_URL="http://127.0.0.1:8090/v1/models"
+  LABEL="Kernel · Qwen 3.8 large-ctx @ http://127.0.0.1:8090/v1"
+else
+  MODEL="kernel-flash/bench-flash"
+  CHECK_URL="http://127.0.0.1:8091/v1/models"
+  LABEL="Kernel · Flash coding @ http://127.0.0.1:8091/v1"
 fi
 
-echo "soveryn-opencode: Kernel · Flash @ http://127.0.0.1:8091/v1" >&2
+if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
+  echo "soveryn-opencode: WARN — $CHECK_URL not answering; warm the brain first" >&2
+fi
+
+echo "soveryn-opencode: $LABEL" >&2
 echo "soveryn-opencode: config $CFG_FILE" >&2
 
-# Default agent = kernel when launching TUI or run without --agent
-ARGS=("$@")
 HAS_AGENT=0
 HAS_MODEL=0
 SUB=""
@@ -62,10 +88,9 @@ done
 EXTRA=()
 if [[ "$SUB" == "run" ]]; then
   [[ $HAS_AGENT -eq 0 ]] && EXTRA+=(--agent kernel)
-  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model kernel-flash/bench-flash)
+  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
 elif [[ -z "$SUB" ]]; then
-  # Interactive TUI — agent selectable; seed model
-  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model kernel-flash/bench-flash)
+  [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
 fi
 
 exec "$OPENCODE_BIN" "${EXTRA[@]+"${EXTRA[@]}"}" "${ARGS[@]+"${ARGS[@]}"}"

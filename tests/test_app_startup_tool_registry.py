@@ -11,9 +11,9 @@ from soveryn.memory.lattice import LatticeStore
 def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
-    (souls_dir / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
-    (souls_dir / "vett.md").write_text("# Vett\n", encoding="utf-8")
-    (souls_dir / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    # Cover every ACTIVE_AGENTS citizen — Kernel/Eve souls are required at loop boot.
+    for name in ("aetheria", "vett", "scotty", "kernel", "eve"):
+        (souls_dir / f"{name}.md").write_text(f"# {name.title()}\n", encoding="utf-8")
     return souls_dir
 
 
@@ -74,6 +74,10 @@ def test_startup_creates_tool_registry_for_aetheria(
     aetheria_loop = app.extensions["soveryn"]["agent_loops"]["aetheria"]
     schemas = aetheria_loop._tool_schemas()
     names = {schema["function"]["name"] for schema in schemas}
+    # Slice A: every citizen gets owner-scoped recall_skill
+    for agent, loop in app.extensions["soveryn"]["agent_loops"].items():
+        agent_names = {s["function"]["name"] for s in loop._tool_schemas()}
+        assert "recall_skill" in agent_names, f"{agent} missing recall_skill"
     # Aetheria's lattice read tools (Track 2)
     assert {
         "search_lattice_by_embedding",

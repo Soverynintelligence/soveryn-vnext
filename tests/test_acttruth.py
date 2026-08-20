@@ -242,6 +242,7 @@ def test_proof_agent_loop_tool_result_carries_lesson(
 
 def test_proof_crew_includes_kernel(at: ActTruth) -> None:
     assert "kernel" in CREW_AGENTS
+    assert "eve" in CREW_AGENTS
     at.ledger.record(
         agent_id="kernel",
         kind="tool_ok",

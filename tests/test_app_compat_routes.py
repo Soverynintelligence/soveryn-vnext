@@ -20,14 +20,19 @@ from soveryn.memory.conversation_store import ConversationStore
 
 
 @pytest.fixture
-def app_state(tmp_path):
+def app_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
     conv = ConversationStore(tmp_path / "conv.db")
     fake_chat = lambda req, server, timeout=60: ChatResponse(
         content="ok", finish_reason="stop", tool_calls=None, usage=None, raw={})
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
-    return app.test_client()
+    # Keep loops reachable for persona hot-reload assertions.
+    app.extensions["soveryn"]["agent_loops"] = loops
+    client = app.test_client()
+    client._soveryn_loops = loops  # type: ignore[attr-defined]
+    return client
 
 
 def _err(resp):
@@ -96,6 +101,8 @@ def test_api_persona_aetheria_returns_canonical_persona(app_state):
     payload = json.loads(resp.data)
     assert payload["agent"] == "aetheria"
     assert payload["persona"] == PERSONAS["aetheria"]
+    assert payload["source"] == "baked"
+    assert payload["baked"] == PERSONAS["aetheria"]
 
 
 def test_api_persona_each_active_agent_round_trips(app_state):
@@ -105,6 +112,36 @@ def test_api_persona_each_active_agent_round_trips(app_state):
         payload = json.loads(resp.data)
         assert payload["agent"] == name
         assert payload["persona"] == PERSONAS[name]
+        assert payload["source"] == "baked"
+
+
+def test_api_persona_put_and_reset(app_state):
+    agent = "eve"
+    edited = "Eve test override — short and operational."
+    resp = app_state.put(f"/api/persona/{agent}", json={"persona": edited})
+    assert resp.status_code == 200
+    payload = json.loads(resp.data)
+    assert payload["ok"] is True
+    assert payload["persona"] == edited
+    assert payload["source"] == "override"
+    assert app_state._soveryn_loops[agent].system_prompt == edited
+
+    got = json.loads(app_state.get(f"/api/persona/{agent}").data)
+    assert got["persona"] == edited
+    assert got["source"] == "override"
+
+    reset = app_state.delete(f"/api/persona/{agent}")
+    assert reset.status_code == 200
+    back = json.loads(reset.data)
+    assert back["source"] == "baked"
+    assert back["persona"] == PERSONAS[agent]
+    assert app_state._soveryn_loops[agent].system_prompt == PERSONAS[agent]
+
+
+def test_api_persona_put_rejects_empty(app_state):
+    resp = app_state.put("/api/persona/eve", json={"persona": "   "})
+    assert resp.status_code == 400
+    assert _err(resp)["code"] == "bad_request"
 
 
 @pytest.mark.parametrize("retired", [

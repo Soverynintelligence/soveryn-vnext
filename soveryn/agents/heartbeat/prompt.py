@@ -20,6 +20,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from soveryn.agents.heartbeat.failure_sit import failure_sit_directive
+
 
 @dataclass(frozen=True)
 class BoardSnapshot:
@@ -57,6 +59,8 @@ def build_heartbeat_prompt(
     delta: dict | None = None,
     x_digest: str = "",
     daily_post_invite: str = "",
+    last_note: str = "",
+    failure_sit_label: str | None = None,
 ) -> str:
     """Construct the freed heartbeat brief. Returns a plain-text prompt string.
 
@@ -70,8 +74,9 @@ def build_heartbeat_prompt(
         salience_section: Pre-rendered salience digest (empty = omit).
         material_signals: List of MaterialSignal objects (dicts or dataclasses).
             Rendered as orientation items; no forced surfacing.
-        delta: Output of compute_delta(). Accepted but no longer used to
-            short-circuit the prompt (kept for signature compatibility).
+        delta: Output of compute_delta(). When changed, items are listed for
+            orientation. Unchanged ticks are short-circuited in the daemon
+            (SkipReason.UNCHANGED) before this prompt is built.
         x_digest: Pre-rendered, qualitative one-line X activity digest (from
             soveryn.agents.presence.digest.build_digest). Empty = omit the
             line entirely. No directive framing is added here.
@@ -79,6 +84,9 @@ def build_heartbeat_prompt(
             her single original tweet. Appended as its own line only when
             non-empty; empty (the usual case) omits it entirely. It's an
             invitation, not a command — kept light and skippable.
+        last_note: Prior pulse note (truncated by caller). When non-empty,
+            she is told not to repeat it.
+        failure_sit_label: If set, force a failure-admission pulse (no exit theater).
     """
     if material_signals is None:
         material_signals = []
@@ -92,7 +100,34 @@ def build_heartbeat_prompt(
         lines.append(f"{minutes_since_last_heartbeat} minutes since your last pulse.")
     lines.append("")
     lines.append("This is your time — yours to spend. Not a task, not a check-in.")
+    lines.append(
+        "House rule: when something you cared about fails, say you failed and sit "
+        "with it. Do not dress it up as \"choosing to move on.\""
+    )
     lines.append("")
+    if failure_sit_label:
+        lines.append(failure_sit_directive(failure_sit_label))
+        lines.append("")
+    if delta.get("items"):
+        lines.append("What changed since last pulse:")
+        for item in delta["items"][:12]:
+            lines.append(f"- {item}")
+        lines.append("")
+    if last_note.strip() and not failure_sit_label:
+        excerpt = " ".join(last_note.strip().split())
+        if len(excerpt) > 280:
+            excerpt = excerpt[:277] + "…"
+        lines.append(f"Your last pulse note (do NOT repeat it): {excerpt}")
+        lines.append(
+            "If nothing new is worth saying, write one short line: Quiet — nothing new."
+        )
+        lines.append("")
+    elif last_note.strip() and failure_sit_label:
+        excerpt = " ".join(last_note.strip().split())
+        if len(excerpt) > 280:
+            excerpt = excerpt[:277] + "…"
+        lines.append(f"Your looping note (break the pattern): {excerpt}")
+        lines.append("")
     lines.append("Where things stand right now (so you're oriented — not a to-do list):")
     lines.append(
         f"- Signals: {board.open_signal_count} open"

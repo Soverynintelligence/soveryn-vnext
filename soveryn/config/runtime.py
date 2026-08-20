@@ -20,7 +20,7 @@ from pathlib import Path
 #: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
 #: Kernel is the house build brain (bench-flash on :8091) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
-ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel")
+ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel", "eve")
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
@@ -224,6 +224,7 @@ AGENT_TO_SERVER: dict[str, str] = {
     "vett":     "vett_scotty_shared",
     "scotty":   "vett_scotty_shared",
     "kernel":   "kernel_build",
+    "eve":      "kernel_build",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

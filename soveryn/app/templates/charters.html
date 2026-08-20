@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SOVERYN · Charters</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
+<style>
+  body { min-height: 100vh; }
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 0 48px; }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1.8fr;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  .layout > .lab-panel {
+    border-right: 1px solid var(--line);
+    min-height: 60vh;
+  }
+  @media (max-width: 900px) {
+    .layout > .lab-panel { border-right: none; border-bottom: 1px solid var(--line); }
+  }
+  .layout > .lab-panel:last-child { border-right: none; }
+  .lab-panel-body { padding: 16px 18px 22px; }
+  .mast { padding: 22px 18px 8px; }
+  .mast h1 {
+    font-size: 1.35rem; font-weight: 500; letter-spacing: 0.02em;
+    color: var(--ink); margin: 0 0 8px;
+  }
+  .mast .prose {
+    font-size: 13px; line-height: 1.55; color: var(--ink-2); max-width: 52em; margin: 0;
+  }
+  .badge-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .badge {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; border: 1px solid var(--line); color: var(--ink-3);
+  }
+  .badge.warn { border-color: rgba(198,166,100,0.4); color: var(--gold); }
+  .charter-list { display:flex; flex-direction:column; gap:0; }
+  .charter-item {
+    display:flex; flex-direction:column; gap:4px;
+    padding: 12px 4px; border-top: 1px solid var(--line);
+    cursor: pointer; transition: background 0.12s ease;
+  }
+  .charter-item:first-child { border-top: none; }
+  .charter-item:hover { background: rgba(198,166,100,0.04); }
+  .charter-item.active { background: rgba(198,166,100,0.08); }
+  .charter-item .name { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .charter-item .meta {
+    font-size: 11px; color: var(--ink-3); font-family: var(--mono);
+    letter-spacing: 0.04em;
+  }
+  .empty { font-size: 12px; color: var(--ink-3); padding: 12px 4px; }
+  .detail-head { margin-bottom: 14px; }
+  .detail-head h2 {
+    margin: 0 0 6px; font-size: 16px; font-weight: 500; color: var(--ink);
+  }
+  .detail-head .meta {
+    font-size: 11px; color: var(--ink-3); font-family: var(--mono);
+  }
+  .detail-actions { display:flex; gap:8px; flex-wrap:wrap; margin: 12px 0 16px; }
+  .detail-actions a, .detail-actions button {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 7px 12px; border: 1px solid var(--line); background: transparent;
+    color: var(--ink-2); text-decoration: none; cursor: pointer; font-family: var(--mono);
+  }
+  .detail-actions a:hover, .detail-actions button:hover {
+    border-color: var(--gold-dim); color: var(--gold);
+  }
+  .prompt {
+    white-space: pre-wrap; word-break: break-word;
+    font-size: 12.5px; line-height: 1.55; color: var(--ink-2);
+    font-family: var(--mono);
+    padding: 14px; background: var(--panel-2); border: 1px solid var(--line);
+    max-height: 62vh; overflow: auto;
+  }
+</style>
+</head>
+<body class="lab" data-lab data-testid="charters-board">
+
+<div class="plate">
+  <a class="id" href="/">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Charters</i></span>
+  </a>
+  <nav>
+    <a href="/">Command</a>
+    <a href="/fleet">Fleet</a>
+    <a href="/citizens" class="keep">Citizens</a>
+    <a href="/chat" class="keep">Chat</a>
+    <a href="/documents">Docs</a>
+    <a href="/charters" class="active keep">Charters</a>
+  </nav>
+</div>
+
+<div class="page">
+  <div class="mast">
+    <h1>Imported job charters</h1>
+    <p class="prose">
+      These are <b>role recipes</b> from botdirectory.ai — named jobs Eve or Kernel
+      pulled for review (Marketing Head, Carousel Publisher, etc.). They are
+      <b>not</b> running processes and <b>not</b> live Automations. Promote to a
+      Citizen duty or Automation only after you approve the delivery path
+      (house default: draft → Signal → you publish).
+    </p>
+    <div class="badge-row">
+      <span class="badge warn">review only</span>
+      <span class="badge">never auto-scheduled</span>
+      <span class="badge" data-count>—</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="lab-panel">
+      <div class="lab-panel-body">
+        <div class="charter-list" data-charter-list>
+          <div class="empty">loading…</div>
+        </div>
+      </div>
+    </section>
+    <section class="lab-panel">
+      <div class="lab-panel-body" data-charter-detail>
+        <div class="empty">Select a charter to read the full prompt.</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const listEl = document.querySelector('[data-charter-list]');
+  const detailEl = document.querySelector('[data-charter-detail]');
+  const countEl = document.querySelector('[data-count]');
+  let active = null;
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[c]);
+  }
+
+  async function loadList(){
+    const r = await fetch('/api/botdirectory/imports');
+    const d = await r.json();
+    const items = d.imports || [];
+    if (countEl) countEl.textContent = items.length + ' imported';
+    if (!items.length){
+      listEl.innerHTML = '<div class="empty">No imports yet. In Chat as Eve: ask her to browse botdirectory and import a charter for review.</div>';
+      return;
+    }
+    listEl.innerHTML = items.map(it => `
+      <div class="charter-item" data-slug="${esc(it.slug)}">
+        <div class="name">${esc(it.name || it.slug)}</div>
+        <div class="meta">${esc(it.category || '—')} · ${esc((it.integrations||[]).join(', ') || 'no integrations')} · ${esc((it.imported_at||'').replace('T',' ').slice(0,16))}</div>
+      </div>
+    `).join('');
+    listEl.querySelectorAll('.charter-item').forEach(el => {
+      el.addEventListener('click', () => openSlug(el.getAttribute('data-slug')));
+    });
+    const q = new URLSearchParams(location.search).get('slug');
+    if (q) openSlug(q);
+  }
+
+  async function openSlug(slug){
+    active = slug;
+    listEl.querySelectorAll('.charter-item').forEach(el => {
+      el.classList.toggle('active', el.getAttribute('data-slug') === slug);
+    });
+    detailEl.innerHTML = '<div class="empty">loading…</div>';
+    const r = await fetch('/api/botdirectory/imports/' + encodeURIComponent(slug));
+    const d = await r.json();
+    if (!r.ok || !d.ok){
+      detailEl.innerHTML = '<div class="empty">' + esc((d && d.message) || 'not found') + '</div>';
+      return;
+    }
+    const ints = (d.integrations || []).join(', ') || '—';
+    detailEl.innerHTML = `
+      <div class="detail-head">
+        <h2>${esc(d.name || d.slug)}</h2>
+        <div class="meta">${esc(d.category || '—')} · ${esc(ints)} · imported ${esc((d.imported_at||'').replace('T',' '))}</div>
+      </div>
+      <div class="detail-actions">
+        ${d.detail_url ? `<a href="${esc(d.detail_url)}" target="_blank" rel="noopener">Source ↗</a>` : ''}
+        <a href="/chat?agent=eve">Open Eve</a>
+        <button type="button" data-copy>Copy prompt</button>
+      </div>
+      <pre class="prompt" data-prompt>${esc(d.prompt || '')}</pre>
+    `;
+    detailEl.querySelector('[data-copy]')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(d.prompt || ''); } catch (_) {}
+    });
+    history.replaceState({}, '', '/charters?slug=' + encodeURIComponent(slug));
+  }
+
+  loadList().catch(() => {
+    listEl.innerHTML = '<div class="empty">charters API unavailable</div>';
+  });
+})();
+</script>
+</body>
+</html>

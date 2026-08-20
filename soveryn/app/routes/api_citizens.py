@@ -606,3 +606,100 @@ def cancel_commission(commission_id: str):
         return jsonify(row), 200
     finally:
         conn.close()
+
+
+def _approval_broker():
+    """The Approval Gate broker wired at startup, or None if unavailable."""
+    state = current_app.extensions.get("soveryn") or {}
+    return state.get("approval_broker")
+
+
+@bp.get("/api/citizens/<citizen_id>/approvals")
+def list_approvals(citizen_id: str):
+    """Pending egress approvals held at the Approval Gate for one citizen.
+
+    Best-effort read (charter evidence rules): a missing or locked gate yields
+    an empty list with a note, never a 500. The decision surface lists what a
+    human must answer before the blocked agent unblocks (or times out and the
+    egress is denied fail-safe).
+    """
+    broker = _approval_broker()
+    if broker is None:
+        return jsonify({
+            "approvals": [],
+            "count": 0,
+            "note": "approval gate not wired",
+        }), 200
+    try:
+        from dataclasses import asdict
+        pending = broker.store.pending_for(citizen_id)
+        return jsonify({
+            "approvals": [asdict(r) for r in pending],
+            "count": len(pending),
+        }), 200
+    except Exception as exc:
+        return jsonify({
+            "approvals": [],
+            "count": 0,
+            "note": f"approval store unreadable: {exc}",
+        }), 200
+
+
+@bp.post("/api/citizens/<citizen_id>/approvals/<approval_id>/decision")
+def decide_approval(citizen_id: str, approval_id: str):
+    """Approve or deny a pending egress call held at the Approval Gate.
+
+    Localhost-only write (the gate is a human authority, not an API client).
+    Body JSON: {"approve": true|false, "decided_by": "jon"} (decided_by
+    defaults to "jon"). Once decided, a request stays decided — a second
+    decision is a no-op, not an error.
+
+    Fail-safe contract: anything that is not an explicit approve leaves the
+    egress denied (the broker also expires unanswered requests on timeout).
+    """
+    _require_localhost()
+    broker = _approval_broker()
+    if broker is None:
+        return jsonify({
+            "error": {
+                "code": "gate_unavailable",
+                "message": "approval gate not wired at startup",
+            }
+        }), 503
+
+    body_json = request.get_json(silent=True) or {}
+    approve = body_json.get("approve")
+    if not isinstance(approve, bool):
+        return jsonify({
+            "error": {
+                "code": "missing_field",
+                "message": "Required field: approve (true|false)",
+            }
+        }), 400
+    decided_by = (body_json.get("decided_by") or "jon").strip() or "jon"
+
+    updated = broker.decide(
+        approval_id,
+        approve=approve,
+        decided_by=decided_by,
+        now=_utc_now(),
+    )
+    if updated is None:
+        return jsonify({
+            "error": {
+                "code": "not_found",
+                "message": f"no approval request {approval_id!r}",
+            }
+        }), 404
+    if updated.citizen and updated.citizen != citizen_id:
+        return jsonify({
+            "error": {
+                "code": "wrong_citizen",
+                "message": (
+                    f"approval {approval_id!r} belongs to "
+                    f"{updated.citizen!r}, not {citizen_id!r}"
+                ),
+            }
+        }), 409
+    from dataclasses import asdict
+    return jsonify(asdict(updated)), 200

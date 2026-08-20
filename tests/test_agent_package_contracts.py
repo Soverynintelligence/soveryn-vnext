@@ -57,8 +57,11 @@ def test_ares_daemon_surface_now_scans_without_llm(tmp_path):
     assert surface.uses_llm is False
 
 
-def test_explicit_cast_is_aetheria_ares_vett_scotty_only():
-    assert set(ACTIVE_AGENTS) == {"aetheria", "vett", "scotty"}
+def test_explicit_cast_matches_active_roster_and_ares_daemon():
+    """Chat roster is ACTIVE_AGENTS; Ares stays a daemon, never a chat agent."""
+    assert set(ACTIVE_AGENTS) == {
+        "aetheria", "vett", "scotty", "kernel", "eve",
+    }
     assert DAEMONS == frozenset({"ares"})
     assert "ares" not in ACTIVE_AGENTS
 

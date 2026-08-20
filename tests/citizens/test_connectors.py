@@ -4,10 +4,12 @@ from __future__ import annotations
 import os
 
 from soveryn.citizens.connectors import (
+    AUTOMATION_AUTO_APPROVE_TOOLS,
     FOUNDING_GRANTS,
     board_payload,
     email_armed,
     for_citizen,
+    requires_approval,
 )
 from soveryn.platform.email.tools import register_email_tools
 from soveryn.platform.tools.registry import ToolRegistry
@@ -62,3 +64,26 @@ def test_board_payload_shape():
     assert "catalog" in p and "by_citizen" in p and "house" in p
     assert "aetheria" in p["by_citizen"]
     assert any(c["id"] == "web" for c in p["by_citizen"]["aetheria"])
+
+
+def test_requires_approval_gates_web_and_writes_by_default():
+    assert requires_approval("web_search") is True
+    assert requires_approval("fetch_url") is True
+    assert requires_approval("x_post") is True
+    assert requires_approval("email_send") is True
+    assert requires_approval("messenger_send") is True
+    assert requires_approval("signal_send") is False  # Direct Line, ungated
+    assert requires_approval("read_file") is False  # house-local
+
+
+def test_automation_source_auto_approves_read_tools_not_writes():
+    """Scheduler / Run now must not hang on web_search — reads pass, writes stay gated."""
+    for tool in AUTOMATION_AUTO_APPROVE_TOOLS:
+        assert requires_approval(tool, source="automation") is False
+        assert requires_approval(tool, source="direct") is True or tool == "email_list"
+    # email_list is channel class (not optional_egress) — only gated via explicit list;
+    # automation still treats it as auto-approved when asked.
+    assert requires_approval("email_list", source="direct") is False
+    assert requires_approval("x_post", source="automation") is True
+    assert requires_approval("email_send", source="automation") is True
+    assert requires_approval("messenger_send", source="automation") is True
