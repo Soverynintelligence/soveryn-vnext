@@ -64,10 +64,15 @@ def _unit_active(
     *,
     runner: Callable[..., Any] = subprocess.run,
 ) -> dict[str, Any]:
-    """systemctl is-active — present / absent / unknown (no systemd)."""
+    """systemctl --user is-active — present / absent / unknown (no systemd).
+
+    House units live in the *user* systemd instance (soveryn-*.service under
+    ``~/.config/systemd/user/``). Probing without ``--user`` always reports
+    inactive and falsely paints CC house health red.
+    """
     try:
         r = runner(
-            ["systemctl", "is-active", unit],
+            ["systemctl", "--user", "is-active", unit],
             capture_output=True,
             text=True,
             timeout=3,

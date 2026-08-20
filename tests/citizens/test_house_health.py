@@ -74,9 +74,12 @@ def test_assemble_with_registry(tmp_path):
         )
         observe(conn, "aetheria", "present", at="2026-08-14T08:00:00Z")
 
+    seen_cmds: list[list[str]] = []
+
     def fake_runner(cmd, **kwargs):
+        seen_cmds.append(list(cmd))
         class R:
-            stdout = "inactive\n"
+            stdout = "active\n"
             stderr = ""
         return R()
 
@@ -91,6 +94,10 @@ def test_assemble_with_registry(tmp_path):
     assert doc["desks"]["aetheria"]["ok"] is True
     assert "scotty" in doc["workers"]
     assert doc["workers"]["scotty"]["residence"] == "process"
+    assert doc["workers"]["scotty"]["active"] is True
+    # User units must be probed with --user (CC false-red without it).
+    assert seen_cmds
+    assert seen_cmds[0][:3] == ["systemctl", "--user", "is-active"]
 
 
 @pytest.fixture
