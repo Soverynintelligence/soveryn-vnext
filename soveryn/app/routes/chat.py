@@ -10,7 +10,8 @@ from datetime import datetime
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from soveryn.agents.loop import (
-    AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
+    AgentLoop, AgentLoopError, AgentStreamEvent, ApprovalPendingEvent,
+    DoneEvent, ErrorEvent, TokenEvent,
     ToolCallEvent, ToolResultEvent, TTSTokenEvent,
 )
 from soveryn.agents.presence.resolver import ResolveResult, resolve_pending
@@ -360,6 +361,15 @@ def _event_to_dict(event: AgentStreamEvent) -> dict | None:
             "call_id": event.call_id,
             "name": event.name,
             "args": event.args,
+        }
+    if isinstance(event, ApprovalPendingEvent):
+        return {
+            "type": "approval_pending",
+            "approval_id": event.approval_id,
+            "citizen": event.citizen,
+            "tool": event.tool,
+            "args": event.args,
+            "call_id": event.call_id,
         }
     if isinstance(event, ToolResultEvent):
         return {

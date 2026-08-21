@@ -133,6 +133,26 @@ def house_health():
     return jsonify(payload), 200
 
 
+@bp.get("/api/active-now")
+def active_now():
+    """Who is mid-work right now — Active-now strip for Command Center.
+
+    Composes running commissions (heartbeat / commission) with interactive
+    chat busy (recent direct/messenger/signal/voice turns). Best-effort:
+    missing DBs yield an empty list, never a 500.
+    """
+    state = current_app.extensions.get("soveryn") or {}
+    env = state.get("env")
+    conv_db = getattr(env, "conversations_db", None) if env is not None else None
+    if conv_db is None:
+        conv_store = state.get("conv_store")
+        conv_db = getattr(conv_store, "db_path", None) if conv_store is not None else None
+    from soveryn.citizens.active_now import build_active_now
+
+    payload = build_active_now(_db_path(), conv_db)
+    return jsonify(payload), 200
+
+
 @bp.route("/api/citizens", methods=["GET"])
 def citizens():
     path = _db_path()
@@ -612,6 +632,35 @@ def _approval_broker():
     """The Approval Gate broker wired at startup, or None if unavailable."""
     state = current_app.extensions.get("soveryn") or {}
     return state.get("approval_broker")
+
+
+@bp.get("/api/approvals/pending")
+def list_approvals_house():
+    """Pending egress approvals house-wide (CC Needs-you / Gate strip).
+
+    Best-effort read: a missing or locked gate yields an empty list with a
+    note, never a 500.
+    """
+    broker = _approval_broker()
+    if broker is None:
+        return jsonify({
+            "approvals": [],
+            "count": 0,
+            "note": "approval gate not wired",
+        }), 200
+    try:
+        from dataclasses import asdict
+        pending = broker.store.pending_all()
+        return jsonify({
+            "approvals": [asdict(r) for r in pending],
+            "count": len(pending),
+        }), 200
+    except Exception as exc:
+        return jsonify({
+            "approvals": [],
+            "count": 0,
+            "note": f"approval store unreadable: {exc}",
+        }), 200
 
 
 @bp.get("/api/citizens/<citizen_id>/approvals")

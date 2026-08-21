@@ -33,6 +33,7 @@ from soveryn.agents.heartbeat.daily_post import (
 )
 from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.delta import compute_delta
+from soveryn.agents.heartbeat.house_snapshot import gather_house_snapshot
 from soveryn.agents.heartbeat.failure_sit import detect_failure_avoidance
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
@@ -354,6 +355,14 @@ class HeartbeatDaemon:
             # record so compute_delta can read it as prev_snapshot next pulse
             # (load-bearing contract: don't drop the "snapshot" key from the
             # ThoughtsLog record below).
+            # House work (automations / gate / triage / active-now) — widen
+            # delta so a still coord board does not silence the whole day.
+            data_root = self.lattice_db.parent.parent if self.lattice_db else None
+            house = gather_house_snapshot(
+                data_root=data_root,
+                citizens_db=self._citizens_db,
+                conv_db=self.conv_db,
+            )
             current_snapshot: dict = {
                 "board": {
                     "open_signal_count": board.open_signal_count,
@@ -375,6 +384,7 @@ class HeartbeatDaemon:
                     "recent_window_minutes": lattice.recent_window_minutes,
                     "new_contradiction_flag_count": lattice.new_contradiction_flag_count,
                 },
+                "house": house,
             }
             prev_record = self._thoughts_log.last()
             delta = compute_delta(current_snapshot, prev_record)

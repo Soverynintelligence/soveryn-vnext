@@ -231,6 +231,16 @@ class ApprovalStore:
             ).fetchall()
         return [self._row_to_request(r) for r in rows]
 
+    def pending_all(self) -> list[ApprovalRequest]:
+        """All pending requests house-wide, oldest first (CC Needs-you / Gate strip)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT id, citizen, tool, args, requested_at, state, decided_at, decided_by "
+                "FROM approval_requests WHERE state = 'pending' "
+                "ORDER BY requested_at ASC"
+            ).fetchall()
+        return [self._row_to_request(r) for r in rows]
+
     def expire_stale(self, now: str, ttl_seconds: float) -> list[ApprovalRequest]:
         """Flip any ``pending`` request older than ttl_seconds to ``expired``.
 

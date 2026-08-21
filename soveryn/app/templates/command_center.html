@@ -2430,6 +2430,56 @@
   }
   .needs-you .ny-chip[data-tone="ok"] .n { color: var(--cc-mint); }
 
+  /* Active now — activity, not urgency (mint/quiet vs Needs-you gold/hot) */
+  .active-now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(111,185,138,0.22);
+    background: rgba(111,185,138,0.05);
+  }
+  .active-now[data-state="clear"],
+  .active-now[data-state="loading"] {
+    display: none;
+  }
+  .active-now .an-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+    margin-right: 4px;
+  }
+  .active-now .an-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.08);
+    color: var(--cc-text);
+    font-size: 12px;
+    font-family: var(--font);
+    text-decoration: none;
+    transition: transform .12s, background .12s;
+  }
+  .active-now .an-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(111,185,138,0.14);
+  }
+  .active-now .an-chip .k {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cc-mint);
+  }
+
   /* Briefing greeting */
   body.lab.cc-2050 .greeting,
   body.lab.cc-2050 section[data-testid="greeting"] {
@@ -3155,6 +3205,11 @@
       <div data-needs-chips style="display:contents"></div>
     </section>
 
+    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
+      <span class="an-label">Active now</span>
+      <div data-active-chips style="display:contents"></div>
+    </section>
+
     <section class="panel greeting" data-testid="greeting">
       <h1 data-greeting-heading>…</h1>
       <p data-greeting-body>Loading your team…</p>
@@ -3303,6 +3358,12 @@
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
       <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
         <div class="empty">No proposals awaiting review.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
+      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
+        <div class="empty">Nothing at the gate.</div>
       </div>
     </section>
     </div>
@@ -4328,9 +4389,10 @@
     const pill = document.querySelector("[data-status-pill]") || document.querySelector(".plate .status-pill");
     if (!root || !chipsEl) return;
 
-    const [pending, staged, coord, publicA, ares, daemons] = await Promise.all([
+    const [pending, staged, gatePending, coord, publicA, ares, daemons] = await Promise.all([
       fetchJson("/api/delegation/pending"),
       fetchJson("/api/x/staged"),
+      fetchJson("/api/approvals/pending"),
       fetchJson("/api/coord/summary"),
       fetchJson("/api/system/public_agents"),
       fetchJson("/api/ares/findings?limit=1"),
@@ -4342,6 +4404,10 @@
     const chips = [];
     const scottyN = Array.isArray(pending) ? pending.length : 0;
     const xN = Array.isArray(staged) ? staged.length : 0;
+    const gateN = (gatePending && typeof gatePending.count === "number")
+      ? gatePending.count
+      : (Array.isArray(gatePending && gatePending.approvals) ? gatePending.approvals.length : 0);
+    if (gateN > 0) chips.push({ n: gateN, label: "Gate approvals", href: "#approvals-anchor", tone: "hot" });
     if (scottyN > 0) chips.push({ n: scottyN, label: "Scotty proposals", href: "#approvals-anchor", tone: "hot" });
     if (xN > 0) chips.push({ n: xN, label: "X posts staged", href: "#approvals-anchor", tone: "hot" });
 
@@ -4369,7 +4435,7 @@
     }
 
     // Cache for greeting briefing (includes soft glance fields)
-    window.__ccNeeds = { chips, scottyN, xN, frOpen, sigOpen, bpOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
+    window.__ccNeeds = { chips, scottyN, xN, gateN, frOpen, sigOpen, bpOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
 
     if (!chips.length) {
       root.setAttribute("data-state", "clear");
@@ -4546,6 +4612,30 @@
     try { localStorage.setItem("soveryn-cc-mode", easy ? "easy" : "advanced"); } catch (_) {}
     if (easy) renderEasyResults();
     try { renderGreeting(); } catch (_) {}
+  }
+
+  // ─── Active now (running commissions + recent interactive chat) ───────────
+  async function renderActiveNow() {
+    const root = document.querySelector("[data-testid='active-now']");
+    const chipsEl = document.querySelector("[data-active-chips]");
+    if (!root || !chipsEl) return;
+    const data = await fetchJson("/api/active-now");
+    const items = (data && Array.isArray(data.active)) ? data.active : [];
+    if (!items.length) {
+      root.setAttribute("data-state", "clear");
+      chipsEl.innerHTML = "";
+      return;
+    }
+    root.setAttribute("data-state", "live");
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    chipsEl.innerHTML = items.map((a) => {
+      const href = `/chat?agent=${encodeURIComponent(a.citizen || "")}`;
+      const kind = esc(a.kind || "work");
+      const name = esc(((a.label || "").split(" · ")[0]) || a.citizen || "someone");
+      return `<a class="an-chip" href="${href}" title="${esc(a.label || "")}"><span class="k">${kind}</span><span>${name}</span></a>`;
+    }).join("");
   }
 
   // ─── Agent cards (state from /sessions per agent) ─────────────────────────
@@ -5744,6 +5834,88 @@
     wire(".xp-reject", "reject", { reason: "dropped from the command center" });
   }
 
+  function _redactApprovalArgs(args) {
+    if (!args || typeof args !== "object") return args;
+    const out = {};
+    const secret = /pass|token|secret|key|auth|credential/i;
+    for (const [k, v] of Object.entries(args)) {
+      out[k] = secret.test(k) ? "•••" : v;
+    }
+    return out;
+  }
+
+  function _fmtApprovalArgs(args) {
+    try {
+      const s = JSON.stringify(_redactApprovalArgs(args), null, 0);
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  async function renderGateApprovals() {
+    const feed = document.querySelector("[data-gate-approvals-feed]");
+    if (!feed) return;
+    const data = await fetchJson("/api/approvals/pending");
+    const items = (data && Array.isArray(data.approvals)) ? data.approvals : [];
+    if (items.length === 0) {
+      feed.innerHTML = '<div class="empty">Nothing at the gate.</div>';
+      return;
+    }
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    feed.innerHTML = items.map(a => `
+      <div class="scotty-proposal" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">
+        <div class="sp-objective">${esc(a.citizen)} · <code>${esc(a.tool)}</code></div>
+        <div class="sp-summary" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:12px;">${esc(_fmtApprovalArgs(a.args))}</div>
+        <div class="sp-tests">requested ${esc(a.requested_at).slice(0, 19).replace("T", " ")}</div>
+        <div class="sp-actions">
+          <button class="gate-approve" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">Allow</button>
+          <button class="gate-deny" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">Deny</button>
+        </div>
+        <div class="sp-notice" style="display:none"></div>
+      </div>`).join("");
+
+    const wire = (sel, approve) => {
+      feed.querySelectorAll(sel).forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.approvalId;
+          const citizen = btn.dataset.citizen;
+          const card = feed.querySelector(`.scotty-proposal[data-approval-id="${id}"]`);
+          const notice = card && card.querySelector(".sp-notice");
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/citizens/${encodeURIComponent(citizen)}/approvals/${encodeURIComponent(id)}/decision`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ approve, decided_by: "jon" }),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (res.ok) {
+              if (notice) {
+                notice.textContent = approve ? "Allowed." : "Denied.";
+                notice.style.display = "";
+              }
+              setTimeout(() => { renderGateApprovals(); renderNeedsYou(); }, 800);
+            } else {
+              if (notice) {
+                notice.textContent = (payload.error && payload.error.message) || payload.error || `Failed (${res.status}).`;
+                notice.style.display = "";
+              }
+              btn.disabled = false;
+            }
+          } catch (_) {
+            if (notice) { notice.textContent = "Network error."; notice.style.display = ""; }
+            btn.disabled = false;
+          }
+        });
+      });
+    };
+    wire(".gate-approve", true);
+    wire(".gate-deny", false);
+  }
+
   async function renderScottyApprovals() {
     const feed = document.querySelector("[data-scotty-approvals-feed]");
     if (!feed) return;
@@ -6011,6 +6183,7 @@
   async function refreshAll() {
     // Needs-you first so greeting can use the cached operator state.
     await renderNeedsYou();
+    await renderActiveNow();
     await renderGreeting();
     renderAgentStates();
     refreshKernel();
@@ -6031,6 +6204,7 @@
     renderCognition();
     renderScottyApprovals();
     renderXApprovals();
+    renderGateApprovals();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();

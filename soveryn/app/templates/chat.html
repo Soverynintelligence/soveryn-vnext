@@ -421,6 +421,42 @@
   }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
+  .approval-card {
+    align-self:flex-start;
+    max-width:78%;
+    margin:4px 0 8px;
+    padding:10px 12px;
+    background:var(--panel);
+    border:1px solid var(--gold);
+    border-radius:3px;
+    font-family:var(--sans);
+    font-size:13px;
+    color:var(--ink);
+  }
+  .approval-card .ac-head {
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--gold); margin-bottom:6px;
+  }
+  .approval-card .ac-tool { font-family:var(--mono); font-size:12px; color:var(--ink-2); }
+  .approval-card .ac-args {
+    font-family:var(--mono); font-size:11px; color:var(--ink-3);
+    white-space:pre-wrap; word-break:break-word; margin:6px 0 10px;
+  }
+  .approval-card .ac-actions { display:flex; gap:8px; }
+  .approval-card .ac-actions button {
+    font-family:var(--sans); font-size:12px; padding:5px 12px;
+    border-radius:3px; border:1px solid var(--line); cursor:pointer;
+    background:var(--bg); color:var(--ink);
+  }
+  .approval-card .ac-actions button.ac-allow {
+    border-color:var(--ok); color:var(--ok);
+  }
+  .approval-card .ac-actions button.ac-deny {
+    border-color:var(--hot, #e07070); color:var(--hot, #e07070);
+  }
+  .approval-card .ac-actions button:disabled { opacity:0.5; cursor:default; }
+  .approval-card.ac-done { border-color:var(--line); opacity:0.85; }
+  .approval-card .ac-notice { margin-top:8px; font-size:12px; color:var(--ink-2); }
   .bubble .thinking-placeholder {
     color:var(--ink-3);
     font-style:italic;
@@ -980,7 +1016,156 @@
     abort: null,
     // pendingAttachments: array of { name, dataUrl } awaiting the next send.
     pendingAttachments: [],
+    // Approval Gate: ids already rendered as cards (SSE + poll dedupe).
+    shownApprovalIds: new Set(),
+    approvalPollTimer: null,
   };
+
+  function _redactApprovalArgs(args) {
+    if (!args || typeof args !== "object") return args;
+    const out = {};
+    const secret = /pass|token|secret|key|auth|credential/i;
+    for (const [k, v] of Object.entries(args)) {
+      out[k] = secret.test(k) ? "•••" : v;
+    }
+    return out;
+  }
+
+  function _fmtApprovalArgs(args) {
+    try {
+      let parsed = args;
+      if (typeof args === "string") {
+        try { parsed = JSON.parse(args); } catch (_) { return args.slice(0, 280); }
+      }
+      const s = JSON.stringify(_redactApprovalArgs(parsed));
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  function renderApprovalCard(payload) {
+    const id = payload && payload.approval_id;
+    if (!id || state.shownApprovalIds.has(id)) return;
+    state.shownApprovalIds.add(id);
+
+    const card = document.createElement("div");
+    card.className = "approval-card";
+    card.dataset.approvalId = id;
+    card.dataset.testid = "approval-card";
+
+    const head = document.createElement("div");
+    head.className = "ac-head";
+    head.textContent = "Needs your yes — Approval Gate";
+    card.appendChild(head);
+
+    const tool = document.createElement("div");
+    tool.className = "ac-tool";
+    tool.textContent = `${payload.citizen || state.agent || "?"} · ${payload.tool || "?"}`;
+    card.appendChild(tool);
+
+    const argsEl = document.createElement("div");
+    argsEl.className = "ac-args";
+    argsEl.textContent = _fmtApprovalArgs(payload.args);
+    card.appendChild(argsEl);
+
+    const actions = document.createElement("div");
+    actions.className = "ac-actions";
+    const allowBtn = document.createElement("button");
+    allowBtn.type = "button";
+    allowBtn.className = "ac-allow";
+    allowBtn.textContent = "Allow";
+    const denyBtn = document.createElement("button");
+    denyBtn.type = "button";
+    denyBtn.className = "ac-deny";
+    denyBtn.textContent = "Deny";
+    actions.appendChild(allowBtn);
+    actions.appendChild(denyBtn);
+    card.appendChild(actions);
+
+    const notice = document.createElement("div");
+    notice.className = "ac-notice";
+    notice.style.display = "none";
+    card.appendChild(notice);
+
+    const decide = async (approve) => {
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      const citizen = payload.citizen || state.agent;
+      try {
+        const r = await fetch(
+          `/api/citizens/${encodeURIComponent(citizen)}/approvals/${encodeURIComponent(id)}/decision`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approve, decided_by: "jon" }),
+          },
+        );
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          card.classList.add("ac-done");
+          notice.textContent = approve ? "Allowed — continuing…" : "Denied.";
+          notice.style.display = "";
+        } else {
+          notice.textContent = (body.error && body.error.message) || body.error || `Failed (${r.status})`;
+          notice.style.display = "";
+          allowBtn.disabled = false;
+          denyBtn.disabled = false;
+        }
+      } catch (e) {
+        notice.textContent = e.message || "Network error";
+        notice.style.display = "";
+        allowBtn.disabled = false;
+        denyBtn.disabled = false;
+      }
+    };
+    allowBtn.addEventListener("click", () => decide(true));
+    denyBtn.addEventListener("click", () => decide(false));
+
+    const callId = payload.call_id;
+    const strip = callId
+      ? elThread().querySelector(`.tool-strip[data-call-id="${cssEsc(callId)}"]`)
+      : null;
+    if (strip && strip.parentNode) {
+      strip.parentNode.insertBefore(card, strip.nextSibling);
+      const pendingLine = strip.querySelector(".tool-result.pending");
+      if (pendingLine) pendingLine.textContent = "waiting for your approval…";
+    } else {
+      elThread().appendChild(card);
+    }
+    elThread().scrollTop = elThread().scrollHeight;
+  }
+
+  function startApprovalPoll() {
+    stopApprovalPoll();
+    const tick = async () => {
+      if (!state.agent) return;
+      try {
+        const r = await fetch(`/api/citizens/${encodeURIComponent(state.agent)}/approvals`);
+        if (!r.ok) return;
+        const data = await r.json();
+        const items = (data && Array.isArray(data.approvals)) ? data.approvals : [];
+        for (const a of items) {
+          renderApprovalCard({
+            approval_id: a.id,
+            citizen: a.citizen,
+            tool: a.tool,
+            args: a.args,
+            call_id: null,
+          });
+        }
+      } catch (_) { /* poll is best-effort */ }
+    };
+    tick();
+    state.approvalPollTimer = setInterval(tick, 1200);
+  }
+
+  function stopApprovalPoll() {
+    if (state.approvalPollTimer) {
+      clearInterval(state.approvalPollTimer);
+      state.approvalPollTimer = null;
+    }
+  }
 
   const CONTEXT_BANNER_THRESHOLD = 0.85;
 
@@ -1398,6 +1583,7 @@
     }
 
     state.abort = new AbortController();
+    startApprovalPoll();
     try {
       const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
       if (images.length > 0) body.attachments = images;
@@ -1428,6 +1614,8 @@
             appendBubbleText(respBubble, payload.delta);
             finalContent += payload.delta;
             elThread().scrollTop = elThread().scrollHeight;
+          } else if (payload.type === "approval_pending") {
+            renderApprovalCard(payload);
           } else if (payload.type === "tool_call") {
             // Insert a tool-activity strip right before the assistant bubble.
             const strip = document.createElement("div");
@@ -1487,6 +1675,19 @@
         setBubbleText(respBubble, `error · ${e.message}`);
       }
     } finally {
+      stopApprovalPoll();
+      // One last poll in case the stream ended before the card painted.
+      try {
+        const r = await fetch(`/api/citizens/${encodeURIComponent(state.agent)}/approvals`);
+        if (r.ok) {
+          const data = await r.json();
+          for (const a of (data.approvals || [])) {
+            renderApprovalCard({
+              approval_id: a.id, citizen: a.citizen, tool: a.tool, args: a.args, call_id: null,
+            });
+          }
+        }
+      } catch (_) { /* noop */ }
       state.abort = null;
     }
   }
@@ -1500,6 +1701,7 @@
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
+    startApprovalPoll();
     try {
       await ensureSession();
       const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
@@ -1519,6 +1721,8 @@
       }
     } catch (e) {
       setBubbleText(respBubble, `error · ${e.message}`);
+    } finally {
+      stopApprovalPoll();
     }
   }
 

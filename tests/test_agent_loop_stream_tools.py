@@ -353,3 +353,128 @@ def test_streaming_attachments_ride_every_tool_round(conv_store):
     assert history[0].role == "user"
     assert history[0].content == "what's this?"
     assert isinstance(history[0].content, str)  # text-only, not JSON
+
+
+# ─── Approval Gate streaming visibility ───────────────────────────────────────
+
+def test_streaming_approval_pending_then_deny_on_ttl(conv_store, tmp_path):
+    """Gated tool yields ApprovalPendingEvent before ToolResultEvent; TTL denies."""
+    from soveryn.agents.loop import ApprovalPendingEvent
+    from soveryn.platform.approval.store import ApprovalBroker, ApprovalStore
+
+    registry = _make_registry(
+        lambda args: {"sent": True},
+        tool_name="email_send",
+    )
+    store = ApprovalStore(tmp_path / "gate.db")
+    # Tiny TTL so wait() expires without a human thread.
+    broker = ApprovalBroker(store, ttl_seconds=0.15, poll_interval_seconds=0.02)
+
+    stream = _MultiRoundStream([
+        [
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, call_id="c9", name="email_send")],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, arg_chunk='{"to":"a@b.c"}')],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason="tool_calls", tool_calls_delta=None,
+                        usage=None, raw={}),
+        ],
+        [
+            StreamChunk(delta="denied, noted.", finish_reason=None,
+                        tool_calls_delta=None, usage=None, raw={}),
+            StreamChunk(delta="", finish_reason="stop",
+                        tool_calls_delta=None, usage={"total_tokens": 2}, raw={}),
+        ],
+    ])
+
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, stream_fn=stream,
+        tool_registry=registry, max_tool_rounds=4,
+        approval_gate=broker,
+    )
+    events = list(loop.process_message_stream(sid, "send the email"))
+
+    pending = [e for e in events if isinstance(e, ApprovalPendingEvent)]
+    assert len(pending) == 1
+    assert pending[0].tool == "email_send"
+    assert pending[0].call_id == "c9"
+    assert pending[0].citizen == "aetheria"
+    assert pending[0].args.get("to") == "a@b.c"
+
+    # Ordering: ToolCall → ApprovalPending → ToolResult (deny)
+    types = [type(e).__name__ for e in events]
+    i_tc = types.index("ToolCallEvent")
+    i_ap = types.index("ApprovalPendingEvent")
+    i_tr = types.index("ToolResultEvent")
+    assert i_tc < i_ap < i_tr
+
+    denied = json.loads([e for e in events if isinstance(e, ToolResultEvent)][0].content)
+    assert denied["error"] == "ApprovalDenied"
+    assert denied["state"] == "expired"
+
+
+def test_streaming_approval_pending_then_approve(conv_store, tmp_path):
+    """Human approve unblocks invoke; ApprovalPendingEvent still precedes result."""
+    import threading
+    import time
+
+    from soveryn.agents.loop import ApprovalPendingEvent
+    from soveryn.platform.approval.store import ApprovalBroker, ApprovalStore
+
+    registry = _make_registry(
+        lambda args: {"sent": True, "text": args.get("text")},
+        tool_name="email_send",
+    )
+    store = ApprovalStore(tmp_path / "gate.db")
+    broker = ApprovalBroker(store, ttl_seconds=5.0, poll_interval_seconds=0.02)
+
+    def _approve_soon():
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            pending = store.pending_all()
+            if pending:
+                broker.decide(
+                    pending[0].id,
+                    approve=True,
+                    decided_by="jon",
+                    now="2026-08-20T12:00:00",
+                )
+                return
+            time.sleep(0.02)
+        raise AssertionError("no pending approval appeared to approve")
+
+    stream = _MultiRoundStream([
+        [
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, call_id="c8", name="email_send")],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason=None,
+                        tool_calls_delta=[_tool_call_delta(0, arg_chunk='{"text":"hello"}')],
+                        usage=None, raw={}),
+            StreamChunk(delta="", finish_reason="tool_calls", tool_calls_delta=None,
+                        usage=None, raw={}),
+        ],
+        [
+            StreamChunk(delta="sent.", finish_reason="stop",
+                        tool_calls_delta=None, usage={"total_tokens": 1}, raw={}),
+        ],
+    ])
+
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, stream_fn=stream,
+        tool_registry=registry, max_tool_rounds=4,
+        approval_gate=broker,
+    )
+    t = threading.Thread(target=_approve_soon, daemon=True)
+    t.start()
+    events = list(loop.process_message_stream(sid, "email please"))
+    t.join(timeout=5.0)
+
+    pending = [e for e in events if isinstance(e, ApprovalPendingEvent)]
+    assert len(pending) == 1
+    result = json.loads([e for e in events if isinstance(e, ToolResultEvent)][0].content)
+    assert result == {"sent": True, "text": "hello"}

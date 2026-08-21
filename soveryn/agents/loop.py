@@ -147,6 +147,19 @@ class ToolResultEvent:
 
 
 @dataclass(frozen=True)
+class ApprovalPendingEvent:
+    """Egress tool is held at the Approval Gate. Emitted after the pending
+    request is created and *before* wait(), so /chat_stream can show Allow/Deny
+    while the loop blocks for a human decision (or TTL expiry).
+    """
+    approval_id: str
+    citizen: str
+    tool: str
+    args: dict
+    call_id: str
+
+
+@dataclass(frozen=True)
 class TTSTokenEvent:
     """Sanitized assistant text fragment for TTS consumption.
 
@@ -166,7 +179,7 @@ class TTSTokenEvent:
 # Union type alias for typing
 AgentStreamEvent = (
     TokenEvent | DoneEvent | ErrorEvent | ToolCallEvent | ToolResultEvent
-    | TTSTokenEvent
+    | ApprovalPendingEvent | TTSTokenEvent
 )
 
 
@@ -1489,12 +1502,84 @@ class AgentLoop:
             "total_input_soft_budget": TOTAL_INPUT_SOFT_BUDGET_TOKENS,
         }
 
+    def _parse_tool_args(self, raw_args: object) -> dict:
+        if isinstance(raw_args, dict):
+            return dict(raw_args)
+        if isinstance(raw_args, str):
+            try:
+                parsed = json.loads(raw_args) if raw_args else {}
+            except (TypeError, json.JSONDecodeError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
+    def _approval_gate_request(
+        self,
+        tool_name: str,
+        raw_args: object,
+        *,
+        source: str = "direct",
+    ):
+        """Create a pending Approval Gate request, or None if not gated."""
+        if self.approval_gate is None or not tool_name:
+            return None
+        from soveryn.citizens.connectors import requires_approval
+
+        if not requires_approval(tool_name, source=source):
+            return None
+        from datetime import datetime as _dt
+
+        return self.approval_gate.request(
+            citizen=self.agent_name,
+            tool=tool_name,
+            args=self._parse_tool_args(raw_args),
+            now=_dt.now().isoformat(),
+        )
+
+    def _approval_denied_message(
+        self,
+        *,
+        tool_name: str,
+        approval_id: str,
+        state: str,
+        call_id: str,
+    ) -> ChatMessage:
+        result = {
+            "error": "ApprovalDenied",
+            "tool": tool_name,
+            "approval_id": approval_id,
+            "state": state,
+            "message": (
+                "This egress tool call was not approved. "
+                "It will not be sent. Re-plan without this call, "
+                "or inform the user it was denied."
+            ),
+        }
+        return ChatMessage(
+            role="tool",
+            content=json.dumps(result, sort_keys=True),
+            tool_call_id=call_id,
+        )
+
+    def _approval_gate_wait_denied(self, req, *, call_id: str) -> ChatMessage | None:
+        """Block on ``req``; return a deny tool message, or None if approved."""
+        terminal = self.approval_gate.wait(req.id)
+        if terminal.state == "approved":
+            return None
+        return self._approval_denied_message(
+            tool_name=req.tool,
+            approval_id=req.id,
+            state=terminal.state,
+            call_id=call_id,
+        )
+
     def _tool_result_message(
         self,
         tool_call: dict,
         *,
         session_id: str | None = None,
         source: str = "direct",
+        skip_approval_gate: bool = False,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1521,44 +1606,16 @@ class AgentLoop:
                 tool_call_id=call_id,
             )
 
-        # ── Approval gate pre-dispatch check.
-        # Intercept egress tool calls before they leave the house. The gate
-        # creates a pending approval request, blocks until a human decides,
-        # and denies on timeout (fail-safe: no egress without a yes). The
-        # model sees the synthetic result and can re-plan or stop.
-        # Automations (source=automation) auto-pass read-only tools so the
-        # scheduler never hangs on web_search — writes stay gated.
-        if self.approval_gate is not None and tool_name:
-            from soveryn.citizens.connectors import requires_approval
-
-            if requires_approval(tool_name, source=source):
-                from datetime import datetime as _dt
-
-                now = _dt.now().isoformat()
-                req = self.approval_gate.request(
-                    citizen=self.agent_name,
-                    tool=tool_name,
-                    args=json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args),
-                    now=now,
-                )
-                terminal = self.approval_gate.wait(req.id)
-                if terminal.state != "approved":
-                    result = {
-                        "error": "ApprovalDenied",
-                        "tool": tool_name,
-                        "approval_id": req.id,
-                        "state": terminal.state,
-                        "message": (
-                            "This egress tool call was not approved. "
-                            "It will not be sent. Re-plan without this call, "
-                            "or inform the user it was denied."
-                        ),
-                    }
-                    return ChatMessage(
-                        role="tool",
-                        content=json.dumps(result, sort_keys=True),
-                        tool_call_id=call_id,
-                    )
+        # ── Approval gate pre-dispatch check (sync path).
+        # Stream path yields ApprovalPendingEvent before wait(); see
+        # process_message_stream. Automations auto-pass read-only tools.
+        # When skip_approval_gate=True the caller already requested+waited.
+        if not skip_approval_gate:
+            gated = self._approval_gate_request(tool_name, raw_args, source=source)
+            if gated is not None:
+                denied = self._approval_gate_wait_denied(gated, call_id=call_id)
+                if denied is not None:
+                    return denied
 
         try:
             args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
@@ -1973,20 +2030,59 @@ class AgentLoop:
                     turn_tool_ledger.append(str(_fn.get("name") or ""))
 
                 # Invoke each tool, emit visibility events, append result messages.
+                # Approval Gate: request → ApprovalPendingEvent → wait → invoke
+                # (or deny tool_result). Yielding before wait lets /chat_stream
+                # show Allow/Deny while this thread blocks.
                 round_observations: list[dict] = []
                 for tool_call in round_tc_tuple:
                     function = tool_call.get("function") or {}
+                    call_id = str(tool_call.get("id") or "")
+                    tool_name = str(function.get("name") or "")
+                    raw_args = function.get("arguments") or ""
                     yield ToolCallEvent(
-                        call_id=str(tool_call.get("id") or ""),
-                        name=str(function.get("name") or ""),
-                        args=str(function.get("arguments") or ""),
+                        call_id=call_id,
+                        name=tool_name,
+                        args=str(raw_args),
                     )
-                    result_message = self._tool_result_message(
-                        tool_call, session_id=session_id, source=source,
+                    gated = self._approval_gate_request(
+                        tool_name, raw_args, source=source,
                     )
+                    if gated is not None:
+                        yield ApprovalPendingEvent(
+                            approval_id=gated.id,
+                            citizen=gated.citizen,
+                            tool=gated.tool,
+                            args=dict(gated.args),
+                            call_id=call_id,
+                        )
+                        denied = self._approval_gate_wait_denied(
+                            gated, call_id=call_id,
+                        )
+                        if denied is not None:
+                            yield ToolResultEvent(
+                                call_id=call_id,
+                                name=tool_name,
+                                content=denied.content,
+                            )
+                            messages = messages + (denied,)
+                            if recorder is not None:
+                                round_observations.append(
+                                    _build_observation_entry(tool_call, denied)
+                                )
+                            continue
+                        result_message = self._tool_result_message(
+                            tool_call,
+                            session_id=session_id,
+                            source=source,
+                            skip_approval_gate=True,
+                        )
+                    else:
+                        result_message = self._tool_result_message(
+                            tool_call, session_id=session_id, source=source,
+                        )
                     yield ToolResultEvent(
-                        call_id=str(tool_call.get("id") or ""),
-                        name=str(function.get("name") or ""),
+                        call_id=call_id,
+                        name=tool_name,
                         content=result_message.content,
                     )
                     messages = messages + (result_message,)
