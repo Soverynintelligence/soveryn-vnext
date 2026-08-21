@@ -43,6 +43,7 @@ Not Mission Control first. **Messages first.**
 | Pitch piece | Ours today | Steal later (house-shaped) |
 |-------------|------------|----------------------------|
 | Chat as OS front door | `/chat`, `/m/`, easy CC | Phone chat house — default front door |
+| Interactive bot image per agent | Agent pills / cards / voice orb | **Presence mascot** per citizen — tap = talk; state-aware (idle / working / needs you) |
 | Group / multi-agent | CoS + house_post / commissions | Live **group thread** Jon can watch |
 | Connectors | Grants / armed chips | Connect = **grant**, not marketplace install |
 | Automations | Catalog → live → CC Results | Kick / see routines from chat |
@@ -63,9 +64,10 @@ Not Mission Control first. **Messages first.**
 
 1. **Group room v0** — Aetheria + one citizen + Jon; CoS routes in-thread.  
 2. **Mobile front door** — that room opens like Messages.  
-3. **Visible peer turns** — commission shows in the room, not only outbox.  
-4. Connectors/automations **reachable from chat** without leaving the house spine.  
-5. Intake depth (OCR / RAG) as the specialist path already parked.
+3. **Interactive presence image v0** — one portrait/mascot per citizen on roster + chat; tap opens talk; later: working / Gate expressions (Active-now can drive it).  
+4. **Visible peer turns** — commission shows in the room, not only outbox.  
+5. Connectors/automations **reachable from chat** without leaving the house spine.  
+6. Intake depth (OCR / RAG) as the specialist path already parked.
 
 ## Quotable briefs
 
