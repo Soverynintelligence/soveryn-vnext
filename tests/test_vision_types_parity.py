@@ -60,8 +60,9 @@ def test_chat_html_allowed_image_mimes_set_matches_canonical():
 
 
 def test_chat_html_vision_agents_set_matches_canonical():
-    """The JS ATTACH_CAPABLE_AGENTS = new Set([...]) — which gates the composer
-    attach button — must equal VISION_CAPABLE_AGENTS (order-independent).
+    """The JS ATTACH_CAPABLE_AGENTS = new Set([...]) — which gates *image*
+    attachments — must equal VISION_CAPABLE_AGENTS (order-independent).
+    The paperclip itself stays visible for PDF intake on any agent.
     chat.html is served as a static file (no Jinja), so the set is mirrored
     in JS; this test is the guard that keeps it in sync with the backend.
 

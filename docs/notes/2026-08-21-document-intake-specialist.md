@@ -1,7 +1,8 @@
 # Document intake specialist — park for tomorrow (first thing)
 
 **Date:** 2026-08-21 (night)  
-**Status:** orientation only — **first agenda item next session**  
+**Status:** v0 spike **shipped 2026-08-21 morning** (thin shared service + chat PDF splice). OCR/RAG still later.  
+
 **Trigger:** Grok bots (and other agents) treated PDFs as opaque binaries; house agents already have partial vision/chat attachment paths. Next level = **document intake as a first-class citizen duty**, not a lucky tool.
 
 ## Problem

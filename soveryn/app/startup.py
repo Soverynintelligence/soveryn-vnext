@@ -657,6 +657,24 @@ def create_app(
                 owner_agent=_doc_agent,
             )
 
+        # Document intake (v0: text-layer PDF extract). Shared house service —
+        # any active agent can call it; cite-or-stop on scans/empty layers.
+        from soveryn.platform.intake.tools import register_intake_tools as _register_intake_tools
+        from soveryn.config.runtime import ACTIVE_AGENTS as _INTAKE_AGENTS
+        _intake_roots = (
+            env.data_root,
+            Path.home() / "soveryn_citizens",
+            Path.home() / "historys-ledger",
+            Path.home() / "historysledger-site",
+            Path.home() / "Downloads",
+        )
+        for _intake_agent in _INTAKE_AGENTS:
+            _register_intake_tools(
+                tool_registry,
+                owner_agent=_intake_agent,
+                allowed_roots=_intake_roots,
+            )
+
         # Aetheria-initiated signal_send — the outbound half of her Direct
         # Line. Bridge daemon handles inbound → response; this tool lets her
         # send WITHOUT a prior inbound (heartbeat-driven thoughts, alerts,

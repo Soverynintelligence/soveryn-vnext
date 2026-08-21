@@ -405,7 +405,7 @@ def test_chat_accepts_attachments_on_vision_capable_agents(app_state, agent):
 
 
 def test_validate_attachments_accepts_vision_capable_agents(app_state):
-    """Unit: _validate_attachments returns the normalized tuple (no error)
+    """Unit: _validate_attachments returns images tuple (no error)
     for every vision-capable agent."""
     from soveryn.app.routes.chat import _validate_attachments
     from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
@@ -413,25 +413,39 @@ def test_validate_attachments_accepts_vision_capable_agents(app_state):
     img = "data:image/png;base64,AAAA"
     with app_state["app"].app_context():
         for agent in VISION_CAPABLE_AGENTS:
-            attachments, err = _validate_attachments([img], agent)
+            images, pdfs, err = _validate_attachments([img], agent)
             assert err is None, f"{agent!r} should be accepted"
-            assert attachments == (img,)
+            assert images == (img,)
+            assert pdfs == ()
 
 
 def test_validate_attachments_rejects_non_vision_agent(app_state):
     """Unit: a genuinely non-vision agent (not in VISION_CAPABLE_AGENTS) is
-    still rejected with the accurate not-supported error."""
+    still rejected with the accurate not-supported error for images."""
     from soveryn.app.routes.chat import _validate_attachments
     from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 
     assert "cognition" not in VISION_CAPABLE_AGENTS
     with app_state["app"].app_context():
-        attachments, err = _validate_attachments(
+        images, pdfs, err = _validate_attachments(
             ["data:image/jpeg;base64,AAAA"], "cognition")
-        assert attachments is None
+        assert images is None
+        assert pdfs == ()
         resp, status = err
         assert status == 400
         assert json.loads(resp.get_data())["error"]["code"] == "agent_does_not_support_vision"
+
+
+def test_validate_attachments_accepts_pdf_for_any_agent(app_state):
+    """PDF intake is text splice — not vision — so any agent may attach a PDF."""
+    from soveryn.app.routes.chat import _validate_attachments
+
+    pdf = "data:application/pdf;base64,JVBERi0="
+    with app_state["app"].app_context():
+        images, pdfs, err = _validate_attachments([pdf], "kernel")
+        assert err is None
+        assert images is None
+        assert pdfs == (pdf,)
 
 
 def test_chat_rejects_non_list_attachments(app_state):

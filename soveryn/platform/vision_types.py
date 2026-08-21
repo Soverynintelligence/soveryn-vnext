@@ -43,7 +43,10 @@ IMAGE_EXT_TO_MIME: dict[str, str] = {
 }
 
 # Comma-separated `accept` attribute value for the UI file input.
-ACCEPT_ATTRIBUTE_VALUE: str = ",".join(mime for mime, _ in IMAGE_TYPES)
+# Images (vision) plus PDF (house intake text splice — not vision).
+ACCEPT_ATTRIBUTE_VALUE: str = ",".join(
+    (*(mime for mime, _ in IMAGE_TYPES), "application/pdf")
+)
 
 
 # Agents whose serving profile loads an mmproj vision projector — i.e. the

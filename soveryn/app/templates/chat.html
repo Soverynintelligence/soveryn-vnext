@@ -959,7 +959,7 @@
         <button type="button" class="composer-attach-btn" data-testid="composer-attach"
                 title="Attach image" aria-label="Attach image">📎</button>
         <input type="file" data-testid="composer-file-input"
-               accept="image/jpeg,image/png,image/webp,image/gif"
+               accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                multiple hidden>
         <input type="text" placeholder="Message…" data-testid="composer-input" aria-label="Message" autofocus>
         <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
@@ -998,6 +998,8 @@
   const ALLOWED_IMAGE_MIMES = new Set([
     "image/jpeg", "image/png", "image/webp", "image/gif",
   ]);
+  const ALLOWED_PDF_MIME = "application/pdf";
+  const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
   // Agents whose serving profile loads an mmproj image projector — gates the
   // composer 📎 attach button. Mirror of the backend source-of-truth set
   // (chat.html is a static file so it can't import the Python const); a
@@ -1359,10 +1361,19 @@
     state.pendingAttachments.forEach((att, idx) => {
       const thumb = document.createElement("div");
       thumb.className = "composer-attachment-thumb";
-      const img = document.createElement("img");
-      img.src = att.dataUrl;
-      img.alt = att.name || "";
-      thumb.appendChild(img);
+      const isPdf = att.kind === "pdf" || (att.dataUrl || "").startsWith("data:application/pdf");
+      if (isPdf) {
+        const label = document.createElement("span");
+        label.textContent = "PDF";
+        label.title = att.name || "document.pdf";
+        label.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:600 10px/1 var(--mono,monospace);";
+        thumb.appendChild(label);
+      } else {
+        const img = document.createElement("img");
+        img.src = att.dataUrl;
+        img.alt = att.name || "";
+        thumb.appendChild(img);
+      }
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "remove-attachment";
@@ -1392,13 +1403,17 @@
     // through a bronze-trailing gradient, which doesn't serve the spectrum
     // treatment Aetheria needs.
     elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
-    // Paperclip shows only for image-capable agents (those whose server
-    // loads an mmproj) — others have no projector and the backend would 400
-    // anyway. Hide the button to avoid the confusing UI.
+    // Paperclip is always available: images need a vision-capable agent,
+    // PDFs use house intake (text splice) for any agent. Drop pending *images*
+    // when switching to a non-vision agent; keep PDFs.
     const attachBtn = elAttachBtn();
-    if (attachBtn) attachBtn.hidden = !ATTACH_CAPABLE_AGENTS.has(name);
-    // Switching to a non-image-capable agent? Drop any pending attachments.
-    if (!ATTACH_CAPABLE_AGENTS.has(name)) clearPendingAttachments();
+    if (attachBtn) attachBtn.hidden = false;
+    if (!ATTACH_CAPABLE_AGENTS.has(name)) {
+      state.pendingAttachments = state.pendingAttachments.filter(
+        (a) => a.kind === "pdf" || (a.dataUrl || "").startsWith("data:application/pdf")
+      );
+      renderAttachmentsRow();
+    }
     // Mirror the agent onto the call button + voice overlay so per-agent
     // hover tints + orb gradient pick up immediately on switch (idempotent
     // updates; voice gating is handled separately by updateCallButton).
@@ -2126,8 +2141,8 @@
             alert(`Max ${MAX_ATTACHMENT_COUNT} attachments per message`);
             break;
           }
-          if (!ALLOWED_IMAGE_MIMES.has(file.type)) {
-            alert(`Not a supported image type: ${file.name} (${file.type || "unknown"})`);
+          if (!ALLOWED_ATTACH_MIMES.has(file.type)) {
+            alert(`Not a supported attachment: ${file.name} (${file.type || "unknown"}). Images or PDF.`);
             continue;
           }
           if (file.size > MAX_ATTACHMENT_BYTES) {
@@ -2141,7 +2156,8 @@
               r.onerror = () => reject(new Error("read failed"));
               r.readAsDataURL(file);
             });
-            state.pendingAttachments.push({ name: file.name, dataUrl });
+            const kind = file.type === ALLOWED_PDF_MIME ? "pdf" : "image";
+            state.pendingAttachments.push({ name: file.name, dataUrl, kind });
           } catch (e) {
             alert(`Failed to read ${file.name}: ${e.message}`);
           }

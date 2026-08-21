@@ -36,6 +36,8 @@ from soveryn.platform.vision_types import (  # noqa: E402
 # the route boundary so a malformed client can't OOM the loop or the wire.
 MAX_ATTACHMENT_DATA_URL_BYTES = 33_000_000
 
+_PDF_DATA_PREFIX = "data:application/pdf"
+
 
 # ─── Small helpers (route-local, deliberately not abstracted further) ────────
 
@@ -44,37 +46,98 @@ def _err(code: str, message: str, status: int):
 
 
 def _validate_attachments(raw, agent: str):
-    """Validate and normalize the optional 'attachments' field.
+    """Validate attachments: images (vision) and/or PDFs (intake text splice).
 
-    Returns: (attachments_tuple_or_none, error_response_or_none).
-    On success: (None | tuple[str, ...], None).
-    On failure: (None, (jsonified_err, status_code)).
+    Returns: ``(images, pdfs, error)`` where
+      - images: ``None | tuple[str, ...]`` data:image URLs for AgentLoop vision
+      - pdfs: ``tuple[str, ...]`` data:application/pdf URLs (extracted before turn)
+      - error: Flask error response or None
 
-    Empty list is treated as absent (returns None) — the AgentLoop's
-    `if attachments:` truthiness gate then bypasses the vision splice.
+    Empty list is treated as absent. Images still require a vision-capable
+    agent; PDF-only attachments are allowed for any active agent.
     """
     if raw is None:
-        return None, None
+        return None, (), None
     if not isinstance(raw, list):
-        return None, _err("invalid_attachments",
-                          "attachments must be a list of data: URL strings", 400)
-    if not raw:  # empty list — treat as absent
-        return None, None
+        return None, (), _err(
+            "invalid_attachments",
+            "attachments must be a list of data: URL strings",
+            400,
+        )
+    if not raw:
+        return None, (), None
+
+    images: list[str] = []
+    pdfs: list[str] = []
     for a in raw:
         if not isinstance(a, str):
-            return None, _err("invalid_attachments",
-                              f"attachment entries must be strings, got {type(a).__name__}",
-                              400)
-        if not a.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
-            return None, _err("invalid_attachments",
-                              "only data:image/{jpeg,png,webp,gif} URLs accepted", 400)
+            return None, (), _err(
+                "invalid_attachments",
+                f"attachment entries must be strings, got {type(a).__name__}",
+                400,
+            )
         if len(a) > MAX_ATTACHMENT_DATA_URL_BYTES:
-            return None, _err("invalid_attachments",
-                              f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes", 400)
-    if agent not in VISION_CAPABLE_AGENTS:
-        return None, _err("agent_does_not_support_vision",
-                          f"agent {agent!r} has no vision model loaded", 400)
-    return tuple(raw), None
+            return None, (), _err(
+                "invalid_attachments",
+                f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes",
+                400,
+            )
+        if a.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
+            images.append(a)
+        elif a.startswith(_PDF_DATA_PREFIX):
+            pdfs.append(a)
+        else:
+            return None, (), _err(
+                "invalid_attachments",
+                "only data:image/{jpeg,png,webp,gif} or data:application/pdf URLs accepted",
+                400,
+            )
+
+    if images and agent not in VISION_CAPABLE_AGENTS:
+        return None, (), _err(
+            "agent_does_not_support_vision",
+            f"agent {agent!r} has no vision model loaded",
+            400,
+        )
+    return (tuple(images) if images else None), tuple(pdfs), None
+
+
+def _splice_pdf_attachments(message: str, pdf_data_urls: tuple[str, ...]) -> str:
+    """Extract text-layer PDFs and prepend intake blocks to the user message."""
+    if not pdf_data_urls:
+        return message
+    import base64
+    import re
+
+    from soveryn.platform.intake.pdf import extract_pdf_bytes, splice_into_message
+
+    results = []
+    for i, url in enumerate(pdf_data_urls):
+        m = re.match(r"^data:application/pdf(;[^,]*)?,", url)
+        if not m:
+            continue
+        b64 = url.split(",", 1)[-1]
+        try:
+            data = base64.b64decode(b64, validate=False)
+        except Exception as exc:  # noqa: BLE001
+            from soveryn.platform.intake.pdf import ExtractResult
+
+            results.append(
+                ExtractResult(
+                    status="failed",
+                    text="",
+                    page_count=0,
+                    pages_with_text=0,
+                    chars=0,
+                    gap=f"base64 decode failed: {exc}",
+                    source_name=f"attachment-{i + 1}.pdf",
+                )
+            )
+            continue
+        results.append(
+            extract_pdf_bytes(data, source_name=f"attachment-{i + 1}.pdf")
+        )
+    return splice_into_message(message, results)
 
 
 def _validate_source(raw):
@@ -266,12 +329,22 @@ def chat():
         return _err("missing_field", "Required field: session_id", 400)
 
     message = body.get("message")
-    if not isinstance(message, str) or not message.strip():
-        return _err("invalid_message", "message must be a non-empty string", 400)
+    if not isinstance(message, str):
+        return _err("invalid_message", "message must be a string", 400)
 
-    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    images, pdfs, attach_err = _validate_attachments(body.get("attachments"), agent)
     if attach_err is not None:
         return attach_err
+
+    if not message.strip() and not images and not pdfs:
+        return _err("invalid_message", "message must be a non-empty string", 400)
+
+    # PDF intake: splice extracted text into the turn before the loop.
+    # Images still go through AgentLoop vision splice unchanged.
+    if pdfs:
+        message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
+    elif not message.strip():
+        message = "(image)"
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -302,7 +375,7 @@ def chat():
     # AgentLoopError into the right HTTP status here.
     try:
         response = loop.process_message(
-            session_id, message, attachments=attachments, source=source,
+            session_id, message, attachments=images, source=source,
         )
     except AgentLoopError as e:
         msg = str(e)
@@ -399,12 +472,20 @@ def chat_stream():
         return _err("missing_field", "Required field: session_id", 400)
 
     message = body.get("message")
-    if not isinstance(message, str) or not message.strip():
-        return _err("invalid_message", "message must be a non-empty string", 400)
+    if not isinstance(message, str):
+        return _err("invalid_message", "message must be a string", 400)
 
-    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    images, pdfs, attach_err = _validate_attachments(body.get("attachments"), agent)
     if attach_err is not None:
         return attach_err
+
+    if not message.strip() and not images and not pdfs:
+        return _err("invalid_message", "message must be a non-empty string", 400)
+
+    if pdfs:
+        message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
+    elif not message.strip():
+        message = "(image)"
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -454,7 +535,7 @@ def chat_stream():
     # per constraint 3, rather than appearing inside a half-opened text/event-stream.
     try:
         event_iter = loop.process_message_stream(
-            session_id, message, attachments=attachments, source=source,
+            session_id, message, attachments=images, source=source,
         )
         # Pre-fetch the first event so setup errors surface here.
         try:
