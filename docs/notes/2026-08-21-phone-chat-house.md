@@ -1,8 +1,26 @@
-# Phone chat house — Grok Bots insight (park)
+# The house as your operating system (ours)
 
-**Date:** 2026-08-21  
-**Status:** orientation only — product north-star UX, not a build plan  
-**Trigger:** After a day on Grok Bots: the phone app feels like a normal chat app with access to everything; agents can form group chats and talk to each other with one as chief of staff.
+**Date:** 2026-08-21 (updated same day)  
+**Status:** orientation — **north-star product claim**, not a build plan  
+**Triggers:**
+1. Day on Grok Bots: phone feels like a chat app with access to everything; agents group-chat with a CoS.
+2. [@XFreeze](https://x.com/XFreeze) framing: Grok Bot → deeper Grok app integration → “universal OS for getting things done” (connectors, automations, tools; research, travel, email, calendar, files, coding, creative, recurring — one place).
+
+## Make it ours (one sentence)
+
+**SOVERYN is the operating system for Jon’s life and work — but it runs in the house: local models, citizens under a Chief of Staff, Approval Gate on egress, your data stays yours.**
+
+Same *feeling* as the Grok ecosystem pitch. Different *owner*, *door*, and *constitution*.
+
+| Their frame | Ours |
+|-------------|------|
+| One app built around you that can do almost everything | One **house chat** (phone + desk) that can do almost everything **you authorize** |
+| Grok + connectors + automations + tools | Citizens + **grants/armed connectors** + **automations → inbox** + tools + intake |
+| Delegate to an agent across apps/files/services | Delegate to **Aetheria (CoS)** → peers / commissions; you watch the room |
+| Recursive updates inside xAI’s app | Recursive improvement of **your** spine (skills, ActTruth, ledger, fleet) |
+| Cloud product seat | **Local-first**; cloud only when you choose |
+
+We do **not** become “Grok but self-hosted.” We become **the thing that pitch is pointing at**, owned by the house.
 
 ## The feeling (keep this)
 
@@ -10,41 +28,45 @@ Not Mission Control first. **Messages first.**
 
 - Every citizen is a contact.
 - The house has group rooms (CoS + peers + Jon).
-- One mobile surface that can reach tools, memory, approvals, intake — without looking like an ops console.
+- One mobile surface that reaches tools, memory, approvals, intake — without looking like an ops console.
 - Chief of Staff is a *role in the room*, not a settings page.
+- Day-to-day work (research, mail, files, code, creative, recurring) increasingly *starts in chat* and lands in Results / Gate / desks.
 
-## Map onto SOVERYN spine
+## Map: Grok-OS energy → house bones
 
-| Grok Bots energy | Ours (keep) | Gap |
-|------------------|-------------|-----|
-| Bots as contacts | Citizens + Easy CC Talk | Not yet a contacts-list inbox |
-| Chat app on phone | `/chat`, `/m/`, soveryn_mobile | Dual with CC; not the default front door |
-| Group chats | CoS + house_post / commissions | No live group *thread* Jon watches |
-| Peer agent talk | house_post, delegation | File/DB more than chat UI |
-| CoS | Aetheria | Already locked — do not flatten to peer swarm |
-| Approvals in thread | Gate cards (CC + chat) | Shipped; keep in group rooms later |
-| Access to everything | Tools + Lattice + intake | Continue; don’t become cloud bot SaaS |
+| Pitch piece | Ours today | Steal later (house-shaped) |
+|-------------|------------|----------------------------|
+| Chat as OS front door | `/chat`, `/m/`, easy CC | Phone chat house — default front door |
+| Group / multi-agent | CoS + house_post / commissions | Live **group thread** Jon can watch |
+| Connectors | Grants / armed chips | Connect = **grant**, not marketplace install |
+| Automations | Catalog → live → CC Results | Kick / see routines from chat |
+| Tools + files | Tools + intake PDF v0 | OCR, docx, deeper intake/RAG specialist path |
+| Approvals | Gate cards in CC + chat | Same cards inside group rooms |
+| “Everything for you” | — | Only with **cite-or-stop** + Gate; no silent egress |
 
-**Spine unchanged:** local, Approval Gate, CoS + citizens. Steal messaging UX; refuse N rented desktops / create-a-bot marketplace.
+**Spine locked:** local, Approval Gate, CoS + citizens.  
+**Refuse:** flat peer swarm, N cloud desktops per bot, Composio-as-identity, inventing sources.
 
-## Related borrow list
+## Related notes
 
-See `2026-08-20-hermes-rakazo-soveryn-three-way.md`:
+- `2026-08-20-hermes-rakazo-soveryn-three-way.md` — borrow list / non-goals  
+- `2026-08-21-document-intake-specialist.md` — intake (PDF v0 shipped)  
+- This file — **UX / OS claim**
 
-- Borrow later: `@citizen` handoff, group room + `@jon` escalate, forever-chat `/new`
-- Non-goal: replacing CoS with a flat peer swarm
+## When we build (thin slices — order holds)
 
-## When we build (order of thin slices)
+1. **Group room v0** — Aetheria + one citizen + Jon; CoS routes in-thread.  
+2. **Mobile front door** — that room opens like Messages.  
+3. **Visible peer turns** — commission shows in the room, not only outbox.  
+4. Connectors/automations **reachable from chat** without leaving the house spine.  
+5. Intake depth (OCR / RAG) as the specialist path already parked.
 
-1. **Group room v0** — Aetheria + one citizen + Jon; one thread; CoS speaks first / routes.  
-2. **Mobile front door** — open that room from `/m` or RN like Messages.  
-3. **Visible peer turns** — when Aetheria commissions Vett, a line appears in the room (not only desk outbox).  
-4. Only then: multi-citizen rooms, caps, `@mention` validation.
-
-## Quotable brief
+## Quotable briefs
 
 > The app on the phone is literally like a chat app that has access to everything — agents can make group chats and communicate with each other with one being the chief of staff.
 
+> (XFreeze / Grok) One app built around you that can do almost everything for you → **(Ours) One house built around Jon that can do almost everything he authorizes — locally, with a CoS and a Gate.**
+
 ---
 
-_Parked 2026-08-21. Intake v0 already shipped; this is the next UX north star when Jon opens it._
+_Updated 2026-08-21: claimed the “universal OS” energy as SOVERYN’s, not xAI’s._
