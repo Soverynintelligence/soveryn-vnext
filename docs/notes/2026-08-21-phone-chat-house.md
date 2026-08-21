@@ -32,6 +32,7 @@ We do **not** become “Grok but self-hosted.” We become **the thing that pitc
 Not Mission Control first. **Messages first.**
 
 - Every citizen is a contact.
+- **Each agent has a bot image that’s interactive** — presence you tap to talk to; face/stance that can show listening, working, waiting on Gate (not a dead avatar tile).
 - The house has group rooms (CoS + peers + Jon).
 - One mobile surface that reaches tools, memory, approvals, intake — without looking like an ops console.
 - Chief of Staff is a *role in the room*, not a settings page.
