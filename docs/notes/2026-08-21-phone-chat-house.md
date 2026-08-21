@@ -22,6 +22,11 @@ Same *feeling* as the Grok ecosystem pitch. Different *owner*, *door*, and *cons
 
 We do **not** become “Grok but self-hosted.” We become **the thing that pitch is pointing at**, owned by the house.
 
+### Operating principle (locked 2026-08-21)
+
+**Build in parallel** with that ecosystem wave — same direction of travel (chat as OS, multi-agent, automations, connectors).  
+**Make ours local and useful** — ship on Jon’s phone and desk this week/month, not a cloud seat roadmap. Usefulness beats feature parity; Gate + CoS beat “can do everything silently.”
+
 ## The feeling (keep this)
 
 Not Mission Control first. **Messages first.**
