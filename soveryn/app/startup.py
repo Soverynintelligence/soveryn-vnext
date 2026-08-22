@@ -604,6 +604,13 @@ def create_app(
             except Exception:
                 pass
 
+        # Standing objectives — CoS assigns Grok-bot style work (CWG/HL/SOVERYN).
+        from soveryn.platform.objective_tools import register_objective_tools
+        try:
+            register_objective_tools(tool_registry, owner_agent="aetheria")
+        except Exception:
+            logger.exception("objective tools not registered for aetheria")
+
         # system_probe — read-only LIVE host inventory (GPUs/CPU/mem/net/board)
         # over a FIXED command allowlist. Gives the "this machine" fact-class a
         # source to cite instead of a gap to confabulate (the failure the
