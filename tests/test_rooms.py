@@ -122,6 +122,16 @@ def test_messages_page_ok(room_app):
     assert r.status_code == 200
     assert b"Messages" in r.data
     assert b"Aetheria" in r.data
+    assert b"/messages/aetheria" in r.data or b"messages/" in r.data
+
+
+def test_message_thread_page_ok(room_app):
+    app, _, _ = room_app
+    client = app.test_client()
+    r = client.get("/messages/aetheria")
+    assert r.status_code == 200
+    assert b"data-thread" in r.data
+    assert b"data-send" in r.data
 
 
 def test_record_house_post_collab_chip(room_app):

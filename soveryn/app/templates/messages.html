@@ -130,7 +130,7 @@
   async function paint() {
     const rows = await Promise.all(CONTACTS.map(async (c) => {
       const p = await preview(c.id);
-      const href = "/chat?agent=" + encodeURIComponent(c.id);
+      const href = "/messages/" + encodeURIComponent(c.id);
       return (
         '<li><a class="row" href="' + href + '">' +
           '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>' +

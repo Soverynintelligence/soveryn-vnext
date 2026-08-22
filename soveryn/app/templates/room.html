@@ -6,65 +6,85 @@
 <title>Room · SOVERYN</title>
 <style>
   :root {
-    --bg: #0c0b0a; --panel: #161411; --line: rgba(232,227,213,0.12);
-    --ink: #e8e3d5; --ink-2: rgba(232,227,213,0.7); --ink-3: rgba(232,227,213,0.45);
-    --gold: #c6a664; --mint: #6fb98a; --sans: "IBM Plex Sans", system-ui, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
+    --ink: #f5f2ea; --ink-2: rgba(245,242,234,0.7); --ink-3: rgba(245,242,234,0.45);
+    --gold: #c6a664; --mint: #6fb98a;
+    --bubble-them: #1c1a17; --bubble-me: #2a2418;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
-  header.room-bar {
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column;
   }
-  header a { color: var(--ink-2); text-decoration: none; font-size: 13px; }
-  header a:hover { color: var(--gold); }
-  .title { font-weight: 600; letter-spacing: 0.02em; }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  header.room-bar {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top));
+    background: rgba(0,0,0,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  header a { color: var(--gold); text-decoration: none; font-size: 15px; }
+  .title { font-weight: 600; font-size: 17px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
   .chip {
     font-size: 12px; padding: 5px 10px; border-radius: 999px;
-    border: 1px solid var(--line); background: rgba(198,166,100,0.06);
+    border: 1px solid var(--line); background: rgba(198,166,100,0.08);
   }
   .chip[data-who="peer"] { border-color: rgba(111,185,138,0.35); color: var(--mint); }
   .chip[data-who="you"] { opacity: 0.85; }
   .thread {
-    flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px;
-    max-width: 720px; width: 100%; margin: 0 auto;
+    flex: 1; overflow-y: auto; padding: 12px;
+    display: flex; flex-direction: column; gap: 6px;
   }
   .bubble {
-    max-width: 85%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
-    background: var(--panel); white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.45;
+    max-width: 78%; padding: 10px 14px; border-radius: 18px;
+    white-space: pre-wrap; word-break: break-word; font-size: 16px; line-height: 1.35;
   }
-  .bubble.user { align-self: flex-end; border-color: rgba(198,166,100,0.35); }
-  .bubble.assistant { align-self: flex-start; }
-  .bubble.system { align-self: stretch; font-size: 13px; color: var(--ink-2); background: rgba(111,185,138,0.06); border-color: rgba(111,185,138,0.25); }
-  .bubble .who { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 4px; }
+  .bubble.user {
+    align-self: flex-end; background: var(--bubble-me);
+    border: 1px solid rgba(198,166,100,0.25); border-bottom-right-radius: 4px;
+  }
+  .bubble.assistant {
+    align-self: flex-start; background: var(--bubble-them); border-bottom-left-radius: 4px;
+  }
+  .bubble.system {
+    align-self: center; max-width: 92%; font-size: 13px; color: var(--ink-2);
+    background: rgba(111,185,138,0.08); border-radius: 12px; padding: 8px 12px;
+  }
+  .bubble .who {
+    font-size: 11px; letter-spacing: 0.04em; color: var(--gold); margin-bottom: 4px; font-weight: 600;
+  }
   .bubble.system .who { color: var(--mint); }
   .composer {
-    max-width: 720px; width: 100%; margin: 0 auto 16px; padding: 0 16px;
-    display: flex; flex-direction: column; gap: 8px;
+    padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px;
   }
-  .ask-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .ask-row button, .composer-row button, .composer-row select {
-    font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 6px;
-    border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer;
+  .ask-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ask-row button {
+    font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35); background: rgba(111,185,138,0.1);
+    color: var(--ink); cursor: pointer;
   }
-  .ask-row button.primary, .composer-row .send {
-    background: rgba(198,166,100,0.15); border-color: rgba(198,166,100,0.4); color: var(--gold);
-  }
-  .composer-row { display: flex; gap: 8px; }
+  .ask-row a { font-size: 13px; color: var(--gold); text-decoration: none; }
+  .composer-row { display: flex; gap: 8px; align-items: center; }
   .composer-row input {
-    flex: 1; font: inherit; padding: 10px 12px; border-radius: 6px;
-    border: 1px solid var(--line); background: #0f0e0c; color: var(--ink);
+    flex: 1; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 20px;
+    border: 1px solid var(--line); background: #141210; color: var(--ink);
+  }
+  .composer-row .send {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: var(--gold); color: #0c0b0a; font-size: 18px; font-weight: 700; cursor: pointer;
   }
   .status { font-size: 12px; color: var(--ink-3); min-height: 1.2em; }
 </style>
 </head>
 <body>
   <header class="room-bar">
-    <a href="/">Command</a>
-    <a href="/chat?agent=aetheria" data-dm-link>Aetheria DM</a>
-    <span class="title">Room</span>
+    <a href="/messages">‹ Messages</a>
+    <a href="/messages/aetheria" data-dm-link>Aetheria</a>
+    <span class="title">Group</span>
     <div class="chips" data-presence>
       <span class="chip" data-who="you">You</span>
       <span class="chip" data-who="cos">Aetheria</span>
@@ -164,7 +184,7 @@
     if (state.dmSessionId) u.searchParams.set("from", state.dmSessionId);
     history.replaceState({}, "", u);
     if (state.dmSessionId) {
-      $("[data-dm-link]").href = "/chat?agent=aetheria&session=" + encodeURIComponent(state.dmSessionId);
+      $("[data-dm-link]").href = "/messages/aetheria?session=" + encodeURIComponent(state.dmSessionId);
     }
     await loadHistory();
     setStatus("Room ready · peer " + state.peer);

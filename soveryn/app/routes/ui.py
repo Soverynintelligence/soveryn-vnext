@@ -66,6 +66,7 @@ def charters_board():
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"
 ROOM_TEMPLATE = Path(__file__).parent.parent / "templates" / "room.html"
 MESSAGES_TEMPLATE = Path(__file__).parent.parent / "templates" / "messages.html"
+MESSAGE_THREAD_TEMPLATE = Path(__file__).parent.parent / "templates" / "message_thread.html"
 
 
 def _serve_chat_html():
@@ -91,6 +92,12 @@ def room_page():
 def messages_page():
     """Messenger-style contacts list — tap a citizen to open their 1:1."""
     return _serve_html(MESSAGES_TEMPLATE, missing_label="Messages")
+
+
+@bp.get("/messages/<agent>")
+def message_thread_page(agent: str):
+    """iMessage-style 1:1 thread — matches /messages list chrome."""
+    return _serve_html(MESSAGE_THREAD_TEMPLATE, missing_label="Message thread")
 
 
 @bp.get("/chat")
