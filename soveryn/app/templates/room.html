@@ -33,6 +33,17 @@
     border: 1px solid var(--line); background: rgba(198,166,100,0.08);
   }
   .chip[data-who="peer"] { border-color: rgba(111,185,138,0.35); color: var(--mint); }
+  .chip[data-who="peer"][data-state="working"] {
+    animation: peer-work 1.4s ease-in-out infinite;
+    border-color: rgba(111,185,138,0.7);
+  }
+  .chip[data-who="peer"][data-state="replied"] {
+    border-color: rgba(198,166,100,0.65); color: var(--gold);
+  }
+  @keyframes peer-work {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+  }
   .chip[data-who="you"] { opacity: 0.85; }
   .thread {
     flex: 1; overflow-y: auto; padding: 12px;
@@ -142,8 +153,17 @@
     thread().scrollTop = thread().scrollHeight;
   }
 
+  function setPeerChipState(st) {
+    const chip = $("[data-peer-chip]");
+    if (!chip) return;
+    chip.dataset.state = st || "";
+    const base = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
+    chip.textContent = st === "working" ? base + " · working" : st === "replied" ? base + " · replied" : base;
+  }
+
   function renderHistory(turns) {
     thread().innerHTML = "";
+    let peerState = "";
     (turns || []).forEach((t) => {
       if (t.role === "user") appendBubble("user", t.content, "You");
       else if (t.role === "system") {
@@ -154,17 +174,24 @@
             (t.content || "").replace(/^\[From [^\]]+\]\n?/, ""),
             fromPeer[1]
           );
+          peerState = "replied";
           return;
+        }
+        if (/waiting on reply|Looped in|Commissioned/i.test(t.content || "")) {
+          if (peerState !== "replied") peerState = "working";
         }
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         const who = m ? ("Messaged " + m[1]) : "Room";
         appendBubble("system", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, ""), who);
       } else if (t.role === "assistant") {
         const toPeer = /^\[To ([^\]]+)\]/.exec(t.content || "");
-        if (toPeer) appendBubble("assistant", (t.content || "").replace(/^\[To [^\]]+\]\n?/, ""), "Aetheria → " + toPeer[1]);
-        else appendBubble("assistant", t.content, "Aetheria");
+        if (toPeer) {
+          appendBubble("assistant", (t.content || "").replace(/^\[To [^\]]+\]\n?/, ""), "Aetheria → " + toPeer[1]);
+          if (peerState !== "replied") peerState = "working";
+        } else appendBubble("assistant", t.content, "Aetheria");
       }
     });
+    setPeerChipState(peerState);
   }
 
   async function openRoom() {

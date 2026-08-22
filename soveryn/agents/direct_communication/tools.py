@@ -43,6 +43,152 @@ _QUERY_PREFIX = (
 )
 
 
+def _commission_peer_for_dm(
+    *,
+    owner_agent: str,
+    target: str,
+    brief: str,
+    coord_node_id: str,
+) -> dict[str, Any]:
+    """Enqueue peer work + room chip; return immediately (no nested /chat)."""
+    try:
+        import os
+        from datetime import datetime, timezone
+        from pathlib import Path
+
+        from soveryn.citizens import post as house_post
+        from soveryn.citizens.registry import connect
+        from soveryn.rooms import context as room_ctx
+        from soveryn.rooms.store import record_house_post_collab
+
+        when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        db = Path(
+            os.environ.get("SOVERYN_CITIZENS_DB")
+            or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
+        )
+        body = (
+            f"(coord:{coord_node_id})\n\n{brief.strip()}"
+        )
+        with connect(db) as conn:
+            routing = house_post.route_via_cos(
+                conn,
+                from_id=owner_agent,
+                assignee_id=target,
+                body=body,
+                at=when,
+                subject=f"coord {coord_node_id[:8]}",
+            )
+        commission_id = routing.get("commission_id")
+        dm = room_ctx.dm_session_id.get()
+        room_sid = room_ctx.room_session_id.get()
+        root = room_ctx.data_root.get()
+        conv = None
+        try:
+            from flask import current_app
+
+            conv = (current_app.extensions.get("soveryn") or {}).get("conv_store")
+        except Exception:
+            conv = None
+        room_event = None
+        if conv is not None and root:
+            room_event = record_house_post_collab(
+                conv,
+                data_root=root,
+                from_id=owner_agent,
+                to_id=target,
+                body=brief,
+                dm_session_id=dm,
+                room_session_id=room_sid,
+                commission_id=commission_id,
+            )
+        return {
+            "ok": True,
+            "commission_id": commission_id,
+            "room_event": room_event,
+            "routing": routing,
+        }
+    except Exception as exc:
+        logger.exception("async commission for DM failed %s → %s", owner_agent, target)
+        return {"ok": False, "error": repr(exc)}
+
+
+def _project_peer_looped_in(
+    *,
+    owner_agent: str,
+    target: str,
+    brief: str,
+) -> dict[str, Any] | None:
+    """Show peer bot-shape in Jon's DM + open group room (best-effort)."""
+    try:
+        from soveryn.rooms import context as room_ctx
+        from soveryn.rooms.store import record_house_post_collab
+
+        dm = room_ctx.dm_session_id.get()
+        room_sid = room_ctx.room_session_id.get()
+        root = room_ctx.data_root.get()
+        conv = None
+        try:
+            from flask import current_app
+
+            conv = (current_app.extensions.get("soveryn") or {}).get("conv_store")
+        except Exception:
+            conv = None
+        # Nested /chat from this tool runs outside Aetheria's request stack;
+        # fall back to app object on the poster path via room_ctx only.
+        if conv is None or not root:
+            return None
+        return record_house_post_collab(
+            conv,
+            data_root=root,
+            from_id=owner_agent,
+            to_id=target,
+            body=brief,
+            dm_session_id=dm,
+            room_session_id=room_sid,
+            mark_working=True,
+        )
+    except Exception:
+        logger.exception("room loop-in projection failed for %s → %s", owner_agent, target)
+        return None
+
+
+def _project_peer_reply(
+    *,
+    target: str,
+    reply_text: str,
+    room_session_id: str | None,
+    dm_session_id: str | None,
+) -> dict[str, Any] | None:
+    """Land peer reply in the group room + DM replied chip (best-effort)."""
+    try:
+        from soveryn.citizens.post import CHIEF_OF_STAFF_ID
+        from soveryn.rooms import context as room_ctx
+        from soveryn.rooms.store import record_house_post_collab
+
+        root = room_ctx.data_root.get()
+        conv = None
+        try:
+            from flask import current_app
+
+            conv = (current_app.extensions.get("soveryn") or {}).get("conv_store")
+        except Exception:
+            conv = None
+        if conv is None or not root:
+            return None
+        return record_house_post_collab(
+            conv,
+            data_root=root,
+            from_id=target,
+            to_id=CHIEF_OF_STAFF_ID,
+            body=reply_text,
+            dm_session_id=dm_session_id or room_ctx.dm_session_id.get(),
+            room_session_id=room_session_id or room_ctx.room_session_id.get(),
+        )
+    except Exception:
+        logger.exception("room reply projection failed for %s", target)
+        return None
+
+
 def _default_http_poster(url: str, body: dict, timeout: float) -> dict:
     """Production POST helper — stdlib only, no requests dependency."""
     data = json.dumps(body).encode("utf-8")
@@ -124,8 +270,61 @@ def build_direct_message_agent_tool(
                 "coord_node_id": coord_node_id,
             }
 
+        brief = message.strip()
+
+        # Phone / messenger path: Jon is watching. Do NOT nest /chat into the
+        # peer while Aetheria still holds the GPU — that hangs. Enqueue a
+        # commission, drop the peer icon into the DM, return immediately.
+        # citizens-runtime runs the peer; reply projects into the group room.
+        try:
+            from soveryn.rooms import context as room_ctx
+
+            dm_live = room_ctx.dm_session_id.get()
+        except Exception:
+            dm_live = None
+        if dm_live and mode == "execute":
+            async_out = _commission_peer_for_dm(
+                owner_agent=owner_agent,
+                target=target,
+                brief=brief,
+                coord_node_id=coord_node_id,
+            )
+            if async_out.get("ok"):
+                limiter.record(sender=owner_agent, target=target, now=now)
+                if edge_writer is not None:
+                    try:
+                        edge_writer(
+                            coord_node_id,
+                            owner_agent,
+                            target,
+                            async_out.get("commission_id") or coord_node_id,
+                            mode,
+                            brief[:200],
+                        )
+                    except Exception:
+                        logger.exception(
+                            "lattice forensic record failed for async coord %s",
+                            coord_node_id,
+                        )
+                return {
+                    "target": target,
+                    "session_id": None,
+                    "response_content": (
+                        f"Looped in {target} via commission "
+                        f"`{(async_out.get('commission_id') or '')[:8]}`. "
+                        "Their reply will land in the group room — Jon can tap "
+                        "their icon in this chat to watch."
+                    ),
+                    "finish_reason": "commissioned",
+                    "coord_node_id": coord_node_id,
+                    "commission_id": async_out.get("commission_id"),
+                    "commissioned": True,
+                    "room_event": async_out.get("room_event"),
+                }
+            # Fall through to nested chat if commission path failed.
+
         prefix = _DIRECTIVE_PREFIX if mode == "execute" else _QUERY_PREFIX
-        wire_message = prefix.format(cid=coord_node_id) + message.strip()
+        wire_message = prefix.format(cid=coord_node_id) + brief
 
         # Mint a session keyed by coord_node_id so the audit trail is easy
         # to navigate. The vnext /sessions endpoint creates a fresh one
@@ -155,10 +354,25 @@ def build_direct_message_agent_tool(
                 "coord_node_id": coord_node_id,
             }
 
+        # Drop Vett/Scotty into Jon's messenger group *before* the nested
+        # chat so the phone shows the peer icon while work runs.
+        room_event = _project_peer_looped_in(
+            owner_agent=owner_agent,
+            target=target,
+            brief=brief,
+        )
+
         try:
+            # source=coordination — not "direct" — so citizens-runtime does
+            # not treat this nested peer turn as Jon mid-chat (interactive_busy).
             chat_resp = poster(
                 f"{vnext_base.rstrip('/')}/chat",
-                {"agent": target, "session_id": session_id, "message": wire_message},
+                {
+                    "agent": target,
+                    "session_id": session_id,
+                    "message": wire_message,
+                    "source": "coordination",
+                },
                 dispatch_timeout_seconds,
             )
         except urllib.error.HTTPError as e:
@@ -168,6 +382,7 @@ def build_direct_message_agent_tool(
                 "target": target,
                 "session_id": session_id,
                 "coord_node_id": coord_node_id,
+                "room_event": room_event,
             }
         except Exception as e:
             return {
@@ -176,6 +391,7 @@ def build_direct_message_agent_tool(
                 "target": target,
                 "session_id": session_id,
                 "coord_node_id": coord_node_id,
+                "room_event": room_event,
             }
 
         # Successful dispatch — record the rate budget and the forensic record.
@@ -195,7 +411,7 @@ def build_direct_message_agent_tool(
                     target,
                     session_id,
                     mode,
-                    message.strip()[:200],
+                    brief[:200],
                 )
             except Exception:
                 logger.exception(
@@ -205,14 +421,26 @@ def build_direct_message_agent_tool(
                 message_node_id = None
                 edge_id = None
 
+        reply_text = (chat_resp.get("content") or "").strip()
+        reply_event = None
+        if reply_text:
+            reply_event = _project_peer_reply(
+                target=target,
+                reply_text=reply_text,
+                room_session_id=(room_event or {}).get("room_session_id"),
+                dm_session_id=(room_event or {}).get("dm_session_id"),
+            )
+
         return {
             "target": target,
             "session_id": session_id,
-            "response_content": chat_resp.get("content", ""),
+            "response_content": reply_text,
             "finish_reason": chat_resp.get("finish_reason", ""),
             "coord_node_id": coord_node_id,
             "message_node_id": message_node_id,
             "edge_id": edge_id,
+            "room_event": room_event,
+            "reply_event": reply_event,
         }
 
     schema = {
@@ -266,8 +494,10 @@ def build_direct_message_agent_tool(
         handler=handler,
         description=(
             "Send a directive or query directly to Vett or Scotty, anchored "
-            "to a specific Coordination node. Use this when you need a peer "
-            "to act or report without waiting for a heartbeat round-trip. "
-            "Every call is forensically logged (lattice edge) and rate-capped."
+            "to a Coordination node. Prefer house_post_send (kind=request) when "
+            "Jon said 'ask Vett/Scotty…' from chat and should watch the group "
+            "room — that path wakes them asynchronously and shows their icon. "
+            "Use this tool for backstage peer work that must run now and report "
+            "into a coord node. Every call is lattice-logged and rate-capped."
         ),
     )

@@ -85,13 +85,13 @@
     background: transparent; color: var(--mute); font-size: 13px;
     text-align: center; padding: 6px 10px;
   }
-  /* In-thread peer: just the bot shape — tap opens group chat (Grok Bots style) */
+  /* In-thread peer: bot shape — tap opens group (working pulse = functional signal) */
   a.messaged-peer {
     align-self: flex-start;
     display: flex; flex-direction: column; align-items: center; gap: 4px;
     text-decoration: none; color: var(--ink);
     padding: 4px 6px; border-radius: 16px;
-    max-width: 88px; border: 1px solid transparent;
+    max-width: 96px; border: 1px solid transparent;
   }
   a.messaged-peer:active { opacity: 0.85; }
   a.messaged-peer:focus-visible {
@@ -108,10 +108,25 @@
   a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer[data-state="working"] .mp-av {
+    animation: mp-work 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
+  }
+  a.messaged-peer[data-state="replied"] .mp-av {
+    box-shadow: 0 0 0 2px rgba(198,166,100,0.65);
+  }
+  @keyframes mp-work {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
   a.messaged-peer .mp-name {
     font-size: 11px; font-weight: 600; color: var(--mute);
     text-align: center; line-height: 1.2;
   }
+  a.messaged-peer .mp-status {
+    font-size: 10px; color: var(--mint, #6fb98a); text-align: center; line-height: 1.2;
+  }
+  a.messaged-peer[data-state="replied"] .mp-status { color: var(--gold); }
   .day {
     align-self: center; font-size: 12px; color: var(--mute); padding: 8px 0 4px;
   }
@@ -170,7 +185,10 @@
   const agent = (params.get("agent") || pathAgent || "aetheria").toLowerCase();
   const contact = CONTACTS[agent] || { name: agent, letter: "?", sub: "" };
 
-  const state = { agent, sessionId: params.get("session") || null, sending: false };
+  const state = {
+    agent, sessionId: params.get("session") || null, sending: false,
+    turnCount: 0, waitingPeers: false, pollTimer: null,
+  };
 
   const $ = (s) => document.querySelector(s);
   const thread = () => $("[data-thread]");
@@ -202,16 +220,23 @@
       + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
   }
 
-  function appendMessagedPeer(peer, roomSessionId) {
+  function appendMessagedPeer(peer, roomSessionId, peerState) {
     const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const st = peerState || "messaged";
+    const status =
+      st === "working" ? "working…" :
+      st === "replied" ? "replied · tap" : "in group";
     const a = document.createElement("a");
     a.className = "messaged-peer";
+    a.dataset.state = st;
+    a.dataset.peer = peer;
     a.href = roomHref(peer, roomSessionId);
     a.title = "Open group chat with " + name;
-    a.setAttribute("aria-label", "Open group chat with " + name);
+    a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
     a.innerHTML =
       '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
-      '<span class="mp-name">' + esc(name) + '</span>';
+      '<span class="mp-name">' + esc(name) + '</span>' +
+      '<span class="mp-status">' + esc(status) + '</span>';
     thread().appendChild(a);
     thread().scrollTop = thread().scrollHeight;
     return a;
@@ -223,26 +248,72 @@
     (collabIndex || []).forEach((ev) => {
       if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
     });
+    // Latest state per peer from system markers (replied wins over working)
+    const peerState = {};
+    (turns || []).forEach((t) => {
+      if (t.role !== "system") return;
+      const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
+      if (m) peerState[m[1]] = /working/i.test(t.content || "") ? "working" : (peerState[m[1]] || "messaged");
+      const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+      if (r) peerState[r[1]] = "replied";
+    });
+    const shown = new Set();
+    let waiting = false;
     (turns || []).forEach((t) => {
       if (t.role === "user") appendBubble("me", t.content);
       else if (t.role === "assistant") appendBubble("them", t.content);
       else if (t.role === "system") {
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
-        if (m) {
-          appendMessagedPeer(m[1], byPeer[m[1]] || null);
-          if (/working/i.test(t.content || "")) {
-            appendBubble("sys", (CONTACTS[m[1]] || { name: m[1] }).name + " is working… tap their shape for the group chat");
+        const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+        const peer = (m && m[1]) || (r && r[1]);
+        if (peer) {
+          if (!shown.has(peer)) {
+            shown.add(peer);
+            appendMessagedPeer(peer, byPeer[peer] || null, peerState[peer]);
+            if (peerState[peer] === "working") waiting = true;
           }
-        } else if (/⟦room:replied:([a-z]+)⟧/.exec(t.content || "")) {
-          const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
-          const peer = r[1];
-          appendMessagedPeer(peer, byPeer[peer] || null);
-          appendBubble("sys", (CONTACTS[peer] || { name: peer }).name + " replied — tap to open group");
         } else {
           appendBubble("sys", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "").replace(/⟦room:replied:[a-z]+⟧\s*/, ""));
         }
       }
     });
+    state.turnCount = (turns || []).length;
+    state.waitingPeers = waiting;
+    if (waiting) {
+      $("[data-agent-sub]").textContent = "peer working — tap their shape for the group";
+      startPoll();
+    } else if (Object.values(peerState).includes("replied")) {
+      $("[data-agent-sub]").textContent = "peer replied — tap shape to read in group";
+      stopPoll();
+    } else {
+      $("[data-agent-sub]").textContent = contact.sub;
+      stopPoll();
+    }
+  }
+
+  function startPoll() {
+    if (state.pollTimer || agent !== "aetheria") return;
+    state.pollTimer = setInterval(async () => {
+      if (!state.sessionId || state.sending) return;
+      try {
+        const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
+        if (!h.ok) return;
+        const hd = await h.json();
+        const turns = hd.turns || [];
+        if (turns.length !== state.turnCount) {
+          const c = await collabs();
+          renderTurns(turns, c);
+          renderChips(c);
+        }
+      } catch (_) {}
+    }, 3000);
+  }
+
+  function stopPoll() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
   }
 
   function renderChips(events) {
@@ -385,8 +456,8 @@
           } else if (payload.type === "tool_result") {
             try {
               const r = JSON.parse(payload.content || "{}");
-              if (r && r.commissioned && r.to_id) {
-                appendBubble("sys", "Commissioned " + r.to_id + " — they'll reply in the group chat");
+              if (r && r.commissioned && (r.to_id || r.target)) {
+                appendBubble("sys", "Commissioned " + (r.to_id || r.target) + " — tap their shape for the group");
               }
             } catch (_) {}
           } else if (payload.type === "error") {
@@ -416,7 +487,9 @@
     if (ev.key === "Enter") { ev.preventDefault(); send(); }
   });
 
-  loadLatestOrHistory();
+  loadLatestOrHistory().then(() => {
+    if (state.waitingPeers) startPoll();
+  });
   $("[data-input]").focus();
 })();
 </script>

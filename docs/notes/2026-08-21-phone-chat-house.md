@@ -82,7 +82,9 @@ Not Mission Control first. **Messages first.**
 
 In the **actual 1:1 chat with Aetheria**, if Jon says *ask Vett to research this*, she messages him from that chat. Jon sees **just Vett’s bot shape** in the thread; tapping it opens the **group chat** between them. Not a settings hop. Not only an outbox. The peer’s presence *is* the affordance.
 
-House target: `house_post_send` same turn → DM system marker → in-thread tappable peer avatar → `/room` (Aetheria + peer + Jon).
+House target: `house_post_send` (or DM-aware `direct_message_agent` → commission) same turn → DM system marker → in-thread tappable peer avatar (working → replied) → `/room` where the reply lands.
+
+**Locked collaboration feel (2026-08-22):** little peer icon pops into Aetheria’s chat = “looped in”; tap = group with both; work + reply happen in that room. Grok bots are *animated* — we may add house flair later; **flow first** (CSS working pulse is a status signal, not mascot art).
 
 ### PondWright: talk while the tools work
 

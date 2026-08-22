@@ -461,10 +461,25 @@
   a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer[data-state="working"] .mp-av {
+    animation: mp-work 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
+  }
+  a.messaged-peer[data-state="replied"] .mp-av {
+    box-shadow: 0 0 0 2px rgba(198,166,100,0.65);
+  }
+  @keyframes mp-work {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
   a.messaged-peer .mp-name {
     font-size: 11px; font-weight: 600; color: var(--ink-3, rgba(245,242,234,0.45));
     text-align: center; line-height: 1.2;
   }
+  a.messaged-peer .mp-status {
+    font-size: 10px; color: var(--ok, #6fb98a); text-align: center;
+  }
+  a.messaged-peer[data-state="replied"] .mp-status { color: var(--gold); }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
   .approval-card {
@@ -1447,17 +1462,21 @@
       + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
   }
 
-  function appendMessagedPeer(peer, roomSessionId) {
+  function appendMessagedPeer(peer, roomSessionId, peerState) {
     const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const st = peerState || "messaged";
+    const status = st === "working" ? "working…" : st === "replied" ? "replied · tap" : "in group";
     const a = document.createElement("a");
     a.className = "messaged-peer";
     a.href = roomHref(peer, roomSessionId);
     a.title = "Open group chat with " + name;
-    a.setAttribute("aria-label", "Open group chat with " + name);
+    a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
     a.dataset.peer = peer;
+    a.dataset.state = st;
     a.innerHTML =
       '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
-      '<span class="mp-name">' + esc(name) + '</span>';
+      '<span class="mp-name">' + esc(name) + '</span>' +
+      '<span class="mp-status">' + esc(status) + '</span>';
     elThread().appendChild(a);
     elThread().scrollTop = elThread().scrollHeight;
     return a;
@@ -1888,20 +1907,43 @@
         if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
       });
       const fromSys = [];
+      const peerState = {};
+      const shown = new Set();
+      for (const t of data.turns || []) {
+        if (t.role === "system") {
+          const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
+          if (m) peerState[m[1]] = /working/i.test(t.content || "") ? "working" : (peerState[m[1]] || "messaged");
+          const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+          if (r) peerState[r[1]] = "replied";
+        }
+      }
       for (const t of data.turns || []) {
         if (t.role === "user" || t.role === "assistant") {
           const b = appendBubble(t.role, t.content);
           if (t.role === "assistant") enhanceBubbleWithImages(b);
-        } else if (t.role === "system" && /⟦room:messaged:([a-z]+)⟧/.test(t.content || "")) {
-          const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content);
-          if (m) {
+        } else if (t.role === "system" && /⟦room:(messaged|replied):([a-z]+)⟧/.test(t.content || "")) {
+          const m = /⟦room:(?:messaged|replied):([a-z]+)⟧/.exec(t.content);
+          if (m && !shown.has(m[1])) {
+            shown.add(m[1]);
             fromSys.push({ peer: m[1], room_session_id: byPeer[m[1]] || null });
-            appendMessagedPeer(m[1], byPeer[m[1]] || null);
+            appendMessagedPeer(m[1], byPeer[m[1]] || null, peerState[m[1]]);
           }
         }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
       renderCollabChips(collabs.length ? collabs : fromSys);
+      // Live-refresh while a peer is working so the icon flips to replied.
+      const waiting = Object.values(peerState).includes("working");
+      if (waiting && state.agent === "aetheria" && sessionId) {
+        if (!state._peerPoll) {
+          state._peerPoll = setInterval(() => {
+            if (state.sessionId) loadHistory(state.sessionId);
+          }, 4000);
+        }
+      } else if (state._peerPoll) {
+        clearInterval(state._peerPoll);
+        state._peerPoll = null;
+      }
     } catch { /* noop */ }
   }
 

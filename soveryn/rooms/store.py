@@ -273,6 +273,7 @@ def record_house_post_collab(
     dm_session_id: str | None,
     room_session_id: str | None = None,
     commission_id: str | None = None,
+    mark_working: bool = False,
 ) -> dict[str, Any] | None:
     """When CoS↔peer house_post fires during a chat, project into DM chip + room.
 
@@ -297,7 +298,8 @@ def record_house_post_collab(
         sid = room["session_id"]
         marker = MESSAGED_MARKER.format(peer=peer)
         excerpt = body if len(body) <= 800 else body[:797] + "…"
-        working = " — working…" if commission_id else ""
+        is_working = bool(commission_id) or mark_working
+        working = " — working…" if is_working else ""
         conv.save_turn(
             sid,
             COS_ID,
@@ -305,12 +307,17 @@ def record_house_post_collab(
             f"[To {peer.title()}]\n{excerpt}",
             source="room",
         )
-        if commission_id:
+        if is_working:
+            label = (
+                f"Commissioned {peer.title()} · `{commission_id[:8]}` — waiting on reply."
+                if commission_id
+                else f"Looped in {peer.title()} — waiting on reply."
+            )
             conv.save_turn(
                 sid,
                 COS_ID,
                 "system",
-                f"Commissioned {peer.title()} · `{commission_id[:8]}` — waiting on reply.",
+                label,
                 source="room",
             )
         if dm_session_id and conv.get_session(dm_session_id) is not None:
@@ -329,6 +336,7 @@ def record_house_post_collab(
             "room_session_id": sid,
             "dm_session_id": dm_session_id,
             "direction": "cos_to_peer",
+            "state": "working" if is_working else "messaged",
         }
         if commission_id:
             event["commission_id"] = commission_id
