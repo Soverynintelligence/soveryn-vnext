@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Aetheria</title>
+<style>
+
+  :root {
+    --bg:#000; --panel:#0c0b0a; --line:rgba(255,255,255,0.08);
+    --ink:#f5f2ea; --mute:rgba(245,242,234,0.45); --gold:#c6a664; --mint:#6fb98a;
+    --bubble-them:#1c1a17; --bubble-me:#2a2418;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+    display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+  header.top{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;
+    padding:12px;padding-top:max(12px,env(safe-area-inset-top));
+    background:rgba(0,0,0,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+  .back{color:var(--gold);text-decoration:none;font-size:17px;padding:6px 4px}
+  .avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+    justify-content:center;font-weight:700;font-size:15px;color:#0c0b0a;
+    background:linear-gradient(145deg,var(--gold),#8a7038)}
+  .avatar.vett{background:linear-gradient(145deg,#7ec8e3,#3a7a9a)}
+  .avatar.eve{background:linear-gradient(145deg,#e0b0ff,#7a4a9a)}
+  .who{flex:1;min-width:0}
+  .who .name{font-weight:600;font-size:17px}
+  .who .sub{font-size:12px;color:var(--mute)}
+  .thread{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
+  .bubble{max-width:78%;padding:10px 14px;border-radius:18px;font-size:16px;line-height:1.35}
+  .bubble.them{align-self:flex-start;background:var(--bubble-them);border-bottom-left-radius:4px}
+  .bubble.me{align-self:flex-end;background:var(--bubble-me);border:1px solid rgba(198,166,100,.25);border-bottom-right-radius:4px}
+  .bubble.sys{align-self:center;max-width:90%;background:transparent;color:var(--mute);font-size:13px;text-align:center}
+  .composer{display:flex;gap:8px;align-items:center;padding:8px 12px;
+    padding-bottom:max(8px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(0,0,0,.95)}
+  .composer input{flex:1;font:inherit;font-size:16px;padding:10px 14px;border-radius:20px;
+    border:1px solid var(--line);background:#141210;color:var(--ink);outline:none}
+  .composer button{width:36px;height:36px;border-radius:50%;border:none;background:var(--gold);color:#0c0b0a;font-weight:700;font-size:18px}
+
+  a.peer{align-self:flex-start;display:flex;flex-direction:column;align-items:center;gap:4px;
+    text-decoration:none;color:var(--ink);padding:4px 6px;max-width:88px}
+  a.peer .av{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:20px;color:#0c0b0a;background:linear-gradient(145deg,#7ec8e3,#3a7a9a);
+    box-shadow:0 0 0 3px rgba(111,185,138,.55);animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  a.peer .lbl{font-size:11px;font-weight:600;color:var(--mute)}
+  a.peer .st{font-size:10px;color:var(--mint)}
+</style></head>
+<body>
+  <header class="top">
+    <a class="back" href="01-contacts.html">‹</a>
+    <div class="avatar">A</div>
+    <div class="who"><div class="name">Aetheria</div><div class="sub">peer working — tap shape for group</div></div>
+  </header>
+  <div class="thread">
+    <div class="bubble me">Second quote today — friend rebuild. Need maintenance / service plan pricing for fountains and waterfalls across the usual platforms.</div>
+    <div class="bubble them">On it. I’m putting Vett on a CWG objective for sourced pricing. I’ll bring you a short brief when it’s ready — you don’t need to babysit the search.</div>
+    <a class="peer" href="03-group.html">
+      <span class="av">V</span>
+      <span class="lbl">Vett</span>
+      <span class="st">working…</span>
+    </a>
+    <div class="bubble sys">That’s the whole UI for “he’s in.” Tap when you want the room.</div>
+  </div>
+  <form class="composer" onsubmit="return false">
+    <input type="text" placeholder="iMessage" value="">
+    <button type="button">↑</button>
+  </form>
+</body></html>
