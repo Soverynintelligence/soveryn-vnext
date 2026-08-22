@@ -72,13 +72,16 @@
     padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px;
   }
-  .ask-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .ask-row button {
-    font: inherit; font-size: 13px; padding: 8px 12px; border-radius: 999px;
-    border: 1px solid rgba(111,185,138,0.35); background: rgba(111,185,138,0.1);
-    color: var(--ink); cursor: pointer;
+  .ask-row {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    justify-content: flex-start;
   }
-  .ask-row a { font-size: 13px; color: var(--gold); text-decoration: none; }
+  .ask-row button {
+    font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent;
+    color: var(--ink-3); cursor: pointer;
+  }
+  .ask-row button:active { color: var(--ink); border-color: rgba(111,185,138,0.35); }
   .composer-row { display: flex; gap: 8px; align-items: center; }
   .composer-row input {
     flex: 1; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 20px;
@@ -106,13 +109,12 @@
   <div class="thread" data-testid="thread" role="log" aria-live="polite"></div>
 
   <div class="composer">
-    <div class="ask-row">
-      <button type="button" class="primary" data-ask-peer>Ask peer again</button>
-      <a href="/messages" style="align-self:center;font-size:12px;color:var(--ink-3);">All messages</a>
-    </div>
     <div class="composer-row">
-      <input type="text" data-composer placeholder="Message Aetheria in this room…" aria-label="Message">
+      <input type="text" data-composer placeholder="iMessage" aria-label="Message">
       <button type="button" class="send" data-send>↑</button>
+    </div>
+    <div class="ask-row">
+      <button type="button" data-ask-peer title="Loop the peer in again">+ peer</button>
     </div>
     <div class="status" data-status></div>
   </div>
@@ -180,9 +182,13 @@
         if (/waiting on reply|Looped in|Commissioned/i.test(t.content || "")) {
           if (peerState !== "replied") peerState = "working";
         }
+        // Hide old instructional welcome chrome from earlier room v0.
+        if (/^Room · You \+/.test(t.content || "")) return;
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         const who = m ? ("Messaged " + m[1]) : "Room";
-        appendBubble("system", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, ""), who);
+        const body = (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "");
+        if (!body.trim()) return;
+        appendBubble("system", body, who);
       } else if (t.role === "assistant") {
         const toPeer = /^\[To ([^\]]+)\]/.exec(t.content || "");
         if (toPeer) {
@@ -213,7 +219,11 @@
     state.peer = d.room.peer;
     $("[data-peer-chip]").textContent = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
     const askBtn = $("[data-ask-peer]");
-    if (askBtn) askBtn.textContent = "Ask " + state.peer.charAt(0).toUpperCase() + state.peer.slice(1) + " again";
+    if (askBtn) {
+      const name = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
+      askBtn.textContent = "+ " + name;
+      askBtn.title = "Loop " + name + " in again";
+    }
     const u = new URL(location.href);
     u.searchParams.set("session", state.sessionId);
     u.searchParams.set("peer", state.peer);
@@ -223,7 +233,7 @@
       $("[data-dm-link]").href = "/messages/aetheria?session=" + encodeURIComponent(state.dmSessionId);
     }
     await loadHistory();
-    setStatus("Room ready · peer " + state.peer);
+    setStatus("");
   }
 
   async function loadHistory() {

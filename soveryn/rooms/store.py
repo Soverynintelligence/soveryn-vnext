@@ -94,18 +94,8 @@ def open_room(
     _sidecar_path(data_root, sid).write_text(
         json.dumps(data, indent=2) + "\n", encoding="utf-8"
     )
-    # Seed room with a system welcome
-    conv.save_turn(
-        sid,
-        COS_ID,
-        "system",
-        (
-            f"Room · You + Aetheria + {peer.title()}. "
-            f"You talk to Aetheria here; when she works with {peer.title()}, "
-            f"it shows in this thread. Use Ask {peer.title()} to commission them."
-        ),
-        source="room",
-    )
+    # No welcome lecture — messenger-forward. First real turns are
+    # To/From peer lines (and Jon's messages) when someone is looped in.
     return data
 
 
