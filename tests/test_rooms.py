@@ -112,4 +112,36 @@ def test_room_page_ok(room_app):
     client = app.test_client()
     r = client.get("/room?peer=vett")
     assert r.status_code == 200
-    assert b"Ask peer" in r.data or b"data-ask-peer" in r.data
+    assert b"data-ask-peer" in r.data
+
+
+def test_messages_page_ok(room_app):
+    app, _, _ = room_app
+    client = app.test_client()
+    r = client.get("/messages")
+    assert r.status_code == 200
+    assert b"Messages" in r.data
+    assert b"Aetheria" in r.data
+
+
+def test_record_house_post_collab_chip(room_app):
+    from soveryn.rooms.store import record_house_post_collab
+
+    app, conv, tmp_path = room_app
+    dm = conv.new_session("aetheria", title="dm")
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    ev = record_house_post_collab(
+        conv,
+        data_root=data_root,
+        from_id="aetheria",
+        to_id="vett",
+        body="Please check the quotes on founding.",
+        dm_session_id=dm,
+    )
+    assert ev is not None
+    assert ev["peer"] == "vett"
+    dm_hist = conv.load_history(dm)
+    assert any("Messaged Vett" in t.content for t in dm_hist if t.role == "system")
+    room_hist = conv.load_history(ev["room_session_id"])
+    assert any("[To Vett]" in t.content for t in room_hist if t.role == "assistant")

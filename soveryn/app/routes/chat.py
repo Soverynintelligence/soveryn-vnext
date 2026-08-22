@@ -373,6 +373,21 @@ def chat():
 
     # AgentLoop validates session ownership BEFORE chat; we translate its
     # AgentLoopError into the right HTTP status here.
+    from soveryn.rooms import context as room_ctx
+
+    env = state.get("env")
+    root = str(getattr(env, "data_root", "")) if env is not None else ""
+    tok_dm = room_ctx.dm_session_id.set(session_id if agent == "aetheria" else None)
+    tok_root = room_ctx.data_root.set(root or None)
+    # Room sessions use title [room:…] — mark room context for projection.
+    room_sid = None
+    try:
+        meta = state["conv_store"].get_session(session_id)
+        if meta and meta.title and str(meta.title).startswith("[room:"):
+            room_sid = session_id
+    except Exception:
+        pass
+    tok_room = room_ctx.room_session_id.set(room_sid)
     try:
         response = loop.process_message(
             session_id, message, attachments=images, source=source,
@@ -391,6 +406,10 @@ def chat():
     except RoutingError as e:
         # Shouldn't happen for an active agent, but be honest if it does.
         return _err("unknown_agent", str(e), 400)
+    finally:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
 
     return jsonify({
         "agent": agent,
@@ -529,6 +548,21 @@ def chat_stream():
     if loop is None:
         return _err("unknown_agent", f"No loop registered for {agent!r}", 400)
 
+    from soveryn.rooms import context as room_ctx
+
+    env = state.get("env")
+    root = str(getattr(env, "data_root", "")) if env is not None else ""
+    tok_dm = room_ctx.dm_session_id.set(session_id if agent == "aetheria" else None)
+    tok_root = room_ctx.data_root.set(root or None)
+    room_sid = None
+    try:
+        meta = state["conv_store"].get_session(session_id)
+        if meta and meta.title and str(meta.title).startswith("[room:"):
+            room_sid = session_id
+    except Exception:
+        pass
+    tok_room = room_ctx.room_session_id.set(room_sid)
+
     # ── Open the AgentLoop stream and pump the first chunk *before* returning
     # the SSE Response. This lets setup errors (session mismatch, recall
     # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
@@ -543,8 +577,14 @@ def chat_stream():
         except StopIteration:
             # Generator returned without yielding anything (shouldn't happen on
             # success; AgentLoop always yields at least a DoneEvent or ErrorEvent).
+            room_ctx.dm_session_id.reset(tok_dm)
+            room_ctx.data_root.reset(tok_root)
+            room_ctx.room_session_id.reset(tok_room)
             return _err("internal_error", "AgentLoop yielded no events", 500)
     except AgentLoopError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         msg = str(e)
         if "does not exist" in msg:
             return _err("missing_session", msg, 404)
@@ -552,24 +592,41 @@ def chat_stream():
             return _err("session_agent_mismatch", msg, 409)
         return _err("internal_error", msg, 500)
     except LlamaServerTimeout as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_timeout", str(e), 504)
     except LlamaServerError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_server_error", str(e), 502)
     except RoutingError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("unknown_agent", str(e), 400)
     except Exception as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_server_error", f"{type(e).__name__}: {e}", 502)
 
     # ── Setup OK. Now wrap the iterator in an SSE response.
     def _generate():
-        # First event was already pulled — emit it (skip if voice-only).
-        first_payload = _event_to_dict(first_event)
-        if first_payload is not None:
-            yield _sse(first_payload)
-        for event in event_iter:
-            payload = _event_to_dict(event)
-            if payload is not None:
-                yield _sse(payload)
+        try:
+            # First event was already pulled — emit it (skip if voice-only).
+            first_payload = _event_to_dict(first_event)
+            if first_payload is not None:
+                yield _sse(first_payload)
+            for event in event_iter:
+                payload = _event_to_dict(event)
+                if payload is not None:
+                    yield _sse(payload)
+        finally:
+            room_ctx.dm_session_id.reset(tok_dm)
+            room_ctx.data_root.reset(tok_root)
+            room_ctx.room_session_id.reset(tok_room)
 
     return Response(
         stream_with_context(_generate()),

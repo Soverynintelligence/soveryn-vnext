@@ -65,6 +65,7 @@ def charters_board():
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"
 ROOM_TEMPLATE = Path(__file__).parent.parent / "templates" / "room.html"
+MESSAGES_TEMPLATE = Path(__file__).parent.parent / "templates" / "messages.html"
 
 
 def _serve_chat_html():
@@ -84,6 +85,12 @@ def _serve_chat_html():
 def room_page():
     """Group collaboration room — CoS + one peer + Jon."""
     return _serve_html(ROOM_TEMPLATE, missing_label="Room")
+
+
+@bp.get("/messages")
+def messages_page():
+    """Messenger-style contacts list — tap a citizen to open their 1:1."""
+    return _serve_html(MESSAGES_TEMPLATE, missing_label="Messages")
 
 
 @bp.get("/chat")

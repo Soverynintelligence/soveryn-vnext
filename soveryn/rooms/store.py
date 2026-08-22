@@ -212,6 +212,116 @@ def collabs_for_dm(data_root: Path | str, dm_session_id: str) -> list[dict[str, 
     return out[:20]
 
 
+def record_house_post_collab(
+    conv: ConversationStore,
+    *,
+    data_root: Path | str,
+    from_id: str,
+    to_id: str,
+    body: str,
+    dm_session_id: str | None,
+    room_session_id: str | None = None,
+) -> dict[str, Any] | None:
+    """When CoS↔peer house_post fires during a chat, project into DM chip + room.
+
+    Returns event dict if recorded, else None.
+    """
+    from_id = (from_id or "").strip().lower()
+    to_id = (to_id or "").strip().lower()
+    body = (body or "").strip()
+    if not body:
+        return None
+
+    # CoS → peer: open/link room, chip on DM, line in room
+    if from_id == COS_ID and to_id in PEERS:
+        peer = to_id
+        room = open_room(
+            conv,
+            data_root=data_root,
+            peer=peer,
+            dm_session_id=dm_session_id,
+            session_id=room_session_id,
+        )
+        sid = room["session_id"]
+        marker = MESSAGED_MARKER.format(peer=peer)
+        excerpt = body if len(body) <= 800 else body[:797] + "…"
+        conv.save_turn(
+            sid,
+            COS_ID,
+            "assistant",
+            f"[To {peer.title()}]\n{excerpt}",
+            source="room",
+        )
+        if dm_session_id and conv.get_session(dm_session_id) is not None:
+            conv.save_turn(
+                dm_session_id,
+                COS_ID,
+                "system",
+                f"{marker} Messaged {peer.title()}",
+                source="room",
+            )
+        event = {
+            "type": "messaged_peer",
+            "peer": peer,
+            "at": _utc_now(),
+            "brief": excerpt[:200],
+            "room_session_id": sid,
+            "dm_session_id": dm_session_id,
+            "direction": "cos_to_peer",
+        }
+        room.setdefault("events", []).append(event)
+        if dm_session_id:
+            room["dm_session_id"] = dm_session_id
+        _save_room(data_root, room)
+        return event
+
+    # Peer → CoS: find rooms for that peer and append peer bubble
+    if to_id == COS_ID and from_id in PEERS:
+        peer = from_id
+        excerpt = body if len(body) <= 800 else body[:797] + "…"
+        root = rooms_root(data_root)
+        matched = None
+        for p in root.glob("*.json"):
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if data.get("peer") != peer:
+                continue
+            if dm_session_id and data.get("dm_session_id") not in (None, dm_session_id):
+                continue
+            matched = data
+            break
+        if matched is None and dm_session_id:
+            matched = open_room(
+                conv, data_root=data_root, peer=peer, dm_session_id=dm_session_id
+            )
+        if matched is None:
+            return None
+        sid = matched["session_id"]
+        conv.save_turn(
+            sid,
+            COS_ID,
+            "system",
+            f"[From {peer.title()}]\n{excerpt}",
+            source="room",
+        )
+        event = {
+            "type": "peer_reply",
+            "peer": peer,
+            "at": _utc_now(),
+            "brief": excerpt[:200],
+            "room_session_id": sid,
+            "dm_session_id": matched.get("dm_session_id") or dm_session_id,
+            "direction": "peer_to_cos",
+        }
+        matched.setdefault("events", []).append(event)
+        _save_room(data_root, matched)
+        return event
+
+    return None
+
+
 def peer_commission_status(
     citizens_db: Path | str, commission_id: str
 ) -> dict[str, Any] | None:

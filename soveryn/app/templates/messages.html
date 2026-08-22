@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Messages · SOVERYN</title>
+<style>
+  :root {
+    --bg: #000; --row: #0c0b0a; --line: rgba(255,255,255,0.08);
+    --ink: #f5f2ea; --mute: rgba(245,242,234,0.45); --gold: #c6a664; --mint: #6fb98a;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    min-height: 100vh; min-height: 100dvh;
+  }
+  header {
+    position: sticky; top: 0; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
+    background: rgba(0,0,0,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header a { color: var(--gold); text-decoration: none; font-size: 15px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .row {
+    display: flex; gap: 14px; align-items: center;
+    padding: 12px 16px; text-decoration: none; color: inherit;
+    border-bottom: 1px solid var(--line); background: var(--row);
+  }
+  .row:active { background: #151311; }
+  .avatar {
+    width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; color: #0c0b0a;
+    background: linear-gradient(145deg, var(--gold), #8a7038);
+  }
+  .avatar[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  .avatar[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .meta { flex: 1; min-width: 0; }
+  .meta .name {
+    display: flex; justify-content: space-between; gap: 8px;
+    font-weight: 600; font-size: 17px; margin-bottom: 3px;
+  }
+  .meta .name time { font-weight: 400; font-size: 13px; color: var(--mute); }
+  .meta .preview {
+    font-size: 14px; color: var(--mute);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .meta .preview.hot { color: var(--mint); }
+  .footer {
+    padding: 16px; text-align: center; font-size: 12px; color: var(--mute);
+  }
+  .footer a { color: var(--gold); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Messages</h1>
+    <a href="/">Home</a>
+  </header>
+  <ul class="list" data-testid="messages-list" aria-label="Your team">
+    <!-- filled by JS -->
+  </ul>
+  <div class="footer">
+    <a href="/room?peer=vett">Open a group room</a>
+    · <a href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
+    · <a href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
+  </div>
+<script>
+(function () {
+  const CONTACTS = [
+    { id: "aetheria", name: "Aetheria", role: "Runs the house", letter: "A" },
+    { id: "vett", name: "Vett", role: "Checks the work", letter: "V" },
+    { id: "scotty", name: "Scotty", role: "Gets it done", letter: "S" },
+    { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
+    { id: "kernel", name: "Kernel", role: "Builds with you", letter: "K" },
+  ];
+
+  const list = document.querySelector("[data-testid=messages-list]");
+
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function rel(iso) {
+    if (!iso) return "";
+    try {
+      const t = new Date(iso).getTime();
+      const d = Date.now() - t;
+      if (d < 60000) return "now";
+      if (d < 3600000) return Math.floor(d/60000) + "m";
+      if (d < 86400000) return Math.floor(d/3600000) + "h";
+      return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch { return ""; }
+  }
+
+  async function preview(agent) {
+    try {
+      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=1");
+      if (!r.ok) return { text: "Tap to talk", hot: false, when: "" };
+      const d = await r.json();
+      const s = (d.sessions && d.sessions[0]) || null;
+      if (!s) return { text: "Tap to talk", hot: false, when: "" };
+      // Optional: collab hint for aetheria
+      let text = s.title || "Continue conversation";
+      let hot = false;
+      if (agent === "aetheria" && s.session_id) {
+        try {
+          const c = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(s.session_id));
+          if (c.ok) {
+            const cj = await c.json();
+            if (cj.count > 0 && cj.collabs[0].peer) {
+              text = "Messaged " + cj.collabs[0].peer;
+              hot = true;
+            }
+          }
+        } catch (_) {}
+      }
+      return { text, hot, when: rel(s.updated_at), session: s.session_id };
+    } catch {
+      return { text: "Tap to talk", hot: false, when: "" };
+    }
+  }
+
+  async function paint() {
+    const rows = await Promise.all(CONTACTS.map(async (c) => {
+      const p = await preview(c.id);
+      const href = "/chat?agent=" + encodeURIComponent(c.id);
+      return (
+        '<li><a class="row" href="' + href + '">' +
+          '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>' +
+          '<div class="meta">' +
+            '<div class="name"><span>' + esc(c.name) + '</span><time>' + esc(p.when) + '</time></div>' +
+            '<div class="preview' + (p.hot ? ' hot' : '') + '">' + esc(p.text) + '</div>' +
+          '</div>' +
+        '</a></li>'
+      );
+    }));
+    list.innerHTML = rows.join("");
+  }
+
+  paint();
+})();
+</script>
+</body>
+</html>

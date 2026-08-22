@@ -432,6 +432,12 @@
     color: var(--ink); font-size: 12px; text-decoration: none;
   }
   .collab-chip:hover { background: rgba(111,185,138,0.14); }
+  .collab-av {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(111,185,138,0.35); color: #0c0b0a;
+    font-size: 11px; font-weight: 700;
+  }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
   .approval-card {
@@ -1431,12 +1437,15 @@
     }
     row.hidden = false;
     row.innerHTML = chips.map((ev) => {
-      const peer = esc(ev.peer || "peer");
-      const label = "Messaged " + peer.charAt(0).toUpperCase() + peer.slice(1);
-      const href = "/room?peer=" + encodeURIComponent(ev.peer || "vett")
+      const peer = (ev.peer || "peer").toLowerCase();
+      const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+      const letter = name.charAt(0);
+      const href = "/room?peer=" + encodeURIComponent(peer)
         + (ev.room_session_id ? "&session=" + encodeURIComponent(ev.room_session_id) : "")
         + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
-      return `<a class="collab-chip" href="${href}">${label}</a>`;
+      return `<a class="collab-chip" href="${href}" title="Open group chat with ${esc(name)}">`
+        + `<span class="collab-av">${esc(letter)}</span>`
+        + `<span>Messaged ${esc(name)}</span></a>`;
     }).join("");
   }
 

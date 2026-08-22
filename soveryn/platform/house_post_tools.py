@@ -40,7 +40,38 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                     kind=kind,
                     subject=subject,
                 )
-            return {"ok": True, "post_id": pid, "to_id": to_id, "kind": kind}
+            out: dict[str, Any] = {
+                "ok": True, "post_id": pid, "to_id": to_id, "kind": kind,
+            }
+            # Project CoS↔peer posts into messenger-style room + DM chip.
+            try:
+                from soveryn.rooms import context as room_ctx
+                from soveryn.rooms.store import record_house_post_collab
+
+                dm = room_ctx.dm_session_id.get()
+                room_sid = room_ctx.room_session_id.get()
+                root = room_ctx.data_root.get()
+                conv = None
+                try:
+                    from flask import current_app
+                    conv = (current_app.extensions.get("soveryn") or {}).get("conv_store")
+                except Exception:
+                    conv = None
+                if conv is not None and root:
+                    ev = record_house_post_collab(
+                        conv,
+                        data_root=root,
+                        from_id=owner_agent,
+                        to_id=to_id,
+                        body=body,
+                        dm_session_id=dm,
+                        room_session_id=room_sid,
+                    )
+                    if ev:
+                        out["room_event"] = ev
+            except Exception:
+                pass
+            return out
         except Exception as exc:
             return {"ok": False, "error": repr(exc)}
 
