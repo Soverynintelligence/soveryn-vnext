@@ -64,6 +64,7 @@ def charters_board():
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"
+ROOM_TEMPLATE = Path(__file__).parent.parent / "templates" / "room.html"
 
 
 def _serve_chat_html():
@@ -77,6 +78,12 @@ def _serve_chat_html():
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
     return resp
+
+
+@bp.get("/room")
+def room_page():
+    """Group collaboration room — CoS + one peer + Jon."""
+    return _serve_html(ROOM_TEMPLATE, missing_label="Room")
 
 
 @bp.get("/chat")

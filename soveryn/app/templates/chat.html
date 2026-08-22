@@ -419,6 +419,19 @@
     padding-top:3px;
     border-top:1px dashed var(--line);
   }
+  .collab-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 8px 16px 0; max-width: 780px; width: 100%; margin: 0 auto;
+  }
+  .collab-chips[hidden] { display: none !important; }
+  .collab-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.08);
+    color: var(--ink); font-size: 12px; text-decoration: none;
+  }
+  .collab-chip:hover { background: rgba(111,185,138,0.14); }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
   .approval-card {
@@ -907,6 +920,7 @@
             <button type="button" role="menuitem" data-more="delete" class="danger">Delete session</button>
             <div class="menu-sep" role="separator"></div>
             <a href="/" role="menuitem">Command</a>
+            <a href="/room?peer=vett" role="menuitem" data-room-link>Room with Vett</a>
             <a href="/fleet" role="menuitem">Fleet</a>
             <a href="/m/" role="menuitem">Mobile</a>
           </div>
@@ -951,6 +965,7 @@
     </div>
 
     <div class="context-banner" data-testid="context-banner" aria-live="polite" aria-atomic="true"></div>
+    <div class="collab-chips" data-testid="collab-chips" hidden aria-label="Agent collaborations"></div>
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
     <form class="composer" data-testid="composer" onsubmit="return false">
@@ -1393,6 +1408,55 @@
     renderAttachmentsRow();
   }
 
+  function renderCollabChips(events) {
+    const row = document.querySelector("[data-testid='collab-chips']");
+    if (!row) return;
+    const fromHistory = [];
+    document.querySelectorAll("[data-testid='thread'] .bubble").forEach(() => {});
+    // Prefer API events; also scan last history via data attribute stash
+    const list = Array.isArray(events) ? events.slice() : [];
+    const seen = new Set();
+    const chips = [];
+    for (const ev of list) {
+      const peer = ev.peer || "";
+      const room = ev.room_session_id || "";
+      if (!peer || seen.has(peer + room)) continue;
+      seen.add(peer + room);
+      chips.push(ev);
+    }
+    if (!chips.length) {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    row.hidden = false;
+    row.innerHTML = chips.map((ev) => {
+      const peer = esc(ev.peer || "peer");
+      const label = "Messaged " + peer.charAt(0).toUpperCase() + peer.slice(1);
+      const href = "/room?peer=" + encodeURIComponent(ev.peer || "vett")
+        + (ev.room_session_id ? "&session=" + encodeURIComponent(ev.room_session_id) : "")
+        + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
+      return `<a class="collab-chip" href="${href}">${label}</a>`;
+    }).join("");
+  }
+
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  async function refreshCollabChips() {
+    if (!state.sessionId || state.agent !== "aetheria") {
+      renderCollabChips([]);
+      return;
+    }
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return;
+      const d = await r.json();
+      renderCollabChips(d.collabs || []);
+    } catch (_) { /* best-effort */ }
+  }
+
   function setAgent(name) {
     state.agent = name;
     localStorage.setItem("soveryn.agent", name);
@@ -1750,13 +1814,21 @@
       // Clear the context banner — the new session's pressure state is
       // unknown until the next chat response arrives.
       updateContextUsage(null);
+      const fromSys = [];
       for (const t of data.turns || []) {
         if (t.role === "user" || t.role === "assistant") {
           const b = appendBubble(t.role, t.content);
           if (t.role === "assistant") enhanceBubbleWithImages(b);
+        } else if (t.role === "system" && /⟦room:messaged:([a-z]+)⟧/.test(t.content || "")) {
+          const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content);
+          if (m) fromSys.push({ peer: m[1], room_session_id: null });
         }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
+      await refreshCollabChips();
+      // If API empty but history has markers, still show chips
+      const row = document.querySelector("[data-testid='collab-chips']");
+      if (row && row.hidden && fromSys.length) renderCollabChips(fromSys);
     } catch { /* noop */ }
   }
 
