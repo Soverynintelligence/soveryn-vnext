@@ -428,8 +428,10 @@
 
   function renderTurns(turns, collabIndex) {
     thread().innerHTML = "";
+    const active = (collabIndex || []).filter(isActiveCollab);
+    const activePeers = new Set(active.map((ev) => (ev.peer || "").toLowerCase()));
     const byPeer = {};
-    (collabIndex || []).forEach((ev) => {
+    active.forEach((ev) => {
       if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
     });
     // Latest state per peer from system markers (replied wins over working)
@@ -451,13 +453,15 @@
         const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
         const peer = (m && m[1]) || (r && r[1]);
         if (peer) {
-          if (!shown.has(peer)) {
+          // Only show peer icon while collab is active — keep 1:1 otherwise.
+          if (!shown.has(peer) && activePeers.has(peer)) {
             shown.add(peer);
             appendMessagedPeer(peer, byPeer[peer] || null, peerState[peer]);
             if (peerState[peer] === "working") waiting = true;
           }
         } else {
-          appendBubble("sys", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "").replace(/⟦room:replied:[a-z]+⟧\s*/, ""));
+          const body = (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "").replace(/⟦room:replied:[a-z]+⟧\s*/, "");
+          if (body.trim()) appendBubble("sys", body);
         }
       }
     });
@@ -507,9 +511,8 @@
   }
 
   function renderChips(events) {
-    // Keep a slim strip of latest unique peers as shortcuts (optional)
     const row = chips();
-    const list = Array.isArray(events) ? events : [];
+    const list = (Array.isArray(events) ? events : []).filter(isActiveCollab);
     if (!list.length || agent !== "aetheria") {
       row.hidden = true;
       row.innerHTML = "";
@@ -577,12 +580,33 @@
     return t.startsWith("[room:");
   }
 
+  function isResumableDmSession(s) {
+    const t = ((s && s.title) || "").trim();
+    if (!s || !s.session_id || !t) return false;
+    if (isRoomSession(s)) return false;
+    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
+    if (t.startsWith("automation:")) return false;
+    if (t.startsWith("verify-")) return false;
+    if (t.startsWith("[m]")) return true;
+    if (t.startsWith("[")) return false;
+    return true;
+  }
+
+  function isActiveCollab(ev) {
+    if (!ev || !ev.peer) return false;
+    if ((ev.state || "").toLowerCase() === "working") return true;
+    if (!ev.at) return false;
+    try {
+      return (Date.now() - new Date(ev.at).getTime()) < 2 * 3600 * 1000;
+    } catch (_) { return false; }
+  }
+
   async function findLatestDmSession() {
     const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=30");
     if (!r.ok) return null;
     const d = await r.json();
     const list = d.sessions || [];
-    return list.find((s) => s && s.session_id && !isRoomSession(s)) || null;
+    return list.find(isResumableDmSession) || null;
   }
 
   async function loadLatestOrHistory() {

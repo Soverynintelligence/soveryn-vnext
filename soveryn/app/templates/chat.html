@@ -1273,7 +1273,14 @@
   const expandedRails = new Set();  // survives re-renders; Conversations is implicitly always open
   function railFor(title) {
     const t = (title || "").trim();
-    if (!t.startsWith("[")) return "Conversations";
+    // Group rooms are not Aetheria 1:1 — keep them out of Conversations.
+    if (t.startsWith("[room:")) return "System";
+    if (!t.startsWith("[")) {
+      // One-shot test / collab shells (e.g. verify-ask-vett) clutter 1:1.
+      if (t.startsWith("verify-")) return "System";
+      if (t.startsWith("automation:")) return "System";
+      return "Conversations";
+    }
     if (t.startsWith("[m]")) return "Mobile";
     if (t.startsWith("[signal]")) return "Signal";
     if (t.startsWith("[heartbeat]")) return "Heartbeat";
@@ -1482,11 +1489,22 @@
     return a;
   }
 
+  function isActiveCollab(ev) {
+    // Only surface peers while a collab is live — stale "Messaged Vett"
+    // chips made Aetheria's 1:1 feel like a permanent group.
+    if (!ev || !ev.peer) return false;
+    const st = (ev.state || "").toLowerCase();
+    if (st === "working") return true;
+    if (!ev.at) return false;
+    try {
+      return (Date.now() - new Date(ev.at).getTime()) < 2 * 3600 * 1000;
+    } catch (_) { return false; }
+  }
+
   function renderCollabChips(events) {
     const row = document.querySelector("[data-testid='collab-chips']");
     if (!row) return;
-    // Prefer API events; also scan last history via data attribute stash
-    const list = Array.isArray(events) ? events.slice() : [];
+    const list = (Array.isArray(events) ? events : []).filter(isActiveCollab);
     const seen = new Set();
     const chips = [];
     for (const ev of list) {
@@ -1902,11 +1920,12 @@
       // unknown until the next chat response arrives.
       updateContextUsage(null);
       const collabs = await fetchCollabs();
+      const activeCollabs = (collabs || []).filter(isActiveCollab);
+      const activePeers = new Set(activeCollabs.map((ev) => (ev.peer || "").toLowerCase()));
       const byPeer = {};
-      (collabs || []).forEach((ev) => {
+      activeCollabs.forEach((ev) => {
         if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
       });
-      const fromSys = [];
       const peerState = {};
       const shown = new Set();
       for (const t of data.turns || []) {
@@ -1923,17 +1942,17 @@
           if (t.role === "assistant") enhanceBubbleWithImages(b);
         } else if (t.role === "system" && /⟦room:(messaged|replied):([a-z]+)⟧/.test(t.content || "")) {
           const m = /⟦room:(?:messaged|replied):([a-z]+)⟧/.exec(t.content);
-          if (m && !shown.has(m[1])) {
+          // 1:1 Aetheria chat: only show peer icon while collab is active.
+          if (m && !shown.has(m[1]) && activePeers.has(m[1])) {
             shown.add(m[1]);
-            fromSys.push({ peer: m[1], room_session_id: byPeer[m[1]] || null });
             appendMessagedPeer(m[1], byPeer[m[1]] || null, peerState[m[1]]);
           }
         }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
-      renderCollabChips(collabs.length ? collabs : fromSys);
+      renderCollabChips(activeCollabs);
       // Live-refresh while a peer is working so the icon flips to replied.
-      const waiting = Object.values(peerState).includes("working");
+      const waiting = Object.values(peerState).includes("working") && activePeers.size > 0;
       if (waiting && state.agent === "aetheria" && sessionId) {
         if (!state._peerPoll) {
           state._peerPoll = setInterval(() => {
@@ -2733,25 +2752,28 @@
   }
 
   // ─── Resume latest per-agent thread ─────────────────────────────────────────
-  // Default landing: open the most-recent HUMAN thread for the current agent
-  // instead of cold-starting a blank session — so she keeps the continuous
-  // thread ("holding the thread"), per-rail / per-agent. Rail + automated
-  // sessions (titles starting with "[" — [signal] [m] [heartbeat] [direct:…]
-  // [specialist…] [webhook] …) are skipped so we never land in another rail's
-  // session. PURELY NON-DESTRUCTIVE: only chooses which existing session to
-  // open; never creates or deletes. Falls back to lazy-mint (sessionId stays
-  // null) if the agent has no prior human thread.
+  // Default landing: open the most-recent HUMAN 1:1 thread for the agent.
+  // Skip group rooms ([room:…]), heartbeats, directs, automations. Prefer
+  // messenger DMs ([m] …) and plain human titles so Aetheria never opens as
+  // a permanent You+Aetheria+Vett group.
+  function isResumableDmSession(s) {
+    const t = ((s && s.title) || "").trim();
+    if (!t) return false;
+    if (t.startsWith("[room:")) return false;
+    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
+    if (t.startsWith("automation:")) return false;
+    if (t.startsWith("verify-")) return false; // one-shot test shells
+    if (t.startsWith("[m]")) return true; // phone/desktop messenger DM
+    if (t.startsWith("[")) return false;
+    return true;
+  }
+
   async function resumeLatestThread() {
     try {
       const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
       if (!r.ok) return;
       const data = await r.json();
-      // Skip group rooms ([room:…]) and other rails ([signal], [direct:], …).
-      // Aetheria's individual chat must not resume a group room thread.
-      const latest = (data.sessions || []).find((s) => {
-        const t = (s.title || "").trim();
-        return !t.startsWith("[");
-      });
+      const latest = (data.sessions || []).find(isResumableDmSession);
       if (!latest) return;
       state.sessionId = latest.session_id;
       window.history.replaceState({}, "", `/chat/${latest.session_id}`);
