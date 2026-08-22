@@ -3,9 +3,8 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Group</title>
 <style>
-
   :root {
-    --bg:#000; --panel:#0c0b0a; --line:rgba(255,255,255,0.08);
+    --bg:#000; --line:rgba(255,255,255,0.08);
     --ink:#f5f2ea; --mute:rgba(245,242,234,0.45); --gold:#c6a664; --mint:#6fb98a;
     --bubble-them:#1c1a17; --bubble-me:#2a2418;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
@@ -14,52 +13,62 @@
   html,body{height:100%;margin:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);
     display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
-  header.top{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;
-    padding:12px;padding-top:max(12px,env(safe-area-inset-top));
-    background:rgba(0,0,0,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-  .back{color:var(--gold);text-decoration:none;font-size:17px;padding:6px 4px}
-  .avatar{width:36px;height:36px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
-    justify-content:center;font-weight:700;font-size:15px;color:#0c0b0a;
-    background:linear-gradient(145deg,var(--gold),#8a7038)}
-  .avatar.vett{background:linear-gradient(145deg,#7ec8e3,#3a7a9a)}
-  .avatar.eve{background:linear-gradient(145deg,#e0b0ff,#7a4a9a)}
+  header.top{
+    position:sticky;top:0;z-index:3;
+    display:flex;align-items:center;gap:10px;
+    padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));
+    background:rgba(0,0,0,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);
+  }
+  .back{color:var(--gold);text-decoration:none;font-size:17px;padding:6px 4px;flex-shrink:0}
+  .faces{display:flex;align-items:center;margin-right:4px}
+  .faces .av{
+    width:32px;height:32px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:13px;color:#0c0b0a;
+    border:2px solid #000;margin-left:-8px;
+  }
+  .faces .av:first-child{margin-left:0}
+  .faces .av.you{background:linear-gradient(145deg,#888,#555);color:#f5f2ea}
+  .faces .av.aetheria{background:linear-gradient(145deg,var(--gold),#8a7038)}
+  .faces .av.vett{background:linear-gradient(145deg,#7ec8e3,#3a7a9a)}
+  .faces .av.eve{background:linear-gradient(145deg,#e0b0ff,#7a4a9a)}
+  .faces .av.working{box-shadow:0 0 0 2px var(--mint)}
   .who{flex:1;min-width:0}
-  .who .name{font-weight:600;font-size:17px}
+  .who .name{font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .who .sub{font-size:12px;color:var(--mute)}
   .thread{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:6px}
   .bubble{max-width:78%;padding:10px 14px;border-radius:18px;font-size:16px;line-height:1.35}
   .bubble.them{align-self:flex-start;background:var(--bubble-them);border-bottom-left-radius:4px}
   .bubble.me{align-self:flex-end;background:var(--bubble-me);border:1px solid rgba(198,166,100,.25);border-bottom-right-radius:4px}
   .bubble.sys{align-self:center;max-width:90%;background:transparent;color:var(--mute);font-size:13px;text-align:center}
+  .who-label{font-size:11px;letter-spacing:.04em;color:var(--gold);margin-bottom:4px;font-weight:600}
+  .ask-row{display:flex;gap:8px;padding:0 12px 8px}
+  .ask-row button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
+    background:transparent;color:var(--mute)}
   .composer{display:flex;gap:8px;align-items:center;padding:8px 12px;
     padding-bottom:max(8px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(0,0,0,.95)}
   .composer input{flex:1;font:inherit;font-size:16px;padding:10px 14px;border-radius:20px;
     border:1px solid var(--line);background:#141210;color:var(--ink);outline:none}
   .composer button{width:36px;height:36px;border-radius:50%;border:none;background:var(--gold);color:#0c0b0a;font-weight:700;font-size:18px}
-
-  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
-  .chip{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(198,166,100,.08)}
-  .chip.peer{border-color:rgba(111,185,138,.35);color:var(--mint)}
-  .who-label{font-size:11px;letter-spacing:.04em;color:var(--gold);margin-bottom:4px;font-weight:600}
-  .ask-row{display:flex;gap:8px;padding:0 12px 8px}
-  .ask-row button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);
-    background:transparent;color:var(--mute)}
 </style></head>
 <body>
   <header class="top">
     <a class="back" href="02-dm.html">‹</a>
-    <div class="who"><div class="name">Group</div><div class="sub">CWG research</div></div>
-    <div class="chips">
-      <span class="chip">You</span>
-      <span class="chip">Aetheria</span>
-      <span class="chip peer">Vett · working</span>
-      <span class="chip peer">Eve</span>
+    <div class="faces" aria-label="In this group">
+      <span class="av you" title="You">Y</span>
+      <span class="av aetheria" title="Aetheria">A</span>
+      <span class="av vett working" title="Vett · working">V</span>
+      <span class="av eve" title="Eve">E</span>
+    </div>
+    <div class="who">
+      <div class="name">You, Aetheria, Vett, Eve</div>
+      <div class="sub">4 people · CWG research</div>
     </div>
   </header>
   <div class="thread">
-    <div class="bubble them"><div class="who-label">Aetheria → Vett</div>Need sourced fountain/waterfall service &amp; maintenance plan pricing — Aquascape, Oase, The Pond Guy, anyone publishing packages. Table with prices + URLs.</div>
+    <div class="bubble them"><div class="who-label">Aetheria → Vett</div>Need sourced fountain/waterfall service &amp; maintenance plan pricing — Aquascape, Oase, The Pond Guy, anyone publishing packages.</div>
     <div class="bubble sys">Added Eve to the group.</div>
-    <div class="bubble them"><div class="who-label">Vett</div>Wave 2/6 — pulling dealer pages. Partial rows in the checkpoint. Not done yet.</div>
+    <div class="bubble them"><div class="who-label">Vett</div>Wave 2/6 — pulling dealer pages. Not done yet.</div>
   </div>
   <div class="ask-row">
     <button type="button">+ add</button>

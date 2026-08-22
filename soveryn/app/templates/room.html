@@ -20,31 +20,47 @@
   }
   header.room-bar {
     position: sticky; top: 0; z-index: 2;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top));
     background: rgba(0,0,0,0.92); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
   }
-  header a { color: var(--gold); text-decoration: none; font-size: 15px; }
-  .title { font-weight: 600; font-size: 17px; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
-  .chip {
-    font-size: 12px; padding: 5px 10px; border-radius: 999px;
-    border: 1px solid var(--line); background: rgba(198,166,100,0.08);
+  header a.back { color: var(--gold); text-decoration: none; font-size: 17px; flex-shrink: 0; }
+  header a.dm-link { display: none; }
+  .faces {
+    display: flex; align-items: center; flex-shrink: 0;
   }
-  .chip[data-who="peer"] { border-color: rgba(111,185,138,0.35); color: var(--mint); }
-  .chip[data-who="peer"][data-state="working"] {
+  .faces .av {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #0c0b0a;
+    border: 2px solid #000; margin-left: -8px;
+    background: linear-gradient(145deg, var(--gold), #8a7038);
+  }
+  .faces .av:first-child { margin-left: 0; }
+  .faces .av[data-who="you"] {
+    background: linear-gradient(145deg, #888, #555); color: var(--ink);
+  }
+  .faces .av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  .faces .av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  .faces .av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  .faces .av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .faces .av[data-state="working"] {
+    box-shadow: 0 0 0 2px var(--mint);
     animation: peer-work 1.4s ease-in-out infinite;
-    border-color: rgba(111,185,138,0.7);
   }
-  .chip[data-who="peer"][data-state="replied"] {
-    border-color: rgba(198,166,100,0.65); color: var(--gold);
-  }
+  .faces .av[data-state="gate"] { box-shadow: 0 0 0 2px var(--gold); }
+  .faces .av[data-state="replied"] { box-shadow: 0 0 0 2px rgba(198,166,100,0.65); }
   @keyframes peer-work {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.65; }
+    50% { opacity: 0.7; }
   }
-  .chip[data-who="you"] { opacity: 0.85; }
+  .who-block { flex: 1; min-width: 0; }
+  .who-block .title {
+    font-weight: 600; font-size: 16px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .who-block .sub { font-size: 12px; color: var(--ink-3); }
   .thread {
     flex: 1; overflow-y: auto; padding: 12px;
     display: flex; flex-direction: column; gap: 6px;
@@ -125,13 +141,14 @@
 </head>
 <body>
   <header class="room-bar">
-    <a href="/messages">‹ Messages</a>
-    <a href="/messages/aetheria" data-dm-link>Aetheria</a>
-    <span class="title">Group</span>
-    <div class="chips" data-presence>
-      <span class="chip" data-who="you">You</span>
-      <span class="chip" data-who="cos">Aetheria</span>
-      <!-- peer chips filled by JS -->
+    <a class="back" href="/messages" aria-label="Back">‹</a>
+    <a class="dm-link" href="/messages/aetheria" data-dm-link>Aetheria</a>
+    <div class="faces" data-presence aria-label="In this group">
+      <!-- filled by JS: only people currently in the group -->
+    </div>
+    <div class="who-block">
+      <div class="title" data-group-title>Group</div>
+      <div class="sub" data-group-sub></div>
     </div>
   </header>
 
@@ -189,43 +206,62 @@
     thread().scrollTop = thread().scrollHeight;
   }
 
+  function memberLabel(pid) {
+    if (pid === "you") return "You";
+    return pid.charAt(0).toUpperCase() + pid.slice(1);
+  }
+
   function renderPeerChips(peers, peerStates) {
     const row = $("[data-presence]");
     if (!row) return;
     const list = (peers && peers.length) ? peers : [state.peer];
     state.peers = list.slice();
     state.peer = list[0] || state.peer;
-    // Keep You + Aetheria; rebuild peer chips
-    row.querySelectorAll('[data-who="peer"]').forEach((el) => el.remove());
-    list.forEach((pid) => {
-      const st = (peerStates && peerStates[pid]) || "";
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.dataset.who = "peer";
-      chip.dataset.peer = pid;
-      if (st) chip.dataset.state = st;
-      const name = pid.charAt(0).toUpperCase() + pid.slice(1);
-      chip.textContent =
-        st === "gate" ? name + " · needs Gate" :
-        st === "working" ? name + " · working" :
-        st === "replied" ? name + " · replied" : name;
-      row.appendChild(chip);
+    // Only people in this group — You, Aetheria, then current peers.
+    const members = ["you", "aetheria"].concat(list);
+    row.innerHTML = "";
+    members.forEach((pid) => {
+      const st = (pid !== "you" && pid !== "aetheria" && peerStates && peerStates[pid]) || "";
+      const av = document.createElement("span");
+      av.className = "av";
+      av.dataset.who = pid === "you" || pid === "aetheria" ? pid : "peer";
+      if (pid !== "you" && pid !== "aetheria") {
+        av.dataset.peer = pid;
+        av.dataset.agent = pid;
+      }
+      if (st) av.dataset.state = st;
+      av.title = memberLabel(pid) + (st === "working" ? " · working" : st === "gate" ? " · needs Gate" : "");
+      av.textContent = memberLabel(pid).charAt(0);
+      row.appendChild(av);
     });
+    const names = members.map(memberLabel).join(", ");
+    const titleEl = $("[data-group-title]");
+    const subEl = $("[data-group-sub]");
+    if (titleEl) titleEl.textContent = names;
+    if (subEl) {
+      const working = list.filter((p) => peerStates && peerStates[p] === "working");
+      subEl.textContent = working.length
+        ? (members.length + " people · " + working.map(memberLabel).join(", ") + " working")
+        : (members.length + " people");
+    }
   }
 
   function setPeerChipState(st, peerId) {
     const pid = peerId || state.peer;
-    const chip = document.querySelector('[data-presence] [data-peer="' + pid + '"]');
-    if (!chip) {
+    const av = document.querySelector('[data-presence] [data-peer="' + pid + '"]');
+    if (!av) {
       renderPeerChips(state.peers.length ? state.peers : [pid], pid ? {[pid]: st} : null);
       return;
     }
-    chip.dataset.state = st || "";
-    const base = pid.charAt(0).toUpperCase() + pid.slice(1);
-    chip.textContent =
-      st === "gate" ? base + " · needs Gate" :
-      st === "working" ? base + " · working" :
-      st === "replied" ? base + " · replied" : base;
+    if (st) av.dataset.state = st;
+    else delete av.dataset.state;
+    av.title = memberLabel(pid) + (st === "working" ? " · working" : st === "gate" ? " · needs Gate" : "");
+    // Refresh subtitle
+    const states = {};
+    document.querySelectorAll("[data-presence] [data-peer]").forEach((el) => {
+      if (el.dataset.state) states[el.dataset.peer] = el.dataset.state;
+    });
+    renderPeerChips(state.peers, states);
   }
 
   function fmtApprovalArgs(args) {
