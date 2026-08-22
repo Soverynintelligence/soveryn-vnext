@@ -66,9 +66,13 @@ def test_board_payload_shape():
     assert any(c["id"] == "web" for c in p["by_citizen"]["aetheria"])
 
 
-def test_requires_approval_gates_web_and_writes_by_default():
-    assert requires_approval("web_search") is True
-    assert requires_approval("fetch_url") is True
+def test_requires_approval_web_ungated_writes_gated():
+    # House SearXNG reads — never Gate (Jon: research must not hang).
+    assert requires_approval("web_search") is False
+    assert requires_approval("fetch_url") is False
+    assert requires_approval("web_search", source="direct") is False
+    assert requires_approval("web_search", source="commission") is False
+    # Write egress still needs a yes.
     assert requires_approval("x_post") is True
     assert requires_approval("email_send") is True
     assert requires_approval("messenger_send") is True
@@ -80,9 +84,9 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     """Scheduler / Run now must not hang on web_search — reads pass, writes stay gated."""
     for tool in AUTOMATION_AUTO_APPROVE_TOOLS:
         assert requires_approval(tool, source="automation") is False
-        assert requires_approval(tool, source="direct") is True or tool == "email_list"
-    # email_list is channel class (not optional_egress) — only gated via explicit list;
-    # automation still treats it as auto-approved when asked.
+    # web reads ungated for any source; x_feed still gated outside automation
+    assert requires_approval("web_search", source="direct") is False
+    assert requires_approval("x_feed", source="direct") is True
     assert requires_approval("email_list", source="direct") is False
     assert requires_approval("x_post", source="automation") is True
     assert requires_approval("email_send", source="automation") is True

@@ -36,8 +36,11 @@ CATALOG: dict[str, ConnectorDef] = {
         title="Web",
         description="Search and read the public web via house SearXNG + fetch.",
         tools=("web_search", "fetch_url"),
-        class_="optional_egress",
-        sovereignty_note="Content only through house SearXNG; no vendor bot C2.",
+        class_="house",
+        sovereignty_note=(
+            "Read-only through house SearXNG — no Gate click. "
+            "Write egress (email/X/messenger) still needs Approval Gate."
+        ),
     ),
     "email": ConnectorDef(
         id="email",
@@ -184,6 +187,13 @@ class ConnectorStatus:
         return d
 
 
+# Read-only web via house SearXNG — always ungated. Research (Vett, chat,
+# commissions) must not hang on a Gate click. Write egress stays gated.
+WEB_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "web_search",
+    "fetch_url",
+})
+
 # Read-only tools that scheduled/manual automations may use without blocking
 # on the Approval Gate. Writes (email_send, x_post, messenger_send, …) stay
 # gated even for source=automation — fail-safe egress still needs a yes.
@@ -203,12 +213,14 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
     ``signal_send`` is ungated: Signal is Jon's direct line to himself, so it
     bypasses the Approval Gate (he is already the approver).
 
-    When ``source="automation"`` (scheduler or Run now), read-only tools in
-    ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass — news digests cannot hang
-    waiting for a human click every morning. Write egress stays gated.
+    ``web_search`` / ``fetch_url`` are always ungated (house SearXNG reads).
+    When ``source="automation"``, additional read-only tools in
+    ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass. Write egress stays gated.
 
     Fail-safe: unknown tools return False (house-local, never egress).
     """
+    if tool_name in WEB_AUTO_APPROVE_TOOLS:
+        return False
     if source == "automation" and tool_name in AUTOMATION_AUTO_APPROVE_TOOLS:
         return False
     for defn in CATALOG.values():
