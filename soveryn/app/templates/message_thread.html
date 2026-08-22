@@ -230,8 +230,16 @@
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         if (m) {
           appendMessagedPeer(m[1], byPeer[m[1]] || null);
+          if (/working/i.test(t.content || "")) {
+            appendBubble("sys", (CONTACTS[m[1]] || { name: m[1] }).name + " is working… tap their shape for the group chat");
+          }
+        } else if (/⟦room:replied:([a-z]+)⟧/.exec(t.content || "")) {
+          const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+          const peer = r[1];
+          appendMessagedPeer(peer, byPeer[peer] || null);
+          appendBubble("sys", (CONTACTS[peer] || { name: peer }).name + " replied — tap to open group");
         } else {
-          appendBubble("sys", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, ""));
+          appendBubble("sys", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "").replace(/⟦room:replied:[a-z]+⟧\s*/, ""));
         }
       }
     });
@@ -372,6 +380,15 @@
             text += payload.delta;
             them.textContent = text;
             thread().scrollTop = thread().scrollHeight;
+          } else if (payload.type === "tool_call") {
+            appendBubble("sys", "→ " + (payload.name || "tool") + (payload.name === "house_post_send" ? " (messaging peer…)" : "…"));
+          } else if (payload.type === "tool_result") {
+            try {
+              const r = JSON.parse(payload.content || "{}");
+              if (r && r.commissioned && r.to_id) {
+                appendBubble("sys", "Commissioned " + r.to_id + " — they'll reply in the group chat");
+              }
+            } catch (_) {}
           } else if (payload.type === "error") {
             them.textContent = "error · " + (payload.message || payload.code);
           }

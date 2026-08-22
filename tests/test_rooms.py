@@ -148,10 +148,96 @@ def test_record_house_post_collab_chip(room_app):
         to_id="vett",
         body="Please check the quotes on founding.",
         dm_session_id=dm,
+        commission_id="cid-test-1",
     )
     assert ev is not None
     assert ev["peer"] == "vett"
+    assert ev.get("commission_id") == "cid-test-1"
     dm_hist = conv.load_history(dm)
     assert any("Messaged Vett" in t.content for t in dm_hist if t.role == "system")
+    assert any("working" in t.content for t in dm_hist if t.role == "system")
     room_hist = conv.load_history(ev["room_session_id"])
     assert any("[To Vett]" in t.content for t in room_hist if t.role == "assistant")
+    assert any("Commissioned Vett" in t.content for t in room_hist if t.role == "system")
+
+
+def test_project_commission_result_into_room(room_app):
+    from soveryn.rooms.store import project_commission_result, record_house_post_collab
+
+    app, conv, tmp_path = room_app
+    dm = conv.new_session("aetheria", title="dm")
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    cid = "cid-reply-1"
+    ev = record_house_post_collab(
+        conv,
+        data_root=data_root,
+        from_id="aetheria",
+        to_id="vett",
+        body="Research liner options.",
+        dm_session_id=dm,
+        commission_id=cid,
+    )
+    assert ev is not None
+    reply = project_commission_result(
+        conv,
+        data_root=data_root,
+        citizen_id="vett",
+        commission_id=cid,
+        result_text="Liner A is best for kidney ponds.",
+        ok=True,
+    )
+    assert reply is not None
+    assert reply["type"] == "peer_reply"
+    room_hist = conv.load_history(ev["room_session_id"])
+    assert any(
+        "[From Vett]" in t.content and "Liner A" in t.content
+        for t in room_hist
+        if t.role == "system"
+    )
+    dm_hist = conv.load_history(dm)
+    assert any("replied" in t.content.lower() for t in dm_hist if t.role == "system")
+
+
+def test_house_post_send_commissions_peer(room_app, monkeypatch):
+    """Aetheria house_post_send to Vett must enqueue a commission (wake path)."""
+    from soveryn.citizens import commissions
+    from soveryn.citizens.registry import connect
+    from soveryn.platform.house_post_tools import register_house_post_tools
+    from soveryn.platform.tools.registry import ToolRegistry
+    from soveryn.rooms import context as room_ctx
+
+    app, conv, tmp_path = room_app
+    db = Path(app.config["CITIZENS_DB"])
+    monkeypatch.setenv("SOVERYN_CITIZENS_DB", str(db))
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    dm = conv.new_session("aetheria", title="dm-tool")
+
+    reg = ToolRegistry()
+    register_house_post_tools(reg, owner_agent="aetheria")
+
+    with app.app_context():
+        app.extensions["soveryn"]["conv_store"] = conv
+        tok_dm = room_ctx.dm_session_id.set(dm)
+        tok_root = room_ctx.data_root.set(data_root)
+        try:
+            result = reg.invoke(
+                "aetheria",
+                "house_post_send",
+                {"to_id": "vett", "body": "Research pond liner options.", "kind": "request"},
+            )
+        finally:
+            room_ctx.dm_session_id.reset(tok_dm)
+            room_ctx.data_root.reset(tok_root)
+
+    assert result.get("ok") is True, result
+    assert result.get("commissioned") is True
+    assert result.get("commission_id")
+    with connect(db) as conn:
+        row = commissions.get(conn, result["commission_id"])
+    assert row is not None
+    assert row["citizen_id"] == "vett"
+    assert row["state"] in ("queued", "running", "done")
+    dm_hist = conv.load_history(dm)
+    assert any("Messaged Vett" in t.content for t in dm_hist if t.role == "system")

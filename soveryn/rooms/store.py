@@ -212,6 +212,57 @@ def collabs_for_dm(data_root: Path | str, dm_session_id: str) -> list[dict[str, 
     return out[:20]
 
 
+REPLIED_MARKER = "⟦room:replied:{peer}⟧"
+
+
+def find_room_for_commission(
+    data_root: Path | str, commission_id: str
+) -> dict[str, Any] | None:
+    """Locate a room sidecar that recorded this commission_id."""
+    if not commission_id:
+        return None
+    root = rooms_root(data_root)
+    if not root.is_dir():
+        return None
+    for p in root.glob("*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        for ev in data.get("events") or []:
+            if ev.get("commission_id") == commission_id:
+                return data
+    return None
+
+
+def find_latest_room_for_peer(
+    data_root: Path | str, peer: str, *, dm_session_id: str | None = None
+) -> dict[str, Any] | None:
+    peer = (peer or "").strip().lower()
+    root = rooms_root(data_root)
+    if not root.is_dir() or peer not in PEERS:
+        return None
+    best = None
+    best_at = ""
+    for p in root.glob("*.json"):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if data.get("peer") != peer:
+            continue
+        if dm_session_id and data.get("dm_session_id") not in (None, dm_session_id):
+            continue
+        at = data.get("created_at") or ""
+        events = data.get("events") or []
+        if events:
+            at = max(at, max((e.get("at") or "") for e in events))
+        if at >= best_at:
+            best_at = at
+            best = data
+    return best
+
+
 def record_house_post_collab(
     conv: ConversationStore,
     *,
@@ -221,6 +272,7 @@ def record_house_post_collab(
     body: str,
     dm_session_id: str | None,
     room_session_id: str | None = None,
+    commission_id: str | None = None,
 ) -> dict[str, Any] | None:
     """When CoS↔peer house_post fires during a chat, project into DM chip + room.
 
@@ -245,6 +297,7 @@ def record_house_post_collab(
         sid = room["session_id"]
         marker = MESSAGED_MARKER.format(peer=peer)
         excerpt = body if len(body) <= 800 else body[:797] + "…"
+        working = " — working…" if commission_id else ""
         conv.save_turn(
             sid,
             COS_ID,
@@ -252,12 +305,20 @@ def record_house_post_collab(
             f"[To {peer.title()}]\n{excerpt}",
             source="room",
         )
+        if commission_id:
+            conv.save_turn(
+                sid,
+                COS_ID,
+                "system",
+                f"Commissioned {peer.title()} · `{commission_id[:8]}` — waiting on reply.",
+                source="room",
+            )
         if dm_session_id and conv.get_session(dm_session_id) is not None:
             conv.save_turn(
                 dm_session_id,
                 COS_ID,
                 "system",
-                f"{marker} Messaged {peer.title()}",
+                f"{marker} Messaged {peer.title()}{working}",
                 source="room",
             )
         event = {
@@ -269,6 +330,8 @@ def record_house_post_collab(
             "dm_session_id": dm_session_id,
             "direction": "cos_to_peer",
         }
+        if commission_id:
+            event["commission_id"] = commission_id
         room.setdefault("events", []).append(event)
         if dm_session_id:
             room["dm_session_id"] = dm_session_id
@@ -279,19 +342,15 @@ def record_house_post_collab(
     if to_id == COS_ID and from_id in PEERS:
         peer = from_id
         excerpt = body if len(body) <= 800 else body[:797] + "…"
-        root = rooms_root(data_root)
         matched = None
-        for p in root.glob("*.json"):
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if data.get("peer") != peer:
-                continue
-            if dm_session_id and data.get("dm_session_id") not in (None, dm_session_id):
-                continue
-            matched = data
-            break
+        if room_session_id:
+            matched = load_room(data_root, room_session_id)
+        if matched is None and commission_id:
+            matched = find_room_for_commission(data_root, commission_id)
+        if matched is None:
+            matched = find_latest_room_for_peer(
+                data_root, peer, dm_session_id=dm_session_id
+            )
         if matched is None and dm_session_id:
             matched = open_room(
                 conv, data_root=data_root, peer=peer, dm_session_id=dm_session_id
@@ -299,6 +358,7 @@ def record_house_post_collab(
         if matched is None:
             return None
         sid = matched["session_id"]
+        dm = matched.get("dm_session_id") or dm_session_id
         conv.save_turn(
             sid,
             COS_ID,
@@ -306,20 +366,64 @@ def record_house_post_collab(
             f"[From {peer.title()}]\n{excerpt}",
             source="room",
         )
+        if dm and conv.get_session(dm) is not None:
+            reply_marker = REPLIED_MARKER.format(peer=peer)
+            conv.save_turn(
+                dm,
+                COS_ID,
+                "system",
+                f"{reply_marker} {peer.title()} replied — open group to read.",
+                source="room",
+            )
         event = {
             "type": "peer_reply",
             "peer": peer,
             "at": _utc_now(),
             "brief": excerpt[:200],
             "room_session_id": sid,
-            "dm_session_id": matched.get("dm_session_id") or dm_session_id,
+            "dm_session_id": dm,
             "direction": "peer_to_cos",
         }
+        if commission_id:
+            event["commission_id"] = commission_id
         matched.setdefault("events", []).append(event)
         _save_room(data_root, matched)
         return event
 
     return None
+
+
+def project_commission_result(
+    conv: ConversationStore,
+    *,
+    data_root: Path | str,
+    citizen_id: str,
+    commission_id: str,
+    result_text: str,
+    ok: bool = True,
+) -> dict[str, Any] | None:
+    """After citizens-runtime finishes a commission, land the reply in the room."""
+    peer = (citizen_id or "").strip().lower()
+    if peer not in PEERS:
+        return None
+    text = (result_text or "").strip()
+    if not text:
+        text = "(empty result)" if ok else "(failed with no detail)"
+    if not ok:
+        text = f"**Failed:**\n{text}"
+    # Prefer the room that commissioned this id; fall back to latest peer room.
+    room = find_room_for_commission(data_root, commission_id)
+    dm = room.get("dm_session_id") if room else None
+    return record_house_post_collab(
+        conv,
+        data_root=data_root,
+        from_id=peer,
+        to_id=COS_ID,
+        body=text,
+        dm_session_id=dm,
+        room_session_id=room.get("session_id") if room else None,
+        commission_id=commission_id,
+    )
 
 
 def peer_commission_status(

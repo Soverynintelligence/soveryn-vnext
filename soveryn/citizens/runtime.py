@@ -132,12 +132,45 @@ def write_outbox(
     return path.resolve()
 
 
+def _project_commission_to_room(
+    *,
+    conv_store,
+    data_root: Path | str | None,
+    citizen_id: str,
+    commission_id: str,
+    result_text: str,
+    ok: bool,
+) -> None:
+    """Best-effort: land commission result in the group room + DM replied chip."""
+    if conv_store is None or not data_root:
+        return
+    try:
+        from soveryn.rooms.store import project_commission_result
+
+        project_commission_result(
+            conv_store,
+            data_root=data_root,
+            citizen_id=citizen_id,
+            commission_id=commission_id,
+            result_text=result_text,
+            ok=ok,
+        )
+    except Exception:
+        logger.exception(
+            "room projection failed for commission %s (%s)",
+            commission_id,
+            citizen_id,
+        )
+
+
 def execute_claimed(
     db_path: str | Path,
     claimed: dict,
     *,
     process_fn: ProcessFn,
     at: str | None = None,
+    conv_store=None,
+    data_root: Path | str | None = None,
 ) -> dict:
     """Run one already-claimed commission to done or failed. Returns final row."""
     when = at or _utc_now()
@@ -181,6 +214,14 @@ def execute_claimed(
                 logger.exception(
                     "house post report failed for commission %s", commission_id
                 )
+        _project_commission_to_room(
+            conv_store=conv_store,
+            data_root=data_root,
+            citizen_id=citizen_id,
+            commission_id=commission_id,
+            result_text=(content or "").strip(),
+            ok=True,
+        )
     except Exception as exc:
         logger.exception(
             "commission %s for %s failed", commission_id, citizen_id
@@ -214,6 +255,14 @@ def execute_claimed(
                     "house post failure report failed for %s", commission_id
                 )
             row = commissions.get(conn, commission_id)
+        _project_commission_to_room(
+            conv_store=conv_store,
+            data_root=data_root,
+            citizen_id=citizen_id,
+            commission_id=commission_id,
+            result_text=repr(exc),
+            ok=False,
+        )
     assert row is not None
     return row
 
@@ -226,6 +275,8 @@ def drain_once(
     citizen_ids: list[str] | None = None,
     at: str | None = None,
     busy_fn: BusyFn | None = None,
+    conv_store=None,
+    data_root: Path | str | None = None,
 ) -> list[dict]:
     """Claim and execute at most one commission per idle citizen. Returns closed rows."""
     when = at or _utc_now()
@@ -266,7 +317,14 @@ def drain_once(
 
     for claimed in claimed_rows:
         closed.append(
-            execute_claimed(db_path, claimed, process_fn=process_fn, at=when)
+            execute_claimed(
+                db_path,
+                claimed,
+                process_fn=process_fn,
+                at=when,
+                conv_store=conv_store,
+                data_root=data_root,
+            )
         )
     return closed
 
@@ -279,6 +337,8 @@ def run_forever(
     poll_seconds: float = 5.0,
     citizen_ids: list[str] | None = None,
     busy_fn: BusyFn | None = None,
+    conv_store=None,
+    data_root: Path | str | None = None,
     _run_once_and_stop: bool = False,
 ) -> None:
     """Poll the commissions queue until stopped (daemon-thread friendly)."""
@@ -293,6 +353,8 @@ def run_forever(
                 worker=worker,
                 citizen_ids=citizen_ids,
                 busy_fn=busy_fn,
+                conv_store=conv_store,
+                data_root=data_root,
             )
             if closed:
                 for row in closed:

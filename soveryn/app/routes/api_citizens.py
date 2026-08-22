@@ -290,6 +290,8 @@ def runtime_drain():
             worker=f"citizens-runtime/{citizen_id or 'all'}",
             citizen_ids=ids,
             busy_fn=busy,
+            conv_store=conv_store,
+            data_root=getattr(env, "data_root", None) if env is not None else None,
         )
         return jsonify({"ok": True, "closed": closed, "count": len(closed)}), 200
     except Exception as exc:

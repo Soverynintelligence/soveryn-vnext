@@ -1248,6 +1248,10 @@ def create_app(
                             "poll_seconds": float(
                                 app.config.get("CITIZENS_POLL_SECONDS", 5.0)
                             ),
+                            # Project commission results into group rooms /
+                            # DM "replied" chips (not only outbox + CoS inbox).
+                            "conv_store": conv_store,
+                            "data_root": getattr(env, "data_root", None),
                         },
                         daemon=True,
                         name="citizens-runtime",

@@ -147,6 +147,15 @@
     (turns || []).forEach((t) => {
       if (t.role === "user") appendBubble("user", t.content, "You");
       else if (t.role === "system") {
+        const fromPeer = /^\[From ([^\]]+)\]\n?/.exec(t.content || "");
+        if (fromPeer) {
+          appendBubble(
+            "assistant",
+            (t.content || "").replace(/^\[From [^\]]+\]\n?/, ""),
+            fromPeer[1]
+          );
+          return;
+        }
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         const who = m ? ("Messaged " + m[1]) : "Room";
         appendBubble("system", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, ""), who);
@@ -195,7 +204,9 @@
     const r = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
     if (!r.ok) return;
     const d = await r.json();
-    renderHistory(d.turns || []);
+    const turns = d.turns || [];
+    lastTurnCount = turns.length;
+    renderHistory(turns);
   }
 
   async function sendMessage() {
@@ -267,7 +278,30 @@
       return;
     }
     await loadHistory();
-    setStatus("Messaged " + state.peer + " · commission " + ((d.event && d.event.commission_id) || ""));
+    setStatus("Messaged " + state.peer + " · waiting on reply…");
+    startPoll();
+  }
+
+  let pollTimer = null;
+  let lastTurnCount = 0;
+  function startPoll() {
+    if (pollTimer) return;
+    pollTimer = setInterval(async () => {
+      if (!state.sessionId) return;
+      try {
+        const r = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
+        if (!r.ok) return;
+        const d = await r.json();
+        const turns = d.turns || [];
+        if (turns.length !== lastTurnCount) {
+          lastTurnCount = turns.length;
+          renderHistory(turns);
+          const hasReply = turns.some((t) => /^\[From /i.test(t.content || ""));
+          if (hasReply) setStatus(state.peer.charAt(0).toUpperCase() + state.peer.slice(1) + " replied");
+          else setStatus("Waiting on " + state.peer + "…");
+        }
+      } catch (_) {}
+    }, 3000);
   }
 
   $("[data-send]").addEventListener("click", sendMessage);
@@ -276,7 +310,9 @@
   });
   $("[data-ask-peer]").addEventListener("click", askPeer);
 
-  openRoom();
+  openRoom().then(() => {
+    startPoll();
+  });
 })();
 </script>
 </body>

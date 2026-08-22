@@ -11,6 +11,9 @@ from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
 
 _DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "citizens.db"
 
+# CoS → peer kinds that should enqueue real work (not just desk mail).
+_WORK_KINDS = frozenset({"request", "directive", "memo"})
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -23,30 +26,61 @@ def _db() -> Path:
 
 def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> None:
     def send(args: Mapping[str, Any]) -> dict[str, Any]:
-        to_id = (args.get("to_id") or "").strip()
+        to_id = (args.get("to_id") or "").strip().lower()
         body = (args.get("body") or "").strip()
-        kind = (args.get("kind") or "memo").strip()
+        kind = (args.get("kind") or "request").strip()
         subject = (args.get("subject") or "").strip() or None
         if not to_id or not body:
             return {"ok": False, "error": "to_id and body required"}
         try:
+            from soveryn.rooms.store import PEERS, record_house_post_collab
+
+            when = _now()
+            commission_id = None
             with connect(_db()) as conn:
-                pid = house_post.send(
-                    conn,
-                    from_id=owner_agent,
-                    to_id=to_id,
-                    body=body,
-                    at=_now(),
-                    kind=kind,
-                    subject=subject,
-                )
-            out: dict[str, Any] = {
-                "ok": True, "post_id": pid, "to_id": to_id, "kind": kind,
-            }
+                # Aetheria asking a peer to do work must hit the commission
+                # queue — bare house_post is silent mail and Vett never wakes.
+                if (
+                    owner_agent == house_post.CHIEF_OF_STAFF_ID
+                    and to_id in PEERS
+                    and kind in _WORK_KINDS
+                ):
+                    if kind == "memo":
+                        kind = "request"
+                    routing = house_post.route_via_cos(
+                        conn,
+                        from_id=owner_agent,
+                        assignee_id=to_id,
+                        body=body,
+                        at=when,
+                        subject=subject,
+                    )
+                    pid = routing.get("directive_post_id") or ""
+                    commission_id = routing.get("commission_id")
+                    out: dict[str, Any] = {
+                        "ok": True,
+                        "post_id": pid,
+                        "to_id": to_id,
+                        "kind": kind,
+                        "commission_id": commission_id,
+                        "commissioned": True,
+                    }
+                else:
+                    pid = house_post.send(
+                        conn,
+                        from_id=owner_agent,
+                        to_id=to_id,
+                        body=body,
+                        at=when,
+                        kind=kind,
+                        subject=subject,
+                    )
+                    out = {
+                        "ok": True, "post_id": pid, "to_id": to_id, "kind": kind,
+                    }
             # Project CoS↔peer posts into messenger-style room + DM chip.
             try:
                 from soveryn.rooms import context as room_ctx
-                from soveryn.rooms.store import record_house_post_collab
 
                 dm = room_ctx.dm_session_id.get()
                 room_sid = room_ctx.room_session_id.get()
@@ -66,6 +100,7 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                         body=body,
                         dm_session_id=dm,
                         room_session_id=room_sid,
+                        commission_id=commission_id,
                     )
                     if ev:
                         out["room_event"] = ev
@@ -93,12 +128,13 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
             name="house_post_send",
             owner=owner_agent,
             description=(
-                "Send a House Post to another citizen (vett, scotty, eve, kernel). "
-                "When Jon says things like 'ask Vett to…', 'message Vett', or "
-                "'have Scotty check…' — call this in the SAME turn with to_id set "
-                "to that peer and a clear brief in body. Do not only promise to "
-                "message them. Kinds: memo, request, report, directive, ack. "
-                "Prefer kind=request when asking a peer to do work."
+                "Message another citizen (vett, scotty, eve, kernel) and put work "
+                "on their commission queue when you are Aetheria. When Jon says "
+                "'ask Vett to…', 'message Vett', or 'have Scotty check…' — call "
+                "this in the SAME turn with to_id set to that peer and a clear "
+                "brief in body. Do not only promise to message them. Prefer "
+                "kind=request (default). That wakes the peer; their result will "
+                "land in the group room. Kinds: memo, request, report, directive, ack."
             ),
             schema={
                 "type": "object",
