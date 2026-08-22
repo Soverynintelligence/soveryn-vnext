@@ -758,3 +758,142 @@ def decide_approval(citizen_id: str, approval_id: str):
         }), 409
     from dataclasses import asdict
     return jsonify(asdict(updated)), 200
+
+
+# ── Objectives (standing assign→execute→verify work) ─────────────────────────
+
+
+@bp.get("/api/objectives")
+def list_objectives_api():
+    """List standing objectives. Query: desk?, owner_id?, state?, limit?"""
+    path = _db_path()
+    if not path.exists():
+        return jsonify({"objectives": [], "count": 0, "ok": True}), 200
+    try:
+        from soveryn.citizens import objectives as objectives_mod
+        from soveryn.citizens.registry import connect
+
+        with connect(path) as conn:
+            rows = objectives_mod.list_objectives(
+                conn,
+                desk=(request.args.get("desk") or "").strip() or None,
+                owner_id=(request.args.get("owner_id") or "").strip() or None,
+                state=(request.args.get("state") or "").strip() or None,
+                limit=int(request.args.get("limit") or 50),
+            )
+        return jsonify({"ok": True, "objectives": rows, "count": len(rows)}), 200
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": {"code": "list_failed", "message": str(exc)},
+        }), 500
+
+
+@bp.post("/api/objectives")
+def create_objective_api():
+    """Assign a standing objective. Localhost write.
+
+    Body: {desk, title, brief, owner_id?, success_criteria?, assigned_by?,
+           enqueue?: true}
+    When enqueue is true (default), also queue a research commission for the owner.
+    """
+    _require_localhost()
+    body = request.get_json(silent=True) or {}
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from soveryn.citizens import commissions
+        from soveryn.citizens import objectives as objectives_mod
+        from soveryn.citizens.registry import connect
+
+        with connect(path) as conn:
+            row = objectives_mod.assign(
+                conn,
+                desk=str(body.get("desk") or ""),
+                title=str(body.get("title") or ""),
+                brief=str(body.get("brief") or ""),
+                at=_utc_now(),
+                owner_id=str(body.get("owner_id") or objectives_mod.DEFAULT_OWNER),
+                success_criteria=str(body.get("success_criteria") or ""),
+                assigned_by=str(body.get("assigned_by") or "jon"),
+            )
+            commission_id = None
+            enqueue = body.get("enqueue", True)
+            if enqueue:
+                commission_id = commissions.enqueue(
+                    conn,
+                    row["owner_id"],
+                    objectives_mod.research_commission_body(row),
+                    at=_utc_now(),
+                )
+        return jsonify({
+            "ok": True,
+            "objective": row,
+            "commission_id": commission_id,
+        }), 201
+    except (ValueError, KeyError) as exc:
+        return jsonify({
+            "ok": False,
+            "error": {"code": "bad_request", "message": str(exc)},
+        }), 400
+    except Exception as exc:
+        return jsonify({
+            "ok": False,
+            "error": {"code": "create_failed", "message": str(exc)},
+        }), 500
+
+
+@bp.get("/api/objectives/<objective_id>")
+def get_objective_api(objective_id: str):
+    path = _db_path()
+    if not path.exists():
+        return jsonify({"error": {"code": "no_registry", "message": "no db"}}), 503
+    try:
+        from soveryn.citizens import objectives as objectives_mod
+        from soveryn.citizens.registry import connect
+
+        with connect(path) as conn:
+            row = objectives_mod.get(conn, objective_id)
+            if row is None:
+                return jsonify({
+                    "error": {"code": "not_found", "message": "no objective"},
+                }), 404
+            checkpoint = None
+            if row.get("checkpoint_path"):
+                checkpoint = objectives_mod.load_checkpoint(row["checkpoint_path"])
+        return jsonify({
+            "ok": True,
+            "objective": row,
+            "checkpoint": checkpoint,
+        }), 200
+    except Exception as exc:
+        return jsonify({
+            "error": {"code": "get_failed", "message": str(exc)},
+        }), 500
+
+
+@bp.post("/api/objectives/<objective_id>/state")
+def set_objective_state_api(objective_id: str):
+    _require_localhost()
+    body = request.get_json(silent=True) or {}
+    state = body.get("state")
+    if not isinstance(state, str) or not state.strip():
+        return jsonify({
+            "error": {"code": "missing_field", "message": "state required"},
+        }), 400
+    path = _db_path()
+    try:
+        from soveryn.citizens import objectives as objectives_mod
+        from soveryn.citizens.registry import connect
+
+        with connect(path) as conn:
+            row = objectives_mod.set_state(
+                conn, objective_id, state=state.strip(), at=_utc_now()
+            )
+        return jsonify({"ok": True, "objective": row}), 200
+    except KeyError:
+        return jsonify({"error": {"code": "not_found", "message": "no objective"}}), 404
+    except ValueError as exc:
+        return jsonify({"error": {"code": "bad_request", "message": str(exc)}}), 400
+    except Exception as exc:
+        return jsonify({"error": {"code": "update_failed", "message": str(exc)}}), 500

@@ -1245,6 +1245,7 @@ def create_app(
                                 agent_loops,
                                 conv_store,
                                 data_root=getattr(env, "data_root", None),
+                                citizens_db=_citizens_db,
                             ),
                             "busy_fn": _busy,
                             "poll_seconds": float(

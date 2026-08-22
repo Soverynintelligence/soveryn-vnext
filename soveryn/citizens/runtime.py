@@ -407,6 +407,59 @@ def execute_claimed(
     return row
 
 
+def requeue_stale_running(
+    db_path: str | Path,
+    *,
+    older_than_seconds: int = 45 * 60,
+    at: str | None = None,
+) -> list[str]:
+    """Requeue commissions stuck in running with no progress (zombie after restart)."""
+    when = at or _utc_now()
+    from datetime import datetime, timezone
+
+    try:
+        now = datetime.now(timezone.utc)
+    except Exception:
+        return []
+    requeued: list[str] = []
+    with connect(db_path) as conn:
+        rows = list(
+            conn.execute(
+                "SELECT id, claimed_at FROM commissions WHERE state = ?",
+                (commissions.RUNNING,),
+            )
+        )
+        for row in rows:
+            claimed_at = row["claimed_at"] or ""
+            try:
+                # accept Z or naive iso
+                ts = claimed_at.replace("Z", "+00:00")
+                claimed = datetime.fromisoformat(ts)
+                if claimed.tzinfo is None:
+                    claimed = claimed.replace(tzinfo=timezone.utc)
+                age = (now - claimed).total_seconds()
+            except Exception:
+                age = older_than_seconds + 1
+            if age < older_than_seconds:
+                continue
+            try:
+                commissions.requeue(
+                    conn,
+                    row["id"],
+                    at=when,
+                    reason=f"stale running >{older_than_seconds}s — auto requeue",
+                )
+                requeued.append(row["id"])
+                logger.warning(
+                    "requeued stale commission %s (claimed_at=%s)",
+                    row["id"],
+                    claimed_at,
+                )
+            except Exception:
+                logger.exception("stale requeue failed for %s", row["id"])
+    return requeued
+
+
 def drain_once(
     db_path: str | Path,
     *,
@@ -421,6 +474,12 @@ def drain_once(
     """Claim and execute at most one commission per idle citizen. Returns closed rows."""
     when = at or _utc_now()
     closed: list[dict] = []
+
+    # Don't let dead workers hold the queue forever.
+    try:
+        requeue_stale_running(db_path, at=when)
+    except Exception:
+        logger.exception("stale requeue pass failed")
 
     with connect(db_path) as conn:
         if citizen_ids is None:
@@ -517,8 +576,18 @@ def make_agent_process_fn(
     conv_store,
     *,
     data_root: Path | str | None = None,
+    citizens_db: Path | str | None = None,
 ) -> ProcessFn:
     """Build a process_fn that drives each citizen's AgentLoop into a session."""
+    import os as _os
+
+    _db = Path(
+        citizens_db
+        or _os.environ.get(
+            "SOVERYN_CITIZENS_DB",
+            str(Path.home() / "soveryn_vnext" / "data" / "citizens.db"),
+        )
+    )
 
     def process(citizen_id: str, body: str, commission_id: str) -> str:
         loop = agent_loops.get(citizen_id)
@@ -526,6 +595,37 @@ def make_agent_process_fn(
             raise RuntimeError(
                 f"no AgentLoop registered for citizen {citizen_id!r}"
             )
+
+        # Standing research objective → multi-wave runner (not one-shot budget).
+        oid = None
+        try:
+            from soveryn.citizens.research_runner import (
+                parse_objective_id,
+                run_research_objective,
+            )
+
+            oid = parse_objective_id(body)
+            if oid:
+                def wave_fn(cid: str, wave_prompt: str) -> str:
+                    sid = conv_store.new_session(
+                        cid, title=f"[research-wave] {commission_id[:8]}"
+                    )
+                    resp = loop.process_message(
+                        sid, wave_prompt, source="commission"
+                    )
+                    return resp.content or ""
+
+                return run_research_objective(
+                    db_path=_db,
+                    citizen_id=citizen_id,
+                    body=body,
+                    commission_id=commission_id,
+                    wave_fn=wave_fn,
+                )
+        except Exception:
+            if oid:
+                raise
+
         session_id = conv_store.new_session(
             citizen_id, title=f"[commission] {commission_id[:8]}"
         )

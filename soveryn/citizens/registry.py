@@ -130,6 +130,31 @@ CREATE INDEX IF NOT EXISTS house_post_by_to
   ON house_post(to_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS house_post_by_from
   ON house_post(from_id, created_at DESC);
+
+-- Standing objectives: Grok-bot style assign→execute→verify work that
+-- outlives one AgentLoop turn. Commissions remain short work units.
+CREATE TABLE IF NOT EXISTS objectives (
+  id                TEXT PRIMARY KEY,
+  desk              TEXT NOT NULL
+                    CHECK (desk IN ('cwg','hl','soveryn')),
+  owner_id          TEXT NOT NULL REFERENCES citizens(id),
+  title             TEXT NOT NULL,
+  brief             TEXT NOT NULL,
+  success_criteria  TEXT,
+  state             TEXT NOT NULL DEFAULT 'active'
+                    CHECK (state IN (
+                      'active','blocked','ready_for_verify',
+                      'done','failed','cancelled'
+                    )),
+  checkpoint_path   TEXT,
+  assigned_by       TEXT,
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS objectives_by_desk
+  ON objectives(desk, updated_at DESC);
+CREATE INDEX IF NOT EXISTS objectives_by_owner
+  ON objectives(owner_id, state, updated_at DESC);
 """
 
 
