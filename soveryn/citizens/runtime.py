@@ -163,6 +163,101 @@ def _project_commission_to_room(
         )
 
 
+def _enqueue_cos_summary(
+    db_path: str | Path,
+    *,
+    peer: str,
+    source_commission_id: str,
+    task: str,
+    result_text: str,
+    ok: bool,
+    data_root: Path | str | None,
+    at: str,
+) -> str | None:
+    """Queue Aetheria to summarize a peer result for Jon (Chief of Staff)."""
+    from soveryn.citizens.post import CHIEF_OF_STAFF_ID
+    from soveryn.rooms.store import (
+        build_cos_relay_brief,
+        find_room_for_commission,
+    )
+
+    room = None
+    if data_root is not None:
+        try:
+            room = find_room_for_commission(data_root, source_commission_id)
+        except Exception:
+            room = None
+    dm = (room or {}).get("dm_session_id")
+    room_sid = (room or {}).get("session_id")
+    brief = build_cos_relay_brief(
+        peer=peer,
+        source_commission_id=source_commission_id,
+        task=task,
+        result_text=result_text,
+        ok=ok,
+        dm_session_id=dm,
+        room_session_id=room_sid,
+    )
+    try:
+        with connect(db_path) as conn:
+            cid = commissions.enqueue(conn, CHIEF_OF_STAFF_ID, brief, at=at)
+        logger.info(
+            "queued CoS summary relay %s for peer=%s source=%s",
+            cid,
+            peer,
+            source_commission_id[:8],
+        )
+        return cid
+    except Exception:
+        logger.exception(
+            "failed to queue CoS summary for %s / %s", peer, source_commission_id
+        )
+        return None
+
+
+def _deliver_cos_summary_if_relay(
+    *,
+    conv_store,
+    body: str,
+    summary: str,
+    ok: bool,
+    commission_id: str,
+) -> bool:
+    """If this was a [COS_RELAY] job, deliver Aetheria's summary to Jon's DM."""
+    if conv_store is None:
+        return False
+    try:
+        from soveryn.rooms.store import (
+            deliver_peer_result_to_jon,
+            parse_cos_relay_brief,
+        )
+
+        meta = parse_cos_relay_brief(body)
+        if meta is None:
+            return False
+        peer = meta.get("peer") or "peer"
+        dm = meta.get("dm_session_id")
+        if dm == "-":
+            dm = None
+        room_sid = meta.get("room_session_id")
+        if room_sid == "-":
+            room_sid = None
+        src = meta.get("source_commission") or commission_id
+        return deliver_peer_result_to_jon(
+            conv_store,
+            dm_session_id=dm,
+            peer=peer,
+            result_text=summary,
+            ok=ok and meta.get("ok", "ok") != "failed",
+            commission_id=src,
+            room_session_id=room_sid,
+            as_cos_summary=True,
+        )
+    except Exception:
+        logger.exception("CoS summary delivery failed for %s", commission_id)
+        return False
+
+
 def execute_claimed(
     db_path: str | Path,
     claimed: dict,
@@ -177,6 +272,7 @@ def execute_claimed(
     commission_id = claimed["id"]
     citizen_id = claimed["citizen_id"]
     body = claimed["body"]
+    is_cos_relay = (body or "").lstrip().startswith("[COS_RELAY]")
 
     workspace = _workspace_for(db_path, citizen_id)
     try:
@@ -191,37 +287,60 @@ def execute_claimed(
             row = commissions.get(conn, commission_id)
             # Report upward so COS (and the board) see outcomes without Jon
             # hunting outboxes. Self-posts from COS are skipped inside report_to_cos.
-            try:
-                from soveryn.citizens import post as house_post
+            # Skip house_post for CoS relay jobs (Aetheria summarizing for Jon).
+            if not is_cos_relay:
+                try:
+                    from soveryn.citizens import post as house_post
 
-                excerpt = (content or "").strip()
-                if len(excerpt) > 1200:
-                    excerpt = excerpt[:1200] + "…"
-                house_post.report_to_cos(
-                    conn,
-                    from_id=citizen_id,
-                    body=(
-                        f"Commission `{commission_id}` **done**.\n\n"
-                        f"**Task:** {body.strip()[:500]}\n\n"
-                        f"**Result:**\n{excerpt}\n\n"
-                        f"_outbox: {out_path}_"
-                    ),
+                    excerpt = (content or "").strip()
+                    if len(excerpt) > 1200:
+                        excerpt = excerpt[:1200] + "…"
+                    house_post.report_to_cos(
+                        conn,
+                        from_id=citizen_id,
+                        body=(
+                            f"Commission `{commission_id}` **done**.\n\n"
+                            f"**Task:** {body.strip()[:500]}\n\n"
+                            f"**Result:**\n{excerpt}\n\n"
+                            f"_outbox: {out_path}_"
+                        ),
+                        at=when,
+                        commission_id=commission_id,
+                        subject=f"done · {citizen_id}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "house post report failed for commission %s", commission_id
+                    )
+        if is_cos_relay:
+            _deliver_cos_summary_if_relay(
+                conv_store=conv_store,
+                body=body,
+                summary=(content or "").strip(),
+                ok=True,
+                commission_id=commission_id,
+            )
+        else:
+            _project_commission_to_room(
+                conv_store=conv_store,
+                data_root=data_root,
+                citizen_id=citizen_id,
+                commission_id=commission_id,
+                result_text=(content or "").strip(),
+                ok=True,
+            )
+            # Peer finished → queue Chief of Staff to summarize for Jon.
+            if citizen_id != "aetheria":
+                _enqueue_cos_summary(
+                    db_path,
+                    peer=citizen_id,
+                    source_commission_id=commission_id,
+                    task=body,
+                    result_text=(content or "").strip(),
+                    ok=True,
+                    data_root=data_root,
                     at=when,
-                    commission_id=commission_id,
-                    subject=f"done · {citizen_id}",
                 )
-            except Exception:
-                logger.exception(
-                    "house post report failed for commission %s", commission_id
-                )
-        _project_commission_to_room(
-            conv_store=conv_store,
-            data_root=data_root,
-            citizen_id=citizen_id,
-            commission_id=commission_id,
-            result_text=(content or "").strip(),
-            ok=True,
-        )
     except Exception as exc:
         logger.exception(
             "commission %s for %s failed", commission_id, citizen_id
@@ -235,34 +354,55 @@ def execute_claimed(
                 logger.exception(
                     "could not mark commission %s failed", commission_id
                 )
-            try:
-                from soveryn.citizens import post as house_post
+            if not is_cos_relay:
+                try:
+                    from soveryn.citizens import post as house_post
 
-                house_post.report_to_cos(
-                    conn,
-                    from_id=citizen_id,
-                    body=(
-                        f"Commission `{commission_id}` **failed**.\n\n"
-                        f"**Task:** {body.strip()[:500]}\n\n"
-                        f"**Error:** {exc!r}"
-                    ),
-                    at=when,
-                    commission_id=commission_id,
-                    subject=f"failed · {citizen_id}",
-                )
-            except Exception:
-                logger.exception(
-                    "house post failure report failed for %s", commission_id
-                )
+                    house_post.report_to_cos(
+                        conn,
+                        from_id=citizen_id,
+                        body=(
+                            f"Commission `{commission_id}` **failed**.\n\n"
+                            f"**Task:** {body.strip()[:500]}\n\n"
+                            f"**Error:** {exc!r}"
+                        ),
+                        at=when,
+                        commission_id=commission_id,
+                        subject=f"failed · {citizen_id}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "house post failure report failed for %s", commission_id
+                    )
             row = commissions.get(conn, commission_id)
-        _project_commission_to_room(
-            conv_store=conv_store,
-            data_root=data_root,
-            citizen_id=citizen_id,
-            commission_id=commission_id,
-            result_text=repr(exc),
-            ok=False,
-        )
+        if is_cos_relay:
+            _deliver_cos_summary_if_relay(
+                conv_store=conv_store,
+                body=body,
+                summary=f"I couldn't finish summarizing {citizen_id}'s result: {exc!r}",
+                ok=False,
+                commission_id=commission_id,
+            )
+        else:
+            _project_commission_to_room(
+                conv_store=conv_store,
+                data_root=data_root,
+                citizen_id=citizen_id,
+                commission_id=commission_id,
+                result_text=repr(exc),
+                ok=False,
+            )
+            if citizen_id != "aetheria":
+                _enqueue_cos_summary(
+                    db_path,
+                    peer=citizen_id,
+                    source_commission_id=commission_id,
+                    task=body,
+                    result_text=repr(exc),
+                    ok=False,
+                    data_root=data_root,
+                    at=when,
+                )
     assert row is not None
     return row
 

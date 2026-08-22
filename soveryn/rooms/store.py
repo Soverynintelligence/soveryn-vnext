@@ -516,7 +516,7 @@ def record_house_post_collab(
             return None
         sid = matched["session_id"]
         dm = matched.get("dm_session_id") or dm_session_id
-        # Longer body in the shared room so the group sees the real work.
+        # Longer body in the shared room so the group sees the raw work.
         room_excerpt = body if len(body) <= 4000 else body[:3997] + "…"
         conv.save_turn(
             sid,
@@ -525,17 +525,29 @@ def record_house_post_collab(
             f"[From {peer.title()}]\n{room_excerpt}",
             source="room",
         )
-        # Autonomous CoS relay: Jon must get the substance in the 1:1 DM,
-        # not only a "replied" chip that forces a group hop.
-        deliver_peer_result_to_jon(
-            conv,
-            dm_session_id=dm,
-            peer=peer,
-            result_text=body,
-            ok=not body.lstrip().startswith("**Failed:**"),
-            commission_id=commission_id,
-            room_session_id=sid,
-        )
+        # Chip + short interim: CoS will summarize into the DM (not a raw dump).
+        ok = not body.lstrip().startswith("**Failed:**")
+        name = peer.title()
+        if dm and conv.get_session(dm) is not None:
+            reply_marker = REPLIED_MARKER.format(peer=peer)
+            conv.save_turn(
+                dm,
+                COS_ID,
+                "system",
+                f"{reply_marker} {name} replied — open group for the thread.",
+                source="room",
+            )
+            conv.save_turn(
+                dm,
+                COS_ID,
+                "assistant",
+                (
+                    f"{name} is back"
+                    f"{'' if ok else ' (with problems)'}. "
+                    f"I'm summarizing for you now."
+                ),
+                source="cos_relay",
+            )
         event = {
             "type": "peer_reply",
             "peer": peer,
@@ -593,11 +605,13 @@ def deliver_peer_result_to_jon(
     ok: bool = True,
     commission_id: str | None = None,
     room_session_id: str | None = None,
+    as_cos_summary: bool = False,
 ) -> bool:
-    """Aetheria autonomously relays a peer result into Jon's 1:1 DM.
+    """Deliver into Jon's 1:1 DM — preferably Aetheria's CoS summary.
 
-    This is the CoS close-the-loop step: peer finishes → Jon sees it in chat
-    without hunting outboxes or only getting a silent chip.
+    When ``as_cos_summary`` is True, ``result_text`` is already Aetheria's
+    synthesis (Chief of Staff voice). Otherwise treat as raw peer dump
+    (legacy / fallback).
     """
     peer = (peer or "").strip().lower()
     dm = _resolve_jon_dm_session(conv, dm_session_id)
@@ -607,30 +621,24 @@ def deliver_peer_result_to_jon(
     # Cap for chat readability; full text stays in room + outbox.
     delivery = text if len(text) <= 3500 else text[:3497] + "…"
     name = peer.title() if peer else "Peer"
-    if ok:
+    if as_cos_summary:
+        msg = delivery
+        if room_session_id and name:
+            msg += (
+                f"\n\n_Full detail from {name} is in the group "
+                f"(tap their shape if you want the raw thread)._"
+            )
+    elif ok:
         msg = (
-            f"{name} finished the research and I'm bringing it back to you.\n\n"
+            f"{name} finished — my take for you:\n\n"
             f"{delivery}"
         )
     else:
         msg = (
-            f"{name} hit a wall on that job — here's what came back:\n\n"
+            f"{name} hit a wall — my take:\n\n"
             f"{delivery}"
         )
-    if room_session_id:
-        msg += (
-            f"\n\n_Also in the group with {name} "
-            f"(tap their shape if you want the full thread)._"
-        )
     conv.save_turn(dm, COS_ID, "assistant", msg, source="cos_relay")
-    reply_marker = REPLIED_MARKER.format(peer=peer)
-    conv.save_turn(
-        dm,
-        COS_ID,
-        "system",
-        f"{reply_marker} {name} replied — open group for the thread.",
-        source="room",
-    )
     # Best-effort Signal ping so the phone buzzes without waiting on chat UI.
     try:
         _signal_cos_ping(
@@ -642,6 +650,68 @@ def deliver_peer_result_to_jon(
     except Exception:
         pass
     return True
+
+
+COS_RELAY_MARKER = "[COS_RELAY]"
+
+
+def build_cos_relay_brief(
+    *,
+    peer: str,
+    source_commission_id: str,
+    task: str,
+    result_text: str,
+    ok: bool,
+    dm_session_id: str | None,
+    room_session_id: str | None,
+) -> str:
+    """Prompt body for Aetheria's summarize-and-deliver commission."""
+    peer = (peer or "").strip().lower()
+    result = (result_text or "").strip()
+    if len(result) > 8000:
+        result = result[:7997] + "…"
+    task = (task or "").strip()
+    if len(task) > 1200:
+        task = task[:1197] + "…"
+    status = "ok" if ok else "failed"
+    return (
+        f"{COS_RELAY_MARKER}\n"
+        f"peer: {peer}\n"
+        f"source_commission: {source_commission_id}\n"
+        f"dm_session_id: {dm_session_id or '-'}\n"
+        f"room_session_id: {room_session_id or '-'}\n"
+        f"ok: {status}\n\n"
+        "You are Chief of Staff. A peer finished work for Jon. "
+        "Summarize for Jon in your own voice — decisive, practical, no fluff.\n"
+        "- Lead with what he should do / buy / decide.\n"
+        "- Keep specific prices, models, and sources when the peer found them.\n"
+        "- Call out gaps honestly (what is still unknown).\n"
+        "- Do not invent numbers. Do not paste the peer's report wholesale.\n"
+        "- Aim for a tight brief he can act on.\n\n"
+        f"## Peer task\n{task}\n\n"
+        f"## Peer result\n{result}\n"
+    )
+
+
+def parse_cos_relay_brief(body: str) -> dict[str, str] | None:
+    """Parse [COS_RELAY] metadata from an Aetheria commission body."""
+    text = (body or "").strip()
+    if not text.startswith(COS_RELAY_MARKER):
+        return None
+    meta: dict[str, str] = {}
+    rest = text[len(COS_RELAY_MARKER) :].lstrip("\n")
+    lines = rest.splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if not line.strip():
+            i += 1
+            break
+        if ":" in line:
+            k, v = line.split(":", 1)
+            meta[k.strip().lower()] = v.strip()
+        i += 1
+    return meta
 
 
 def _signal_cos_ping(

@@ -200,10 +200,11 @@ def test_project_commission_result_into_room(room_app):
 
 
 def test_cos_relays_peer_result_into_jon_dm(room_app):
-    """When a peer finishes, Aetheria must put the substance in the 1:1 DM."""
+    """Peer finish → interim chip; CoS summary is what Jon reads."""
     from soveryn.rooms.store import (
         deliver_peer_result_to_jon,
-        open_room,
+        parse_cos_relay_brief,
+        build_cos_relay_brief,
         project_commission_result,
         record_house_post_collab,
     )
@@ -236,8 +237,36 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
     assert ev is not None
     dm_hist = conv.load_history(dm)
     assistant = [t for t in dm_hist if t.role == "assistant"]
-    assert any("bringing it back" in t.content for t in assistant)
-    assert any("$450" in t.content or "Pond Guy" in t.content for t in assistant)
+    # Interim: CoS acknowledges; full numbers come from her summary job.
+    assert any("summarizing" in t.content.lower() for t in assistant)
+
+    brief = build_cos_relay_brief(
+        peer="vett",
+        source_commission_id=cid,
+        task="Research fountain maintenance pricing.",
+        result_text="Aquascape ~$450–$900; Pond Guy seasonal from $299.",
+        ok=True,
+        dm_session_id=dm,
+        room_session_id=ev["room_session_id"],
+    )
+    meta = parse_cos_relay_brief(brief)
+    assert meta is not None and meta["peer"] == "vett"
+    assert deliver_peer_result_to_jon(
+        conv,
+        dm_session_id=dm,
+        peer="vett",
+        result_text=(
+            "For the rebuild, budget **$299–$900** for seasonal/annual fountain "
+            "service depending on package — Pond Guy starts ~$299, Aquascape "
+            "annual plans run higher (~$450–$900)."
+        ),
+        ok=True,
+        commission_id=cid,
+        room_session_id=ev["room_session_id"],
+        as_cos_summary=True,
+    )
+    dm_hist2 = conv.load_history(dm)
+    assert any("$299" in t.content for t in dm_hist2 if t.role == "assistant")
 
 
 def test_add_peer_grows_shared_group(room_app):
