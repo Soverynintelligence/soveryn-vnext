@@ -67,8 +67,7 @@
     <!-- filled by JS -->
   </ul>
   <div class="footer">
-    <a href="/room?peer=vett">Open a group room</a>
-    · <a href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
+    <a href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
     · <a href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
   </div>
 <script>
@@ -99,28 +98,44 @@
     } catch { return ""; }
   }
 
+  function isRoomSession(s) {
+    return ((s && s.title) || "").trim().startsWith("[room:");
+  }
+
   async function preview(agent) {
     try {
-      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=1");
+      // Prefer individual DMs — never surface a group-room session as the
+      // Aetheria (or any) contact preview. Groups open via peer icon only.
+      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=20");
       if (!r.ok) return { text: "Tap to talk", hot: false, when: "" };
       const d = await r.json();
-      const s = (d.sessions && d.sessions[0]) || null;
+      const s = ((d.sessions || []).find((x) => x && !isRoomSession(x))) || null;
       if (!s) return { text: "Tap to talk", hot: false, when: "" };
-      // Optional: collab hint for aetheria
-      let text = s.title || "Continue conversation";
+      let text = "Continue conversation";
       let hot = false;
+      // Only hint at an active collab on this DM — don't make Aetheria look
+      // like she's permanently in a group with Vett.
       if (agent === "aetheria" && s.session_id) {
         try {
           const c = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(s.session_id));
           if (c.ok) {
             const cj = await c.json();
-            if (cj.count > 0 && cj.collabs[0].peer) {
-              text = "Messaged " + cj.collabs[0].peer;
-              hot = true;
+            const active = (cj.collabs || []).find((ev) => {
+              const st = (ev.state || "").toLowerCase();
+              return st === "working" || (!st && ev.peer);
+            });
+            // Show hot preview only for very recent working collabs (< 2h)
+            if (active && active.peer && active.at) {
+              const age = Date.now() - new Date(active.at).getTime();
+              if (age < 2 * 3600 * 1000) {
+                text = "Working with " + active.peer;
+                hot = true;
+              }
             }
           }
         } catch (_) {}
       }
+      if (!hot && s.title && !String(s.title).startsWith("[")) text = s.title;
       return { text, hot, when: rel(s.updated_at), session: s.session_id };
     } catch {
       return { text: "Tap to talk", hot: false, when: "" };

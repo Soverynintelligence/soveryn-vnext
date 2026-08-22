@@ -2746,9 +2746,12 @@
       const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
       if (!r.ok) return;
       const data = await r.json();
-      const latest = (data.sessions || []).find(
-        s => !(s.title || "").trim().startsWith("[")
-      );
+      // Skip group rooms ([room:…]) and other rails ([signal], [direct:], …).
+      // Aetheria's individual chat must not resume a group room thread.
+      const latest = (data.sessions || []).find((s) => {
+        const t = (s.title || "").trim();
+        return !t.startsWith("[");
+      });
       if (!latest) return;
       state.sessionId = latest.session_id;
       window.history.replaceState({}, "", `/chat/${latest.session_id}`);

@@ -570,8 +570,37 @@
     } catch (_) { return []; }
   }
 
+  function isRoomSession(s) {
+    // Group rooms are aetheria sessions titled [room:aetheria+peer].
+    // Individual Aetheria chat must never auto-open those.
+    const t = ((s && s.title) || "").trim();
+    return t.startsWith("[room:");
+  }
+
+  async function findLatestDmSession() {
+    const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=30");
+    if (!r.ok) return null;
+    const d = await r.json();
+    const list = d.sessions || [];
+    return list.find((s) => s && s.session_id && !isRoomSession(s)) || null;
+  }
+
   async function loadLatestOrHistory() {
     if (state.sessionId) {
+      // If URL pointed at a room session, bounce to /room — keep DM individual.
+      try {
+        const metaR = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=50");
+        if (metaR.ok) {
+          const meta = await metaR.json();
+          const hit = (meta.sessions || []).find((s) => s.session_id === state.sessionId);
+          if (hit && isRoomSession(hit)) {
+            const peer = (/\[room:[^=]+\+([a-z]+)\]/i.exec(hit.title || "") || [])[1] || "vett";
+            location.replace("/room?peer=" + encodeURIComponent(peer)
+              + "&session=" + encodeURIComponent(state.sessionId));
+            return;
+          }
+        }
+      } catch (_) {}
       const r = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
       if (r.ok) {
         const d = await r.json();
@@ -581,24 +610,20 @@
         return;
       }
     }
-    const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=1");
-    if (r.ok) {
-      const d = await r.json();
-      const s = (d.sessions && d.sessions[0]) || null;
-      if (s && s.session_id) {
-        state.sessionId = s.session_id;
-        const u = new URL(location.href);
-        u.searchParams.set("session", state.sessionId);
-        history.replaceState({}, "", u);
-        const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
-        if (h.ok) {
-          const hd = await h.json();
-          const c = await collabs();
-          renderTurns(hd.turns || [], c);
-          renderChips(c);
-        }
-        return;
+    const s = await findLatestDmSession();
+    if (s && s.session_id) {
+      state.sessionId = s.session_id;
+      const u = new URL(location.href);
+      u.searchParams.set("session", state.sessionId);
+      history.replaceState({}, "", u);
+      const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
+      if (h.ok) {
+        const hd = await h.json();
+        const c = await collabs();
+        renderTurns(hd.turns || [], c);
+        renderChips(c);
       }
+      return;
     }
     thread().innerHTML = "";
     appendBubble("sys", "Say hello to start the thread.");
