@@ -418,11 +418,41 @@ def make_agent_process_fn(
                 logger.exception(
                     "room context for commission %s failed", commission_id
                 )
+        research_bar = ""
+        blob = (body or "").lower()
+        if any(
+            k in blob
+            for k in (
+                "price",
+                "pricing",
+                "research",
+                "manufacturer",
+                "skimmer",
+                "biofall",
+                "maintenance",
+                "compare",
+                "pond",
+            )
+        ):
+            research_bar = (
+                "\n\nRESEARCH BAR (PondWright-grade — do not phone this in):\n"
+                "- Pull **specific** model names and **dollar prices** from "
+                "multiple real platforms (manufacturer sites + major retailers "
+                "like The Pond Guy, Aquascape dealers, Amazon, specialty pond "
+                "shops). Name the source next to each price.\n"
+                "- Prefer tables: Brand | Model | What it covers | Price | Source URL.\n"
+                "- If a search is thin, try alternate queries (SKU, series name, "
+                "'maintenance plan', 'service contract', 'annual service') and "
+                "fetch promising result pages — do not stop at 'no pricing found' "
+                "after one vague pass.\n"
+                "- Cite-or-stop: if you cannot verify a number, say so; never invent.\n"
+            )
         prompt = (
             f"[COMMISSION {commission_id}]\n"
             "You are executing a house commission — discrete work Jon (or a "
             "duty) placed on your desk. Complete the task. Write a clear, "
             "self-contained result a human can read without the chat UI."
+            f"{research_bar}"
             f"{room_ctx}\n\n"
             f"{body.strip()}"
         )

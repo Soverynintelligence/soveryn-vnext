@@ -199,6 +199,47 @@ def test_project_commission_result_into_room(room_app):
     assert any("replied" in t.content.lower() for t in dm_hist if t.role == "system")
 
 
+def test_cos_relays_peer_result_into_jon_dm(room_app):
+    """When a peer finishes, Aetheria must put the substance in the 1:1 DM."""
+    from soveryn.rooms.store import (
+        deliver_peer_result_to_jon,
+        open_room,
+        project_commission_result,
+        record_house_post_collab,
+    )
+
+    app, conv, tmp_path = room_app
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    dm = conv.new_session("aetheria", title="[m] Aetheria — test")
+    cid = "cid-relay-1"
+    record_house_post_collab(
+        conv,
+        data_root=data_root,
+        from_id="aetheria",
+        to_id="vett",
+        body="Research fountain maintenance pricing.",
+        dm_session_id=dm,
+        commission_id=cid,
+    )
+    ev = project_commission_result(
+        conv,
+        data_root=data_root,
+        citizen_id="vett",
+        commission_id=cid,
+        result_text=(
+            "Aquascape annual service ~$450–$900 depending on region; "
+            "The Pond Guy lists seasonal start-up packages from $299."
+        ),
+        ok=True,
+    )
+    assert ev is not None
+    dm_hist = conv.load_history(dm)
+    assistant = [t for t in dm_hist if t.role == "assistant"]
+    assert any("bringing it back" in t.content for t in assistant)
+    assert any("$450" in t.content or "Pond Guy" in t.content for t in assistant)
+
+
 def test_add_peer_grows_shared_group(room_app):
     """Same DM should grow one multi-peer room (Vett then Eve), not two rooms."""
     from soveryn.rooms.store import add_peer_to_room, open_room, room_peers

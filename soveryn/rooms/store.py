@@ -516,22 +516,26 @@ def record_house_post_collab(
             return None
         sid = matched["session_id"]
         dm = matched.get("dm_session_id") or dm_session_id
+        # Longer body in the shared room so the group sees the real work.
+        room_excerpt = body if len(body) <= 4000 else body[:3997] + "…"
         conv.save_turn(
             sid,
             COS_ID,
             "system",
-            f"[From {peer.title()}]\n{excerpt}",
+            f"[From {peer.title()}]\n{room_excerpt}",
             source="room",
         )
-        if dm and conv.get_session(dm) is not None:
-            reply_marker = REPLIED_MARKER.format(peer=peer)
-            conv.save_turn(
-                dm,
-                COS_ID,
-                "system",
-                f"{reply_marker} {peer.title()} replied — open group to read.",
-                source="room",
-            )
+        # Autonomous CoS relay: Jon must get the substance in the 1:1 DM,
+        # not only a "replied" chip that forces a group hop.
+        deliver_peer_result_to_jon(
+            conv,
+            dm_session_id=dm,
+            peer=peer,
+            result_text=body,
+            ok=not body.lstrip().startswith("**Failed:**"),
+            commission_id=commission_id,
+            room_session_id=sid,
+        )
         event = {
             "type": "peer_reply",
             "peer": peer,
@@ -548,6 +552,136 @@ def record_house_post_collab(
         return event
 
     return None
+
+
+def _resolve_jon_dm_session(
+    conv: ConversationStore, dm_session_id: str | None
+) -> str | None:
+    """Prefer the linked DM; never deliver into heartbeat/automation shells."""
+    def _usable(sid: str | None) -> str | None:
+        if not sid:
+            return None
+        meta = conv.get_session(sid)
+        if meta is None:
+            return None
+        title = (meta.title or "").strip()
+        if title.startswith("[heartbeat]") or title.startswith("automation:"):
+            return None
+        if title.startswith("[room:"):
+            return None
+        return sid
+
+    hit = _usable(dm_session_id)
+    if hit:
+        return hit
+    for s in conv.list_sessions(agent=COS_ID, limit=40):
+        t = (s.title or "").strip()
+        if t.startswith("[m]"):
+            return s.session_id
+    for s in conv.list_sessions(agent=COS_ID, limit=40):
+        if _usable(s.session_id):
+            return s.session_id
+    return None
+
+
+def deliver_peer_result_to_jon(
+    conv: ConversationStore,
+    *,
+    dm_session_id: str | None,
+    peer: str,
+    result_text: str,
+    ok: bool = True,
+    commission_id: str | None = None,
+    room_session_id: str | None = None,
+) -> bool:
+    """Aetheria autonomously relays a peer result into Jon's 1:1 DM.
+
+    This is the CoS close-the-loop step: peer finishes → Jon sees it in chat
+    without hunting outboxes or only getting a silent chip.
+    """
+    peer = (peer or "").strip().lower()
+    dm = _resolve_jon_dm_session(conv, dm_session_id)
+    if not dm:
+        return False
+    text = (result_text or "").strip() or ("(empty result)" if ok else "(failed)")
+    # Cap for chat readability; full text stays in room + outbox.
+    delivery = text if len(text) <= 3500 else text[:3497] + "…"
+    name = peer.title() if peer else "Peer"
+    if ok:
+        msg = (
+            f"{name} finished the research and I'm bringing it back to you.\n\n"
+            f"{delivery}"
+        )
+    else:
+        msg = (
+            f"{name} hit a wall on that job — here's what came back:\n\n"
+            f"{delivery}"
+        )
+    if room_session_id:
+        msg += (
+            f"\n\n_Also in the group with {name} "
+            f"(tap their shape if you want the full thread)._"
+        )
+    conv.save_turn(dm, COS_ID, "assistant", msg, source="cos_relay")
+    reply_marker = REPLIED_MARKER.format(peer=peer)
+    conv.save_turn(
+        dm,
+        COS_ID,
+        "system",
+        f"{reply_marker} {name} replied — open group for the thread.",
+        source="room",
+    )
+    # Best-effort Signal ping so the phone buzzes without waiting on chat UI.
+    try:
+        _signal_cos_ping(
+            peer=peer,
+            ok=ok,
+            preview=delivery[:500],
+            commission_id=commission_id,
+        )
+    except Exception:
+        pass
+    return True
+
+
+def _signal_cos_ping(
+    *,
+    peer: str,
+    ok: bool,
+    preview: str,
+    commission_id: str | None,
+) -> None:
+    """Optional Direct Line nudge — fail open if Signal isn't armed."""
+    import os
+
+    if os.environ.get("SOVERYN_COS_RELAY_SIGNAL", "1").strip() in ("0", "false", "no"):
+        return
+    try:
+        from soveryn.agents.signal_bridge.client import send_once
+        from soveryn.agents.signal_bridge.config import SignalBridgeConfig
+    except Exception:
+        return
+    try:
+        cfg = SignalBridgeConfig.from_env()
+    except Exception:
+        return
+    if not cfg.bot_number or not cfg.allowed_numbers:
+        return
+    recipient = sorted(cfg.allowed_numbers)[0]
+    name = peer.title()
+    head = f"Aetheria · {name} {'done' if ok else 'failed'}"
+    if commission_id:
+        head += f" (`{commission_id[:8]}`)"
+    body = f"{head}\n\n{preview}\n\n— full write-up is in your Aetheria chat / group."
+    try:
+        send_once(
+            signal_cli_bin=cfg.signal_cli_bin,
+            bot_number=cfg.bot_number,
+            recipient_e164=recipient,
+            body=body,
+        )
+    except Exception:
+        return
 
 
 def project_commission_result(
