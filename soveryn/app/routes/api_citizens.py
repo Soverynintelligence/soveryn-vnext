@@ -277,7 +277,11 @@ def runtime_drain():
                 "error": {"code": "no_conv", "message": "conversation store missing"},
             }), 503
 
-        process_fn = make_agent_process_fn(loops, conv_store)
+        process_fn = make_agent_process_fn(
+            loops,
+            conv_store,
+            data_root=getattr(env, "data_root", None) if env is not None else None,
+        )
         conv_db = getattr(env, "conversations_db", None) if env is not None else None
 
         def busy(cid: str) -> bool:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,6 +38,36 @@ def _title_for(peer: str) -> str:
     return f"[room:aetheria+{peer}]"
 
 
+def _title_for_peers(peers: list[str]) -> str:
+    parts = "+".join(p for p in peers if p)
+    return f"[room:aetheria+{parts}]" if parts else "[room:aetheria]"
+
+
+def room_peers(room: dict[str, Any] | None) -> list[str]:
+    """Normalize peer list (legacy single `peer` + multi `peers`)."""
+    if not room:
+        return []
+    out: list[str] = []
+    for p in room.get("peers") or []:
+        pid = str(p).strip().lower()
+        if pid in PEERS and pid not in out:
+            out.append(pid)
+    legacy = (room.get("peer") or "").strip().lower()
+    if legacy in PEERS and legacy not in out:
+        out.insert(0, legacy)
+    return out
+
+
+def _normalize_room(data: dict[str, Any]) -> dict[str, Any]:
+    """Ensure peers[] exists; keep peer= as primary for older clients."""
+    peers = room_peers(data)
+    if not peers:
+        peers = [DEFAULT_PEER]
+    data["peers"] = peers
+    data["peer"] = peers[0]
+    return data
+
+
 def open_room(
     conv: ConversationStore,
     *,
@@ -45,7 +76,11 @@ def open_room(
     dm_session_id: str | None = None,
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Create or load a room session (agent=aetheria) + sidecar."""
+    """Create or load a room session (agent=aetheria) + sidecar.
+
+    Multi-peer: if a room already exists for this DM, adding another peer
+    (e.g. Eve) joins that same thread so hands share one group.
+    """
     peer = (peer or DEFAULT_PEER).strip().lower()
     if peer not in PEERS:
         raise ValueError(f"peer must be one of {sorted(PEERS)}, got {peer!r}")
@@ -58,19 +93,27 @@ def open_room(
             raise ValueError("room sessions must belong to aetheria")
         path = _sidecar_path(data_root, session_id)
         if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-        else:
-            data = {
-                "session_id": session_id,
-                "peer": peer,
-                "dm_session_id": dm_session_id,
-                "created_at": _utc_now(),
-                "events": [],
-            }
-            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            data = _normalize_room(json.loads(path.read_text(encoding="utf-8")))
+            if peer not in room_peers(data):
+                data = add_peer_to_room(
+                    conv, data_root=data_root, session_id=session_id, peer=peer
+                )
+            else:
+                _save_room(data_root, data)
+            return data
+        data = _normalize_room({
+            "session_id": session_id,
+            "peer": peer,
+            "peers": [peer],
+            "dm_session_id": dm_session_id,
+            "created_at": _utc_now(),
+            "events": [],
+        })
+        path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         return data
 
-    # Reuse existing open room for this peer+dm if sidecar matches
+    # Reuse the DM's existing group room (any peer) so we grow one thread
+    # instead of spawning parallel Vett-only / Eve-only rooms.
     root = rooms_root(data_root)
     if dm_session_id:
         for p in root.glob("*.json"):
@@ -78,19 +121,28 @@ def open_room(
                 data = json.loads(p.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if data.get("peer") == peer and data.get("dm_session_id") == dm_session_id:
-                sid = data.get("session_id")
-                if sid and conv.get_session(sid) is not None:
-                    return data
+            if data.get("dm_session_id") != dm_session_id:
+                continue
+            sid = data.get("session_id")
+            if not sid or conv.get_session(sid) is None:
+                continue
+            data = _normalize_room(data)
+            if peer not in room_peers(data):
+                return add_peer_to_room(
+                    conv, data_root=data_root, session_id=sid, peer=peer
+                )
+            _save_room(data_root, data)
+            return data
 
     sid = conv.new_session(COS_ID, title=_title_for(peer))
-    data = {
+    data = _normalize_room({
         "session_id": sid,
         "peer": peer,
+        "peers": [peer],
         "dm_session_id": dm_session_id,
         "created_at": _utc_now(),
         "events": [],
-    }
+    })
     _sidecar_path(data_root, sid).write_text(
         json.dumps(data, indent=2) + "\n", encoding="utf-8"
     )
@@ -99,12 +151,93 @@ def open_room(
     return data
 
 
+def add_peer_to_room(
+    conv: ConversationStore,
+    *,
+    data_root: Path | str,
+    session_id: str,
+    peer: str,
+) -> dict[str, Any]:
+    """Add a peer to an existing group so the thread stays shared."""
+    peer = (peer or "").strip().lower()
+    if peer not in PEERS:
+        raise ValueError(f"peer must be one of {sorted(PEERS)}, got {peer!r}")
+    room = load_room(data_root, session_id)
+    if room is None:
+        raise ValueError(f"no room sidecar for {session_id!r}")
+    room = _normalize_room(room)
+    peers = room_peers(room)
+    if peer in peers:
+        return room
+    peers.append(peer)
+    room["peers"] = peers
+    room["peer"] = peers[0]
+    # Soft notice in-thread — messenger style, not a lecture
+    conv.save_turn(
+        session_id,
+        COS_ID,
+        "system",
+        f"Added {peer.title()} to the group.",
+        source="room",
+    )
+    room.setdefault("events", []).append({
+        "type": "peer_added",
+        "peer": peer,
+        "at": _utc_now(),
+        "room_session_id": session_id,
+        "dm_session_id": room.get("dm_session_id"),
+    })
+    # Best-effort: retitle session for ops lists
+    try:
+        conv.update_title(session_id, _title_for_peers(peers))
+    except Exception:
+        pass
+    _save_room(data_root, room)
+    return room
+
+
+def room_transcript_excerpt(
+    conv: ConversationStore,
+    session_id: str,
+    *,
+    limit: int = 12,
+) -> str:
+    """Recent room turns for commission prompts (cross-peer awareness)."""
+    try:
+        turns = conv.load_history(session_id) or []
+    except Exception:
+        return ""
+    if not turns:
+        return ""
+    lines: list[str] = []
+    for t in turns[-limit:]:
+        role = (t.role or "").strip()
+        content = (t.content or "").strip()
+        if not content:
+            continue
+        content = re.sub(r"⟦room:(?:messaged|replied):[a-z]+⟧\s*", "", content)
+        if role == "user":
+            who = "Jon"
+        elif content.startswith("[To "):
+            who = "Aetheria"
+        elif content.startswith("[From "):
+            who = content[len("[From ") :].split("]", 1)[0]
+            content = content.split("\n", 1)[-1] if "\n" in content else content
+        elif role == "system":
+            who = "Room"
+        else:
+            who = "Aetheria"
+        excerpt = content if len(content) <= 400 else content[:397] + "…"
+        lines.append(f"{who}: {excerpt}")
+    return "\n".join(lines)
+
+
 def load_room(data_root: Path | str, session_id: str) -> dict[str, Any] | None:
     path = _sidecar_path(data_root, session_id)
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return _normalize_room(json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return None
 
@@ -124,8 +257,12 @@ def ask_peer(
     session_id: str,
     brief: str,
     from_id: str = "jon",
+    peer: str | None = None,
 ) -> dict[str, Any]:
-    """Commission peer via CoS routing; project into room + DM."""
+    """Commission a peer via CoS routing; project into room + DM.
+
+    ``peer`` selects who in a multi-peer room; defaults to primary.
+    """
     from soveryn.citizens import post as house_post
     from soveryn.citizens.registry import connect
 
@@ -136,8 +273,29 @@ def ask_peer(
     room = load_room(data_root, session_id)
     if room is None:
         raise ValueError(f"no room sidecar for {session_id!r}")
-    peer = room["peer"]
+    peers = room_peers(room)
+    if peer:
+        peer = peer.strip().lower()
+        if peer not in PEERS:
+            raise ValueError(f"peer must be one of {sorted(PEERS)}, got {peer!r}")
+        if peer not in peers:
+            room = add_peer_to_room(
+                conv, data_root=data_root, session_id=session_id, peer=peer
+            )
+            peers = room_peers(room)
+    else:
+        peer = peers[0] if peers else room.get("peer") or DEFAULT_PEER
     at = _utc_now()
+
+    # Shared room context so the assignee sees what other hands already did.
+    room_ctx = room_transcript_excerpt(conv, session_id, limit=12)
+    body = f"(Jon, via room · peers: {', '.join(peers)})\n\n{brief}"
+    if room_ctx:
+        body = (
+            f"{body}\n\n---\n"
+            f"Shared group thread (read this — other citizens may already "
+            f"have contributed; do not duplicate their work):\n{room_ctx}"
+        )
 
     # Route as CoS so we don't require a `jon` citizen row (FK). Jon is the
     # human operating the room UI; the commission is still attributed in body.
@@ -146,7 +304,7 @@ def ask_peer(
             conn,
             from_id=COS_ID,
             assignee_id=peer,
-            body=f"(Jon, via room)\n\n{brief}",
+            body=body,
             at=at,
             subject=f"room ask {peer}",
         )
@@ -176,6 +334,7 @@ def ask_peer(
         "directive_post_id": result.get("directive_post_id"),
         "room_session_id": session_id,
         "dm_session_id": dm,
+        "state": "working",
     }
     room.setdefault("events", []).append(event)
     _save_room(data_root, room)
@@ -236,10 +395,10 @@ def find_latest_room_for_peer(
     best_at = ""
     for p in root.glob("*.json"):
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
+            data = _normalize_room(json.loads(p.read_text(encoding="utf-8")))
         except (OSError, json.JSONDecodeError):
             continue
-        if data.get("peer") != peer:
+        if peer not in room_peers(data):
             continue
         if dm_session_id and data.get("dm_session_id") not in (None, dm_session_id):
             continue

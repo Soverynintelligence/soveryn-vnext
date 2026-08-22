@@ -131,7 +131,7 @@
     <div class="chips" data-presence>
       <span class="chip" data-who="you">You</span>
       <span class="chip" data-who="cos">Aetheria</span>
-      <span class="chip" data-who="peer" data-peer-chip>Vett</span>
+      <!-- peer chips filled by JS -->
     </div>
   </header>
 
@@ -143,16 +143,19 @@
       <button type="button" class="send" data-send>↑</button>
     </div>
     <div class="ask-row">
-      <button type="button" data-ask-peer title="Loop the peer in again">+ peer</button>
+      <button type="button" data-add-peer title="Add someone to this group">+ add</button>
+      <button type="button" data-ask-peer title="Ask a peer in this group">ask…</button>
     </div>
     <div class="status" data-status></div>
   </div>
 
 <script>
 (function () {
+  const ALL_PEERS = ["vett", "eve", "scotty", "kernel"];
   const params = new URLSearchParams(location.search);
   const state = {
     peer: (params.get("peer") || "vett").toLowerCase(),
+    peers: [],
     sessionId: params.get("session") || null,
     dmSessionId: params.get("from") || null,
     stream: true,
@@ -186,11 +189,39 @@
     thread().scrollTop = thread().scrollHeight;
   }
 
-  function setPeerChipState(st) {
-    const chip = $("[data-peer-chip]");
-    if (!chip) return;
+  function renderPeerChips(peers, peerStates) {
+    const row = $("[data-presence]");
+    if (!row) return;
+    const list = (peers && peers.length) ? peers : [state.peer];
+    state.peers = list.slice();
+    state.peer = list[0] || state.peer;
+    // Keep You + Aetheria; rebuild peer chips
+    row.querySelectorAll('[data-who="peer"]').forEach((el) => el.remove());
+    list.forEach((pid) => {
+      const st = (peerStates && peerStates[pid]) || "";
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.dataset.who = "peer";
+      chip.dataset.peer = pid;
+      if (st) chip.dataset.state = st;
+      const name = pid.charAt(0).toUpperCase() + pid.slice(1);
+      chip.textContent =
+        st === "gate" ? name + " · needs Gate" :
+        st === "working" ? name + " · working" :
+        st === "replied" ? name + " · replied" : name;
+      row.appendChild(chip);
+    });
+  }
+
+  function setPeerChipState(st, peerId) {
+    const pid = peerId || state.peer;
+    const chip = document.querySelector('[data-presence] [data-peer="' + pid + '"]');
+    if (!chip) {
+      renderPeerChips(state.peers.length ? state.peers : [pid], pid ? {[pid]: st} : null);
+      return;
+    }
     chip.dataset.state = st || "";
-    const base = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
+    const base = pid.charAt(0).toUpperCase() + pid.slice(1);
     chip.textContent =
       st === "gate" ? base + " · needs Gate" :
       st === "working" ? base + " · working" :
@@ -274,11 +305,11 @@
       const r = await fetch("/api/approvals/pending");
       if (!r.ok) return;
       const data = await r.json();
-      let peerNeedsGate = false;
+      const inRoom = new Set(state.peers.length ? state.peers : [state.peer]);
       for (const a of (data.approvals || [])) {
         const c = (a.citizen || "").toLowerCase();
-        if (c === state.peer || c === "aetheria") {
-          if (c === state.peer) peerNeedsGate = true;
+        if (inRoom.has(c) || c === "aetheria") {
+          if (inRoom.has(c)) setPeerChipState("gate", c);
           renderApprovalCard({
             approval_id: a.id,
             citizen: a.citizen,
@@ -287,7 +318,6 @@
           });
         }
       }
-      if (peerNeedsGate) setPeerChipState("gate");
     } catch (_) {}
   }
 
@@ -299,22 +329,29 @@
 
   function renderHistory(turns) {
     thread().innerHTML = "";
-    let peerState = "";
+    const peerStates = {};
     (turns || []).forEach((t) => {
       if (t.role === "user") appendBubble("user", t.content, "You");
       else if (t.role === "system") {
         const fromPeer = /^\[From ([^\]]+)\]\n?/.exec(t.content || "");
         if (fromPeer) {
+          const name = fromPeer[1];
           appendBubble(
             "assistant",
             (t.content || "").replace(/^\[From [^\]]+\]\n?/, ""),
-            fromPeer[1]
+            name
           );
-          peerState = "replied";
+          peerStates[name.toLowerCase()] = "replied";
           return;
         }
-        if (/waiting on reply|Looped in|Commissioned/i.test(t.content || "")) {
-          if (peerState !== "replied") peerState = "working";
+        if (/^Added [A-Za-z]+ to the group/.test(t.content || "")) {
+          appendBubble("system", t.content, "Room");
+          return;
+        }
+        const commissioned = /Commissioned ([A-Za-z]+)|Looped in ([A-Za-z]+)/i.exec(t.content || "");
+        if (commissioned) {
+          const name = (commissioned[1] || commissioned[2] || "").toLowerCase();
+          if (name && peerStates[name] !== "replied") peerStates[name] = "working";
         }
         // Hide old instructional welcome chrome from earlier room v0.
         if (/^Room · You \+/.test(t.content || "")) return;
@@ -327,11 +364,12 @@
         const toPeer = /^\[To ([^\]]+)\]/.exec(t.content || "");
         if (toPeer) {
           appendBubble("assistant", (t.content || "").replace(/^\[To [^\]]+\]\n?/, ""), "Aetheria → " + toPeer[1]);
-          if (peerState !== "replied") peerState = "working";
+          const pid = toPeer[1].toLowerCase();
+          if (peerStates[pid] !== "replied") peerStates[pid] = "working";
         } else appendBubble("assistant", t.content, "Aetheria");
       }
     });
-    setPeerChipState(peerState);
+    renderPeerChips(state.peers.length ? state.peers : [state.peer], peerStates);
   }
 
   async function openRoom() {
@@ -350,14 +388,9 @@
       return;
     }
     state.sessionId = d.room.session_id;
-    state.peer = d.room.peer;
-    $("[data-peer-chip]").textContent = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
-    const askBtn = $("[data-ask-peer]");
-    if (askBtn) {
-      const name = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
-      askBtn.textContent = "+ " + name;
-      askBtn.title = "Loop " + name + " in again";
-    }
+    state.peers = d.room.peers || [d.room.peer];
+    state.peer = state.peers[0] || d.room.peer;
+    renderPeerChips(state.peers);
     const u = new URL(location.href);
     u.searchParams.set("session", state.sessionId);
     u.searchParams.set("peer", state.peer);
@@ -368,6 +401,37 @@
     }
     await loadHistory();
     setStatus("");
+  }
+
+  async function addPeer() {
+    if (!state.sessionId) return;
+    const available = ALL_PEERS.filter((p) => !(state.peers || []).includes(p));
+    if (!available.length) {
+      setStatus("Everyone's already in this group");
+      return;
+    }
+    const pick = prompt("Add who? " + available.join(", "));
+    if (!pick) return;
+    const peer = pick.trim().toLowerCase();
+    if (!available.includes(peer)) {
+      setStatus("Pick one of: " + available.join(", "));
+      return;
+    }
+    setStatus("Adding " + peer + "…");
+    const r = await fetch("/api/rooms/" + encodeURIComponent(state.sessionId) + "/add_peer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ peer }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      setStatus((d.error && d.error.message) || "Could not add peer");
+      return;
+    }
+    state.peers = d.peers || (d.room && d.room.peers) || state.peers.concat([peer]);
+    renderPeerChips(state.peers);
+    await loadHistory();
+    setStatus("Added " + peer.charAt(0).toUpperCase() + peer.slice(1));
   }
 
   async function loadHistory() {
@@ -435,13 +499,25 @@
 
   async function askPeer() {
     if (!state.sessionId) return;
-    const brief = prompt("What should " + state.peer + " check or do?");
+    const peers = state.peers.length ? state.peers : [state.peer];
+    let peer = peers[0];
+    if (peers.length > 1) {
+      const pick = prompt("Ask who? " + peers.join(", "), peer);
+      if (!pick) return;
+      peer = pick.trim().toLowerCase();
+      if (!peers.includes(peer)) {
+        setStatus("Pick one of: " + peers.join(", "));
+        return;
+      }
+    }
+    const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const brief = prompt("What should " + name + " check or do?");
     if (!brief) return;
-    setStatus("Commissioning " + state.peer + "…");
+    setStatus("Commissioning " + name + "…");
     const r = await fetch("/api/rooms/" + encodeURIComponent(state.sessionId) + "/ask_peer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brief }),
+      body: JSON.stringify({ brief, peer }),
     });
     const d = await r.json();
     if (!r.ok) {
@@ -449,7 +525,7 @@
       return;
     }
     await loadHistory();
-    setStatus("Messaged " + state.peer + " · waiting on reply…");
+    setStatus("Messaged " + name + " · waiting on reply…");
     startPoll();
   }
 
@@ -468,8 +544,8 @@
           lastTurnCount = turns.length;
           renderHistory(turns);
           const hasReply = turns.some((t) => /^\[From /i.test(t.content || ""));
-          if (hasReply) setStatus(state.peer.charAt(0).toUpperCase() + state.peer.slice(1) + " replied");
-          else setStatus("Waiting on " + state.peer + "…");
+          if (hasReply) setStatus("New reply in group");
+          else setStatus("Waiting on the group…");
         }
       } catch (_) {}
     }, 3000);
@@ -480,6 +556,7 @@
     if (ev.key === "Enter") { ev.preventDefault(); sendMessage(); }
   });
   $("[data-ask-peer]").addEventListener("click", askPeer);
+  $("[data-add-peer]").addEventListener("click", addPeer);
 
   openRoom().then(() => {
     startPoll();

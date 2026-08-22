@@ -372,7 +372,12 @@ def run_forever(
         time.sleep(poll_seconds)
 
 
-def make_agent_process_fn(agent_loops: dict, conv_store) -> ProcessFn:
+def make_agent_process_fn(
+    agent_loops: dict,
+    conv_store,
+    *,
+    data_root: Path | str | None = None,
+) -> ProcessFn:
     """Build a process_fn that drives each citizen's AgentLoop into a session."""
 
     def process(citizen_id: str, body: str, commission_id: str) -> str:
@@ -384,11 +389,41 @@ def make_agent_process_fn(agent_loops: dict, conv_store) -> ProcessFn:
         session_id = conv_store.new_session(
             citizen_id, title=f"[commission] {commission_id[:8]}"
         )
+        # If this commission is tied to a group room, fold in the shared
+        # thread so Vett/Eve/… can see what other hands already contributed.
+        room_ctx = ""
+        if data_root is not None:
+            try:
+                from soveryn.rooms.store import (
+                    find_room_for_commission,
+                    room_peers,
+                    room_transcript_excerpt,
+                )
+
+                room = find_room_for_commission(data_root, commission_id)
+                if room and room.get("session_id"):
+                    peers = room_peers(room)
+                    excerpt = room_transcript_excerpt(
+                        conv_store, room["session_id"], limit=14
+                    )
+                    if excerpt:
+                        room_ctx = (
+                            "\n\n---\nYou are one hand in a shared group "
+                            f"({', '.join(['aetheria'] + peers)}). "
+                            "Read the thread — do not redo work another "
+                            "citizen already finished; build on it.\n"
+                            f"{excerpt}\n"
+                        )
+            except Exception:
+                logger.exception(
+                    "room context for commission %s failed", commission_id
+                )
         prompt = (
             f"[COMMISSION {commission_id}]\n"
             "You are executing a house commission — discrete work Jon (or a "
             "duty) placed on your desk. Complete the task. Write a clear, "
-            "self-contained result a human can read without the chat UI.\n\n"
+            "self-contained result a human can read without the chat UI."
+            f"{room_ctx}\n\n"
             f"{body.strip()}"
         )
         response = loop.process_message(

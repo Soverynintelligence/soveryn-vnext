@@ -1242,7 +1242,9 @@ def create_app(
                         kwargs={
                             "db_path": _citizens_db,
                             "process_fn": _citizens_process_fn(
-                                agent_loops, conv_store
+                                agent_loops,
+                                conv_store,
+                                data_root=getattr(env, "data_root", None),
                             ),
                             "busy_fn": _busy,
                             "poll_seconds": float(

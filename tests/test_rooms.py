@@ -199,6 +199,28 @@ def test_project_commission_result_into_room(room_app):
     assert any("replied" in t.content.lower() for t in dm_hist if t.role == "system")
 
 
+def test_add_peer_grows_shared_group(room_app):
+    """Same DM should grow one multi-peer room (Vett then Eve), not two rooms."""
+    from soveryn.rooms.store import add_peer_to_room, open_room, room_peers
+
+    app, conv, tmp_path = room_app
+    data_root = tmp_path / "data"
+    data_root.mkdir(parents=True, exist_ok=True)
+    dm = conv.new_session("aetheria", title="dm-multi")
+    r1 = open_room(conv, data_root=data_root, peer="vett", dm_session_id=dm)
+    assert room_peers(r1) == ["vett"]
+    r2 = open_room(conv, data_root=data_root, peer="eve", dm_session_id=dm)
+    assert r2["session_id"] == r1["session_id"]
+    assert set(room_peers(r2)) == {"vett", "eve"}
+    r3 = add_peer_to_room(
+        conv, data_root=data_root, session_id=r1["session_id"], peer="scotty"
+    )
+    assert set(room_peers(r3)) == {"vett", "eve", "scotty"}
+    hist = conv.load_history(r1["session_id"])
+    assert any("Added Eve" in t.content for t in hist if t.role == "system")
+    assert any("Added Scotty" in t.content for t in hist if t.role == "system")
+
+
 def test_house_post_send_commissions_peer(room_app, monkeypatch):
     """Aetheria house_post_send to Vett must enqueue a commission (wake path)."""
     from soveryn.citizens import commissions
