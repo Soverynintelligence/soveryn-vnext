@@ -93,9 +93,12 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
             name="house_post_send",
             owner=owner_agent,
             description=(
-                "Send a House Post to another citizen (vett, scotty, aetheria). "
-                "Kinds: memo, request, report, directive, ack. "
-                "Use request/report with COS (aetheria) for routing; do not invent channels."
+                "Send a House Post to another citizen (vett, scotty, eve, kernel). "
+                "When Jon says things like 'ask Vett to…', 'message Vett', or "
+                "'have Scotty check…' — call this in the SAME turn with to_id set "
+                "to that peer and a clear brief in body. Do not only promise to "
+                "message them. Kinds: memo, request, report, directive, ack. "
+                "Prefer kind=request when asking a peer to do work."
             ),
             schema={
                 "type": "object",

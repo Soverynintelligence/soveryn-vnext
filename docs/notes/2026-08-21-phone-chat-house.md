@@ -62,12 +62,13 @@ Not Mission Control first. **Messages first.**
 
 ## When we build (thin slices — order holds)
 
-1. **Group room v0** — Aetheria + one citizen + Jon; CoS routes in-thread.  
-2. **Mobile front door** — that room opens like Messages.  
+1. **Group room v0** — Aetheria + one citizen + Jon; CoS routes in-thread. ✅  
+2. **Mobile front door** — Messages list → iMessage thread → in-thread peer bot shape → group. ✅ (polish: real portraits later)  
 3. **Interactive presence image v0** — one portrait/mascot per citizen on roster + chat; tap opens talk; later: working / Gate expressions (Active-now can drive it).  
 4. **Visible peer turns** — commission shows in the room, not only outbox.  
-5. Connectors/automations **reachable from chat** without leaving the house spine.  
-6. Intake depth (OCR / RAG) as the specialist path already parked.
+5. **Talk-while-tools** (PondWright bar) — CRM / estimator / web in the same chat that builds the artifact.  
+6. Connectors/automations **reachable from chat** without leaving the house spine.  
+7. Intake depth (OCR / RAG) as the specialist path already parked.
 
 ## Quotable briefs
 
@@ -75,6 +76,30 @@ Not Mission Control first. **Messages first.**
 
 > (XFreeze / Grok) One app built around you that can do almost everything for you → **(Ours) One house built around Jon that can do almost everything he authorizes — locally, with a CoS and a Gate.**
 
+## Honest bar from using Grok bots (2026-08-22)
+
+### In-thread “ask Vett” → bot shape → group
+
+In the **actual 1:1 chat with Aetheria**, if Jon says *ask Vett to research this*, she messages him from that chat. Jon sees **just Vett’s bot shape** in the thread; tapping it opens the **group chat** between them. Not a settings hop. Not only an outbox. The peer’s presence *is* the affordance.
+
+House target: `house_post_send` same turn → DM system marker → in-thread tappable peer avatar → `/room` (Aetheria + peer + Jon).
+
+### PondWright: talk while the tools work
+
+PondWright bot already has **CRM + web + estimator**. Jon can literally just talk: it intakes the job, builds the quote, and can verify **pond size / water volume / pump size** in the same conversation — no form wizard first.
+
+House steal (shape, not clone):
+
+| Feeling | Ours |
+|---------|------|
+| Talk = intake | Chat turns fill structured work (quote / commission / ledger row) |
+| Tools in the talk | Estimator / CRM / web as **armed house tools**, Gate on egress |
+| Verify while chatting | Numbers checked in-thread (cite sources / calc), not a separate desktop |
+| Phone-first | Same thread on `/messages/<agent>` and `/chat` |
+
+Park for PondWright phone path + any “desk agent that builds artifacts while you speak.” Connectors later; this bar is about **conversation as the work surface**.
+
 ---
 
-_Updated 2026-08-21: claimed the “universal OS” energy as SOVERYN’s, not xAI’s._
+_Updated 2026-08-21: claimed the “universal OS” energy as SOVERYN’s, not xAI’s._  
+_Updated 2026-08-22: in-thread peer bot-shape + PondWright talk+CRM+estimator bar._

@@ -438,6 +438,33 @@
     background: rgba(111,185,138,0.35); color: #0c0b0a;
     font-size: 11px; font-weight: 700;
   }
+  /* In-thread: just the peer bot shape — tap opens Aetheria+peer group room */
+  a.messaged-peer {
+    align-self: flex-start;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    text-decoration: none; color: var(--ink);
+    padding: 4px 6px; margin: 4px 0 8px; border-radius: 16px;
+    max-width: 88px; border: 1px solid transparent;
+  }
+  a.messaged-peer:hover { opacity: 0.9; }
+  a.messaged-peer:focus-visible {
+    outline: none; border-color: rgba(111,185,138,0.5);
+  }
+  a.messaged-peer .mp-av {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; color: #0c0b0a;
+    background: linear-gradient(145deg, #7ec8e3, #3a7a9a);
+    box-shadow: 0 0 0 2px rgba(111,185,138,0.35);
+  }
+  a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer .mp-name {
+    font-size: 11px; font-weight: 600; color: var(--ink-3, rgba(245,242,234,0.45));
+    text-align: center; line-height: 1.2;
+  }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
   .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
   .approval-card {
@@ -1414,11 +1441,31 @@
     renderAttachmentsRow();
   }
 
+  function roomHref(peer, roomSessionId) {
+    return "/room?peer=" + encodeURIComponent(peer)
+      + (roomSessionId ? "&session=" + encodeURIComponent(roomSessionId) : "")
+      + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
+  }
+
+  function appendMessagedPeer(peer, roomSessionId) {
+    const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const a = document.createElement("a");
+    a.className = "messaged-peer";
+    a.href = roomHref(peer, roomSessionId);
+    a.title = "Open group chat with " + name;
+    a.setAttribute("aria-label", "Open group chat with " + name);
+    a.dataset.peer = peer;
+    a.innerHTML =
+      '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
+      '<span class="mp-name">' + esc(name) + '</span>';
+    elThread().appendChild(a);
+    elThread().scrollTop = elThread().scrollHeight;
+    return a;
+  }
+
   function renderCollabChips(events) {
     const row = document.querySelector("[data-testid='collab-chips']");
     if (!row) return;
-    const fromHistory = [];
-    document.querySelectorAll("[data-testid='thread'] .bubble").forEach(() => {});
     // Prefer API events; also scan last history via data attribute stash
     const list = Array.isArray(events) ? events.slice() : [];
     const seen = new Set();
@@ -1440,12 +1487,9 @@
       const peer = (ev.peer || "peer").toLowerCase();
       const name = peer.charAt(0).toUpperCase() + peer.slice(1);
       const letter = name.charAt(0);
-      const href = "/room?peer=" + encodeURIComponent(peer)
-        + (ev.room_session_id ? "&session=" + encodeURIComponent(ev.room_session_id) : "")
-        + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
-      return `<a class="collab-chip" href="${href}" title="Open group chat with ${esc(name)}">`
+      return `<a class="collab-chip" href="${roomHref(peer, ev.room_session_id)}" title="Open group chat with ${esc(name)}">`
         + `<span class="collab-av">${esc(letter)}</span>`
-        + `<span>Messaged ${esc(name)}</span></a>`;
+        + `<span>${esc(name)}</span></a>`;
     }).join("");
   }
 
@@ -1453,17 +1497,24 @@
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
+  async function fetchCollabs() {
+    if (!state.sessionId || state.agent !== "aetheria") return [];
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.collabs || [];
+    } catch (_) { return []; }
+  }
+
   async function refreshCollabChips() {
     if (!state.sessionId || state.agent !== "aetheria") {
       renderCollabChips([]);
-      return;
+      return [];
     }
-    try {
-      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
-      if (!r.ok) return;
-      const d = await r.json();
-      renderCollabChips(d.collabs || []);
-    } catch (_) { /* best-effort */ }
+    const list = await fetchCollabs();
+    renderCollabChips(list);
+    return list;
   }
 
   function setAgent(name) {
@@ -1750,6 +1801,11 @@
             // turn it into an inline <img>. Safe to call always — no-op
             // when no matching URL is present.
             enhanceBubbleWithImages(respBubble);
+            // After tools settle, rebuild so in-thread Messaged {peer} bot
+            // shapes (house_post → room) appear and link to the group chat.
+            if (state.agent === "aetheria" && state.sessionId) {
+              try { await loadHistory(state.sessionId); } catch (_) { /* best-effort */ }
+            }
           } else if (payload.type === "error") {
             setBubbleText(respBubble, `error · ${payload.code}: ${payload.message}`);
             return;
@@ -1806,6 +1862,9 @@
         setBubbleText(respBubble, data.content || "");
         updateContextUsage(data.context_usage);
         enhanceBubbleWithImages(respBubble);
+        if (state.agent === "aetheria" && state.sessionId) {
+          try { await loadHistory(state.sessionId); } catch (_) { /* best-effort */ }
+        }
       }
     } catch (e) {
       setBubbleText(respBubble, `error · ${e.message}`);
@@ -1823,6 +1882,11 @@
       // Clear the context banner — the new session's pressure state is
       // unknown until the next chat response arrives.
       updateContextUsage(null);
+      const collabs = await fetchCollabs();
+      const byPeer = {};
+      (collabs || []).forEach((ev) => {
+        if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
+      });
       const fromSys = [];
       for (const t of data.turns || []) {
         if (t.role === "user" || t.role === "assistant") {
@@ -1830,14 +1894,14 @@
           if (t.role === "assistant") enhanceBubbleWithImages(b);
         } else if (t.role === "system" && /⟦room:messaged:([a-z]+)⟧/.test(t.content || "")) {
           const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content);
-          if (m) fromSys.push({ peer: m[1], room_session_id: null });
+          if (m) {
+            fromSys.push({ peer: m[1], room_session_id: byPeer[m[1]] || null });
+            appendMessagedPeer(m[1], byPeer[m[1]] || null);
+          }
         }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
-      await refreshCollabChips();
-      // If API empty but history has markers, still show chips
-      const row = document.querySelector("[data-testid='collab-chips']");
-      if (row && row.hidden && fromSys.length) renderCollabChips(fromSys);
+      renderCollabChips(collabs.length ? collabs : fromSys);
     } catch { /* noop */ }
   }
 

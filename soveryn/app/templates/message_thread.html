@@ -85,6 +85,33 @@
     background: transparent; color: var(--mute); font-size: 13px;
     text-align: center; padding: 6px 10px;
   }
+  /* In-thread peer: just the bot shape — tap opens group chat (Grok Bots style) */
+  a.messaged-peer {
+    align-self: flex-start;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    text-decoration: none; color: var(--ink);
+    padding: 4px 6px; border-radius: 16px;
+    max-width: 88px; border: 1px solid transparent;
+  }
+  a.messaged-peer:active { opacity: 0.85; }
+  a.messaged-peer:focus-visible {
+    outline: none; border-color: rgba(111,185,138,0.5);
+  }
+  a.messaged-peer .mp-av {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; color: #0c0b0a;
+    background: linear-gradient(145deg, #7ec8e3, #3a7a9a);
+    box-shadow: 0 0 0 2px rgba(111,185,138,0.35);
+  }
+  a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer .mp-name {
+    font-size: 11px; font-weight: 600; color: var(--mute);
+    text-align: center; line-height: 1.2;
+  }
   .day {
     align-self: center; font-size: 12px; color: var(--mute); padding: 8px 0 4px;
   }
@@ -169,16 +196,40 @@
     return b;
   }
 
-  function renderTurns(turns) {
+  function roomHref(peer, roomSessionId) {
+    return "/room?peer=" + encodeURIComponent(peer)
+      + (roomSessionId ? "&session=" + encodeURIComponent(roomSessionId) : "")
+      + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
+  }
+
+  function appendMessagedPeer(peer, roomSessionId) {
+    const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const a = document.createElement("a");
+    a.className = "messaged-peer";
+    a.href = roomHref(peer, roomSessionId);
+    a.title = "Open group chat with " + name;
+    a.setAttribute("aria-label", "Open group chat with " + name);
+    a.innerHTML =
+      '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
+      '<span class="mp-name">' + esc(name) + '</span>';
+    thread().appendChild(a);
+    thread().scrollTop = thread().scrollHeight;
+    return a;
+  }
+
+  function renderTurns(turns, collabIndex) {
     thread().innerHTML = "";
+    const byPeer = {};
+    (collabIndex || []).forEach((ev) => {
+      if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
+    });
     (turns || []).forEach((t) => {
       if (t.role === "user") appendBubble("me", t.content);
       else if (t.role === "assistant") appendBubble("them", t.content);
       else if (t.role === "system") {
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         if (m) {
-          // chip handled by refreshChips; soft line in thread too
-          appendBubble("sys", "Messaged " + m[1].charAt(0).toUpperCase() + m[1].slice(1) + " — tap chip above to open group");
+          appendMessagedPeer(m[1], byPeer[m[1]] || null);
         } else {
           appendBubble("sys", (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, ""));
         }
@@ -187,6 +238,7 @@
   }
 
   function renderChips(events) {
+    // Keep a slim strip of latest unique peers as shortcuts (optional)
     const row = chips();
     const list = Array.isArray(events) ? events : [];
     if (!list.length || agent !== "aetheria") {
@@ -201,13 +253,10 @@
       if (!peer || seen.has(peer)) continue;
       seen.add(peer);
       const name = peer.charAt(0).toUpperCase() + peer.slice(1);
-      const href = "/room?peer=" + encodeURIComponent(peer)
-        + (ev.room_session_id ? "&session=" + encodeURIComponent(ev.room_session_id) : "")
-        + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
       html.push(
-        '<a class="collab-chip" href="' + href + '">' +
+        '<a class="collab-chip" href="' + roomHref(peer, ev.room_session_id) + '">' +
           '<span class="collab-av">' + esc(name.charAt(0)) + '</span>' +
-          '<span>Messaged ' + esc(name) + '</span></a>'
+          '<span>' + esc(name) + '</span></a>'
       );
     }
     row.hidden = !html.length;
@@ -242,13 +291,24 @@
     return state.sessionId;
   }
 
+  async function collabs() {
+    if (!state.sessionId || agent !== "aetheria") return [];
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.collabs || [];
+    } catch (_) { return []; }
+  }
+
   async function loadLatestOrHistory() {
     if (state.sessionId) {
       const r = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
       if (r.ok) {
         const d = await r.json();
-        renderTurns(d.turns || []);
-        await refreshChips();
+        const c = await collabs();
+        renderTurns(d.turns || [], c);
+        renderChips(c);
         return;
       }
     }
@@ -264,9 +324,10 @@
         const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
         if (h.ok) {
           const hd = await h.json();
-          renderTurns(hd.turns || []);
+          const c = await collabs();
+          renderTurns(hd.turns || [], c);
+          renderChips(c);
         }
-        await refreshChips();
         return;
       }
     }
@@ -317,13 +378,13 @@
         }
       }
       if (!text) them.textContent = "(no reply)";
-      await refreshChips();
-      // Reload to pick up system Messaged lines
+      // Reload to pick up in-thread Messaged {peer} avatars
       const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
       if (h.ok) {
         const hd = await h.json();
-        renderTurns(hd.turns || []);
-        await refreshChips();
+        const c = await collabs();
+        renderTurns(hd.turns || [], c);
+        renderChips(c);
       }
     } catch (e) {
       them.textContent = "error · " + e.message;
