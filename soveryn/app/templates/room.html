@@ -92,6 +92,35 @@
     background: var(--gold); color: #0c0b0a; font-size: 18px; font-weight: 700; cursor: pointer;
   }
   .status { font-size: 12px; color: var(--ink-3); min-height: 1.2em; }
+  .approval-card {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 4px 0 8px;
+    padding: 10px 12px;
+    background: #141210;
+    border: 1px solid var(--gold);
+    border-radius: 14px;
+    font-size: 14px;
+  }
+  .approval-card .ac-head {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 6px; font-weight: 600;
+  }
+  .approval-card .ac-tool { font-size: 13px; margin-bottom: 4px; }
+  .approval-card .ac-args {
+    font-size: 12px; color: var(--ink-3); white-space: pre-wrap; word-break: break-word;
+    margin: 0 0 10px;
+  }
+  .approval-card .ac-actions { display: flex; gap: 8px; }
+  .approval-card .ac-actions button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); cursor: pointer; background: #0c0b0a; color: var(--ink);
+  }
+  .approval-card .ac-actions button.ac-allow { border-color: var(--mint); color: var(--mint); }
+  .approval-card .ac-actions button.ac-deny { border-color: #e07070; color: #e07070; }
+  .approval-card .ac-actions button:disabled { opacity: 0.45; }
+  .approval-card.ac-done { border-color: var(--line); opacity: 0.85; }
+  .approval-card .ac-notice { margin-top: 8px; font-size: 12px; color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -127,6 +156,8 @@
     sessionId: params.get("session") || null,
     dmSessionId: params.get("from") || null,
     stream: true,
+    shownApprovalIds: new Set(),
+    gatePollTimer: null,
   };
 
   const $ = (s) => document.querySelector(s);
@@ -160,7 +191,110 @@
     if (!chip) return;
     chip.dataset.state = st || "";
     const base = state.peer.charAt(0).toUpperCase() + state.peer.slice(1);
-    chip.textContent = st === "working" ? base + " · working" : st === "replied" ? base + " · replied" : base;
+    chip.textContent =
+      st === "gate" ? base + " · needs Gate" :
+      st === "working" ? base + " · working" :
+      st === "replied" ? base + " · replied" : base;
+  }
+
+  function fmtApprovalArgs(args) {
+    try {
+      let parsed = args;
+      if (typeof args === "string") {
+        try { parsed = JSON.parse(args); } catch (_) { return String(args).slice(0, 280); }
+      }
+      const s = JSON.stringify(parsed);
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) { return String(args || ""); }
+  }
+
+  function renderApprovalCard(payload) {
+    const id = payload && (payload.approval_id || payload.id);
+    if (!id || state.shownApprovalIds.has(id)) return;
+    state.shownApprovalIds.add(id);
+    const citizen = (payload.citizen || state.peer || "?").toLowerCase();
+
+    const card = document.createElement("div");
+    card.className = "approval-card";
+    card.innerHTML =
+      '<div class="ac-head">Needs your yes — Approval Gate</div>' +
+      '<div class="ac-tool"></div><div class="ac-args"></div>' +
+      '<div class="ac-actions">' +
+      '<button type="button" class="ac-allow">Allow</button>' +
+      '<button type="button" class="ac-deny">Deny</button></div>' +
+      '<div class="ac-notice" style="display:none"></div>';
+    card.querySelector(".ac-tool").textContent =
+      citizen.charAt(0).toUpperCase() + citizen.slice(1) + " · " + (payload.tool || "?");
+    card.querySelector(".ac-args").textContent = fmtApprovalArgs(payload.args);
+    const allowBtn = card.querySelector(".ac-allow");
+    const denyBtn = card.querySelector(".ac-deny");
+    const notice = card.querySelector(".ac-notice");
+    const decide = async (approve) => {
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      try {
+        const r = await fetch(
+          "/api/citizens/" + encodeURIComponent(citizen) + "/approvals/" + encodeURIComponent(id) + "/decision",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approve: approve, decided_by: "jon" }),
+          }
+        );
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          card.classList.add("ac-done");
+          notice.textContent = approve ? "Allowed — continuing…" : "Denied.";
+          notice.style.display = "";
+          setStatus(approve ? "Allowed — " + citizen + " continuing…" : "Denied");
+          setPeerChipState(approve ? "working" : "");
+        } else {
+          notice.textContent = (body.error && body.error.message) || ("Failed (" + r.status + ")");
+          notice.style.display = "";
+          allowBtn.disabled = false;
+          denyBtn.disabled = false;
+        }
+      } catch (e) {
+        notice.textContent = e.message || "Network error";
+        notice.style.display = "";
+        allowBtn.disabled = false;
+        denyBtn.disabled = false;
+      }
+    };
+    allowBtn.addEventListener("click", () => decide(true));
+    denyBtn.addEventListener("click", () => decide(false));
+    thread().appendChild(card);
+    thread().scrollTop = thread().scrollHeight;
+    setPeerChipState("gate");
+    setStatus(citizen.charAt(0).toUpperCase() + citizen.slice(1) + " needs Gate — Allow below");
+  }
+
+  async function pollApprovals() {
+    try {
+      const r = await fetch("/api/approvals/pending");
+      if (!r.ok) return;
+      const data = await r.json();
+      let peerNeedsGate = false;
+      for (const a of (data.approvals || [])) {
+        const c = (a.citizen || "").toLowerCase();
+        if (c === state.peer || c === "aetheria") {
+          if (c === state.peer) peerNeedsGate = true;
+          renderApprovalCard({
+            approval_id: a.id,
+            citizen: a.citizen,
+            tool: a.tool,
+            args: a.args,
+          });
+        }
+      }
+      if (peerNeedsGate) setPeerChipState("gate");
+    } catch (_) {}
+  }
+
+  function startGatePoll() {
+    if (state.gatePollTimer) return;
+    pollApprovals();
+    state.gatePollTimer = setInterval(pollApprovals, 1500);
   }
 
   function renderHistory(turns) {
@@ -349,6 +483,7 @@
 
   openRoom().then(() => {
     startPoll();
+    startGatePoll();
   });
 })();
 </script>

@@ -127,9 +127,49 @@
     font-size: 10px; color: var(--mint, #6fb98a); text-align: center; line-height: 1.2;
   }
   a.messaged-peer[data-state="replied"] .mp-status { color: var(--gold); }
+  a.messaged-peer[data-state="gate"] .mp-av {
+    box-shadow: 0 0 0 3px rgba(198,166,100,0.8);
+    animation: mp-work 1.1s ease-in-out infinite;
+  }
+  a.messaged-peer[data-state="gate"] .mp-status { color: var(--gold); }
   .day {
     align-self: center; font-size: 12px; color: var(--mute); padding: 8px 0 4px;
   }
+
+  /* Approval Gate — needs your yes (was invisible on messenger; caused silent hangs) */
+  .approval-card {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 4px 0 8px;
+    padding: 10px 12px;
+    background: #141210;
+    border: 1px solid var(--gold);
+    border-radius: 14px;
+    font-size: 14px;
+  }
+  .approval-card .ac-head {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 6px; font-weight: 600;
+  }
+  .approval-card .ac-tool { font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+  .approval-card .ac-args {
+    font-size: 12px; color: var(--mute); white-space: pre-wrap; word-break: break-word;
+    margin: 0 0 10px;
+  }
+  .approval-card .ac-actions { display: flex; gap: 8px; }
+  .approval-card .ac-actions button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); cursor: pointer; background: #0c0b0a; color: var(--ink);
+  }
+  .approval-card .ac-actions button.ac-allow {
+    border-color: var(--mint); color: var(--mint);
+  }
+  .approval-card .ac-actions button.ac-deny {
+    border-color: #e07070; color: #e07070;
+  }
+  .approval-card .ac-actions button:disabled { opacity: 0.45; }
+  .approval-card.ac-done { border-color: var(--line); opacity: 0.85; }
+  .approval-card .ac-notice { margin-top: 8px; font-size: 12px; color: var(--mute); }
 
   .composer {
     display: flex; gap: 8px; align-items: flex-end;
@@ -188,6 +228,7 @@
   const state = {
     agent, sessionId: params.get("session") || null, sending: false,
     turnCount: 0, waitingPeers: false, pollTimer: null,
+    shownApprovalIds: new Set(), gatePollTimer: null, peerGate: {},
   };
 
   const $ = (s) => document.querySelector(s);
@@ -222,8 +263,10 @@
 
   function appendMessagedPeer(peer, roomSessionId, peerState) {
     const name = peer.charAt(0).toUpperCase() + peer.slice(1);
-    const st = peerState || "messaged";
+    let st = peerState || "messaged";
+    if (state.peerGate[peer] && st !== "replied") st = "gate";
     const status =
+      st === "gate" ? "needs Gate" :
       st === "working" ? "working…" :
       st === "replied" ? "replied · tap" : "in group";
     const a = document.createElement("a");
@@ -231,7 +274,9 @@
     a.dataset.state = st;
     a.dataset.peer = peer;
     a.href = roomHref(peer, roomSessionId);
-    a.title = "Open group chat with " + name;
+    a.title = st === "gate"
+      ? name + " is waiting on Approval Gate — Allow below"
+      : "Open group chat with " + name;
     a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
     a.innerHTML =
       '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
@@ -240,6 +285,145 @@
     thread().appendChild(a);
     thread().scrollTop = thread().scrollHeight;
     return a;
+  }
+
+  function fmtApprovalArgs(args) {
+    try {
+      let parsed = args;
+      if (typeof args === "string") {
+        try { parsed = JSON.parse(args); } catch (_) { return String(args).slice(0, 280); }
+      }
+      const s = JSON.stringify(parsed);
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  function renderApprovalCard(payload) {
+    const id = payload && (payload.approval_id || payload.id);
+    if (!id || state.shownApprovalIds.has(id)) return;
+    state.shownApprovalIds.add(id);
+    const citizen = (payload.citizen || state.agent || "?").toLowerCase();
+    if (citizen && citizen !== "aetheria") state.peerGate[citizen] = true;
+
+    const card = document.createElement("div");
+    card.className = "approval-card";
+    card.dataset.approvalId = id;
+
+    const head = document.createElement("div");
+    head.className = "ac-head";
+    head.textContent = "Needs your yes — Approval Gate";
+    card.appendChild(head);
+
+    const tool = document.createElement("div");
+    tool.className = "ac-tool";
+    const who = (CONTACTS[citizen] || { name: citizen }).name;
+    tool.textContent = who + " · " + (payload.tool || "?");
+    card.appendChild(tool);
+
+    const argsEl = document.createElement("div");
+    argsEl.className = "ac-args";
+    argsEl.textContent = fmtApprovalArgs(payload.args);
+    card.appendChild(argsEl);
+
+    const actions = document.createElement("div");
+    actions.className = "ac-actions";
+    const allowBtn = document.createElement("button");
+    allowBtn.type = "button";
+    allowBtn.className = "ac-allow";
+    allowBtn.textContent = "Allow";
+    const denyBtn = document.createElement("button");
+    denyBtn.type = "button";
+    denyBtn.className = "ac-deny";
+    denyBtn.textContent = "Deny";
+    actions.appendChild(allowBtn);
+    actions.appendChild(denyBtn);
+    card.appendChild(actions);
+
+    const notice = document.createElement("div");
+    notice.className = "ac-notice";
+    notice.style.display = "none";
+    card.appendChild(notice);
+
+    const decide = async (approve) => {
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      try {
+        const r = await fetch(
+          "/api/citizens/" + encodeURIComponent(citizen) + "/approvals/" + encodeURIComponent(id) + "/decision",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approve: approve, decided_by: "jon" }),
+          }
+        );
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          card.classList.add("ac-done");
+          notice.textContent = approve ? "Allowed — continuing…" : "Denied.";
+          notice.style.display = "";
+          if (approve) delete state.peerGate[citizen];
+          $("[data-agent-sub]").textContent = approve
+            ? who + " unblocked — working…"
+            : who + " denied · Gate";
+        } else {
+          notice.textContent = (body.error && body.error.message) || ("Failed (" + r.status + ")");
+          notice.style.display = "";
+          allowBtn.disabled = false;
+          denyBtn.disabled = false;
+        }
+      } catch (e) {
+        notice.textContent = e.message || "Network error";
+        notice.style.display = "";
+        allowBtn.disabled = false;
+        denyBtn.disabled = false;
+      }
+    };
+    allowBtn.addEventListener("click", () => decide(true));
+    denyBtn.addEventListener("click", () => decide(false));
+
+    thread().appendChild(card);
+    thread().scrollTop = thread().scrollHeight;
+    $("[data-agent-sub]").textContent = who + " needs Gate — Allow below";
+  }
+
+  async function pollApprovals() {
+    try {
+      const r = await fetch("/api/approvals/pending");
+      if (!r.ok) return;
+      const data = await r.json();
+      const items = (data && data.approvals) || [];
+      const gatePeers = {};
+      for (const a of items) {
+        const c = (a.citizen || "").toLowerCase();
+        if (c && c !== "aetheria") gatePeers[c] = true;
+        renderApprovalCard({
+          approval_id: a.id,
+          citizen: a.citizen,
+          tool: a.tool,
+          args: a.args,
+        });
+      }
+      state.peerGate = gatePeers;
+      // Refresh peer icon labels if Gate state changed
+      document.querySelectorAll("a.messaged-peer[data-peer]").forEach((el) => {
+        const peer = el.dataset.peer;
+        if (!peer) return;
+        if (gatePeers[peer] && el.dataset.state !== "replied") {
+          el.dataset.state = "gate";
+          const st = el.querySelector(".mp-status");
+          if (st) st.textContent = "needs Gate";
+          el.title = (CONTACTS[peer] || { name: peer }).name + " is waiting on Approval Gate — Allow below";
+        }
+      });
+    } catch (_) {}
+  }
+
+  function startGatePoll() {
+    if (state.gatePollTimer) return;
+    pollApprovals();
+    state.gatePollTimer = setInterval(pollApprovals, 1500);
   }
 
   function renderTurns(turns, collabIndex) {
@@ -279,9 +463,15 @@
     });
     state.turnCount = (turns || []).length;
     state.waitingPeers = waiting;
-    if (waiting) {
+    if (Object.keys(state.peerGate || {}).length) {
+      const g = Object.keys(state.peerGate)[0];
+      $("[data-agent-sub]").textContent = (CONTACTS[g] || { name: g }).name + " needs Gate — Allow below";
+      startPoll();
+      startGatePoll();
+    } else if (waiting) {
       $("[data-agent-sub]").textContent = "peer working — tap their shape for the group";
       startPoll();
+      startGatePoll();
     } else if (Object.values(peerState).includes("replied")) {
       $("[data-agent-sub]").textContent = "peer replied — tap shape to read in group";
       stopPoll();
@@ -451,6 +641,9 @@
             text += payload.delta;
             them.textContent = text;
             thread().scrollTop = thread().scrollHeight;
+          } else if (payload.type === "approval_pending") {
+            renderApprovalCard(payload);
+            startGatePoll();
           } else if (payload.type === "tool_call") {
             appendBubble("sys", "→ " + (payload.name || "tool") + (payload.name === "house_post_send" ? " (messaging peer…)" : "…"));
           } else if (payload.type === "tool_result") {
@@ -458,6 +651,7 @@
               const r = JSON.parse(payload.content || "{}");
               if (r && r.commissioned && (r.to_id || r.target)) {
                 appendBubble("sys", "Commissioned " + (r.to_id || r.target) + " — tap their shape for the group");
+                startGatePoll();
               }
             } catch (_) {}
           } else if (payload.type === "error") {
@@ -489,6 +683,7 @@
 
   loadLatestOrHistory().then(() => {
     if (state.waitingPeers) startPoll();
+    if (agent === "aetheria") startGatePoll();
   });
   $("[data-input]").focus();
 })();
