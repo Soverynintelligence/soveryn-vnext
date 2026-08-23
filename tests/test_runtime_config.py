@@ -109,6 +109,7 @@ def test_model_servers_have_distinct_logical_names():
         "embeddings",
         "cognition",
         "kernel_build",
+        "eve_flash",
     }
 
 
@@ -122,15 +123,44 @@ def test_each_model_server_has_router_alias_populated():
     """
     brain = runtime.resolve_vett_brain()
     vett_alias = runtime._VETT_BRAIN_PROFILES[brain]["alias"]
+    kbrain = runtime.resolve_kernel_brain()
+    kernel_alias = runtime._KERNEL_BRAIN_PROFILES[kbrain]["alias"]
     expected = {
         "aetheria_primary": "aetheria",
         "vett_scotty_shared": vett_alias,
         "embeddings": "nemotron-embed-8b",
         "cognition": "cognition",
-        "kernel_build": "bench-flash",
+        "kernel_build": kernel_alias,
+        "eve_flash": "bench-flash",
     }
     actual = {s.name: s.model_alias for s in runtime.MODEL_SERVERS}
     assert actual == expected
+
+
+def test_kernel_brain_defaults_to_flash(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOVERYN_KERNEL_BRAIN", raising=False)
+    monkeypatch.setattr(runtime, "_KERNEL_BRAIN_FILE", tmp_path / "missing")
+    assert runtime.resolve_kernel_brain() == "flash"
+
+
+def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
+    path = tmp_path / "kernel_brain"
+    path.write_text("qwen38\n", encoding="utf-8")
+    monkeypatch.setattr(runtime, "_KERNEL_BRAIN_FILE", path)
+    monkeypatch.delenv("SOVERYN_KERNEL_BRAIN", raising=False)
+    assert runtime.resolve_kernel_brain() == "qwen38"
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flash")
+    assert runtime.resolve_kernel_brain() == "flash"
+
+
+def test_eve_stays_on_flash_when_kernel_on_qwen38(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "qwen38")
+    # Re-import factory through resolve — MODEL_SERVERS is built at import.
+    # Spot-check profile wiring instead of rebinding the frozen tuple.
+    assert runtime._KERNEL_BRAIN_PROFILES["qwen38"]["alias"] == "qwen38-27b"
+    assert runtime._KERNEL_BRAIN_PROFILES["flash"]["alias"] == "bench-flash"
+    assert runtime.AGENT_TO_SERVER["eve"] == "eve_flash"
+    assert runtime.AGENT_TO_SERVER["kernel"] == "kernel_build"
 
 
 def test_cognition_is_cognition_not_aetheria_public():

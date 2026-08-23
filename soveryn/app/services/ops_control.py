@@ -125,7 +125,9 @@ def brain_status() -> dict[str, Any]:
         # One-at-a-time on Spark :8001 — peers are switchable, not concurrent.
         "note": (
             "Spark hard brains for Vett, Scotty, and public agents. "
-            "Only one loaded at a time. Aetheria (soul) and Kernel (build) stay on the tower."
+            "Only one loaded at a time. Aetheria (soul) stays on Blackwell. "
+            "Kernel defaults to Quadros Flash; switch with "
+            "scripts/switch_kernel_brain.sh flash|qwen38 (Eve stays on Flash)."
         ),
         "brains": [
             {

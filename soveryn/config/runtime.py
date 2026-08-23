@@ -166,6 +166,87 @@ def _vett_scotty_server() -> ModelServer:
     )
 
 
+# Kernel build brain — Flash on Quadros (default) or Qwen3.8 on Spark :8001.
+# Switch:  scripts/switch_kernel_brain.sh flash|qwen38
+# Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash
+# qwen38 uses Spark's served alias — Spark must already be on qwen38
+# (switch_vett_brain.sh qwen38) unless you pass --take-spark.
+_KERNEL_BRAIN_PROFILES: dict[str, dict] = {
+    "flash": {
+        "alias": "bench-flash",
+        "house_name": "Flash",
+        "blurb": "DeepSeek V4 Flash · Quadros :8091 · daily build default",
+        "host": "127.0.0.1",
+        "port": 8091,
+        "path": (
+            "DeepSeek-V4-Flash-0731/UD-Q4_K_XL/"
+            "DeepSeek-V4-Flash-0731-UD-Q4_K_XL-00001-of-00005.gguf"
+        ),
+        "role": "Kernel — house build brain (DeepSeek V4 Flash on Quadros :8091)",
+    },
+    "qwen38": {
+        "alias": "qwen38-27b",
+        "house_name": "Qwen 3.8",
+        "blurb": "Dense 27B NVFP4 · Spark :8001 · heavier build turns",
+        "host": "10.10.10.2",
+        "port": 8001,
+        "path": "Qwen3.8-27B-NVFP4",
+        "role": (
+            "Kernel — house build brain (Qwen3.8-27B NVFP4 on Spark :8001). "
+            "Shares the Spark slot with Vett/Scotty when that brain is loaded."
+        ),
+    },
+}
+_KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
+
+
+def resolve_kernel_brain() -> str:
+    """Return Kernel brain key: flash | qwen38."""
+    env = (os.environ.get("SOVERYN_KERNEL_BRAIN") or "").strip().lower()
+    if env in _KERNEL_BRAIN_PROFILES:
+        return env
+    try:
+        key = _KERNEL_BRAIN_FILE.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        key = ""
+    if key in _KERNEL_BRAIN_PROFILES:
+        return key
+    return "flash"
+
+
+def _kernel_server() -> ModelServer:
+    """Kernel build backend for the currently selected brain."""
+    key = resolve_kernel_brain()
+    prof = _KERNEL_BRAIN_PROFILES[key]
+    return ModelServer(
+        name="kernel_build",
+        host=str(prof["host"]),
+        port=int(prof["port"]),
+        model_path=MODEL_ROOT / str(prof["path"]),
+        mmproj_path=None,
+        role=str(prof["role"]),
+        supports_multi_system_messages=False,
+        model_alias=str(prof["alias"]),
+        chat_template_kwargs={"enable_thinking": False},
+    )
+
+
+def _eve_flash_server() -> ModelServer:
+    """Eve always on Quadros Flash — does not follow Kernel to Spark."""
+    flash = _KERNEL_BRAIN_PROFILES["flash"]
+    return ModelServer(
+        name="eve_flash",
+        host=str(flash["host"]),
+        port=int(flash["port"]),
+        model_path=MODEL_ROOT / str(flash["path"]),
+        mmproj_path=None,
+        role="Eve — presence/marketing on Quadros Flash (pinned; not Kernel-switched)",
+        supports_multi_system_messages=False,
+        model_alias=str(flash["alias"]),
+        chat_template_kwargs={"enable_thinking": False},
+    )
+
+
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
 MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
@@ -204,18 +285,8 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         role="Cognition layer — dream consolidation, background dispatch worker",
         model_alias="cognition",
     ),
-    ModelServer(
-        name="kernel_build",
-        port=8091,
-        # Live weights: router-presets-quadro.ini [bench-flash] (DeepSeek V4 Flash).
-        model_path=MODEL_ROOT
-        / "DeepSeek-V4-Flash-0731"
-        / "UD-Q4_K_XL"
-        / "DeepSeek-V4-Flash-0731-UD-Q4_K_XL-00001-of-00005.gguf",
-        role="Kernel — house build brain (DeepSeek V4 Flash on Quadros :8091)",
-        model_alias="bench-flash",
-        supports_multi_system_messages=False,
-    ),
+    _kernel_server(),
+    _eve_flash_server(),
 )
 
 #: Per-agent routing: agent name → MODEL_SERVERS.name
@@ -224,7 +295,8 @@ AGENT_TO_SERVER: dict[str, str] = {
     "vett":     "vett_scotty_shared",
     "scotty":   "vett_scotty_shared",
     "kernel":   "kernel_build",
-    "eve":      "kernel_build",
+    # Eve stays on Quadros Flash even when Kernel rides Spark Qwen3.8.
+    "eve":      "eve_flash",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
