@@ -125,47 +125,95 @@ def claim(
     return dict(row) if row else None
 
 
-def _require_running(conn: sqlite3.Connection, commission_id: str) -> None:
-    row = conn.execute(
-        "SELECT state FROM commissions WHERE id = ?", (commission_id,)
-    ).fetchone()
+def _require_exists(conn: sqlite3.Connection, commission_id: str) -> dict[str, Any]:
+    row = get(conn, commission_id)
     if row is None:
         raise KeyError(commission_id)
-    if row["state"] != RUNNING:
-        # Finishing something that was never claimed, or finishing it twice,
-        # means two parties disagree about who holds the work. Refuse loudly.
-        raise ValueError(
-            f"commission {commission_id} is {row['state']}, not {RUNNING} — "
-            "only claimed work can be completed or failed"
-        )
+    return row
 
 
 def complete(
     conn: sqlite3.Connection, commission_id: str, *, result_ref: str, at: str
 ) -> None:
-    """Finish with evidence. `result_ref` is not optional, deliberately."""
+    """Finish with evidence. `result_ref` is not optional, deliberately.
+
+    Race rule (2026-08-23): if an intervening ``fail()`` closed the ticket while
+    the worker was still finishing, **evidence wins** — revive ``failed`` →
+    ``done`` and keep the prior fail reason in ``error``. Already-``done`` is
+    idempotent (second complete is a no-op).
+    """
     if not result_ref.strip():
         raise ValueError(
             "complete() needs a result_ref — a path or id someone can open. "
             "Success with no trace cannot be told apart from doing nothing."
         )
-    _require_running(conn, commission_id)
-    conn.execute(
-        "UPDATE commissions SET state = ?, result_ref = ?, completed_at = ? "
-        "WHERE id = ?",
-        (DONE, result_ref, at, commission_id),
+    # Atomic: only one closer wins from running.
+    row = conn.execute(
+        """
+        UPDATE commissions
+           SET state = ?, result_ref = ?, completed_at = ?
+         WHERE id = ? AND state = ?
+        RETURNING *
+        """,
+        (DONE, result_ref, at, commission_id, RUNNING),
+    ).fetchone()
+    if row is not None:
+        conn.commit()
+        return
+
+    cur = _require_exists(conn, commission_id)
+    if cur["state"] == DONE:
+        conn.commit()
+        return
+    if cur["state"] == FAILED:
+        # Worker finished after a premature fail (operator/smoke/stale timeout).
+        prior = (cur.get("error") or "").strip()
+        trail = (
+            f"{prior}\n[{at}] recovered by complete() with evidence"
+            if prior
+            else f"[{at}] recovered by complete() with evidence"
+        )
+        conn.execute(
+            "UPDATE commissions SET state = ?, result_ref = ?, completed_at = ?, "
+            "error = ? WHERE id = ? AND state = ?",
+            (DONE, result_ref, at, trail, commission_id, FAILED),
+        )
+        conn.commit()
+        return
+    raise ValueError(
+        f"commission {commission_id} is {cur['state']}, not {RUNNING} — "
+        "only claimed work can be completed or failed"
     )
-    conn.commit()
 
 
 def fail(conn: sqlite3.Connection, commission_id: str, *, error: str, at: str) -> None:
-    _require_running(conn, commission_id)
-    conn.execute(
-        "UPDATE commissions SET state = ?, error = ?, completed_at = ? WHERE id = ?",
-        (FAILED, error or "failed without a reason", at, commission_id),
-    )
-    conn.commit()
+    """Mark running work failed. No-op if already failed; refuses if already done."""
+    row = conn.execute(
+        """
+        UPDATE commissions
+           SET state = ?, error = ?, completed_at = ?
+         WHERE id = ? AND state = ?
+        RETURNING *
+        """,
+        (FAILED, error or "failed without a reason", at, commission_id, RUNNING),
+    ).fetchone()
+    if row is not None:
+        conn.commit()
+        return
 
+    cur = _require_exists(conn, commission_id)
+    if cur["state"] == FAILED:
+        conn.commit()
+        return
+    if cur["state"] == DONE:
+        raise ValueError(
+            f"commission {commission_id} is already {DONE} — "
+            "cannot fail work that finished with evidence"
+        )
+    raise ValueError(
+        f"commission {commission_id} is {cur['state']}, not {RUNNING} — "
+        "only claimed work can be completed or failed"
+    )
 
 def abandoned(conn: sqlite3.Connection, *, claimed_before: str) -> list[dict[str, Any]]:
     """Commissions still `running` that were claimed before a cutoff.

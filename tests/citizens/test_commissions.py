@@ -119,12 +119,40 @@ def test_only_a_running_commission_can_be_completed(db):
         complete(db, cid, result_ref="x", at="2026-08-14T09:05:00Z")
 
 
-def test_a_completed_commission_cannot_be_completed_again(db):
+def test_a_completed_commission_complete_again_is_idempotent(db):
     cid = enqueue(db, "vett", "task", at="2026-08-14T09:00:00Z")
     claim(db, "vett", worker="w", at="2026-08-14T09:01:00Z")
     complete(db, cid, result_ref="x", at="2026-08-14T09:05:00Z")
-    with pytest.raises(ValueError):
-        complete(db, cid, result_ref="x again", at="2026-08-14T09:06:00Z")
+    complete(db, cid, result_ref="x again", at="2026-08-14T09:06:00Z")
+    (row,) = for_citizen(db, "vett")
+    assert row["state"] == "done"
+    assert row["result_ref"] == "x"  # first evidence kept
+
+
+def test_complete_recovers_from_intervening_fail(db):
+    """Worker still finishing must not lose to a premature fail (Kernel smoke)."""
+    cid = enqueue(db, "vett", "task", at="2026-08-14T09:00:00Z")
+    claim(db, "vett", worker="w", at="2026-08-14T09:01:00Z")
+    fail(db, cid, error="smoke cancelled — wiring probe only", at="2026-08-14T09:02:00Z")
+    complete(
+        db,
+        cid,
+        result_ref="~/soveryn_citizens/vett/outbox/late.md",
+        at="2026-08-14T09:05:00Z",
+    )
+    (row,) = for_citizen(db, "vett")
+    assert row["state"] == "done"
+    assert row["result_ref"].endswith("late.md")
+    assert "smoke cancelled" in (row["error"] or "")
+    assert "recovered by complete" in (row["error"] or "")
+
+
+def test_fail_after_done_is_refused(db):
+    cid = enqueue(db, "vett", "task", at="2026-08-14T09:00:00Z")
+    claim(db, "vett", worker="w", at="2026-08-14T09:01:00Z")
+    complete(db, cid, result_ref="x", at="2026-08-14T09:05:00Z")
+    with pytest.raises(ValueError, match="already done"):
+        fail(db, cid, error="too late", at="2026-08-14T09:06:00Z")
 
 
 def test_work_claimed_and_never_finished_is_findable(db):
