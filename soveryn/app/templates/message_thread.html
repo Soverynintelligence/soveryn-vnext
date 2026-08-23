@@ -69,21 +69,49 @@
   }
   .bubble {
     max-width: 78%; padding: 10px 14px; border-radius: 18px;
-    font-size: 16px; line-height: 1.35; white-space: pre-wrap; word-break: break-word;
+    font-size: 16px; line-height: 1.4; word-break: break-word;
   }
   .bubble.them {
     align-self: flex-start;
     background: var(--bubble-them); border-bottom-left-radius: 4px;
   }
   .bubble.me {
-    align-self: flex-end;
+    align-self: flex-end; white-space: pre-wrap;
     background: var(--bubble-me); border: 1px solid rgba(198,166,100,0.25);
     border-bottom-right-radius: 4px;
   }
   .bubble.sys {
     align-self: center; max-width: 90%;
     background: transparent; color: var(--mute); font-size: 13px;
-    text-align: center; padding: 6px 10px;
+    text-align: center; padding: 6px 10px; white-space: pre-wrap;
+  }
+  .bubble.them .md-body > *:first-child { margin-top: 0; }
+  .bubble.them .md-body > *:last-child { margin-bottom: 0; }
+  .bubble.them .md-body p { margin: 0.45em 0; }
+  .bubble.them .md-body h1,
+  .bubble.them .md-body h2,
+  .bubble.them .md-body h3,
+  .bubble.them .md-body h4 {
+    font-size: 1.05em; font-weight: 700; margin: 0.65em 0 0.3em; letter-spacing: -0.01em;
+  }
+  .bubble.them .md-body ul, .bubble.them .md-body ol {
+    margin: 0.4em 0; padding-left: 1.25em;
+  }
+  .bubble.them .md-body li { margin: 0.15em 0; }
+  .bubble.them .md-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88em; background: rgba(255,255,255,0.06);
+    padding: 0.1em 0.35em; border-radius: 4px;
+  }
+  .bubble.them .md-body pre {
+    margin: 0.5em 0; padding: 10px 12px; overflow-x: auto;
+    background: rgba(0,0,0,0.35); border-radius: 10px; font-size: 0.86em;
+  }
+  .bubble.them .md-body pre code { background: none; padding: 0; }
+  .bubble.them .md-body a { color: var(--gold); }
+  .bubble.them .md-body blockquote {
+    margin: 0.45em 0; padding-left: 10px; border-left: 2px solid rgba(198,166,100,0.4);
+    color: var(--mute);
   }
   /* In-thread peer: bot shape — tap opens group (working pulse = functional signal) */
   a.messaged-peer {
@@ -172,6 +200,7 @@
   .approval-card .ac-notice { margin-top: 8px; font-size: 12px; color: var(--mute); }
 
   .composer {
+    position: sticky; bottom: 0; z-index: 4;
     display: flex; gap: 8px; align-items: flex-end;
     padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); background: rgba(0,0,0,0.95);
@@ -197,9 +226,7 @@
       <div class="name" data-agent-name>Aetheria</div>
       <div class="sub" data-agent-sub></div>
     </div>
-    <div class="top-actions">
-      <a href="/chat" data-full-chat title="Full chat">Full</a>
-    </div>
+    <div class="top-actions"></div>
   </header>
 
   <div class="collab-chips" data-collab-chips hidden></div>
@@ -240,19 +267,98 @@
   $("[data-agent-av]").textContent = contact.letter;
   $("[data-agent-name]").textContent = contact.name;
   $("[data-agent-sub]").textContent = contact.sub;
-  $("[data-full-chat]").href = "/chat?agent=" + encodeURIComponent(agent);
+
+  // Prefill from CC dispatch (?q=...) — Messages is the front door.
+  const prefill = (params.get("q") || "").trim();
+  if (prefill && $("[data-input]")) {
+    $("[data-input]").value = prefill;
+    $("[data-input]").focus();
+  }
 
   function esc(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
+  // Lightweight markdown for assistant bubbles (Grok-bots readable on phone).
+  function renderMarkdown(md) {
+    let s = String(md || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    s = s.replace(/```[\s\S]*?```/g, (m) => {
+      const inner = m.slice(3, -3).replace(/^\w*\n/, "");
+      return "<pre><code>" + inner + "</code></pre>";
+    });
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
+    s = s.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
+    s = s.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+    s = s.replace(/^&gt;\s+(.*)$/gm, "<blockquote>$1</blockquote>");
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+    s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^[-*]\s+/, "") + "</li>").join("");
+      return "<ul>" + items + "</ul>";
+    });
+    s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^\d+\.\s+/, "") + "</li>").join("");
+      return "<ol>" + items + "</ol>";
+    });
+    s = s.replace(/\n{2,}/g, "</p><p>");
+    s = "<p>" + s + "</p>";
+    s = s.replace(/<p>\s*<\/p>/g, "");
+    s = s.replace(/<p>(<(?:h[1-6]|ul|ol|pre|blockquote)[\s\S]*?<\/(?:h[1-6]|ul|ol|pre|blockquote)>)<\/p>/g, "$1");
+    return s;
+  }
+
   function appendBubble(kind, text) {
     const b = document.createElement("div");
     b.className = "bubble " + kind;
-    b.textContent = text;
+    if (kind === "them") {
+      const body = document.createElement("div");
+      body.className = "md-body";
+      body.innerHTML = renderMarkdown(text);
+      b.appendChild(body);
+    } else {
+      b.textContent = text;
+    }
     thread().appendChild(b);
     thread().scrollTop = thread().scrollHeight;
     return b;
+  }
+
+  function setBubbleText(el, text, asMarkdown) {
+    if (!el) return;
+    if (asMarkdown) {
+      let body = el.querySelector(".md-body");
+      if (!body) {
+        el.textContent = "";
+        body = document.createElement("div");
+        body.className = "md-body";
+        el.appendChild(body);
+      }
+      body.innerHTML = renderMarkdown(text);
+    } else {
+      el.textContent = text;
+    }
+  }
+
+  // Keep composer above the iOS keyboard when visualViewport shrinks.
+  function bindKeyboardInset() {
+    const vv = window.visualViewport;
+    const composer = document.querySelector(".composer");
+    if (!vv || !composer) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      composer.style.paddingBottom = "max(8px, calc(env(safe-area-inset-bottom) + " + inset + "px))";
+      thread().style.paddingBottom = inset ? (inset + 8) + "px" : "";
+    };
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    sync();
   }
 
   function roomHref(peer, roomSessionId) {
@@ -688,6 +794,7 @@
           const payload = JSON.parse(line.slice(6));
           if (payload.type === "token" && payload.delta) {
             text += payload.delta;
+            // Stream plain text; render markdown once the turn finishes.
             them.textContent = text;
             thread().scrollTop = thread().scrollHeight;
           } else if (payload.type === "approval_pending") {
@@ -709,6 +816,7 @@
         }
       }
       if (!text) them.textContent = "(no reply)";
+      else setBubbleText(them, text, true);
       // Reload to pick up in-thread Messaged {peer} avatars
       const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
       if (h.ok) {
@@ -730,6 +838,7 @@
     if (ev.key === "Enter") { ev.preventDefault(); send(); }
   });
 
+  bindKeyboardInset();
   loadLatestOrHistory().then(() => {
     if (state.waitingPeers) startPoll();
     if (agent === "aetheria") startGatePoll();

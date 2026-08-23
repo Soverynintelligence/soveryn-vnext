@@ -3185,7 +3185,6 @@
       <nav>
         <a href="/" class="active">Home</a>
         <a href="/messages" class="keep">Messages</a>
-        <a href="/chat" class="keep">Chat</a>
         <a href="/citizens" class="cc-nav-advanced">Citizens</a>
         <a href="/fleet" class="cc-nav-advanced">Fleet</a>
         <a href="/documents" class="cc-nav-advanced">Docs</a>
@@ -3217,10 +3216,10 @@
       <ul class="brief-list" data-brief-list hidden></ul>
       <div class="brief-actions">
         <a class="brief-act primary" href="/messages">Messages</a>
-        <a class="brief-act" href="/chat?agent=aetheria">Talk to Aetheria</a>
+        <a class="brief-act" href="/messages/aetheria">Message Aetheria</a>
         <a class="brief-act" href="/room?peer=vett">Room · Aetheria + Vett</a>
-        <a class="brief-act" href="/chat?agent=eve">Talk to Eve</a>
-        <a class="brief-act" href="/chat?agent=kernel">Talk to Kernel</a>
+        <a class="brief-act" href="/messages/eve">Message Eve</a>
+        <a class="brief-act" href="/messages/kernel">Message Kernel</a>
         <a class="brief-act" href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
         <a class="brief-act" href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
         <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
@@ -3229,14 +3228,16 @@
       <div class="dispatch-box" data-testid="dispatch-box">
         <form data-dispatch-form>
           <select data-dispatch-target aria-label="Dispatch to">
-            <option value="chat:aetheria">Aetheria · chat</option>
-            <option value="chat:vett">Vett · chat</option>
-            <option value="chat:scotty">Scotty · chat</option>
+            <option value="msg:aetheria">Aetheria · Messages</option>
+            <option value="msg:vett">Vett · Messages</option>
+            <option value="msg:scotty">Scotty · Messages</option>
+            <option value="msg:eve">Eve · Messages</option>
+            <option value="msg:kernel">Kernel · Messages</option>
             <option value="board:Signal">Board · Signal</option>
             <option value="board:Blueprint">Board · Blueprint</option>
             <option value="board:Friction">Board · Friction</option>
           </select>
-          <input type="text" data-dispatch-text placeholder="Dispatch a note or open chat with a prompt…" aria-label="Dispatch message" maxlength="500" required>
+          <input type="text" data-dispatch-text placeholder="Dispatch a note or open Messages with a prompt…" aria-label="Dispatch message" maxlength="500" required>
           <button type="submit">Send</button>
           <div class="dispatch-err" data-dispatch-err></div>
         </form>
@@ -3256,7 +3257,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/chat?agent=aetheria">Talk</a>
+          <a class="agent-act primary" href="/messages/aetheria">Talk</a>
           <a class="agent-act" href="/room?peer=vett">Room</a>
           <a class="agent-act" href="/voice">Voice</a>
         </div>
@@ -3273,7 +3274,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/chat?agent=vett">Talk</a>
+          <a class="agent-act primary" href="/messages/vett">Talk</a>
           <a class="agent-act cc-advanced" href="/citizens">Duties</a>
         </div>
       </div>
@@ -3289,7 +3290,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/chat?agent=scotty">Talk</a>
+          <a class="agent-act primary" href="/messages/scotty">Talk</a>
           <a class="agent-act" href="#approvals-anchor" data-open-chapter="chapter-gates">Queue</a>
         </div>
       </div>
@@ -3305,7 +3306,7 @@
           <div class="state" data-kernel-state-text>checking…</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/chat?agent=kernel">Talk</a>
+          <a class="agent-act primary" href="/messages/kernel">Talk</a>
           <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (Flash coding default)">OpenCode</button>
           <button type="button" class="agent-act" data-kernel-warm>Warm</button>
           <details class="agent-more">
@@ -3329,7 +3330,7 @@
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
-          <a class="agent-act primary" href="/chat?agent=eve">Talk</a>
+          <a class="agent-act primary" href="/messages/eve">Talk</a>
           <a class="agent-act" href="/charters">Charters</a>
         </div>
       </div>
@@ -4637,7 +4638,7 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
     chipsEl.innerHTML = items.map((a) => {
-      const href = `/chat?agent=${encodeURIComponent(a.citizen || "")}`;
+      const href = `/messages/${encodeURIComponent(a.citizen || "")}`;
       const kind = esc(a.kind || "work");
       const name = esc(((a.label || "").split(" · ")[0]) || a.citizen || "someone");
       return `<a class="an-chip" href="${href}" title="${esc(a.label || "")}"><span class="k">${kind}</span><span>${name}</span></a>`;
@@ -4672,10 +4673,10 @@
       const err = form.querySelector("[data-dispatch-err]");
       if (err) err.textContent = "";
       if (!text) return;
-      if (target.startsWith("chat:")) {
-        const agent = target.slice(5);
+      if (target.startsWith("msg:") || target.startsWith("chat:")) {
+        const agent = target.slice(target.indexOf(":") + 1);
         const q = encodeURIComponent(text);
-        window.location.href = `/chat?agent=${agent}&q=${q}`;
+        window.location.href = `/messages/${encodeURIComponent(agent)}?q=${q}`;
         return;
       }
       if (target.startsWith("board:")) {

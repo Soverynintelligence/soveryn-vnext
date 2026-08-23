@@ -589,8 +589,9 @@ def create_app(
 
         # Email connector — arms only when SOVERYN_SMTP_* / IMAP_* set.
         # Citizens board shows granted-but-unarmed until configured.
+        # Each owner gets house From aliases (not Jon's personal Gmail).
         from soveryn.platform.email import register_email_tools
-        for agent_name in ("aetheria", "vett"):
+        for agent_name in ("aetheria", "vett", "eve", "scotty", "kernel"):
             try:
                 register_email_tools(tool_registry, owner_agent=agent_name)
             except Exception:
@@ -610,6 +611,17 @@ def create_app(
             register_objective_tools(tool_registry, owner_agent="aetheria")
         except Exception:
             logger.exception("objective tools not registered for aetheria")
+
+        # PondWright house pricing — Apex catalog + rate book (CWG desk).
+        # Prefer this over web digs for equipment / service quotes.
+        from soveryn.platform.pondwright import register_pondwright_tools
+        for agent_name in ("aetheria", "vett"):
+            try:
+                register_pondwright_tools(tool_registry, owner_agent=agent_name)
+            except Exception:
+                logger.exception(
+                    "pondwright tools not registered for %s", agent_name
+                )
 
         # system_probe — read-only LIVE host inventory (GPUs/CPU/mem/net/board)
         # over a FIXED command allowlist. Gives the "this machine" fact-class a

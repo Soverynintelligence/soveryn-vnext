@@ -189,6 +189,14 @@ def _enqueue_cos_summary(
             room = None
     dm = (room or {}).get("dm_session_id")
     room_sid = (room or {}).get("session_id")
+    # Research commissions stamp dm_session_id into the body when assigned
+    # from a live Messages thread (objective_assign + AgentLoop inject).
+    if not dm:
+        import re as _re
+
+        m = _re.search(r"(?m)^dm_session_id:\s*(\S+)\s*$", task or "")
+        if m and m.group(1) not in ("-", "None", "null"):
+            dm = m.group(1)
     brief = build_cos_relay_brief(
         peer=peer,
         source_commission_id=source_commission_id,
@@ -243,6 +251,11 @@ def _deliver_cos_summary_if_relay(
         if room_sid == "-":
             room_sid = None
         src = meta.get("source_commission") or commission_id
+        # Peer result lives in the relay prompt — use it to rescue dropped $.
+        peer_result = ""
+        marker = "## Peer result"
+        if marker in (body or ""):
+            peer_result = (body or "").split(marker, 1)[1].strip()
         return deliver_peer_result_to_jon(
             conv_store,
             dm_session_id=dm,
@@ -252,6 +265,7 @@ def _deliver_cos_summary_if_relay(
             commission_id=src,
             room_session_id=room_sid,
             as_cos_summary=True,
+            peer_result_for_numbers=peer_result or None,
         )
     except Exception:
         logger.exception("CoS summary delivery failed for %s", commission_id)
@@ -629,10 +643,11 @@ def make_agent_process_fn(
         session_id = conv_store.new_session(
             citizen_id, title=f"[commission] {commission_id[:8]}"
         )
+        is_cos_relay = (body or "").lstrip().startswith("[COS_RELAY]")
         # If this commission is tied to a group room, fold in the shared
         # thread so Vett/Eve/… can see what other hands already contributed.
         room_ctx = ""
-        if data_root is not None:
+        if data_root is not None and not is_cos_relay:
             try:
                 from soveryn.rooms.store import (
                     find_room_for_commission,
@@ -660,7 +675,7 @@ def make_agent_process_fn(
                 )
         research_bar = ""
         blob = (body or "").lower()
-        if any(
+        if (not is_cos_relay) and any(
             k in blob
             for k in (
                 "price",
@@ -676,26 +691,42 @@ def make_agent_process_fn(
         ):
             research_bar = (
                 "\n\nRESEARCH BAR (PondWright-grade — do not phone this in):\n"
-                "- Pull **specific** model names and **dollar prices** from "
-                "multiple real platforms (manufacturer sites + major retailers "
-                "like The Pond Guy, Aquascape dealers, Amazon, specialty pond "
-                "shops). Name the source next to each price.\n"
-                "- Prefer tables: Brand | Model | What it covers | Price | Source URL.\n"
-                "- If a search is thin, try alternate queries (SKU, series name, "
-                "'maintenance plan', 'service contract', 'annual service') and "
-                "fetch promising result pages — do not stop at 'no pricing found' "
-                "after one vague pass.\n"
+                "- **House first:** pick a catalog — `apex_catalog_search` "
+                "(Apex MAP/MSRP/WS) or `akt_catalog_search` (AKT dealer WS) — "
+                "plus `pondwright_pricing_book` for labor/service rates. "
+                "Catalogs are separate; do not blend them. Customer retail from "
+                "Apex = MAP (else MSRP). Never quote wholesale (ws).\n"
+                "- Prefer tables: Brand | Model/MPN | Coverage | Price | Source "
+                "(Apex catalog / rate book).\n"
+                "- Web is fallback only when the house catalog/rate book cannot "
+                "answer (e.g. competitor comps). Do not dig the web for Apex/"
+                "Aquascape dealer list prices that already live in the house.\n"
                 "- Cite-or-stop: if you cannot verify a number, say so; never invent.\n"
             )
-        prompt = (
-            f"[COMMISSION {commission_id}]\n"
-            "You are executing a house commission — discrete work Jon (or a "
-            "duty) placed on your desk. Complete the task. Write a clear, "
-            "self-contained result a human can read without the chat UI."
-            f"{research_bar}"
-            f"{room_ctx}\n\n"
-            f"{body.strip()}"
-        )
+        if is_cos_relay:
+            prompt = (
+                f"[COMMISSION {commission_id}]\n"
+                "You are Chief of Staff writing Jon's DM brief. Your reply is "
+                "delivered verbatim into his 1:1 Messages thread.\n"
+                "HARD RULES this turn:\n"
+                "- Include every useful price/model/source from the peer result "
+                "(copy the markdown price table into your brief).\n"
+                "- Do NOT call objective_verify.\n"
+                "- Do NOT say the brief is 'already in front of him' without "
+                "writing the numbers yourself.\n"
+                "- No fluff. Decisive. Honest about gaps.\n\n"
+                f"{body.strip()}"
+            )
+        else:
+            prompt = (
+                f"[COMMISSION {commission_id}]\n"
+                "You are executing a house commission — discrete work Jon (or a "
+                "duty) placed on your desk. Complete the task. Write a clear, "
+                "self-contained result a human can read without the chat UI."
+                f"{research_bar}"
+                f"{room_ctx}\n\n"
+                f"{body.strip()}"
+            )
         response = loop.process_message(
             session_id, prompt, source="commission"
         )

@@ -187,10 +187,31 @@ def append_finding(path: str | Path, finding: dict[str, Any]) -> dict[str, Any]:
 
 def research_commission_body(objective: dict[str, Any]) -> str:
     """Body string that citizens-runtime routes to the research wave runner."""
+    desk = (objective.get("desk") or "").strip().lower()
+    cwg_bar = ""
+    if desk == "cwg":
+        cwg_bar = (
+            "\nCWG HOUSE PRICING (mandatory):\n"
+            "- Pick a catalog — do not blend:\n"
+            "  • `apex_catalog_search` — Aquascape/Apex MAP/MSRP/WS "
+            "(customer retail = MAP else MSRP)\n"
+            "  • `akt_catalog_search` — AKT Specialty dealer storefront "
+            "(price in ws only; house cost)\n"
+            "- Also call `pondwright_pricing_book` for labor / spring "
+            "clean-out / service rates.\n"
+            "- Web search is fallback only for competitor comps the house "
+            "books cannot answer. Never invent prices.\n"
+            "- Output a markdown table: Brand | Model/MPN | Coverage | "
+            "Price | Source (Apex|AKT|rate book).\n"
+        )
+    dm = (objective.get("dm_session_id") or "").strip()
+    dm_line = f"dm_session_id: {dm}\n" if dm else ""
     return (
         f"[RESEARCH_OBJECTIVE {objective['id']}]\n"
         f"desk: {objective['desk']}\n"
         f"title: {objective['title']}\n"
-        f"success: {objective.get('success_criteria') or 'sourced pricing table or honest gap'}\n\n"
+        f"success: {objective.get('success_criteria') or 'sourced pricing table or honest gap'}\n"
+        f"{dm_line}\n"
         f"{objective['brief'].strip()}\n"
+        f"{cwg_bar}"
     )

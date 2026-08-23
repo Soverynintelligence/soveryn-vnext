@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Room · SOVERYN</title>
 <style>
   :root {
@@ -67,10 +67,10 @@
   }
   .bubble {
     max-width: 78%; padding: 10px 14px; border-radius: 18px;
-    white-space: pre-wrap; word-break: break-word; font-size: 16px; line-height: 1.35;
+    word-break: break-word; font-size: 16px; line-height: 1.4;
   }
   .bubble.user {
-    align-self: flex-end; background: var(--bubble-me);
+    align-self: flex-end; background: var(--bubble-me); white-space: pre-wrap;
     border: 1px solid rgba(198,166,100,0.25); border-bottom-right-radius: 4px;
   }
   .bubble.assistant {
@@ -79,35 +79,87 @@
   .bubble.system {
     align-self: center; max-width: 92%; font-size: 13px; color: var(--ink-2);
     background: rgba(111,185,138,0.08); border-radius: 12px; padding: 8px 12px;
+    white-space: pre-wrap;
   }
   .bubble .who {
     font-size: 11px; letter-spacing: 0.04em; color: var(--gold); margin-bottom: 4px; font-weight: 600;
   }
   .bubble.system .who { color: var(--mint); }
+  .bubble .md-body > *:first-child { margin-top: 0; }
+  .bubble .md-body > *:last-child { margin-bottom: 0; }
+  .bubble .md-body p { margin: 0.45em 0; }
+  .bubble .md-body h1, .bubble .md-body h2, .bubble .md-body h3, .bubble .md-body h4 {
+    font-size: 1.05em; font-weight: 700; margin: 0.65em 0 0.3em;
+  }
+  .bubble .md-body ul, .bubble .md-body ol { margin: 0.4em 0; padding-left: 1.25em; }
+  .bubble .md-body li { margin: 0.15em 0; }
+  .bubble .md-body code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.88em; background: rgba(255,255,255,0.06);
+    padding: 0.1em 0.35em; border-radius: 4px;
+  }
+  .bubble .md-body pre {
+    margin: 0.5em 0; padding: 10px 12px; overflow-x: auto;
+    background: rgba(0,0,0,0.35); border-radius: 10px; font-size: 0.86em;
+  }
+  .bubble .md-body pre code { background: none; padding: 0; }
+  .bubble .md-body a { color: var(--gold); }
   .composer {
+    position: sticky; bottom: 0; z-index: 4;
     padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px;
+    background: rgba(0,0,0,0.95);
   }
   .ask-row {
     display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
     justify-content: flex-start;
   }
   .ask-row button {
-    font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px;
     border: 1px solid var(--line); background: transparent;
-    color: var(--ink-3); cursor: pointer;
+    color: var(--ink-3); cursor: pointer; min-height: 32px;
   }
   .ask-row button:active { color: var(--ink); border-color: rgba(111,185,138,0.35); }
   .composer-row { display: flex; gap: 8px; align-items: center; }
-  .composer-row input {
+  .composer-row input, .composer-row textarea {
     flex: 1; font: inherit; font-size: 16px; padding: 10px 14px; border-radius: 20px;
     border: 1px solid var(--line); background: #141210; color: var(--ink);
+  }
+  .composer-row textarea {
+    border-radius: 16px; resize: none; min-height: 72px; max-height: 140px;
   }
   .composer-row .send {
     width: 36px; height: 36px; border-radius: 50%; border: none;
     background: var(--gold); color: #0c0b0a; font-size: 18px; font-weight: 700; cursor: pointer;
   }
   .status { font-size: 12px; color: var(--ink-3); min-height: 1.2em; }
+  .sheet {
+    display: none; flex-direction: column; gap: 8px;
+    padding: 8px 0 0; border-top: 1px solid var(--line);
+  }
+  .sheet.open { display: flex; }
+  .composer.sheet-open .ask-row,
+  .composer.sheet-open [data-main-compose] { display: none !important; }
+  .sheet .sheet-label {
+    font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em;
+  }
+  .sheet .peer-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sheet .peer-picks button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: #141210; color: var(--ink); cursor: pointer;
+  }
+  .sheet .peer-picks button:active,
+  .sheet .peer-picks button.selected {
+    border-color: var(--mint); color: var(--mint);
+  }
+  .sheet .sheet-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .sheet .sheet-actions button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: #0c0b0a; color: var(--ink); cursor: pointer;
+  }
+  .sheet .sheet-actions button.primary {
+    background: var(--gold); color: #0c0b0a; border-color: var(--gold); font-weight: 600;
+  }
   .approval-card {
     align-self: flex-start;
     max-width: 88%;
@@ -155,13 +207,31 @@
   <div class="thread" data-testid="thread" role="log" aria-live="polite"></div>
 
   <div class="composer">
-    <div class="composer-row">
-      <input type="text" data-composer placeholder="iMessage" aria-label="Message">
-      <button type="button" class="send" data-send>↑</button>
-    </div>
     <div class="ask-row">
       <button type="button" data-add-peer title="Add someone to this group">+ add</button>
       <button type="button" data-ask-peer title="Ask a peer in this group">ask…</button>
+    </div>
+    <div class="sheet" data-add-sheet>
+      <div class="sheet-label">Add to this group</div>
+      <div class="peer-picks" data-add-picks></div>
+      <div class="sheet-actions">
+        <button type="button" data-add-cancel>Cancel</button>
+      </div>
+    </div>
+    <div class="sheet" data-ask-sheet>
+      <div class="sheet-label">Ask someone in this group</div>
+      <div class="peer-picks" data-ask-picks></div>
+      <div class="composer-row">
+        <textarea data-ask-brief placeholder="What should they check or do?" rows="3" aria-label="Brief"></textarea>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" data-ask-cancel>Cancel</button>
+        <button type="button" class="primary" data-ask-send>Ask</button>
+      </div>
+    </div>
+    <div class="composer-row" data-main-compose>
+      <input type="text" data-composer placeholder="iMessage" aria-label="Message">
+      <button type="button" class="send" data-send>↑</button>
     </div>
     <div class="status" data-status></div>
   </div>
@@ -178,6 +248,7 @@
     stream: true,
     shownApprovalIds: new Set(),
     gatePollTimer: null,
+    askPeerPick: null,
   };
 
   const $ = (s) => document.querySelector(s);
@@ -190,6 +261,40 @@
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
 
+  function renderMarkdown(md) {
+    let s = String(md || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    s = s.replace(/```[\s\S]*?```/g, (m) => {
+      const inner = m.slice(3, -3).replace(/^\w*\n/, "");
+      return "<pre><code>" + inner + "</code></pre>";
+    });
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
+    s = s.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
+    s = s.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+    s = s.replace(/^&gt;\s+(.*)$/gm, "<blockquote>$1</blockquote>");
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+    s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^[-*]\s+/, "") + "</li>").join("");
+      return "<ul>" + items + "</ul>";
+    });
+    s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^\d+\.\s+/, "") + "</li>").join("");
+      return "<ol>" + items + "</ol>";
+    });
+    s = s.replace(/\n{2,}/g, "</p><p>");
+    s = "<p>" + s + "</p>";
+    s = s.replace(/<p>\s*<\/p>/g, "");
+    s = s.replace(/<p>(<(?:h[1-6]|ul|ol|pre|blockquote)[\s\S]*?<\/(?:h[1-6]|ul|ol|pre|blockquote)>)<\/p>/g, "$1");
+    return s;
+  }
+
   function appendBubble(role, content, who) {
     const b = document.createElement("div");
     b.className = "bubble " + role;
@@ -200,10 +305,39 @@
       b.appendChild(w);
     }
     const body = document.createElement("div");
-    body.textContent = content;
+    if (role === "assistant") {
+      body.className = "md-body";
+      body.innerHTML = renderMarkdown(content);
+    } else {
+      body.textContent = content;
+    }
     b.appendChild(body);
     thread().appendChild(b);
     thread().scrollTop = thread().scrollHeight;
+  }
+
+  function closeSheets() {
+    const add = $("[data-add-sheet]");
+    const ask = $("[data-ask-sheet]");
+    const composer = document.querySelector(".composer");
+    if (add) add.classList.remove("open");
+    if (ask) ask.classList.remove("open");
+    if (composer) composer.classList.remove("sheet-open");
+    state.askPeerPick = null;
+  }
+
+  function bindKeyboardInset() {
+    const vv = window.visualViewport;
+    const composer = document.querySelector(".composer");
+    if (!vv || !composer) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      composer.style.paddingBottom = "max(8px, calc(env(safe-area-inset-bottom) + " + inset + "px))";
+      thread().style.paddingBottom = inset ? (inset + 8) + "px" : "";
+    };
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    sync();
   }
 
   function memberLabel(pid) {
@@ -439,21 +573,10 @@
     setStatus("");
   }
 
-  async function addPeer() {
-    if (!state.sessionId) return;
-    const available = ALL_PEERS.filter((p) => !(state.peers || []).includes(p));
-    if (!available.length) {
-      setStatus("Everyone's already in this group");
-      return;
-    }
-    const pick = prompt("Add who? " + available.join(", "));
-    if (!pick) return;
-    const peer = pick.trim().toLowerCase();
-    if (!available.includes(peer)) {
-      setStatus("Pick one of: " + available.join(", "));
-      return;
-    }
+  async function addPeerToRoom(peer) {
+    if (!state.sessionId || !peer) return;
     setStatus("Adding " + peer + "…");
+    closeSheets();
     const r = await fetch("/api/rooms/" + encodeURIComponent(state.sessionId) + "/add_peer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -468,6 +591,30 @@
     renderPeerChips(state.peers);
     await loadHistory();
     setStatus("Added " + peer.charAt(0).toUpperCase() + peer.slice(1));
+  }
+
+  function openAddSheet() {
+    if (!state.sessionId) return;
+    const available = ALL_PEERS.filter((p) => !(state.peers || []).includes(p));
+    if (!available.length) {
+      setStatus("Everyone's already in this group");
+      return;
+    }
+    const ask = $("[data-ask-sheet]");
+    const add = $("[data-add-sheet]");
+    const composer = document.querySelector(".composer");
+    const picks = $("[data-add-picks]");
+    if (ask) ask.classList.remove("open");
+    picks.innerHTML = "";
+    available.forEach((peer) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = peer.charAt(0).toUpperCase() + peer.slice(1);
+      btn.addEventListener("click", () => addPeerToRoom(peer));
+      picks.appendChild(btn);
+    });
+    add.classList.add("open");
+    if (composer) composer.classList.add("sheet-open");
   }
 
   async function loadHistory() {
@@ -527,28 +674,60 @@
         }
       }
       if (!text) bodyEl.textContent = "(no reply)";
+      else {
+        bodyEl.className = "md-body";
+        bodyEl.innerHTML = renderMarkdown(text);
+      }
     } catch (e) {
       bodyEl.textContent = "error · " + e.message;
     }
     setStatus("");
   }
 
-  async function askPeer() {
+  function openAskSheet() {
     if (!state.sessionId) return;
     const peers = state.peers.length ? state.peers : [state.peer];
-    let peer = peers[0];
-    if (peers.length > 1) {
-      const pick = prompt("Ask who? " + peers.join(", "), peer);
-      if (!pick) return;
-      peer = pick.trim().toLowerCase();
-      if (!peers.includes(peer)) {
-        setStatus("Pick one of: " + peers.join(", "));
-        return;
-      }
+    const add = $("[data-add-sheet]");
+    const ask = $("[data-ask-sheet]");
+    const composer = document.querySelector(".composer");
+    const picks = $("[data-ask-picks]");
+    const brief = $("[data-ask-brief]");
+    if (add) add.classList.remove("open");
+    state.askPeerPick = peers[0];
+    picks.innerHTML = "";
+    peers.forEach((peer) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = peer.charAt(0).toUpperCase() + peer.slice(1);
+      if (peer === state.askPeerPick) btn.classList.add("selected");
+      btn.addEventListener("click", () => {
+        state.askPeerPick = peer;
+        picks.querySelectorAll("button").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+      });
+      picks.appendChild(btn);
+    });
+    if (brief) brief.value = "";
+    ask.classList.add("open");
+    if (composer) composer.classList.add("sheet-open");
+    if (brief) brief.focus();
+  }
+
+  async function submitAskPeer() {
+    if (!state.sessionId) return;
+    const peers = state.peers.length ? state.peers : [state.peer];
+    const peer = state.askPeerPick || peers[0];
+    if (!peers.includes(peer)) {
+      setStatus("Pick someone in this group");
+      return;
+    }
+    const brief = (($("[data-ask-brief]") || {}).value || "").trim();
+    if (!brief) {
+      setStatus("Say what they should check or do");
+      return;
     }
     const name = peer.charAt(0).toUpperCase() + peer.slice(1);
-    const brief = prompt("What should " + name + " check or do?");
-    if (!brief) return;
+    closeSheets();
     setStatus("Commissioning " + name + "…");
     const r = await fetch("/api/rooms/" + encodeURIComponent(state.sessionId) + "/ask_peer", {
       method: "POST",
@@ -591,9 +770,13 @@
   $("[data-composer]").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") { ev.preventDefault(); sendMessage(); }
   });
-  $("[data-ask-peer]").addEventListener("click", askPeer);
-  $("[data-add-peer]").addEventListener("click", addPeer);
+  $("[data-ask-peer]").addEventListener("click", openAskSheet);
+  $("[data-add-peer]").addEventListener("click", openAddSheet);
+  $("[data-ask-send]").addEventListener("click", submitAskPeer);
+  $("[data-ask-cancel]").addEventListener("click", closeSheets);
+  $("[data-add-cancel]").addEventListener("click", closeSheets);
 
+  bindKeyboardInset();
   openRoom().then(() => {
     startPoll();
     startGatePoll();

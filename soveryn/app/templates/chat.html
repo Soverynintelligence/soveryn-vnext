@@ -891,15 +891,15 @@
 <body class="lab" data-lab>
 
 <div class="plate">
-  <a class="id" href="/">
+  <a class="id" href="/command-center">
     <img src="/static/lab-seal.png" alt="" width="44" height="44">
     <span><b>SOVERYN</b><i>Chat</i></span>
   </a>
   <nav>
-    <a href="/">Command</a>
+    <a href="/command-center">Command</a>
     <a href="/fleet">Fleet</a>
     <a href="/citizens" class="keep">Citizens</a>
-    <a href="/chat" class="active keep">Chat</a>
+    <a href="/messages" class="keep">Messages</a>
     <a href="/documents">Docs</a>
     <a href="/charters" class="keep">Charters</a>
   </nav>
@@ -909,7 +909,7 @@
   <aside data-testid="sidebar">
     <div class="brand">
       <div class="wordmark">SOVERYN</div>
-      <a href="/" class="home" data-testid="mission-control-link">⌂ mission control</a>
+      <a href="/command-center" class="home" data-testid="mission-control-link">⌂ mission control</a>
     </div>
 
     <button class="new-chat act primary" data-testid="new-chat">+ New conversation</button>
@@ -967,7 +967,7 @@
             <button type="button" role="menuitem" data-more="copy-id">Copy session id</button>
             <button type="button" role="menuitem" data-more="delete" class="danger">Delete session</button>
             <div class="menu-sep" role="separator"></div>
-            <a href="/" role="menuitem">Command</a>
+            <a href="/command-center" role="menuitem">Command</a>
             <a href="/room?peer=vett" role="menuitem" data-room-link>Room with Vett</a>
             <a href="/fleet" role="menuitem">Fleet</a>
             <a href="/m/" role="menuitem">Mobile</a>

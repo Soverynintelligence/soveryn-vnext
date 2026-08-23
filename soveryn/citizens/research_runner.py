@@ -60,11 +60,12 @@ def _wave_prompt(
         f"{objective['brief']}\n\n"
         f"{prior}"
         "PondWright bar for this wave:\n"
-        "- Search AND fetch promising pages (don't stop at snippets).\n"
-        "- Extract Brand | Model | Coverage | Price | Source URL.\n"
-        "- Try alternate queries if results are generic (SKU, series, "
-        "'service contract', 'annual maintenance', regional packages).\n"
-        "- Cite-or-stop: no invented prices.\n"
+        "- **House first:** pick `apex_catalog_search` OR `akt_catalog_search` "
+        "(separate catalogs), plus `pondwright_pricing_book` for rates.\n"
+        "- Extract Brand | Model/MPN | Coverage | Price | Source "
+        "(Apex catalog / rate book / URL only if web fallback).\n"
+        "- Customer retail = MAP else MSRP. Never publish wholesale.\n"
+        "- Web only if the house book cannot answer. Cite-or-stop.\n"
         "- End with a short WAVE_SUMMARY listing new rows added or why none.\n"
     )
 
@@ -161,7 +162,24 @@ def run_research_objective(
                 f for f in findings
                 if isinstance(f, dict) and f.get("price") and "$" in str(f.get("price"))
             ]
-            if len(priced) >= 3:
+            # CWG house catalogs: accept Apex/AKT/rate-book sources without "$"
+            # if the price cell is numeric-looking.
+            house_priced = [
+                f for f in findings
+                if isinstance(f, dict)
+                and f.get("price")
+                and (
+                    "$" in str(f.get("price"))
+                    or any(
+                        s in str(f.get("source", "")).lower()
+                        for s in ("apex", "akt", "rate book", "pondwright")
+                    )
+                )
+            ]
+            enough = len(priced) >= 3 or (
+                (objective.get("desk") or "").lower() == "cwg" and len(house_priced) >= 3
+            )
+            if enough:
                 objectives_mod.set_state(
                     conn, oid, state="ready_for_verify", at=_now()
                 )
@@ -174,9 +192,20 @@ def run_research_objective(
             checkpoint = objectives_mod.load_checkpoint(path)
 
         findings = checkpoint.get("findings") or []
+        priced = [
+            f for f in findings
+            if isinstance(f, dict) and f.get("price") and "$" in str(f.get("price"))
+        ]
         lines = [
             f"# Research objective result · {objective['title']}",
+            f"OBJECTIVE_ID: {oid}",
+            "STATE: ready_for_verify",
             f"desk={objective['desk']} owner={citizen_id} waves={checkpoint.get('wave')}",
+            f"success: {objective.get('success_criteria') or '(not specified)'}",
+            "",
+            "CoS: put the priced brief (with $) into Jon's DM now. "
+            f"Do NOT call objective_verify until Jon accepts/rejects. "
+            f"objective_id={oid}.",
             "",
             "| Brand | Model | Coverage | Price | Source |",
             "|---|---|---|---|---|",
@@ -189,14 +218,35 @@ def run_research_objective(
                 f"{f.get('coverage','')} | {f.get('price','')} | "
                 f"{f.get('source','')} |"
             )
-        if not any(isinstance(f, dict) and f.get("price") for f in findings):
+        if not priced:
             lines.append("")
             lines.append(
-                "No sourced price rows extracted. See wave summaries for attempts."
+                "**Honest gap:** no sourced dollar rows. Web catalogs do not "
+                "publish service/maintenance plan pricing for the targets "
+                "searched. Prefer house pricing (PondWright estimator / CRM) "
+                "or local contractor calls over more web waves."
             )
-            for w in (checkpoint.get("waves_done") or [])[-3:]:
-                lines.append(f"\n## Wave {w.get('wave')}\n{w.get('summary','')}\n")
-        return "\n".join(lines)
+            # Keep the last wave only — Cos summarizes; don't dump the trail.
+            last = (checkpoint.get("waves_done") or [])[-1:]
+            for w in last:
+                lines.append(
+                    f"\n## Last wave ({w.get('wave')}) trail\n"
+                    f"{(w.get('summary') or '')[:1200]}\n"
+                )
+        else:
+            lines.append("")
+            lines.append(
+                f"**{len(priced)} sourced price row(s)** ready for Jon to verify."
+            )
+
+        text = "\n".join(lines)
+        try:
+            root = Path(path)
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "result.md").write_text(text + "\n", encoding="utf-8")
+        except OSError:
+            logger.exception("could not write result.md for objective %s", oid)
+        return text
 
 
 def _now() -> str:

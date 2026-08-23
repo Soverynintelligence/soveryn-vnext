@@ -27,12 +27,78 @@ def app_state(tmp_path, fake_chat):
 
 
 def test_root_serves_command_center(app_state):
-    resp = app_state.get("/")
+    resp = app_state.get("/", headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
     assert resp.status_code == 200
     assert resp.content_type.startswith("text/html")
     assert resp.headers.get("X-SOVERYN-UI-Source") == "vnext-native"
     body = resp.data.decode("utf-8")
     assert 'data-testid="command-center"' in body
+
+
+def test_root_phone_redirects_to_messages(app_state):
+    resp = app_state.get(
+        "/",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
+                "Mobile/15E148 Safari/604.1"
+            )
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers.get("Location", "").endswith("/messages")
+
+
+def test_root_phone_can_force_command_center(app_state):
+    resp = app_state.get(
+        "/?desk=1",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+            )
+        },
+    )
+    assert resp.status_code == 200
+    assert 'data-testid="command-center"' in resp.data.decode("utf-8")
+
+
+def test_command_center_alias(app_state):
+    resp = app_state.get("/command-center")
+    assert resp.status_code == 200
+    assert 'data-testid="command-center"' in resp.data.decode("utf-8")
+
+
+def test_command_center_phone_redirects_to_messages(app_state):
+    resp = app_state.get(
+        "/command-center",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 "
+                "Mobile/15E148 Safari/604.1"
+            )
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers.get("Location", "").endswith("/messages")
+
+
+def test_command_center_phone_can_force_desk(app_state):
+    resp = app_state.get(
+        "/command-center?desk=1",
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1"
+            )
+        },
+    )
+    assert resp.status_code == 200
+    assert 'data-testid="command-center"' in resp.data.decode("utf-8")
 
 
 def test_root_has_greeting_block(app_state):
@@ -86,11 +152,17 @@ def test_root_no_external_resources(app_state):
     assert re.findall(r'<link[^>]+href=["\']https?://', body) == []
 
 
-def test_agent_cards_link_to_chat(app_state):
-    """Each agent card on the command center is a link into /chat?agent=<n>."""
-    body = app_state.get("/").data.decode("utf-8")
+def test_agent_cards_link_to_messages(app_state):
+    """Each agent card Talk button opens Messages — not lab /chat."""
+    body = app_state.get(
+        "/",
+        headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0.0.0"},
+    ).data.decode("utf-8")
+    assert 'href="/chat"' not in body
+    assert ">Chat<" not in body
+    assert 'href="/messages"' in body
     for agent in ACTIVE_AGENTS:
-        assert f'/chat?agent={agent}' in body
+        assert f'/messages/{agent}' in body
 
 
 def test_legacy_moved_to_legacy_path(app_state):

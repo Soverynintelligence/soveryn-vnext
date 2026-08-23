@@ -45,10 +45,17 @@ CATALOG: dict[str, ConnectorDef] = {
     "email": ConnectorDef(
         id="email",
         title="Email",
-        description="Send and list mail when SMTP/IMAP is configured for the house.",
+        description=(
+            "Send as a house-owned citizen/desk address when SMTP is armed; "
+            "list house IMAP when configured. Never Jon's personal Gmail."
+        ),
         tools=("email_send", "email_list"),
         class_="channel",
-        sovereignty_note="Arms only with house SMTP/IMAP env — never silent cloud mail SaaS.",
+        sovereignty_note=(
+            "Per-citizen From aliases on house domains (soverynintelligence.com / "
+            "carolinawatergardens.com). Arms only with SOVERYN_SMTP_* — never "
+            "silent cloud mail SaaS (not AgentMail). Write egress stays Gate-approved."
+        ),
     ),
     "signal": ConnectorDef(
         id="signal",
@@ -130,6 +137,27 @@ CATALOG: dict[str, ConnectorDef] = {
         class_="house",
         sovereignty_note="House patrol state + web via web connector.",
     ),
+    "pondwright": ConnectorDef(
+        id="pondwright",
+        title="PondWright pricing",
+        description=(
+            "House Apex Distribution catalog (MAP/MSRP/WS), AKT Specialty dealer "
+            "catalog, and estimator rate book for CWG quotes — not the public web."
+        ),
+        tools=(
+            "apex_catalog_search",
+            "akt_catalog_search",
+            "pondwright_pricing_book",
+        ),
+        class_="house",
+        sovereignty_note=(
+            "Separate pickable catalogs: Apex (xlsx) and AKT Specialty. "
+            "Wholesale stays house-only."
+        ),
+    ),
+
+
+
     "code": ConnectorDef(
         id="code",
         title="Local code exec",
@@ -154,17 +182,17 @@ CATALOG: dict[str, ConnectorDef] = {
 FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     "aetheria": (
         "web", "email", "signal", "messenger", "x", "files", "documents",
-        "system", "delegation", "house_post",
+        "system", "delegation", "house_post", "pondwright",
     ),
     "vett": (
         "web", "email", "files", "documents", "system", "house_post",
-        "git", "patrol",
+        "git", "patrol", "pondwright",
     ),
     "scotty": (
-        "files", "system", "house_post", "code",
+        "files", "system", "house_post", "code", "email",
     ),
     "eve": (
-        "social", "signal", "files", "documents", "house_post",
+        "social", "signal", "files", "documents", "house_post", "email",
     ),
 }
 
@@ -180,10 +208,15 @@ class ConnectorStatus:
     granted: bool
     armed: bool
     reason: str = ""
+    email_from: str = ""
+    email_aliases: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["class"] = d.pop("class_")
+        if not d.get("email_from") and not d.get("email_aliases"):
+            d.pop("email_from", None)
+            d.pop("email_aliases", None)
         return d
 
 
@@ -193,6 +226,15 @@ WEB_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "web_search",
     "fetch_url",
 })
+
+# House-local PondWright pricing — always ungated (no egress).
+PONDWRIGHT_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "apex_catalog_search",
+    "akt_catalog_search",
+    "pondwright_pricing_book",
+})
+
+
 
 # Read-only tools that scheduled/manual automations may use without blocking
 # on the Approval Gate. Writes (email_send, x_post, messenger_send, …) stay
@@ -221,8 +263,11 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
     """
     if tool_name in WEB_AUTO_APPROVE_TOOLS:
         return False
+    if tool_name in PONDWRIGHT_AUTO_APPROVE_TOOLS:
+        return False
     if source == "automation" and tool_name in AUTOMATION_AUTO_APPROVE_TOOLS:
         return False
+
     for defn in CATALOG.values():
         if defn.class_ != "optional_egress":
             continue
@@ -306,6 +351,8 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
 
 
 def for_citizen(citizen_id: str) -> list[ConnectorStatus]:
+    from soveryn.platform.email.identities import allowed_from_addresses, identity_for
+
     grants = set(FOUNDING_GRANTS.get(citizen_id, ()))
     out: list[ConnectorStatus] = []
     for cid, defn in CATALOG.items():
@@ -313,6 +360,12 @@ def for_citizen(citizen_id: str) -> list[ConnectorStatus]:
         armed, reason = connector_armed(cid) if granted else (False, "not granted")
         if granted and not armed:
             reason = reason or "granted but not configured"
+        email_from = ""
+        email_aliases: list[str] = []
+        if cid == "email" and granted:
+            ident = identity_for(citizen_id) or {}
+            email_from = str(ident.get("default") or "")
+            email_aliases = allowed_from_addresses(citizen_id)
         out.append(
             ConnectorStatus(
                 id=defn.id,
@@ -324,13 +377,16 @@ def for_citizen(citizen_id: str) -> list[ConnectorStatus]:
                 granted=granted,
                 armed=bool(granted and armed),
                 reason=reason if granted else "not granted to this citizen",
+                email_from=email_from,
+                email_aliases=email_aliases,
             )
         )
-    # only show granted by default for board compactness? show all with flags
     return out
 
 
 def board_payload() -> dict[str, Any]:
+    from soveryn.platform.email.identities import board_identities
+
     by_citizen = {
         cid: [c.as_dict() for c in for_citizen(cid) if c.granted]
         for cid in FOUNDING_GRANTS
@@ -350,6 +406,7 @@ def board_payload() -> dict[str, Any]:
             for d in CATALOG.values()
         ],
         "by_citizen": by_citizen,
+        "email_identities": board_identities(),
         "house": {
             "email_send_armed": email_ok,
             "email_send_note": email_why,
@@ -360,6 +417,7 @@ def board_payload() -> dict[str, Any]:
         },
         "reading": (
             "Connectors are grants + configuration. Armed means the house can "
-            "actually invoke the channel; granted-but-unarmed needs env (e.g. SMTP)."
+            "actually invoke the channel; granted-but-unarmed needs env (e.g. SMTP). "
+            "Email From is a house citizen identity — never Jon's personal Gmail."
         ),
     }

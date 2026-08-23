@@ -107,3 +107,8 @@ config/opencode/node_modules/
 # Package build artifacts
 packages/*/build/
 packages/*/dist/
+
+# PondWright / AKT secrets live under ~/.config/soveryn/
+
+# Runtime group-room sidecars (not source)
+data/rooms/

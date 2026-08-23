@@ -104,4 +104,5 @@ Park for PondWright phone path + any “desk agent that builds artifacts while y
 ---
 
 _Updated 2026-08-21: claimed the “universal OS” energy as SOVERYN’s, not xAI’s._  
-_Updated 2026-08-22: in-thread peer bot-shape + PondWright talk+CRM+estimator bar._
+_Updated 2026-08-22: in-thread peer bot-shape + PondWright talk+CRM+estimator bar._  
+_Updated 2026-08-23: AgentMail wave → house citizen email identities (`2026-08-23-citizen-email-identity.md`)._

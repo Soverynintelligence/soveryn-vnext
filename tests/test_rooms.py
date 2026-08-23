@@ -199,6 +199,28 @@ def test_project_commission_result_into_room(room_app):
     assert any("replied" in t.content.lower() for t in dm_hist if t.role == "system")
 
 
+def test_ensure_cos_brief_carries_numbers_rescues_thin_meta():
+    from soveryn.rooms.store import ensure_cos_brief_carries_numbers
+
+    peer = (
+        "| Brand | Model | Coverage | Price | Source |\n"
+        "|---|---|---|---|---|\n"
+        "| Aquascape | LARGE SNORKEL VAULT (29064) | vault | $656.99 (MAP) | Apex |\n"
+        "| — | Spring clean-out | labor | $249 | rate book |\n"
+    )
+    thin = (
+        "Objective closed. Brief is in front of Jon — waiting on his call "
+        "on whether the numbers work."
+    )
+    out = ensure_cos_brief_carries_numbers(thin, peer)
+    assert "$656.99" in out
+    assert "$249" in out
+    assert "Objective closed" not in out or "$656.99" in out
+
+    good = "Quote the snorkel vault at **$656.99 MAP** and clean-out at **$249**."
+    assert ensure_cos_brief_carries_numbers(good, peer) == good
+
+
 def test_cos_relays_peer_result_into_jon_dm(room_app):
     """Peer finish → interim chip; CoS summary is what Jon reads."""
     from soveryn.rooms.store import (

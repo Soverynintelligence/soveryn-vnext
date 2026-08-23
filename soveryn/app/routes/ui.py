@@ -1,18 +1,22 @@
 """SOVERYN vNext — native UI routes.
 
-Serves the vNext command center at / and the chat page at /chat
-(plus /chat/<session_id>). All templates live in
-soveryn/app/templates/ — self-contained HTML+CSS+JS, no framework,
-no static asset dependencies, reading from the existing vNext REST
-API (/api/models, /sessions, /chat, /chat_stream, etc.).
+Serves the vNext command center at / (desktop) and the chat page at /chat
+(plus /chat/<session_id>). Phone UA hitting / redirects to /messages —
+Messages is the phone front door; Command Center stays the desk HUD.
+
+All templates live in soveryn/app/templates/ — self-contained HTML+CSS+JS,
+no framework, no static asset dependencies, reading from the existing vNext
+REST API (/api/models, /sessions, /chat, /chat_stream, etc.).
 
 The legacy template bridge that previously sat at / moved to /legacy.
 """
 
 from __future__ import annotations
+
+import re
 from pathlib import Path
 
-from flask import Blueprint, jsonify, make_response
+from flask import Blueprint, jsonify, make_response, redirect, request
 
 bp = Blueprint("ui", __name__)
 
@@ -20,6 +24,13 @@ COMMAND_CENTER_TEMPLATE = Path(__file__).parent.parent / "templates" / "command_
 CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
 FLEET_TEMPLATE = Path(__file__).parent.parent / "templates" / "fleet.html"
 CHARTERS_TEMPLATE = Path(__file__).parent.parent / "templates" / "charters.html"
+
+# Phone / handheld — not tablets (iPad) so desk-sized glass still gets CC.
+_PHONE_UA_RE = re.compile(
+    r"(?:iPhone|iPod|Android.*Mobile|Windows Phone|BlackBerry|webOS|"
+    r"Mobile(?:\s|;|/)|Opera Mini|IEMobile)",
+    re.IGNORECASE,
+)
 
 
 def _serve_html(path: Path, *, missing_label: str):
@@ -32,6 +43,10 @@ def _serve_html(path: Path, *, missing_label: str):
     resp = make_response(html, 200)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
+    # Phone Safari / home-screen bookmarks love stale HTML; Messages must be fresh.
+    if path.name in ("messages.html", "message_thread.html", "room.html"):
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
     return resp
 
 
@@ -39,9 +54,51 @@ def _serve_command_center():
     return _serve_html(COMMAND_CENTER_TEMPLATE, missing_label="Command center")
 
 
+def _is_phone_user_agent(ua: str | None) -> bool:
+    return bool(_PHONE_UA_RE.search(ua or ""))
+
+
+def _force_command_center() -> bool:
+    """Explicit overrides so phone can still open the desk HUD."""
+    raw = (
+        request.args.get("home")
+        or request.args.get("desk")
+        or ""
+    ).strip().lower()
+    return raw in (
+        "cc",
+        "desk",
+        "command",
+        "command-center",
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def _force_messages() -> bool:
+    raw = (request.args.get("home") or "").strip().lower()
+    return raw in ("messages", "phone", "m")
+
+
 @bp.get("/")
+def home():
+    """Desktop → Command Center. Phone → Messages (phone-chat front door)."""
+    if _force_command_center():
+        return _serve_command_center()
+    if _force_messages() or _is_phone_user_agent(request.headers.get("User-Agent")):
+        return redirect("/messages", code=302)
+    return _serve_command_center()
+
+
+@bp.get("/command-center")
 def command_center():
-    """Serve the vNext command center."""
+    """Desk HUD. Phone → Messages unless ?desk=1 (or home=cc) is explicit."""
+    if (
+        _is_phone_user_agent(request.headers.get("User-Agent"))
+        and not _force_command_center()
+    ):
+        return redirect("/messages", code=302)
     return _serve_command_center()
 
 

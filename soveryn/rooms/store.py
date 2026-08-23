@@ -596,6 +596,68 @@ def _resolve_jon_dm_session(
     return None
 
 
+_THIN_COS_META = re.compile(
+    r"brief is in front|objective closed|waiting on (?:his|jon)|"
+    r"numbers work or he wants changes|full detail from .+ is in the group",
+    re.IGNORECASE,
+)
+
+
+def _extract_price_block(peer_result: str) -> str:
+    """Pull a markdown price table (or $-lines) out of a peer result."""
+    text = peer_result or ""
+    lines = text.splitlines()
+    # Prefer a markdown table that mentions Price.
+    for i, line in enumerate(lines):
+        if "|" in line and re.search(r"price", line, re.I):
+            block = [line]
+            if i + 1 < len(lines) and re.match(r"^\s*\|?\s*-+", lines[i + 1]):
+                block.append(lines[i + 1])
+                j = i + 2
+            else:
+                j = i + 1
+            while j < len(lines) and "|" in lines[j]:
+                block.append(lines[j])
+                j += 1
+            joined = "\n".join(block).strip()
+            if "$" in joined and len(block) >= 3:
+                return joined
+    money = [ln for ln in lines if "$" in ln and ln.strip()]
+    if money:
+        return "\n".join(money[:12])
+    return ""
+
+
+def ensure_cos_brief_carries_numbers(summary: str, peer_result: str) -> str:
+    """If the peer found dollars and CoS dropped them, put the table back.
+
+    Live failure mode (2026-08-23): CoS wrote 'Objective closed. Brief is in
+    front of Jon' with zero $ while Vett's room result had the Apex table.
+    """
+    summary = (summary or "").strip()
+    peer = (peer_result or "").strip()
+    if "$" not in peer:
+        return summary
+    thin = bool(_THIN_COS_META.search(summary)) if summary else True
+    if "$" in summary and not thin:
+        return summary
+    block = _extract_price_block(peer)
+    if not block:
+        return summary
+    lead = (
+        "Vett finished the house-catalog dig. Here's what you can quote:"
+        if thin or not summary
+        else summary.rstrip()
+    )
+    if thin and summary and "$" not in summary:
+        lead = "Vett finished the house-catalog dig. Here's what you can quote:"
+    return (
+        f"{lead}\n\n"
+        f"**Numbers from Vett (house catalogs):**\n\n"
+        f"{block}"
+    )
+
+
 def deliver_peer_result_to_jon(
     conv: ConversationStore,
     *,
@@ -606,6 +668,7 @@ def deliver_peer_result_to_jon(
     commission_id: str | None = None,
     room_session_id: str | None = None,
     as_cos_summary: bool = False,
+    peer_result_for_numbers: str | None = None,
 ) -> bool:
     """Deliver into Jon's 1:1 DM — preferably Aetheria's CoS summary.
 
@@ -618,12 +681,14 @@ def deliver_peer_result_to_jon(
     if not dm:
         return False
     text = (result_text or "").strip() or ("(empty result)" if ok else "(failed)")
+    if as_cos_summary and peer_result_for_numbers:
+        text = ensure_cos_brief_carries_numbers(text, peer_result_for_numbers)
     # Cap for chat readability; full text stays in room + outbox.
     delivery = text if len(text) <= 3500 else text[:3497] + "…"
     name = peer.title() if peer else "Peer"
     if as_cos_summary:
         msg = delivery
-        if room_session_id and name:
+        if room_session_id and name and "tap their shape" not in msg.lower():
             msg += (
                 f"\n\n_Full detail from {name} is in the group "
                 f"(tap their shape if you want the raw thread)._"
@@ -666,6 +731,8 @@ def build_cos_relay_brief(
     room_session_id: str | None,
 ) -> str:
     """Prompt body for Aetheria's summarize-and-deliver commission."""
+    import re
+
     peer = (peer or "").strip().lower()
     result = (result_text or "").strip()
     if len(result) > 8000:
@@ -674,6 +741,27 @@ def build_cos_relay_brief(
     if len(task) > 1200:
         task = task[:1197] + "…"
     status = "ok" if ok else "failed"
+
+    verify_block = ""
+    oid = None
+    m = re.search(
+        r"\[RESEARCH_OBJECTIVE ([0-9a-fA-F-]{36})\]", task
+    ) or re.search(
+        r"OBJECTIVE_ID:\s*([0-9a-fA-F-]{36})", result
+    )
+    if m:
+        oid = m.group(1)
+    if oid or "ready_for_verify" in result.lower() or "[RESEARCH_OBJECTIVE" in task:
+        verify_block = (
+            "\n## Standing objective — verify step\n"
+            "This was assign→execute work. Deliver your brief to Jon **now**.\n"
+            "**Do NOT** call objective_verify in this turn — wait until Jon "
+            "explicitly accepts or rejects in a later message.\n"
+            f"When he does, call objective_verify with objective_id="
+            f"`{oid or '(from OBJECTIVE_ID in result)'}` and state "
+            "`done`|`failed`|`cancelled` plus a one-line note.\n"
+        )
+
     return (
         f"{COS_RELAY_MARKER}\n"
         f"peer: {peer}\n"
@@ -684,10 +772,15 @@ def build_cos_relay_brief(
         "You are Chief of Staff. A peer finished work for Jon. "
         "Summarize for Jon in your own voice — decisive, practical, no fluff.\n"
         "- Lead with what he should do / buy / decide.\n"
-        "- Keep specific prices, models, and sources when the peer found them.\n"
+        "- Keep specific prices, models, and sources when the peer found them "
+        "(copy the useful table rows into your brief — Jon should not need the "
+        "group thread to see dollar amounts).\n"
         "- Call out gaps honestly (what is still unknown).\n"
         "- Do not invent numbers. Do not paste the peer's report wholesale.\n"
-        "- Aim for a tight brief he can act on.\n\n"
+        "- Aim for a tight brief he can act on.\n"
+        "- Your reply IS the brief delivered to Jon's DM — never say "
+        "'brief is in front of him' without writing the numbers.\n"
+        f"{verify_block}\n"
         f"## Peer task\n{task}\n\n"
         f"## Peer result\n{result}\n"
     )

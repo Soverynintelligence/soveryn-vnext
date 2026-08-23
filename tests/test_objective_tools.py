@@ -54,3 +54,54 @@ def test_objective_assign_and_status(tool_db):
     assert st["objective"]["state"] == "active"
     listed = reg.invoke("aetheria", "objective_status", {"desk": "cwg"})
     assert listed.get("count", 0) >= 1
+
+
+def test_objective_verify_closes_loop(tool_db):
+    reg = ToolRegistry()
+    register_objective_tools(reg, owner_agent="aetheria")
+    out = reg.invoke(
+        "aetheria",
+        "objective_assign",
+        {
+            "desk": "soveryn",
+            "title": "Smoke verify loop",
+            "brief": "Tiny standing job for the verify tool.",
+            "owner_id": "vett",
+            "enqueue": False,
+        },
+    )
+    oid = out["objective_id"]
+    # Simulate execute finishing → ready_for_verify
+    from soveryn.citizens import objectives as objectives_mod
+    from soveryn.citizens.registry import connect
+
+    with connect(tool_db) as conn:
+        objectives_mod.set_state(
+            conn, oid, state="ready_for_verify", at="2026-08-22T22:00:00Z"
+        )
+    waiting = reg.invoke(
+        "aetheria",
+        "objective_status",
+        {"state": "ready_for_verify"},
+    )
+    assert waiting.get("ok") is True
+    assert any(o["id"] == oid for o in waiting.get("objectives") or [])
+
+    closed = reg.invoke(
+        "aetheria",
+        "objective_verify",
+        {
+            "objective_id": oid,
+            "state": "done",
+            "note": "Jon accepted the brief.",
+        },
+    )
+    assert closed.get("ok") is True
+    assert closed.get("state") == "done"
+    assert closed.get("prior_state") == "ready_for_verify"
+    st = reg.invoke("aetheria", "objective_status", {"objective_id": oid})
+    assert st["objective"]["state"] == "done"
+    path = Path(st["objective"]["checkpoint_path"])
+    assert (path / "verify.md").is_file()
+    ck = st.get("checkpoint") or {}
+    assert "Jon accepted" in (ck.get("verify_note") or "")

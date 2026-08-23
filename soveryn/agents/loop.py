@@ -1622,6 +1622,16 @@ class AgentLoop:
         except (TypeError, json.JSONDecodeError) as exc:
             result = {"error": "ToolArgError", "message": str(exc)}
         else:
+            # Stamp originating Messages/chat session onto objective_assign so
+            # CoS relay delivers the brief into THIS DM, not a random [m] thread.
+            if (
+                tool_name == "objective_assign"
+                and session_id
+                and isinstance(args, dict)
+                and not str(args.get("dm_session_id") or "").strip()
+            ):
+                args = dict(args)
+                args["dm_session_id"] = session_id
             try:
                 result = self.tool_registry.invoke(self.agent_name, tool_name, args)
             except ToolArgError as exc:

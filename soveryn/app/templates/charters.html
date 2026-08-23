@@ -85,15 +85,15 @@
 <body class="lab" data-lab data-testid="charters-board">
 
 <div class="plate">
-  <a class="id" href="/">
+  <a class="id" href="/command-center">
     <img src="/static/lab-seal.png" alt="" width="44" height="44">
     <span><b>SOVERYN</b><i>Charters</i></span>
   </a>
   <nav>
-    <a href="/">Command</a>
+    <a href="/command-center">Command</a>
     <a href="/fleet">Fleet</a>
     <a href="/citizens" class="keep">Citizens</a>
-    <a href="/chat" class="keep">Chat</a>
+    <a href="/messages" class="keep">Messages</a>
     <a href="/documents">Docs</a>
     <a href="/charters" class="active keep">Charters</a>
   </nav>
@@ -187,7 +187,7 @@
       </div>
       <div class="detail-actions">
         ${d.detail_url ? `<a href="${esc(d.detail_url)}" target="_blank" rel="noopener">Source ↗</a>` : ''}
-        <a href="/chat?agent=eve">Open Eve</a>
+        <a href="/messages/eve">Open Eve</a>
         <button type="button" data-copy>Copy prompt</button>
       </div>
       <pre class="prompt" data-prompt>${esc(d.prompt || '')}</pre>
