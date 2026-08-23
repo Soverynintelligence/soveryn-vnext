@@ -41,6 +41,9 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     ("eve:chat", "eve", "chat", "Chat", None),
     ("eve:marketing", "eve", "marketing",
      "Marketing — draft-and-drop IG/FB posts for SOVERYN, ActTruth, CWG", None),
+    ("kernel:chat", "kernel", "chat", "Chat", None),
+    ("kernel:commission_worker", "kernel", "commission_worker",
+     "Commission runtime — build / code assignments", "continuous"),
 )
 
 

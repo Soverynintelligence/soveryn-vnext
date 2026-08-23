@@ -194,6 +194,9 @@ FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     "eve": (
         "social", "signal", "files", "documents", "house_post", "email",
     ),
+    "kernel": (
+        "files", "documents", "system", "house_post", "code", "git", "email",
+    ),
 }
 
 

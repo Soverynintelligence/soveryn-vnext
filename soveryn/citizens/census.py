@@ -120,6 +120,21 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
         ),
         (),
     ),
+    (
+        Citizen(
+            id="kernel",
+            display_name="Kernel",
+            soul_path="data/memory/souls/kernel.md",
+            model_server="kernel_build",
+            workspace_path=str(DEFAULT_WORKSPACES / "kernel"),
+            notes=(
+                "Build / code desk. Inference on Quadros :8091 "
+                f"({_alias_of('kernel_build')}); shared with Eve. "
+                "Jon assigns build work here — not Scotty's repair queue."
+            ),
+        ),
+        (),  # no dedicated process unit on the tower yet — invoked on demand
+    ),
 )
 
 

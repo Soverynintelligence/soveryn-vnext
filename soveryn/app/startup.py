@@ -599,7 +599,7 @@ def create_app(
 
         # House Post tools — inter-citizen mail (all founding citizens).
         from soveryn.platform.house_post_tools import register_house_post_tools
-        for agent_name in ("aetheria", "vett", "scotty", "eve"):
+        for agent_name in ("aetheria", "vett", "scotty", "eve", "kernel"):
             try:
                 register_house_post_tools(tool_registry, owner_agent=agent_name)
             except Exception:
