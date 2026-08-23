@@ -1125,6 +1125,22 @@ def create_app(
                 # and covers document-length tool calls; her 65536 n_ctx has
                 # ample room for it.
                 kwargs["max_tokens"] = 8192
+            elif name == "kernel":
+                # Kernel builds on Quadros Flash (kernel_build / bench-flash).
+                # Live 2026-08-23: chess-page commission died with
+                # LlamaServerTimeout('kernel_build: timeout after 120.0s') while
+                # prompt eval alone was still mid-flight (~8k tokens / ~66 t/s
+                # prefill, generation ~5 t/s). Same class of work as Vett's
+                # heavy turns — code + tools + large context. 600s covers a
+                # full build wave without treating a slow prefill as failure.
+                kwargs["chat_timeout_seconds"] = 600.0
+                kwargs["max_tool_rounds"] = 16
+                kwargs["max_tokens"] = 8192
+            elif name == "eve":
+                # Shares kernel_build with Kernel; lighter marketing turns but
+                # same cold-prefill tax on Quadros. Match Vett's 300s floor.
+                kwargs["chat_timeout_seconds"] = 300.0
+                kwargs["max_tokens"] = 8192
             # Every agent gets its own live thread, not just Aetheria.
             if name in active_context_services:
                 kwargs["active_context"] = active_context_services[name]
