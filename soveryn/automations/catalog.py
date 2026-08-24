@@ -145,4 +145,75 @@ CATALOG: List[AutomationSpec] = [
         ),
         delivery=_SJON,
     ),
+    # --- Marketing / autonomy -------------------------------------------------
+    AutomationSpec(
+        id="eve_product_advertise",
+        title="Eve Product Advertise",
+        category="marketing",
+        agent="eve",
+        cron="0 11 * * 1,4",
+        prompt=(
+            "Cadence marketing tick — you are on schedule, not volunteering cold.\n"
+            "Pick ONE item from this house receipt list (authorized ground truth "
+            "for cadence posts — you do not need web/lattice proof this turn):\n"
+            "1) SOVERYN — local multi-agent house: Messages front door, citizens "
+            "assign→execute→verify (objectives + brief into Jon's DM).\n"
+            "2) SOVERYN — PondWright as a product tool (only when this slot is "
+            "picked): honest quote/CRM tooling. Keep MAP/catalog talk HERE, "
+            "not in CWG brand posts.\n"
+            "3) CWG — outdoor oasis & serenity: living water ecosystems, "
+            "wildlife, birds/dragonflies, shade, stillness, the beauty of "
+            "being outside. Sensory and local. NEVER lead with prices, MAP, "
+            "or catalog quoting — that is not CWG brand voice.\n"
+            "4) ActTruth — ledger/truth standard: cite-or-stop, no fake stats.\n"
+            "Rotate — prefer CWG beauty posts often. Write about the thing, "
+            "not ticket IDs.\n"
+            "HARD RULES this turn:\n"
+            "- Call canva_status. If authorized, create visuals that are NOT "
+            "blank: prefer canva_autofill_post when templates exist; otherwise "
+            "canva_create_design WITH image_path under data/media/ "
+            "(e.g. carolina_watergardens pond JPG, or a graphic you already "
+            "have). Never create an empty canvas. Then canva_export_design → "
+            "compose_post with that PNG. Include Canva edit_url so Jon can "
+            "Schedule in Content Planner.\n"
+            "- Your caption delivery MUST call compose_post (platform "
+            "instagram or both). Narrating 'dropped on Signal' without calling "
+            "compose_post is a failure.\n"
+            "- Pass the full caption in content: hook in line 1; hashtags at "
+            "the end; image_path when export succeeded (text-only OK if Canva "
+            "not ready).\n"
+            "- One brand, one job. No invented stats. No Meta API. Never claim "
+            "posted to IG — only drafted / exported / ready to schedule.\n"
+            "- Do not refuse for lack of search/lattice receipts when using the "
+            "list above — that list IS the receipt for this cadence.\n"
+            "- After tools return, one short confirm line (or tool error)."
+        ),
+        delivery=_SJON,
+    ),
+    AutomationSpec(
+        id="house_improvement_scan",
+        title="House Improvement Scan",
+        category="ops",
+        agent="aetheria",
+        cron="0 10 * * 1,3,5",
+        prompt=(
+            "Autonomy pulse — partner brief, not boss mode.\n"
+            "Check standing house work with objective_status (desk=soveryn and "
+            "desk=cwg, and state=active). Then:\n"
+            "1) If SOVERYN has no active improvement objective, call "
+            "objective_assign desk=soveryn owner_id=kernel with a concrete "
+            "title/brief for the highest-leverage system improvement you can "
+            "name from recent reality (Flash speed, citizen proactive loops, "
+            "Messages UX, PondWright, spine debt). Success criteria: a bounded "
+            "fix or design note Jon can verify.\n"
+            "2) If CWG has no active objective, assign desk=cwg owner_id=vett "
+            "a standing competitor/pricing or service-watch brief (house "
+            "catalogs first).\n"
+            "3) If actives already exist, do NOT stack duplicates — report their "
+            "ids/titles and the single next unblock if any.\n"
+            "Tone: peer briefing Jon. No 'directive', no managing him. Keep it "
+            "under 180 words after the tool calls."
+        ),
+        delivery=_SJON,
+    ),
 ]

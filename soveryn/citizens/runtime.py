@@ -706,15 +706,16 @@ def make_agent_process_fn(
         if is_cos_relay:
             prompt = (
                 f"[COMMISSION {commission_id}]\n"
-                "You are Chief of Staff writing Jon's DM brief. Your reply is "
-                "delivered verbatim into his 1:1 Messages thread.\n"
+                "You are Aetheria writing Jon's DM brief as his partner — not "
+                "as a boss. Your reply is delivered verbatim into his 1:1 "
+                "Messages thread.\n"
                 "HARD RULES this turn:\n"
                 "- Include every useful price/model/source from the peer result "
                 "(copy the markdown price table into your brief).\n"
                 "- Do NOT call objective_verify.\n"
                 "- Do NOT say the brief is 'already in front of him' without "
                 "writing the numbers yourself.\n"
-                "- No fluff. Decisive. Honest about gaps.\n\n"
+                "- No fluff. Honest about gaps. No directive / manager tone.\n\n"
                 f"{body.strip()}"
             )
         else:

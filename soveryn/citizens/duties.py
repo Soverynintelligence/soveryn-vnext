@@ -23,7 +23,8 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     # id, citizen_id, kind, title, schedule
     ("aetheria:chat", "aetheria", "chat", "Chat", None),
     ("aetheria:chief_of_staff", "aetheria", "chief_of_staff",
-     "Chief of Staff — route house post, assign commissions", "continuous"),
+     "House brief relay — route post / assign work (temporary CoS wiring; "
+     "Aetheria is philosophical partner, not house manager)", "continuous"),
     ("aetheria:heartbeat", "aetheria", "heartbeat", "Heartbeat", "interval:1800"),
     ("aetheria:dream", "aetheria", "dream", "Dream", "quiet_hours:23:00-07:00"),
     ("aetheria:signal", "aetheria", "signal", "Signal bridge", "continuous"),
@@ -40,7 +41,8 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
      "Desk worker / residence", "continuous"),
     ("eve:chat", "eve", "chat", "Chat", None),
     ("eve:marketing", "eve", "marketing",
-     "Marketing — draft-and-drop IG/FB posts for SOVERYN, ActTruth, CWG", None),
+     "Marketing — draft-and-drop IG/FB posts for SOVERYN, ActTruth, CWG",
+     "cron:0 11 * * 1,4"),
     ("kernel:chat", "kernel", "chat", "Chat", None),
     ("kernel:commission_worker", "kernel", "commission_worker",
      "Commission runtime — build / code assignments", "continuous"),

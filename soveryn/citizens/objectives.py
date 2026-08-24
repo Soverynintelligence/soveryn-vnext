@@ -215,3 +215,28 @@ def research_commission_body(objective: dict[str, Any]) -> str:
         f"{objective['brief'].strip()}\n"
         f"{cwg_bar}"
     )
+
+
+def build_commission_body(objective: dict[str, Any]) -> str:
+    """Plain commission for build/ops owners (Kernel/Scotty) — not research waves."""
+    dm = (objective.get("dm_session_id") or "").strip()
+    dm_line = f"dm_session_id: {dm}\n" if dm else ""
+    return (
+        f"[BUILD_OBJECTIVE {objective['id']}]\n"
+        f"desk: {objective['desk']}\n"
+        f"title: {objective['title']}\n"
+        f"success: {objective.get('success_criteria') or 'bounded fix or honest blocked'}\n"
+        f"{dm_line}\n"
+        f"{objective['brief'].strip()}\n\n"
+        "Execute this standing objective. Prefer a concrete patch, config fix, "
+        "or design note with paths. When done, state OBJECTIVE_ID="
+        f"{objective['id']} and whether it is ready_for_verify."
+    )
+
+
+def commission_body_for(objective: dict[str, Any]) -> str:
+    """Pick research-wave vs build body from owner."""
+    owner = (objective.get("owner_id") or "").strip().lower()
+    if owner in ("kernel", "scotty", "eve"):
+        return build_commission_body(objective)
+    return research_commission_body(objective)

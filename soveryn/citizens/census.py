@@ -67,9 +67,11 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="aetheria_primary",
             workspace_path=str(DEFAULT_WORKSPACES / "aetheria"),
             notes=(
-                "Chief of Staff of the house. Blackwell :8090, alone — never "
-                "co-tenanted (charter §8). Routes House Post, assigns commissions "
-                "to Vett/Scotty, holds the partnership surface with Jon."
+                "Philosophical partner / primary intelligence. Blackwell :8090, "
+                "alone — never co-tenanted (charter §8). Holds partnership with "
+                "Jon. Still wired as temporary CoS relay for assign→verify "
+                "(autonomy-first; CoS rename deferred) — briefs peers' work, "
+                "does not manage Jon."
             ),
         ),
         ("soveryn-heartbeat.service", "soveryn-dream.service",
@@ -189,6 +191,17 @@ def take_census(conn, *, workspaces: Path = DEFAULT_WORKSPACES,
     # rewire systemd — register first, rewire later (project §7).
     from soveryn.citizens.duties import seed_founding
     seed_founding(conn)
+
+    # Autonomy: keep at least one SOVERYN improve + one CWG watch objective
+    # alive so the house does work without Jon poking.
+    try:
+        from soveryn.citizens.standing_work import ensure_standing_objectives
+        ensure_standing_objectives(conn)
+    except Exception:
+        import logging
+        logging.getLogger("soveryn.citizens.census").exception(
+            "standing objectives seed failed"
+        )
 
     from soveryn.citizens.registry import board_citizens
     return board_citizens(conn)

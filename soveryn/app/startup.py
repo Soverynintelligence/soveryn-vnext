@@ -886,6 +886,14 @@ def create_app(
                 owner_agent="eve",
             )
 
+        # Eve — Canva Connect (create/autofill/export). Publish to IG stays in
+        # Canva Content Planner or manual paste — see platform/canva/SETUP.md.
+        try:
+            from soveryn.platform.canva import register_canva_tools
+            register_canva_tools(tool_registry, owner_agent="eve")
+        except Exception:
+            logger.exception("canva tools not registered")
+
         # botdirectory.ai — browse public bot charters + import to local disk
         # for review. NEVER auto-schedules. Eve (marketing) + Kernel (build).
         from soveryn.platform.botdirectory.tools import register_botdirectory_tools
@@ -1139,7 +1147,9 @@ def create_app(
             elif name == "eve":
                 # Shares kernel_build with Kernel; lighter marketing turns but
                 # same cold-prefill tax on Quadros. Match Vett's 300s floor.
+                # Canva create+export+compose needs several tool rounds.
                 kwargs["chat_timeout_seconds"] = 300.0
+                kwargs["max_tool_rounds"] = 12
                 kwargs["max_tokens"] = 8192
             # Every agent gets its own live thread, not just Aetheria.
             if name in active_context_services:

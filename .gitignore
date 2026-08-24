@@ -112,3 +112,6 @@ packages/*/dist/
 
 # Runtime group-room sidecars (not source)
 data/rooms/
+
+# Canva Connect OAuth tokens (never commit)
+data/canva/

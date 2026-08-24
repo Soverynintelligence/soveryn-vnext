@@ -60,7 +60,7 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                     commission_id = commissions.enqueue(
                         conn,
                         row["owner_id"],
-                        objectives_mod.research_commission_body(row),
+                        objectives_mod.commission_body_for(row),
                         at=_now(),
                     )
             return {

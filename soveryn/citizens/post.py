@@ -221,8 +221,8 @@ def route_via_cos(
         from_id=CHIEF_OF_STAFF_ID,
         to_id=assignee_id,
         body=(
-            f"Directive from Chief of Staff"
-            f"{'' if from_id == CHIEF_OF_STAFF_ID else f' (on behalf of {from_id})'}.\n\n"
+            f"Assignment from the house"
+            f"{'' if from_id == CHIEF_OF_STAFF_ID else f' (via {from_id})'}.\n\n"
             f"{body.strip()}\n\n"
             f"_Commission `{cid}` is on your queue._"
         ),
