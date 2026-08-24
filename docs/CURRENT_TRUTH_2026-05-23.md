@@ -1,10 +1,12 @@
-# SOVERYN Current Truth Spec — 2026-05-23
+# SOVERYN Current Truth Spec — 2026-05-23 (**ARCHIVE**)
 
-> Authoritative description of what is actually running, right now, on this machine. Source of authority for vNext. If something in here changes, this doc changes first.
+> **Superseded 2026-08-24.** Live source of authority is [`docs/CURRENT_TRUTH.md`](CURRENT_TRUTH.md).
+> Keep this file for history only — do not treat as what is running now.
 >
-> **Not aspirational. Not historical. Observed.** Built from live `ps`, `ss`, `systemctl`, and the structural extracts under `/media/.../soveryn_PRESERVE_2026-05-23_174236/decompiled/`.
+> Original note: observed snapshot from 2026-05-23 (`ps` / `ss` / `systemctl` / preserve extracts).
 
 ---
+
 
 ## 1. Active LLM agents
 

@@ -20,7 +20,4 @@
 - `data/media/canva/*` exports
 
 ## Next when fresh
-1. ASUS arrives Tuesday → assign Kernel (or second brain) off tower.
-2. Optional: Canva Brand Templates (`HOOK`/`BODY`/`HASHTAGS`) + `SOVERYN_CANVA_TEMPLATES=…`
-3. Optional: Seneca lead-capture on pricing/hardware gates.
-4. CoS ownership still undecided (Marshal / Eve / Kernel) — after autonomy proves out.
+Kill list lives in **`docs/CURRENT_TRUTH.md` §4** (authority). Order: secrets backup → Seneca leads → email arm/mark → Teammates upgrades. ASUS Tuesday → Kernel brain. FreeToken parked.

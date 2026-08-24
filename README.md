@@ -2,20 +2,17 @@
 
 Clean rebuild of SOVERYN, the local multi-agent system. Built beside the running production instance, not in place of it.
 
-**Source of authority:** `docs/CURRENT_TRUTH_2026-05-23.md`. The active rebuild plan is tracked from `~/soveryn_complete/docs/superpowers/plans/2026-05-27-soveryn-rebuild-phase1-vnext-refactor.md`.
+**Source of authority:** [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md) (rotated 2026-08-24).  
+Archive only: `docs/CURRENT_TRUTH_2026-05-23.md`. Session notes in `docs/notes/` are not authority.
 
 ## Status
 
-vNext is a working side-by-side Flask app and Phase 1 platform refactor substrate. It now has:
+See **CURRENT_TRUTH** for live vs incomplete. Short version:
 
-- 3 active chat agents: Aetheria, V.E.T.T., Scotty
-- Explicit agent packages for Aetheria, Ares, Vett, and Scotty
-- Aetheria chat and heartbeat surfaces split at the code boundary
-- Platform packages for inference, lattice/memory, tools, bus, supervisor, telemetry, and repair recipes
-- Compatibility shims for old import paths during the refactor window
-- Command center UI, chat UI, sessions, streaming, compatibility routes, validation harness, and code-backup daemon from earlier vnext work
-
-Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Phase 2b-i adds the safe memory storage substrate: first-class provenance, write gates, durable Attic storage, additive promotion, a provenance-aware writer, and provisional metadata facets while freezing recall behavior. Phase 2b-ii-a adds Aetheria's deterministic speech-boundary components as a dark path: channel classification, provenance phrasing, uncertainty-only Channel B rendering, the two-channel assembler, no-ghost structural tests, and the IDK floor. Phase 2b-ii-b1 migrates prod-derived legacy memory into vnext Attic as raw low-confidence material and creates a bounded 12-entry reviewed identity spine in vnext lattice. Phase 2b-ii-b2 cuts Aetheria live recall over to the two-channel speech boundary: reviewed identity spine entries are Channel A, raw legacy matches are Channel B uncertainty, and Channel B content is not quoted. Phase 2c adds supervisor orchestration: user-unit router/vNext/Ares services, a readiness wait primitive, a thin status CLI, and an idempotent install script. Phase 3a ports Ares core + the hardware lane as a detection-only host sentinel with dry-run mode for shadow-bake operation beside prod Ares. Phase 3b extends Ares with network and architecture lanes: TCP listener delta, public-interface EMERGENCY detection, expected-service presence, raw-I/O guards, retired-agent absence, and tool-ownership checks, still dry-run-first. Phase 3c closes the Ares operational gap with a daemon launcher, loopback/process structural fixes, and a live snapshot verifier. Track 2 adds Aetheria's active read-only lattice tools: bounded non-streaming tool-call iteration plus channel-aware embedding search, keyword search, node lookup, and recent-entry access wired only to Aetheria. Later phases build and swap the remaining platform components one at a time.
+- **Live agents:** Aetheria, Vett, Scotty, Kernel, Eve
+- **Live products:** Messages/citizens, Eve+Canva marketing cadence, Seneca/PondWright/Atticus on Spark, Teammates Phase 0 (`~/teammates`, console `:5075`)
+- **Next (kill list):** secrets backup runbook → Seneca lead capture → arm or mark email → then Teammates upgrades
+- **Hardware:** second ASUS GX10 ordered (Tuesday) for dedicated Kernel brain; FreeToken parked until then
 
 ## Layout
 
