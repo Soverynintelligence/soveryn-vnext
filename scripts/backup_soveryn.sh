@@ -64,7 +64,41 @@ while IFS= read -r f; do
     cp -p "$f" "$dst" && echo "$LOG_PREFIX ✓ $rel"
 done < <(find "$DATA" -maxdepth 3 -type f \( -name '*.md' -o -name '*.json' \) 2>/dev/null | sort)
 
+# ── Secrets / operator state (NOT in git; must survive tower death) ───────
+# Critic 2026-08-24: .env was never in the nightly set — Canva OAuth would
+# die with the tower even though tokens.json was copied. Bundle mode 600.
+SECRETS="$DEST/secrets"
+mkdir -p "$SECRETS"
+copy_secret() {
+    local src="$1" name="$2"
+    if [ -f "$src" ]; then
+        cp -p "$src" "$SECRETS/$name"
+        chmod 600 "$SECRETS/$name"
+        echo "$LOG_PREFIX ✓ secrets/$name"
+    else
+        echo "$LOG_PREFIX ⚠ secrets/$name missing at $src (skip)"
+    fi
+}
+copy_secret "$BASE/.env" "soveryn_vnext.env"
+copy_secret "$DATA/canva/tokens.json" "canva_tokens.json"
+copy_secret "$DATA/memory/personas/eve.md" "eve_persona.md"
+# Teammates is a sibling repo — same operator, same restore story.
+copy_secret "$HOME/teammates/.env" "teammates.env"
+copy_secret "$HOME/teammates/roster.toml" "teammates_roster.toml"
+# Manifest (no secret values) so a restore drill can assert completeness.
+{
+    echo "backed_up_at=$(date -Iseconds)"
+    echo "host=$(hostname)"
+    for f in "$SECRETS"/*; do
+        [ -f "$f" ] || continue
+        echo "$(basename "$f") sha256=$(sha256sum "$f" | awk '{print $1}') bytes=$(stat -c%s "$f")"
+    done
+} > "$SECRETS/MANIFEST.txt"
+chmod 600 "$SECRETS/MANIFEST.txt"
+echo "$LOG_PREFIX ✓ secrets/MANIFEST.txt"
+
 # ── Off-disk mirror to easystore ─────────────────────────────────────────
+
 # A missing mirror used to be SILENT: both the skip and the failure branch
 # only echoed, so the script still exited 0 and cron's `|| alert` never fired.
 # Local-only backups then looked identical to healthy ones — which is how the

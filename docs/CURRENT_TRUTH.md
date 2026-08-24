@@ -54,7 +54,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Citizen email (Zoho aliases, SPF/DKIM/DMARC) | **Designed, not armed** — not production |
 | CoS ownership (Marshal / Eve / Kernel) | **Deferred** — Aetheria still `COS_ID` |
 | Seneca structured lead capture | **Gap** — conversations.log only |
-| Secrets/state backup runbook | **Gap** — Canva/Eve persona not restorable if tower dies |
+| Secrets/state backup runbook | **Done 2026-08-24** — nightly `secrets/` + easystore; `scripts/restore_secrets_drill.sh` PASS |
 | Second ASUS GX10 | **Ordered — ETA Tuesday** — Kernel dedicated brain |
 | CWG brand | **Locked:** oasis/serenity/wildlife — not catalog pricing |
 
