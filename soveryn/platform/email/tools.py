@@ -1,7 +1,9 @@
 """Email tools for citizens — stdlib SMTP/IMAP, env-configured only.
 
-Never phones home to a mail SaaS control plane. If SMTP is not configured,
-registration is skipped and the Citizens board shows email as granted-but-unarmed.
+Never phones home to a mail SaaS control plane. Citizen email is **not
+production** until SMTP is configured *and* ``SOVERYN_EMAIL_PRODUCTION=1``.
+Until then registration is skipped and the Citizens board shows
+granted-but-unarmed / not production.
 
 From addresses are citizen identities (see identities.py) — not Jon's Gmail.
 """

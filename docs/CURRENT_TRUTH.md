@@ -9,86 +9,115 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 ---
 
+## 0. House spine (locked 2026-08-24)
+
+**One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
+
+| Layer | What | Role |
+|-------|------|------|
+| **Phone OS** | Messages (`/messages`) | Contacts = agents (Aetheria, Eve, Vett, Scotty, Kernel) + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. Grok-bots shape. |
+| **Tower / desk** | Command Center, Citizens, Fleet | Technical HUD — oversight, ops, not the daily ask door. |
+| **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
+| **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
+| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces on Spark — not the house OS. |
+
+**Do / don’t**
+
+- **Do** add phone UX to Messages (or feed Messages).  
+- **Do** keep Teammates as a separate process that POSTs briefs into the house.  
+- **Don’t** invent new phone consoles (`:5075` marketing, extra PWAs) for house work.  
+- **Don’t** treat Funnel/Command Center/Teammates console as the consumer front door.
+
+Funnel: `https://soveryn-1.tail70bbcc.ts.net/messages` (Basic once → 30-day cookie).  
+Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
+
+---
+
 ## 1. What is live
 
-### House (SOVERYN vNext) — tower `:5001`
+### House (soveryn_vnext) — tower `:5001`
 | Surface | Status |
 |---------|--------|
-| Flask vNext (`soveryn-vnext`) | **Live** |
-| Agents in `agent_loops` | **Aetheria, Vett, Scotty, Kernel, Eve** |
-| Heartbeat / dream / automations | **Live** (systemd user units) |
-| Citizens commissions + standing objectives | **Live** (census seeds SOVERYN+CWG work) |
-| Eve marketing cadence (`eve_product_advertise`) | **Live** Mon/Thu — Canva + Signal draft-and-drop |
+| Flask vNext | **Live** |
+| Agents | **Aetheria, Vett, Scotty, Kernel, Eve** |
+| Heartbeat / dream / automations | **Live** |
+| Citizens commissions + standing objectives | **Live** |
+| Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |
+| Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | House improvement scan | **Live** Mon/Wed/Fri |
-| Canva Connect | **Live** (OAuth tokens local-only) |
-| Messages / CoS relay | **Live** — Aetheria still wired as temporary CoS; partner tone; **rename deferred** |
+| Canva Connect | **Live** (tokens local-only) |
+| Messages / CoS | **Live** — phone OS; Aetheria temp CoS; rename deferred; **reliability pass 2026-08-25** (load errors, wrong-session, Gate card wipe) |
 
-### Public Spark products
+### Teammates — `~/teammates`
+| Surface | Status |
+|---------|--------|
+| Critic + Scout overnight | **Live** — cron; briefs → Messages |
+| Scheduler | **Enabled** — Critic `02:00` ET, Scout `07:30` ET; `teammates stop` = HALT |
+| Bridge | `POST /api/internal/teammates_brief` (localhost) |
+| Marketer interactive / `:5075` as product UI | **Deprecated** — posts via Messages → Eve |
+| Console `:5075` | Background / operator only |
+
+### Public Spark
 | Product | Status |
 |---------|--------|
-| Seneca (`:8400`, ask.soverynintelligence.com) | **Live** — lead capture **not** wired |
-| PondWright (`:8200`) | **Live** |
-| Atticus (`:8500`) | **Live** |
+| Seneca `:8400` | **Live** — lead capture wired → Toni notify |
+| PondWright `:8200` | **Live** |
+| Atticus `:8500` | **Live** |
 
-### Teammates (separate repo `~/teammates`)
-| Surface | Status |
-|---------|--------|
-| Critic + Scout Phase 0 | **Live** — console `:5075`, Tailscale phone |
-| Overnight scheduler unit | Installed; enable when Jon wants unattended cron |
-| Cloudflare hostname for Teammates | **Not done** (operator decision) |
-
-### Brains (shortcuts)
+### Brains
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel coding default | Quadros Flash `:8091` (`bench-flash` / DeepSeek-V4-Flash) via `soveryn-opencode` |
-| Shared Spark workers | `:8001` (Vett/Scotty/PondWright/Atticus/Seneca) |
-| FreeToken | **Back burner** until second Spark/ASUS brain is up |
+| Kernel / Eve default | Quadros Flash `:8091` |
+| Shared Spark workers | `:8001` |
+| FreeToken | **Back burner** until second ASUS (ETA Tuesday) |
 
 ---
 
-## 2. What is dry-run / incomplete / blocked
+## 2. Incomplete / blocked
 
 | Item | State |
 |------|--------|
-| Citizen email (Zoho aliases, SPF/DKIM/DMARC) | **Designed, not armed** — not production |
-| CoS ownership (Marshal / Eve / Kernel) | **Deferred** — Aetheria still `COS_ID` |
-| Seneca structured lead capture | **Gap** — conversations.log only |
-| Secrets/state backup runbook | **Done 2026-08-24** — nightly `secrets/` + easystore; `scripts/restore_secrets_drill.sh` PASS |
-| Second ASUS GX10 | **Ordered — ETA Tuesday** — Kernel dedicated brain |
+| Citizen email | **Not production** — needs SMTP + `SOVERYN_EMAIL_PRODUCTION=1` |
+| CoS rename | **Deferred** — Aetheria still `COS_ID` |
+| Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
+| Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
+| Second ASUS GX10 | **Ordered — ETA Wednesday** (bring-up Wed evening) |
 | CWG brand | **Locked:** oasis/serenity/wildlife — not catalog pricing |
+| Memory / identity layer | **2026-08-25** — pinned + persona spine; journal/heartbeat recall demoted to Channel B (not “I remember…” essays) |
 
 ---
 
-## 3. Three-way product split (one place)
+## 3. Brands (one place)
 
 | Brand | Owns | Voice |
 |-------|------|--------|
-| **SOVERYN** | House, citizens, Kernel, Messages | Quiet confidence — we built this |
-| **CWG** | Carolina Water Gardens craft / ponds | Oasis, serenity, ecosystems, outdoor beauty |
-| **PondWright** | Quote/CRM tool for CWG | Product honesty (catalog/MAP when relevant) |
+| **SOVERYN** | House, citizens, Kernel, Messages | Quiet confidence |
+| **CWG** | Carolina Water Gardens craft | Oasis / serenity / wildlife |
+| **PondWright** | Quote/CRM for CWG | Product honesty |
 | **ActTruth** | Ledger / spend honesty | Cite-or-stop |
-| **History’s Ledger / Atticus** | Corpus / history product | Precise, receipts |
+| **History’s Ledger / Atticus** | Corpus / history | Precise, receipts |
 
 ---
 
-## 4. Kill list (from Critic 2026-08-24 — work in order)
+## 4. Kill list
 
-1. ~~Rotate source of authority~~ → **this file** (2026-08-24)
-2. Secrets/state backup runbook (`.env`, `data/canva/tokens.json`, `data/memory/personas/*`)
-3. Seneca lead capture on pricing/hardware gates
-4. Arm citizen email end-to-end or mark “not production” everywhere
-5. Keep this doc short when state changes — don’t let notes outrun it again
+1. ~~Rotate source of authority~~ → this file  
+2. ~~Secrets/state backup~~ → runbook + drill PASS  
+3. ~~Seneca lead capture~~ → Spark `soveryn-leads.jsonl`  
+4. ~~Citizen email~~ → marked not production  
+5. ~~House spine~~ → **§0 locked 2026-08-24**  
+6. Keep this file short when state changes  
 
-Then: Teammates Phase 1 (or overnight scheduler) when Jon says go.
+**Next (when Jon says go):** Meta IG optional; CRM parked; deeper lattice/dream continuity when asked.
 
 ---
 
-## 5. Git / ops pointers
+## 5. Git / ops
 
-| Repo | Branch / tip (as of rotate) |
-|------|------------------------------|
-| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `906e5f0` (+ later local) |
-| `teammates` | `feat/phase-0` @ phone console live |
+| Repo | Branch / tip |
+|------|----------------|
+| `soveryn_vnext` | `feat/mission-control-spark-tile` (+ local) |
+| `teammates` | `feat/phase-0` · overnight + Messages bridge |
 
-Detailed session notes stay in `docs/notes/` — they are **not** authority. This file is.
+Notes in `docs/notes/` are **not** authority. **This file is.**

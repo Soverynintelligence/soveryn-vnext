@@ -92,15 +92,25 @@ def test_get_persona_rejects_unknown():
 # ─── Content sanity (don't drift from Jon's canonical text) ──────────────────
 
 def test_aetheria_persona_mentions_coordination():
-    assert "coordinate" in AETHERIA_PERSONA.lower()
+    # Routing language — "coordinate" is optional; spine + peers are required.
     assert "V.E.T.T." in AETHERIA_PERSONA
     assert "Scotty" in AETHERIA_PERSONA
+    assert "route" in AETHERIA_PERSONA.lower() or "Messages" in AETHERIA_PERSONA
 
 
 def test_aetheria_persona_lists_retired_systems():
-    """Persona should remind the model not to treat retired systems as live."""
-    for retired_name in ["Scout", "Vision", "Telegram", "ChromaDB", "Tinker", "aetheria_public"]:
+    """Persona should remind the model not to treat retired systems as live.
+
+    Teammates Critic/Scout are live overnight outside eye (Messages inboxes) —
+    do NOT list bare "Scout" as retired. Legacy stack leftovers stay named.
+    """
+    for retired_name in ["Vision", "ChromaDB", "Tinker", "aetheria_public"]:
         assert retired_name in AETHERIA_PERSONA
+    assert "Messages" in AETHERIA_PERSONA
+    assert "Critic" in AETHERIA_PERSONA
+    assert "read_overnight_brief" in AETHERIA_PERSONA
+    # Must not invent a "Scout is retired" world-model (Teammates Scout is live).
+    assert "Scout, Vision" not in AETHERIA_PERSONA
 
 
 def test_vett_persona_emphasizes_verification():

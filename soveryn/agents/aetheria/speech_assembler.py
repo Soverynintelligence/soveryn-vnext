@@ -81,6 +81,12 @@ def _entry_from_node(node: Node, *, score: float | None) -> Entry:
         metadata["intent"] = node.intent
     if node.provenance is not None:
         metadata["provenance"] = node.provenance
+        # Grade / canonical live on the provenance blob — copy for classify_channel.
+        if isinstance(node.provenance, dict):
+            if "grade" in node.provenance:
+                metadata["grade"] = node.provenance["grade"]
+            if node.provenance.get("canonical") is False:
+                metadata["canonical"] = False
     return Entry(
         id=node.id,
         content=node.content,

@@ -33,24 +33,40 @@ def test_for_citizen_marks_email_unarmed_without_smtp(monkeypatch):
     assert rows["web"].granted is True
 
 
-def test_email_armed_when_host_and_from_set(monkeypatch):
+def test_email_stays_unarmed_without_production_latch(monkeypatch):
     monkeypatch.setenv("SOVERYN_SMTP_HOST", "smtp.example.test")
     monkeypatch.setenv("SOVERYN_SMTP_FROM", "house@example.test")
+    monkeypatch.delenv("SOVERYN_EMAIL_PRODUCTION", raising=False)
+    ok, why = email_armed()
+    assert ok is False
+    assert "not production" in why.lower()
+
+
+def test_email_armed_when_host_from_and_production(monkeypatch):
+    monkeypatch.setenv("SOVERYN_SMTP_HOST", "smtp.example.test")
+    monkeypatch.setenv("SOVERYN_SMTP_FROM", "house@example.test")
+    monkeypatch.setenv("SOVERYN_EMAIL_PRODUCTION", "1")
     ok, why = email_armed()
     assert ok is True
-    assert "SMTP" in why
+    assert "production" in why.lower()
 
 
 def test_register_email_tools_only_when_armed(monkeypatch):
     monkeypatch.delenv("SOVERYN_SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SOVERYN_SMTP_FROM", raising=False)
+    monkeypatch.delenv("SOVERYN_EMAIL_PRODUCTION", raising=False)
     reg = ToolRegistry(active_agents=("aetheria", "vett", "scotty"))
     n = register_email_tools(reg, owner_agent="aetheria")
     assert n == 0
 
     monkeypatch.setenv("SOVERYN_SMTP_HOST", "smtp.example.test")
     monkeypatch.setenv("SOVERYN_SMTP_FROM", "house@example.test")
+    # SMTP alone must not register tools — not production.
+    reg_smtp_only = ToolRegistry(active_agents=("aetheria", "vett", "scotty"))
+    assert register_email_tools(reg_smtp_only, owner_agent="aetheria") == 0
+
+    monkeypatch.setenv("SOVERYN_EMAIL_PRODUCTION", "1")
     reg2 = ToolRegistry(active_agents=("aetheria", "vett", "scotty"))
     n2 = register_email_tools(reg2, owner_agent="aetheria")
     assert n2 >= 1
@@ -76,6 +92,7 @@ def test_requires_approval_web_ungated_writes_gated():
     assert requires_approval("x_post") is True
     assert requires_approval("email_send") is True
     assert requires_approval("messenger_send") is True
+    assert requires_approval("compose_post") is True  # Messages Allow → Signal
     assert requires_approval("signal_send") is False  # Direct Line, ungated
     assert requires_approval("read_file") is False  # house-local
 
@@ -88,6 +105,8 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     assert requires_approval("web_search", source="direct") is False
     assert requires_approval("x_feed", source="direct") is True
     assert requires_approval("email_list", source="direct") is False
+    assert requires_approval("compose_post", source="direct") is True
+    assert requires_approval("compose_post", source="automation") is False
     assert requires_approval("x_post", source="automation") is True
     assert requires_approval("email_send", source="automation") is True
     assert requires_approval("messenger_send", source="automation") is True

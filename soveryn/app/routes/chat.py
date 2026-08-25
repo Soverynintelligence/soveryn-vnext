@@ -21,6 +21,9 @@ from soveryn.inference.routing import RoutingError
 
 bp = Blueprint("chat", __name__)
 
+# Teammates overnight → Messages inboxes (read-only; not chattable agents).
+INBOX_AGENTS: frozenset[str] = frozenset({"t_critic", "t_scout"})
+
 
 # Vision attachments — accepted at /chat + /chat_stream, plumbed to AgentLoop.
 # The MIME set is canonicalized in soveryn.platform.vision_types so the
@@ -182,6 +185,16 @@ def _resolve_agent(name: str | None):
     return n, None
 
 
+def _resolve_agent_or_inbox(name: str | None):
+    """Like _resolve_agent, but allows Teammates overnight inbox ids for /sessions."""
+    if not isinstance(name, str) or not name.strip():
+        return None, _err("missing_field", "Required field: agent", 400)
+    n = name.lower().strip()
+    if n in INBOX_AGENTS:
+        return n, None
+    return _resolve_agent(name)
+
+
 def _state():
     return current_app.extensions["soveryn"]
 
@@ -261,7 +274,7 @@ def create_session():
 def list_sessions():
     agent_param = request.args.get("agent")
     if agent_param is not None:
-        agent, err = _resolve_agent(agent_param)
+        agent, err = _resolve_agent_or_inbox(agent_param)
         if err:
             return err
     else:

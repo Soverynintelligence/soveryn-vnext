@@ -587,8 +587,9 @@ def create_app(
                 owner_agent=agent_name,
             )
 
-        # Email connector — arms only when SOVERYN_SMTP_* / IMAP_* set.
-        # Citizens board shows granted-but-unarmed until configured.
+        # Email connector — NOT PRODUCTION until SOVERYN_SMTP_* + 
+        # SOVERYN_EMAIL_PRODUCTION=1 (after DNS aliases / SPF/DKIM).
+        # Citizens board shows granted-but-unarmed until then.
         # Each owner gets house From aliases (not Jon's personal Gmail).
         from soveryn.platform.email import register_email_tools
         for agent_name in ("aetheria", "vett", "eve", "scotty", "kernel"):
@@ -604,6 +605,20 @@ def create_app(
                 register_house_post_tools(tool_registry, owner_agent=agent_name)
             except Exception:
                 pass
+
+        # Teammates overnight briefs (Critic/Scout) — Aetheria reads Messages
+        # inboxes then house_post_send commissions to Kernel/Vett/Scotty/Eve.
+        from soveryn.platform.teammates_brief_tools import (
+            register_teammates_brief_tools,
+        )
+        try:
+            register_teammates_brief_tools(
+                tool_registry,
+                conv_store=conv_store,
+                owner_agent="aetheria",
+            )
+        except Exception:
+            logger.exception("teammates brief tools not registered for aetheria")
 
         # Standing objectives — CoS assigns Grok-bot style work (CWG/HL/SOVERYN).
         from soveryn.platform.objective_tools import register_objective_tools
@@ -1630,6 +1645,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_botdirectory_bp)
     from soveryn.app.routes.api_citizens import bp as api_citizens_bp
     app.register_blueprint(api_citizens_bp)
+    from soveryn.app.routes.api_teammates_bridge import bp as api_teammates_bridge_bp
+    app.register_blueprint(api_teammates_bridge_bp)
     from soveryn.app.routes.api_rooms import bp as api_rooms_bp
     app.register_blueprint(api_rooms_bp)
     from soveryn.app.routes.api_ares import bp as api_ares_bp

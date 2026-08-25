@@ -58,3 +58,44 @@ def test_attic_or_noncanonical_entry_is_channel_b_even_with_channel_a_provenance
     entry = _entry(ProvenanceClass.WITNESSED, metadata={"canonical": False})
 
     assert classify_channel(entry) is Channel.B
+
+
+def test_journal_grade_is_channel_b_even_when_witnessed() -> None:
+    """Heartbeat/dream journal residue must not become assertable \"I remember…\"."""
+    entry = _entry(
+        ProvenanceClass.WITNESSED,
+        source="heartbeat",
+        metadata={
+            "grade": "journal",
+            "legacy_type": "reflection",
+            "tags": ["heartbeat", "reflection", "grade:journal"],
+            "provenance": {
+                "cls": "witnessed",
+                "source": "heartbeat",
+                "grade": "journal",
+            },
+        },
+    )
+    assert classify_channel(entry) is Channel.B
+
+
+def test_reflection_from_dream_daemon_is_channel_b() -> None:
+    entry = _entry(
+        ProvenanceClass.WITNESSED,
+        source="dream_daemon",
+        metadata={
+            "legacy_type": "reflection",
+            "tags": ["dream"],
+            "provenance": {"cls": "witnessed", "source": "dream_daemon"},
+        },
+    )
+    assert classify_channel(entry) is Channel.B
+
+
+def test_identity_spine_atom_stays_channel_a() -> None:
+    entry = _entry(
+        ProvenanceClass.CONSOLIDATED,
+        source="legacy_identity_review",
+        metadata={"grade": "atom", "legacy_type": "identity"},
+    )
+    assert classify_channel(entry) is Channel.A

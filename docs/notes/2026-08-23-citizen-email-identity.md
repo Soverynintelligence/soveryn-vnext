@@ -1,12 +1,12 @@
 # Citizen email identity (ours — not AgentMail)
 
 **Date:** 2026-08-23  
-**Status:** v0 wired in code; DNS/SMTP arming is ops  
+**Status:** designed in code; **NOT PRODUCTION / not armed** (DNS + SMTP + `SOVERYN_EMAIL_PRODUCTION=1` pending)  
 **Trigger:** Musk / Grok Bot “why its own email?” + AgentMail pitch. Same problem we’ve held: agents must not write as Jon from his personal inbox.
 
-## Claim
+## Claim (design intent — not live)
 
-**Every founding hand sends as a house-owned address.** Not Jon’s Gmail. Not a cloud inbox SaaS control plane. SMTP/IMAP we configure; **Approval Gate** on `email_send`.
+**Every founding hand is designed to send as a house-owned address.** Not Jon’s Gmail. Not a cloud inbox SaaS control plane. SMTP/IMAP we configure; **Approval Gate** on `email_send`. Live egress stays off until ops below are done and the production latch is set.
 
 | Their frame | Ours |
 |-------------|------|
@@ -31,14 +31,17 @@ Override: `SOVERYN_EMAIL_IDENTITIES` JSON (see `soveryn/platform/email/identitie
 - `email_send` — From = citizen identity (optional `from` if allowlisted)  
 - Connectors board — `email_identities` + per-citizen `email_from` / `email_aliases`  
 - Gate unchanged — write egress still requires Allow  
+- **Production latch:** `SOVERYN_EMAIL_PRODUCTION=1` required in addition to SMTP (SMTP alone does not register tools)
 
-## Ops checklist (Jon)
+## Ops checklist (Jon) — required before production
 
 1. Create aliases on **soverynintelligence.com** and **carolinawatergardens.com**  
 2. SPF/DKIM (and DMARC when ready) for both domains  
 3. Arm house SMTP: `SOVERYN_SMTP_HOST`, `SOVERYN_SMTP_FROM` (envelope mailbox), user/pass  
 4. Optional IMAP for house inbox list (not personal Gmail)  
-5. Smoke: Messages → Aetheria → Gate Allow → send test as `aetheria@soverynintelligence.com`  
+5. Set `SOVERYN_EMAIL_PRODUCTION=1` only after a controlled smoke  
+6. Smoke: Messages → Aetheria → Gate Allow → send test as `aetheria@soverynintelligence.com`  
+7. Flip `docs/CURRENT_TRUTH.md` to Live only after smoke  
 
 ## Non-goals (v0)
 
@@ -52,4 +55,5 @@ Override: `SOVERYN_EMAIL_IDENTITIES` JSON (see `soveryn/platform/email/identitie
 - `2026-08-21-phone-chat-house.md` — Messages as OS  
 - Connectors grants — `soveryn/citizens/connectors.py`  
 
-_Updated 2026-08-23: AgentMail wave → house citizen From identities._
+_Updated 2026-08-23: AgentMail wave → house citizen From identities._  
+_Updated 2026-08-24: kill-list #4 — marked not production everywhere; production latch._

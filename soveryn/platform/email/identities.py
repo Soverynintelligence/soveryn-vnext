@@ -177,6 +177,15 @@ def board_identities() -> dict[str, Any]:
         for cid in ("aetheria", "vett", "eve", "scotty", "kernel")
         if cid in identities
     }
+    # Mirror connectors.email_armed without importing (avoid cycle).
+    smtp_ready = bool(
+        (os.environ.get("SOVERYN_SMTP_HOST") or os.environ.get("SMTP_HOST"))
+        and (os.environ.get("SOVERYN_SMTP_FROM") or os.environ.get("SMTP_FROM"))
+    )
+    latch = os.environ.get("SOVERYN_EMAIL_PRODUCTION", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    prod = bool(smtp_ready and latch)
     return {
         "domains": [SOVERYN_DOMAIN, CWG_DOMAIN],
         "by_citizen": by_citizen,
@@ -184,8 +193,16 @@ def board_identities() -> dict[str, Any]:
             "pondwright": identities.get("pondwright"),
         },
         "reading": (
-            "Citizens send as house-owned addresses — not Jon's personal Gmail. "
-            "DNS aliases + SPF/DKIM on each domain, then arm SOVERYN_SMTP_*. "
+            "NOT PRODUCTION: identity map is designed; live send is off until "
+            "DNS aliases + SPF/DKIM, SOVERYN_SMTP_*, and SOVERYN_EMAIL_PRODUCTION=1. "
+            "Citizens will send as house-owned addresses — never Jon's personal Gmail. "
             "email_send stays behind Approval Gate."
+            if not prod
+            else (
+                "Citizen email production latch is on — send as house-owned addresses "
+                "(never Jon's personal Gmail). email_send stays behind Approval Gate."
+            )
         ),
+        "production": prod,
+        "status": "production" if prod else "not_production",
     }

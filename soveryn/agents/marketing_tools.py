@@ -32,30 +32,74 @@ PLATFORM_LIMITS: dict[str, int] = {
 
 # Media root — compose_post may only reference images under this path
 MEDIA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "media"
+_PROJECT_ROOT = MEDIA_ROOT.parent.parent
+_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"}
+# Prefer these when the model invents a path (messenger UX > perfect pathing).
+_DEFAULT_IMAGES = (
+    MEDIA_ROOT / "canva" / "cwg_oasis_serenity.jpg",
+    MEDIA_ROOT / "canva" / "cwg_serenity_0.jpg",
+    MEDIA_ROOT / "carolina_watergardens" / "IMG_0947.jpeg",
+)
 
 
-def _validate_media_path(raw: str) -> str | None:
-    """Validate that an image path is under data/media/ and is a real file.
-    Returns an error string on failure, None on success."""
+def _resolve_media_path(raw: str) -> Path:
+    """Accept absolute paths or paths relative to the project / media root."""
+    p = Path((raw or "").strip())
+    if p.is_absolute():
+        return p.resolve()
+    # data/media/... from repo root (common model habit)
+    via_project = (_PROJECT_ROOT / p).resolve()
+    if via_project.exists():
+        return via_project
+    # bare filename or canva/foo.jpg under MEDIA_ROOT
+    via_media = (MEDIA_ROOT / p).resolve()
+    return via_media
+
+
+def _suggest_media(limit: int = 8) -> list[str]:
+    found: list[str] = []
+    if not MEDIA_ROOT.is_dir():
+        return found
+    for p in sorted(MEDIA_ROOT.rglob("*")):
+        if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES:
+            found.append(str(p))
+            if len(found) >= limit:
+                break
+    return found
+
+
+def _default_image() -> Path | None:
+    for p in _DEFAULT_IMAGES:
+        if p.is_file():
+            return p
+    suggestions = _suggest_media(1)
+    return Path(suggestions[0]) if suggestions else None
+
+
+def _validate_media_path(raw: str) -> tuple[str | None, Path | None]:
+    """Validate image under data/media/.
+
+    Returns (error, path). On success error is None and path is resolved.
+    """
     if not isinstance(raw, str) or not raw.strip():
-        return "image_path must be a non-empty string"
-    p = Path(raw).resolve()
-    # Must be under MEDIA_ROOT
+        return "image_path must be a non-empty string", None
+    p = _resolve_media_path(raw)
     try:
         p.relative_to(MEDIA_ROOT.resolve())
     except ValueError:
         return (
-            f"image_path must be under {MEDIA_ROOT} — "
-            f"got {raw!r}. Place media in data/media/ first."
+            f"image_path must be under {MEDIA_ROOT} — got {raw!r}. "
+            f"Try one of: {_suggest_media(4)}",
+            None,
         )
-    if not p.exists():
-        return f"image does not exist: {raw}"
-    if not p.is_file():
-        return f"path is not a regular file: {raw}"
-    # Basic image extension check
-    if p.suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic"):
-        return f"not a recognized image file (got {p.suffix}): {raw}"
-    return None
+    if not p.exists() or not p.is_file():
+        return (
+            f"image does not exist: {raw}. Available: {_suggest_media(6)}",
+            None,
+        )
+    if p.suffix.lower() not in _IMAGE_SUFFIXES:
+        return f"not a recognized image file (got {p.suffix}): {raw}", None
+    return None, p
 
 
 def _format_post(
@@ -138,10 +182,38 @@ def build_compose_post_tool(
             )
 
         image_path = args.get("image_path")
-        if image_path is not None:
-            err = _validate_media_path(image_path)
+        image_note = ""
+        resolved_image: Path | None = None
+        if image_path is not None and str(image_path).strip():
+            err, resolved_image = _validate_media_path(str(image_path))
             if err is not None:
-                return {"error": "invalid_image", "message": err}
+                # Models invent paths. Fall back to a real CWG asset so the
+                # messenger flow still delivers a draft (text + image).
+                fallback = _default_image()
+                if fallback is not None:
+                    resolved_image = fallback
+                    image_note = (
+                        f"requested image missing ({image_path!r}); "
+                        f"used {fallback.name}"
+                    )
+                else:
+                    return {
+                        "error": "invalid_image",
+                        "message": err,
+                        "drafted": True,
+                        "platform": platform,
+                        "caption": content.strip(),
+                        "image_path": None,
+                        "available": _suggest_media(6),
+                        "thread_note": "Caption ready — no image on disk yet.",
+                    }
+        elif image_path is None or not str(image_path).strip():
+            # Prefer shipping with a default serene image over text-only.
+            resolved_image = _default_image()
+            if resolved_image is not None:
+                image_note = f"no image_path given; used {resolved_image.name}"
+
+        image_path_str = str(resolved_image) if resolved_image else None
 
         audience = args.get("audience")
         if audience is not None and not isinstance(audience, str):
@@ -151,9 +223,11 @@ def build_compose_post_tool(
         formatted = _format_post(
             platform=platform,
             content=content,
-            image_path=image_path if image_path else None,
+            image_path=image_path_str,
             audience=audience,
         )
+        if image_note:
+            formatted = formatted + f"\nNote: {image_note}\n"
 
         recipient = args.get("recipient") or default_recipient
         if not isinstance(recipient, str) or not recipient.strip():
@@ -168,44 +242,69 @@ def build_compose_post_tool(
                 f"Allowed: {sorted(config.allowed_numbers)}."
             )
 
-        # Deliver via signal-cli (same path as signal_send — ungated)
+        # Deliver via signal-cli (same path as signal_send — ungated).
+        # Attach the image when present so Jon gets caption + visual in one bubble.
+        attach: tuple[str, ...] = (image_path_str,) if image_path_str else ()
         try:
             send_once(
                 signal_cli_bin=config.signal_cli_bin,
                 bot_number=config.bot_number,
                 recipient_e164=recipient,
                 body=formatted,
-                attachments=(),
+                attachments=attach,
             )
         except SignalCliError as e:
             _log_marketing_event(
                 lattice_db_path,
                 platform=platform,
                 content_head=content[:200],
-                image_path=image_path,
+                image_path=image_path_str,
                 error=f"signal delivery failed: {e}",
             )
             return {
                 "error": "delivery_failed",
                 "message": str(e),
                 "recipient": recipient,
+                # Still return the draft so Messages can show it in-thread.
+                "drafted": True,
+                "platform": platform,
+                "caption": content.strip(),
+                "image_path": image_path_str,
+                "audience": audience,
+                "image_note": image_note or None,
+                "thread_note": (
+                    "Draft is in this chat — Signal delivery failed "
+                    f"({e})."
+                ),
             }
 
         _log_marketing_event(
             lattice_db_path,
             platform=platform,
             content_head=content[:200],
-            image_path=image_path,
+            image_path=image_path_str,
             error=None,
         )
 
+        # caption + image_path are first-class so Messages can render a draft
+        # card in the Eve thread (messenger-first — not only Signal / disk).
         return {
             "drafted": True,
             "platform": platform,
+            "caption": content.strip(),
+            "image_path": image_path_str,
+            "audience": audience,
+            "image_note": image_note or None,
             "delivered_to": recipient,
+            "delivered_via": "signal",
             "delivered_at": datetime.now().isoformat(),
             "char_count": len(content.strip()),
             "char_limit": limit,
+            "thread_note": (
+                f"Draft ready for {platform}. Also sent to Signal — "
+                "copy-paste into the app when you want it live."
+                + (f" ({image_note})" if image_note else "")
+            ),
         }
 
     schema = {
@@ -231,9 +330,11 @@ def build_compose_post_tool(
             "image_path": {
                 "type": "string",
                 "description": (
-                    "Absolute path to the image file under data/media/. "
-                    "Must be a real image file (.jpg, .png, .webp, etc). "
-                    "Optional — omit for text-only posts."
+                    "Path under data/media/ to a real image (.jpg/.png). "
+                    "Prefer absolute, or relative like "
+                    "data/media/canva/cwg_oasis_serenity.jpg. "
+                    "If missing/wrong, a default CWG serene image is used. "
+                    "Do NOT invent filenames."
                 ),
             },
             "audience": {

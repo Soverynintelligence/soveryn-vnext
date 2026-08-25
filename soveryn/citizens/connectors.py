@@ -5,7 +5,8 @@ missing was a **grant map**: which citizen holds which channel, whether it is
 actually configured, and what sovereignty rule applies.
 
 Connectors are *capabilities*, not cloud SaaS agent plugins. Default: house
-network. Email is optional and only arms when Jon sets SMTP/IMAP env. Web goes
+network. Email is optional and **not production** until Jon sets SMTP/IMAP
+*and* ``SOVERYN_EMAIL_PRODUCTION=1`` after DNS aliases + SPF/DKIM smoke. Web goes
 through house SearXNG — content fetch, not vendor control-plane.
 
 Board surfaces this so the roster answers "what can they actually do?" without
@@ -46,15 +47,17 @@ CATALOG: dict[str, ConnectorDef] = {
         id="email",
         title="Email",
         description=(
-            "Send as a house-owned citizen/desk address when SMTP is armed; "
-            "list house IMAP when configured. Never Jon's personal Gmail."
+            "NOT PRODUCTION until SMTP + SOVERYN_EMAIL_PRODUCTION=1. "
+            "Then: send as house-owned citizen/desk addresses; list house IMAP. "
+            "Never Jon's personal Gmail."
         ),
         tools=("email_send", "email_list"),
         class_="channel",
         sovereignty_note=(
             "Per-citizen From aliases on house domains (soverynintelligence.com / "
-            "carolinawatergardens.com). Arms only with SOVERYN_SMTP_* — never "
-            "silent cloud mail SaaS (not AgentMail). Write egress stays Gate-approved."
+            "carolinawatergardens.com). Not production by default — needs "
+            "SOVERYN_SMTP_* plus SOVERYN_EMAIL_PRODUCTION=1 after DNS/SPF/DKIM. "
+            "Never silent cloud mail SaaS (not AgentMail). Write egress stays Gate-approved."
         ),
     ),
     "signal": ConnectorDef(
@@ -169,10 +172,16 @@ CATALOG: dict[str, ConnectorDef] = {
     "social": ConnectorDef(
         id="social",
         title="Social (draft-and-drop)",
-        description="Compose Instagram/Facebook post drafts, delivered via Signal for manual publishing.",
+        description=(
+            "Compose Instagram/Facebook post drafts. In Messages, Gate Allow "
+            "sends the pack to Signal for manual publishing."
+        ),
         tools=("compose_post",),
         class_="channel",
-        sovereignty_note="Draft-only; Jon is the publisher. No Meta API, no credentials.",
+        sovereignty_note=(
+            "Interactive compose_post is Gate-approved (Allow → Signal). "
+            "Scheduled Eve cadence may auto-drop. No Meta API."
+        ),
     ),
 }
 
@@ -247,6 +256,8 @@ AUTOMATION_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "fetch_url",
     "x_feed",
     "email_list",
+    # Eve Mon/Thu cadence must not hang overnight waiting for Gate.
+    "compose_post",
 })
 
 
@@ -258,8 +269,11 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
     ``signal_send`` is ungated: Signal is Jon's direct line to himself, so it
     bypasses the Approval Gate (he is already the approver).
 
+    ``compose_post`` is gated for interactive Messages (Allow → Signal pack).
+    Scheduled automations may auto-approve it via AUTOMATION_AUTO_APPROVE_TOOLS.
+
     ``web_search`` / ``fetch_url`` are always ungated (house SearXNG reads).
-    When ``source="automation"``, additional read-only tools in
+    When ``source="automation"``, additional tools in
     ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass. Write egress stays gated.
 
     Fail-safe: unknown tools return False (house-local, never egress).
@@ -277,7 +291,7 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
         if tool_name in defn.tools:
             return True
     # human-facing channels: outbound to the world — gated
-    if tool_name in ("email_send", "messenger_send"):
+    if tool_name in ("email_send", "messenger_send", "compose_post"):
         return True
     return False
 
@@ -297,19 +311,38 @@ def email_config() -> dict[str, str | None]:
     }
 
 
+def email_production_enabled() -> bool:
+    """Explicit production latch — SMTP alone must not ship citizen mail."""
+    return os.environ.get("SOVERYN_EMAIL_PRODUCTION", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
 def email_armed() -> tuple[bool, str]:
+    """Send is armed only when SMTP is configured *and* production is latched.
+
+    Designed identities exist in code; live egress stays off until DNS aliases,
+    SPF/DKIM, SMTP, and ``SOVERYN_EMAIL_PRODUCTION=1`` are all intentional.
+    """
     cfg = email_config()
     if not cfg["smtp_host"] or not cfg["smtp_from"]:
-        return False, "set SOVERYN_SMTP_HOST and SOVERYN_SMTP_FROM to arm send"
-    return True, "SMTP configured"
-    # list can still be unarmed without IMAP — handled in tool
+        return False, "not production — SMTP unset (needs SOVERYN_SMTP_HOST/FROM + SOVERYN_EMAIL_PRODUCTION=1)"
+    if not email_production_enabled():
+        return False, (
+            "not production — SMTP present but SOVERYN_EMAIL_PRODUCTION unset "
+            "(set to 1 only after aliases + SPF/DKIM smoke)"
+        )
+    return True, "SMTP configured (production latch on)"
 
 
 def email_list_armed() -> tuple[bool, str]:
+    """Inbox list follows the same not-production latch as send."""
     cfg = email_config()
+    if not email_production_enabled():
+        return False, "not production — SOVERYN_EMAIL_PRODUCTION unset"
     if not cfg["imap_host"]:
         return False, "set SOVERYN_IMAP_HOST (and user/pass) to arm inbox list"
-    return True, "IMAP configured"
+    return True, "IMAP configured (production latch on)"
 
 
 def web_armed() -> tuple[bool, str]:
@@ -395,6 +428,7 @@ def board_payload() -> dict[str, Any]:
         for cid in FOUNDING_GRANTS
     }
     email_ok, email_why = email_armed()
+    list_ok, list_why = email_list_armed()
     web_ok, web_why = web_armed()
     return {
         "catalog": [
@@ -413,14 +447,17 @@ def board_payload() -> dict[str, Any]:
         "house": {
             "email_send_armed": email_ok,
             "email_send_note": email_why,
-            "email_list_armed": email_list_armed()[0],
-            "email_list_note": email_list_armed()[1],
+            "email_list_armed": list_ok,
+            "email_list_note": list_why,
+            "email_production": email_production_enabled(),
+            "email_not_production": not email_ok,
             "web_armed": web_ok,
             "web_note": web_why,
         },
         "reading": (
             "Connectors are grants + configuration. Armed means the house can "
-            "actually invoke the channel; granted-but-unarmed needs env (e.g. SMTP). "
+            "actually invoke the channel. Citizen email is NOT PRODUCTION until "
+            "DNS aliases + SPF/DKIM + SOVERYN_SMTP_* + SOVERYN_EMAIL_PRODUCTION=1. "
             "Email From is a house citizen identity — never Jon's personal Gmail."
         ),
     }

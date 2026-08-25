@@ -38,6 +38,8 @@
   .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   .avatar[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .avatar[data-agent="t_critic"] { background: linear-gradient(145deg, #d4a574, #6b4a2e); }
+  .avatar[data-agent="t_scout"] { background: linear-gradient(145deg, #8eb8d4, #3a5a70); }
   .who { flex: 1; min-width: 0; }
   .who .name { font-weight: 600; font-size: 17px; }
   .who .sub { font-size: 12px; color: var(--mute); }
@@ -199,6 +201,27 @@
   .approval-card.ac-done { border-color: var(--line); opacity: 0.85; }
   .approval-card .ac-notice { margin-top: 8px; font-size: 12px; color: var(--mute); }
 
+  /* Marketing draft card — compose_post result visible in-thread (Grok-bot feel) */
+  .draft-card {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 4px 0 8px;
+    padding: 10px 12px;
+    background: #12141a;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-size: 14px;
+  }
+  .draft-card .dc-head {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--mint, #6fb98a); margin-bottom: 6px; font-weight: 600;
+  }
+  .draft-card .dc-caption {
+    white-space: pre-wrap; word-break: break-word; color: var(--ink);
+    margin: 0 0 8px; line-height: 1.35;
+  }
+  .draft-card .dc-meta { font-size: 12px; color: var(--mute); }
+
   .composer {
     position: sticky; bottom: 0; z-index: 4;
     display: flex; gap: 8px; align-items: flex-end;
@@ -245,17 +268,23 @@
     scotty: { name: "Scotty", letter: "S", sub: "Gets it done" },
     eve: { name: "Eve", letter: "E", sub: "Shows up online" },
     kernel: { name: "Kernel", letter: "K", sub: "Builds with you" },
+    t_critic: { name: "Critic", letter: "C", sub: "Overnight review · inbox" },
+    t_scout: { name: "Scout", letter: "Sc", sub: "Overnight scan · inbox" },
   };
+  // Teammates overnight inboxes — read-only (no chat_stream agent).
+  const INBOX_ONLY = { t_critic: true, t_scout: true };
 
   const params = new URLSearchParams(location.search);
   const pathAgent = (location.pathname.split("/").pop() || "").toLowerCase();
   const agent = (params.get("agent") || pathAgent || "aetheria").toLowerCase();
   const contact = CONTACTS[agent] || { name: agent, letter: "?", sub: "" };
+  const inboxOnly = !!INBOX_ONLY[agent];
 
   const state = {
     agent, sessionId: params.get("session") || null, sending: false,
     turnCount: 0, waitingPeers: false, pollTimer: null,
-    shownApprovalIds: new Set(), gatePollTimer: null, peerGate: {},
+    gatePollTimer: null, peerGate: {}, bootDone: false,
+    gateFailStreak: 0,
   };
 
   const $ = (s) => document.querySelector(s);
@@ -268,9 +297,36 @@
   $("[data-agent-name]").textContent = contact.name;
   $("[data-agent-sub]").textContent = contact.sub;
 
+  if (inboxOnly) {
+    const form = $("[data-composer]");
+    if (form) {
+      form.innerHTML =
+        '<div style="flex:1;font-size:13px;color:var(--mute);padding:8px 4px;line-height:1.4">' +
+        "Overnight inbox — findings land here.<br>" +
+        '<a href="#" data-act-aetheria style="color:var(--gold)">Ask Aetheria to act →</a>' +
+        "</div>";
+      const link = form.querySelector("[data-act-aetheria]");
+      if (link) {
+        link.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const raw = (thread()?.innerText || "").trim().slice(0, 900);
+          const who = agent === "t_scout" ? "scout" : "critic";
+          const q = encodeURIComponent(
+            "Act on the latest " + who + " overnight brief. " +
+            "Use read_overnight_brief(who=" + who + "), then house_post_send " +
+            "commissions (kernel=code, vett=verify, scotty=repair, eve=marketing). " +
+            "Thread excerpt for context:\n\n" +
+            (raw || "(no brief text visible — trust read_overnight_brief)")
+          );
+          location.href = "/messages/aetheria?q=" + q;
+        });
+      }
+    }
+  }
+
   // Prefill from CC dispatch (?q=...) — Messages is the front door.
   const prefill = (params.get("q") || "").trim();
-  if (prefill && $("[data-input]")) {
+  if (!inboxOnly && prefill && $("[data-input]")) {
     $("[data-input]").value = prefill;
     $("[data-input]").focus();
   }
@@ -393,11 +449,21 @@
     return a;
   }
 
-  function fmtApprovalArgs(args) {
+  function fmtApprovalArgs(args, toolName) {
     try {
       let parsed = args;
       if (typeof args === "string") {
         try { parsed = JSON.parse(args); } catch (_) { return String(args).slice(0, 280); }
+      }
+      // compose_post: show caption + platform for phone Allow (not raw JSON)
+      if ((toolName === "compose_post" || parsed.content) && parsed && typeof parsed === "object") {
+        const plat = (parsed.platform || "post").toString().toUpperCase();
+        const cap = (parsed.content || "").toString().trim();
+        const img = parsed.image_path
+          ? "\nImage: " + String(parsed.image_path).split("/").pop()
+          : "";
+        const body = (cap.length > 500 ? cap.slice(0, 497) + "…" : cap) + img;
+        return plat + " draft — Allow sends to Signal\n\n" + body;
       }
       const s = JSON.stringify(parsed);
       return s.length > 280 ? s.slice(0, 277) + "…" : s;
@@ -408,8 +474,13 @@
 
   function renderApprovalCard(payload) {
     const id = payload && (payload.approval_id || payload.id);
-    if (!id || state.shownApprovalIds.has(id)) return;
-    state.shownApprovalIds.add(id);
+    if (!id) return;
+    // Dedupe by DOM, not a permanent Set — renderTurns() wipes the thread and
+    // must be allowed to recreate pending Gate cards (Allow vanishing hang).
+    const existing = thread().querySelector(
+      '.approval-card[data-approval-id="' + CSS.escape(String(id)) + '"]'
+    );
+    if (existing) return;
     const citizen = (payload.citizen || state.agent || "?").toLowerCase();
     if (citizen && citizen !== "aetheria") state.peerGate[citizen] = true;
 
@@ -419,7 +490,9 @@
 
     const head = document.createElement("div");
     head.className = "ac-head";
-    head.textContent = "Needs your yes — Approval Gate";
+    head.textContent = payload.tool === "compose_post"
+      ? "Allow to send draft to Signal"
+      : "Needs your yes — Approval Gate";
     card.appendChild(head);
 
     const tool = document.createElement("div");
@@ -430,7 +503,7 @@
 
     const argsEl = document.createElement("div");
     argsEl.className = "ac-args";
-    argsEl.textContent = fmtApprovalArgs(payload.args);
+    argsEl.textContent = fmtApprovalArgs(payload.args, payload.tool);
     card.appendChild(argsEl);
 
     const actions = document.createElement("div");
@@ -497,7 +570,14 @@
   async function pollApprovals() {
     try {
       const r = await fetch("/api/approvals/pending");
-      if (!r.ok) return;
+      if (!r.ok) {
+        state.gateFailStreak = (state.gateFailStreak || 0) + 1;
+        if (state.gateFailStreak >= 3) {
+          $("[data-agent-sub]").textContent = "Gate unreachable — retrying…";
+        }
+        return;
+      }
+      state.gateFailStreak = 0;
       const data = await r.json();
       const items = (data && data.approvals) || [];
       const gatePeers = {};
@@ -512,7 +592,6 @@
         });
       }
       state.peerGate = gatePeers;
-      // Refresh peer icon labels if Gate state changed
       document.querySelectorAll("a.messaged-peer[data-peer]").forEach((el) => {
         const peer = el.dataset.peer;
         if (!peer) return;
@@ -523,13 +602,29 @@
           el.title = (CONTACTS[peer] || { name: peer }).name + " is waiting on Approval Gate — Allow below";
         }
       });
-    } catch (_) {}
+      // Back off when nothing pending and no peer Gate — keep phone quiet.
+      if (!items.length && !Object.keys(gatePeers).length && !state.waitingPeers) {
+        stopGatePoll();
+      }
+    } catch (_) {
+      state.gateFailStreak = (state.gateFailStreak || 0) + 1;
+      if (state.gateFailStreak >= 3) {
+        $("[data-agent-sub]").textContent = "Gate unreachable — retrying…";
+      }
+    }
   }
 
   function startGatePoll() {
     if (state.gatePollTimer) return;
     pollApprovals();
     state.gatePollTimer = setInterval(pollApprovals, 1500);
+  }
+
+  function stopGatePoll() {
+    if (state.gatePollTimer) {
+      clearInterval(state.gatePollTimer);
+      state.gatePollTimer = null;
+    }
   }
 
   function renderTurns(turns, collabIndex) {
@@ -588,6 +683,10 @@
     } else {
       $("[data-agent-sub]").textContent = contact.sub;
       stopPoll();
+    }
+    // History rebuild wiped Gate cards — re-pull pending so Allow returns.
+    if (agent === "aetheria" || agent === "eve" || Object.keys(state.peerGate || {}).length) {
+      pollApprovals();
     }
   }
 
@@ -661,12 +760,72 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agent: state.agent }),
     });
-    const d = await r.json();
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.session_id) {
+      const msg = (d.error && d.error.message) || ("Could not start chat (" + r.status + ")");
+      throw new Error(msg);
+    }
     state.sessionId = d.session_id;
     const u = new URL(location.href);
     u.searchParams.set("session", state.sessionId);
     history.replaceState({}, "", u);
     return state.sessionId;
+  }
+
+  function showLoadError(detail) {
+    thread().innerHTML = "";
+    appendBubble(
+      "sys",
+      "Couldn't load this thread" + (detail ? " — " + detail : "") +
+        ". Go back and try again."
+    );
+  }
+
+  function showEmptyThread() {
+    thread().innerHTML = "";
+    if (inboxOnly) {
+      appendBubble(
+        "sys",
+        "Overnight inbox — Critic/Scout findings land here.\nNothing yet for this contact."
+      );
+    } else {
+      appendBubble("sys", "Say hello to start the thread.");
+    }
+  }
+
+  function clearSessionFromUrl() {
+    state.sessionId = null;
+    const u = new URL(location.href);
+    u.searchParams.delete("session");
+    history.replaceState({}, "", u);
+  }
+
+  async function applyHistory(sessionId) {
+    const r = await fetch("/sessions/" + encodeURIComponent(sessionId) + "/history");
+    if (!r.ok) {
+      // Dead/missing session — drop it so send can mint a fresh one.
+      if (r.status === 404) {
+        clearSessionFromUrl();
+        return null;
+      }
+      const body = await r.json().catch(() => ({}));
+      const detail = (body.error && body.error.message) || ("HTTP " + r.status);
+      showLoadError(detail);
+      return false;
+    }
+    const d = await r.json();
+    // Wrong contact in ?session=… — drop and let caller resume the right DM.
+    if (d.agent && String(d.agent).toLowerCase() !== agent) {
+      clearSessionFromUrl();
+      return null;
+    }
+    const c = await collabs();
+    renderTurns(d.turns || [], c);
+    renderChips(c);
+    if (inboxOnly && !(d.turns || []).length) {
+      appendBubble("sys", "Overnight inbox — waiting for the next Critic/Scout brief.");
+    }
+    return true;
   }
 
   async function collabs() {
@@ -687,8 +846,10 @@
   }
 
   function isResumableDmSession(s) {
+    if (!s || !s.session_id) return false;
     const t = ((s && s.title) || "").trim();
-    if (!s || !s.session_id || !t) return false;
+    // Untitled sessions (just minted) are real DMs — resume them.
+    if (!t) return true;
     if (isRoomSession(s)) return false;
     if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
     if (t.startsWith("automation:")) return false;
@@ -712,54 +873,52 @@
     if (!r.ok) return null;
     const d = await r.json();
     const list = d.sessions || [];
+    // Overnight Teammates inboxes: always resume newest session (no chat filters).
+    if (inboxOnly) return list[0] || null;
     return list.find(isResumableDmSession) || null;
   }
 
   async function loadLatestOrHistory() {
-    if (state.sessionId) {
-      // If URL pointed at a room session, bounce to /room — keep DM individual.
-      try {
-        const metaR = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=50");
-        if (metaR.ok) {
-          const meta = await metaR.json();
-          const hit = (meta.sessions || []).find((s) => s.session_id === state.sessionId);
-          if (hit && isRoomSession(hit)) {
-            const peer = (/\[room:[^=]+\+([a-z]+)\]/i.exec(hit.title || "") || [])[1] || "vett";
-            location.replace("/room?peer=" + encodeURIComponent(peer)
-              + "&session=" + encodeURIComponent(state.sessionId));
-            return;
+    try {
+      if (state.sessionId) {
+        // If URL pointed at a room session, bounce to /room — keep DM individual.
+        try {
+          const metaR = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=50");
+          if (metaR.ok) {
+            const meta = await metaR.json();
+            const hit = (meta.sessions || []).find((s) => s.session_id === state.sessionId);
+            if (hit && isRoomSession(hit)) {
+              const peer = (/\[room:[^=]+\+([a-z]+)\]/i.exec(hit.title || "") || [])[1] || "vett";
+              location.replace("/room?peer=" + encodeURIComponent(peer)
+                + "&session=" + encodeURIComponent(state.sessionId));
+              return;
+            }
           }
-        }
-      } catch (_) {}
-      const r = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
-      if (r.ok) {
-        const d = await r.json();
-        const c = await collabs();
-        renderTurns(d.turns || [], c);
-        renderChips(c);
-        return;
+        } catch (_) {}
+        const ok = await applyHistory(state.sessionId);
+        if (ok === true) return;
+        if (ok === false) return; // hard error already shown
+        // ok === null → wrong agent; fall through to latest DM
       }
-    }
-    const s = await findLatestDmSession();
-    if (s && s.session_id) {
-      state.sessionId = s.session_id;
-      const u = new URL(location.href);
-      u.searchParams.set("session", state.sessionId);
-      history.replaceState({}, "", u);
-      const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
-      if (h.ok) {
-        const hd = await h.json();
-        const c = await collabs();
-        renderTurns(hd.turns || [], c);
-        renderChips(c);
+      const s = await findLatestDmSession();
+      if (s && s.session_id) {
+        state.sessionId = s.session_id;
+        const u = new URL(location.href);
+        u.searchParams.set("session", state.sessionId);
+        history.replaceState({}, "", u);
+        const ok = await applyHistory(state.sessionId);
+        if (ok === true) return;
+        if (ok === false) return;
       }
-      return;
+      showEmptyThread();
+    } catch (e) {
+      showLoadError(e.message || "network error");
     }
-    thread().innerHTML = "";
-    appendBubble("sys", "Say hello to start the thread.");
   }
 
   async function send() {
+    if (inboxOnly) return;
+    if (!state.bootDone) return; // wait for initial history so we don't race a new session
     const input = $("[data-input]");
     const msg = (input.value || "").trim();
     if (!msg || state.sending) return;
@@ -779,6 +938,16 @@
           message: msg,
         }),
       });
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        const detail = (errBody.error && errBody.error.message) || ("HTTP " + r.status);
+        them.textContent = "error · " + detail;
+        return;
+      }
+      if (!r.body) {
+        them.textContent = "error · empty response from house";
+        return;
+      }
       const reader = r.body.getReader();
       const dec = new TextDecoder();
       let buf = "", text = "";
@@ -791,7 +960,12 @@
         for (const part of parts) {
           const line = part.split("\n").find((l) => l.startsWith("data: "));
           if (!line) continue;
-          const payload = JSON.parse(line.slice(6));
+          let payload;
+          try {
+            payload = JSON.parse(line.slice(6));
+          } catch (_) {
+            continue;
+          }
           if (payload.type === "token" && payload.delta) {
             text += payload.delta;
             // Stream plain text; render markdown once the turn finishes.
@@ -804,10 +978,31 @@
             appendBubble("sys", "→ " + (payload.name || "tool") + (payload.name === "house_post_send" ? " (messaging peer…)" : "…"));
           } else if (payload.type === "tool_result") {
             try {
-              const r = JSON.parse(payload.content || "{}");
-              if (r && r.commissioned && (r.to_id || r.target)) {
-                appendBubble("sys", "Commissioned " + (r.to_id || r.target) + " — tap their shape for the group");
+              const tr = JSON.parse(payload.content || "{}");
+              if (tr && tr.commissioned && (tr.to_id || tr.target)) {
+                appendBubble("sys", "Commissioned " + (tr.to_id || tr.target) + " — tap their shape for the group");
                 startGatePoll();
+              }
+              // Eve compose_post — show the draft in this thread (messenger-first)
+              if ((payload.name === "compose_post" || tr.drafted) && tr.caption) {
+                const card = document.createElement("div");
+                card.className = "draft-card";
+                const plat = (tr.platform || "post").toString().toUpperCase();
+                const via = tr.delivered_via ? (" · via " + tr.delivered_via) : "";
+                const img = tr.image_path
+                  ? ("<div class=\"dc-meta\">Image: " + esc(String(tr.image_path).split("/").pop()) + "</div>")
+                  : "";
+                const note = tr.thread_note
+                  ? ("<div class=\"dc-meta\">" + esc(tr.thread_note) + "</div>")
+                  : (tr.error
+                    ? ("<div class=\"dc-meta\">Signal: " + esc(tr.message || tr.error) + " — draft still here</div>")
+                    : "");
+                card.innerHTML =
+                  "<div class=\"dc-head\">Draft · " + esc(plat) + via + "</div>" +
+                  "<div class=\"dc-caption\">" + esc(tr.caption) + "</div>" +
+                  img + note;
+                thread().appendChild(card);
+                thread().scrollTop = thread().scrollHeight;
               }
             } catch (_) {}
           } else if (payload.type === "error") {
@@ -818,32 +1013,41 @@
       if (!text) them.textContent = "(no reply)";
       else setBubbleText(them, text, true);
       // Reload to pick up in-thread Messaged {peer} avatars
-      const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
-      if (h.ok) {
-        const hd = await h.json();
-        const c = await collabs();
-        renderTurns(hd.turns || [], c);
-        renderChips(c);
-      }
+      await applyHistory(state.sessionId);
     } catch (e) {
       them.textContent = "error · " + e.message;
+    } finally {
+      state.sending = false;
+      $("[data-send]").disabled = false;
+      if (input) input.focus();
     }
-    state.sending = false;
-    $("[data-send]").disabled = false;
-    input.focus();
   }
 
-  $("[data-send]").addEventListener("click", send);
-  $("[data-input]").addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") { ev.preventDefault(); send(); }
-  });
+  const _sendBtn = $("[data-send]");
+  const _inp = $("[data-input]");
+  if (_sendBtn && !inboxOnly) _sendBtn.disabled = true;
+  if (_sendBtn) _sendBtn.addEventListener("click", send);
+  if (_inp) {
+    _inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); send(); }
+    });
+  }
 
   bindKeyboardInset();
-  loadLatestOrHistory().then(() => {
-    if (state.waitingPeers) startPoll();
-    if (agent === "aetheria") startGatePoll();
-  });
-  $("[data-input]").focus();
+  loadLatestOrHistory()
+    .then(() => {
+      state.bootDone = true;
+      if (_sendBtn && !inboxOnly) _sendBtn.disabled = false;
+      if (state.waitingPeers) startPoll();
+      // Eve compose_post is Gate-approved; Aetheria too for other egress.
+      if (agent === "aetheria" || agent === "eve") startGatePoll();
+    })
+    .catch((e) => {
+      state.bootDone = true;
+      if (_sendBtn && !inboxOnly) _sendBtn.disabled = false;
+      showLoadError(e.message || "network error");
+    });
+  if (_inp) _inp.focus();
 })();
 </script>
 </body>

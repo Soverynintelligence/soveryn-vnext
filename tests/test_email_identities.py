@@ -65,6 +65,9 @@ def test_board_identities_shape():
     assert board["desk"]["pondwright"]["default"].endswith(
         "@carolinawatergardens.com"
     )
+    assert board.get("production") is False
+    assert board.get("status") == "not_production"
+    assert "NOT PRODUCTION" in (board.get("reading") or "")
 
 
 def test_connectors_board_includes_email_identities():
@@ -72,8 +75,11 @@ def test_connectors_board_includes_email_identities():
 
     payload = board_payload()
     assert "email_identities" in payload
+    assert payload["house"].get("email_not_production") is True
+    assert "NOT PRODUCTION" in (payload.get("reading") or "")
     aetheria_email = [
         c for c in for_citizen("aetheria") if c.id == "email"
     ][0]
     assert aetheria_email.email_from == "aetheria@soverynintelligence.com"
     assert "pondwright@carolinawatergardens.com" in aetheria_email.email_aliases
+    assert aetheria_email.armed is False

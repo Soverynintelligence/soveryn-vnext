@@ -247,6 +247,8 @@ def _entry_for_classification(node: Node) -> Entry:
         metadata["provenance"] = dict(node.provenance)
         if node.provenance.get("canonical") is False:
             metadata["canonical"] = False
+        if "grade" in node.provenance:
+            metadata["grade"] = node.provenance["grade"]
     if node.intent is not None:
         metadata["intent"] = node.intent
 

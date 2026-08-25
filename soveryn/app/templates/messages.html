@@ -45,6 +45,8 @@
   .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   .avatar[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .avatar[data-agent="t_critic"] { background: linear-gradient(145deg, #d4a574, #6b4a2e); }
+  .avatar[data-agent="t_scout"] { background: linear-gradient(145deg, #8eb8d4, #3a5a70); }
   .meta { flex: 1; min-width: 0; }
   .meta .name {
     display: flex; justify-content: space-between; gap: 8px;
@@ -74,6 +76,9 @@
     { id: "scotty", name: "Scotty", role: "Gets it done", letter: "S" },
     { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
     { id: "kernel", name: "Kernel", role: "Builds with you", letter: "K" },
+    // Teammates overnight → Messages (merge). Read-only inboxes.
+    { id: "t_critic", name: "Critic", role: "Overnight review", letter: "C" },
+    { id: "t_scout", name: "Scout", role: "Overnight scan", letter: "Sc" },
   ];
 
   const list = document.querySelector("[data-testid=messages-list]");
@@ -94,23 +99,40 @@
     } catch { return ""; }
   }
 
+  const INBOX_ONLY = { t_critic: true, t_scout: true };
+
   function isRoomSession(s) {
     return ((s && s.title) || "").trim().startsWith("[room:");
   }
 
+  // Match message_thread: don't preview heartbeat/commission/room as the DM.
+  function isResumableDmSession(s) {
+    if (!s || !s.session_id) return false;
+    const t = ((s && s.title) || "").trim();
+    if (!t) return true;
+    if (isRoomSession(s)) return false;
+    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
+    if (t.startsWith("automation:")) return false;
+    if (t.startsWith("verify-")) return false;
+    if (t.startsWith("[m]")) return true;
+    if (t.startsWith("[")) return false;
+    return true;
+  }
+
   async function preview(agent) {
+    const inbox = !!INBOX_ONLY[agent];
+    const fallback = inbox ? "Overnight inbox" : "Tap to talk";
     try {
-      // Prefer individual DMs — never surface a group-room session as the
-      // Aetheria (or any) contact preview. Groups open via peer icon only.
-      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=20");
-      if (!r.ok) return { text: "Tap to talk", hot: false, when: "" };
+      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=30");
+      if (!r.ok) return { text: fallback, hot: false, when: "" };
       const d = await r.json();
-      const s = ((d.sessions || []).find((x) => x && !isRoomSession(x))) || null;
-      if (!s) return { text: "Tap to talk", hot: false, when: "" };
-      let text = "Continue conversation";
+      const list = d.sessions || [];
+      const s = inbox
+        ? (list[0] || null)
+        : (list.find(isResumableDmSession) || null);
+      if (!s) return { text: fallback, hot: false, when: "" };
+      let text = inbox ? (s.title || "Overnight inbox") : "Continue conversation";
       let hot = false;
-      // Only hint at an active collab on this DM — don't make Aetheria look
-      // like she's permanently in a group with Vett.
       if (agent === "aetheria" && s.session_id) {
         try {
           const c = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(s.session_id));
@@ -120,7 +142,6 @@
               const st = (ev.state || "").toLowerCase();
               return st === "working" || (!st && ev.peer);
             });
-            // Show hot preview only for very recent working collabs (< 2h)
             if (active && active.peer && active.at) {
               const age = Date.now() - new Date(active.at).getTime();
               if (age < 2 * 3600 * 1000) {
@@ -131,28 +152,35 @@
           }
         } catch (_) {}
       }
-      if (!hot && s.title && !String(s.title).startsWith("[")) text = s.title;
+      if (!hot && !inbox && s.title && !String(s.title).startsWith("[")) text = s.title;
       return { text, hot, when: rel(s.updated_at), session: s.session_id };
     } catch {
-      return { text: "Tap to talk", hot: false, when: "" };
+      return { text: fallback, hot: false, when: "" };
     }
   }
 
   async function paint() {
-    const rows = await Promise.all(CONTACTS.map(async (c) => {
-      const p = await preview(c.id);
-      const href = "/messages/" + encodeURIComponent(c.id);
-      return (
-        '<li><a class="row" href="' + href + '">' +
-          '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>' +
-          '<div class="meta">' +
-            '<div class="name"><span>' + esc(c.name) + '</span><time>' + esc(p.when) + '</time></div>' +
-            '<div class="preview' + (p.hot ? ' hot' : '') + '">' + esc(p.text) + '</div>' +
-          '</div>' +
-        '</a></li>'
-      );
-    }));
-    list.innerHTML = rows.join("");
+    if (!list) return;
+    try {
+      const rows = await Promise.all(CONTACTS.map(async (c) => {
+        const p = await preview(c.id);
+        const href = "/messages/" + encodeURIComponent(c.id);
+        return (
+          '<li><a class="row" href="' + href + '">' +
+            '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>' +
+            '<div class="meta">' +
+              '<div class="name"><span>' + esc(c.name) + '</span><time>' + esc(p.when) + '</time></div>' +
+              '<div class="preview' + (p.hot ? ' hot' : '') + '">' + esc(p.text) + '</div>' +
+            '</div>' +
+          '</a></li>'
+        );
+      }));
+      list.innerHTML = rows.join("");
+    } catch (e) {
+      list.innerHTML =
+        '<li style="padding:16px;color:var(--mute)">Couldn\'t load contacts — ' +
+        esc(e.message || "network error") + "</li>";
+    }
   }
 
   paint();

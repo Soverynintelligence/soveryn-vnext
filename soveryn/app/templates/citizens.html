@@ -261,10 +261,11 @@
     <span class="r" data-conn-reading>grants + armed state</span>
   </div>
   <p class="spawn-note" data-conn-note>
-    Web (house SearXNG), email (SMTP/IMAP when env is set), Signal, files, House Post, …
+    Web (house SearXNG), email, Signal, files, House Post, …
     <strong>Granted</strong> is who may use it; <strong>armed</strong> means configured and live.
-    Email stays off until you set <code>SOVERYN_SMTP_HOST</code> / <code>SOVERYN_SMTP_FROM</code>
-    (and IMAP to list).
+    <strong>Citizen email is NOT PRODUCTION</strong> — identity map exists, live send stays off
+    until DNS aliases + SPF/DKIM, <code>SOVERYN_SMTP_HOST</code> / <code>SOVERYN_SMTP_FROM</code>,
+    and <code>SOVERYN_EMAIL_PRODUCTION=1</code> (IMAP optional for list).
   </p>
   <div data-connectors-house class="spawn-note" style="border-top:1px solid var(--line)"></div>
 </section>
@@ -547,9 +548,13 @@
       if (reading) reading.textContent = data.reading || "connectors";
       if (!el) return;
       const h = data.house || {};
+      const emailProd = h.email_production
+        ? "production latch on"
+        : "NOT PRODUCTION";
       el.innerHTML = `
         <strong>House arms:</strong>
         web ${h.web_armed ? "on" : "off"} (${esc(h.web_note || "")}) ·
+        email ${esc(emailProd)} ·
         email send ${h.email_send_armed ? "on" : "off"} (${esc(h.email_send_note || "")}) ·
         email list ${h.email_list_armed ? "on" : "off"} (${esc(h.email_list_note || "")}).
         Per-citizen grants show as chips on each roster row (green-ish = armed, gold = granted/off).
