@@ -249,6 +249,27 @@
     cursor: pointer; flex-shrink: 0;
   }
   .composer button:disabled { opacity: 0.4; }
+  [data-push-banner] {
+    margin: 0; padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: #12100e;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    justify-content: space-between;
+  }
+  [data-push-banner][hidden] { display: none !important; }
+  [data-push-banner][data-tone="on"] { background: rgba(111,185,138,0.08); }
+  [data-push-banner] .push-copy {
+    flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--ink);
+  }
+  [data-push-banner] .push-copy strong { color: var(--gold); font-weight: 600; }
+  [data-push-banner][data-tone="on"] .push-copy strong { color: var(--mint); }
+  [data-push-banner] .push-note { color: var(--mute); font-size: 12px; }
+  [data-push-banner] .push-allow {
+    flex-shrink: 0; font: inherit; font-size: 14px; font-weight: 600;
+    padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--gold); background: var(--gold); color: #0c0b0a;
+  }
+  [data-push-banner] .push-allow:disabled { opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -262,6 +283,7 @@
     <div class="top-actions"></div>
   </header>
 
+  <div data-push-banner role="region" aria-label="House alerts"></div>
   <div class="collab-chips" data-collab-chips hidden></div>
   <div class="thread" data-thread role="log" aria-live="polite"></div>
 
