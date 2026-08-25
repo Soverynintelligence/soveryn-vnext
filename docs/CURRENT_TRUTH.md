@@ -117,7 +117,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 | Repo | Branch / tip |
 |------|----------------|
-| `soveryn_vnext` | `feat/mission-control-spark-tile` — **7 commits local ahead of origin** (Messages door, push, spine) |
+| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `5c1e880` — **pushed** (Messages door, push, spine) |
 | `teammates` | `feat/phase-0` · overnight + Messages bridge (`6f9ae24`) |
 
 Notes in `docs/notes/` are **not** authority. **This file is.**
