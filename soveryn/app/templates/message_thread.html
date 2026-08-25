@@ -1072,6 +1072,14 @@
     });
   }
 
+  // Clear unread dot on Messages list — this contact is open.
+  try {
+    const SEEN_KEY = "soveryn_messages_seen_v1";
+    const seen = JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {};
+    seen[agent] = new Date().toISOString();
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+  } catch (_) {}
+
   bindKeyboardInset();
   loadLatestOrHistory()
     .then(() => {

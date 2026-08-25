@@ -74,12 +74,24 @@
     border-bottom: 1px solid var(--line); background: var(--row);
   }
   .row:active { background: #151311; }
+  .av-wrap {
+    position: relative; flex-shrink: 0; width: 56px; height: 56px;
+  }
   .avatar {
-    width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+    width: 56px; height: 56px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 20px; color: #0c0b0a;
     background: linear-gradient(145deg, var(--gold), #8a7038);
   }
+  .unread-dot {
+    position: absolute; top: 2px; right: 2px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--mint);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 1px rgba(111,185,138,0.35);
+  }
+  .row.unread .meta .name > span:first-child { color: var(--ink); font-weight: 700; }
+  .row.unread .preview { color: rgba(245,242,234,0.72); }
   .avatar[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
   .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
@@ -136,9 +148,29 @@
   ];
 
   const list = document.querySelector("[data-testid=messages-list]");
+  const SEEN_KEY = "soveryn_messages_seen_v1";
 
   function esc(s) {
     return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  function loadSeen() {
+    try {
+      return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function isUnread(agent, updatedAt) {
+    if (!updatedAt) return false;
+    const seenAt = loadSeen()[agent];
+    if (!seenAt) return true; // never opened this contact — activity waiting
+    try {
+      return new Date(updatedAt).getTime() > new Date(seenAt).getTime();
+    } catch (_) {
+      return false;
+    }
   }
 
   function rel(iso) {
@@ -184,7 +216,7 @@
       const s = inbox
         ? (list[0] || null)
         : (list.find(isResumableDmSession) || null);
-      if (!s) return { text: fallback, hot: false, when: "" };
+      if (!s) return { text: fallback, hot: false, when: "", updatedAt: null };
       let text = inbox ? (s.title || "Overnight inbox") : "Continue conversation";
       let hot = false;
       if (agent === "aetheria" && s.session_id) {
@@ -207,9 +239,15 @@
         } catch (_) {}
       }
       if (!hot && !inbox && s.title && !String(s.title).startsWith("[")) text = s.title;
-      return { text, hot, when: rel(s.updated_at), session: s.session_id };
+      return {
+        text,
+        hot,
+        when: rel(s.updated_at),
+        session: s.session_id,
+        updatedAt: s.updated_at || null,
+      };
     } catch {
-      return { text: fallback, hot: false, when: "" };
+      return { text: fallback, hot: false, when: "", updatedAt: null };
     }
   }
 
@@ -219,14 +257,22 @@
       const rows = await Promise.all(CONTACTS.map(async (c) => {
         const p = await preview(c.id);
         const href = "/messages/" + encodeURIComponent(c.id);
+        const unread = isUnread(c.id, p.updatedAt);
+        const dot = unread
+          ? '<span class="unread-dot" title="New" aria-label="Unread"></span>'
+          : "";
         return (
-          '<li><a class="row" href="' + href + '">' +
-            '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>' +
+          '<li><a class="row' + (unread ? " unread" : "") + '" href="' + href + '"' +
+            (unread ? ' aria-label="' + esc(c.name) + ', unread"' : "") + ">" +
+            '<div class="av-wrap">' +
+              '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + "</div>" +
+              dot +
+            "</div>" +
             '<div class="meta">' +
-              '<div class="name"><span>' + esc(c.name) + '</span><time>' + esc(p.when) + '</time></div>' +
-              '<div class="preview' + (p.hot ? ' hot' : '') + '">' + esc(p.text) + '</div>' +
-            '</div>' +
-          '</a></li>'
+              '<div class="name"><span>' + esc(c.name) + "</span><time>" + esc(p.when) + "</time></div>" +
+              '<div class="preview' + (p.hot ? " hot" : "") + '">' + esc(p.text) + "</div>" +
+            "</div>" +
+          "</a></li>"
         );
       }));
       list.innerHTML = rows.join("");
@@ -238,6 +284,11 @@
   }
 
   paint();
+  // Returning from a thread (bfcache / tab focus) — refresh dots.
+  window.addEventListener("pageshow", () => { paint(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") paint();
+  });
 })();
 </script>
 </body>
