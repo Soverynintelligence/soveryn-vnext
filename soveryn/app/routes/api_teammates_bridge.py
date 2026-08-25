@@ -106,6 +106,17 @@ def teammates_brief():
         bubble,
         source="teammates_overnight",
     )
+    # Phone heads-up only — brief stays in Messages; push says where to look.
+    try:
+        from soveryn.platform.webpush.notify import notify_overnight_brief
+
+        notify_overnight_brief(
+            teammate_id=teammate_id,
+            routine=routine,
+            status=status,
+        )
+    except Exception:
+        pass
     return jsonify({
         "ok": True,
         "agent": agent,

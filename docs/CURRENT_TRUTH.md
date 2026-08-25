@@ -46,7 +46,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
-| Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (phone subscribed); Signal stays Aetheria-only |
+| Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (Gate / needs-you / Critic·Scout brief ready); Signal = Aetheria-only |
 
 ### Teammates — `~/teammates`
 | Surface | Status |

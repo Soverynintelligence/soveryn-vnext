@@ -1,4 +1,4 @@
-"""Send Web Push to subscribed Messages PWAs — Gate / needs-you only."""
+"""Send Web Push to subscribed Messages PWAs — Gate / needs-you / overnight briefs."""
 
 from __future__ import annotations
 
@@ -130,4 +130,26 @@ def notify_share(*, agent: str, preview: str = "") -> None:
         body=(preview or "Open Messages").strip()[:140],
         url=f"/messages/{who}",
         tag=f"share-{who}",
+    )
+
+
+def notify_overnight_brief(
+    *,
+    teammate_id: str,
+    routine: str = "",
+    status: str = "ok",
+) -> None:
+    """Thin heads-up when Critic/Scout lands in Messages — where to look, not the essay."""
+    who = (teammate_id or "").strip().lower()
+    agent = {"critic": "t_critic", "scout": "t_scout"}.get(who, "")
+    if not agent:
+        return
+    name = "Critic" if who == "critic" else "Scout" if who == "scout" else who.title()
+    bit = (routine or "overnight").strip() or "overnight"
+    st = (status or "ok").strip() or "ok"
+    notify_needs_you(
+        title=f"{name} brief ready",
+        body=f"{bit} · {st} — open Messages → {name}",
+        url=f"/messages/{agent}",
+        tag=f"overnight-{who}",
     )
