@@ -63,33 +63,53 @@ def _send_all(*, title: str, body: str, url: str, tag: str) -> None:
     import json
 
     data = json.dumps(payload)
-    claims = {"sub": vapid.get("subject") or "mailto:jon@soveryn.local"}
-    dead: list[str] = []
+    claims = {
+        "sub": vapid.get("subject") or "mailto:jon@soverynintelligence.com"
+    }
+    # pywebpush accepts a PEM file path more reliably than an in-memory PEM string.
+    import tempfile
 
-    for row in subs:
-        try:
-            webpush(
-                subscription_info=push_store.subscription_info(row),
-                data=data,
-                vapid_private_key=vapid["privateKeyPem"],
-                vapid_claims=claims,
-                ttl=120,
-                timeout=10,
-            )
-        except WebPushException as exc:
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            logger.warning(
-                "webpush: send failed endpoint=…%s status=%s err=%s",
-                row["endpoint"][-24:],
-                status,
-                exc,
-            )
-            if status in (404, 410):
-                dead.append(row["endpoint"])
-        except Exception:
-            logger.exception(
-                "webpush: send error endpoint=…%s", row["endpoint"][-24:]
-            )
+    pem_path = None
+    dead: list[str] = []
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w", suffix=".pem", delete=False
+        ) as tmp:
+            tmp.write(vapid["privateKeyPem"])
+            pem_path = tmp.name
+
+        for row in subs:
+            try:
+                webpush(
+                    subscription_info=push_store.subscription_info(row),
+                    data=data,
+                    vapid_private_key=pem_path,
+                    vapid_claims=claims,
+                    ttl=120,
+                    timeout=10,
+                )
+            except WebPushException as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                logger.warning(
+                    "webpush: send failed endpoint=…%s status=%s err=%s",
+                    row["endpoint"][-24:],
+                    status,
+                    exc,
+                )
+                if status in (404, 410):
+                    dead.append(row["endpoint"])
+            except Exception:
+                logger.exception(
+                    "webpush: send error endpoint=…%s", row["endpoint"][-24:]
+                )
+    finally:
+        if pem_path:
+            try:
+                import os
+
+                os.unlink(pem_path)
+            except OSError:
+                pass
 
     for endpoint in dead:
         try:

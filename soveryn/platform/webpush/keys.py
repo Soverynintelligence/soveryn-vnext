@@ -45,7 +45,10 @@ def _ensure_keys(path: Path) -> dict[str, Any]:
     payload = {
         "publicKey": public_b64,
         "privateKeyPem": priv_pem,
-        "subject": os.environ.get("SOVERYN_VAPID_SUBJECT", "mailto:jon@soveryn.local"),
+        # Apple Web Push rejects .local mailto — use a real house contact.
+        "subject": os.environ.get(
+            "SOVERYN_VAPID_SUBJECT", "mailto:jon@soverynintelligence.com"
+        ),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
