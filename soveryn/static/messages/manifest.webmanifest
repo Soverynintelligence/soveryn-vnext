@@ -2,7 +2,7 @@
   "name": "SOVERYN Messages",
   "short_name": "SOVERYN",
   "description": "Your house — talk to them here",
-  "start_url": "/messages",
+  "start_url": "/messages?src=pwa",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",

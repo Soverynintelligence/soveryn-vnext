@@ -110,11 +110,18 @@
       <a class="muted" href="/command-center">Desk</a>
     </div>
   </header>
-  <div data-push-banner role="region" aria-label="House alerts"></div>
+  <!-- Server-rendered so phones see this even if JS/cache is stale -->
+  <div data-push-banner role="region" aria-label="House alerts" data-tone="ask">
+    <div class="push-copy">
+      <strong>House alerts</strong> — Gate and needs-you from any citizen (not only Signal).<br>
+      <span class="push-note">On iPhone: Safari Share → <strong>Add to Home Screen</strong>, open the SOVERYN icon, then tap Allow below.</span>
+    </div>
+    <button type="button" data-push-allow class="push-allow">Allow house alerts</button>
+  </div>
   <ul class="list" data-testid="messages-list" aria-label="Your house">
     <!-- filled by JS -->
   </ul>
-<script src="/static/messages/push-client.js" defer></script>
+<script src="/messages-push-client.js?v=20260825c" defer></script>
 <script>
 (function () {
   const CONTACTS = [

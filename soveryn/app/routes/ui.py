@@ -149,27 +149,40 @@ def messages_page():
     return _serve_html(MESSAGES_TEMPLATE, missing_label="Messages")
 
 
+def _messages_static_file(name: str, *, mimetype: str):
+    from flask import Response
+
+    path = Path(__file__).resolve().parents[2] / "static" / "messages" / name
+    if not path.is_file():
+        return jsonify({"error": {
+            "code": "ui_unavailable",
+            "message": f"messages asset missing at {path}",
+        }}), 500
+    resp = Response(path.read_text(encoding="utf-8"), mimetype=mimetype)
+    # Phones (esp. Home Screen PWAs) love stale JS — never cache these.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    return resp
+
+
 @bp.get("/messages-sw.js")
 def messages_service_worker():
     """Service worker at origin scope so Web Push covers /messages/*."""
-    from flask import Response
-
-    sw_path = (
-        Path(__file__).resolve().parents[2] / "static" / "messages" / "sw.js"
+    resp = _messages_static_file(
+        "sw.js", mimetype="application/javascript; charset=utf-8"
     )
-    if not sw_path.is_file():
-        return jsonify({"error": {
-            "code": "ui_unavailable",
-            "message": f"messages SW missing at {sw_path}",
-        }}), 500
-    resp = Response(
-        sw_path.read_text(encoding="utf-8"),
-        mimetype="application/javascript; charset=utf-8",
-    )
-    # Allow controlling /messages and / from a path under this route.
+    if isinstance(resp, tuple):
+        return resp
     resp.headers["Service-Worker-Allowed"] = "/"
-    resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@bp.get("/messages-push-client.js")
+def messages_push_client():
+    """Cache-busted push client — prefer this URL from Messages templates."""
+    return _messages_static_file(
+        "push-client.js", mimetype="application/javascript; charset=utf-8"
+    )
 
 
 @bp.get("/messages/<agent>")

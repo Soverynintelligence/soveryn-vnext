@@ -283,7 +283,13 @@
     <div class="top-actions"></div>
   </header>
 
-  <div data-push-banner role="region" aria-label="House alerts"></div>
+  <div data-push-banner role="region" aria-label="House alerts" data-tone="ask">
+    <div class="push-copy">
+      <strong>House alerts</strong> — Gate / needs-you.<br>
+      <span class="push-note">Home Screen app → tap Allow house alerts.</span>
+    </div>
+    <button type="button" data-push-allow class="push-allow">Allow house alerts</button>
+  </div>
   <div class="collab-chips" data-collab-chips hidden></div>
   <div class="thread" data-thread role="log" aria-live="polite"></div>
 
@@ -292,7 +298,7 @@
     <button type="button" data-send aria-label="Send">↑</button>
   </form>
 
-<script src="/static/messages/push-client.js" defer></script>
+<script src="/messages-push-client.js?v=20260825c" defer></script>
 <script>
 (function () {
   const CONTACTS = {

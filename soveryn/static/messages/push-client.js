@@ -129,8 +129,18 @@
     );
   }
 
+  function bindExistingAllow() {
+    const allow = document.querySelector("[data-push-allow]");
+    if (allow && !allow.dataset.bound) {
+      allow.dataset.bound = "1";
+      allow.addEventListener("click", onAllowClick);
+    }
+  }
+
   async function boot() {
     if (!banner()) return;
+    // HTML already has the banner — bind Allow immediately (helps stale phones).
+    bindExistingAllow();
 
     // iOS: Web Push only works from the installed Home Screen app.
     if (!isStandalone()) {
