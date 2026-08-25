@@ -149,6 +149,29 @@ def messages_page():
     return _serve_html(MESSAGES_TEMPLATE, missing_label="Messages")
 
 
+@bp.get("/messages-sw.js")
+def messages_service_worker():
+    """Service worker at origin scope so Web Push covers /messages/*."""
+    from flask import Response
+
+    sw_path = (
+        Path(__file__).resolve().parents[2] / "static" / "messages" / "sw.js"
+    )
+    if not sw_path.is_file():
+        return jsonify({"error": {
+            "code": "ui_unavailable",
+            "message": f"messages SW missing at {sw_path}",
+        }}), 500
+    resp = Response(
+        sw_path.read_text(encoding="utf-8"),
+        mimetype="application/javascript; charset=utf-8",
+    )
+    # Allow controlling /messages and / from a path under this route.
+    resp.headers["Service-Worker-Allowed"] = "/"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @bp.get("/messages/<agent>")
 def message_thread_page(agent: str):
     """iMessage-style 1:1 thread — matches /messages list chrome."""

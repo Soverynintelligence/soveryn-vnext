@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Messages · SOVERYN</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOVERYN">
+<link rel="manifest" href="/static/messages/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
 <style>
   :root {
@@ -35,6 +41,12 @@
   header .links { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
   header a { color: var(--gold); text-decoration: none; font-size: 15px; }
   header a.muted { color: var(--mute); font-size: 13px; }
+  [data-push-chip] {
+    font-size: 12px; color: var(--gold); border: 1px solid rgba(198,166,100,0.35);
+    border-radius: 999px; padding: 5px 10px; background: transparent; cursor: pointer;
+    font-family: inherit;
+  }
+  [data-push-chip][data-state="on"] { color: var(--mint); border-color: rgba(111,185,138,0.4); cursor: default; }
   /* Phone OS = Messages. Desk HUD is optional and usually unused on phone. */
   @media (max-width: 720px) {
     header a[href="/command-center"],
@@ -79,6 +91,7 @@
       <p class="sub">Your house — talk to them here</p>
     </div>
     <div class="links">
+      <button type="button" data-push-chip hidden>Enable alerts</button>
       <a class="muted" href="/citizens">Staff</a>
       <a class="muted" href="/command-center">Desk</a>
     </div>
@@ -86,6 +99,7 @@
   <ul class="list" data-testid="messages-list" aria-label="Your house">
     <!-- filled by JS -->
   </ul>
+<script src="/static/messages/push-client.js" defer></script>
 <script>
 (function () {
   const CONTACTS = [

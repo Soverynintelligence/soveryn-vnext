@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Messages · SOVERYN</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOVERYN">
+<link rel="manifest" href="/static/messages/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
 <style>
   :root {
@@ -264,6 +270,7 @@
     <button type="button" data-send aria-label="Send">↑</button>
   </form>
 
+<script src="/static/messages/push-client.js" defer></script>
 <script>
 (function () {
   const CONTACTS = {

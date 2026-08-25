@@ -1647,6 +1647,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_citizens_bp)
     from soveryn.app.routes.api_teammates_bridge import bp as api_teammates_bridge_bp
     app.register_blueprint(api_teammates_bridge_bp)
+    from soveryn.app.routes.api_push import bp as api_push_bp
+    app.register_blueprint(api_push_bp)
     from soveryn.app.routes.api_rooms import bp as api_rooms_bp
     app.register_blueprint(api_rooms_bp)
     from soveryn.app.routes.api_ares import bp as api_ares_bp

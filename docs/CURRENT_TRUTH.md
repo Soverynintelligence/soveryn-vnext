@@ -46,7 +46,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
-| Messages / CoS | **Live** — **default `/` door**; Aetheria temp CoS; reliability pass + primary-product framing 2026-08-25 |
+| Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push** (Gate / needs-you); Signal stays Aetheria-only |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
@@ -109,7 +109,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 
-**Next (when Jon says go):** Meta IG optional; CRM parked; deeper lattice/dream continuity when asked.
+**Next (when Jon says go):** Install Messages PWA on phone + Enable alerts; ASUS Wed evening; Meta IG / CRM parked.
 
 ---
 

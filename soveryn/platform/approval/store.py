@@ -304,7 +304,19 @@ class ApprovalBroker:
         now: str,
     ) -> ApprovalRequest:
         """Create and return a pending approval request."""
-        return self.store.create(citizen=citizen, tool=tool, args=args, now=now)
+        req = self.store.create(citizen=citizen, tool=tool, args=args, now=now)
+        # Wake Messages PWA — house push (Signal stays Aetheria-only).
+        try:
+            from soveryn.platform.webpush.notify import notify_gate
+
+            notify_gate(
+                citizen=req.citizen,
+                tool=req.tool,
+                approval_id=req.id,
+            )
+        except Exception:
+            pass
+        return req
 
     def wait(self, approval_id: str) -> ApprovalRequest:
         """Block until the request reaches a terminal state.
