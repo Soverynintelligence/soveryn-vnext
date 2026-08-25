@@ -3,19 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Chat · SOVERYN</title>
+<title>Messages · SOVERYN</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
 <style>
   :root {
     --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
     --ink: #f5f2ea; --mute: rgba(245,242,234,0.45); --gold: #c6a664; --mint: #6fb98a;
     --bubble-them: #1c1a17; --bubble-me: #2a2418;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    /* Same face as Desk / Staff (lab-console) — one house */
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg); color: var(--ink); font-family: var(--sans);
     display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
   }
   header.top {
     position: sticky; top: 0; z-index: 3;
@@ -101,7 +105,7 @@
   }
   .bubble.them .md-body li { margin: 0.15em 0; }
   .bubble.them .md-body code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--mono);
     font-size: 0.88em; background: rgba(255,255,255,0.06);
     padding: 0.1em 0.35em; border-radius: 4px;
   }
