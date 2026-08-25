@@ -46,7 +46,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
-| Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push** (Gate / needs-you); Signal stays Aetheria-only |
+| Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (phone subscribed); Signal stays Aetheria-only |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
@@ -109,7 +109,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 
-**Next (when Jon says go):** Install Messages PWA on phone + Enable alerts; ASUS Wed evening; Meta IG / CRM parked.
+**Next (when Jon says go):** ASUS GX10 Wed evening bring-up; Meta IG / CRM parked.
 
 ---
 
@@ -117,7 +117,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 | Repo | Branch / tip |
 |------|----------------|
-| `soveryn_vnext` | `feat/mission-control-spark-tile` (+ local) |
-| `teammates` | `feat/phase-0` · overnight + Messages bridge |
+| `soveryn_vnext` | `feat/mission-control-spark-tile` — **7 commits local ahead of origin** (Messages door, push, spine) |
+| `teammates` | `feat/phase-0` · overnight + Messages bridge (`6f9ae24`) |
 
 Notes in `docs/notes/` are **not** authority. **This file is.**
