@@ -23,10 +23,18 @@
     border-bottom: 1px solid var(--line);
   }
   header h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  header .sub {
+    margin: 2px 0 0; font-size: 12px; color: var(--mute); font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+  header .brand { display: flex; flex-direction: column; min-width: 0; }
+  header .links { display: flex; gap: 14px; align-items: center; flex-shrink: 0; }
   header a { color: var(--gold); text-decoration: none; font-size: 15px; }
+  header a.muted { color: var(--mute); font-size: 13px; }
   /* Phone OS = Messages. Desk HUD is optional and usually unused on phone. */
   @media (max-width: 720px) {
-    header a[href="/command-center"] { display: none; }
+    header a[href="/command-center"],
+    header a[href="/citizens"] { display: none; }
   }
   .list { list-style: none; margin: 0; padding: 0; }
   .row {
@@ -62,10 +70,16 @@
 </head>
 <body>
   <header>
-    <h1>Messages</h1>
-    <a href="/command-center">Desk</a>
+    <div class="brand">
+      <h1>Messages</h1>
+      <p class="sub">Your house — talk to them here</p>
+    </div>
+    <div class="links">
+      <a class="muted" href="/citizens">Staff</a>
+      <a class="muted" href="/command-center">Desk</a>
+    </div>
   </header>
-  <ul class="list" data-testid="messages-list" aria-label="Your team">
+  <ul class="list" data-testid="messages-list" aria-label="Your house">
     <!-- filled by JS -->
   </ul>
 <script>

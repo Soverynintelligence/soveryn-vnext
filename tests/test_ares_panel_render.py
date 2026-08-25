@@ -18,7 +18,8 @@ def _seed_bus(tmp_path):
 
 def test_command_center_has_ares_panel(app_state):
     # `app_state` is the existing app-test fixture used by tests/test_app_ui_routes.py
-    html = app_state.get("/").get_data(as_text=True)
+    html = app_state.get("/command-center").get_data(as_text=True)
+
     assert 'ares-panel' in html
     assert 'data-ares-feed' in html
     assert 'pulse-row' in html          # heartbeat + ares wrapped in the twin row

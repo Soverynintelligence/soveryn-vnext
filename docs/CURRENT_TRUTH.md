@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-24  
+> **Last rotated:** 2026-08-25  
 > Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -15,8 +15,8 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 | Layer | What | Role |
 |-------|------|------|
-| **Phone OS** | Messages (`/messages`) | Contacts = agents (Aetheria, Eve, Vett, Scotty, Kernel) + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. Grok-bots shape. |
-| **Tower / desk** | Command Center, Citizens, Fleet | Technical HUD — oversight, ops, not the daily ask door. |
+| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = house staff + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
+| **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
 | **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces on Spark — not the house OS. |
@@ -46,7 +46,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
-| Messages / CoS | **Live** — phone OS; Aetheria temp CoS; rename deferred; **reliability pass 2026-08-25** (load errors, wrong-session, Gate card wipe) |
+| Messages / CoS | **Live** — **default `/` door**; Aetheria temp CoS; reliability pass + primary-product framing 2026-08-25 |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
@@ -70,7 +70,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Aetheria | Blackwell `:8090` — alone |
 | Kernel / Eve default | Quadros Flash `:8091` |
 | Shared Spark workers | `:8001` |
-| FreeToken | **Back burner** until second ASUS (ETA Tuesday) |
+| FreeToken | **Back burner** until second ASUS (ETA Wednesday evening) |
 
 ---
 

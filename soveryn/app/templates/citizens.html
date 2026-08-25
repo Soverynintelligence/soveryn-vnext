@@ -207,15 +207,15 @@
 <body class="lab" data-lab data-testid="citizens-board">
 
 <div class="plate">
-  <a class="id" href="/command-center">
+  <a class="id" href="/messages">
     <img src="/static/lab-seal.png" alt="" width="44" height="44">
-    <span><b>SOVERYN</b><i>Citizens</i></span>
+    <span><b>SOVERYN</b><i>House staff</i></span>
   </a>
   <nav>
-    <a href="/command-center">Command</a>
-    <a href="/fleet">Fleet</a>
-    <a href="/citizens" class="active keep">Citizens</a>
     <a href="/messages" class="keep">Messages</a>
+    <a href="/citizens" class="active keep">Staff</a>
+    <a href="/command-center">Desk</a>
+    <a href="/fleet">Fleet</a>
     <a href="/documents">Docs</a>
     <a href="/charters" class="keep">Charters</a>
   </nav>
@@ -224,10 +224,10 @@
 <div class="lab-panel">
   <div class="mast">
     <div class="say">
-      <h1>Who lives here — and on what evidence.</h1>
-      <p class="prose">Residence is derived from observation, not declared.
-        Duties are standing obligations. Commissions are discrete work.
-        Nothing on this board is green by default.</p>
+      <h1>House staff — talk in Messages, evidence here.</h1>
+      <p class="prose">Day-to-day door is <a href="/messages" style="color:var(--brass)">Messages</a>.
+        This board is who lives here, duties, and commissions — not a second chat app.
+        Residence is derived from observation. Nothing is green by default.</p>
     </div>
     <div class="seal">
       <img src="/static/lab-seal.png" alt="SOVERYN Intelligence Labs">
@@ -417,6 +417,7 @@
         ? `<div class="err">last error: ${esc(c.last_error)}</div>` : "";
       const notes = c.notes
         ? `<div class="meta prose" style="font-size:.86rem;margin-top:8px">${esc(c.notes)}</div>` : "";
+      const msgHref = "/messages/" + encodeURIComponent(c.id);
       return `
         <article class="citizen" data-citizen="${esc(c.id)}" data-state="${esc(c.status)}">
           <div>
@@ -431,7 +432,8 @@
           </div>
           <div class="side">
             <div class="status-label">${esc(c.status)}</div>
-            <div>${esc((c.workspace_path || "").replace(/.*soveryn_citizens/, "…/citizens"))}</div>
+            <a class="act primary" href="${msgHref}" style="display:inline-block;margin-top:8px;text-decoration:none">Message</a>
+            <div style="margin-top:6px">${esc((c.workspace_path || "").replace(/.*soveryn_citizens/, "…/citizens"))}</div>
           </div>
         </article>`;
     }).join("");

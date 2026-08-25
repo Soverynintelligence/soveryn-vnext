@@ -1,12 +1,12 @@
 """SOVERYN vNext — native UI routes.
 
-Serves the vNext command center at / (desktop) and the chat page at /chat
-(plus /chat/<session_id>). Phone UA hitting / redirects to /messages —
-Messages is the phone front door; Command Center stays the desk HUD.
+Messages is the house front door (all devices). ``/`` redirects to
+``/messages``. Command Center at ``/command-center`` is the desk HUD
+(ops/tower) — open with ``?desk=1`` from phone if needed.
 
 All templates live in soveryn/app/templates/ — self-contained HTML+CSS+JS,
 no framework, no static asset dependencies, reading from the existing vNext
-REST API (/api/models, /sessions, /chat, /chat_stream, etc.).
+REST API (/api/models, /sessions, /chat_stream, etc.).
 
 The legacy template bridge that previously sat at / moved to /legacy.
 """
@@ -83,12 +83,10 @@ def _force_messages() -> bool:
 
 @bp.get("/")
 def home():
-    """Desktop → Command Center. Phone → Messages (phone-chat front door)."""
+    """House front door → Messages. Desk HUD only when explicitly forced."""
     if _force_command_center():
         return _serve_command_center()
-    if _force_messages() or _is_phone_user_agent(request.headers.get("User-Agent")):
-        return redirect("/messages", code=302)
-    return _serve_command_center()
+    return redirect("/messages", code=302)
 
 
 @bp.get("/command-center")
@@ -159,14 +157,22 @@ def message_thread_page(agent: str):
 
 @bp.get("/chat")
 def chat_index():
-    """Serve the chat page (agent picker via ?agent=X query string, client-side)."""
-    return _serve_chat_html()
+    """Legacy lab chat → Messages (house front door)."""
+    agent = (request.args.get("agent") or "").strip().lower()
+    if agent:
+        return redirect(f"/messages/{agent}", code=302)
+    return redirect("/messages", code=302)
 
 
 @bp.get("/chat/<session_id>")
-def chat_session(session_id: str):  # noqa: ARG001 - client reads session from URL
-    """Serve the chat page; the client JS reads the session_id from the URL."""
-    return _serve_chat_html()
+def chat_session(session_id: str):  # noqa: ARG001 - client may use ?agent=
+    """Legacy session URL → Messages (session resume happens in-thread)."""
+    agent = (request.args.get("agent") or "").strip().lower()
+    if agent:
+        return redirect(
+            f"/messages/{agent}?session={session_id}", code=302
+        )
+    return redirect("/messages", code=302)
 
 
 BUILD_TEMPLATE = Path(__file__).parent.parent / "templates" / "build_chat.html"
