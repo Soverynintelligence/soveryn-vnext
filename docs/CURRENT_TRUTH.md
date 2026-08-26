@@ -70,7 +70,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Aetheria | Blackwell `:8090` — alone |
 | Kernel / Eve default | Quadros Flash `:8091` |
 | Shared Spark workers | `:8001` |
-| FreeToken | **Back burner** until second ASUS (ETA Wednesday evening) |
+| FreeToken | **Back burner** — second ASUS purchase stalled (Amazon declines); no ETA |
 
 ---
 
