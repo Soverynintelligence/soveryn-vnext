@@ -82,7 +82,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | CoS rename | **Deferred** — Aetheria still `COS_ID` |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
 | Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
-| Second ASUS GX10 | **Ordered — ETA Wednesday** (bring-up Wed evening) |
+| Second ASUS GX10 | **Parked** — Amazon declined (enough credit; not a bank limit). Retry later / other channel if wanted |
 | CWG brand | **Locked:** oasis/serenity/wildlife — not catalog pricing |
 | Memory / identity layer | **2026-08-25** — pinned + persona spine; journal/heartbeat recall demoted to Channel B (not “I remember…” essays) |
 
@@ -109,7 +109,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 
-**Next (when Jon says go):** ASUS GX10 Wed evening bring-up; Meta IG / CRM parked.
+**Next (when Jon says go):** House as-is (no second ASUS this week); Meta IG / CRM parked.
 
 ---
 
