@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Care Membership · Carolina Water Gardens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f16;
+    --bg-2: #0e1520;
+    --bg-3: #121c29;
+    --ink: #f3eee2;
+    --ink-dim: #aab2bf;
+    --ink-soft: #c9c2b2;
+    --gold: #d3a24a;
+    --gold-2: #ecc978;
+    --gold-deep: #a97c2b;
+    --line: rgba(211, 162, 74, 0.18);
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+    --serif: "Cormorant Garamond", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: var(--sans); color: var(--ink);
+    background:
+      radial-gradient(90% 55% at 50% 0%, rgba(211,162,74,0.10), transparent 55%),
+      radial-gradient(60% 45% at 90% 100%, rgba(169,124,43,0.08), transparent 50%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 28px 80px; }
+  .eyebrow {
+    font-size: 12.5px; letter-spacing: 0.32em; text-transform: uppercase;
+    font-weight: 600; color: var(--gold); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 600; font-size: clamp(2rem, 4vw, 2.85rem);
+    line-height: 1.1; margin: 0 0 16px; letter-spacing: 0.005em;
+  }
+  h1 em { font-style: italic; color: var(--gold-2); font-weight: 500; }
+  .lede {
+    max-width: 38rem; color: var(--ink-dim); font-size: 1.05rem; line-height: 1.6;
+    margin: 0 0 28px;
+  }
+  .note {
+    display: inline-block; font-size: 12.5px; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 2px; padding: 7px 14px;
+    margin-bottom: 32px;
+  }
+  .note a { color: var(--gold-2); text-decoration: none; }
+  .note a:hover { color: var(--gold); }
+  .grid {
+    display: grid; gap: 18px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; }
+    .wrap { padding: 40px 20px 72px; }
+  }
+  .card {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 3px; padding: 28px 24px 24px;
+    display: flex; flex-direction: column; gap: 18px;
+    position: relative;
+  }
+  .card.featured {
+    border-color: rgba(211, 162, 74, 0.45);
+    box-shadow: 0 0 0 1px rgba(211, 162, 74, 0.12), 0 24px 48px rgba(0, 0, 0, 0.35);
+    background: linear-gradient(180deg, #121c29 0%, var(--bg-2) 100%);
+  }
+  .badge {
+    position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+    background: linear-gradient(180deg, var(--gold-2), var(--gold));
+    color: #20160a; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 2px; white-space: nowrap;
+  }
+  .tier-icon { font-size: 1.4rem; line-height: 1; opacity: 0.9; color: var(--gold-2); }
+  .tier-name {
+    font-family: var(--serif); font-size: 1.85rem; font-weight: 600;
+    margin: 4px 0 0; letter-spacing: 0.005em;
+  }
+  .visits {
+    font-size: 12.5px; color: var(--gold); letter-spacing: 0.08em;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .fit {
+    font-size: 0.95rem; color: var(--ink-dim); line-height: 1.5; margin: 0;
+    min-height: 3.2em;
+  }
+  .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .rows li {
+    display: grid; grid-template-columns: 1.25rem 1fr; gap: 10px;
+    align-items: start; font-size: 0.92rem; line-height: 1.4;
+  }
+  .rows .y { color: var(--gold-2); font-weight: 600; }
+  .rows .n { color: rgba(243, 238, 226, 0.28); font-weight: 600; }
+  .rows .off { color: rgba(243, 238, 226, 0.38); }
+  .price {
+    margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line);
+  }
+  .price .ask {
+    font-family: var(--serif); font-size: 1.4rem; font-weight: 600;
+    margin: 0 0 4px; color: var(--gold-2);
+  }
+  .price .sub { font-size: 12.5px; color: var(--ink-dim); margin: 0 0 14px; line-height: 1.45; }
+  .cta {
+    display: block; text-align: center; text-decoration: none;
+    font-size: 14.5px; font-weight: 600; padding: 13px 18px; border-radius: 2px;
+    border: 1px solid rgba(243, 238, 226, 0.35); color: var(--ink); background: transparent;
+    transition: 0.2s;
+  }
+  .cta:hover { border-color: var(--gold); color: var(--gold-2); }
+  .card.featured .cta {
+    background: linear-gradient(180deg, var(--gold-2), var(--gold));
+    color: #20160a; border-color: transparent;
+  }
+  .card.featured .cta:hover { filter: brightness(1.07); color: #20160a; border-color: transparent; }
+  .why {
+    margin-top: 56px; padding-top: 36px; border-top: 1px solid var(--line);
+  }
+  .why h2 {
+    font-family: var(--serif); font-weight: 600; font-size: clamp(1.6rem, 3vw, 2rem);
+    margin: 0 0 8px; letter-spacing: 0.005em;
+  }
+  .why .subhead { color: var(--ink-dim); margin: 0 0 28px; max-width: 36rem; }
+  .why-grid {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (max-width: 900px) { .why-grid { grid-template-columns: 1fr; } }
+  .why-card {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 3px; padding: 20px 18px;
+  }
+  .why-card h3 {
+    font-family: var(--serif); font-size: 1.05rem; font-weight: 600;
+    margin: 0 0 8px; color: var(--gold-2);
+  }
+  .why-card p { margin: 0; font-size: 0.9rem; color: var(--ink-dim); line-height: 1.5; }
+  footer {
+    margin-top: 48px; font-size: 12.5px; color: var(--ink-dim);
+    line-height: 1.55; opacity: 0.85;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">Carolina Water Gardens · Care</p>
+    <h1>The water stays <em>healthy</em>.<br>The owner stays <em>calm</em>.</h1>
+    <p class="lede">
+      Membership is how we stay with your feature through North Carolina’s seasons:
+      spring wake-up, summer heat, fall leaves, winter rest. Same crew. Same system.
+      We quote what your water actually needs — not a catalog of medals.
+    </p>
+    <p class="note">Sketch · names &amp; inclusions only · <a href="./pricing.html">honest service ranges →</a></p>
+
+    <div class="grid">
+      <!-- Shore -->
+      <article class="card">
+        <div>
+          <div class="tier-icon" aria-hidden="true">〰️</div>
+          <h2 class="tier-name">Shore</h2>
+          <div class="visits">12 visits / season</div>
+        </div>
+        <p class="fit">Pondless waterfalls and simple features — beauty without fish, light touch, seasons handled.</p>
+        <ul class="rows">
+          <li><span class="y">✓</span><span>Spring clean-up</span></li>
+          <li><span class="y">✓</span><span>Fall leaf care</span></li>
+          <li><span class="y">✓</span><span>Winter shutdown</span></li>
+          <li><span class="n">–</span><span class="off">Aquatic plantings</span></li>
+          <li><span class="n">–</span><span class="off">Replaceables covered</span></li>
+          <li><span class="n">–</span><span class="off">Priority response</span></li>
+          <li><span class="n">–</span><span class="off">Water chemistry every visit</span></li>
+        </ul>
+        <div class="price">
+          <p class="ask">Season quote</p>
+          <p class="sub">Not 12 × drop-in · bundled visit rate · agreement length set with you</p>
+          <a class="cta" href="#">Ask about Shore</a>
+        </div>
+      </article>
+
+      <!-- Garden -->
+      <article class="card featured">
+        <div class="badge">Most chosen</div>
+        <div>
+          <div class="tier-icon" aria-hidden="true">🌿</div>
+          <h2 class="tier-name">Garden</h2>
+          <div class="visits">12 visits / season</div>
+        </div>
+        <p class="fit">Koi ponds and planted water gardens — fish, plants, and chemistry in trusted hands.</p>
+        <ul class="rows">
+          <li><span class="y">✓</span><span>Spring clean-up</span></li>
+          <li><span class="y">✓</span><span>Fall leaf care</span></li>
+          <li><span class="y">✓</span><span>Winter shutdown</span></li>
+          <li><span class="y">✓</span><span>Aquatic plantings</span></li>
+          <li><span class="y">✓</span><span>Replaceables covered*</span></li>
+          <li><span class="n">–</span><span class="off">Priority response</span></li>
+          <li><span class="y">✓</span><span>Water chemistry every visit</span></li>
+        </ul>
+        <div class="price">
+          <p class="ask">Season quote</p>
+          <p class="sub">Bundled — well under paying $170 drop-in twelve times ($2,040)</p>
+          <a class="cta" href="#">Start with Garden</a>
+        </div>
+      </article>
+
+      <!-- Sanctuary -->
+      <article class="card">
+        <div>
+          <div class="tier-icon" aria-hidden="true">◇</div>
+          <h2 class="tier-name">Sanctuary</h2>
+          <div class="visits">24 visits / season</div>
+        </div>
+        <p class="fit">Precious collections and larger estates — more presence, faster response, full continuity.</p>
+        <ul class="rows">
+          <li><span class="y">✓</span><span>Spring clean-up</span></li>
+          <li><span class="y">✓</span><span>Fall leaf care</span></li>
+          <li><span class="y">✓</span><span>Winter shutdown</span></li>
+          <li><span class="y">✓</span><span>Aquatic plantings</span></li>
+          <li><span class="y">✓</span><span>Replaceables covered*</span></li>
+          <li><span class="y">✓</span><span>24-hr priority response</span></li>
+          <li><span class="y">✓</span><span>Water chemistry every visit</span></li>
+          <li><span class="y">✓</span><span>Install &amp; landscape member rates</span></li>
+        </ul>
+        <div class="price">
+          <p class="ask">$2,040 <span style="font-size:0.85rem;font-weight:400;color:var(--ink-dim)">/ year</span></p>
+          <p class="sub">24 visits · ~$85 each effective · white-glove (drop-in alone at $170 would be $4,080)</p>
+          <a class="cta" href="#">Ask about Sanctuary</a>
+        </div>
+      </article>
+    </div>
+
+    <section class="why">
+      <h2>Why that promise holds</h2>
+      <p class="subhead">Healthy water, calm owner — especially when North Carolina’s calendar turns hard.</p>
+      <div class="why-grid">
+        <div class="why-card">
+          <h3>NC seasons — spring first</h3>
+          <p>Spring is the most dangerous time for koi ponds: water warms, fish wake hungry, parasites and bacteria move faster than owners expect. We plan the year around that risk — then summer heat, fall leaf load, and winter rest — so your water isn’t left to chance at the worst moment.</p>
+        </div>
+        <div class="why-card">
+          <h3>Inspection every visit</h3>
+          <p>Pumps, skimmers, filters, lights, leaks, flow — we check that the feature is actually running the way it should. Small problems stay small. The water stays moving; the owner stays calm.</p>
+        </div>
+        <div class="why-card">
+          <h3>Detailed notes every visit</h3>
+          <p>What we saw, what we did, what we used, what to watch before we return. A real service history — not a vague “we came by.” You always know where things stand.</p>
+        </div>
+        <div class="why-card">
+          <h3>Chemistry when it matters</h3>
+          <p>On Garden and Sanctuary, we test and adjust water every visit. Imbalance is how fish fail and algae take over — we don’t leave that to guesswork.</p>
+        </div>
+        <div class="why-card">
+          <h3>A crew that knows yours</h3>
+          <p>Same hands return. They learn the quirks of your system — that’s the part you can’t buy à la carte.</p>
+        </div>
+        <div class="why-card">
+          <h3>Seasons pre-planned</h3>
+          <p>Visits are on the calendar. No chasing, no missed fall netting, no “we’ll try to fit you in.”</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Carolina Water Gardens · Care membership sketch (not live pricing).<br>
+      *Replaceables: define in the agreement (e.g. pads, bulbs, selected wear parts) — honesty over “everything covered.”<br>
+      Brand voice: oasis / serenity / wildlife — craft first, not catalog tiers for their own sake.
+    </footer>
+  </div>
+</body>
+</html>

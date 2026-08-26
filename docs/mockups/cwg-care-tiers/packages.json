@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "as_of": "2026-08-25",
+  "source": "pondpro/calc.js computePond+computePrice + Apex MAP",
+  "series": ["Essential", "Signature", "Oasis"],
+  "priced_series": ["Essential", "Signature"],
+  "oasis_policy": "Oasis is a named series. Cost varies with rock choices (package vs premium stone), planting, lighting, and site — quote after walk, not a fixed menu price.",
+  "premium_stone_note": "Larger/premium boulders add premium stone rate plus machine work and access (staging, path, equipment reach) — not included in package prices.",
+  "assumptions": {
+    "rock_per_ton": 245,
+    "gravel_per_ton": 225,
+    "labor_cost_per_hour": 60,
+    "margin_pct": 50,
+    "liner_per_sqft": 0.98,
+    "underlayment_per_sqft": 0.50,
+    "equipment_pricing": "Apex MAP straight-through",
+    "rock_style": "all-boulder",
+    "package_stone": "standard 18–24 inch at package rate",
+    "premium_stone": "specimen / monster — separate premium rate"
+  },
+  "footprints": [
+    {
+      "id": "8x10",
+      "label": "8×10",
+      "dims": "10′×8′×2′",
+      "sqft": 80,
+      "gallons_approx": 1200,
+      "Essential": 9500,
+      "Signature": 12800,
+      "Oasis": null,
+      "essential_kit": "BioFalls 6000 + Signature 400 skimmer + AquaSurge 2000-4000 + PVC",
+      "signature_adds": "~8′ stream, lights, basic plants",
+      "oasis": "Varies — rock choices, planting, light, site"
+    },
+    {
+      "id": "11x16",
+      "label": "11×16",
+      "dims": "16′×11′×2.5′",
+      "sqft": 176,
+      "gallons_approx": 3300,
+      "Essential": 14200,
+      "Signature": 18600,
+      "Oasis": null,
+      "essential_kit": "BioFalls 6000 + Signature 1000 skimmer + AquaSurge 4000-8000 + PVC",
+      "signature_adds": "~12′ stream, lights, basic plants",
+      "oasis": "Varies — rock choices, planting, light, site"
+    },
+    {
+      "id": "16x24x3",
+      "label": "16×24×3",
+      "dims": "24′×16′×3′",
+      "sqft": 384,
+      "gallons_approx": 8600,
+      "Essential": 23000,
+      "Signature": 29200,
+      "Oasis": null,
+      "essential_kit": "BioFalls 6000 (3″) + Signature 1000 + AquaSurge 4000-8000 + PVC",
+      "signature_adds": "~16′ stream, lights, basic plants",
+      "oasis": "Varies — rock choices, planting, light, site"
+    }
+  ],
+  "custom_excluded": [
+    "Swim ponds / recreational",
+    "Larger than 16×24 package footprints",
+    "Premium / specimen / monster stone (separate rate)"
+  ],
+  "design_consult": {
+    "price": 299,
+    "note": "Applied toward the feature if purchased"
+  },
+  "note": "Rounded to nearest $100 from PondWright raw. Site conditions can move numbers."
+}

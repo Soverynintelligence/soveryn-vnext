@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service ranges · Carolina Water Gardens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f16;
+    --bg-2: #0e1520;
+    --bg-3: #121c29;
+    --ink: #f3eee2;
+    --ink-dim: #aab2bf;
+    --ink-soft: #c9c2b2;
+    --gold: #d3a24a;
+    --gold-2: #ecc978;
+    --gold-deep: #a97c2b;
+    --line: rgba(211, 162, 74, 0.18);
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+    --serif: "Cormorant Garamond", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--sans); color: var(--ink);
+    background:
+      radial-gradient(90% 50% at 30% 0%, rgba(211,162,74,0.09), transparent 50%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 28px 80px; }
+  @media (max-width: 640px) { .wrap { padding: 40px 20px 72px; } }
+  .eyebrow {
+    font-size: 12.5px; letter-spacing: 0.32em; text-transform: uppercase;
+    font-weight: 600; color: var(--gold); margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 600; font-size: clamp(1.85rem, 3.5vw, 2.5rem);
+    line-height: 1.12; margin: 0 0 14px; letter-spacing: 0.005em;
+  }
+  h1 em { font-style: italic; color: var(--gold-2); font-weight: 500; }
+  .lede { color: var(--ink-dim); line-height: 1.6; max-width: 42rem; margin: 0 0 18px; }
+  .truth {
+    border: 1px solid rgba(211, 162, 74, 0.35);
+    background: rgba(211, 162, 74, 0.08);
+    border-radius: 3px; padding: 14px 16px; font-size: 0.92rem; line-height: 1.5;
+    margin: 0 0 28px; color: var(--ink-soft);
+  }
+  .truth strong { color: var(--gold-2); }
+  .truth code {
+    font-size: 0.85em; background: rgba(0,0,0,0.25); padding: 1px 6px;
+    border-radius: 2px; color: var(--gold);
+  }
+  .nav-mock { margin: 0 0 28px; font-size: 13.5px; }
+  .nav-mock a { color: var(--gold-2); text-decoration: none; }
+  .nav-mock a:hover { color: var(--gold); }
+
+  .block {
+    background: var(--bg-2); border: 1px solid var(--line);
+    border-radius: 3px; padding: 22px 20px 8px; margin: 0 0 22px;
+  }
+  .block h2 {
+    font-family: var(--serif); font-weight: 600; font-size: 1.55rem;
+    margin: 0 0 6px; letter-spacing: 0.005em;
+  }
+  .block .sec-lede { color: var(--ink-dim); font-size: 0.92rem; margin: 0 0 16px; line-height: 1.5; }
+
+  .item {
+    border-top: 1px solid var(--line); padding: 14px 0 16px;
+  }
+  .item:first-of-type { border-top: none; }
+  .item-top {
+    display: flex; justify-content: space-between; gap: 16px; align-items: baseline;
+    flex-wrap: wrap; margin-bottom: 6px;
+  }
+  .item h3 { margin: 0; font-size: 1.02rem; font-weight: 600; }
+  .typical {
+    font-family: var(--serif); font-size: 1.3rem; font-weight: 600;
+    text-align: right; white-space: nowrap; color: var(--gold-2);
+  }
+  .from { display: block; font-size: 11.5px; color: var(--ink-dim); margin-top: 2px; text-align: right; }
+  .item p { margin: 0; font-size: 0.88rem; color: var(--ink-dim); line-height: 1.5; }
+  .item a { color: var(--gold-2); text-decoration: none; }
+  .item a:hover { color: var(--gold); }
+
+  .worked {
+    border: 1px solid rgba(211, 162, 74, 0.35);
+    background: linear-gradient(180deg, rgba(211,162,74,0.07), rgba(14,21,32,0.9));
+    border-radius: 3px; padding: 22px 20px; margin: 28px 0;
+  }
+  .worked h2 {
+    font-family: var(--serif); font-weight: 600; font-size: 1.45rem; margin: 0 0 8px;
+    letter-spacing: 0.005em;
+  }
+  .worked .meta { color: var(--ink-dim); font-size: 0.9rem; margin: 0 0 14px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th {
+    text-align: left; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--gold); padding: 0 0 8px; border-bottom: 1px solid var(--line); font-weight: 600;
+  }
+  th.r, td.r { text-align: right; }
+  td { padding: 8px 0; border-bottom: 1px solid rgba(211, 162, 74, 0.1); vertical-align: top; }
+  td.k { color: var(--ink-dim); }
+  td.amt { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .total-row td { border-bottom: none; padding-top: 12px; font-size: 1.05rem; }
+  .total-row .amt {
+    color: var(--gold-2); font-family: var(--serif); font-size: 1.35rem; font-weight: 600;
+  }
+  .caveat { margin: 14px 0 0; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.5; }
+  .caveat code {
+    font-size: 0.9em; background: rgba(0,0,0,0.25); padding: 1px 6px;
+    border-radius: 2px; color: var(--gold);
+  }
+
+  footer {
+    margin-top: 40px; font-size: 12.5px; color: var(--ink-dim); line-height: 1.55; opacity: 0.85;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <p class="eyebrow">Carolina Water Gardens · Sketch</p>
+    <h1>Grouped honestly. <em>Quoted from the book.</em></h1>
+    <p class="lede">
+      Care work lives together. Design is credited when you build. Builds are sized in PondWright —
+      not a fake “$8,500+” that means $10–12k in the fine print.
+    </p>
+    <p class="truth">
+      <strong>Integrity:</strong> hero number = typical band. Consultation credit is real.
+      Worked example below uses PondWright <code>computePond</code> · rock <strong>$245/ton</strong> · gravel <strong>$225/ton</strong>
+      · liner/underlay list · labor $60/hr cost @ 50% margin (≈ $120 billable).
+    </p>
+    <p class="nav-mock"><a href="./index.html">← Care membership (Shore · Garden · Sanctuary)</a></p>
+
+    <!-- BLOCK 1: keep water running -->
+    <section class="block">
+      <h2>Care — service, clean &amp; maintenance</h2>
+      <p class="sec-lede">
+        One family of work: keep the feature running, clean when it’s due, maintain through the seasons.
+        Spring is the dangerous season for koi — inspections and notes every visit on membership plans.
+      </p>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Service call</h3>
+          <div>
+            <div class="typical">$85 / man-hour</div>
+            <span class="from">On-site problem-solving</span>
+          </div>
+        </div>
+        <p>Pump or light swap, clogged pump/skimmer, leak detection, flow issues — billed for time with work done.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Clean — fountainscapes</h3>
+          <div>
+            <div class="typical">Typically $250–$450</div>
+            <span class="from">By time · size &amp; sludge drive it</span>
+          </div>
+        </div>
+        <p>Reset a fountain feature so it runs clean again.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Clean — small water features</h3>
+          <div>
+            <div class="typical">Typically $450–$850</div>
+            <span class="from">Often under a day · multi-year sludge extra</span>
+          </div>
+        </div>
+        <p>Small gardens. We say so when sludge years mean more than a standard clean.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Clean — medium to large</h3>
+          <div>
+            <div class="typical">Typically $850–$2,500</div>
+            <span class="from">Often a full day · sludge years add time</span>
+          </div>
+        </div>
+        <p>Annual deep clean for medium and large systems — including many 11×16-class gardens.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Drop-in maintenance visit</h3>
+          <div>
+            <div class="typical">About $170 / visit</div>
+            <span class="from">À la carte · when you’re not on a plan</span>
+          </div>
+        </div>
+        <p>
+          Debris, filters, skimmer, pump &amp; lights check, plant trim, leaves — picture-ready.
+          <strong style="color:var(--ink);font-weight:500">A care plan is not 12 × $170.</strong>
+          That’s $2,040 if you paid full drop-in every month — membership is a season package at a lower effective rate
+          (visits pre-scheduled; chemistry and notes where the tier includes them).
+          <strong style="color:var(--ink);font-weight:500">Sanctuary is $2,040 / year</strong> for 24 visits (~$85 each) —
+          the $2,040 figure lives there, not on a 12× drop-in Garden plan.
+          See <a href="./index.html">Shore / Garden / Sanctuary</a>.
+        </p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Water testing add-on</h3>
+          <div>
+            <div class="typical">About $30</div>
+            <span class="from">Included on Garden &amp; Sanctuary visits</span>
+          </div>
+        </div>
+        <p>Recorded parameters with the visit — no guesswork between seasons.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Fall netting</h3>
+          <div>
+            <div class="typical">Typically $450–$650+</div>
+            <span class="from">Install + takedown · nets reusable</span>
+          </div>
+        </div>
+        <p>Domed leaf protection. Small near $450; larger (two nets) nearer $650+.</p>
+      </div>
+    </section>
+
+    <!-- BLOCK 2: design -->
+    <section class="block">
+      <h2>Design consultation</h2>
+      <p class="sec-lede">Feet on the ground before dirt moves — credited when you build with us.</p>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>On-site design consultation</h3>
+          <div>
+            <div class="typical">$299</div>
+            <span class="from">Applied to the feature if purchased</span>
+          </div>
+        </div>
+        <p>
+          Site assessment, design conversation, red flags (grade, water, access, power).
+          Much can start digitally; this is for when the property has to be walked.
+          <strong style="color:var(--ink);font-weight:500">If you proceed with the water feature, the $299 is put toward that project.</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- BLOCK 3: worked PondWright example -->
+    <section class="worked">
+      <h2>Ecosystem packages — honest sizes, three series</h2>
+      <p class="meta">
+        Footprints: <strong style="color:var(--ink)">8×10</strong> · <strong style="color:var(--ink)">11×16</strong> · <strong style="color:var(--ink)">16×24×3</strong>.
+        <strong style="color:var(--ink)">Essential</strong> and <strong style="color:var(--ink)">Signature</strong> have package prices.
+        <strong style="color:var(--ink)">Oasis</strong> is named and real — cost varies with rock choices, planting, light, and site.
+        Package stone = standard <strong style="color:var(--ink)">18–24″</strong> at package rate ($245 rock / $225 gravel). Premium stone = different rate, own line.
+        PondWright + Apex MAP · rounded $100. Design consult <strong style="color:var(--ink)">$299</strong> credits if you build.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Footprint</th>
+            <th class="r">Essential</th>
+            <th class="r">Signature</th>
+            <th class="r">Oasis</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <strong>8×10</strong>
+              <div class="k">10′×8′×2′ · ~1,200 gal · starter ecosystem</div>
+            </td>
+            <td class="r amt">$9,500</td>
+            <td class="r amt">$12,800</td>
+            <td class="r" style="color:var(--ink-dim);font-size:0.85rem;font-weight:500">Varies</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>11×16</strong>
+              <div class="k">16′×11′×2.5′ · ~3,300 gal · most common</div>
+            </td>
+            <td class="r amt">$14,200</td>
+            <td class="r amt">$18,600</td>
+            <td class="r" style="color:var(--ink-dim);font-size:0.85rem;font-weight:500">Varies</td>
+          </tr>
+          <tr>
+            <td>
+              <strong>16×24×3</strong>
+              <div class="k">24′×16′×3′ · ~8,600 gal · large backyard</div>
+            </td>
+            <td class="r amt">$23,000</td>
+            <td class="r amt">$29,200</td>
+            <td class="r" style="color:var(--ink-dim);font-size:0.85rem;font-weight:500">Varies</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="meta" style="margin-top:18px"><strong style="color:var(--ink)">What each series is</strong></p>
+      <table>
+        <thead>
+          <tr><th>Series</th><th>Includes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Essential</strong></td>
+            <td class="k">Shell (standard 18–24″ rock, gravel, liner, labor, foam) + BioFalls 6000 + Aquascape skimmer (400 on 8×10 · 1000 on larger) + AquaSurge + PVC. Honest core pond — <em>priced</em>.</td>
+          </tr>
+          <tr>
+            <td><strong>Signature</strong></td>
+            <td class="k">Essential + sized stream &amp; falls + lighting package + basic plants. The step most people feel — <em>priced</em>.</td>
+          </tr>
+          <tr>
+            <td><strong>Oasis</strong></td>
+            <td class="k">
+              The calm, finished water garden — longer stream, richer planting and light, comfort options (e.g. auto-fill), and the stone you actually choose.
+              <strong style="color:var(--ink)">Oasis is a named series; the price isn’t fixed on a menu</strong> —
+              it varies with rock choices (including premium stone and the machine work / access larger boulders need), planting, lighting, and the site.
+              We quote it after we walk the property so the number matches the water you’re building.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="meta" style="margin-top:18px"><strong style="color:var(--ink)">11×16 Essential — under the hood</strong></p>
+      <table>
+        <thead>
+          <tr><th>Line</th><th>Detail</th><th class="r">Customer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Boulder (18–24″)</td><td class="k">7 t × $245 → margin</td><td class="r amt">$3,430</td></tr>
+          <tr><td>Gravel</td><td class="k">3 t × $225 → margin</td><td class="r amt">$1,350</td></tr>
+          <tr><td>Liner + underlay + foam</td><td class="k">List / book</td><td class="r amt">~$1,290</td></tr>
+          <tr><td>Labor</td><td class="k">~40 hr</td><td class="r amt">$4,800</td></tr>
+          <tr><td>BioFalls 6000</td><td class="k">MAP #29319</td><td class="r amt">$1,260</td></tr>
+          <tr><td>Signature 1000 skimmer</td><td class="k">MAP #43022</td><td class="r amt">$747</td></tr>
+          <tr><td>AquaSurge 4000–8000</td><td class="k">MAP #45010</td><td class="r amt">$927</td></tr>
+          <tr><td>PVC + fittings</td><td class="k">Allowance</td><td class="r amt">~$350</td></tr>
+          <tr class="total-row">
+            <td colspan="2"><strong>Essential 11×16 (rounded)</strong></td>
+            <td class="r amt">$14,200</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="caveat">
+        Source: <code>packages.json</code> + <code>~/pondpro/calc.js</code>. Site conditions can move a number; the structure stays honest.
+      </p>
+    </section>
+
+    <!-- BLOCK 4: other builds -->
+    <section class="block">
+      <h2>Other builds &amp; custom</h2>
+      <p class="sec-lede">Packages above are backyard ecosystem ponds with standard rock. Bigger water — and bigger stone — is custom work.</p>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Fountainscapes</h3>
+          <div>
+            <div class="typical">Typically $3,500–$5,500</div>
+            <span class="from">Complex multi-piece $5k–$15k</span>
+          </div>
+        </div>
+        <p>Basin to custom reservoirs — stated bands, not a fake $2,500 floor.</p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Swim ponds &amp; larger ponds</h3>
+          <div>
+            <div class="typical">Custom quote</div>
+            <span class="from">Not Essential / Signature package pricing</span>
+          </div>
+        </div>
+        <p>
+          Recreational swim ponds, estate-scale water gardens, and anything past the footprints above are <strong style="color:var(--ink);font-weight:500">custom</strong> —
+          engineering, volume, filtration, and access all change the job. We size those in PondWright after a site walk.
+        </p>
+      </div>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Stone grades</h3>
+          <div>
+            <div class="typical">Package rate vs premium</div>
+            <span class="from">Different stone · different price</span>
+          </div>
+        </div>
+        <p>
+          <strong style="color:var(--ink);font-weight:500">Package stone</strong> — standard 18–24″ boulders and gravel at the rates built into Essential / Signature
+          (today’s book: rock $245/ton, gravel $225/ton). That’s the coverage and shelf rock the package number already includes.
+        </p>
+        <p style="margin-top:10px">
+          <strong style="color:var(--ink);font-weight:500">Premium stone</strong> — larger specimen pieces, select colors, or “monster” boulders.
+          Different stone, different price — and often <em>different work</em>: bigger rock usually means machine time, staging, and site access (gate width, path to the water, where a skid steer or excavator can reach).
+          That labor and access isn’t free and isn’t buried in the Essential / Signature number.
+          You choose the stone; you see the lines — material and the machine work it takes to set it.
+        </p>
+      </div>
+    </section>
+
+    <!-- BLOCK 5: enhancements -->
+    <section class="block">
+      <h2>Enhancements</h2>
+      <p class="sec-lede">What makes the feature livable — and protects the equipment.</p>
+
+      <div class="item">
+        <div class="item-top">
+          <h3>Auto fill &amp; shutoff</h3>
+          <div class="typical">From about $500</div>
+        </div>
+        <p>Fill valves, dry-run protection, dosing / self-clean options as scoped.</p>
+      </div>
+      <div class="item">
+        <div class="item-top">
+          <h3>Landscape packages</h3>
+          <div class="typical">From about $2,500</div>
+        </div>
+        <p>Green that belongs with the water. Specimen trees on request.</p>
+      </div>
+      <div class="item">
+        <div class="item-top">
+          <h3>Lighting packages</h3>
+          <div class="typical">From about $595</div>
+        </div>
+        <p>e.g. 5 LEDs + transformer; custom fixtures available.</p>
+      </div>
+      <div class="item">
+        <div class="item-top">
+          <h3>Boulder retaining walls</h3>
+          <div class="typical">From about $995</div>
+        </div>
+        <p>Per ~10 ft · 18–24″ height band — grade for falls and terracing.</p>
+      </div>
+      <div class="item">
+        <div class="item-top">
+          <h3>Patios &amp; sitting walls</h3>
+          <div class="typical">Typically $35–$55 / sq ft</div>
+        </div>
+        <p>Material and base drive the band. Outdoor rooms are custom.</p>
+      </div>
+    </section>
+
+    <footer>
+      Sketch for CWG / PondWright presentation · shell math from ~/pondpro/calc.js (2026-08-25).<br>
+      Promise: the water stays healthy and the owner stays calm — including when they read the numbers.
+    </footer>
+  </div>
+</body>
+</html>
