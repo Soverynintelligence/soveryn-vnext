@@ -15,7 +15,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 | Layer | What | Role |
 |-------|------|------|
-| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = house staff + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
+| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = house staff + **Grok** (direct coding peer) + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
@@ -39,7 +39,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
-| Agents | **Aetheria, Vett, Scotty, Kernel, Eve** |
+| Agents | **Aetheria, Vett, Scotty, Kernel, Eve, Grok** (Messages coding peer → headless Grok Build CLI) |
 | Heartbeat / dream / automations | **Live** |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |

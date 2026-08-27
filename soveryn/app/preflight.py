@@ -75,6 +75,15 @@ def run_preflight(
 
     results: list[HealthResult] = []
     for server in runtime.MODEL_SERVERS:
+        if getattr(server, "skip_preflight", False):
+            results.append(HealthResult(
+                server.name,
+                "model_server",
+                "deferred",
+                0.0,
+                "skip_preflight (external backend)",
+            ))
+            continue
         results.append(check_llama_server(server, timeout=t))
     for endpoint in runtime.SERVICE_ENDPOINTS:
         results.append(check_service_endpoint(endpoint, timeout=t))

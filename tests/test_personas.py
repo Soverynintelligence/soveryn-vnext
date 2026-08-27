@@ -23,7 +23,7 @@ def no_persona_overrides(tmp_path, monkeypatch):
 
 def test_personas_cover_all_active_agents():
     assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel", "eve",
+        "aetheria", "vett", "scotty", "kernel", "eve", "grok",
     }
 
 

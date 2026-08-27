@@ -8,8 +8,14 @@ def test_active_agents_includes_crew_kernel_and_eve():
     """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
     Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
     assert set(runtime.ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel", "eve",
+        "aetheria", "vett", "scotty", "kernel", "eve", "grok",
     }
+
+
+def test_grok_routes_to_external_backend_skipped_in_preflight():
+    assert runtime.AGENT_TO_SERVER["grok"] == "grok_build"
+    server = next(s for s in runtime.MODEL_SERVERS if s.name == "grok_build")
+    assert server.skip_preflight is True
 
 
 def test_retired_includes_known_retired_agents():
@@ -91,12 +97,15 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     # 2026-08-12: the Spark port moved :8000 -> :8001 when laguna-serve was
     # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
-    assert {s.port for s in others} == {8001, 8091, 8096}
+    live_others = [s for s in others if not s.skip_preflight]
+    assert {s.port for s in live_others} == {8001, 8091, 8096}
     # Local quadro slots stay on loopback; Spark tenants are remote.
-    assert all(s.host == "127.0.0.1" for s in others if s.port == 8091)
-    assert all(s.host != "127.0.0.1" for s in others if s.port in (8001, 8096))
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port == 8091)
+    assert all(s.host != "127.0.0.1" for s in live_others if s.port in (8001, 8096))
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
+    # External Grok Build backend is bookkeeping only (not a llama port).
+    assert any(s.name == "grok_build" and s.skip_preflight for s in others)
 
 
 def test_model_servers_have_distinct_logical_names():
@@ -110,6 +119,7 @@ def test_model_servers_have_distinct_logical_names():
         "cognition",
         "kernel_build",
         "eve_flash",
+        "grok_build",
     }
 
 
@@ -132,6 +142,7 @@ def test_each_model_server_has_router_alias_populated():
         "cognition": "cognition",
         "kernel_build": kernel_alias,
         "eve_flash": "bench-flash",
+        "grok_build": "grok-build",
     }
     actual = {s.name: s.model_alias for s in runtime.MODEL_SERVERS}
     assert actual == expected

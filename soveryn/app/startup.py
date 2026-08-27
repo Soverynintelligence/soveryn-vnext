@@ -1166,6 +1166,23 @@ def create_app(
                 kwargs["chat_timeout_seconds"] = 300.0
                 kwargs["max_tool_rounds"] = 12
                 kwargs["max_tokens"] = 8192
+            elif name == "grok":
+                # Messages coding peer — headless Grok Build CLI (not llama).
+                # Tools live inside grok; AgentLoop tools stay off to avoid
+                # double wrappers. Long timeout for real coding turns.
+                from soveryn.platform.inference.grok_build_client import (
+                    grok_chat,
+                    grok_chat_stream,
+                    grok_timeout,
+                )
+                kwargs["tool_registry"] = None
+                kwargs["chat_fn"] = grok_chat
+                kwargs["stream_fn"] = grok_chat_stream
+                kwargs["chat_timeout_seconds"] = grok_timeout()
+                kwargs["max_tool_rounds"] = 1
+                kwargs["max_tokens"] = 8192
+                kwargs["approval_gate"] = None
+                kwargs["verification_gate"] = None
             # Every agent gets its own live thread, not just Aetheria.
             if name in active_context_services:
                 kwargs["active_context"] = active_context_services[name]

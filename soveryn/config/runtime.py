@@ -20,7 +20,9 @@ from pathlib import Path
 #: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
 #: Kernel is the house build brain (bench-flash on :8091) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
-ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel", "eve")
+ACTIVE_AGENTS: tuple[str, ...] = (
+    "aetheria", "vett", "scotty", "kernel", "eve", "grok",
+)
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
@@ -92,6 +94,9 @@ class ModelServer:
     #: /v1/chat/completions and /v1/embeddings request bodies. Must match a
     #: preset alias (section name or registered basename) in router-presets.ini.
     model_alias: str = ""
+    #: When True, preflight does not probe this endpoint (external backends
+    #: such as Grok Build CLI that inject custom chat_fn and never hit llama).
+    skip_preflight: bool = False
 
     @property
     def base_url(self) -> str:
@@ -287,6 +292,17 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     _kernel_server(),
     _eve_flash_server(),
+    # Grok Build — Messages coding peer. Not a llama-server; AgentLoop injects
+    # grok_build_client chat_fn/stream_fn. Port is bookkeeping only.
+    ModelServer(
+        name="grok_build",
+        port=5099,
+        host="127.0.0.1",
+        model_path=MODEL_ROOT / ".grok_build_external",
+        role="Grok Build CLI — Messages coding peer (headless grok)",
+        model_alias="grok-build",
+        skip_preflight=True,
+    ),
 )
 
 #: Per-agent routing: agent name → MODEL_SERVERS.name
@@ -297,6 +313,7 @@ AGENT_TO_SERVER: dict[str, str] = {
     "kernel":   "kernel_build",
     # Eve stays on Quadros Flash even when Kernel rides Spark Qwen3.8.
     "eve":      "eve_flash",
+    "grok":     "grok_build",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -490,9 +507,13 @@ def _validate() -> None:
 
 
 def all_ports() -> frozenset[int]:
-    """Every port the active fleet should be listening on (excluding APP_PORT)."""
+    """Every port the active fleet should be listening on (excluding APP_PORT).
+
+    External backends (skip_preflight) are omitted — they are not sockets.
+    """
     return frozenset(
-        {s.port for s in MODEL_SERVERS} | {e.port for e in SERVICE_ENDPOINTS}
+        {s.port for s in MODEL_SERVERS if not s.skip_preflight}
+        | {e.port for e in SERVICE_ENDPOINTS}
     )
 
 
