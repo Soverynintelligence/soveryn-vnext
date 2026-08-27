@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Care Membership · Carolina Water Gardens</title>
+<title>Care Membership · Essential · Signature · Oasis | Carolina Water Gardens</title>
+<meta name="description" content="CWG Care membership — Essential, Signature, and Oasis. Same ladder as our pond packages. Seasonal visits across the NC Sandhills.">
+<link rel="canonical" href="https://carolinawatergardens.com/care-membership.html">
+<link rel="icon" href="images/logo.png">
+<link rel="stylesheet" href="styles.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -149,8 +153,62 @@
     line-height: 1.55; opacity: 0.85;
   }
 </style>
+
+<script>
+(function(){
+  try{
+    var q=new URLSearchParams(location.search);
+    var s=q.get("utm_source"), c=q.get("utm_campaign");
+    if(s){sessionStorage.setItem("cwg_src", c ? s+"/"+c : s); return;}
+    if(sessionStorage.getItem("cwg_src")) return;
+    var r=document.referrer||"";
+    if(q.get("fbclid")){sessionStorage.setItem("cwg_src","facebook-organic"); return;}
+    if(q.get("gclid")){sessionStorage.setItem("cwg_src","google-ads"); return;}
+    if(/facebook|instagram|fb\.com/i.test(r)) sessionStorage.setItem("cwg_src","facebook-organic");
+    else if(/google|bing|duckduckgo/i.test(r)) sessionStorage.setItem("cwg_src","search-organic");
+    else if(r && r.indexOf(location.hostname)===-1) sessionStorage.setItem("cwg_src","referral");
+  }catch(e){}
+})();
+</script>
+<style>
+  .site-top{position:sticky;top:0;z-index:40;backdrop-filter:blur(12px);background:rgba(8,12,18,.88);border-bottom:1px solid rgba(211,162,74,.18);}
+  .site-top .inner{max-width:1100px;margin:0 auto;padding:12px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .site-top a.brand{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-size:18px;font-weight:600;text-decoration:none;color:var(--ink);}
+  .site-top a.brand img{width:36px;height:36px;border-radius:50%;background:#fff;padding:2px;}
+  .site-top a.brand b{color:var(--gold-2);}
+  .site-top nav{display:flex;gap:18px;flex-wrap:wrap;font-size:13.5px;font-weight:500;color:var(--ink-soft);}
+  .site-top nav a{text-decoration:none;color:inherit;}
+  .site-top nav a:hover{color:var(--gold-2);}
+  .site-top .phone{font-weight:600;color:var(--ink);text-decoration:none;}
+  .site-top .phone:hover{color:var(--gold-2);}
+  @media(max-width:700px){.site-top nav{display:none;} .wrap{padding-top:28px;}}
+
+  .ask-sect{margin-top:56px;padding-top:36px;border-top:1px solid var(--line);}
+  .ask-sect .sect-head{max-width:40rem;margin:0 auto 28px;text-align:center;}
+  .ask-sect .sect-head h2{font-family:var(--serif);font-size:clamp(1.6rem,3vw,2rem);margin:0 0 10px;}
+  .ask-sect .sect-head p{color:var(--ink-dim);margin:0;font-size:1.02rem;}
+  .ask-sect .tier-pill{display:inline-block;margin-top:12px;font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#20160a;background:linear-gradient(180deg,var(--gold-2),var(--gold));padding:6px 12px;border-radius:2px;}
+  .ask-sect .pay-note{text-align:center;margin-top:18px;font-size:13px;color:var(--ink-dim);}
+  .ask-sect .pay-note a{color:var(--gold-2);}
+  .ask-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px;}
+  .ask-actions .ghost{display:inline-flex;align-items:center;gap:8px;padding:12px 18px;border-radius:2px;border:1px solid rgba(243,238,226,.35);color:var(--ink);text-decoration:none;font-weight:600;font-size:14.5px;}
+  .ask-actions .ghost:hover{border-color:var(--gold);color:var(--gold-2);}
+</style>
 </head>
 <body>
+
+<header class="site-top">
+  <div class="inner">
+    <a class="brand" href="index.html"><img src="images/logo.png" alt="Carolina Water Gardens logo"><span>Carolina <b>Water Gardens</b></span></a>
+    <nav>
+      <a href="pond-maintenance.html">Maintenance</a>
+      <a href="care-membership.html">Care</a>
+      <a href="ecosystem-ponds.html">Ecosystem Ponds</a>
+      <a href="index.html#contact">Contact</a>
+    </nav>
+    <a class="phone" href="tel:+19105813970">(910) 581-3970</a>
+  </div>
+</header>
   <div class="wrap">
     <p class="eyebrow">Carolina Water Gardens · Care</p>
     <h1>The water stays <em>healthy</em>.<br>The owner stays <em>calm</em>.</h1>
@@ -159,7 +217,7 @@
       spring wake-up, summer heat, fall leaves, winter rest. Same crew. Same system.
       We quote what your water actually needs — not a catalog of medals.
     </p>
-    <p class="note">Same ladder as builds · <strong>Essential · Signature · Oasis</strong> Care · <a href="./pricing.html">honest ranges &amp; pond packages →</a></p>
+    <p class="note">Same ladder as builds · <strong>Essential · Signature · Oasis</strong> Care · <a href="index.html#contact">free estimate →</a></p>
 
     <div class="grid">
       <!-- Essential Care (was Shore) -->
@@ -182,7 +240,7 @@
         <div class="price">
           <p class="ask">$175 <span style="font-size:0.85rem;font-weight:400;color:var(--ink-dim)">/ visit</span></p>
           <p class="sub">4 quarterly visits · $700 / season · one visit each season turn · vs ~$170 drop-in</p>
-          <a class="cta" href="#">Ask about Essential Care</a>
+          <a class="cta" href="#ask" data-care="essential" data-care-label="Essential Care" data-stripe-ready="false">Ask about Essential Care</a>
         </div>
       </article>
 
@@ -207,7 +265,7 @@
         <div class="price">
           <p class="ask">$75 <span style="font-size:0.85rem;font-weight:400;color:var(--ink-dim)">/ visit</span></p>
           <p class="sub">12 visits · $900 / season · vs ~$170 drop-in ($2,040 if you paid twelve times)</p>
-          <a class="cta" href="#">Start with Signature Care</a>
+          <a class="cta" href="#ask" data-care="signature" data-care-label="Signature Care" data-stripe-ready="false">Start with Signature Care</a>
         </div>
       </article>
 
@@ -232,7 +290,7 @@
         <div class="price">
           <p class="ask">$2,040 <span style="font-size:0.85rem;font-weight:400;color:var(--ink-dim)">/ year</span></p>
           <p class="sub">24 visits · ~$85 each effective · white-glove (drop-in alone at $170 would be $4,080)</p>
-          <a class="cta" href="#">Ask about Oasis Care</a>
+          <a class="cta" href="#ask" data-care="oasis" data-care-label="Oasis Care" data-stripe-ready="false">Ask about Oasis Care</a>
         </div>
       </article>
     </div>
@@ -256,11 +314,304 @@
       </div>
     </section>
 
+
+    <section class="ask-sect" id="ask">
+      <div class="sect-head">
+        <p class="eyebrow" style="margin-bottom:10px">Get started</p>
+        <h2>Tell us which Care plan fits</h2>
+        <p>Leave your name and a way to reach you. Jon follows up personally — usually within a day. No obligation.</p>
+        <span class="tier-pill" id="carePill" hidden></span>
+      </div>
+
+      <form class="ef" id="careForm" autocomplete="on">
+        <div class="grp">
+          <label class="q">Care plan</label>
+          <div class="chips" id="ef-care">
+            <span class="chip" data-v="Essential Care" data-care="essential">Essential Care</span>
+            <span class="chip" data-v="Signature Care" data-care="signature">Signature Care</span>
+            <span class="chip" data-v="Oasis Care" data-care="oasis">Oasis Care</span>
+            <span class="chip" data-v="Not sure yet" data-care="">Not sure yet</span>
+          </div>
+        </div>
+        <div class="grp">
+          <label class="q">Your name</label>
+          <div class="row">
+            <input id="ef-first" placeholder="First name" autocomplete="given-name">
+            <input id="ef-last" placeholder="Last name" autocomplete="family-name">
+          </div>
+        </div>
+        <div class="grp">
+          <label class="q">How can we reach you? <span class="req">*</span></label>
+          <div class="row">
+            <input id="ef-phone" placeholder="Phone" inputmode="tel" autocomplete="tel">
+            <input id="ef-email" placeholder="Email" inputmode="email" autocomplete="email">
+          </div>
+        </div>
+        <div class="grp">
+          <label class="q">Where is the feature?</label>
+          <div class="row3" style="margin-bottom:12px">
+            <input id="ef-city" placeholder="City" autocomplete="address-level2">
+            <input id="ef-zip" placeholder="ZIP" inputmode="numeric" autocomplete="postal-code">
+          </div>
+        </div>
+        <div class="grp">
+          <label class="q">Anything else?</label>
+          <textarea id="ef-msg" placeholder="Pond size, who built it, timing, questions…"></textarea>
+        </div>
+        <button type="submit" class="submit" id="ef-go">Request Care follow-up</button>
+        <div class="fine">No obligation. We’ll never share your information.</div>
+        <div class="fallback" id="ef-fallback"></div>
+      </form>
+      <div class="ef ef-done" id="careDone">
+        <h3>Thank you!</h3>
+        <p>We’ve got your Care interest and will reach out personally — usually within a day.</p>
+      </div>
+
+      <div class="ask-actions">
+        <a class="ghost" href="#" id="askPw">Ask Pondwright about this plan</a>
+        <a class="ghost" href="tel:+19105813970">Call (910) 581-3970</a>
+      </div>
+      <p class="pay-note">Online pay / member portal coming soon — for now Jon sets you up by phone or text.
+        <!-- Stripe hook: set data-stripe-ready="true" + data-stripe-price on CTAs when products exist. -->
+      </p>
+    </section>
+
     <footer>
-      Carolina Water Gardens · Care membership sketch (not live pricing).<br>
+      Carolina Water Gardens · Care membership · Pinehurst, Southern Pines &amp; the NC Sandhills.<br>
       *Replaceables: define in the agreement (e.g. pads, bulbs, selected wear parts) — honesty over “everything covered.”<br>
       Brand voice: oasis / serenity / wildlife — craft first, not catalog tiers for their own sake.
     </footer>
   </div>
+
+<script>
+(function(){
+  var CRM = "https://crm.pondwright.com/lead";
+  var CARE = {
+    essential: {v:"Essential Care", msg:"I'm interested in Essential Care (4 quarterly visits · $175/visit · $700/season)."},
+    signature: {v:"Signature Care", msg:"I'm interested in Signature Care (12 visits · $75/visit · $900/season)."},
+    oasis: {v:"Oasis Care", msg:"I'm interested in Oasis Care ($2,040/year · 24 visits)."}
+  };
+  var selected = null;
+
+  function setCare(key){
+    selected = (key && CARE[key]) ? key : null;
+    var label = selected ? CARE[selected].v : "";
+    document.querySelectorAll("#ef-care .chip").forEach(function(c){
+      var on = selected ? (c.dataset.care === selected) : (c.dataset.care === "");
+      c.classList.toggle("on", on);
+    });
+    var pill = document.getElementById("carePill");
+    if (label){ pill.hidden=false; pill.textContent = label; }
+    else { pill.hidden=true; }
+    var ta = document.getElementById("ef-msg");
+    if (selected && ta && !ta.dataset.touched){
+      ta.value = CARE[selected].msg;
+    }
+    try{ if(selected) sessionStorage.setItem("cwg_care", selected); }catch(e){}
+  }
+
+  document.querySelectorAll("a.cta[data-care]").forEach(function(a){
+    a.addEventListener("click", function(){
+      setCare(a.getAttribute("data-care") || "");
+    });
+  });
+  document.querySelectorAll("#ef-care .chip").forEach(function(c){
+    c.addEventListener("click", function(){ setCare(c.dataset.care || ""); });
+  });
+  var ta = document.getElementById("ef-msg");
+  if (ta) ta.addEventListener("input", function(){ ta.dataset.touched = "1"; });
+
+  // ?care=essential|signature|oasis
+  try{
+    var q = new URLSearchParams(location.search).get("care");
+    if (q && CARE[q.toLowerCase()]) {
+      setCare(q.toLowerCase());
+      // scroll after paint
+      setTimeout(function(){ document.getElementById("ask").scrollIntoView({behavior:"smooth",block:"start"}); }, 50);
+    } else {
+      var saved = sessionStorage.getItem("cwg_care");
+      if (saved && CARE[saved]) setCare(saved);
+    }
+  }catch(e){}
+
+  document.getElementById("careForm").addEventListener("submit", function(e){
+    e.preventDefault();
+    var go = document.getElementById("ef-go");
+    var first = document.getElementById("ef-first").value.trim();
+    var last  = document.getElementById("ef-last").value.trim();
+    var phone = document.getElementById("ef-phone").value.trim();
+    var email = document.getElementById("ef-email").value.trim();
+    var fb = document.getElementById("ef-fallback");
+    if (!phone && !email){
+      fb.style.display="block";
+      fb.textContent="Please leave a phone or email so we can reach you.";
+      return;
+    }
+    var careLabel = selected ? CARE[selected].v : "Care membership (not sure yet)";
+    var payload = {
+      name: (first+" "+last).trim(), first: first, last: last,
+      phone: phone, email: email,
+      address: "",
+      city: document.getElementById("ef-city").value.trim(),
+      zip: document.getElementById("ef-zip").value.trim(),
+      budget: null, budget_label: null,
+      services: [careLabel],
+      interest: careLabel,
+      message: document.getElementById("ef-msg").value.trim(),
+      source: (function(){try{
+        var s = sessionStorage.getItem("cwg_src")||"website";
+        return s + (selected ? ("|care:"+selected) : "|care:unset");
+      }catch(e){return "website|care"}})()
+    };
+    go.disabled = true; go.textContent = "Sending…";
+    fetch(CRM, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)})
+      .then(function(r){ if(!r.ok) throw new Error("bad status");
+        document.getElementById("careForm").style.display="none";
+        document.getElementById("careDone").style.display="block";
+        document.getElementById("careDone").scrollIntoView({behavior:"smooth",block:"center"});
+      })
+      .catch(function(){
+        fb.style.display="block";
+        fb.textContent="We couldn’t send that just now — please call or text (910) 581-3970.";
+        go.disabled=false; go.textContent="Request Care follow-up";
+      });
+  });
+})();
+</script>
+
+<!-- ===== Pondwright chat widget ===== -->
+<style>
+#pw-launch{position:fixed;bottom:22px;right:22px;z-index:9998;display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,#ecc978,#d3a24a);color:#20160a;border:none;border-radius:30px;
+  padding:13px 20px 13px 16px;font:600 15px system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;
+  box-shadow:0 10px 30px rgba(0,0,0,.35);transition:transform .15s,box-shadow .15s}
+#pw-launch:hover{transform:translateY(-2px);box-shadow:0 14px 36px rgba(0,0,0,.45)}
+#pw-launch svg{width:22px;height:22px}
+#pw-launch .pw-dot{width:8px;height:8px;border-radius:50%;background:#1e7a3d;box-shadow:0 0 0 3px rgba(30,122,61,.25)}
+#pw-panel{position:fixed;bottom:22px;right:22px;z-index:9999;width:370px;max-width:calc(100vw - 24px);
+  height:560px;max-height:calc(100vh - 44px);background:#0e1520;border:1px solid #26313f;border-radius:16px;
+  display:none;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#pw-panel.pw-open{display:flex}
+.pw-head{background:#0a0f16;padding:14px 16px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #26313f}
+.pw-head .pw-av{width:38px;height:38px;border-radius:50%;background:linear-gradient(180deg,#ecc978,#d3a24a);
+  display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.pw-head .pw-t{flex:1;min-width:0}
+.pw-head .pw-t b{color:#f3eee2;font-size:15px;display:block;line-height:1.2}
+.pw-head .pw-t span{color:#8aa0b4;font-size:11.5px}
+.pw-head .pw-x{background:none;border:none;color:#8aa0b4;font-size:22px;cursor:pointer;line-height:1;padding:4px}
+.pw-head .pw-x:hover{color:#f3eee2}
+.pw-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#0e1520}
+.pw-msg{max-width:82%;padding:10px 13px;border-radius:14px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.pw-bot{align-self:flex-start;background:#1a2431;color:#e6ebf1;border-bottom-left-radius:4px}
+.pw-bot b{color:#ecc978}
+.pw-user{align-self:flex-end;background:linear-gradient(180deg,#d3a24a,#b8862f);color:#20160a;border-bottom-right-radius:4px;font-weight:500}
+.pw-typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px;background:#1a2431;border-radius:14px}
+.pw-typing i{width:7px;height:7px;border-radius:50%;background:#8aa0b4;animation:pw-b 1.2s infinite}
+.pw-typing i:nth-child(2){animation-delay:.2s}.pw-typing i:nth-child(3){animation-delay:.4s}
+@keyframes pw-b{0%,60%,100%{opacity:.3}30%{opacity:1}}
+.pw-foot{padding:12px;border-top:1px solid #26313f;background:#0a0f16;display:flex;gap:8px}
+.pw-foot input{flex:1;background:#131c28;border:1px solid #26313f;border-radius:10px;padding:11px 13px;
+  color:#f3eee2;font:14.5px system-ui;outline:none}
+.pw-foot input:focus{border-color:#d3a24a}
+.pw-foot button{background:linear-gradient(180deg,#ecc978,#d3a24a);border:none;border-radius:10px;
+  color:#20160a;font-weight:700;padding:0 16px;cursor:pointer;font-size:14px}
+.pw-foot button:disabled{opacity:.5;cursor:default}
+</style>
+
+<button id="pw-launch" aria-label="Chat with Pondwright">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+  <span class="pw-dot"></span> Chat with Pondwright
+</button>
+
+<div id="pw-panel" role="dialog" aria-label="Chat with Pondwright">
+  <div class="pw-head">
+    <div class="pw-av">🪷</div>
+    <div class="pw-t"><b>Pondwright</b><span>Carolina Water Gardens Intelligence · AI guide</span></div>
+    <button class="pw-x" aria-label="Close">×</button>
+  </div>
+  <div class="pw-body" id="pw-body"></div>
+  <div class="pw-foot">
+    <input id="pw-input" placeholder="Ask about ponds, koi, waterfalls…" autocomplete="off">
+    <button id="pw-send">Send</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var ENDPOINT = "https://chat.pondwright.com/chat";
+  var GREETING = "Hey — I'm Pondwright, the AI pond guide for Carolina Water Gardens. 🌊\nI can walk you through Essential, Signature, and Oasis Care (published membership rates), or how Jon builds. I'm an AI — Jon follows up as a person.";
+  var session = "web-" + Math.floor(performance.now()) + "-" + (history.length||0);
+  var history_ = [];   // {role, content}
+  var launch=document.getElementById("pw-launch"), panel=document.getElementById("pw-panel"),
+      body=document.getElementById("pw-body"), input=document.getElementById("pw-input"),
+      send=document.getElementById("pw-send"), started=false;
+
+  function bubble(text, who){
+    var d=document.createElement("div"); d.className="pw-msg "+(who==="user"?"pw-user":"pw-bot");
+    d.textContent=text; body.appendChild(d); body.scrollTop=body.scrollHeight; return d;
+  }
+  function typing(on){
+    var t=document.getElementById("pw-typing");
+    if(on && !t){var e=document.createElement("div");e.id="pw-typing";e.className="pw-typing";
+      e.innerHTML="<i></i><i></i><i></i>";body.appendChild(e);body.scrollTop=body.scrollHeight;}
+    else if(!on && t){t.remove();}
+  }
+  function open(){
+    panel.classList.add("pw-open"); launch.style.display="none";
+    if(!started){started=true; bubble(GREETING,"bot"); input.focus();}
+  }
+  function close(){ panel.classList.remove("pw-open"); launch.style.display="flex"; }
+
+  function sendMsg(){
+    var text=input.value.trim(); if(!text) return;
+    input.value=""; bubble(text,"user"); history_.push({role:"user",content:text});
+    send.disabled=true; typing(true);
+    fetch(ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({session_id:session,messages:history_})})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      typing(false); send.disabled=false;
+      var reply=(d && d.reply) || "Sorry — I hit a snag. Call or text Jon at (910) 581-3970 and he'll take care of you.";
+      bubble(reply,"bot"); history_.push({role:"assistant",content:reply}); input.focus();
+    })
+    .catch(function(){
+      typing(false); send.disabled=false;
+      bubble("I can't reach the pond right now — please call or text Jon at (910) 581-3970 and he'll take great care of you.","bot");
+    });
+  }
+
+  
+  var askPw=document.getElementById("askPw");
+  if(askPw){
+    askPw.addEventListener("click", function(e){
+      e.preventDefault();
+      open();
+      try{
+        var k = sessionStorage.getItem("cwg_care");
+        var seeds = {
+          essential: "Can you explain Essential Care membership and what's included?",
+          signature: "Can you explain Signature Care membership and the published price?",
+          oasis: "Can you explain Oasis Care membership and the $2,040/year plan?"
+        };
+        if(k && seeds[k] && !history_.length){
+          // let greeting land, then auto-ask
+          setTimeout(function(){
+            input.value = seeds[k];
+            sendMsg();
+          }, 400);
+        }
+      }catch(err){}
+    });
+  }
+
+  launch.addEventListener("click",open);
+  panel.querySelector(".pw-x").addEventListener("click",close);
+  send.addEventListener("click",sendMsg);
+  input.addEventListener("keydown",function(e){ if(e.key==="Enter") sendMsg(); });
+})();
+</script>
+<!-- ===== end Pondwright widget ===== -->
+<script src="site.js" defer></script>
 </body>
 </html>
