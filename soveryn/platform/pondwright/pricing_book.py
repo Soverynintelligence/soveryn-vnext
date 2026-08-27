@@ -34,10 +34,11 @@ _SEED: dict[str, Any] = {
         "liner_per_sqft": 0.98,
         "underlayment_per_sqft": 0.50,
         "rock_per_ton_hint": 245,
-        "gravel_per_ton_hint": 235,
+        "gravel_per_ton_hint": 225,
     },
     "service": {
-        "service_call_per_hour": None,
+        "service_call_per_hour": 85,
+        "drop_in_maintenance_visit": 170,
         "rate_book": [
             {
                 "desc": "Spring clean-out — inspect, clean pumps & filters",
@@ -46,9 +47,8 @@ _SEED: dict[str, Any] = {
         ],
         "monthly_plan": {
             "includes": (
-                "Auto-dosing bacteria kept filled, and a monthly inspection of "
-                "pump, filter, skimmer and plumbing to confirm everything is "
-                "running as designed."
+                "Superseded for customer menu by care_membership Essential/"
+                "Signature/Oasis Care — see care_membership in live JSON."
             ),
             "rates_by_size": {
                 "small": None,
@@ -56,8 +56,8 @@ _SEED: dict[str, Any] = {
                 "large": None,
             },
             "note": (
-                "Jon 2026-08-22: ~$249/mo for a typical plan including bacteria; "
-                "tiers by pond size still to lock in the estimator rate book."
+                "Published Care menu 2026-08-27 on care-membership.html; "
+                "live book at ~/pondpro/pricing_book.json is source of truth."
             ),
         },
     },
@@ -65,6 +65,9 @@ _SEED: dict[str, Any] = {
         "Customer-facing equipment: use MAP, else MSRP from Apex catalog.",
         "AKT Specialty prices in akt_catalog are dealer storefront (ws) — house cost, not customer MAP.",
         "Never publish wholesale (ws) to a customer quote.",
+        "Care membership + Essential/Signature package MENU may be stated from the live pricing book.",
+        "Oasis Care is priced; Oasis build varies — never invent an Oasis build price.",
+        "Never invent a custom yard estimate; Jon quotes after site walk.",
         "Service plans / clean-outs: use this rate book, not web scrapes.",
         "Full pond builds: size in the estimator; line-price equipment from catalog.",
     ],
