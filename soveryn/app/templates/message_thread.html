@@ -301,15 +301,17 @@
 <script src="/messages-push-client.js?v=20260825c" defer></script>
 <script>
 (function () {
+  // Fleet freeze: Vett/Scotty parked as Messages peers (engine room only).
   const CONTACTS = {
     aetheria: { name: "Aetheria", letter: "A", sub: "Runs the house" },
-    vett: { name: "Vett", letter: "V", sub: "Checks the work" },
-    scotty: { name: "Scotty", letter: "S", sub: "Gets it done" },
     eve: { name: "Eve", letter: "E", sub: "Shows up online" },
     kernel: { name: "Kernel", letter: "K", sub: "Builds with you" },
     grok: { name: "Grok", letter: "G", sub: "Codes with you" },
     t_critic: { name: "Critic", letter: "C", sub: "Overnight review · inbox" },
     t_scout: { name: "Scout", letter: "Sc", sub: "Overnight scan · inbox" },
+    // Deep-link labels if an old URL is opened — not listed on the home screen.
+    vett: { name: "Vett", letter: "V", sub: "Parked · engine room" },
+    scotty: { name: "Scotty", letter: "S", sub: "Parked · engine room" },
   };
   // Teammates overnight inboxes — read-only (no chat_stream agent).
   const INBOX_ONLY = { t_critic: true, t_scout: true };

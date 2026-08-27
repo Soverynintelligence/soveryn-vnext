@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-25  
+> **Last rotated:** 2026-08-27  
 > Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -15,18 +15,37 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 | Layer | What | Role |
 |-------|------|------|
-| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = house staff + **Grok** (direct coding peer) + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
+| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = **MESSAGES_CONTACTS** + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
 | **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces on Spark — not the house OS. |
 
+### 0a. Fleet freeze — frontier few (locked 2026-08-27)
+
+**Constraint:** you cannot run six frontier minds and six personas on this iron. One card → one frontier mind. Extra agents only for **different tools** or a **different clock** — never another wig on the same weights.
+
+| Messages contact | Role | Brain |
+|------------------|------|--------|
+| **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
+| **Kernel** | Local build | Quadros Flash (or Qwen lane) |
+| **Eve** | Ship posts (Canva / Signal Gate) | Shares build lane tools |
+| **Grok** | Phone coding peer | Headless Grok Build CLI (cloud — no local VRAM) |
+| **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
+
+| Parked as Messages peers | Still in `ACTIVE_AGENTS`? | Notes |
+|--------------------------|---------------------------|--------|
+| **Vett** | Yes (engine room) | Research/patrol — fold into Eve/Aetheria tools over time; not a phone contact |
+| **Scotty** | Yes (engine room) | Least used; coding owned by Kernel + Grok |
+
 **Do / don’t**
 
 - **Do** add phone UX to Messages (or feed Messages).  
 - **Do** keep Teammates as a separate process that POSTs briefs into the house.  
+- **Do** keep Vett/Scotty off the Messages list (`MESSAGES_PARKED`).  
 - **Don’t** invent new phone consoles (`:5075` marketing, extra PWAs) for house work.  
-- **Don’t** treat Funnel/Command Center/Teammates console as the consumer front door.
+- **Don’t** treat Funnel/Command Center/Teammates console as the consumer front door.  
+- **Don’t** load a sixth local frontier “just in case.”
 
 Funnel: `https://soveryn-1.tail70bbcc.ts.net/messages` (Basic once → 30-day cookie).  
 Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
@@ -39,7 +58,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
-| Agents | **Aetheria, Vett, Scotty, Kernel, Eve, Grok** (Messages coding peer → headless Grok Build CLI) |
+| Agents | **Messages:** Aetheria, Kernel, Eve, Grok (+ Critic/Scout inboxes). **Engine room (parked contacts):** Vett, Scotty still in `ACTIVE_AGENTS`. |
 | Heartbeat / dream / automations | **Live** |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |

@@ -24,6 +24,20 @@ ACTIVE_AGENTS: tuple[str, ...] = (
     "aetheria", "vett", "scotty", "kernel", "eve", "grok",
 )
 
+#: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
+#: inboxes are layered in the UI. Fleet freeze 2026-08-27: frontier few —
+#: one card / one frontier mind. Vett + Scotty stay in ACTIVE_AGENTS for
+#: engine-room commissions/automations but are **not** Messages contacts.
+MESSAGES_CONTACTS: tuple[str, ...] = (
+    "aetheria",  # soul / face — Blackwell alone
+    "kernel",    # local build lane
+    "eve",       # ship posts (Canva / Signal)
+    "grok",      # cloud coding peer (headless Build CLI — no local VRAM)
+)
+
+#: Parked as Messages peers (still may exist as ACTIVE_AGENTS).
+MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
+
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
 DAEMONS: frozenset[str] = frozenset({"ares"})
@@ -448,6 +462,13 @@ def _validate() -> None:
     daemon_overlap = (DAEMONS & set(ACTIVE_AGENTS)) | (DAEMONS & RETIRED)
     if daemon_overlap:
         raise RuntimeError(f"DAEMONS overlaps active/retired: {daemon_overlap}")
+    # Messages contacts must be active chat agents (not overnight inboxes)
+    bad_msg = set(MESSAGES_CONTACTS) - set(ACTIVE_AGENTS)
+    if bad_msg:
+        raise RuntimeError(f"MESSAGES_CONTACTS not in ACTIVE_AGENTS: {bad_msg}")
+    parked_overlap = set(MESSAGES_CONTACTS) & MESSAGES_PARKED
+    if parked_overlap:
+        raise RuntimeError(f"MESSAGES_CONTACTS overlaps PARKED: {parked_overlap}")
     # Every agent routes to a real server
     server_names = {s.name for s in MODEL_SERVERS}
     for agent, server in AGENT_TO_SERVER.items():

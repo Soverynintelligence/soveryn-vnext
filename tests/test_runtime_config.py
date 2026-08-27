@@ -18,6 +18,18 @@ def test_grok_routes_to_external_backend_skipped_in_preflight():
     assert server.skip_preflight is True
 
 
+def test_messages_contacts_fleet_freeze():
+    """Phone door is frontier few; Vett/Scotty parked as Messages peers."""
+    assert runtime.MESSAGES_CONTACTS == (
+        "aetheria", "kernel", "eve", "grok",
+    )
+    assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty"})
+    assert set(runtime.MESSAGES_CONTACTS).isdisjoint(runtime.MESSAGES_PARKED)
+    assert set(runtime.MESSAGES_CONTACTS) <= set(runtime.ACTIVE_AGENTS)
+    # Still engine-room agents until tools are fully folded.
+    assert "vett" in runtime.ACTIVE_AGENTS and "scotty" in runtime.ACTIVE_AGENTS
+
+
 def test_retired_includes_known_retired_agents():
     """Spec §10 Bucket C: these names must be blocked."""
     must_be_retired = {

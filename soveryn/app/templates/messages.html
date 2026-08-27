@@ -136,12 +136,11 @@
 <script src="/messages-push-client.js?v=20260825c" defer></script>
 <script>
 (function () {
+  // Fleet freeze 2026-08-27: MESSAGES_CONTACTS only (Vett/Scotty parked).
   const CONTACTS = [
     { id: "aetheria", name: "Aetheria", role: "Runs the house", letter: "A" },
-    { id: "vett", name: "Vett", role: "Checks the work", letter: "V" },
-    { id: "scotty", name: "Scotty", role: "Gets it done", letter: "S" },
-    { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
     { id: "kernel", name: "Kernel", role: "Builds with you", letter: "K" },
+    { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
     { id: "grok", name: "Grok", role: "Codes with you", letter: "G" },
     // Teammates overnight → Messages (merge). Read-only inboxes.
     { id: "t_critic", name: "Critic", role: "Overnight review", letter: "C" },
