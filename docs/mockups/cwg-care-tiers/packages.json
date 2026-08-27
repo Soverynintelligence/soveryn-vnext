@@ -68,5 +68,7 @@
     "price": 299,
     "note": "Applied toward the feature if purchased"
   },
-  "note": "Rounded to nearest $100 from PondWright raw. Site conditions can move numbers."
+  "care_series": ["Essential", "Signature", "Oasis"],
+  "care_note": "Same ladder names as builds for customer clarity. Care Essential = 4 quarterly @ $175 ($700). Care Signature = 12 @ $75 ($900). Oasis Care = $2040/yr (24 visits). Oasis build remains quote-varies.",
+  "note": "Rounded to nearest $100 from PondWright raw. Site conditions can move numbers. Care and build share Essential/Signature/Oasis naming."
 }
