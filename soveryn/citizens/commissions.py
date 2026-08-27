@@ -41,7 +41,12 @@ FAILED = "failed"
 
 
 def enqueue(conn: sqlite3.Connection, citizen_id: str, body: str, *, at: str) -> str:
-    """Put work on a citizen's queue. Returns the commission id."""
+    """Put work on a citizen's queue. Returns the commission id.
+
+    Product freeze (no new Vett/Scotty work) is enforced at CoS routing
+    (`rooms.PEERS`) and ``objectives.assign`` — not here — so the queue
+    machinery stays testable and duty bookkeeping can still use any citizen.
+    """
     if not body.strip():
         raise ValueError("a commission needs a body — what is being asked")
     commission_id = str(uuid.uuid4())

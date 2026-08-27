@@ -15,7 +15,12 @@ def tool_db(tmp_path: Path, monkeypatch):
     db = tmp_path / "citizens.db"
     monkeypatch.setenv("SOVERYN_CITIZENS_DB", str(db))
     with connect(db) as conn:
-        for cid, name in (("aetheria", "Aetheria"), ("vett", "V.E.T.T.")):
+        for cid, name in (
+            ("aetheria", "Aetheria"),
+            ("eve", "Eve"),
+            ("kernel", "Kernel"),
+            ("vett", "V.E.T.T."),
+        ):
             register(
                 conn,
                 Citizen(
@@ -37,7 +42,7 @@ def test_objective_assign_and_status(tool_db):
             "desk": "cwg",
             "title": "Test pricing dig",
             "brief": "Find three sourced prices.",
-            "owner_id": "vett",
+            "owner_id": "eve",
             "success_criteria": "3 rows",
             "enqueue": True,
         },
@@ -66,7 +71,7 @@ def test_objective_verify_closes_loop(tool_db):
             "desk": "soveryn",
             "title": "Smoke verify loop",
             "brief": "Tiny standing job for the verify tool.",
-            "owner_id": "vett",
+            "owner_id": "eve",
             "enqueue": False,
         },
     )

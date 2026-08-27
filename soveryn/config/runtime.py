@@ -38,6 +38,10 @@ MESSAGES_CONTACTS: tuple[str, ...] = (
 #: Parked as Messages peers (still may exist as ACTIVE_AGENTS).
 MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
 
+#: Do not enqueue new CoS commissions / standing objectives to these ids.
+#: Engine-room loops may still exist; new work goes to Eve / Kernel / Grok.
+COMMISSION_BLOCKED: frozenset[str] = frozenset({"vett", "scotty"})
+
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
 DAEMONS: frozenset[str] = frozenset({"ares"})

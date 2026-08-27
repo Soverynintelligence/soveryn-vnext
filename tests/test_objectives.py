@@ -14,22 +14,19 @@ from soveryn.citizens.research_runner import parse_objective_id, _extract_table_
 def obj_db(tmp_path: Path):
     db = tmp_path / "citizens.db"
     with connect(db) as conn:
-        register(
-            conn,
-            Citizen(
-                id="vett",
-                display_name="V.E.T.T.",
-                workspace_path=str(tmp_path / "desks" / "vett"),
-            ),
-        )
-        register(
-            conn,
-            Citizen(
-                id="aetheria",
-                display_name="Aetheria",
-                workspace_path=str(tmp_path / "desks" / "aetheria"),
-            ),
-        )
+        for cid, name in (
+            ("aetheria", "Aetheria"),
+            ("eve", "Eve"),
+            ("vett", "V.E.T.T."),
+        ):
+            register(
+                conn,
+                Citizen(
+                    id=cid,
+                    display_name=name,
+                    workspace_path=str(tmp_path / "desks" / cid),
+                ),
+            )
     return db, tmp_path
 
 
@@ -42,7 +39,7 @@ def test_assign_objective_creates_checkpoint(obj_db):
             title="Fountain maintenance pricing",
             brief="Pull sourced prices across platforms.",
             at="2026-08-22T18:00:00Z",
-            owner_id="vett",
+            owner_id="eve",
             success_criteria="table with >=3 sourced prices",
             assigned_by="jon",
         )

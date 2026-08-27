@@ -128,13 +128,13 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
             name="house_post_send",
             owner=owner_agent,
             description=(
-                "Message another citizen (vett, scotty, eve, kernel) and put work "
-                "on their commission queue when you are Aetheria. When Jon says "
-                "'ask Vett to…', 'message Vett', or 'have Scotty check…' — call "
-                "this in the SAME turn with to_id set to that peer and a clear "
-                "brief in body. Do not only promise to message them. Prefer "
-                "kind=request (default). That wakes the peer; their result will "
-                "land in the group room. Kinds: memo, request, report, directive, ack."
+                "Message another citizen and put work on their commission queue "
+                "when you are Aetheria. Commission peers: eve (research + posts), "
+                "kernel (build). Vett and Scotty are parked — do not assign new "
+                "work to them; use eve or kernel instead. When Jon says 'ask Eve "
+                "to…' or 'have Kernel check…' — call this in the SAME turn with "
+                "to_id set and a clear brief in body. Prefer kind=request "
+                "(default). Kinds: memo, request, report, directive, ack."
             ),
             schema={
                 "type": "object",

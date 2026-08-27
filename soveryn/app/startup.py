@@ -261,6 +261,14 @@ def create_app(
                 (Path.home() / "Downloads").resolve(),
             ),
         )
+        # Eve — CWG / marketing media from Downloads (fleet freeze: she ships).
+        register_personal_files_tools(
+            tool_registry,
+            owner_agent="eve",
+            roots=(
+                (Path.home() / "Downloads").resolve(),
+            ),
+        )
 
         # Image generation — wraps ComfyUI on :8188. JuggernautXL Lightning
         # default (~5s gen). Aetheria gets the file path back; she can
@@ -500,6 +508,13 @@ def create_app(
         tool_registry.register(
             build_list_directory_tool(owner_agent="vett", root=Path.home())
         )
+        # Eve — research+ship: read across home (media, Downloads, CWG refs).
+        tool_registry.register(
+            build_read_file_tool(owner_agent="eve", root=Path.home())
+        )
+        tool_registry.register(
+            build_list_directory_tool(owner_agent="eve", root=Path.home())
+        )
         # Kernel — build brain: Lattice search (above) + read/list in house
         # workspaces. No write/exec/git in AgentLoop — those stay Aider/HITL.
         tool_registry.register(build_read_file_tool(owner_agent="kernel"))
@@ -512,7 +527,7 @@ def create_app(
         # write+search; Kernel gets search-only via Lattice tools above.
         if recall_lattice is not None:
             from soveryn.platform.library import register_library_tools
-            for agent_name in ("aetheria", "vett", "scotty"):
+            for agent_name in ("aetheria", "vett", "scotty", "eve"):
                 register_library_tools(
                     tool_registry,
                     lattice_store=recall_lattice,
@@ -557,13 +572,9 @@ def create_app(
                     telemetry_db_path=env.data_root / "telemetry" / "telemetry.db",
                 )
 
-        # Web tools (web_search + fetch_url) — Aetheria and Vett only.
-        # Backed by local SearXNG (:8095 default) for sovereign metasearch
-        # and trafilatura for main-content extraction. SSRF guard rejects
-        # private/loopback/link-local IPs in fetch so the model can't be
-        # social-engineered into hitting internal services. Scotty does NOT
-        # get these — his surface is mechanical local-host tools, not
-        # arbitrary outbound network.
+        # Web tools (web_search + fetch_url) — Aetheria + Eve (+ Vett engine room).
+        # Fleet freeze 2026-08-27: Eve is the Messages research+ship peer;
+        # she needs the same dig surface Vett had. Scotty does NOT get these.
         import os
         searxng_url = os.environ.get(
             "SOVERYN_SEARXNG_URL", "http://127.0.0.1:8095/",
@@ -580,7 +591,7 @@ def create_app(
             register_spark_status_tool(tool_registry, owner_agent=agent_name)
 
         from soveryn.platform.web import register_web_tools
-        for agent_name in ("aetheria", "vett"):
+        for agent_name in ("aetheria", "vett", "eve"):
             register_web_tools(
                 tool_registry,
                 searxng_url=searxng_url,
@@ -630,7 +641,7 @@ def create_app(
         # PondWright house pricing — Apex catalog + rate book (CWG desk).
         # Prefer this over web digs for equipment / service quotes.
         from soveryn.platform.pondwright import register_pondwright_tools
-        for agent_name in ("aetheria", "vett"):
+        for agent_name in ("aetheria", "vett", "eve"):
             try:
                 register_pondwright_tools(tool_registry, owner_agent=agent_name)
             except Exception:
@@ -660,31 +671,20 @@ def create_app(
                 lattice_db_path=env.lattice_db,
             )
 
-        # Vett's file->PDF converter. Deterministic file-in/file-out so she
-        # calls a converter instead of regenerating document content into a
-        # tool call (which truncates on long docs). No lattice dependency.
+        # PDF / git awareness — Vett (engine room) + Eve (Messages research+ship).
         from soveryn.agents.vett.tools import register_vett_pdf_tools
-        register_vett_pdf_tools(tool_registry)
+        register_vett_pdf_tools(tool_registry)  # owner=vett default
+        register_vett_pdf_tools(tool_registry, owner_agent="eve")
 
-        # Vett's read-only git-awareness tools (git_status/git_log/git_diff).
-        # She can read a file's content; these let her verify WHERE it lives in
-        # the repo — branch, dirty/clean, staged/modified/untracked, history,
-        # working diff. Read-only by construction (no mutating subcommand); the
-        # default repo is the vnext tree, overridable per-call by a path arg.
-        # default_repo_root=None → the tool falls back to ~/soveryn_vnext (the
-        # same repo path delegation uses); a per-call path arg overrides it.
         from soveryn.agents.vett.tools import register_vett_git_tools
         register_vett_git_tools(tool_registry)
+        register_vett_git_tools(tool_registry, owner_agent="eve")
 
-        # Document tools — Aetheria + Vett only; Scotty is not a document author.
-        # One shared DocumentStore (documents_vnext.db in the memory dir) so
-        # both agents operate on the same deliverable space. Attribution is
-        # preserved via the agent column on each row. Jon can download any
-        # document as md/html/pdf/docx via the D4 API routes (pending).
+        # Document tools — Aetheria + Eve (+ Vett engine room).
         from soveryn.platform.documents.store import DocumentStore as _DocumentStore
         from soveryn.platform.documents.tools import register_document_tools as _register_document_tools
         _document_store = _DocumentStore(env.data_root / "memory" / "documents_vnext.db")
-        for _doc_agent in ("aetheria", "vett"):
+        for _doc_agent in ("aetheria", "vett", "eve"):
             _register_document_tools(
                 tool_registry,
                 store=_document_store,

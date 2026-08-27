@@ -22,7 +22,7 @@ STATES: frozenset[str] = frozenset({
     "failed",
     "cancelled",
 })
-DEFAULT_OWNER = "vett"
+DEFAULT_OWNER = "eve"
 
 
 def _workspace_for(conn, citizen_id: str) -> Path:
@@ -63,6 +63,13 @@ def assign(
         raise ValueError(f"desk must be one of {sorted(DESKS)}")
     if not title or not brief:
         raise ValueError("title and brief required")
+    from soveryn.config.runtime import COMMISSION_BLOCKED
+
+    if owner_id in COMMISSION_BLOCKED:
+        raise ValueError(
+            f"{owner_id!r} is parked — assign to eve or kernel "
+            f"(fleet freeze; research tools live on Eve)"
+        )
     exists = conn.execute(
         "SELECT 1 FROM citizens WHERE id = ?", (owner_id,)
     ).fetchone()
@@ -237,6 +244,7 @@ def build_commission_body(objective: dict[str, Any]) -> str:
 def commission_body_for(objective: dict[str, Any]) -> str:
     """Pick research-wave vs build body from owner."""
     owner = (objective.get("owner_id") or "").strip().lower()
-    if owner in ("kernel", "scotty", "eve"):
+    # Kernel (and legacy Scotty) = build body. Eve owns research+ship digs.
+    if owner in ("kernel", "scotty"):
         return build_commission_body(objective)
     return research_commission_body(objective)

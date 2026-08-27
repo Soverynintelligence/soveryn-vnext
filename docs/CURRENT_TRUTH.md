@@ -35,8 +35,8 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 | Parked as Messages peers | Still in `ACTIVE_AGENTS`? | Notes |
 |--------------------------|---------------------------|--------|
-| **Vett** | Yes (engine room) | Research/patrol — fold into Eve/Aetheria tools over time; not a phone contact |
-| **Scotty** | Yes (engine room) | Least used; coding owned by Kernel + Grok |
+| **Vett** | Yes (engine room) | Research tools **also on Eve** (2026-08-27). New commissions/objectives **blocked**. Patrol cron may still touch Vett. |
+| **Scotty** | Yes (engine room) | New commissions **blocked**. Coding = Kernel + Grok. |
 
 **Do / don’t**
 

@@ -24,10 +24,19 @@ def test_messages_contacts_fleet_freeze():
         "aetheria", "kernel", "eve", "grok",
     )
     assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty"})
+    assert runtime.COMMISSION_BLOCKED == frozenset({"vett", "scotty"})
     assert set(runtime.MESSAGES_CONTACTS).isdisjoint(runtime.MESSAGES_PARKED)
     assert set(runtime.MESSAGES_CONTACTS) <= set(runtime.ACTIVE_AGENTS)
     # Still engine-room agents until tools are fully folded.
     assert "vett" in runtime.ACTIVE_AGENTS and "scotty" in runtime.ACTIVE_AGENTS
+
+
+def test_commission_peers_are_eve_and_kernel_only():
+    from soveryn.rooms.store import DEFAULT_PEER, PEERS
+
+    assert PEERS == frozenset({"eve", "kernel"})
+    assert DEFAULT_PEER == "eve"
+    assert PEERS.isdisjoint(runtime.COMMISSION_BLOCKED)
 
 
 def test_retired_includes_known_retired_agents():

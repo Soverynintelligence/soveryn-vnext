@@ -38,14 +38,15 @@ STANDING: tuple[dict[str, Any], ...] = (
     },
     {
         "desk": "cwg",
-        "owner_id": "vett",
+        "owner_id": "eve",
         "title": "Standing · CWG pricing & competitor watch",
         "brief": (
             "Standing Carolina Water Gardens / PondWright watch. Refresh "
             "competitor or service pricing that matters to quotes — house Apex/"
             "AKT catalogs and rate book first; web only for comps the house "
             "books cannot answer. Produce a scannable table Jon or PondWright "
-            "can use. Cite-or-stop; never invent prices."
+            "can use. Cite-or-stop; never invent prices. (Fleet freeze: Eve "
+            "owns research+ship; Vett parked as Messages peer.)"
         ),
         "success_criteria": (
             "Markdown table Brand|Model|Price|Source with ≥3 verified rows "

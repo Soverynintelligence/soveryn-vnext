@@ -92,9 +92,11 @@ def test_get_persona_rejects_unknown():
 # ─── Content sanity (don't drift from Jon's canonical text) ──────────────────
 
 def test_aetheria_persona_mentions_coordination():
-    # Routing language — "coordinate" is optional; spine + peers are required.
-    assert "V.E.T.T." in AETHERIA_PERSONA
-    assert "Scotty" in AETHERIA_PERSONA
+    # Fleet freeze: Messages peers are Kernel / Eve / Grok; Vett/Scotty parked.
+    assert "Kernel" in AETHERIA_PERSONA
+    assert "Eve" in AETHERIA_PERSONA
+    assert "Grok" in AETHERIA_PERSONA
+    assert "parked" in AETHERIA_PERSONA.lower()
     assert "route" in AETHERIA_PERSONA.lower() or "Messages" in AETHERIA_PERSONA
 
 

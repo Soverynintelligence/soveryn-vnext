@@ -12,8 +12,10 @@ from typing import Any
 from soveryn.memory.conversation_store import ConversationStore
 
 # Pickable peers (not CoS). Default vett.
-PEERS: frozenset[str] = frozenset({"vett", "eve", "kernel", "scotty"})
-DEFAULT_PEER = "vett"
+# Fleet freeze 2026-08-27: CoS commissions go to Eve/Kernel only.
+# Vett/Scotty parked — not commission peers (engine room only).
+PEERS: frozenset[str] = frozenset({"eve", "kernel"})
+DEFAULT_PEER = "eve"
 COS_ID = "aetheria"
 
 # Marker embedded in 1:1 system turns so chat.html can render a chip.

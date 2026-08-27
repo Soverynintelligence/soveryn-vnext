@@ -44,7 +44,7 @@ def test_ensure_standing_creates_soveryn_and_cwg(db):
     assert len(open_s) == 1
     assert len(open_c) == 1
     assert open_s[0]["owner_id"] == "kernel"
-    assert open_c[0]["owner_id"] == "vett"
+    assert open_c[0]["owner_id"] == "eve"
 
 
 def test_build_vs_research_commission_body():
@@ -62,7 +62,7 @@ def test_build_vs_research_commission_body():
         {
             "id": "00000000-0000-0000-0000-000000000002",
             "desk": "cwg",
-            "owner_id": "vett",
+            "owner_id": "eve",
             "title": "t",
             "brief": "b",
             "success_criteria": "s",

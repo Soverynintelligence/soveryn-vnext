@@ -170,11 +170,12 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                 "citizen — Grok-bot style: define the objective once, they execute "
                 "across waves, you verify when ready. Use when Jon says things like "
                 "'research this overnight', 'keep working on CWG pricing', or "
-                "'put Vett on a real dig'. Prefer this over one-shot house_post for "
+                "'put Eve on a real dig'. Prefer this over one-shot house_post for "
                 "multi-step research. Desks: cwg (PondWright/ponds — house Apex/AKT "
                 "catalogs first, not the open web), hl (History's Ledger), soveryn "
-                "(house/product). After they finish, check objective_status and call "
-                "objective_verify when Jon accepts."
+                "(house/product). Owners: eve (research+ship) or kernel (build). "
+                "Vett/Scotty are parked. After they finish, check objective_status "
+                "and call objective_verify when Jon accepts."
             ),
             schema={
                 "type": "object",
@@ -187,7 +188,7 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                     "brief": {"type": "string"},
                     "owner_id": {
                         "type": "string",
-                        "enum": ["vett", "eve", "scotty", "kernel"],
+                        "enum": ["eve", "kernel"],
                     },
                     "success_criteria": {"type": "string"},
                     "enqueue": {"type": "boolean"},
