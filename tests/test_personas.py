@@ -45,8 +45,34 @@ def test_get_persona_returns_scotty_string(no_persona_overrides):
     assert get_persona("scotty") == SCOTTY_PERSONA
 
 
-def test_get_persona_returns_kernel_string(no_persona_overrides):
+def test_get_persona_kernel_uses_tower_opencode_prompt(no_persona_overrides):
+    from soveryn.agents.personas import (
+        KERNEL_MESSAGES_LANE,
+        KERNEL_TOWER_PROMPT,
+        persona_source,
+        read_kernel_tower_prompt,
+    )
+
+    tower = read_kernel_tower_prompt()
+    assert tower is not None
+    assert KERNEL_TOWER_PROMPT.is_file()
+    text = get_persona("kernel")
+    assert text.startswith(tower)
+    assert KERNEL_MESSAGES_LANE in text
+    assert "How about a nice game of chess?" in text
+    assert "This door (Messages)" in text
+    assert persona_source("kernel") == "tower"
+
+
+def test_get_persona_kernel_falls_back_when_tower_missing(
+    no_persona_overrides, tmp_path, monkeypatch
+):
+    monkeypatch.setenv(
+        "SOVERYN_KERNEL_OPENCODE_PROMPT", str(tmp_path / "missing-kernel.md")
+    )
+    from soveryn.agents import personas as personas_mod
     assert get_persona("kernel") == KERNEL_PERSONA
+    assert personas_mod.persona_source("kernel") == "baked"
 
 
 def test_kernel_chess_is_unparked_wargames_line(no_persona_overrides):
@@ -98,10 +124,9 @@ def test_get_persona_rejects_unknown():
 # ─── Content sanity (don't drift from Jon's canonical text) ──────────────────
 
 def test_aetheria_persona_mentions_coordination():
-    # Fleet freeze: Messages peers are Kernel / Eve / Grok; Vett/Scotty parked.
+    # Fleet freeze: Messages peers are Kernel / Eve; Vett/Scotty/Grok parked.
     assert "Kernel" in AETHERIA_PERSONA
     assert "Eve" in AETHERIA_PERSONA
-    assert "Grok" in AETHERIA_PERSONA
     assert "parked" in AETHERIA_PERSONA.lower()
     assert "route" in AETHERIA_PERSONA.lower() or "Messages" in AETHERIA_PERSONA
 

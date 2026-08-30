@@ -559,6 +559,35 @@ def chat_stream():
     if loop is None:
         return _err("unknown_agent", f"No loop registered for {agent!r}", 400)
 
+    from soveryn.app.deferred_chat import ACK, try_defer_chat
+
+    deferred_id = try_defer_chat(
+        agent=agent, session_id=session_id, message=message, state=state,
+    )
+    if deferred_id:
+        def _generate_deferred():
+            yield _sse({"type": "token", "delta": ACK})
+            yield _sse({
+                "type": "done",
+                "content": ACK,
+                "finish_reason": "stop",
+                "deferred": True,
+                "commission_id": deferred_id,
+                "tool_calls": None,
+                "usage": None,
+                "context_usage": None,
+            })
+
+        return Response(
+            stream_with_context(_generate_deferred()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream; charset=utf-8",
+            },
+        )
+
     from soveryn.rooms import context as room_ctx
 
     env = state.get("env")

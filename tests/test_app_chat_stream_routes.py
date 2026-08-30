@@ -224,7 +224,7 @@ def test_chat_stream_rejects_non_image_data_url(app_state):
     sid = _new_session(client, agent="aetheria")
     resp = _post_stream(client, {
         "agent": "aetheria", "session_id": sid, "message": "hi",
-        "attachments": ["data:application/pdf;base64,AAAA"],
+        "attachments": ["data:text/plain;base64,AAAA"],
     })
     assert resp.status_code == 400
     assert resp.content_type.startswith("application/json")

@@ -3219,7 +3219,6 @@
         <a class="brief-act" href="/messages/aetheria">Message Aetheria</a>
         <a class="brief-act" href="/messages/eve">Message Eve</a>
         <a class="brief-act" href="/messages/kernel">Message Kernel</a>
-        <a class="brief-act" href="/messages/grok">Message Grok</a>
         <a class="brief-act" href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
         <a class="brief-act" href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
         <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
@@ -3231,7 +3230,6 @@
             <option value="msg:aetheria">Aetheria · Messages</option>
             <option value="msg:eve">Eve · Messages</option>
             <option value="msg:kernel">Kernel · Messages</option>
-            <option value="msg:grok">Grok · Messages</option>
             <option value="board:Signal">Board · Signal</option>
             <option value="board:Blueprint">Board · Blueprint</option>
             <option value="board:Friction">Board · Friction</option>
@@ -3298,16 +3296,6 @@
         <div class="agent-actions">
           <a class="agent-act primary" href="/messages/eve">Talk</a>
           <a class="agent-act" href="/charters">Charters</a>
-        </div>
-      </div>
-      <div class="agent-card" data-agent="grok" aria-label="Grok — coding peer">
-        <div class="body">
-          <div class="name">Grok</div>
-          <div class="role">Coding peer</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-        <div class="agent-actions">
-          <a class="agent-act primary" href="/messages/grok">Talk</a>
         </div>
       </div>
     </section>
@@ -4341,7 +4329,7 @@
 <script>
 
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","kernel","eve","grok"];
+  const ACTIVE_AGENTS = ["aetheria","kernel","eve"];
 
   // ─── Fetch helpers ─────────────────────────────────────────────────────────
   const fetchJson = async (url) => {

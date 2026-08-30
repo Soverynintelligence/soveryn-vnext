@@ -640,6 +640,16 @@ def make_agent_process_fn(
             if oid:
                 raise
 
+        from soveryn.app.deferred_chat import parse_messages_turn
+
+        messages_turn = parse_messages_turn(body)
+        if messages_turn:
+            sid, user_text = messages_turn
+            resp = loop.process_message(
+                sid, user_text, source="deferred", skip_user_save=True
+            )
+            return resp.content or ""
+
         session_id = conv_store.new_session(
             citizen_id, title=f"[commission] {commission_id[:8]}"
         )

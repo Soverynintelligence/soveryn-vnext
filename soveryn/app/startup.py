@@ -52,6 +52,8 @@ def create_app(
     app = Flask("soveryn")
     app.config.setdefault("SOVERYN_REQUIRE_LOCALHOST", True)
     app.config.setdefault("SOVERYN_VERSION", __version__)
+    if agent_loops is not None:
+        app.config.setdefault("DEFER_CHAT", False)
     # Bound pre-validation memory: a ~50MB cap leaves headroom above the
     # /chat route's 33MB-per-attachment string limit (single image) but
     # forces Flask to 413 anything bigger BEFORE json-parsing the body
@@ -516,9 +518,13 @@ def create_app(
             build_list_directory_tool(owner_agent="eve", root=Path.home())
         )
         # Kernel — build brain: Lattice search (above) + read/list in house
-        # workspaces. No write/exec/git in AgentLoop — those stay Aider/HITL.
+        # workspaces. Writes go through OpenCode (run_opencode), not AgentLoop
+        # bash/edit.
         tool_registry.register(build_read_file_tool(owner_agent="kernel"))
         tool_registry.register(build_list_directory_tool(owner_agent="kernel"))
+        from soveryn.platform.opencode_tool import build_run_opencode_tool
+
+        tool_registry.register(build_run_opencode_tool(owner_agent="kernel"))
 
         # Library layer tools — shared write surface for verified reference
         # material (per the 2026-06-02 design discussion, "Option B": passive
@@ -572,9 +578,8 @@ def create_app(
                     telemetry_db_path=env.data_root / "telemetry" / "telemetry.db",
                 )
 
-        # Web tools (web_search + fetch_url) — Aetheria + Eve (+ Vett engine room).
-        # Fleet freeze 2026-08-27: Eve is the Messages research+ship peer;
-        # she needs the same dig surface Vett had. Scotty does NOT get these.
+        # Web tools (web_search + fetch_url) — Aetheria + Eve + Kernel
+        # (+ Vett engine room). House SearXNG, ungated. Scotty does NOT get these.
         import os
         searxng_url = os.environ.get(
             "SOVERYN_SEARXNG_URL", "http://127.0.0.1:8095/",
@@ -591,7 +596,7 @@ def create_app(
             register_spark_status_tool(tool_registry, owner_agent=agent_name)
 
         from soveryn.platform.web import register_web_tools
-        for agent_name in ("aetheria", "vett", "eve"):
+        for agent_name in ("aetheria", "vett", "eve", "kernel"):
             register_web_tools(
                 tool_registry,
                 searxng_url=searxng_url,

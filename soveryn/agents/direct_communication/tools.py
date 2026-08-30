@@ -24,12 +24,11 @@ from typing import Any, Callable
 
 from soveryn.agents.direct_communication.rate_limit import DirectCommRateLimiter
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
+from soveryn.rooms.store import PEERS as _VALID_TARGETS
 
 
 logger = logging.getLogger(__name__)
 
-
-_VALID_TARGETS = frozenset({"vett", "scotty"})
 _VALID_MODES = frozenset({"execute", "query"})
 
 _DIRECTIVE_PREFIX = (
@@ -448,11 +447,11 @@ def build_direct_message_agent_tool(
         "properties": {
             "target": {
                 "type": "string",
-                "enum": ["vett", "scotty"],
+                "enum": sorted(_VALID_TARGETS),
                 "description": (
-                    "Which peer agent to direct-message. Vett for research / "
-                    "verification work; Scotty for execution / mechanical fixes. "
-                    "You cannot direct-message yourself."
+                    "Which peer to direct-message. Eve for research/ship; "
+                    "Kernel for build/code. You cannot direct-message yourself. "
+                    "Vett/Scotty are parked — not DAC targets."
                 ),
             },
             "message": {
@@ -493,11 +492,12 @@ def build_direct_message_agent_tool(
         schema=schema,
         handler=handler,
         description=(
-            "Send a directive or query directly to Vett or Scotty, anchored "
+            "Send a directive or query directly to Eve or Kernel, anchored "
             "to a Coordination node. Prefer house_post_send (kind=request) when "
-            "Jon said 'ask Vett/Scotty…' from chat and should watch the group "
+            "Jon said 'ask Eve/Kernel…' from chat and should watch the group "
             "room — that path wakes them asynchronously and shows their icon. "
             "Use this tool for backstage peer work that must run now and report "
-            "into a coord node. Every call is lattice-logged and rate-capped."
+            "into a coord node. Every call is lattice-logged and rate-capped. "
+            "Vett/Scotty are parked."
         ),
     )

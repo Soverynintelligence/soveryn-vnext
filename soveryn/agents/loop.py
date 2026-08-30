@@ -1070,6 +1070,7 @@ class AgentLoop:
         attachments: tuple[str, ...] | None = None,
         *,
         source: str = "direct",
+        skip_user_save: bool = False,
     ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
 
@@ -1088,6 +1089,9 @@ class AgentLoop:
         passes source="heartbeat" so pulse turns are distinguishable from
         real human turns in the UI. Threaded straight to save_turn — see
         ConversationStore.save_turn.
+
+        skip_user_save — Messages deferred path already persisted the user
+        turn so the composer can unblock. Do not write it twice.
 
         Raises:
           AgentLoopError — session does not exist OR session.agent != self.agent_name
@@ -1123,9 +1127,10 @@ class AgentLoop:
 
         # 1. Save user turn (constraint 6: stays saved if chat later fails).
         # Text-only by design — vision parts live in-flight, not in the DB.
-        self.conv_store.save_turn(
-            session_id, self.agent_name, "user", user_message, source=source,
-        )
+        if not skip_user_save:
+            self.conv_store.save_turn(
+                session_id, self.agent_name, "user", user_message, source=source,
+            )
 
         # 2. Load history (includes the just-saved user turn).
         history_turns = self.conv_store.load_history(session_id)

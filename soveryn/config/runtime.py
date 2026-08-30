@@ -25,22 +25,25 @@ ACTIVE_AGENTS: tuple[str, ...] = (
 )
 
 #: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
-#: inboxes are layered in the UI. Fleet freeze 2026-08-27: frontier few —
-#: one card / one frontier mind. Vett + Scotty stay in ACTIVE_AGENTS for
-#: engine-room commissions/automations but are **not** Messages contacts.
+#: inboxes are layered in the UI. Fleet freeze: frontier few — one card /
+#: one frontier mind. Vett / Scotty / Grok stay in ACTIVE_AGENTS for
+#: engine-room / CLI but are **not** Messages contacts.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # soul / face — Blackwell alone
     "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
     "eve",       # ship posts (Canva / Signal) — Quadro Qwen 3.8
-    "grok",      # cloud coding peer (headless Build CLI — no local VRAM)
 )
 
 #: Parked as Messages peers (still may exist as ACTIVE_AGENTS).
-MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
+MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty", "grok"})
 
 #: Do not enqueue new CoS commissions / standing objectives to these ids.
-#: Engine-room loops may still exist; new work goes to Eve / Kernel / Grok.
+#: Engine-room loops may still exist; new work goes to Eve / Kernel.
 COMMISSION_BLOCKED: frozenset[str] = frozenset({"vett", "scotty"})
+
+#: Messages contacts whose turn must not own the HTTP/SSE thread. Work is
+#: enqueued as a commission; the composer unblocks after a short ack.
+DEFERRED_CHAT_AGENTS: frozenset[str] = frozenset({"kernel"})
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.

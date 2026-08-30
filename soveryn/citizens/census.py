@@ -141,6 +141,20 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
         ),
         (),  # no dedicated process unit on the tower yet — invoked on demand
     ),
+    (
+        Citizen(
+            id="grok",
+            display_name="Grok",
+            soul_path="data/memory/souls/grok.md",
+            model_server="grok_build",
+            workspace_path=str(DEFAULT_WORKSPACES / "grok"),
+            notes=(
+                "Cloud coding peer (headless Grok Build CLI). No local VRAM. "
+                "Messages turns enqueue — composer does not own the HTTP thread."
+            ),
+        ),
+        (),  # cloud — nothing on the tower to probe
+    ),
 )
 
 

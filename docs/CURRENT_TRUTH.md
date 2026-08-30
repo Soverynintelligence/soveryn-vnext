@@ -19,7 +19,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
-| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces on Spark — not the house OS. |
+| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces — **not** the house OS. Messie is Qwen3.5-9B on `:5066` (TGTHR helper), not the Quadros 27B public slot. |
 
 ### 0a. Fleet freeze — frontier few (locked 2026-08-27)
 
@@ -30,13 +30,13 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
 | **Kernel** | Local build | Dual Spark GLM-5.3-Flash NVFP4 (RedHat, 32k) |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
-| **Grok** | Phone coding peer | Headless Grok Build CLI (cloud — no local VRAM) |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
 | Parked as Messages peers | Still in `ACTIVE_AGENTS`? | Notes |
 |--------------------------|---------------------------|--------|
 | **Vett** | Retired (folded into Eve 2026-08-28) | Hidden on Staff + Command Center crew. Patrol off. No phone pings. |
-| **Scotty** | Yes (engine room) | Hidden on Staff + Command Center crew. New commissions **blocked**. Coding = Kernel + Grok. |
+| **Scotty** | Yes (engine room) | Hidden on Staff + Command Center crew. New commissions **blocked**. Coding = Kernel / OpenCode. |
+| **Grok** | Yes (CLI only) | Not a phone contact — empty Messages peer. Headless Build CLI still installed; Kernel is the coding door. |
 
 **Do / don’t**
 
@@ -58,7 +58,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
-| Agents | **Messages:** Aetheria, Kernel, Eve, Grok (+ Critic/Scout inboxes). **Engine room (parked contacts):** Vett, Scotty still in `ACTIVE_AGENTS`. |
+| Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). **Parked contacts:** Vett, Scotty, Grok still in `ACTIVE_AGENTS`. |
 | Heartbeat / dream / automations | **Live** |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |

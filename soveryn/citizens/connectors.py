@@ -214,6 +214,7 @@ FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     ),
     "kernel": (
         "files", "documents", "system", "house_post", "code", "git", "email",
+        "web",
     ),
 }
 

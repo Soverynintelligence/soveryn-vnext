@@ -19,22 +19,25 @@ def test_grok_routes_to_external_backend_skipped_in_preflight():
 
 
 def test_messages_contacts_fleet_freeze():
-    """Phone door is frontier few; Vett/Scotty parked as Messages peers."""
+    """Phone door is frontier few; Vett/Scotty/Grok parked as Messages peers."""
     assert runtime.MESSAGES_CONTACTS == (
-        "aetheria", "kernel", "eve", "grok",
+        "aetheria", "kernel", "eve",
     )
-    assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty"})
+    assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty", "grok"})
+    assert runtime.DEFERRED_CHAT_AGENTS == frozenset({"kernel"})
+    assert runtime.DEFERRED_CHAT_AGENTS <= set(runtime.MESSAGES_CONTACTS)
     assert runtime.COMMISSION_BLOCKED == frozenset({"vett", "scotty"})
     assert set(runtime.MESSAGES_CONTACTS).isdisjoint(runtime.MESSAGES_PARKED)
     assert set(runtime.MESSAGES_CONTACTS) <= set(runtime.ACTIVE_AGENTS)
     # Still engine-room agents until tools are fully folded.
     assert "vett" in runtime.ACTIVE_AGENTS and "scotty" in runtime.ACTIVE_AGENTS
+    assert "grok" in runtime.ACTIVE_AGENTS
 
 
 def test_commission_peers_are_eve_and_kernel_only():
     from soveryn.rooms.store import DEFAULT_PEER, PEERS
 
-    assert PEERS == frozenset({"eve", "kernel", "grok"})
+    assert PEERS == frozenset({"eve", "kernel"})
     assert DEFAULT_PEER == "eve"
     assert PEERS.isdisjoint(runtime.COMMISSION_BLOCKED)
 

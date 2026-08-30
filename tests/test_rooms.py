@@ -32,7 +32,9 @@ def room_app(tmp_path: Path, fake_chat, monkeypatch):
     with connect(db) as conn:
         for cid, name in (
             ("aetheria", "Aetheria"),
-            ("vett", "V.E.T.T."),
+            ("eve", "Eve"),
+            ("kernel", "Kernel"),
+            ("grok", "Grok"),
             ("jon", "Jon"),
         ):
             try:
@@ -45,7 +47,7 @@ def room_app(tmp_path: Path, fake_chat, monkeypatch):
                     ),
                 )
             except Exception:
-                # jon may not be a citizen — only aetheria/vett required
+                # jon may not be a citizen — only Messages peers required
                 if cid == "jon":
                     pass
                 else:
@@ -73,13 +75,13 @@ def test_open_room_and_ask_peer(room_app):
     dm = conv.new_session("aetheria", title="dm")
     resp = client.post(
         "/api/rooms/open",
-        json={"peer": "vett", "dm_session_id": dm},
+        json={"peer": "eve", "dm_session_id": dm},
     )
     assert resp.status_code == 200, resp.get_data(as_text=True)
     data = resp.get_json()
     assert data["ok"]
     sid = data["room"]["session_id"]
-    assert data["room"]["peer"] == "vett"
+    assert data["room"]["peer"] == "eve"
 
     ask = client.post(
         f"/api/rooms/{sid}/ask_peer",
@@ -88,29 +90,29 @@ def test_open_room_and_ask_peer(room_app):
     assert ask.status_code == 200, ask.get_data(as_text=True)
     body = ask.get_json()
     assert body["ok"]
-    assert body["event"]["peer"] == "vett"
+    assert body["event"]["peer"] == "eve"
     assert body["routing"]["commission_id"]
 
     # Room history has messaged marker
     hist = conv.load_history(sid)
     sys_turns = [t for t in hist if t.role == "system"]
-    assert any(MESSAGED_MARKER.format(peer="vett") in t.content for t in sys_turns)
+    assert any(MESSAGED_MARKER.format(peer="eve") in t.content for t in sys_turns)
 
     # DM also got a chip line
     dm_hist = conv.load_history(dm)
-    assert any(MESSAGED_MARKER.format(peer="vett") in t.content for t in dm_hist if t.role == "system")
+    assert any(MESSAGED_MARKER.format(peer="eve") in t.content for t in dm_hist if t.role == "system")
 
     collabs = client.get(f"/api/rooms/collabs?dm_session_id={dm}")
     assert collabs.status_code == 200
     c = collabs.get_json()
     assert c["count"] >= 1
-    assert c["collabs"][0]["peer"] == "vett"
+    assert c["collabs"][0]["peer"] == "eve"
 
 
 def test_room_page_ok(room_app):
     app, _, _ = room_app
     client = app.test_client()
-    r = client.get("/room?peer=vett")
+    r = client.get("/room?peer=eve")
     assert r.status_code == 200
     assert b"data-ask-peer" in r.data
 
@@ -145,20 +147,20 @@ def test_record_house_post_collab_chip(room_app):
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="vett",
+        to_id="eve",
         body="Please check the quotes on founding.",
         dm_session_id=dm,
         commission_id="cid-test-1",
     )
     assert ev is not None
-    assert ev["peer"] == "vett"
+    assert ev["peer"] == "eve"
     assert ev.get("commission_id") == "cid-test-1"
     dm_hist = conv.load_history(dm)
-    assert any("Messaged Vett" in t.content for t in dm_hist if t.role == "system")
+    assert any("Messaged Eve" in t.content for t in dm_hist if t.role == "system")
     assert any("working" in t.content for t in dm_hist if t.role == "system")
     room_hist = conv.load_history(ev["room_session_id"])
-    assert any("[To Vett]" in t.content for t in room_hist if t.role == "assistant")
-    assert any("Commissioned Vett" in t.content for t in room_hist if t.role == "system")
+    assert any("[To Eve]" in t.content for t in room_hist if t.role == "assistant")
+    assert any("Commissioned Eve" in t.content for t in room_hist if t.role == "system")
 
 
 def test_project_commission_result_into_room(room_app):
@@ -173,7 +175,7 @@ def test_project_commission_result_into_room(room_app):
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="vett",
+        to_id="eve",
         body="Research liner options.",
         dm_session_id=dm,
         commission_id=cid,
@@ -182,7 +184,7 @@ def test_project_commission_result_into_room(room_app):
     reply = project_commission_result(
         conv,
         data_root=data_root,
-        citizen_id="vett",
+        citizen_id="eve",
         commission_id=cid,
         result_text="Liner A is best for kidney ponds.",
         ok=True,
@@ -191,7 +193,7 @@ def test_project_commission_result_into_room(room_app):
     assert reply["type"] == "peer_reply"
     room_hist = conv.load_history(ev["room_session_id"])
     assert any(
-        "[From Vett]" in t.content and "Liner A" in t.content
+        "[From Eve]" in t.content and "Liner A" in t.content
         for t in room_hist
         if t.role == "system"
     )
@@ -240,7 +242,7 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="vett",
+        to_id="eve",
         body="Research fountain maintenance pricing.",
         dm_session_id=dm,
         commission_id=cid,
@@ -248,7 +250,7 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
     ev = project_commission_result(
         conv,
         data_root=data_root,
-        citizen_id="vett",
+        citizen_id="eve",
         commission_id=cid,
         result_text=(
             "Aquascape annual service ~$450–$900 depending on region; "
@@ -263,7 +265,7 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
     assert any("summarizing" in t.content.lower() for t in assistant)
 
     brief = build_cos_relay_brief(
-        peer="vett",
+        peer="eve",
         source_commission_id=cid,
         task="Research fountain maintenance pricing.",
         result_text="Aquascape ~$450–$900; Pond Guy seasonal from $299.",
@@ -272,11 +274,11 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
         room_session_id=ev["room_session_id"],
     )
     meta = parse_cos_relay_brief(brief)
-    assert meta is not None and meta["peer"] == "vett"
+    assert meta is not None and meta["peer"] == "eve"
     assert deliver_peer_result_to_jon(
         conv,
         dm_session_id=dm,
-        peer="vett",
+        peer="eve",
         result_text=(
             "For the rebuild, budget **$299–$900** for seasonal/annual fountain "
             "service depending on package — Pond Guy starts ~$299, Aquascape "
@@ -292,29 +294,24 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
 
 
 def test_add_peer_grows_shared_group(room_app):
-    """Same DM should grow one multi-peer room (Vett then Eve), not two rooms."""
-    from soveryn.rooms.store import add_peer_to_room, open_room, room_peers
+    """Same DM should grow one multi-peer room (Kernel then Eve), not two rooms."""
+    from soveryn.rooms.store import open_room, room_peers
 
     app, conv, tmp_path = room_app
     data_root = tmp_path / "data"
     data_root.mkdir(parents=True, exist_ok=True)
     dm = conv.new_session("aetheria", title="dm-multi")
-    r1 = open_room(conv, data_root=data_root, peer="vett", dm_session_id=dm)
-    assert room_peers(r1) == ["vett"]
+    r1 = open_room(conv, data_root=data_root, peer="kernel", dm_session_id=dm)
+    assert room_peers(r1) == ["kernel"]
     r2 = open_room(conv, data_root=data_root, peer="eve", dm_session_id=dm)
     assert r2["session_id"] == r1["session_id"]
-    assert set(room_peers(r2)) == {"vett", "eve"}
-    r3 = add_peer_to_room(
-        conv, data_root=data_root, session_id=r1["session_id"], peer="scotty"
-    )
-    assert set(room_peers(r3)) == {"vett", "eve", "scotty"}
+    assert set(room_peers(r2)) == {"kernel", "eve"}
     hist = conv.load_history(r1["session_id"])
     assert any("Added Eve" in t.content for t in hist if t.role == "system")
-    assert any("Added Scotty" in t.content for t in hist if t.role == "system")
 
 
 def test_house_post_send_commissions_peer(room_app, monkeypatch):
-    """Aetheria house_post_send to Vett must enqueue a commission (wake path)."""
+    """Aetheria house_post_send to Eve must enqueue a commission (wake path)."""
     from soveryn.citizens import commissions
     from soveryn.citizens.registry import connect
     from soveryn.platform.house_post_tools import register_house_post_tools
@@ -339,7 +336,7 @@ def test_house_post_send_commissions_peer(room_app, monkeypatch):
             result = reg.invoke(
                 "aetheria",
                 "house_post_send",
-                {"to_id": "vett", "body": "Research pond liner options.", "kind": "request"},
+                {"to_id": "eve", "body": "Research pond liner options.", "kind": "request"},
             )
         finally:
             room_ctx.dm_session_id.reset(tok_dm)
@@ -351,7 +348,7 @@ def test_house_post_send_commissions_peer(room_app, monkeypatch):
     with connect(db) as conn:
         row = commissions.get(conn, result["commission_id"])
     assert row is not None
-    assert row["citizen_id"] == "vett"
+    assert row["citizen_id"] == "eve"
     assert row["state"] in ("queued", "running", "done")
     dm_hist = conv.load_history(dm)
-    assert any("Messaged Vett" in t.content for t in dm_hist if t.role == "system")
+    assert any("Messaged Eve" in t.content for t in dm_hist if t.role == "system")

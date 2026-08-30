@@ -306,12 +306,12 @@
     aetheria: { name: "Aetheria", letter: "A", sub: "Runs the house" },
     eve: { name: "Eve", letter: "E", sub: "Shows up online" },
     kernel: { name: "Kernel", letter: "K", sub: "Builds with you" },
-    grok: { name: "Grok", letter: "G", sub: "Codes with you" },
     t_critic: { name: "Critic", letter: "C", sub: "Overnight review · inbox" },
     t_scout: { name: "Scout", letter: "Sc", sub: "Overnight scan · inbox" },
     // Deep-link labels if an old URL is opened — not listed on the home screen.
     vett: { name: "Vett", letter: "V", sub: "Parked · engine room" },
     scotty: { name: "Scotty", letter: "S", sub: "Parked · engine room" },
+    grok: { name: "Grok", letter: "G", sub: "Parked · not a Messages peer" },
   };
   // Teammates overnight inboxes — read-only (no chat_stream agent).
   const INBOX_ONLY = { t_critic: true, t_scout: true };
@@ -722,9 +722,27 @@
     } else if (Object.values(peerState).includes("replied")) {
       $("[data-agent-sub]").textContent = "peer replied — tap shape to read in group";
       stopPoll();
+    } else if (state.deferred) {
+      const lastA = [...(turns || [])].reverse().find((t) => t.role === "assistant");
+      const ack = "This thread stays yours";
+      if (lastA && lastA.content && String(lastA.content).indexOf(ack) === -1) {
+        state.deferred = false;
+        $("[data-agent-sub]").textContent = contact.sub;
+        stopPoll();
+      } else {
+        $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      }
     } else {
-      $("[data-agent-sub]").textContent = contact.sub;
-      stopPoll();
+      const last = (turns || [])[(turns || []).length - 1];
+      if (last && last.role === "user" && agent === "kernel") {
+        state.deferred = true;
+        $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      } else {
+        $("[data-agent-sub]").textContent = contact.sub;
+        stopPoll();
+      }
     }
     // History rebuild wiped Gate cards — re-pull pending so Allow returns.
     if (agent === "aetheria" || agent === "eve" || Object.keys(state.peerGate || {}).length) {
@@ -733,7 +751,8 @@
   }
 
   function startPoll() {
-    if (state.pollTimer || agent !== "aetheria") return;
+    if (state.pollTimer) return;
+    if (agent !== "aetheria" && !state.deferred) return;
     state.pollTimer = setInterval(async () => {
       if (!state.sessionId || state.sending) return;
       try {
@@ -1047,6 +1066,8 @@
                 thread().scrollTop = thread().scrollHeight;
               }
             } catch (_) {}
+          } else if (payload.type === "done" && payload.deferred) {
+            state.deferred = true;
           } else if (payload.type === "error") {
             them.textContent = "error · " + (payload.message || payload.code);
           }
@@ -1054,8 +1075,11 @@
       }
       if (!text) them.textContent = "(no reply)";
       else setBubbleText(them, text, true);
-      // Reload to pick up in-thread Messaged {peer} avatars
-      await applyHistory(state.sessionId);
+      if (state.deferred) {
+        startPoll();
+      } else {
+        await applyHistory(state.sessionId);
+      }
     } catch (e) {
       them.textContent = "error · " + e.message;
     } finally {

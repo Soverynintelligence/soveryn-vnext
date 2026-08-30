@@ -346,3 +346,22 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
                 f"vett missing steward tools: {steward_tools - names}"
         assert names.isdisjoint(dream_tools), \
             f"{agent} sees dream tools (should not): {names & dream_tools}"
+
+
+def test_kernel_has_house_web_tools(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice,
+) -> None:
+    _configure_startup_env(
+        monkeypatch,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice=recall_lattice,
+    )
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    loop = app.extensions["soveryn"]["agent_loops"]["kernel"]
+    names = {schema["function"]["name"] for schema in loop._tool_schemas()}
+    assert {"web_search", "fetch_url", "run_opencode"} <= names

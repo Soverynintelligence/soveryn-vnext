@@ -19,6 +19,7 @@ def test_founding_grants_give_web_to_aetheria_and_vett_not_scotty():
     assert "web" in FOUNDING_GRANTS["aetheria"]
     assert "web" in FOUNDING_GRANTS["vett"]
     assert "web" in FOUNDING_GRANTS["eve"]
+    assert "web" in FOUNDING_GRANTS["kernel"]
     assert "git" in FOUNDING_GRANTS["eve"]
     assert "x" in FOUNDING_GRANTS["eve"]
     assert "x" not in FOUNDING_GRANTS["aetheria"]

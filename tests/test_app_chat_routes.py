@@ -360,12 +360,12 @@ def test_chat_accepts_attachments_passes_to_loop(app_state):
 
 
 def test_chat_rejects_non_image_data_url(app_state):
-    """Only data:image/{jpeg,png,webp,gif} accepted."""
+    """Non-image, non-PDF data URLs are rejected."""
     client = app_state["client"]
     sid = _new_session(client, agent="aetheria")
     resp = _post(client, "/chat", {
         "agent": "aetheria", "session_id": sid, "message": "hi",
-        "attachments": ["data:application/pdf;base64,AAAA"],
+        "attachments": ["data:text/plain;base64,AAAA"],
     })
     assert resp.status_code == 400
     assert _err(resp)["code"] == "invalid_attachments"

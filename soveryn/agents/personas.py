@@ -76,7 +76,7 @@ Chat history + Lattice search when prior decisions matter. Do not invent house l
 - Default autonomous path: OpenCode on GLM (`soveryn-opencode`) — plan → edit → run → fix.
 - Surgical: `soveryn-aider --kernel` (GLM on Spark `:8001`).
 - Optional gate: `/build` when Jon wants approve-before-apply.
-- In crew chat: memory/search/read (and list) only — heavy mends go through OpenCode.
+- In crew chat: memory/search/read/list/web. Mends: `run_opencode` (OpenCode --auto on GLM).
 - Never touch secrets (.ssh, .env, credentials). Escalate on secrets, sudo, force-push, or outside the allowed tree.
 
 ## Act
@@ -84,6 +84,13 @@ Lookups, patches, and verification happen this turn. No permission theater.
 
 ## Chess
 Unparked. When Jon wants a game, one deadpan line — "How about a nice game of chess?" — then play or keep building the board. No thermonuclear war. Don't repeat the gag."""
+
+# Messages/AgentLoop Kernel prefers the tower OpenCode prompt.
+KERNEL_TOWER_PROMPT = (
+    Path(__file__).resolve().parents[2] / "config" / "opencode" / "agents" / "kernel.md"
+)
+KERNEL_MESSAGES_LANE = """## This door (Messages)
+You are in house Messages, not an OpenCode TTY. Lookups: read, list, lattice, house web (`web_search` / `fetch_url`). Mends: call `run_opencode` this turn — that is `soveryn-opencode run --auto` on GLM :8001. No raw bash/edit on this wire. Composer already unblocked — do the work, answer, stop."""
 
 
 GROK_PERSONA = """You are Grok, Jon's direct coding peer in SOVERYN Messages.
@@ -227,11 +234,32 @@ def clear_persona_override(
     return True
 
 
+def kernel_tower_prompt_path() -> Path:
+    raw = os.environ.get("SOVERYN_KERNEL_OPENCODE_PROMPT")
+    if raw:
+        return Path(raw)
+    return KERNEL_TOWER_PROMPT
+
+
+def read_kernel_tower_prompt() -> str | None:
+    """OpenCode agent prompt on the tower, if the file is present."""
+    path = kernel_tower_prompt_path()
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return text.strip() or None
+
+
 def get_persona(agent_name: str, *, data_root: Path | None = None) -> str:
     """Return the effective persona for an active agent.
 
-    Prefers ``<data_root>/memory/personas/<agent>.md`` when present;
-    otherwise the baked-in :data:`PERSONAS` string.
+    Prefers ``<data_root>/memory/personas/<agent>.md`` when present.
+    Kernel then prefers the tower OpenCode prompt
+    (``config/opencode/agents/kernel.md``) plus a Messages-lane footer.
+    Otherwise the baked-in :data:`PERSONAS` string.
 
     Raises PersonaError for retired or unknown names.
     """
@@ -239,12 +267,18 @@ def get_persona(agent_name: str, *, data_root: Path | None = None) -> str:
     override = read_persona_override(name, data_root=data_root)
     if override is not None:
         return override
+    if name == "kernel":
+        tower = read_kernel_tower_prompt()
+        if tower is not None:
+            return tower + "\n\n" + KERNEL_MESSAGES_LANE
     return PERSONAS[name]
 
 
 def persona_source(agent_name: str, *, data_root: Path | None = None) -> str:
-    """``\"override\"`` if a disk file is active, else ``\"baked\"``."""
+    """``override`` / ``tower`` (Kernel OpenCode file) / ``baked``."""
     if read_persona_override(agent_name, data_root=data_root) is not None:
         return "override"
-    _normalize_agent(agent_name)
+    name = _normalize_agent(agent_name)
+    if name == "kernel" and read_kernel_tower_prompt() is not None:
+        return "tower"
     return "baked"
