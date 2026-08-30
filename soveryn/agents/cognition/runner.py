@@ -43,7 +43,7 @@ from soveryn.agents.dream.cognition import chat_completion
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COGNITION_URL = "http://127.0.0.1:8089"
+DEFAULT_COGNITION_URL = "http://127.0.0.1:8091"
 DEFAULT_TICK_SECONDS = 1800.0      # 30 min — no faster than the heartbeat
 DEFAULT_IDLE_SECONDS = 900.0       # 15 min — a real lull, not a typing pause
 DEFAULT_POLL_SECONDS = 300.0       # check the gate every 5 min, run at most per tick
