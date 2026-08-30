@@ -468,7 +468,7 @@ def create_app(
             # Peers' upward channel — same tool builder, different owner per
             # agent. Aetheria is the recipient of NEEDS_DIRECTION events via
             # the webhook router, not a sender, so she does NOT get this tool.
-            for peer in ("vett", "scotty"):
+            for peer in ("kernel", "eve"):
                 tool_registry.register(
                     build_request_direction_tool(
                         store=coord_store,

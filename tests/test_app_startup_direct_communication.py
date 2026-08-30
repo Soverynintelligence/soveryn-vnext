@@ -1,7 +1,7 @@
 """Tests for Direct Agent Communication tool registration in app startup.
 
 DAC-T7 wires the two new tools (direct_message_agent on Aetheria,
-request_direction on Vett + Scotty) into the coord-store-gated block in
+request_direction on Kernel + Eve) into the coord-store-gated block in
 soveryn.app.startup. These tests assert ownership lands as designed and
 that the wiring is gated by the same coord-store availability as the
 other coord tools.
@@ -25,6 +25,9 @@ def fake_souls_dir(tmp_path) -> Path:
     (souls_dir / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
     (souls_dir / "vett.md").write_text("# Vett\n", encoding="utf-8")
     (souls_dir / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    (souls_dir / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    (souls_dir / "eve.md").write_text("# Eve\n", encoding="utf-8")
+    (souls_dir / "grok.md").write_text("# Grok\n", encoding="utf-8")
     return souls_dir
 
 
@@ -82,14 +85,17 @@ def test_direct_message_agent_registered_for_aetheria_only(app_state):
     assert "direct_message_agent" not in scotty_tool_names
 
 
-def test_request_direction_registered_for_vett_and_scotty_only(app_state):
-    """request_direction lives on the peers — they're the ones who hit walls
-    that need a judgment call. Aetheria receives those pings via the
-    webhook router; she's not a sender of direction requests."""
+def test_request_direction_registered_for_kernel_and_eve_only(app_state):
+    """request_direction lives on the live peers — they hit walls that need
+    a judgment call. Vett/Scotty are parked; Aetheria receives the pings."""
     registry = app_state["tool_registry"]
     aetheria_tool_names = {t.name for t in registry.iter_tools_for_agent("aetheria")}
+    kernel_tool_names = {t.name for t in registry.iter_tools_for_agent("kernel")}
+    eve_tool_names = {t.name for t in registry.iter_tools_for_agent("eve")}
     vett_tool_names = {t.name for t in registry.iter_tools_for_agent("vett")}
     scotty_tool_names = {t.name for t in registry.iter_tools_for_agent("scotty")}
     assert "request_direction" not in aetheria_tool_names
-    assert "request_direction" in vett_tool_names
-    assert "request_direction" in scotty_tool_names
+    assert "request_direction" in kernel_tool_names
+    assert "request_direction" in eve_tool_names
+    assert "request_direction" not in vett_tool_names
+    assert "request_direction" not in scotty_tool_names

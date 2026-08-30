@@ -155,15 +155,22 @@ def test_aetheria_has_signature_tools(app):
 
 def test_vett_has_signature_tools(app):
     names = _tool_names(_loops(app)["vett"], "vett")
-    for tool in ("read_file", "list_directory", "request_direction",
-                 "create_document"):
+    for tool in ("read_file", "list_directory", "create_document"):
         assert tool in names, f"vett missing {tool!r}: {sorted(names)}"
+    assert "request_direction" not in names
+
+
+def test_kernel_and_eve_request_direction(app):
+    kernel = _tool_names(_loops(app)["kernel"], "kernel")
+    eve = _tool_names(_loops(app)["eve"], "eve")
+    assert "request_direction" in kernel
+    assert "request_direction" in eve
 
 
 def test_scotty_tool_scope(app):
     names = _tool_names(_loops(app)["scotty"], "scotty")
     assert "read_file" in names
-    assert "request_direction" in names
+    assert "request_direction" not in names
     # Documents are an Aetheria+Vett capability — Scotty must NOT have it.
     assert "create_document" not in names, "scotty should not have document tools"
 

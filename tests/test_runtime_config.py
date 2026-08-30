@@ -34,7 +34,7 @@ def test_messages_contacts_fleet_freeze():
 def test_commission_peers_are_eve_and_kernel_only():
     from soveryn.rooms.store import DEFAULT_PEER, PEERS
 
-    assert PEERS == frozenset({"eve", "kernel"})
+    assert PEERS == frozenset({"eve", "kernel", "grok"})
     assert DEFAULT_PEER == "eve"
     assert PEERS.isdisjoint(runtime.COMMISSION_BLOCKED)
 

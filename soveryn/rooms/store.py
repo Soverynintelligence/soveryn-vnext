@@ -14,7 +14,7 @@ from soveryn.memory.conversation_store import ConversationStore
 # Pickable peers (not CoS). Default vett.
 # Fleet freeze 2026-08-27: CoS commissions go to Eve/Kernel only.
 # Vett/Scotty parked — not commission peers (engine room only).
-PEERS: frozenset[str] = frozenset({"eve", "kernel"})
+PEERS: frozenset[str] = frozenset({"eve", "kernel", "grok"})
 DEFAULT_PEER = "eve"
 COS_ID = "aetheria"
 
