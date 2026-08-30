@@ -38,7 +38,7 @@ fi
 
 export OPENCODE_CONFIG="$CFG_FILE"
 export OPENCODE_CONFIG_DIR="$CFG_DIR"
-export OPENAI_API_KEY="${OPENAI_API_KEY:-sk-local-soveryn}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
 
 # Parse --qwen / --flash; strip before forwarding to opencode
 USE_QWEN=0

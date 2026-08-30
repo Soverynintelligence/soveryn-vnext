@@ -9,7 +9,7 @@
       "name": "Kernel coding · GLM-5.3-Flash dual Spark (:8001)",
       "options": {
         "baseURL": "http://10.10.10.2:8001/v1",
-        "apiKey": "sk-local-soveryn",
+        "apiKey": "local",
         "chat_template_kwargs": {
           "enable_thinking": false,
           "thinking": false
@@ -30,7 +30,7 @@
       "name": "Kernel alt · Qwen 3.8 (:8090)",
       "options": {
         "baseURL": "http://127.0.0.1:8090/v1",
-        "apiKey": "sk-local-soveryn"
+        "apiKey": "local"
       },
       "models": {
         "aetheria": {

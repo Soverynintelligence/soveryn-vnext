@@ -13,7 +13,7 @@ from soveryn.citizens.connectors import requires_approval
 def _cfg(tmp_path):
     return GbpConfig(
         client_id="id",
-        client_secret="secret",
+        client_secret="test-gbp-client",  # ggignore
         redirect_uri="http://127.0.0.1:8766/oauth/gbp/callback",
         token_path=tmp_path / "tokens.json",
         location_path=tmp_path / "location.json",
