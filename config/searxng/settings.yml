@@ -49,11 +49,11 @@ engines:
   - name: bing
     disabled: false
   - name: wikipedia
-    disabled: false
+    disabled: true
   - name: duckduckgo
     disabled: true
   - name: brave
-    disabled: true
+    disabled: false
   - name: startpage
     disabled: true
   - name: qwant

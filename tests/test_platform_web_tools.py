@@ -57,6 +57,28 @@ def test_parse_results_truncates_to_max():
     assert len(out) == 3
 
 
+def test_parse_results_drops_dictionary_hosts():
+    payload = {
+        "results": [
+            {
+                "url": "https://www.merriam-webster.com/dictionary/sovereign",
+                "title": "SOVEREIGN Definition",
+                "content": "noun",
+                "engine": "bing",
+            },
+            {
+                "url": "https://www.opentext.com/what-is/sovereign-ai",
+                "title": "What is sovereign AI?",
+                "content": "enterprise",
+                "engine": "brave",
+            },
+        ],
+    }
+    out = _parse_results(payload, max_results=5)
+    assert len(out) == 1
+    assert "opentext.com" in out[0].url
+
+
 def test_parse_results_skips_malformed_entries():
     payload = {
         "results": [

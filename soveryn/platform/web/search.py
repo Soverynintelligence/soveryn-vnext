@@ -29,9 +29,20 @@ class SearchResult:
     engine: str
 
 
-# Prefer engines that still answer from house IPs. DDG/Brave/Startpage often
-# CAPTCHA or suspend; Bing has been the reliable default (2026-08-19).
-DEFAULT_ENGINES = "bing,wikipedia"
+# 2026-08-30: Brave is the engine that still returns market pages from this IP.
+# Bing+Wikipedia were dictionary/first-token junk (Scout overnight 08-30).
+# DDG/Google/Startpage CAPTCHA or empty.
+DEFAULT_ENGINES = "brave"
+
+# Agent search is not a dictionary. Drop these even if an engine ranks them first.
+_DICTIONARY_HOST_MARKERS = (
+    "merriam-webster.com",
+    "dictionary.com",
+    "cambridge.org/dictionary",
+    "thefreedictionary.com",
+    "wiktionary.org",
+    "vocabulary.com",
+)
 
 
 @dataclass(frozen=True)
@@ -155,6 +166,8 @@ def _parse_results(payload: Any, *, max_results: int) -> tuple[SearchResult, ...
         engine = item.get("engine") or ""
         if not isinstance(engine, str):
             engine = str(engine)
+        if _is_dictionary_url(url):
+            continue
         out.append(SearchResult(
             title=title.strip(),
             url=url.strip(),
@@ -162,3 +175,8 @@ def _parse_results(payload: Any, *, max_results: int) -> tuple[SearchResult, ...
             engine=engine.strip(),
         ))
     return tuple(out)
+
+
+def _is_dictionary_url(url: str) -> bool:
+    host = url.lower()
+    return any(marker in host for marker in _DICTIONARY_HOST_MARKERS)

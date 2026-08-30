@@ -2,7 +2,7 @@
 
 Canonical **non-secret** settings for `soveryn-searxng.service` (`127.0.0.1:8095`).
 
-- **Bing + Wikipedia** enabled by default (2026-08-19) after DDG/Brave CAPTCHA storms
+- **Brave** default (2026-08-30). Bing kept enabled as fallback; Wikipedia off — it was dictionary-first.
 - Mounted into the container at `/etc/searxng` from this directory
 - Client default engines also set in `soveryn/platform/web/search.py` (`DEFAULT_ENGINES`)
 
