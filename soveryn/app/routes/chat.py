@@ -207,12 +207,10 @@ def maybe_resolve_x_approval(
     Called from BOTH /chat and /chat_stream, before the AgentLoop turn — a
     hook in only one route would be bypassed by whichever surface uses the
     other (the desktop UI streams). Staged posts are keyed on the AGENT
-    ("aetheria"), not session_id, so this fires regardless of which session
-    Jon replies in — a post proposed during a heartbeat wake (session
-    `[heartbeat] aetheria`) can be approved from his primary thread.
+    (eve), not session_id. Approve from Eve's Messages thread with "post it".
 
     Returns None (caller proceeds into the normal turn unchanged) when:
-      - `agent != "aetheria"` (the only agent with an X presence),
+      - `agent` is not Eve (Aetheria is off X),
       - the X deps aren't wired on `state` (e.g. a test/fixture app that
         never populated app.extensions["soveryn"] — fail open, not KeyError),
       - there's nothing staged, or `message` doesn't classify as a clear
@@ -224,7 +222,7 @@ def maybe_resolve_x_approval(
     skip the agent's normal turn (a bare affirm's whole meaning was "post
     it"; running her normal turn on top would be a non sequitur).
     """
-    if agent != "aetheria":
+    if agent != "eve":
         return None
 
     x_staged = state.get("x_staged")
@@ -235,7 +233,7 @@ def maybe_resolve_x_approval(
         return None
 
     return resolve_pending(
-        agent="aetheria",
+        agent=agent,
         message=message,
         staged=x_staged,
         publisher_fn=x_publisher_fn,

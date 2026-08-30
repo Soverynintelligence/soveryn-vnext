@@ -87,6 +87,28 @@ def test_interactive_chat_busy(citizens_db: Path, tmp_path: Path) -> None:
     assert chat["label"] == "Aetheria · chat"
 
 
+def test_parked_citizens_do_not_appear(citizens_db: Path) -> None:
+    with connect(citizens_db) as conn:
+        register(
+            conn,
+            Citizen(
+                id="scotty",
+                display_name="Scotty",
+                workspace_path=str(citizens_db.parent / "desks" / "scotty"),
+            ),
+        )
+        commissions.begin_owned(
+            conn,
+            "scotty",
+            "desk drain",
+            worker="scotty-worker",
+            at="2026-08-20T12:00:00Z",
+        )
+    out = build_active_now(citizens_db, None)
+    assert all(c["citizen"] != "scotty" for c in out["active"])
+    assert all(c["citizen"] != "vett" for c in out["active"])
+
+
 def test_missing_db_is_empty_not_raise(tmp_path: Path) -> None:
     out = build_active_now(tmp_path / "nope.db", None)
     assert out["count"] == 0

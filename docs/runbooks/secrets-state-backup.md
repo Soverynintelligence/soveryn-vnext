@@ -10,6 +10,7 @@ Not in git. Must survive tower death.
 | SOVERYN env (incl. Canva client id/secret) | `~/soveryn_vnext/.env` | **Yes** → `backups/DATE/secrets/soveryn_vnext.env` (added 2026-08-24) |
 | Canva OAuth tokens | `data/canva/tokens.json` | Yes (`data/canva/` + secrets copy) |
 | Eve live persona | `data/memory/personas/eve.md` | Yes |
+| Eve CWG Instagram desk (cookies) | `data/eve_ig_profile/` | **Yes** if under `data/` — treat as secret, not git |
 | Teammates env | `~/teammates/.env` | **Yes** → `secrets/teammates.env` |
 | Teammates roster | `~/teammates/roster.toml` | Yes (also in git; bundled for convenience) |
 | SQLite DBs / souls | under `data/` | Yes (longstanding) |

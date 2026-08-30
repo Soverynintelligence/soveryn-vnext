@@ -18,6 +18,10 @@ from soveryn.platform.tools.registry import ToolRegistry
 def test_founding_grants_give_web_to_aetheria_and_vett_not_scotty():
     assert "web" in FOUNDING_GRANTS["aetheria"]
     assert "web" in FOUNDING_GRANTS["vett"]
+    assert "web" in FOUNDING_GRANTS["eve"]
+    assert "git" in FOUNDING_GRANTS["eve"]
+    assert "x" in FOUNDING_GRANTS["eve"]
+    assert "x" not in FOUNDING_GRANTS["aetheria"]
     assert "web" not in FOUNDING_GRANTS["scotty"]
     assert "code" in FOUNDING_GRANTS["scotty"]
 
@@ -86,6 +90,7 @@ def test_requires_approval_web_ungated_writes_gated():
     # House SearXNG reads — never Gate (Jon: research must not hang).
     assert requires_approval("web_search") is False
     assert requires_approval("fetch_url") is False
+    assert requires_approval("read_x") is False  # house X feed, no post
     assert requires_approval("web_search", source="direct") is False
     assert requires_approval("web_search", source="commission") is False
     # Write egress still needs a yes.
@@ -93,6 +98,8 @@ def test_requires_approval_web_ungated_writes_gated():
     assert requires_approval("email_send") is True
     assert requires_approval("messenger_send") is True
     assert requires_approval("compose_post") is True  # Messages Allow → Signal
+    assert requires_approval("eve_ig_post") is True  # Messages Allow → CWG Instagram desk
+    assert requires_approval("eve_gbp_post") is True  # Messages Allow → CWG Google Business
     assert requires_approval("signal_send") is False  # Direct Line, ungated
     assert requires_approval("read_file") is False  # house-local
 
@@ -110,3 +117,9 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     assert requires_approval("x_post", source="automation") is True
     assert requires_approval("email_send", source="automation") is True
     assert requires_approval("messenger_send", source="automation") is True
+    assert requires_approval("eve_ig_post", source="automation") is True
+    assert requires_approval("eve_ig_post", source="direct") is True
+    assert requires_approval("eve_gbp_post", source="automation") is True
+    assert requires_approval("eve_gbp_status", source="direct") is False
+    assert requires_approval("read_x", source="direct") is False
+    assert requires_approval("read_x", source="automation") is False

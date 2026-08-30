@@ -41,7 +41,7 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
      "Desk worker / residence", "continuous"),
     ("eve:chat", "eve", "chat", "Chat", None),
     ("eve:marketing", "eve", "marketing",
-     "Marketing — draft-and-drop IG/FB posts for SOVERYN, ActTruth, CWG",
+     "Research + ship — dig, CWG/SOVERYN/ActTruth (IG Gate / Signal / house X)",
      "cron:0 11 * * 1,4"),
     ("kernel:chat", "kernel", "chat", "Chat", None),
     ("kernel:commission_worker", "kernel", "commission_worker",

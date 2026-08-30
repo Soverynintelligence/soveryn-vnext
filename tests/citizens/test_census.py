@@ -43,7 +43,8 @@ def test_all_units_down_reports_offline(db, tmp_path):
                        unit_check=lambda u: False, now="2026-08-13T10:00:00Z")
     assert _by_id(rows)["aetheria"]["status"] == "offline"
     assert _by_id(rows)["scotty"]["status"] == "offline"
-    assert _by_id(rows)["vett"]["status"] == "offline"
+    # Vett is retired (folded into Eve) — not on the live board.
+    assert "vett" not in _by_id(rows)
 
 
 def test_any_unit_up_reports_resident(db, tmp_path):
@@ -87,6 +88,6 @@ def test_running_the_census_twice_keeps_the_last_alive_time(db, tmp_path):
                 now="2026-08-13T10:00:00Z")
     rows = take_census(db, workspaces=tmp_path, unit_check=lambda u: False,
                        now="2026-08-13T11:00:00Z")
-    vett = _by_id(rows)["vett"]
-    assert vett["status"] == "offline"
-    assert vett["last_seen_at"] == "2026-08-13T10:00:00Z"
+    assert "vett" not in _by_id(rows)
+    aetheria = _by_id(rows)["aetheria"]
+    assert aetheria["last_seen_at"] == "2026-08-13T10:00:00Z"

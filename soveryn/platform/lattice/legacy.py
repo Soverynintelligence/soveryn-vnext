@@ -722,6 +722,51 @@ class LatticeStore:
                 ).fetchall()
         return tuple(_row_to_node(r) for r in rows)
 
+    def find_canonical_facts(
+        self,
+        agent: str,
+        query: str,
+        *,
+        limit: int = 3,
+    ) -> tuple[Node, ...]:
+        """Locked fact rail: tagged canonical facts matching query tokens.
+
+        Cosine cannot evict these. Empty query tokens → no rows (do not dump
+        the whole fact set into every turn).
+        """
+        from soveryn.platform.lattice.fact_rail import (
+            CANONICAL_FACT_TAG,
+            fact_query_tokens,
+        )
+
+        tokens = fact_query_tokens(query)
+        if not tokens or limit < 1:
+            return ()
+        tag_like = f"%{CANONICAL_FACT_TAG}%"
+        scored: dict[str, tuple[Node, int]] = {}
+        with self._conn() as conn:
+            for token in tokens:
+                like = f"%{token.lower()}%"
+                rows = conn.execute(
+                    "SELECT * FROM nodes "
+                    "WHERE NOT (agent != ? AND layer = ?) "
+                    "  AND layer != ? "
+                    "  AND IFNULL(tags, '[]') LIKE ? "
+                    "  AND LOWER(content) LIKE ? "
+                    "ORDER BY salience DESC, updated_at DESC LIMIT ?",
+                    (agent, LAYER_PRIVATE, LAYER_DREAM, tag_like, like, max(limit, 8)),
+                ).fetchall()
+                for row in rows:
+                    node = _row_to_node(row)
+                    prev = scored.get(node.id)
+                    hits = 1 if prev is None else prev[1] + 1
+                    scored[node.id] = (node, hits)
+        ordered = sorted(
+            scored.values(),
+            key=lambda item: (-item[1], -item[0].salience, item[0].id),
+        )
+        return tuple(node for node, _hits in ordered[:limit])
+
     def find_nodes_by_embedding(
         self,
         agent: str,

@@ -58,6 +58,11 @@ def _resolve_media_path(raw: str) -> Path:
 
 def _suggest_media(limit: int = 8) -> list[str]:
     found: list[str] = []
+    from soveryn.platform.social.instagram_desk import list_inbox_images
+    for p in list_inbox_images():
+        found.append(p)
+        if len(found) >= limit:
+            return found
     if not MEDIA_ROOT.is_dir():
         return found
     for p in sorted(MEDIA_ROOT.rglob("*")):
@@ -84,11 +89,18 @@ def _validate_media_path(raw: str) -> tuple[str | None, Path | None]:
     if not isinstance(raw, str) or not raw.strip():
         return "image_path must be a non-empty string", None
     p = _resolve_media_path(raw)
-    try:
-        p.relative_to(MEDIA_ROOT.resolve())
-    except ValueError:
+    from soveryn.platform.social.instagram_desk import DEFAULT_INBOX, _in_roots
+    roots = [MEDIA_ROOT.resolve()]
+    if DEFAULT_INBOX.exists():
+        roots.append(DEFAULT_INBOX.resolve())
+        # bare filename in the desktop inbox
+        if not p.exists():
+            via_inbox = (DEFAULT_INBOX / Path(raw.strip()).name).resolve()
+            if via_inbox.is_file():
+                p = via_inbox
+    if not _in_roots(p, roots):
         return (
-            f"image_path must be under {MEDIA_ROOT} — got {raw!r}. "
+            f"image_path must be under {MEDIA_ROOT} or Desktop/CWG-Instagram — got {raw!r}. "
             f"Try one of: {_suggest_media(4)}",
             None,
         )

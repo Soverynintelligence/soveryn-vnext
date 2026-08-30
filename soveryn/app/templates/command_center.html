@@ -1238,7 +1238,7 @@
     to   { transform:translateX(420%); }
   }
 
-  /* Sparks — A is live hardware, B is an empty bay (an invitation, not an apology). */
+  /* Sparks — A is vLLM API, B is the TP=2 worker. */
   .rig-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .spark-hw {
     font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
@@ -3217,9 +3217,9 @@
       <div class="brief-actions">
         <a class="brief-act primary" href="/messages">Messages</a>
         <a class="brief-act" href="/messages/aetheria">Message Aetheria</a>
-        <a class="brief-act" href="/room?peer=vett">Room · Aetheria + Vett</a>
         <a class="brief-act" href="/messages/eve">Message Eve</a>
         <a class="brief-act" href="/messages/kernel">Message Kernel</a>
+        <a class="brief-act" href="/messages/grok">Message Grok</a>
         <a class="brief-act" href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
         <a class="brief-act" href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
         <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
@@ -3229,10 +3229,9 @@
         <form data-dispatch-form>
           <select data-dispatch-target aria-label="Dispatch to">
             <option value="msg:aetheria">Aetheria · Messages</option>
-            <option value="msg:vett">Vett · Messages</option>
-            <option value="msg:scotty">Scotty · Messages</option>
             <option value="msg:eve">Eve · Messages</option>
             <option value="msg:kernel">Kernel · Messages</option>
+            <option value="msg:grok">Grok · Messages</option>
             <option value="board:Signal">Board · Signal</option>
             <option value="board:Blueprint">Board · Blueprint</option>
             <option value="board:Friction">Board · Friction</option>
@@ -3258,40 +3257,7 @@
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/messages/aetheria">Talk</a>
-          <a class="agent-act" href="/room?peer=vett">Room</a>
           <a class="agent-act" href="/voice">Voice</a>
-        </div>
-      </div>
-      <div class="agent-card" data-agent="vett" aria-label="Vett — checks the work">
-        <button type="button" class="acttruth-badge" data-acttruth-badge="vett" title="ActTruth — click for crew ledger" aria-label="ActTruth for Vett">
-          <span class="pip" aria-hidden="true"></span>
-          <span class="lbl">AT</span>
-          <span data-at-budget>—</span>
-        </button>
-        <div class="body">
-          <div class="name">Vett</div>
-          <div class="role">Checks the work</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-        <div class="agent-actions">
-          <a class="agent-act primary" href="/messages/vett">Talk</a>
-          <a class="agent-act cc-advanced" href="/citizens">Duties</a>
-        </div>
-      </div>
-      <div class="agent-card" data-agent="scotty" aria-label="Scotty — gets things done">
-        <button type="button" class="acttruth-badge" data-acttruth-badge="scotty" title="ActTruth — click for crew ledger" aria-label="ActTruth for Scotty">
-          <span class="pip" aria-hidden="true"></span>
-          <span class="lbl">AT</span>
-          <span data-at-budget>—</span>
-        </button>
-        <div class="body">
-          <div class="name">Scotty</div>
-          <div class="role">Gets things done</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-        <div class="agent-actions">
-          <a class="agent-act primary" href="/messages/scotty">Talk</a>
-          <a class="agent-act" href="#approvals-anchor" data-open-chapter="chapter-gates">Queue</a>
         </div>
       </div>
       <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — builds and fixes code">
@@ -3307,7 +3273,7 @@
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/messages/kernel">Talk</a>
-          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (Flash coding default)">OpenCode</button>
+          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (GLM on Sparks)">OpenCode</button>
           <button type="button" class="agent-act" data-kernel-warm>Warm</button>
           <details class="agent-more">
             <summary class="agent-act" title="Build / Aider">More</summary>
@@ -3326,12 +3292,22 @@
         </button>
         <div class="body">
           <div class="name">Eve</div>
-          <div class="role">Marketing &amp; posts</div>
+          <div class="role">Research + ship</div>
           <div class="state" data-agent-state>—</div>
         </div>
         <div class="agent-actions">
           <a class="agent-act primary" href="/messages/eve">Talk</a>
           <a class="agent-act" href="/charters">Charters</a>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="grok" aria-label="Grok — coding peer">
+        <div class="body">
+          <div class="name">Grok</div>
+          <div class="role">Coding peer</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/messages/grok">Talk</a>
         </div>
       </div>
     </section>
@@ -4329,8 +4305,8 @@
           <select data-library-agent-filter aria-label="Filter by agent">
             <option value="">All agents</option>
             <option value="aetheria">Aetheria</option>
-            <option value="vett">Vett</option>
-            <option value="scotty">Scotty</option>
+            <option value="eve">Eve</option>
+            <option value="kernel">Kernel</option>
           </select>
           <input type="text" data-library-tag-filter placeholder="tag contains…"
                  aria-label="Filter by tag substring" size="14">
@@ -4365,7 +4341,7 @@
 <script>
 
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
+  const ACTIVE_AGENTS = ["aetheria","kernel","eve","grok"];
 
   // ─── Fetch helpers ─────────────────────────────────────────────────────────
   const fetchJson = async (url) => {
@@ -4940,8 +4916,8 @@
       </div>`;
   }
 
-  function renderSparkBay(d) {
-    const el = document.querySelector("[data-rig-spark-a]");
+  function renderSparkBay(d, selector, workerLabel) {
+    const el = document.querySelector(selector || "[data-rig-spark-a]");
     if (!el) return;
     if (!d || !d.available) {
       el.innerHTML = `<div class="rig-dead">unreachable</div>
@@ -4972,8 +4948,11 @@
     const kv = v.kv_cache_pct == null ? null : (v.kv_cache_pct * 100).toFixed(0);
     const vllmLine = v.up
       ? `<span class="res-chip"><span class="caret">›</span>${htmlEscape(v.model || "vllm")}<span class="mem">${
-          running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}</span></span>`
-      : `<span class="res-unknown">vllm down</span>`;
+          workerLabel
+            ? htmlEscape(workerLabel)
+            : `${running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}`
+        }</span></span>`
+      : `<span class="res-unknown">${workerLabel ? "worker down" : "vllm down"}</span>`;
 
     el.innerHTML = `
       <div class="spark-hw">${htmlEscape(hw)}</div>
@@ -5039,12 +5018,14 @@
         `${gpuCount || "—"} GPU${gpuCount === 1 ? "" : "s"}`,
         `${totalMib ? Math.round(gbFromMib(totalMib)) : "—"} GB VRAM`,
       ];
-      if (spark && spark.available) bits.push("1 Spark");
+      const sparkCount = (spark && spark.available ? 1 : 0) + (spark && spark.b && spark.b.available ? 1 : 0);
+      if (sparkCount) bits.push(`${sparkCount} Spark${sparkCount === 1 ? "" : "s"}`);
       totalsEl.innerHTML = `${htmlEscape(bits.join(" · "))} · <span class="fabric-state" data-state="${
         fabricState}">${htmlEscape(fabricShort)}</span>`;
     }
 
-    renderSparkBay(spark);
+    renderSparkBay(spark, "[data-rig-spark-a]");
+    renderSparkBay(spark && spark.b, "[data-rig-spark-b]", "tp worker");
   }
 
   // ─── Lattice write telemetry (14d) ───────────────────────────────────────
@@ -6105,7 +6086,7 @@
     });
   }
 
-  // ─── Kernel — autonomous build brain (Flash :8091 · OpenCode default) ───
+  // ─── Kernel — GLM-5.3-Flash TP=2 on Sparks :8001 ───
   let _kernelAiderCmd = "soveryn-aider --kernel";
   let _kernelOpenCodeCmd = "soveryn-opencode";
   let _kernelWarmPoll = null;

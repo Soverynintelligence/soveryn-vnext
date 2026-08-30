@@ -2,17 +2,12 @@
 
 Clean rebuild of SOVERYN, the local multi-agent system. Built beside the running production instance, not in place of it.
 
-**Source of authority:** [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md) (rotated 2026-08-24).  
+**Source of authority:** [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md) (rotated 2026-08-28).  
 Archive only: `docs/CURRENT_TRUTH_2026-05-23.md`. Session notes in `docs/notes/` are not authority.
 
 ## Status
 
-See **CURRENT_TRUTH** for live vs incomplete. Short version:
-
-- **Live agents:** Aetheria, Vett, Scotty, Kernel, Eve
-- **Live products:** Messages/citizens, Eve+Canva marketing cadence, Seneca/PondWright/Atticus on Spark, Teammates Phase 0 (`~/teammates`, console `:5075`)
-- **Next (kill list):** secrets backup runbook → Seneca lead capture → arm or mark email → then Teammates upgrades
-- **Hardware:** second ASUS GX10 ordered (Tuesday) for dedicated Kernel brain; FreeToken parked until then
+See **CURRENT_TRUTH** for live vs incomplete, kill list, and hardware. Do not copy those here.
 
 ## Layout
 

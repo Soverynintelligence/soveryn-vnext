@@ -79,10 +79,16 @@ CATALOG: dict[str, ConnectorDef] = {
     "x": ConnectorDef(
         id="x",
         title="X / Twitter",
-        description="Read/post presence on X when the house X stack is armed.",
-        tools=("x_post", "x_feed"),
+        description=(
+            "House @Soveryn_AI presence for Eve: read_x feed, post_to_x "
+            "(trust-staged, Jon says 'post it'). X_* creds. Aetheria is off X."
+        ),
+        tools=("x_post", "x_feed", "read_x"),
         class_="optional_egress",
-        sovereignty_note="Opt-in presence; not a control plane.",
+        sovereignty_note=(
+            "Same publisher as Aetheria. Trust-gated; Stage 0 stages until "
+            "'post it'. Not a control plane."
+        ),
     ),
     "files": ConnectorDef(
         id="files",
@@ -176,11 +182,13 @@ CATALOG: dict[str, ConnectorDef] = {
             "Compose Instagram/Facebook post drafts. In Messages, Gate Allow "
             "sends the pack to Signal for manual publishing."
         ),
-        tools=("compose_post",),
+        tools=("compose_post", "eve_ig_post", "eve_gbp_post", "eve_gbp_status"),
         class_="channel",
         sovereignty_note=(
             "Interactive compose_post is Gate-approved (Allow → Signal). "
-            "Scheduled Eve cadence may auto-drop. No Meta API."
+            "Scheduled Eve cadence may auto-drop drafts. "
+            "eve_ig_post and eve_gbp_post are Gate-only (never cadence) — "
+            "CWG Instagram desk / Google Business. No password, no ads spend."
         ),
     ),
 }
@@ -190,7 +198,7 @@ CATALOG: dict[str, ConnectorDef] = {
 # Status "armed" still depends on runtime config (SMTP, signal bridge, …).
 FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     "aetheria": (
-        "web", "email", "signal", "messenger", "x", "files", "documents",
+        "web", "email", "signal", "messenger", "files", "documents",
         "system", "delegation", "house_post", "pondwright",
     ),
     "vett": (
@@ -202,6 +210,7 @@ FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     ),
     "eve": (
         "social", "signal", "files", "documents", "house_post", "email",
+        "web", "git", "pondwright", "system", "x",
     ),
     "kernel": (
         "files", "documents", "system", "house_post", "code", "git", "email",
@@ -239,6 +248,11 @@ WEB_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "fetch_url",
 })
 
+# House X feed read — research, no egress. post_to_x stays gated.
+X_READ_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "read_x",
+})
+
 # House-local PondWright pricing — always ungated (no egress).
 PONDWRIGHT_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "apex_catalog_search",
@@ -256,6 +270,7 @@ AUTOMATION_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "fetch_url",
     "x_feed",
     "email_list",
+    "read_x",
     # Eve Mon/Thu cadence must not hang overnight waiting for Gate.
     "compose_post",
 })
@@ -271,14 +286,18 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
 
     ``compose_post`` is gated for interactive Messages (Allow → Signal pack).
     Scheduled automations may auto-approve it via AUTOMATION_AUTO_APPROVE_TOOLS.
+    ``eve_ig_post`` / ``eve_gbp_post`` are always gated — live CWG surfaces, never cadence.
 
     ``web_search`` / ``fetch_url`` are always ungated (house SearXNG reads).
+    ``read_x`` is always ungated (house X feed). ``post_to_x`` stays gated.
     When ``source="automation"``, additional tools in
     ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass. Write egress stays gated.
 
     Fail-safe: unknown tools return False (house-local, never egress).
     """
     if tool_name in WEB_AUTO_APPROVE_TOOLS:
+        return False
+    if tool_name in X_READ_AUTO_APPROVE_TOOLS:
         return False
     if tool_name in PONDWRIGHT_AUTO_APPROVE_TOOLS:
         return False
@@ -291,7 +310,13 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
         if tool_name in defn.tools:
             return True
     # human-facing channels: outbound to the world — gated
-    if tool_name in ("email_send", "messenger_send", "compose_post"):
+    if tool_name in (
+        "email_send",
+        "messenger_send",
+        "compose_post",
+        "eve_ig_post",
+        "eve_gbp_post",
+    ):
         return True
     return False
 

@@ -6,7 +6,7 @@ import pytest
 
 from soveryn.agents.loop import AgentLoop
 from soveryn.app.startup import create_app
-from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.config.runtime import ACTIVE_AGENTS, MESSAGES_CONTACTS
 from soveryn.inference.llama_server_client import ChatResponse
 from soveryn.memory.conversation_store import ConversationStore
 
@@ -110,8 +110,10 @@ def test_desk_has_greeting_block(app_state):
 
 def test_desk_has_agent_row_with_active_agents(app_state):
     body = app_state.get("/command-center").data.decode("utf-8").lower()
-    for agent in ACTIVE_AGENTS:
+    for agent in MESSAGES_CONTACTS:
         assert f'data-agent="{agent}"' in body
+    for parked in ("vett", "scotty"):
+        assert f'class="agent-card" data-agent="{parked}"' not in body
 
 
 def test_desk_has_lattice_telemetry(app_state):
@@ -163,8 +165,10 @@ def test_agent_cards_link_to_messages(app_state):
     assert 'href="/chat"' not in body
     assert ">Chat<" not in body
     assert 'href="/messages"' in body
-    for agent in ACTIVE_AGENTS:
+    for agent in MESSAGES_CONTACTS:
         assert f'/messages/{agent}' in body
+    assert "/messages/vett" not in body
+    assert "/messages/scotty" not in body
 
 
 def test_legacy_chat_redirects_to_messages(app_state):
@@ -235,8 +239,8 @@ def test_desk_agent_cards_are_tab_targets(app_state):
     body = app_state.get("/command-center").data.decode("utf-8")
     # No negative tabindex on agent cards
     assert 'data-agent="aetheria" tabindex="-1"' not in body
-    assert 'data-agent="vett" tabindex="-1"' not in body
-    assert 'data-agent="scotty" tabindex="-1"' not in body
+    assert 'class="agent-card" data-agent="vett"' not in body
+    assert 'class="agent-card" data-agent="scotty"' not in body
 
 
 def test_desk_status_pill_does_not_steal_focus(app_state):

@@ -13,6 +13,7 @@ from typing import Any
 
 from soveryn.citizens.commissions import RUNNING
 from soveryn.citizens.runtime import interactive_busy
+from soveryn.config.runtime import MESSAGES_PARKED
 
 # Cap chips so a stuck queue cannot flood the Easy front door.
 _MAX_ACTIVE = 8
@@ -74,7 +75,7 @@ def build_active_now(
                     names = _display_names(conn)
                     for row in _running_commissions(conn):
                         cid = str(row.get("citizen_id") or "")
-                        if not cid:
+                        if not cid or cid in MESSAGES_PARKED:
                             continue
                         kind = "heartbeat" if _is_heartbeat(row) else "commission"
                         display = names.get(cid, cid)
@@ -107,6 +108,8 @@ def build_active_now(
             pass
 
     for cid in citizen_ids:
+        if cid in MESSAGES_PARKED:
+            continue
         try:
             if interactive_busy(conv_db, cid, within_seconds=within_seconds):
                 display = names.get(cid, cid)

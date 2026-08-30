@@ -18,7 +18,7 @@ from pathlib import Path
 # ─────────────────────────────────────────────────────────────────────────────
 
 #: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
-#: Kernel is the house build brain (bench-flash on :8091) — chat + memory + read;
+#: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
 ACTIVE_AGENTS: tuple[str, ...] = (
     "aetheria", "vett", "scotty", "kernel", "eve", "grok",
@@ -30,8 +30,8 @@ ACTIVE_AGENTS: tuple[str, ...] = (
 #: engine-room commissions/automations but are **not** Messages contacts.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # soul / face — Blackwell alone
-    "kernel",    # local build lane
-    "eve",       # ship posts (Canva / Signal)
+    "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
+    "eve",       # ship posts (Canva / Signal) — Quadro Qwen 3.8
     "grok",      # cloud coding peer (headless Build CLI — no local VRAM)
 )
 
@@ -115,6 +115,10 @@ class ModelServer:
     #: When True, preflight does not probe this endpoint (external backends
     #: such as Grok Build CLI that inject custom chat_fn and never hit llama).
     skip_preflight: bool = False
+    #: Server context window in tokens. AgentLoop must fit prompt+max_tokens
+    #: inside this or llama-server/vLLM returns HTTP 400 exceed_context_size.
+    #: GLM TP=2 on Sparks is 32768; Quadro Qwen 3.8 is 65536.
+    n_ctx: int = 32768
 
     @property
     def base_url(self) -> str:
@@ -151,12 +155,19 @@ _VETT_BRAIN_PROFILES: dict[str, dict] = {
         "role": "Vett + Scotty shared Nemotron 3.5 Lightning 30B-A3B NVFP4 (Spark, vLLM)",
         "path": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
     },
+    "glm": {
+        "alias": "glm-5.3-flash",
+        "house_name": "GLM 5.3 Flash",
+        "blurb": "NVFP4 TP=2 · both Sparks · Lightning parked",
+        "role": "Vett + Scotty on GLM-5.3-Flash NVFP4 (Spark TP=2 :8001)",
+        "path": "GLM-5.3-Flash-NVFP4",
+    },
 }
 _VETT_BRAIN_FILE = Path.home() / ".soveryn" / "vett_brain"
 
 
 def resolve_vett_brain() -> str:
-    """Return brain key: qwen36 | qwen38 | lightning."""
+    """Return brain key: qwen36 | qwen38 | lightning | glm."""
     env = (os.environ.get("SOVERYN_VETT_BRAIN") or "").strip().lower()
     if env in _VETT_BRAIN_PROFILES:
         return env
@@ -186,26 +197,24 @@ def _vett_scotty_server() -> ModelServer:
         # Thinking off: overnight harness showed enable_thinking=True raised
         # false-deny of the agent's own action on some backends.
         chat_template_kwargs={"enable_thinking": False},
+        n_ctx=32768,
     )
 
 
-# Kernel build brain — Flash on Quadros (default) or Qwen3.8 on Spark :8001.
-# Switch:  scripts/switch_kernel_brain.sh flash|qwen38
-# Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash
-# qwen38 uses Spark's served alias — Spark must already be on qwen38
-# (switch_vett_brain.sh qwen38) unless you pass --take-spark.
+# Kernel build brain — live default is GLM TP=2 on Sparks (`~/.soveryn/kernel_brain` = glm).
+# Switch:  scripts/switch_kernel_brain.sh glm|flash|qwen38
+# Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash (test/fallback)
+# glm: Spark :8001 alias glm-5.3-flash (Lightning parked). Eve stays on Quadros Qwen 3.8.
 _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
     "flash": {
+        # Router preset [kernel]; alias bench-flash kept so old callers still hit it.
         "alias": "bench-flash",
-        "house_name": "Flash",
-        "blurb": "DeepSeek V4 Flash · Quadros :8091 · daily build default",
+        "house_name": "Qwen 3.8",
+        "blurb": "Qwen3.8-27B · Quadros :8091 · ctx 65k · DeepSeek Flash parked",
         "host": "127.0.0.1",
         "port": 8091,
-        "path": (
-            "DeepSeek-V4-Flash-0731/UD-Q4_K_XL/"
-            "DeepSeek-V4-Flash-0731-UD-Q4_K_XL-00001-of-00005.gguf"
-        ),
-        "role": "Kernel — house build brain (DeepSeek V4 Flash on Quadros :8091)",
+        "path": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+        "role": "Kernel — house build brain (Qwen3.8-27B on Quadros :8091, ctx 65536)",
     },
     "qwen38": {
         "alias": "qwen38-27b",
@@ -219,12 +228,21 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
             "Shares the Spark slot with Vett/Scotty when that brain is loaded."
         ),
     },
+    "glm": {
+        "alias": "glm-5.3-flash",
+        "house_name": "GLM 5.3 Flash",
+        "blurb": "NVFP4 · TP=2 both Sparks :8001 · Lightning parked",
+        "host": "10.10.10.2",
+        "port": 8001,
+        "path": "GLM-5.3-Flash-NVFP4",
+        "role": "Kernel — GLM-5.3-Flash NVFP4 TP=2 on Spark1+Spark2 :8001",
+    },
 }
 _KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
 
 
 def resolve_kernel_brain() -> str:
-    """Return Kernel brain key: flash | qwen38."""
+    """Return Kernel brain key: flash | qwen38 | glm."""
     env = (os.environ.get("SOVERYN_KERNEL_BRAIN") or "").strip().lower()
     if env in _KERNEL_BRAIN_PROFILES:
         return env
@@ -250,7 +268,8 @@ def _kernel_server() -> ModelServer:
         role=str(prof["role"]),
         supports_multi_system_messages=False,
         model_alias=str(prof["alias"]),
-        chat_template_kwargs={"enable_thinking": False},
+        chat_template_kwargs={"enable_thinking": False, "thinking": False},
+        n_ctx=32768 if key == "glm" else 65536,
     )
 
 
@@ -263,10 +282,11 @@ def _eve_flash_server() -> ModelServer:
         port=int(flash["port"]),
         model_path=MODEL_ROOT / str(flash["path"]),
         mmproj_path=None,
-        role="Eve — presence/marketing on Quadros Flash (pinned; not Kernel-switched)",
+        role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is on Spark GLM",
         supports_multi_system_messages=False,
         model_alias=str(flash["alias"]),
         chat_template_kwargs={"enable_thinking": False},
+        n_ctx=65536,
     )
 
 
@@ -291,14 +311,12 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     _vett_scotty_server(),
     ModelServer(
         name="embeddings",
-        # 2026-08-17: Lattice librarian moved to Spark (fabric). Same Nemotron-Embed-8B
-        # weights — NOT Lightning chat. Lightning stays hard-brain on :8001; embed is a
-        # separate process on :8096 so vectors stay in the 4096-d space the Lattice
-        # already uses. Frees ~15G Quadro on the tower for Kernel.
-        host="10.10.10.2",
+        # 2026-08-29: back on helper Quadro — GLM owns Spark UMA. Same 4096-d
+        # Nemotron-Embed-8B weights. Spark soveryn-embed stays disabled.
+        host="127.0.0.1",
         port=8096,
-        model_path=MODEL_ROOT / "Nemotron-3-Embed-8B-BF16",
-        role="Lattice librarian: Nemotron-3-Embed-8B on Spark :8096 (fabric)",
+        model_path=Path("/mnt/soveryn_models/Nemotron-3-Embed-8B-BF16"),
+        role="Lattice librarian: Nemotron-3-Embed-8B on helper Quadro :8096",
         model_alias="nemotron-embed-8b",
     ),
     ModelServer(

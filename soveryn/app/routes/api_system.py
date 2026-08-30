@@ -13,7 +13,7 @@ from soveryn.app.services.bench_flash import start_warm as bench_flash_warm
 from soveryn.app.services.gpu_stats import get_gpu_stats
 from soveryn.app.services.public_agents import get_public_agents
 from soveryn.app.services.rig_stats import get_rig_stats
-from soveryn.app.services.spark_stats import get_spark_stats
+from soveryn.app.services.spark_stats import get_spark_stats, get_spark2_stats
 
 bp = Blueprint("api_system", __name__)
 
@@ -52,6 +52,7 @@ def api_system_spark():
     silently fell back to a ~100x slower path — the UI renders that amber, not green.
     """
     r = get_spark_stats()
+    b = get_spark2_stats()
     return jsonify({
         "available": r.available,
         "path": r.path,
@@ -61,6 +62,16 @@ def api_system_spark():
         "vllm": asdict(r.vllm) if r.vllm else None,
         "fetched_at": r.fetched_at,
         "host_known": r.host_known,
+        "b": {
+            "available": b.available,
+            "path": b.path,
+            "message": b.message,
+            "host": asdict(b.host) if b.host else None,
+            "containers": [asdict(c) for c in b.containers],
+            "vllm": asdict(b.vllm) if b.vllm else None,
+            "fetched_at": b.fetched_at,
+            "host_known": b.host_known,
+        },
     }), 200
 
 
@@ -198,7 +209,7 @@ def api_system_bench_flash():
 
 @bp.post("/api/system/bench_flash/warm")
 def api_system_bench_flash_warm():
-    """Start loading Kernel (bench-flash) on the quadro router (background)."""
+    """Start loading Kernel (glm-5.3-flash on Spark :8001) in the background."""
     result = bench_flash_warm()
     code = 200 if result.get("ok") else 409
     return jsonify(result), code

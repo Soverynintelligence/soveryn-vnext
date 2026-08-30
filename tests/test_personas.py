@@ -49,6 +49,12 @@ def test_get_persona_returns_kernel_string(no_persona_overrides):
     assert get_persona("kernel") == KERNEL_PERSONA
 
 
+def test_kernel_chess_is_unparked_wargames_line(no_persona_overrides):
+    text = get_persona("kernel")
+    assert "How about a nice game of chess?" in text
+    assert "Unparked" in text
+
+
 def test_get_persona_returns_eve_string(no_persona_overrides):
     assert get_persona("eve") == EVE_PERSONA
 

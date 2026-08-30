@@ -30,6 +30,11 @@ from dataclasses import dataclass, field
 SPARK_SSH_USER = "soverynspark"
 SPARK_FABRIC_HOST = "10.10.10.2"
 SPARK_WIFI_HOST = "192.168.86.26"
+# Spark B (TP worker). Tower cannot reach the Spark–Spark CX-7 subnet
+# 10.10.11.2; house LAN is the probe path. vLLM API stays on Spark A :8001.
+SPARK2_SSH_USER = "soverynspark2"
+SPARK2_LAN_HOST = "192.168.86.34"
+SPARK2_FABRIC_HOST = "10.10.11.2"
 # Hard brain (Lightning / Qwen switch) is qwen-serve on :8001.
 # Laguna on :8000 was retired 2026-08-12; keep as fallback if someone
 # brings it back. CC was still probing 8000 → false "vllm down".
@@ -168,7 +173,7 @@ def _parse_prometheus(raw: str) -> dict[str, float]:
 _cache: SparkStatsResult | None = None
 
 
-def _ssh(host: str) -> subprocess.CompletedProcess | None:
+def _ssh(host: str, user: str = SPARK_SSH_USER) -> subprocess.CompletedProcess | None:
     """One SSH round-trip. Returns None if ssh itself is missing or hangs."""
     try:
         return subprocess.run(
@@ -177,7 +182,7 @@ def _ssh(host: str) -> subprocess.CompletedProcess | None:
                 "-o", "BatchMode=yes",
                 "-o", f"ConnectTimeout={_SSH_CONNECT_TIMEOUT}",
                 "-o", "StrictHostKeyChecking=accept-new",
-                f"{SPARK_SSH_USER}@{host}",
+                f"{user}@{host}",
                 PROBE_CMD,
             ],
             capture_output=True, text=True, timeout=_SSH_TIMEOUT_SECONDS,
@@ -219,6 +224,9 @@ def _fetch_vllm(host: str) -> SparkVllm:
             model = models["data"][0]["id"]
         except (KeyError, IndexError, TypeError):
             model = None
+        # House name: GLM on Spark is Kernel, not a leftover vLLM id.
+        if model == "glm-5.3-flash":
+            model = "kernel"
 
         m = _parse_prometheus(_http_text(f"{base}/metrics") or "")
         return SparkVllm(
@@ -311,3 +319,48 @@ def get_spark_stats(*, _force_refresh: bool = False) -> SparkStatsResult:
         return _cache
     _cache = _probe()
     return _cache
+
+
+_cache_b: SparkStatsResult | None = None
+
+
+def _probe_spark2() -> SparkStatsResult:
+    """Spark B is a vLLM TP worker — no public :8001. SSH + docker is the truth."""
+    try:
+        proc = _ssh(SPARK2_LAN_HOST, user=SPARK2_SSH_USER)
+    except Exception:
+        proc = None
+    if proc is None or proc.returncode != 0:
+        err = (proc.stderr.strip() if proc is not None and proc.stderr else "")
+        return SparkStatsResult(
+            available=False,
+            path=None,
+            host_known=False,
+            message=err or f"Spark B unreachable over LAN ({SPARK2_LAN_HOST})",
+            fetched_at=time.time(),
+        )
+    host, containers = _parse_probe(proc.stdout)
+    glm_up = any("glm53" in c.name and c.state == "running" for c in containers)
+    return SparkStatsResult(
+        available=True,
+        path="lan",
+        host=host,
+        containers=containers,
+        vllm=SparkVllm(up=glm_up, model="kernel" if glm_up else None),
+        host_known=True,
+        fetched_at=time.time(),
+    )
+
+
+def get_spark2_stats(*, _force_refresh: bool = False) -> SparkStatsResult:
+    """Spark B (gx10-a733) host metrics, cached 20s."""
+    global _cache_b
+    now = time.time()
+    if (
+        not _force_refresh
+        and _cache_b is not None
+        and (now - _cache_b.fetched_at) < _CACHE_TTL_SECONDS
+    ):
+        return _cache_b
+    _cache_b = _probe_spark2()
+    return _cache_b

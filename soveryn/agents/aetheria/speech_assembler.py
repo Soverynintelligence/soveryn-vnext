@@ -8,10 +8,12 @@ from soveryn.agents.aetheria.channels import Channel, classify_channel
 from soveryn.agents.aetheria.phrase_renderer import render_phrase
 from soveryn.agents.aetheria.uncertainty_renderer import render_uncertainty
 from soveryn.memory.lattice import Node, region_for_node
+from soveryn.platform.lattice.fact_rail import merge_fact_rail
 from soveryn.platform.lattice.provenance import Provenance
 from soveryn.platform.lattice.types import Entry
 
 QUOTABLE_RECALL_HEADING = "Stateable recall:"
+LOCKED_FACTS_HEADING = "Locked facts:"
 UNCERTAINTY_HEADING = "Uncertain context:"
 
 
@@ -19,20 +21,40 @@ def assemble_ranked_recall(
     ranked_nodes: Iterable[tuple[Node, float]],
     *,
     identity_nodes: Iterable[Node] = (),
+    fact_nodes: Iterable[Node] = (),
 ) -> str:
     """Assemble live recall from scored Lattice nodes plus reviewed identity spine.
 
     Scored legacy nodes keep their content non-quotable unless they carry valid
     Channel-A provenance. Reviewed identity-spine nodes are supplied separately
     because they are canonical but may not have embeddings yet.
+
+    ``fact_nodes`` are the locked fact rail — listed first so cosine ranking
+    cannot bury phones, dates, names, or negations.
     """
 
+    facts, rest = merge_fact_rail(tuple(ranked_nodes), tuple(fact_nodes))
+    sections: list[str] = []
+    if facts:
+        fact_lines = [LOCKED_FACTS_HEADING]
+        fact_lines.extend(f"- {_truncate_fact(node.content)}" for node in facts)
+        sections.append("\n".join(fact_lines))
     entries: list[Entry] = []
-    for node, score in ranked_nodes:
+    for node, score in rest:
         entries.append(_entry_from_node(node, score=score))
     for node in identity_nodes:
         entries.append(_entry_from_node(node, score=None))
-    return assemble_recall(entries)
+    assembled = assemble_recall(entries)
+    if assembled:
+        sections.append(assembled)
+    return "\n\n".join(sections)
+
+
+def _truncate_fact(text: str, limit: int = 240) -> str:
+    flat = text.replace("\n", " ").replace("\r", " ").strip()
+    if len(flat) <= limit:
+        return flat
+    return flat[: limit - 3] + "..."
 
 
 def assemble_recall(entries: Iterable[Entry]) -> str:

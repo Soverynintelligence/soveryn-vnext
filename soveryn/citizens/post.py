@@ -50,6 +50,9 @@ def send(
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
     if not body.strip():
         raise ValueError("post body required")
+    # Vett folded into Eve — mail and assignments follow the living desk.
+    if to_id == "vett":
+        to_id = "eve"
     if from_id == to_id:
         raise ValueError("cannot post to self — use notes/")
     post_id = str(uuid.uuid4())

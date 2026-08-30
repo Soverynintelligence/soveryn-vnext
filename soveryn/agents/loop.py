@@ -836,7 +836,17 @@ class AgentLoop:
             limit=self.recall_k,
             threshold=self.recall_threshold,
         )
-        text = assemble_ranked_recall(ranked)
+        facts: tuple = ()
+        impl = getattr(type(self.lattice_store), "find_canonical_facts", None)
+        if callable(impl) and getattr(impl, "__name__", "") == "find_canonical_facts":
+            try:
+                facts = impl(self.lattice_store, self.agent_name, user_message, limit=3) or ()
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "canonical fact rail failed; serving cosine recall only"
+                )
+                facts = ()
+        text = assemble_ranked_recall(ranked, fact_nodes=facts)
         self.session_context_cache.recall[session_id] = RecallCacheEntry(
             text=text,
             query_text=user_message,

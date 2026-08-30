@@ -176,7 +176,8 @@ def citizens():
 
     try:
         from soveryn.citizens.registry import board_citizens
-        rows = board_citizens(conn)
+        from soveryn.config.runtime import MESSAGES_PARKED
+        rows = [r for r in board_citizens(conn) if r.get("id") not in MESSAGES_PARKED]
     except sqlite3.Error as exc:
         return jsonify({
             "citizens": [],
@@ -222,6 +223,8 @@ def refresh_census():
         return jsonify({
             "error": {"code": "census_failed", "message": str(exc)}
         }), 500
+    from soveryn.config.runtime import MESSAGES_PARKED
+    rows = [r for r in rows if r.get("id") not in MESSAGES_PARKED]
     spawned = _spawned_under_aetheria()
     for row in rows:
         if row.get("id") == "aetheria":

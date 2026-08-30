@@ -320,13 +320,19 @@ def list_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
-def board_citizens(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def board_citizens(
+    conn: sqlite3.Connection,
+    *,
+    include_retired: bool = False,
+) -> list[dict[str, Any]]:
     """Roster plus duties and open commissions — the Phase 3 board shape."""
     from soveryn.citizens import commissions, duties
     from soveryn.citizens.post import CHIEF_OF_STAFF_ID
 
     out: list[dict[str, Any]] = []
     for record in list_citizens(conn):
+        if not include_retired and record.get("retired_at"):
+            continue
         cid = record["id"]
         duty_rows = duties.for_citizen(conn, cid)
         record["duties"] = duty_rows

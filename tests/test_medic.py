@@ -40,25 +40,25 @@ def test_no_target_is_a_router_unit():
 
 
 def test_unhealthy_target_out_of_cooldown_acts():
-    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
+    d = medic.decide(unhealthy_keys={"dream"}, router_healthy=True,
                      state={}, now=1000.0)
-    assert len(d) == 1 and d[0].action == "act" and d[0].unit == "soveryn-embeddings.service"
+    assert len(d) == 1 and d[0].action == "act" and d[0].unit == "soveryn-dream.service"
 
 
 def test_within_cooldown_is_skipped():
-    state = {"embeddings": {"consecutive_fails": 1, "last_restart_ts": 900.0, "escalated": False}}
-    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
+    state = {"dream": {"consecutive_fails": 1, "last_restart_ts": 900.0, "escalated": False}}
+    d = medic.decide(unhealthy_keys={"dream"}, router_healthy=True,
                      state=state, now=1000.0)  # 100 < 300
     assert d[0].action == "skip_cooldown"
 
 
 def test_cooldown_is_per_target_not_global():
-    # embeddings cooling, heartbeat not → heartbeat still acts.
-    state = {"embeddings": {"consecutive_fails": 1, "last_restart_ts": 990.0, "escalated": False}}
-    d = medic.decide(unhealthy_keys={"embeddings", "heartbeat"}, router_healthy=True,
+    # dream cooling, heartbeat not → heartbeat still acts.
+    state = {"dream": {"consecutive_fails": 1, "last_restart_ts": 990.0, "escalated": False}}
+    d = medic.decide(unhealthy_keys={"dream", "heartbeat"}, router_healthy=True,
                      state=state, now=1000.0)
     by_key = {x.key: x for x in d}
-    assert by_key["embeddings"].action == "skip_cooldown"
+    assert by_key["dream"].action == "skip_cooldown"
     assert by_key["heartbeat"].action == "act"
 
 
@@ -71,17 +71,29 @@ def test_loopguard_trips_to_escalate():
 
 
 def test_non_critical_escalation_is_not_priority():
-    state = {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}
-    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
+    state = {"dream": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}
+    d = medic.decide(unhealthy_keys={"dream"}, router_healthy=True,
                      state=state, now=800.0)
     assert d[0].action == "escalate" and d[0].priority is False
 
 
 def test_escalated_target_is_latched():
-    state = {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": True}}
-    d = medic.decide(unhealthy_keys={"embeddings"}, router_healthy=True,
+    state = {"dream": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": True}}
+    d = medic.decide(unhealthy_keys={"dream"}, router_healthy=True,
                      state=state, now=800.0)
     assert d[0].action == "skip_escalated"
+
+
+def test_unknown_remote_escalates_once_then_latches():
+    d = medic.decide(unhealthy_keys={"spark-embed"}, router_healthy=True,
+                     state={}, now=1000.0)
+    assert d[0].action == "escalate" and d[0].unit == "remote"
+    d2 = medic.decide(
+        unhealthy_keys={"spark-embed"}, router_healthy=True,
+        state={"spark-embed": {"consecutive_fails": 0, "last_restart_ts": None, "escalated": True}},
+        now=1060.0,
+    )
+    assert d2[0].action == "skip_escalated"
 
 
 def test_vnext_deferred_when_router_unhealthy():
@@ -92,7 +104,7 @@ def test_vnext_deferred_when_router_unhealthy():
 
 def test_probe_unhealthy_classifies_from_readings():
     unhealthy, router_healthy = medic.probe_unhealthy(
-        http_ok={"vnext": False, "embeddings": True, "router": True},
+        http_ok={"vnext": False, "router": True},
         unit_active={"dream": False, "x-feed": True, "parakeet": True,
                      "vett-patrol": True, "representation": True},
         heartbeat_age=100.0,           # fresh
@@ -102,9 +114,20 @@ def test_probe_unhealthy_classifies_from_readings():
     assert router_healthy is True
 
 
+def test_probe_flags_local_embed():
+    unhealthy, _ = medic.probe_unhealthy(
+        http_ok={"vnext": True, "embeddings": False, "router": True},
+        unit_active={"dream": True, "x-feed": True, "parakeet": True,
+                     "vett-patrol": True, "representation": True},
+        heartbeat_age=100.0,
+        comfyui_on_her_card=False,
+    )
+    assert "embeddings" in unhealthy
+
+
 def test_probe_flags_stale_heartbeat_and_comfyui_squatter():
     unhealthy, _ = medic.probe_unhealthy(
-        http_ok={"vnext": True, "embeddings": True, "router": True},
+        http_ok={"vnext": True, "router": True},
         unit_active={"dream": True, "x-feed": True, "parakeet": True,
                      "vett-patrol": True, "representation": True},
         heartbeat_age=3000.0,          # > 2400 → stale
@@ -159,19 +182,19 @@ def test_run_once_acts_and_records_state(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
     monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
-    # everything healthy except embeddings
-    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+    # everything healthy except dream
+    monkeypatch.setattr(medic, "_probe", lambda: ({"dream"}, True))
     calls = []
     monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: calls.append((unit, verb)))
     monkeypatch.setattr(medic, "_escalate", lambda d: calls.append(("ESCALATE", d.unit)))
 
     result = medic.run_once(now=1000.0)
 
-    assert ("soveryn-embeddings.service", "restart") in calls
+    assert ("soveryn-dream.service", "restart") in calls
     assert result["actions"][0]["action"] == "act"
     state = medic._read_state()
-    assert state["embeddings"]["consecutive_fails"] == 1
-    assert state["embeddings"]["last_restart_ts"] == 1000.0
+    assert state["dream"]["consecutive_fails"] == 1
+    assert state["dream"]["last_restart_ts"] == 1000.0
 
 
 def test_run_once_escalates_and_does_not_restart_when_loopguard_tripped(tmp_path, monkeypatch):
@@ -216,7 +239,7 @@ def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_DIR", tmp_path)
     monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
-    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+    monkeypatch.setattr(medic, "_probe", lambda: ({"dream"}, True))
 
     def boom(unit, verb):
         raise RuntimeError("systemctl failed")
@@ -230,7 +253,7 @@ def test_run_once_survives_a_failed_restart(tmp_path, monkeypatch):
     assert (tmp_path / "medic.jsonl").read_text().strip() != ""
     # the failed attempt was still recorded to state (paces retries / feeds loop-guard)
     state = medic._read_state()
-    assert state["embeddings"]["consecutive_fails"] == 1
+    assert state["dream"]["consecutive_fails"] == 1
     # the action reflects the failure
     assert result["actions"][0]["ok"] is False
 
@@ -240,8 +263,8 @@ def test_run_once_survives_a_failed_escalation(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
     (tmp_path / "medic_state.json").write_text(json.dumps(
-        {"embeddings": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}))
-    monkeypatch.setattr(medic, "_probe", lambda: ({"embeddings"}, True))
+        {"dream": {"consecutive_fails": 3, "last_restart_ts": 700.0, "escalated": False}}))
+    monkeypatch.setattr(medic, "_probe", lambda: ({"dream"}, True))
 
     def boom(decision):
         raise RuntimeError("signal send failed")
@@ -253,7 +276,7 @@ def test_run_once_survives_a_failed_escalation(tmp_path, monkeypatch):
 
     assert (tmp_path / "medic.jsonl").read_text().strip() != ""
     state = medic._read_state()
-    assert state["embeddings"]["escalated"] is True
+    assert state["dream"]["escalated"] is True
     assert result["actions"][0]["ok"] is False
 
 
@@ -262,8 +285,8 @@ def test_run_once_clears_state_on_recovery(tmp_path, monkeypatch):
     monkeypatch.setattr(medic, "STATE_FILE", tmp_path / "medic_state.json")
     monkeypatch.setattr(medic, "LOG_FILE", tmp_path / "medic.jsonl")
     (tmp_path / "medic_state.json").write_text(json.dumps(
-        {"embeddings": {"consecutive_fails": 2, "last_restart_ts": 700.0, "escalated": False}}))
-    # embeddings is healthy now — not in the unhealthy set returned by probe.
+        {"dream": {"consecutive_fails": 2, "last_restart_ts": 700.0, "escalated": False}}))
+    # dream is healthy now — not in the unhealthy set returned by probe.
     monkeypatch.setattr(medic, "_probe", lambda: (set(), True))
     monkeypatch.setattr(medic, "_run_unit", lambda unit, verb: None)
     monkeypatch.setattr(medic, "_escalate", lambda d: None)
@@ -271,7 +294,7 @@ def test_run_once_clears_state_on_recovery(tmp_path, monkeypatch):
     medic.run_once(now=1000.0)
 
     state = medic._read_state()
-    assert "embeddings" not in state
+    assert "dream" not in state
 
 
 def test_converges_no_infinite_restart():
@@ -352,3 +375,15 @@ def test_tg_bridge_is_not_resurrectable():
     assert "tg-bridge" not in medic.TARGETS
     assert "tg-bridge" not in medic._UNIT_KEYS
     assert not any("tg-bridge" in t.unit for t in medic.TARGETS.values())
+
+
+def test_spark_embed_is_not_watchable():
+    """Spark soveryn-embed stays parked; tower librarian is the watch target.
+
+    GLM owns Spark UMA. Medic must not GET 10.10.10.2:8096. The helper-Quadro
+    unit soveryn-embeddings.service is the healable embeddings surface.
+    """
+    assert medic.TARGETS["embeddings"].unit == "soveryn-embeddings.service"
+    assert medic._HTTP_URLS.get("embeddings") == "http://127.0.0.1:8096/health"
+    assert "10.10.10.2:8096" not in medic._HTTP_URLS.values()
+    assert "embeddings" not in medic._UNIT_KEYS

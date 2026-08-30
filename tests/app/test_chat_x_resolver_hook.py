@@ -130,7 +130,7 @@ def _parse_sse(data: bytes) -> list[dict]:
 
 # ─── /chat ────────────────────────────────────────────────────────────────
 
-def test_chat_affirm_publishes_and_skips_normal_turn(app_state):
+def test_chat_aetheria_post_it_does_not_publish(app_state):
     sid = _new_session(app_state["client"], "aetheria")
     app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
@@ -140,12 +140,10 @@ def test_chat_affirm_publishes_and_skips_normal_turn(app_state):
 
     assert resp.status_code == 200
     payload = json.loads(resp.data)
-    assert payload["x_resolution"]["action"] == "published"
-    assert "https://x.com" in payload["x_resolution"]["note"]
-    assert app_state["rec"].publish_calls == [("draft post", None)]
-    assert len(app_state["rec"].memory_calls) == 1
-    assert app_state["fake_chat"].calls == []  # normal turn did NOT run
-    assert app_state["staged"].pending("aetheria") is None
+    assert "x_resolution" not in payload
+    assert app_state["rec"].publish_calls == []
+    assert len(app_state["fake_chat"].calls) == 1
+    assert app_state["staged"].pending("aetheria") is not None
 
 
 def test_chat_normal_message_nothing_staged_runs_loop(app_state):
@@ -179,9 +177,29 @@ def test_chat_heartbeat_message_with_pending_does_not_publish(app_state):
     assert app_state["staged"].pending("aetheria") is not None  # still proposed
 
 
+def test_chat_eve_affirm_publishes_her_slot(app_state):
+    sid = _new_session(app_state["client"], "eve")
+    app_state["staged"].stage(
+        agent="eve", text="eve draft", reply_to=None, now="2026-07-11T10:00:00"
+    )
+
+    resp = _post(
+        app_state["client"],
+        "/chat",
+        {"agent": "eve", "session_id": sid, "message": "post it"},
+    )
+
+    assert resp.status_code == 200
+    payload = json.loads(resp.data)
+    assert payload["x_resolution"]["action"] == "published"
+    assert app_state["rec"].publish_calls == [("eve draft", None)]
+    assert app_state["fake_chat"].calls == []
+    assert app_state["staged"].pending("eve") is None
+
+
 def test_chat_non_aetheria_agent_hook_is_noop(app_state):
     # Stage a post for aetheria (agent-slot keyed) — a "yes" from vett's
-    # session must NOT resolve it; the hook only applies to agent=="aetheria".
+    # session must NOT resolve it; the hook only applies to aetheria/eve.
     sid = _new_session(app_state["client"], "vett")
     app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
@@ -198,12 +216,12 @@ def test_chat_non_aetheria_agent_hook_is_noop(app_state):
 
 
 def test_chat_decline_marks_rejected_no_publish(app_state):
-    sid = _new_session(app_state["client"], "aetheria")
-    app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
+    sid = _new_session(app_state["client"], "eve")
+    app_state["staged"].stage(agent="eve", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat",
-                 {"agent": "aetheria", "session_id": sid, "message": "no"})
+                 {"agent": "eve", "session_id": sid, "message": "no"})
 
     assert resp.status_code == 200
     payload = json.loads(resp.data)
@@ -211,7 +229,7 @@ def test_chat_decline_marks_rejected_no_publish(app_state):
     assert app_state["rec"].publish_calls == []
     assert len(app_state["rec"].rejection_calls) == 1
     assert app_state["fake_chat"].calls == []  # normal turn did NOT run
-    assert app_state["staged"].pending("aetheria") is None
+    assert app_state["staged"].pending("eve") is None
 
 
 def test_chat_missing_x_state_keys_hook_is_noop(tmp_path):
@@ -236,12 +254,12 @@ def test_chat_missing_x_state_keys_hook_is_noop(tmp_path):
 # ─── /chat_stream ────────────────────────────────────────────────────────
 
 def test_chat_stream_affirm_publishes_and_skips_normal_turn(app_state):
-    sid = _new_session(app_state["client"], "aetheria")
-    app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
+    sid = _new_session(app_state["client"], "eve")
+    app_state["staged"].stage(agent="eve", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat_stream",
-                 {"agent": "aetheria", "session_id": sid, "message": "post it"})
+                 {"agent": "eve", "session_id": sid, "message": "post it"})
 
     assert resp.status_code == 200
     events = _parse_sse(resp.data)
@@ -251,7 +269,7 @@ def test_chat_stream_affirm_publishes_and_skips_normal_turn(app_state):
     assert events[0]["action"] == "published"
     assert app_state["rec"].publish_calls == [("draft post", None)]
     assert app_state["fake_stream"].calls == []  # normal turn did NOT run
-    assert app_state["staged"].pending("aetheria") is None
+    assert app_state["staged"].pending("eve") is None
 
 
 def test_chat_stream_normal_message_nothing_staged_runs_loop(app_state):
@@ -288,12 +306,12 @@ def test_chat_stream_affirm_emits_done_event_to_close_spinner(app_state):
     """The /chat_stream approval path must terminate the SSE stream with a
     'done' frame — otherwise the UI's thinking spinner hangs forever (the
     resolver short-circuits the normal turn, so no DoneEvent arrives)."""
-    sid = _new_session(app_state["client"], "aetheria")
-    app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
+    sid = _new_session(app_state["client"], "eve")
+    app_state["staged"].stage(agent="eve", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat_stream",
-                 {"agent": "aetheria", "session_id": sid, "message": "post it"})
+                 {"agent": "eve", "session_id": sid, "message": "post it"})
 
     assert resp.status_code == 200
     events = _parse_sse(resp.data)

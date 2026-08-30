@@ -19,6 +19,7 @@ intact deliberately — this file's own convention is *recorded, not buried* —
 | **Aetheria's soul** | Gemma 4 31B Q6 | **Qwen3.8-27B-UD-Q6_K_XL**, ctx 65536 (cutover 08-17, ctx raised 08-19) | `curl 127.0.0.1:8090/v1/models` |
 | **Embeddings** | `soveryn-embeddings.service`, Quadro `…990a` :8096 | **`soveryn-embed.service` on the SPARK**, `10.10.10.2:8096` | `embeddings_url()` |
 | **Quadro router tenants** | vett-scotty / cognition / reflection | + **Kernel** (`bench-flash`, DeepSeek-V4-Flash) — the house build brain and Eve's brain | `router-presets-quadro.ini` |
+| **Kernel (2026-08-30)** | Flash/Qwen on Quadros `:8091` / `:8090` | **GLM-5.3-Flash NVFP4 TP=2**, `http://10.10.10.2:8001`, alias `glm-5.3-flash`, ctx **32768**, RedHat `compressed-tensors` (LibertAI ModelOpt retired — token corruption / tool loops). Lightning parked. Eve + public stay on Quadro Qwen `:8091`. Librarian embed on helper Quadro `:8096`. | `curl 10.10.10.2:8001/v1/models` · `~/.soveryn/kernel_brain` = `glm` |
 
 ### The Spark alias is now a switch, not a constant
 

@@ -76,10 +76,21 @@ def test_app_port_is_5001_during_side_by_side():
     assert runtime.APP_PORT == 5001
 
 
+def test_glm_kernel_window_is_32k():
+    """2026-08-30: Kernel GLM TP=2 is 32k (was 16k; 16k 400'd ~17k prompts)."""
+    kernel = next(s for s in runtime.MODEL_SERVERS if s.name == "kernel_build")
+    if runtime.resolve_kernel_brain() == "glm":
+        assert kernel.n_ctx == 32768
+        assert kernel.host == "10.10.10.2" and kernel.port == 8001
+    eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
+    assert eve.n_ctx == 65536
+    assert eve.port == 8091
+    assert eve.model_alias == "bench-flash"
+
+
 def test_embeddings_url_resolves():
-    # 2026-08-17 — Librarian on Spark fabric :8096 (was tower loopback).
-    # Only aetheria_primary stays on :8090.
-    assert runtime.embeddings_url() == "http://10.10.10.2:8096"
+    # 2026-08-29 — Librarian back on helper Quadro loopback :8096 (Spark GLM).
+    assert runtime.embeddings_url() == "http://127.0.0.1:8096"
 
 
 # ─── Service endpoints (spec §2, §3) ─────────────────────────────────────────
@@ -121,8 +132,8 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     live_others = [s for s in others if not s.skip_preflight]
     assert {s.port for s in live_others} == {8001, 8091, 8096}
     # Local quadro slots stay on loopback; Spark tenants are remote.
-    assert all(s.host == "127.0.0.1" for s in live_others if s.port == 8091)
-    assert all(s.host != "127.0.0.1" for s in live_others if s.port in (8001, 8096))
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8091, 8096))
+    assert all(s.host != "127.0.0.1" for s in live_others if s.port == 8001)
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
     # External Grok Build backend is bookkeeping only (not a llama port).

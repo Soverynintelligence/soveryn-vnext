@@ -56,6 +56,17 @@ def test_pending_none_when_nothing_staged(tmp_path):
     assert s.pending("aetheria") is None
 
 
+def test_pending_all_lists_every_agent(tmp_path):
+    s = StagedStore(tmp_path / "s.db")
+    s.stage(agent="aetheria", text="a", reply_to=None, now="2026-07-11T10:00:00")
+    s.stage(agent="eve", text="e", reply_to=None, now="2026-07-11T10:01:00")
+    posts = s.pending_all()
+    assert {p.agent for p in posts} == {"aetheria", "eve"}
+    got = s.get(posts[0].id)
+    assert got is not None
+    assert got.id == posts[0].id
+
+
 def test_pending_is_agent_scoped(tmp_path):
     s = StagedStore(tmp_path / "staged.db")
     s.stage(agent="aetheria", text="aetheria post", reply_to=None, now="2026-07-11T10:00:00")

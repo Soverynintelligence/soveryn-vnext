@@ -59,6 +59,9 @@ data/router-presets.ini
 # Eval stderr capture (debug noise; .json artifacts stay committed)
 eval_runs/*.stderr
 
+# Eve CWG Instagram desk — session cookies, not git
+data/eve_ig_profile/
+
 # Local environment secrets
 .env
 .env.local
@@ -115,3 +118,6 @@ data/rooms/
 
 # Canva Connect OAuth tokens (never commit)
 data/canva/
+
+# Google Business Profile OAuth tokens (never commit)
+data/gbp/

@@ -123,6 +123,10 @@ def run_grok_prompt(
     timeout: float | None = None,
     bin_path: Path | None = None,
     max_turns: int = DEFAULT_MAX_TURNS,
+    tools: str | None = None,
+    disallowed_tools: str | None = None,
+    permission_mode: str = "acceptEdits",
+    extra_flags: list[str] | None = None,
 ) -> str:
     """Run headless grok; return assistant text. Raises LlamaServer* on failure."""
     binary = bin_path or grok_bin()
@@ -148,8 +152,16 @@ def run_grok_prompt(
         "--cwd", str(work),
         "--output-format", "json",
         "--max-turns", str(max_turns),
-        "--permission-mode", "acceptEdits",
+        "--permission-mode", permission_mode,
     ]
+    if tools:
+        cmd.extend(["--tools", tools])
+    if disallowed_tools:
+        cmd.extend(["--disallowed-tools", disallowed_tools])
+    if tools or disallowed_tools:
+        cmd.append("--no-subagents")
+    if extra_flags:
+        cmd.extend(extra_flags)
     for rule in _DENY_RULES:
         cmd.extend(["--deny", rule])
 

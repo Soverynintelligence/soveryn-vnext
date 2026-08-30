@@ -28,7 +28,7 @@ from flask import Flask, g, jsonify, request
 from soveryn import __version__
 from soveryn.agents.loop import AgentLoop, _default_embed
 from soveryn.config.loader import EnvConfig, load_env_config
-from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.config.runtime import ACTIVE_AGENTS, AGENT_TO_SERVER, MODEL_SERVERS
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.platform.black_box import BlackBox
 from soveryn.platform.continuity.config import ContinuityConfig
@@ -657,7 +657,7 @@ def create_app(
         # guard on fetch_url). Owners: Vett (+ Aetheria); NOT Scotty
         # (mechanical-local surface only, per tool-ownership policy).
         from soveryn.platform.system_probe import register_system_probe_tool
-        for agent_name in ("vett", "aetheria"):
+        for agent_name in ("vett", "aetheria", "eve"):
             register_system_probe_tool(tool_registry, owner_agent=agent_name)
 
         # Vett's patrol tools (read_patrol_sources + mark_source_visited).
@@ -761,17 +761,10 @@ def create_app(
             )
         # Scotty: not registered by default. He reports through threads Jon initiates.
 
-        # X presence — read_x + post_to_x on the REAL aetheria loop (one
-        # Aetheria, no clone/second decision-maker). The isolated feed-worker
-        # process (soveryn-x-feed.service) writes candidates into the SAME
-        # PresenceConfig.default().db_path this reads, so read_x always shows
-        # what the feed found. post_to_x is trust-gated (x_trust.json,
-        # fail-closed to Stage 0) and, below that trust ceiling, only stages
-        # into StagedStore — Jon's chat-side affirmation (Task 7/8) is what
-        # actually publishes. publisher_fn below builds XClient.from_env()
-        # LAZILY, on first publish call, NOT here — create_app() must boot
-        # cleanly with zero X_* env vars (staging needs no creds; only an
-        # actual Stage 1/2 publish does).
+        # X presence — Eve only (@Soveryn_AI). Aetheria is off this stack.
+        # Feed worker still fills the candidate store for Eve's read_x.
+        # post_to_x is trust-gated (fail-closed Stage 0). Jon's "post it"
+        # in Eve's Messages thread publishes. XClient.from_env() is lazy.
         if recall_lattice is not None:
             from soveryn.agents.presence.candidate_store import CandidateStore
             from soveryn.agents.presence.config import PresenceConfig
@@ -813,31 +806,33 @@ def create_app(
             # build_post_to_x_tool already wraps this call in try/except (an
             # embed-service outage must not turn a successful publish into a
             # tool error), so no extra guarding is needed here.
-            def _x_autonomous_memory_fn(
-                text: str, reply_to: str | None, result: dict[str, Any]
-            ) -> None:
-                write_x_post_node(
-                    lattice_store=recall_lattice,
-                    embed_fn=_default_embed,
-                    agent="aetheria",
-                    text=text,
-                    source_tweet=reply_to,
-                    edited_by_jon=False,
-                    posted_id=result.get("id") or "",
-                    now=datetime.now().isoformat(),
-                )
+            def _x_autonomous_memory_fn_for(agent_id: str):
+                def _fn(
+                    text: str, reply_to: str | None, result: dict[str, Any]
+                ) -> None:
+                    write_x_post_node(
+                        lattice_store=recall_lattice,
+                        embed_fn=_default_embed,
+                        agent=agent_id,
+                        text=text,
+                        source_tweet=reply_to,
+                        edited_by_jon=False,
+                        posted_id=result.get("id") or "",
+                        now=datetime.now().isoformat(),
+                    )
+                return _fn
 
             tool_registry.register(
-                build_read_x_tool(owner_agent="aetheria", store=x_candidate_store)
+                build_read_x_tool(owner_agent="eve", store=x_candidate_store)
             )
             tool_registry.register(
                 build_post_to_x_tool(
-                    owner_agent="aetheria",
+                    owner_agent="eve",
                     staged=x_staged_store,
                     publisher_fn=_x_publisher_fn,
                     trust_path=x_trust_path,
                     now_fn=lambda: datetime.now().isoformat(),
-                    x_memory_fn=_x_autonomous_memory_fn,
+                    x_memory_fn=_x_autonomous_memory_fn_for("eve"),
                     active_context=active_context_service,
                 )
             )
@@ -900,6 +895,14 @@ def create_app(
                 lattice_db_path=env.lattice_db,
                 owner_agent="eve",
             )
+            from soveryn.agents.eve_ig_tools import register_eve_ig_post_tool
+            register_eve_ig_post_tool(tool_registry, owner_agent="eve")
+
+        try:
+            from soveryn.platform.gbp import register_gbp_tools
+            register_gbp_tools(tool_registry, owner_agent="eve")
+        except Exception:
+            logger.exception("gbp tools not registered")
 
         # Eve — Canva Connect (create/autofill/export). Publish to IG stays in
         # Canva Content Planner or manual paste — see platform/canva/SETUP.md.
@@ -1149,23 +1152,18 @@ def create_app(
                 # ample room for it.
                 kwargs["max_tokens"] = 8192
             elif name == "kernel":
-                # Kernel builds on Quadros Flash (kernel_build / bench-flash).
-                # Live 2026-08-23: chess-page commission died with
-                # LlamaServerTimeout('kernel_build: timeout after 120.0s') while
-                # prompt eval alone was still mid-flight (~8k tokens / ~66 t/s
-                # prefill, generation ~5 t/s). Same class of work as Vett's
-                # heavy turns — code + tools + large context. 600s covers a
-                # full build wave without treating a slow prefill as failure.
+                # Kernel on GLM TP=2 (Spark :8001, 32k) or Quadros Qwen (65k).
+                # 600s covers a slow prefill; n_ctx clamp below sets max_tokens
+                # so prompt+completion actually fit the live window.
                 kwargs["chat_timeout_seconds"] = 600.0
                 kwargs["max_tool_rounds"] = 16
                 kwargs["max_tokens"] = 8192
             elif name == "eve":
-                # Shares kernel_build with Kernel; lighter marketing turns but
-                # same cold-prefill tax on Quadros. Match Vett's 300s floor.
-                # Canva create+export+compose needs several tool rounds.
+                # Quadros Qwen 3.8 :8091 (65k). Not Spark GLM.
                 kwargs["chat_timeout_seconds"] = 300.0
                 kwargs["max_tool_rounds"] = 12
                 kwargs["max_tokens"] = 8192
+                kwargs["context_window"] = 65536
             elif name == "grok":
                 # Messages coding peer — headless Grok Build CLI (not llama).
                 # Tools live inside grok; AgentLoop tools stay off to avoid
@@ -1183,6 +1181,25 @@ def create_app(
                 kwargs["max_tokens"] = 8192
                 kwargs["approval_gate"] = None
                 kwargs["verification_gate"] = None
+            # Fit prompt+completion to the live server window. GLM was 16k
+            # (now 32k); still clamp if a server is ≤16k so we don't 400.
+            _srv = next(
+                (s for s in MODEL_SERVERS if s.name == AGENT_TO_SERVER.get(name)),
+                None,
+            )
+            if _srv is not None:
+                _nctx = int(_srv.n_ctx)
+                kwargs["context_window"] = min(
+                    int(kwargs.get("context_window") or _nctx), _nctx
+                )
+                if _nctx <= 16384:
+                    # GLM hides CoT in `reasoning`. 2048 often expired mid-thought
+                    # so Messages got no visible tokens. 4096 leaves room for an
+                    # answer inside 16k (prompt fit still uses max_tokens+margin).
+                    kwargs["max_tokens"] = min(int(kwargs.get("max_tokens") or 4096), 4096)
+                    kwargs["history_token_budget"] = min(
+                        int(kwargs.get("history_token_budget") or 2048), 2048
+                    )
             # Every agent gets its own live thread, not just Aetheria.
             if name in active_context_services:
                 kwargs["active_context"] = active_context_services[name]

@@ -58,8 +58,9 @@ class MedicDecision:
 
 TARGETS: dict[str, MedicTarget] = {
     "vnext":      MedicTarget("vnext", "soveryn-vnext.service", 300.0, escalation_priority=True),
-    # embeddings: 2026-08-17 moved to Spark fabric (soveryn-embed.service there).
-    # Tower unit soveryn-embeddings.service is retired — do not restart it.
+    # embeddings: helper Quadro soveryn-embeddings.service (:8096). Spark
+    # soveryn-embed stays disabled — GLM owns that UMA.
+    "embeddings": MedicTarget("embeddings", "soveryn-embeddings.service", 300.0, escalation_priority=False),
     "heartbeat":  MedicTarget("heartbeat", "soveryn-heartbeat.service", 600.0, escalation_priority=False),
     "dream":      MedicTarget("dream", "soveryn-dream.service", 300.0, escalation_priority=False),
     "x-feed":     MedicTarget("x-feed", "soveryn-x-feed.service", 300.0, escalation_priority=False),
@@ -95,14 +96,22 @@ def decide(
     """
     decisions: list[MedicDecision] = []
     for key in sorted(unhealthy_keys):
-        # Keys probed but not in TARGETS (e.g. Spark embeddings) — escalate only
-        # via visibility; no local unit to restart.
+        # Keys probed but not in TARGETS — no local unit. Page once, then latch
+        # (same as TARGET skip_escalated). Without the latch, a parked remote
+        # (Spark embed) Signal-spammed every 60s timer tick.
         if key not in targets:
-            decisions.append(MedicDecision(
-                key, "remote", "escalate",
-                "unhealthy remote surface (no tower unit) — check Spark soveryn-embed",
-                priority=False,
-            ))
+            st = state.get(key, _blank_state())
+            if st["escalated"]:
+                decisions.append(MedicDecision(
+                    key, "remote", "skip_escalated",
+                    "already escalated; awaiting recovery",
+                ))
+            else:
+                decisions.append(MedicDecision(
+                    key, "remote", "escalate",
+                    "unhealthy remote surface (no tower unit)",
+                    priority=False,
+                ))
             continue
         target = targets[key]
         if key == "vnext" and not router_healthy:
@@ -130,8 +139,7 @@ def decide(
 
 # ── probe classification (pure) ─────────────────────────────────────────────
 _HTTP_PORTS = {"vnext": 5001, "router": 8090}
-# Spark librarian (fabric) — health only; no tower unit to restart.
-_HTTP_URLS = {"embeddings": "http://10.10.10.2:8096/health"}
+_HTTP_URLS: dict[str, str] = {"embeddings": "http://127.0.0.1:8096/health"}
 _UNIT_KEYS = ("dream", "x-feed", "parakeet", "vett-patrol", "representation")
 
 
@@ -146,8 +154,6 @@ def probe_unhealthy(
     unhealthy: set[str] = set()
     if not http_ok.get("vnext", True):
         unhealthy.add("vnext")
-    # Embeddings on Spark: report unhealthy for visibility, but TARGETS no longer
-    # restarts a tower unit (would thrash the retired soveryn-embeddings.service).
     if not http_ok.get("embeddings", True):
         unhealthy.add("embeddings")
     for key in _UNIT_KEYS:

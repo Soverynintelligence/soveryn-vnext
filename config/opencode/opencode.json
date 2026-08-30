@@ -1,21 +1,25 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "kernel-flash/bench-flash",
-  "small_model": "kernel-flash/bench-flash",
-  "enabled_providers": ["kernel-flash", "kernel-qwen"],
+  "model": "kernel-glm/glm-5.3-flash",
+  "small_model": "kernel-glm/glm-5.3-flash",
+  "enabled_providers": ["kernel-glm", "kernel-qwen"],
   "provider": {
-    "kernel-flash": {
+    "kernel-glm": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel coding · DeepSeek Flash (:8091)",
+      "name": "Kernel coding · GLM-5.3-Flash dual Spark (:8001)",
       "options": {
-        "baseURL": "http://127.0.0.1:8091/v1",
-        "apiKey": "sk-local-soveryn"
+        "baseURL": "http://10.10.10.2:8001/v1",
+        "apiKey": "sk-local-soveryn",
+        "chat_template_kwargs": {
+          "enable_thinking": false,
+          "thinking": false
+        }
       },
       "models": {
-        "bench-flash": {
-          "name": "Kernel · DeepSeek V4 Flash (OpenCode default)",
+        "glm-5.3-flash": {
+          "name": "Kernel · GLM-5.3-Flash NVFP4 TP=2 (OpenCode default)",
           "limit": {
-            "context": 16384,
+            "context": 32768,
             "output": 8192
           }
         }
@@ -41,9 +45,9 @@
   },
   "agent": {
     "kernel": {
-      "description": "SOVERYN house build brain — autonomous mend/patch on DeepSeek Flash",
+      "description": "SOVERYN house build brain — autonomous mend/patch on GLM-5.3-Flash",
       "mode": "primary",
-      "model": "kernel-flash/bench-flash",
+      "model": "kernel-glm/glm-5.3-flash",
       "temperature": 0.2,
       "prompt": "{file:./agents/kernel.md}",
       "color": "#6aa84f",
@@ -62,10 +66,10 @@
       }
     },
     "build": {
-      "model": "kernel-flash/bench-flash"
+      "model": "kernel-glm/glm-5.3-flash"
     },
     "plan": {
-      "model": "kernel-flash/bench-flash"
+      "model": "kernel-glm/glm-5.3-flash"
     }
   },
   "permission": {

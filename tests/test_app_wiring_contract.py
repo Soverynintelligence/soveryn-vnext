@@ -168,16 +168,19 @@ def test_scotty_tool_scope(app):
     assert "create_document" not in names, "scotty should not have document tools"
 
 
-# ─── X presence tools (Task 6): read_x + post_to_x, aetheria-only ────────────
+# ─── X presence tools: Eve only (Aetheria pulled off) ────────────────────────
 
-def test_aetheria_has_x_tools(app):
+def test_aetheria_has_no_x_tools(app):
     names = _tool_names(_loops(app)["aetheria"], "aetheria")
-    assert "read_x" in names, f"aetheria missing 'read_x': {sorted(names)}"
-    assert "post_to_x" in names, f"aetheria missing 'post_to_x': {sorted(names)}"
+    assert "read_x" not in names
+    assert "post_to_x" not in names
 
 
-def test_x_tools_scoped_to_aetheria_only(app):
-    for agent in ("vett", "scotty"):
+def test_x_tools_scoped_to_eve(app):
+    eve_names = _tool_names(_loops(app)["eve"], "eve")
+    assert "read_x" in eve_names
+    assert "post_to_x" in eve_names
+    for agent in ("aetheria", "vett", "scotty", "kernel"):
         names = _tool_names(_loops(app)[agent], agent)
         assert "read_x" not in names, f"{agent} must not have 'read_x'"
         assert "post_to_x" not in names, f"{agent} must not have 'post_to_x'"
@@ -196,6 +199,9 @@ def test_create_app_boots_with_no_x_creds(tmp_path, monkeypatch, fake_souls_dir,
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
     app = create_app(conv_store=ConversationStore(tmp_path / "conv2.db"))
-    names = _tool_names(_loops(app)["aetheria"], "aetheria")
+    names = _tool_names(_loops(app)["eve"], "eve")
     assert "read_x" in names
     assert "post_to_x" in names
+    aeth = _tool_names(_loops(app)["aetheria"], "aetheria")
+    assert "read_x" not in aeth
+    assert "post_to_x" not in aeth

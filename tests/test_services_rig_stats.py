@@ -20,6 +20,7 @@ from soveryn.app.services.rig_stats import (
     _read_cgroup_unit,
     _read_comm,
     _resolve_pid_name,
+    _house_resident_name,
     Resident,
     RigGpu,
     RigStatsResult,
@@ -149,6 +150,15 @@ def test_pid_vanished_between_calls_is_skipped_not_fatal():
 
 
 # --- full join / get_rig_stats -------------------------------------------
+
+def test_quadro_kernel_alias_is_house_qwen38():
+    """Live llama-server still starts as --alias kernel for the public Qwen slot.
+    Kernel the citizen is Spark GLM — the Quadro chip must not say Kernel."""
+    assert _house_resident_name("kernel", "Quadro RTX 8000") == "qwen38"
+    assert _house_resident_name("Kernel", "NVIDIA Quadro RTX 8000") == "qwen38"
+    assert _house_resident_name("kernel", "NVIDIA RTX PRO 5000 Blackwell") == "kernel"
+    assert _house_resident_name("aetheria", "Quadro RTX 8000") == "aetheria"
+
 
 def test_join_attaches_residents_to_correct_gpu_by_uuid_and_sorts_desc():
     with patch("subprocess.run", side_effect=[_smi(GPU_RAW), _smi(APPS_RAW)]), \

@@ -126,8 +126,8 @@ def brain_status() -> dict[str, Any]:
         "note": (
             "Spark hard brains for Vett, Scotty, and public agents. "
             "Only one loaded at a time. Aetheria (soul) stays on Blackwell. "
-            "Kernel defaults to Quadros Flash; switch with "
-            "scripts/switch_kernel_brain.sh flash|qwen38 (Eve stays on Flash)."
+            "Kernel defaults to GLM TP=2 on Sparks :8001; switch with "
+            "scripts/switch_kernel_brain.sh glm|flash|qwen38 (Eve stays on Quadros Qwen)."
         ),
         "brains": [
             {

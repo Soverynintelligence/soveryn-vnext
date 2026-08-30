@@ -150,7 +150,8 @@ def test_roster_includes_duties_after_refresh(client, tmp_path):
     assert resp.status_code == 200, resp.get_data(as_text=True)
     rows = {r["id"]: r for r in resp.get_json()["citizens"]}
     assert "heartbeat" in rows["aetheria"]["duties_enabled"]
-    assert "patrol" in rows["vett"]["duties_enabled"]
+    assert "vett" not in rows
+    assert "scotty" not in rows
 
     board = c.get("/api/citizens")
     assert board.status_code == 200
@@ -183,4 +184,6 @@ def test_board_includes_spawned_under_aetheria(client):
     assert spawned["count"] == len(spawned["specialists"])
     # founding roster never includes ephemeral specialist ids
     citizen_ids = {r["id"] for r in data["citizens"]}
-    assert citizen_ids <= {"aetheria", "vett", "scotty"} or "aetheria" in citizen_ids
+    assert "aetheria" in citizen_ids
+    assert "vett" not in citizen_ids
+    assert "scotty" not in citizen_ids

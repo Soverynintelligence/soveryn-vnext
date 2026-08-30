@@ -76,6 +76,8 @@ def test_startup_creates_tool_registry_for_aetheria(
     names = {schema["function"]["name"] for schema in schemas}
     # Slice A: every citizen gets owner-scoped recall_skill
     for agent, loop in app.extensions["soveryn"]["agent_loops"].items():
+        if loop.tool_registry is None:
+            continue  # Grok tools live in the Build CLI, not AgentLoop
         agent_names = {s["function"]["name"] for s in loop._tool_schemas()}
         assert "recall_skill" in agent_names, f"{agent} missing recall_skill"
     # Aetheria's lattice read tools (Track 2)
@@ -180,15 +182,16 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     # continuity, spine, recall — against the same envelope was starving the
     # chat history it was supposed to protect. A smaller history-only budget
     # leaves her more room to talk, not less.
-    for agent in ("aetheria", "vett", "scotty"):
+    assert loops["aetheria"].context_window == 32_768
+    assert loops["aetheria"].history_token_budget == 6_000
+    for agent in ("vett", "scotty"):
         assert loops[agent].context_window == 32_768, agent
         assert loops[agent].history_token_budget == 6_000, agent
+    assert loops["kernel"].context_window == 32_768
     # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
-    # 2026-07-11: Vett also raised to 8192 — document-length tool calls
-    # (create_document with a full markdown paper) were truncated mid-JSON at
-    # the 2048 default. Scotty stays at the default. See startup.py:750.
+    # Vett 8192 on the 32k GLM/Qwen window.
     assert loops["vett"].max_tokens == 8192
     assert loops["scotty"].max_tokens != 8192
 

@@ -149,7 +149,7 @@
     to   { transform:translateX(420%); }
   }
 
-  /* Sparks — A is live hardware, B is an empty bay (an invitation, not an apology). */
+  /* Sparks — A is vLLM API, B is the TP=2 worker. */
   .rig-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .spark-hw {
     font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
@@ -239,12 +239,9 @@
             <div class="bay-label">DGX Spark A</div>
             <div data-rig-spark-a><div class="rig-note">reading the Spark…</div></div>
           </div>
-          <div class="rig-bay empty-bay" data-testid="rig-spark-b">
-            <div class="bay-label">Spark B</div>
-            <div class="bay-empty">
-              <div class="eb-title">Empty bay</div>
-              <div class="eb-sub">awaiting hardware</div>
-            </div>
+          <div class="rig-bay spark" data-testid="rig-spark-b">
+            <div class="bay-label">DGX Spark B</div>
+            <div data-rig-spark-b><div class="rig-note">reading Spark B…</div></div>
           </div>
         </div>
       </section>
@@ -353,8 +350,8 @@ function htmlEscape(s) {
       </div>`;
   }
 
-  function renderSparkBay(d) {
-    const el = document.querySelector("[data-rig-spark-a]");
+  function renderSparkBay(d, selector, workerLabel) {
+    const el = document.querySelector(selector || "[data-rig-spark-a]");
     if (!el) return;
     if (!d || !d.available) {
       el.innerHTML = `<div class="rig-dead">unreachable</div>
@@ -385,8 +382,11 @@ function htmlEscape(s) {
     const kv = v.kv_cache_pct == null ? null : (v.kv_cache_pct * 100).toFixed(0);
     const vllmLine = v.up
       ? `<span class="res-chip"><span class="caret">›</span>${htmlEscape(v.model || "vllm")}<span class="mem">${
-          running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}</span></span>`
-      : `<span class="res-unknown">vllm down</span>`;
+          workerLabel
+            ? htmlEscape(workerLabel)
+            : `${running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}`
+        }</span></span>`
+      : `<span class="res-unknown">${workerLabel ? "worker down" : "vllm down"}</span>`;
 
     el.innerHTML = `
       <div class="spark-hw">${htmlEscape(hw)}</div>
@@ -452,12 +452,14 @@ function htmlEscape(s) {
         `${gpuCount || "—"} GPU${gpuCount === 1 ? "" : "s"}`,
         `${totalMib ? Math.round(gbFromMib(totalMib)) : "—"} GB VRAM`,
       ];
-      if (spark && spark.available) bits.push("1 Spark");
+      const sparkCount = (spark && spark.available ? 1 : 0) + (spark && spark.b && spark.b.available ? 1 : 0);
+      if (sparkCount) bits.push(`${sparkCount} Spark${sparkCount === 1 ? "" : "s"}`);
       totalsEl.innerHTML = `${htmlEscape(bits.join(" · "))} · <span class="fabric-state" data-state="${
         fabricState}">${htmlEscape(fabricShort)}</span>`;
     }
 
-    renderSparkBay(spark);
+    renderSparkBay(spark, "[data-rig-spark-a]");
+    renderSparkBay(spark && spark.b, "[data-rig-spark-b]", "tp worker");
   }
 
 

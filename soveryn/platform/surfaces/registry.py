@@ -220,9 +220,9 @@ SURFACES: tuple[Surface, ...] = (
         notes="History's Ledger curator; cite-or-drop depends on a live model.",
     ),
     Surface(
-        "embeddings", Kind.HTTP, "http://10.10.10.2:8096/health",
+        "embeddings", Kind.HTTP, "http://127.0.0.1:8096/health",
         owner="aetheria", interval_s=600,
-        notes="Lattice librarian on Spark (Nemotron-Embed-8B); not Lightning chat.",
+        notes="Lattice librarian on helper Quadro (Nemotron-Embed-8B); Spark embed parked.",
     ),
 
     # ── internal ──────────────────────────────────────────────────────────

@@ -25,11 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.agents.heartbeat.daily_post import (
-    DAILY_POST_INVITE,
     DEFAULT_DAILY_POST_HOUR,
-    read_last_invite_date,
-    should_nudge,
-    write_last_invite_date,
 )
 from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.delta import compute_delta
@@ -46,9 +42,6 @@ from soveryn.agents.heartbeat.prompt import (
     build_heartbeat_prompt,
 )
 from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-from soveryn.agents.presence.candidate_store import CandidateStore
-from soveryn.agents.presence.config import PresenceConfig
-from soveryn.agents.presence.digest import build_digest
 from soveryn.agents.heartbeat.trigger import (
     HeartbeatConfig,
     SkipReason,
@@ -388,36 +381,10 @@ class HeartbeatDaemon:
             }
             prev_record = self._thoughts_log.last()
             delta = compute_delta(current_snapshot, prev_record)
-            # X digest — best-effort. Reads the same feed candidate_store the
-            # read_x tool reads; a feed problem (missing db, corrupt store,
-            # etc.) must never break the heartbeat tick.
-            try:
-                x_digest = build_digest(
-                    CandidateStore(PresenceConfig.default().db_path)
-                ) or ""
-            except Exception:
-                logger.exception("heartbeat tick: X digest build failed, omitting")
-                x_digest = ""
-            # Once-per-day AM post nudge — best-effort. Fires on the FIRST
-            # eligible tick each calendar day at/after `daily_post_hour` local
-            # (`now` is the single wall-clock read passed down from run()), then
-            # persists today's date so a mid-day restart won't re-nudge. Any
-            # failure here must never break the tick.
+            # Aetheria is off X. Do not inject a feed digest or a daily tweet
+            # invite into her pulse — Eve owns @Soveryn_AI now.
+            x_digest = ""
             daily_post_invite = ""
-            try:
-                last_invite = read_last_invite_date(self.daily_post_state_path)
-                if should_nudge(
-                    now=now,
-                    last_invite_date=last_invite,
-                    hour_threshold=self.daily_post_hour,
-                ):
-                    daily_post_invite = DAILY_POST_INVITE
-                    write_last_invite_date(
-                        self.daily_post_state_path, now.date().isoformat()
-                    )
-            except Exception:
-                logger.exception("heartbeat tick: daily post nudge failed, omitting")
-                daily_post_invite = ""
 
             # Walk past empty unchanged-skip rows to the last real note.
             last_note = self._thoughts_log.last_standing_note()

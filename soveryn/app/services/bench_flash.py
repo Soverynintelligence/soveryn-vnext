@@ -1,7 +1,7 @@
-"""Kernel — SOVERYN local build brain (DeepSeek V4 Flash under the hood).
+"""Kernel — SOVERYN local build brain (GLM-5.3-Flash NVFP4 under the hood).
 
-House name: Kernel (chosen in-house). Model: DeepSeek-V4-Flash-0731.
-Weights on NVMe; quadro router alias ``bench-flash`` on :8091.
+House name: Kernel. Live weights: GLM-5.3-Flash TP=2 on both Sparks.
+API ``http://10.10.10.2:8001`` alias ``glm-5.3-flash``. DeepSeek Flash GGUF parked.
 Command Center uses this so operators can warm and talk without CLI.
 """
 
@@ -17,16 +17,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROUTER_BASE = "http://127.0.0.1:8091"
-MODEL_ALIAS = "bench-flash"
-ENTRY_SHARD = Path(
-    "/mnt/soveryn_models/GGUF/DeepSeek-V4-Flash-0731/UD-Q4_K_XL/"
-    "DeepSeek-V4-Flash-0731-UD-Q4_K_XL-00001-of-00005.gguf"
-)
-WEIGHTS_DIR = ENTRY_SHARD.parent
+ROUTER_BASE = "http://10.10.10.2:8001"
+MODEL_ALIAS = "glm-5.3-flash"
+# Live weights are on the Sparks, not a tower GGUF. Path is display-only.
+ENTRY_SHARD = Path("/home/soverynspark/models/GLM-5.3-Flash-NVFP4")
+WEIGHTS_DIR = ENTRY_SHARD
 AIDER_CMD = (
-    "AIDER_BASE=http://127.0.0.1:8091/v1 "
-    "AIDER_MODEL=openai/bench-flash soveryn-aider"
+    "AIDER_BASE=http://10.10.10.2:8001/v1 "
+    "AIDER_MODEL=openai/glm-5.3-flash soveryn-aider"
 )
 OPENCODE_CMD = "soveryn-opencode"
 HOUSE_NAME = "Kernel"
@@ -63,10 +61,9 @@ class BenchFlashStatus:
     talk_path: str = "/build"
     note: str = (
         "Kernel — house build brain. "
-        "OpenCode coding default: Qwen 3.8 on :8090 (`soveryn-opencode`). "
-        "Chat/dig warm here: DeepSeek Flash on :8091. "
-        "Flash dig via OpenCode: `soveryn-opencode --flash`. "
-        "Aider Flash: `soveryn-aider --kernel`. First Flash warm can take minutes."
+        "OpenCode / Aider / Messages: GLM-5.3-Flash TP=2 on Sparks :8001 "
+        "(`soveryn-opencode`, `soveryn-aider --kernel`). "
+        "Quadros :8091 Qwen 3.8 is Eve + public, not Kernel."
     )
     fetched_at: str = ""
 
@@ -124,63 +121,36 @@ def get_status() -> BenchFlashStatus:
     st = BenchFlashStatus(
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
-    st.weights_ok = ENTRY_SHARD.is_file()
     models = _http_json(f"{ROUTER_BASE}/v1/models", timeout=3.0)
     st.router_ok = models is not None
+    listed = False
+    llama_status = None
+    for m in (models or {}).get("data") or []:
+        mid = m.get("id") or ""
+        aliases = m.get("aliases") or []
+        if mid == MODEL_ALIAS or MODEL_ALIAS in aliases:
+            listed = True
+            llama_status = (m.get("status") or {}).get("value")
+            break
+
+    # vLLM /v1/models has no llama.cpp status.value — listed means serving.
+    st.weights_ok = listed
+    st.model_status = llama_status or ("loaded" if listed else None)
 
     with _lock:
         st.warm_job = dict(_warm_state)
 
-    if not st.weights_ok:
-        st.state = "missing"
-        return st
     if not st.router_ok:
         st.state = "router_down"
         return st
-
-    model_status = None
-    for m in (models or {}).get("data") or []:
-        mid = m.get("id") or ""
-        aliases = m.get("aliases") or []
-        if mid == MODEL_ALIAS or MODEL_ALIAS in aliases or mid in (
-            "deepseek-flash",
-            "deepseek-v4-flash",
-            "DeepSeek-V4-Flash-0731",
-        ):
-            ms = (m.get("status") or {}).get("value")
-            model_status = ms
-            break
-        # Also match if id is bench-flash
-        if "flash" in mid.lower() and "deepseek" in mid.lower():
-            model_status = (m.get("status") or {}).get("value")
-            break
-
-    # Prefer exact alias scan
-    for m in (models or {}).get("data") or []:
-        if m.get("id") == MODEL_ALIAS:
-            model_status = (m.get("status") or {}).get("value")
-            break
-
-    st.model_status = model_status
-
     if st.warm_job.get("status") == "loading":
         st.state = "loading"
-    elif model_status == "loaded":
+        return st
+    if listed:
         st.state = "warm"
-    elif model_status in (None, "unloaded"):
-        # preset may be listed as unloaded, or only appear once first requested
-        if model_status is None:
-            # preset missing from router — still cold if weights exist
-            st.state = "cold"
-            st.note = (
-                st.note
-                + " Preset not listed on router — restart soveryn-router-quadro if needed."
-            )
-        else:
-            st.state = "cold"
-    else:
-        st.state = "cold"
-
+        return st
+    st.state = "missing"
+    st.note = st.note + " GLM not listed on Spark :8001."
     return st
 
 
@@ -427,7 +397,7 @@ def _chat_plain(
     except Exception:
         system = (
             "You are Kernel, the SOVERYN house build brain. "
-            "You run locally (DeepSeek V4 Flash weights). "
+            "You run locally (GLM-5.3-Flash NVFP4 on dual Spark). "
             "You make and mend code — patches, refactors, technical work. "
             "You are not the soul, not the verifier, not the political executor. "
             "Be direct. Prefer concrete patches and commands over essays."

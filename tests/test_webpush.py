@@ -5,8 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from soveryn.platform.webpush import store as push_store
+from soveryn.platform.webpush.notify import should_notify_phone
 from soveryn.platform.webpush.keys import get_vapid_public_key, load_vapid
 from soveryn.platform.approval.store import ApprovalBroker, ApprovalStore
+
+
+def test_parked_messages_peers_do_not_wake_phone():
+    assert should_notify_phone("vett") is False
+    assert should_notify_phone("scotty") is False
+    assert should_notify_phone("eve") is True
+    assert should_notify_phone("aetheria") is True
+    assert should_notify_phone("kernel") is True
 
 
 def test_vapid_keys_mint_once(tmp_path: Path, monkeypatch):

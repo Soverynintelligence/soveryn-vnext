@@ -9,6 +9,19 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def should_notify_phone(citizen: str) -> bool:
+    """Parked Messages peers (Vett/Scotty) must not wake the phone."""
+    who = (citizen or "").strip().lower()
+    if not who:
+        return True
+    try:
+        from soveryn.config.runtime import MESSAGES_PARKED
+
+        return who not in MESSAGES_PARKED
+    except Exception:
+        return True
+
+
 def notify_needs_you(
     *,
     title: str,
@@ -134,6 +147,9 @@ def _label(citizen: str) -> str:
 
 def notify_gate(*, citizen: str, tool: str, approval_id: str) -> None:
     who = (citizen or "aetheria").strip().lower() or "aetheria"
+    if not should_notify_phone(who):
+        logger.info("webpush: skip gate for parked contact %s", who)
+        return
     tool_s = (tool or "action").strip()
     notify_needs_you(
         title=f"{_label(who)} needs Gate",
@@ -145,6 +161,9 @@ def notify_gate(*, citizen: str, tool: str, approval_id: str) -> None:
 
 def notify_share(*, agent: str, preview: str = "") -> None:
     who = (agent or "aetheria").strip().lower() or "aetheria"
+    if not should_notify_phone(who):
+        logger.info("webpush: skip share for parked contact %s", who)
+        return
     notify_needs_you(
         title=f"{_label(who)} — needs you",
         body=(preview or "Open Messages").strip()[:140],

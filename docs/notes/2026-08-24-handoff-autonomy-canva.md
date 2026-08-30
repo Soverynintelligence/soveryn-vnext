@@ -11,7 +11,7 @@
 - Ordered **second ASUS GX10** — ETA **Tuesday**. Same GB10 class as DGX Spark; plan: dedicated brain so Flash stops fighting tower VRAM.
 
 ## Seneca (public)
-- Today 2 turns (IP 89.187.177.74): hardware yes / cost → ask Jon. Lead **not** captured. Log: Spark `~/soveryn-agent/conversations.log`.
+- 2026-08-23 2 turns (IP 89.187.177.74, DataCamp/CDN77 NYC): hardware yes then cost; **no contact left**. Logged → `docs/leads/seneca-leads.csv` (open-uncontactable). Quote process (internal): `docs/ops/soveryn-quote-skeleton.md`. Log: Spark `~/soveryn-agent/conversations.log`.
 
 ## Local-only (not in git)
 - `.env` — `SOVERYN_CANVA_CLIENT_ID` / `SOVERYN_CANVA_CLIENT_SECRET`
@@ -20,4 +20,4 @@
 - `data/media/canva/*` exports
 
 ## Next when fresh
-Kill list lives in **`docs/CURRENT_TRUTH.md` §4** (authority). Order: secrets backup → Seneca leads → email arm/mark → Teammates upgrades. ASUS Tuesday → Kernel brain. FreeToken parked.
+Kill list lives in **`docs/CURRENT_TRUTH.md` §4** (authority). Do not re-state it here.

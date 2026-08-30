@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-27  
+> **Last rotated:** 2026-08-30  
 > Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -28,15 +28,15 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | Quadros Flash (or Qwen lane) |
-| **Eve** | Ship posts (Canva / Signal Gate) | Shares build lane tools |
+| **Kernel** | Local build | Dual Spark GLM-5.3-Flash NVFP4 (RedHat, 32k) |
+| **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Grok** | Phone coding peer | Headless Grok Build CLI (cloud — no local VRAM) |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
 | Parked as Messages peers | Still in `ACTIVE_AGENTS`? | Notes |
 |--------------------------|---------------------------|--------|
-| **Vett** | Yes (engine room) | Research tools **also on Eve** (2026-08-27). New commissions/objectives **blocked**. Patrol cron may still touch Vett. |
-| **Scotty** | Yes (engine room) | New commissions **blocked**. Coding = Kernel + Grok. |
+| **Vett** | Retired (folded into Eve 2026-08-28) | Hidden on Staff + Command Center crew. Patrol off. No phone pings. |
+| **Scotty** | Yes (engine room) | Hidden on Staff + Command Center crew. New commissions **blocked**. Coding = Kernel + Grok. |
 
 **Do / don’t**
 
@@ -63,6 +63,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
+| Eve CWG Instagram desk | **Session live.** `eve_ig_post` Gate-only (never cadence). Pics: `~/Desktop/CWG-Instagram`. Profile `data/eve_ig_profile/`. |
+| Eve CWG Google Business | **Wired, not armed.** `eve_gbp_post` Gate-only (never cadence, never ads). OAuth: `python -m soveryn.platform.gbp authorize`. Needs Cloud client + Google access/quota. Tokens: `data/gbp/`. |
+| Eve X | **Live.** House @Soveryn_AI (`read_x` / `post_to_x`, `X_*` in `x_presence.env`). Stages until Jon says `post it`. **Aetheria off X** (no tools, no heartbeat tweet nudge). |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
 | Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (Gate / needs-you / Critic·Scout brief ready); Signal = Aetheria-only |
@@ -87,9 +90,10 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel / Eve default | Quadros Flash `:8091` |
-| Shared Spark workers | `:8001` |
-| FreeToken | **Back burner** — second ASUS purchase stalled (Amazon declines); no ETA |
+| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, RedHat compressed-tensors, ctx 32768) |
+| Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
+| Shared Spark workers | `:8001` GLM TP=2 (Spark2 worker on fabric) |
+| Second Spark | **Live** — `gx10-a733` / soverynspark2, GLM rank 1 |
 
 ---
 
@@ -97,11 +101,11 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 | Item | State |
 |------|--------|
-| Citizen email | **Not production** — needs SMTP + `SOVERYN_EMAIL_PRODUCTION=1` |
+| Citizen email | **Not production — NOT ARMED.** Gated checklist (source: `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist): 1) aliases on soverynintelligence.com + carolinawatergardens.com · 2) SPF/DKIM/DMARC both domains · 3) arm `SOVERYN_SMTP_HOST`/`SOVERYN_SMTP_FROM` + creds · 4) optional IMAP house inbox · 5) `SOVERYN_EMAIL_PRODUCTION=1` only after controlled smoke · 6) smoke: Messages → Aetheria → Gate Allow → test as `aetheria@soverynintelligence.com` · 7) flip this row to **Live** only after smoke |
 | CoS rename | **Deferred** — Aetheria still `COS_ID` |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
 | Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
-| Second ASUS GX10 | **Parked** — Amazon declined (enough credit; not a bank limit). Retry later / other channel if wanted |
+| Second ASUS GX10 | **Live** — Spark2 `gx10-a733` on GLM TP=2 |
 | CWG brand | **Locked:** oasis/serenity/wildlife — not catalog pricing |
 | Memory / identity layer | **2026-08-25** — pinned + persona spine; journal/heartbeat recall demoted to Channel B (not “I remember…” essays) |
 
@@ -123,12 +127,14 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 1. ~~Rotate source of authority~~ → this file  
 2. ~~Secrets/state backup~~ → runbook + drill PASS  
-3. ~~Seneca lead capture~~ → Spark `soveryn-leads.jsonl`  
-4. ~~Citizen email~~ → marked not production  
+3. ~~Seneca lead capture~~ → `docs/leads/seneca-leads.csv` (retroactive 08-24)  
+4. ~~Citizen email~~ → **NOT ARMED** — gated checklist in §2  
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 
 **Next (when Jon says go):** House as-is (no second ASUS this week); Meta IG / CRM parked.
+
+Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `docs/runbooks/env-var-map.md` · incident template `docs/notes/INCIDENT-TEMPLATE.md` · **internal** SOVERYN quote skeleton `docs/ops/soveryn-quote-skeleton.md` (not public; Seneca does not quote dollars).
 
 ---
 

@@ -165,6 +165,31 @@ class StagedStore:
 
         return self._row_to_post(row) if row is not None else None
 
+    def pending_all(self) -> list[StagedPost]:
+        """All `proposed` posts, any agent."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, agent, text, reply_to, proposed_at, state
+                FROM staged_posts
+                WHERE state = 'proposed'
+                ORDER BY proposed_at ASC
+                """
+            ).fetchall()
+        return [self._row_to_post(row) for row in rows]
+
+    def get(self, post_id: str) -> Optional[StagedPost]:
+        with self._conn() as conn:
+            row = conn.execute(
+                """
+                SELECT id, agent, text, reply_to, proposed_at, state
+                FROM staged_posts
+                WHERE id = ?
+                """,
+                (post_id,),
+            ).fetchone()
+        return self._row_to_post(row) if row is not None else None
+
     def mark(self, post_id: str, state: str) -> None:
         """Update a staged post's state."""
         with self._conn() as conn:

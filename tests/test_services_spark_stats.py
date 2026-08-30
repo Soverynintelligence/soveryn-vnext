@@ -7,6 +7,7 @@ from unittest.mock import patch
 from soveryn.app.services import spark_stats
 from soveryn.app.services.spark_stats import (
     _parse_probe, _parse_prometheus, SparkContainer, get_spark_stats,
+    get_spark2_stats,
 )
 
 PROBE_OK = """45, 52
@@ -316,3 +317,33 @@ def test_caches_within_window():
         get_spark_stats()
         get_spark_stats()
     assert run.call_count == 1
+
+
+PROBE_B = """95, 72
+---
+Mem:  130596184064 113556271104 1502601216 0 19507953664 17039912960
+---
+glm53-serve-vllm-glm53-1|running
+"""
+
+
+def test_spark2_reports_kernel_worker_from_docker():
+    spark_stats._cache_b = None
+    with patch("subprocess.run", return_value=_ssh_ok(PROBE_B)) as run:
+        r = get_spark2_stats(_force_refresh=True)
+    assert r.available is True
+    assert r.path == "lan"
+    assert r.vllm.up is True
+    assert r.vllm.model == "kernel"
+    assert r.host.gpu_util_pct == 95
+    cmd = " ".join(run.call_args[0][0])
+    assert spark_stats.SPARK2_SSH_USER in cmd
+    assert spark_stats.SPARK2_LAN_HOST in cmd
+
+
+def test_spark2_unreachable_is_not_fatal():
+    spark_stats._cache_b = None
+    with patch("subprocess.run", return_value=_ssh_fail()):
+        r = get_spark2_stats(_force_refresh=True)
+    assert r.available is False
+    assert r.host_known is False

@@ -15,6 +15,7 @@ def db(tmp_path):
             ("vett", "V.E.T.T."),
             ("scotty", "Scotty"),
             ("eve", "Eve"),
+            ("kernel", "Kernel"),
         ):
             register(conn, Citizen(id=cid, display_name=name))
         yield conn
@@ -62,4 +63,6 @@ def test_census_seeds_duties(tmp_path):
         )
     aeth = next(r for r in rows if r["id"] == "aetheria")
     assert "heartbeat" in aeth["duties_enabled"]
-    assert "patrol" in next(r for r in rows if r["id"] == "vett")["duties_enabled"]
+    eve = next(r for r in rows if r["id"] == "eve")
+    assert "marketing" in eve["duties_enabled"]
+    assert all(r["id"] != "vett" for r in rows)

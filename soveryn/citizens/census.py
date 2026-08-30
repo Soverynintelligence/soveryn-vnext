@@ -85,8 +85,9 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="vett_scotty_shared",
             workspace_path=str(DEFAULT_WORKSPACES / "vett"),
             notes=(
-                f"Inference on Spark :8001 ({_alias_of('vett_scotty_shared')}); "
-                "patrols from the tower."
+                f"FOLDED INTO EVE 2026-08-28. Was Spark :8001 "
+                f"({_alias_of('vett_scotty_shared')}). Research tools live on Eve. "
+                "Do not assign new work here."
             ),
         ),
         ("soveryn-vett-patrol.service",),
@@ -111,13 +112,15 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             id="eve",
             display_name="Eve",
             soul_path="data/memory/souls/eve.md",
-            model_server="kernel_build",
+            model_server="eve_flash",
             workspace_path=str(DEFAULT_WORKSPACES / "eve"),
             notes=(
-                "Head of Marketing for the house. Inference on Quadros :8091 "
-                "(shared with Kernel). Draft-and-drop marketing for SOVERYN, "
-                "ActTruth, and Carolina Water Gardens — no Meta API, no "
-                "credentials, Signal drop only."
+                "Research + marketing (Vett folded in). Quadros :8091 Qwen3.8-27B "
+                "(ctx 65k). Kernel is on Spark GLM, not this slot. Dig with "
+                "web/docs; owns house @Soveryn_AI (read_x / post_to_x). "
+                "Aetheria is off X. Ship Canva + Signal drafts; live CWG "
+                "Instagram via eve_ig_post and Google Business via eve_gbp_post "
+                "after Allow. Facebook still Signal-only. GBP not ads."
             ),
         ),
         (),
@@ -130,9 +133,10 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="kernel_build",
             workspace_path=str(DEFAULT_WORKSPACES / "kernel"),
             notes=(
-                "Build / code desk. Inference on Quadros :8091 "
-                f"({_alias_of('kernel_build')}); shared with Eve. "
-                "Jon assigns build work here — not Scotty's repair queue."
+                "Build / code desk. GLM-5.3-Flash NVFP4 (RedHat compressed-tensors) "
+                f"TP=2 on both Sparks (:8001 / {_alias_of('kernel_build')}, ctx 32k). "
+                "Eve stays on Quadros Qwen 3.8 :8091. DeepSeek Flash parked. Jon "
+                "assigns build work here — not Scotty's repair queue."
             ),
         ),
         (),  # no dedicated process unit on the tower yet — invoked on demand
@@ -191,6 +195,12 @@ def take_census(conn, *, workspaces: Path = DEFAULT_WORKSPACES,
     # rewire systemd — register first, rewire later (project §7).
     from soveryn.citizens.duties import seed_founding
     seed_founding(conn)
+
+    # Vett folded into Eve — after duty seed so we can disable her rows.
+    from soveryn.citizens.registry import retire
+    retire(conn, "vett", at=stamp)
+    conn.execute("UPDATE duties SET enabled = 0 WHERE citizen_id = 'vett'")
+    conn.commit()
 
     # Autonomy: keep at least one SOVERYN improve + one CWG watch objective
     # alive so the house does work without Jon poking.

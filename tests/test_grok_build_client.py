@@ -84,6 +84,73 @@ def test_run_grok_prompt_success(monkeypatch, tmp_path):
     assert "acceptEdits" in cmd
 
 
+def test_run_grok_prompt_tools_allowlist(monkeypatch, tmp_path):
+    bin_path = tmp_path / "grok"
+    bin_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    bin_path.chmod(0o755)
+    work = tmp_path / "cwd"
+    work.mkdir()
+
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = json.dumps({"text": "x ok"})
+    completed.stderr = ""
+    runner = MagicMock(return_value=completed)
+    monkeypatch.setattr(
+        "soveryn.platform.inference.grok_build_client.subprocess.run",
+        runner,
+    )
+
+    out = run_grok_prompt(
+        "search X",
+        cwd=work,
+        bin_path=bin_path,
+        timeout=30,
+        tools="x_keyword_search,x_thread_fetch",
+        permission_mode="bypassPermissions",
+        max_turns=8,
+    )
+    assert out == "x ok"
+    cmd = runner.call_args.args[0]
+    assert "--tools" in cmd
+    assert "x_keyword_search,x_thread_fetch" in cmd
+    assert "--no-subagents" in cmd
+    assert "bypassPermissions" in cmd
+
+
+def test_run_grok_prompt_disallowed_tools(monkeypatch, tmp_path):
+    bin_path = tmp_path / "grok"
+    bin_path.write_text("#!/bin/sh\n", encoding="utf-8")
+    bin_path.chmod(0o755)
+    work = tmp_path / "cwd"
+    work.mkdir()
+
+    completed = MagicMock()
+    completed.returncode = 0
+    completed.stdout = json.dumps({"text": "x ok"})
+    completed.stderr = ""
+    runner = MagicMock(return_value=completed)
+    monkeypatch.setattr(
+        "soveryn.platform.inference.grok_build_client.subprocess.run",
+        runner,
+    )
+
+    out = run_grok_prompt(
+        "search X",
+        cwd=work,
+        bin_path=bin_path,
+        timeout=30,
+        disallowed_tools="run_terminal_cmd,search_replace",
+        permission_mode="bypassPermissions",
+        max_turns=8,
+    )
+    assert out == "x ok"
+    cmd = runner.call_args.args[0]
+    assert "--disallowed-tools" in cmd
+    assert "run_terminal_cmd,search_replace" in cmd
+    assert "--no-subagents" in cmd
+
+
 def test_run_grok_prompt_timeout(monkeypatch, tmp_path):
     bin_path = tmp_path / "grok"
     bin_path.write_text("x", encoding="utf-8")

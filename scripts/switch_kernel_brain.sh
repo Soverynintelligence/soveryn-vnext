@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# Switch Kernel between Quadros Flash and Spark Qwen3.8.
+# Switch Kernel between GLM (dual Spark), Quadros Qwen3.8, or Spark Qwen3.8 NVFP4.
 #
 # Usage:
 #   switch_kernel_brain.sh                 # show current
-#   switch_kernel_brain.sh flash           # DeepSeek V4 Flash on Quadros :8091 (default)
-#   switch_kernel_brain.sh qwen38          # Qwen3.8-27B on Spark :8001 (must be loaded)
+#   switch_kernel_brain.sh glm             # GLM-5.3-Flash TP=2 on Sparks :8001 (live)
+#   switch_kernel_brain.sh flash           # Qwen3.8 GGUF on Quadros :8091 (legacy)
+#   switch_kernel_brain.sh qwen38          # Qwen3.8-27B NVFP4 on Spark :8001
 #   switch_kernel_brain.sh qwen38 --take-spark
-#        Also runs switch_vett_brain.sh qwen38 so Spark serves Qwen3.8
-#        (moves Vett/Scotty/public agents onto that brain too).
 #
-# Eve stays on Quadros Flash either way.
+# Eve stays on Quadros Qwen 3.8 either way.
 set -euo pipefail
 
 SPARK_HOST="${SPARK_HOST:-spark}"
@@ -20,9 +19,10 @@ PY="${SOVERYN_PYTHON:-/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python}"
 VETT_SWITCH="${REPO}/scripts/switch_vett_brain.sh"
 
 usage() {
-  echo "Usage: $0 [flash|qwen38] [--take-spark]"
-  echo "  flash    DeepSeek V4 Flash on Quadros :8091 (default)"
-  echo "  qwen38   Qwen3.8-27B on Spark :8001 (alias qwen38-27b)"
+  echo "Usage: $0 [glm|flash|qwen38] [--take-spark]"
+  echo "  glm      GLM-5.3-Flash NVFP4 TP=2 on Sparks :8001 (alias glm-5.3-flash)"
+  echo "  flash    Qwen3.8 GGUF on Quadros :8091 (legacy alias bench-flash)"
+  echo "  qwen38   Qwen3.8-27B NVFP4 on Spark :8001 (alias qwen38-27b)"
   echo "  --take-spark   with qwen38: load that brain on Spark via switch_vett_brain.sh"
   exit 1
 }
@@ -56,7 +56,7 @@ for arg in "$@"; do
   case "$arg" in
     --take-spark) TAKE_SPARK=1 ;;
     -h|--help) usage ;;
-    flash|qwen38) BRAIN="$arg" ;;
+    flash|qwen38|glm) BRAIN="$arg" ;;
     *)
       if [[ -n "$arg" ]]; then
         echo "unknown arg: $arg" >&2
@@ -74,6 +74,16 @@ fi
 mkdir -p "${HOME}/.soveryn"
 echo "$BRAIN" > "$BRAIN_FILE_TOWER"
 echo "wrote tower $BRAIN_FILE_TOWER → $BRAIN"
+
+if [[ "$BRAIN" == "glm" ]]; then
+  body="$(curl -sS -m 5 "$SPARK_URL/v1/models" 2>/dev/null || true)"
+  if ! echo "$body" | grep -q '"glm-5.3-flash"'; then
+    echo "ERROR: Spark :8001 is not serving glm-5.3-flash." >&2
+    echo "  Current Spark models: $(echo "$body" | "$PY" -c 'import sys,json; d=json.load(sys.stdin); print(",".join(m["id"] for m in d.get("data",[])))' 2>/dev/null || echo '?')" >&2
+    exit 2
+  fi
+  echo "Spark already serving glm-5.3-flash"
+fi
 
 if [[ "$BRAIN" == "qwen38" ]]; then
   body="$(curl -sS -m 5 "$SPARK_URL/v1/models" 2>/dev/null || true)"
