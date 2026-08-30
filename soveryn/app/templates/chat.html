@@ -8,6 +8,7 @@
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
 <link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830faces">
 <style>
 
   :root {
@@ -916,8 +917,6 @@
 
     <div class="agent-pills" role="tablist" aria-label="Select agent">
       <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>
-      <button class="agent-pill" data-agent="vett"     role="tab" aria-pressed="false">vett</button>
-      <button class="agent-pill" data-agent="scotty"   role="tab" aria-pressed="false">scotty</button>
       <button class="agent-pill" data-agent="kernel"   role="tab" aria-pressed="false">kernel</button>
       <button class="agent-pill" data-agent="eve"      role="tab" aria-pressed="false">eve</button>
     </div>
@@ -1032,6 +1031,7 @@
   </main>
 </div><!-- /.chat-shell -->
 <script src="/static/voice/presence.js?v=alive5"></script>
+<script src="/static/citizen-icons.js?v=20260830faces"></script>
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
@@ -1481,7 +1481,9 @@
     a.dataset.peer = peer;
     a.dataset.state = st;
     a.innerHTML =
-      '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
+      (typeof soverynCitizenIcon === "function"
+        ? soverynCitizenIcon(peer, { size: 52, className: "mp-av", letter: name.charAt(0), busy: st === "working", label: name })
+        : '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>') +
       '<span class="mp-name">' + esc(name) + '</span>' +
       '<span class="mp-status">' + esc(status) + '</span>';
     elThread().appendChild(a);
@@ -1524,8 +1526,12 @@
       const peer = (ev.peer || "peer").toLowerCase();
       const name = peer.charAt(0).toUpperCase() + peer.slice(1);
       const letter = name.charAt(0);
+      const busy = (ev.state || "").toLowerCase() === "working";
+      const av = (typeof soverynCitizenIcon === "function")
+        ? soverynCitizenIcon(peer, { size: 22, className: "collab-av", letter: letter, busy: busy, label: name })
+        : `<span class="collab-av">${esc(letter)}</span>`;
       return `<a class="collab-chip" href="${roomHref(peer, ev.room_session_id)}" title="Open group chat with ${esc(name)}">`
-        + `<span class="collab-av">${esc(letter)}</span>`
+        + av
         + `<span>${esc(name)}</span></a>`;
     }).join("");
   }

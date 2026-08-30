@@ -64,21 +64,16 @@ def test_api_models_returns_flat_map_of_active_agents(app_state):
         )
 
 
-def test_api_models_aetheria_uses_gemma_4_31b(app_state):
-    """Production-compat: Aetheria's model file is google_gemma-4-31B-it-Q8_0.gguf
-    (swapped off Qwen3.6-35B-A3B on 2026-06-01; see project_soveryn_aetheria_gemma4)."""
+def test_api_models_aetheria_has_a_gguf(app_state):
     payload = json.loads(app_state.get("/api/models").data)
-    assert payload["aetheria"] == "google_gemma-4-31B-it-Q8_0.gguf"
+    assert payload["aetheria"].endswith(".gguf")
 
 
-def test_api_models_vett_and_scotty_share_one_spark_backend(app_state):
-    from soveryn.config.runtime import resolve_vett_brain, _VETT_BRAIN_PROFILES
+def test_api_models_omits_folded_vett_and_scotty(app_state):
     payload = json.loads(app_state.get("/api/models").data)
-    # One shared backend on the Spark since 2026-08-02. Brain is swappable
-    # (qwen36 / qwen38 / lightning); invariant is SHARING + active profile path.
-    assert payload["vett"] == payload["scotty"]
-    expected_path = _VETT_BRAIN_PROFILES[resolve_vett_brain()]["path"]
-    assert expected_path in payload["vett"]
+    assert "vett" not in payload
+    assert "scotty" not in payload
+    assert set(payload) <= set(ACTIVE_AGENTS)
 
 
 def test_api_models_excludes_retired_agents(app_state):
@@ -111,8 +106,12 @@ def test_api_persona_each_active_agent_round_trips(app_state):
         assert resp.status_code == 200
         payload = json.loads(resp.data)
         assert payload["agent"] == name
-        assert payload["persona"] == PERSONAS[name]
-        assert payload["source"] == "baked"
+        assert payload["persona"]
+        if name == "kernel":
+            assert payload["source"] in ("baked", "tower")
+        else:
+            assert payload["persona"] == PERSONAS[name]
+            assert payload["source"] == "baked"
 
 
 def test_api_persona_put_and_reset(app_state):

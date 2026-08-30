@@ -21,14 +21,13 @@ from pathlib import Path
 #: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
 ACTIVE_AGENTS: tuple[str, ...] = (
-    "aetheria", "vett", "scotty", "kernel", "eve",
+    "aetheria", "kernel", "eve",
 )
 
 #: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
 #: inboxes are layered in the UI. Fleet freeze: frontier few — one card /
-#: one frontier mind. Vett / Scotty stay in ACTIVE_AGENTS for engine-room
-#: but are **not** Messages contacts. Grok is desktop Grok Bots, not a
-#: house chat agent.
+#: one frontier mind. Vett folded into Eve; Scotty coding into Kernel.
+#: Grok is desktop Grok Bots, not a house chat agent.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # soul / face — Blackwell alone
     "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
@@ -337,10 +336,7 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
 #: Per-agent routing: agent name → MODEL_SERVERS.name
 AGENT_TO_SERVER: dict[str, str] = {
     "aetheria": "aetheria_primary",
-    "vett":     "vett_scotty_shared",
-    "scotty":   "vett_scotty_shared",
     "kernel":   "kernel_build",
-    # Eve stays on Quadros Flash even when Kernel rides Spark Qwen3.8.
     "eve":      "eve_flash",
 }
 

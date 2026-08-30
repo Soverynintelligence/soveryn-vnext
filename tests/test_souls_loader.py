@@ -41,17 +41,15 @@ def test_get_soul_origin_reads_origin_file(souls_dir):
 
 
 def test_get_soul_origin_missing_returns_empty(souls_dir):
-    assert get_soul_origin("vett", souls_dir=souls_dir) == ""
+    (souls_dir / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    assert get_soul_origin("kernel", souls_dir=souls_dir) == ""
 
 
-def test_get_soul_vett_reads_file(souls_dir):
-    text = get_soul("vett", souls_dir=souls_dir)
-    assert "Verify or say nothing" in text
-
-
-def test_get_soul_scotty_reads_file(souls_dir):
-    text = get_soul("scotty", souls_dir=souls_dir)
-    assert "Bounded execution" in text
+def test_get_soul_rejects_folded_vett_and_scotty(souls_dir):
+    with pytest.raises(SoulNameError):
+        get_soul("vett", souls_dir=souls_dir)
+    with pytest.raises(SoulNameError):
+        get_soul("scotty", souls_dir=souls_dir)
 
 
 def test_get_soul_normalizes_agent_name_case(souls_dir):

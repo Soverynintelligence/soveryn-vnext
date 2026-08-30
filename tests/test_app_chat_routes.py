@@ -186,7 +186,7 @@ def test_list_sessions_returns_empty_initially(app_state):
 
 def test_list_sessions_filtered_by_agent(app_state):
     _post(app_state["client"], "/sessions", {"agent": "aetheria"})
-    _post(app_state["client"], "/sessions", {"agent": "vett"})
+    _post(app_state["client"], "/sessions", {"agent": "eve"})
     resp = app_state["client"].get("/sessions?agent=aetheria")
     sessions = json.loads(resp.data)["sessions"]
     assert len(sessions) == 1
@@ -282,7 +282,7 @@ def test_chat_404_when_session_does_not_exist(app_state):
 
 
 def test_chat_409_when_session_belongs_to_other_agent(app_state):
-    create = _post(app_state["client"], "/sessions", {"agent": "vett"})
+    create = _post(app_state["client"], "/sessions", {"agent": "eve"})
     sid = json.loads(create.data)["session_id"]
     resp = _post(app_state["client"], "/chat",
                  {"agent": "aetheria", "session_id": sid, "message": "hi"})
@@ -384,11 +384,9 @@ def test_chat_rejects_oversized_attachment(app_state):
     assert _err(resp)["code"] == "invalid_attachments"
 
 
-@pytest.mark.parametrize("agent", ["vett", "scotty"])
+@pytest.mark.parametrize("agent", ["aetheria"])
 def test_chat_accepts_attachments_on_vision_capable_agents(app_state, agent):
-    """Vett + Scotty share the vett-scotty server which loads an mmproj
-    vision projector — their attachments must be accepted and plumbed to
-    the loop, not rejected as Aetheria-only."""
+    """Aetheria is the live vision door. Vett/Scotty are folded."""
     img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
     sid = _new_session(client, agent=agent)

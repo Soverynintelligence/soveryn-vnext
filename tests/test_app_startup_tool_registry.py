@@ -184,16 +184,13 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     # leaves her more room to talk, not less.
     assert loops["aetheria"].context_window == 32_768
     assert loops["aetheria"].history_token_budget == 6_000
-    for agent in ("vett", "scotty"):
-        assert loops[agent].context_window == 32_768, agent
-        assert loops[agent].history_token_budget == 6_000, agent
     assert loops["kernel"].context_window == 32_768
+    assert loops["eve"].context_window == 32_768 or loops["eve"].context_window == 65536
     # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
-    # Vett 8192 on the 32k GLM/Qwen window.
-    assert loops["vett"].max_tokens == 8192
-    assert loops["scotty"].max_tokens != 8192
+    assert "vett" not in loops
+    assert "scotty" not in loops
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(
@@ -294,9 +291,9 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "list_grants",
         "grant_submit",
     }
+    registry = app.extensions["soveryn"]["tool_registry"]
     for agent in ("vett", "scotty"):
-        loop = app.extensions["soveryn"]["agent_loops"][agent]
-        names = {schema["function"]["name"] for schema in loop._tool_schemas()}
+        names = {t.name for t in registry.iter_tools_for_agent(agent)}
         assert names.isdisjoint(aetheria_lattice_tools), \
             f"{agent} sees Aetheria-only tools: {names & aetheria_lattice_tools}"
         assert names.isdisjoint(sandbox_tools), \

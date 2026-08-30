@@ -111,23 +111,10 @@ def test_aetheria_full_capability_wiring(app):
     assert a.pinned_text                         # relationship substrate, non-empty
 
 
-def test_vett_capability_wiring(app):
-    v = _loops(app)["vett"]
-    # Active Focus needs BOTH an enabled config and a coord_store — the live gap.
-    assert v.continuity_config is not None and v.continuity_config.enabled
-    assert v.coord_store is not None
-    # Research-weight timeout fix (the "can't message vett" root cause).
-    assert v.chat_timeout_seconds == 300.0
-    # 2026-07-11: raised 8->16 (deeper research directives exhausted the round
-    # budget); coupled with dispatch_timeout 1200s. See startup.py:707.
-    assert v.max_tool_rounds == 16
-
-
-def test_scotty_stays_bounded(app):
-    s = _loops(app)["scotty"]
-    # Scotty is a bounded executor: no board view, no cross-surface continuity.
-    assert s.continuity_config is None
-    assert s.coord_store is None
+def test_folded_vett_and_scotty_have_no_chat_loop(app):
+    loops = _loops(app)
+    assert "vett" not in loops
+    assert "scotty" not in loops
 
 
 # ─── The generalizing invariant that encodes the lesson ──────────────────────
@@ -154,7 +141,9 @@ def test_aetheria_has_signature_tools(app):
 
 
 def test_vett_has_signature_tools(app):
-    names = _tool_names(_loops(app)["vett"], "vett")
+    """Folded — tools may still be registered for engine-room workers, no loop."""
+    registry = _ext(app)["tool_registry"]
+    names = {t.name for t in registry.iter_tools_for_agent("vett")}
     for tool in ("read_file", "list_directory", "create_document"):
         assert tool in names, f"vett missing {tool!r}: {sorted(names)}"
     assert "request_direction" not in names
@@ -168,10 +157,10 @@ def test_kernel_and_eve_request_direction(app):
 
 
 def test_scotty_tool_scope(app):
-    names = _tool_names(_loops(app)["scotty"], "scotty")
+    registry = _ext(app)["tool_registry"]
+    names = {t.name for t in registry.iter_tools_for_agent("scotty")}
     assert "read_file" in names
     assert "request_direction" not in names
-    # Documents are an Aetheria+Vett capability — Scotty must NOT have it.
     assert "create_document" not in names, "scotty should not have document tools"
 
 
@@ -187,8 +176,9 @@ def test_x_tools_scoped_to_eve(app):
     eve_names = _tool_names(_loops(app)["eve"], "eve")
     assert "read_x" in eve_names
     assert "post_to_x" in eve_names
+    registry = _ext(app)["tool_registry"]
     for agent in ("aetheria", "vett", "scotty", "kernel"):
-        names = _tool_names(_loops(app)[agent], agent)
+        names = {t.name for t in registry.iter_tools_for_agent(agent)}
         assert "read_x" not in names, f"{agent} must not have 'read_x'"
         assert "post_to_x" not in names, f"{agent} must not have 'post_to_x'"
 

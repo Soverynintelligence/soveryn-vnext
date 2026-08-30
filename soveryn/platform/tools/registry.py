@@ -12,7 +12,7 @@ from typing import Any
 
 from jsonschema import ValidationError, validate
 
-from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.config.runtime import ACTIVE_AGENTS, MESSAGES_PARKED, RETIRED
 
 ToolHandler = Callable[[Mapping[str, Any]], Any]
 AuditHook = Callable[["ToolAuditEvent"], None]
@@ -78,7 +78,9 @@ class ToolRegistry:
     def register(self, spec: ToolSpec) -> None:
         owner = _normalize(spec.owner)
         name = _normalize(spec.name)
-        if owner not in self._active_agents:
+        if owner in RETIRED:
+            raise ToolRegistryError(f"Tool owner {owner!r} is retired")
+        if owner not in self._active_agents and owner not in MESSAGES_PARKED:
             raise ToolRegistryError(f"Tool owner {owner!r} is not an active agent")
         key = (owner, name)
         if key in self._tools:

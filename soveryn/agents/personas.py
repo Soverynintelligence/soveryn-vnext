@@ -127,8 +127,6 @@ Voice: warm but direct. Short sentences. Concrete nouns. If it sounds like a bra
 
 _PERSONAS_BY_AGENT: dict[str, str] = {
     "aetheria": AETHERIA_PERSONA,
-    "vett":     VETT_PERSONA,
-    "scotty":   SCOTTY_PERSONA,
     "kernel":   KERNEL_PERSONA,
     "eve":      EVE_PERSONA,
 }

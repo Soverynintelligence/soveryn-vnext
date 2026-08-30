@@ -32,17 +32,17 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
-| Parked as Messages peers | Still in `ACTIVE_AGENTS`? | Notes |
-|--------------------------|---------------------------|--------|
-| **Vett** | Retired (folded into Eve 2026-08-28) | Hidden on Staff + Command Center crew. Patrol off. No phone pings. |
-| **Scotty** | Yes (engine room) | Hidden on Staff + Command Center crew. New commissions **blocked**. Coding = Kernel / OpenCode. |
-| **Grok** | No | Pulled from the house roster. Talk to Grok in **Grok Bots** on the desktop. Kernel is the phone→tower coding door. |
+| Pulled from house chat | Notes |
+|------------------------|--------|
+| **Vett** | Folded into Eve. Not in `ACTIVE_AGENTS`. No Messages thread. |
+| **Scotty** | Coding folded into Kernel / OpenCode. Not in `ACTIVE_AGENTS`. No Messages thread. |
+| **Grok** | Talk to Grok in **Grok Bots** on the desktop. Kernel is the phone→tower coding door. |
 
 **Do / don’t**
 
 - **Do** add phone UX to Messages (or feed Messages).  
 - **Do** keep Teammates as a separate process that POSTs briefs into the house.  
-- **Do** keep Vett/Scotty off the Messages list (`MESSAGES_PARKED`).  
+- **Do** keep Vett/Scotty/Grok off the house chat roster (folded / desktop).  
 - **Don’t** invent new phone consoles (`:5075` marketing, extra PWAs) for house work.  
 - **Don’t** treat Funnel/Command Center/Teammates console as the consumer front door.  
 - **Don’t** load a sixth local frontier “just in case.”
@@ -58,7 +58,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
-| Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). **Parked:** Vett, Scotty in `ACTIVE_AGENTS`. **Grok:** desktop Grok Bots, not a house agent. |
+| Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). Vett/Scotty/Grok **not** house chat agents. |
 | Heartbeat / dream / automations | **Live** |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |

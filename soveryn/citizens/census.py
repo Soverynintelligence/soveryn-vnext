@@ -200,6 +200,8 @@ def take_census(conn, *, workspaces: Path = DEFAULT_WORKSPACES,
     from soveryn.citizens.registry import retire
     retire(conn, "vett", at=stamp)
     conn.execute("UPDATE duties SET enabled = 0 WHERE citizen_id = 'vett'")
+    retire(conn, "scotty", at=stamp)
+    conn.execute("UPDATE duties SET enabled = 0 WHERE citizen_id = 'scotty'")
     # Grok pulled — desktop Grok Bots, not a house citizen.
     try:
         retire(conn, "grok", at=stamp)

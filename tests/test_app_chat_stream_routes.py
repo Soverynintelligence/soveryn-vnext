@@ -101,7 +101,7 @@ def test_chat_stream_empty_message_returns_json_400(app_state):
 
 def test_chat_stream_session_agent_mismatch_returns_json_409(app_state):
     s = app_state["client"].post("/sessions",
-                                 data=json.dumps({"agent": "vett"}),
+                                 data=json.dumps({"agent": "eve"}),
                                  content_type="application/json")
     sid = json.loads(s.data)["session_id"]
     resp = _post_stream(app_state["client"],
@@ -245,12 +245,9 @@ def test_chat_stream_rejects_oversized_attachment(app_state):
     assert app_state["stream"].calls == []
 
 
-@pytest.mark.parametrize("agent", ["vett", "scotty"])
+@pytest.mark.parametrize("agent", ["aetheria"])
 def test_chat_stream_accepts_attachments_on_vision_capable_agents(app_state, agent):
-    """Vett + Scotty share the vett-scotty mmproj server — their attachments
-    must stream through, not 400 as Aetheria-only. (Route-level rejection of a
-    genuinely non-vision agent is unit-tested in test_app_chat_routes.py via
-    _validate_attachments, since every ACTIVE_AGENT is now vision-capable.)"""
+    """Aetheria is the live vision door. Vett/Scotty are folded — not chat agents."""
     img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
     sid = _new_session(client, agent=agent)

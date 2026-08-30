@@ -18,9 +18,9 @@ def test_register_active_agent_succeeds():
 
 def test_register_all_three_active_agents():
     reg = AgentRegistry()
-    for name in ("aetheria", "vett", "scotty"):
+    for name in ("aetheria", "kernel", "eve"):
         reg.register(name, make_dummy_agent(name))
-    assert reg.names() == ("aetheria", "scotty", "vett")
+    assert set(reg.names()) == {"aetheria", "kernel", "eve"}
     assert len(reg) == 3
 
 

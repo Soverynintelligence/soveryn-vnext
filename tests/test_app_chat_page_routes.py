@@ -1,6 +1,5 @@
-"""Tests for /chat page route (Phase 1: static skeleton)."""
+""" /chat is not a desk console — it redirects to Messages. """
 
-import re
 import pytest
 
 from soveryn.agents.loop import AgentLoop
@@ -25,114 +24,23 @@ def client(tmp_path, fake_chat):
     return app.test_client()
 
 
-def test_chat_route_returns_html(client):
+def test_chat_route_redirects_to_messages(client):
     resp = client.get("/chat")
-    assert resp.status_code == 200
-    assert resp.content_type.startswith("text/html")
-    assert resp.headers.get("X-SOVERYN-UI-Source") == "vnext-native"
+    assert resp.status_code == 302
+    assert resp.headers.get("Location", "").endswith("/messages")
 
 
-def test_chat_page_has_sidebar_marker(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="sidebar"' in body
+def test_chat_agent_query_redirects_into_that_thread(client):
+    resp = client.get("/chat?agent=kernel")
+    assert resp.status_code == 302
+    assert "/messages/kernel" in resp.headers.get("Location", "")
 
 
-def test_chat_page_has_new_chat_button(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="new-chat"' in body
-
-
-def test_chat_page_has_agent_pills_for_active_agents(client):
-    body = client.get("/chat").data.decode("utf-8").lower()
-    for agent in ACTIVE_AGENTS:
-        assert f'data-agent="{agent}"' in body
-
-
-def test_chat_page_no_retired_agents(client):
-    body = client.get("/chat").data.decode("utf-8").lower()
-    for retired in ("scout", "vision", "tinker", "ares_llm"):
-        assert retired not in body, f"retired {retired!r} leaked into chat page"
-
-
-def test_chat_page_no_external_resources(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert re.findall(r'<script[^>]+src=["\']https?://', body) == []
-    assert re.findall(r'<link[^>]+href=["\']https?://', body) == []
-
-
-def test_chat_page_has_thread_marker(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="thread"' in body
-
-
-def test_chat_page_has_input_marker(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="composer"' in body
-
-
-def test_chat_page_has_thinking_placeholder_template(client):
-    """The thinking-placeholder CSS class must exist so streaming bubbles can show
-    'thinking…' before the first non-empty token."""
-    body = client.get("/chat").data.decode("utf-8")
-    assert "thinking-placeholder" in body
-    assert "@keyframes" in body  # pulse animation lives somewhere in the styles
-
-
-def test_chat_page_has_header_with_agent_identity_slot(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="chat-header"' in body
-
-
-def test_chat_page_has_streaming_toggle(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'data-testid="stream-toggle"' in body
-
-
-def test_chat_page_reads_agent_from_query_string(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert "searchParams" in body or "URLSearchParams" in body
-
-
-def test_chat_page_uses_fetch_for_streaming(client):
-    """Streaming uses fetch + ReadableStream, not EventSource."""
-    body = client.get("/chat").data.decode("utf-8")
-    assert "ReadableStream" in body or "getReader" in body
-    assert "EventSource" not in body, "EventSource doesn't POST; must use fetch"
-
-
-def test_chat_page_supports_abort(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert "AbortController" in body
-
-
-def test_chat_page_posts_to_chat_stream(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert "/chat_stream" in body
-
-
-def test_chat_page_posts_to_chat_sync(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert '"/chat"' in body or "'/chat'" in body
-
-
-def test_chat_page_groups_history_by_rail(client):
-    body = client.get("/chat").data.decode("utf-8")
-    # Sidebar groups sessions by rail/type (replaced the old date buckets):
-    # Conversations (human) + collapsible machine rails.
-    for label in ("Conversations", "Mobile", "Signal", "Heartbeat", "Webhook", "System"):
-        assert label in body
-
-
-def test_chat_page_fetches_sessions_on_agent_change(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert "/sessions?agent=" in body
-
-
-def test_chat_page_thread_has_aria_live(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert 'aria-live="polite"' in body or "aria-live='polite'" in body
-
-
-def test_chat_composer_input_has_label(client):
-    body = client.get("/chat").data.decode("utf-8")
-    assert "aria-label" in body
+def test_folded_agents_are_not_messages_contacts(client):
+    body = client.get("/messages").data.decode("utf-8")
+    assert 'id: "aetheria"' in body
+    assert 'id: "kernel"' in body
+    assert 'id: "eve"' in body
+    assert 'id: "vett"' not in body
+    assert 'id: "scotty"' not in body
+    assert 'id: "grok"' not in body

@@ -23,7 +23,7 @@ def no_persona_overrides(tmp_path, monkeypatch):
 
 def test_personas_cover_all_active_agents():
     assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel", "eve",
+        "aetheria", "kernel", "eve",
     }
 
 
@@ -37,12 +37,11 @@ def test_get_persona_returns_aetheria_string(no_persona_overrides):
     assert get_persona("aetheria") == AETHERIA_PERSONA
 
 
-def test_get_persona_returns_vett_string(no_persona_overrides):
-    assert get_persona("vett") == VETT_PERSONA
-
-
-def test_get_persona_returns_scotty_string(no_persona_overrides):
-    assert get_persona("scotty") == SCOTTY_PERSONA
+def test_get_persona_rejects_folded_vett_and_scotty(no_persona_overrides):
+    with pytest.raises(PersonaError):
+        get_persona("vett")
+    with pytest.raises(PersonaError):
+        get_persona("scotty")
 
 
 def test_get_persona_kernel_uses_tower_opencode_prompt(no_persona_overrides):
@@ -127,7 +126,7 @@ def test_aetheria_persona_mentions_coordination():
     # Fleet freeze: Messages peers are Kernel / Eve; Vett/Scotty/Grok parked.
     assert "Kernel" in AETHERIA_PERSONA
     assert "Eve" in AETHERIA_PERSONA
-    assert "parked" in AETHERIA_PERSONA.lower()
+    assert "folded" in AETHERIA_PERSONA.lower()
     assert "route" in AETHERIA_PERSONA.lower() or "Messages" in AETHERIA_PERSONA
 
 

@@ -8,9 +8,11 @@ def test_active_agents_includes_crew_kernel_and_eve():
     """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
     Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
     assert set(runtime.ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel", "eve",
+        "aetheria", "kernel", "eve",
     }
     assert "grok" not in runtime.ACTIVE_AGENTS
+    assert "vett" not in runtime.ACTIVE_AGENTS
+    assert "scotty" not in runtime.ACTIVE_AGENTS
 
 
 def test_grok_is_not_a_house_agent():
@@ -30,8 +32,8 @@ def test_messages_contacts_fleet_freeze():
     assert runtime.COMMISSION_BLOCKED == frozenset({"vett", "scotty"})
     assert set(runtime.MESSAGES_CONTACTS).isdisjoint(runtime.MESSAGES_PARKED)
     assert set(runtime.MESSAGES_CONTACTS) <= set(runtime.ACTIVE_AGENTS)
-    # Still engine-room agents until tools are fully folded.
-    assert "vett" in runtime.ACTIVE_AGENTS and "scotty" in runtime.ACTIVE_AGENTS
+    assert "vett" not in runtime.ACTIVE_AGENTS
+    assert "scotty" not in runtime.ACTIVE_AGENTS
     assert "grok" not in runtime.ACTIVE_AGENTS
 
 

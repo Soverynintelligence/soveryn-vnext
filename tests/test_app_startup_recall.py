@@ -38,8 +38,8 @@ def fake_souls_dir(tmp_path):
     d = tmp_path / "souls"
     d.mkdir()
     (d / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
-    (d / "vett.md").write_text("# Vett\n", encoding="utf-8")
-    (d / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    (d / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    (d / "eve.md").write_text("# Eve\n", encoding="utf-8")
     return d
 
 
@@ -101,7 +101,7 @@ def test_aetheria_gets_identity_spine_store_when_vnext_lattice_exists(
     assert len(spine) == 1
     assert spine[0].provenance["source"] == "legacy_identity_review"
 
-def test_vett_and_scotty_do_not_get_recall(
+def test_folded_vett_and_scotty_have_no_loop(
     tmp_path, fake_chat, seeded_recall_lattice, fake_souls_dir, fake_pinned, monkeypatch
 ):
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
@@ -109,11 +109,9 @@ def test_vett_and_scotty_do_not_get_recall(
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(seeded_recall_lattice))
     conv = ConversationStore(tmp_path / "conv.db")
     app = create_app(conv_store=conv)
-    state = app.extensions["soveryn"]
-    for name in ("vett", "scotty"):
-        loop = state["agent_loops"][name]
-        assert loop.recall_k == 0, f"{name} should not have recall enabled"
-        assert loop.lattice_store is None, f"{name} should have no lattice_store"
+    loops = app.extensions["soveryn"]["agent_loops"]
+    assert "vett" not in loops
+    assert "scotty" not in loops
 
 
 def test_aetheria_runs_without_recall_if_recall_lattice_missing(

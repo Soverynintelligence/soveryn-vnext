@@ -42,9 +42,9 @@ def test_all_units_down_reports_offline(db, tmp_path):
     rows = take_census(db, workspaces=tmp_path,
                        unit_check=lambda u: False, now="2026-08-13T10:00:00Z")
     assert _by_id(rows)["aetheria"]["status"] == "offline"
-    assert _by_id(rows)["scotty"]["status"] == "offline"
-    # Vett is retired (folded into Eve) — not on the live board.
+    # Vett/Scotty folded — not on the live board.
     assert "vett" not in _by_id(rows)
+    assert "scotty" not in _by_id(rows)
 
 
 def test_any_unit_up_reports_resident(db, tmp_path):
@@ -56,17 +56,14 @@ def test_any_unit_up_reports_resident(db, tmp_path):
     assert aetheria["last_observation"]["detail"] == "soveryn-heartbeat.service"
 
 
-def test_scotty_resident_when_desk_worker_active(db, tmp_path):
-    """Scotty's process residence is soveryn-scotty-worker.service."""
+def test_scotty_folded_off_the_live_board(db, tmp_path):
     rows = take_census(
         db,
         workspaces=tmp_path,
         unit_check=lambda u: u == "soveryn-scotty-worker.service",
         now="2026-08-13T10:00:00Z",
     )
-    scotty = _by_id(rows)["scotty"]
-    assert scotty["status"] == "resident"
-    assert "soveryn-scotty-worker" in scotty["last_observation"]["detail"]
+    assert "scotty" not in _by_id(rows)
 
 
 def test_the_census_gives_every_citizen_a_desk(db, tmp_path):

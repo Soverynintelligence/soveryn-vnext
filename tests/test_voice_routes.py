@@ -33,8 +33,8 @@ def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
     (souls_dir / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
-    (souls_dir / "vett.md").write_text("# Vett\n", encoding="utf-8")
-    (souls_dir / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    (souls_dir / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    (souls_dir / "eve.md").write_text("# Eve\n", encoding="utf-8")
     return souls_dir
 
 
