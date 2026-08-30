@@ -36,7 +36,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 |--------------------------|---------------------------|--------|
 | **Vett** | Retired (folded into Eve 2026-08-28) | Hidden on Staff + Command Center crew. Patrol off. No phone pings. |
 | **Scotty** | Yes (engine room) | Hidden on Staff + Command Center crew. New commissions **blocked**. Coding = Kernel / OpenCode. |
-| **Grok** | Yes (CLI only) | Not a phone contact — empty Messages peer. Headless Build CLI still installed; Kernel is the coding door. |
+| **Grok** | No | Pulled from the house roster. Talk to Grok in **Grok Bots** on the desktop. Kernel is the phone→tower coding door. |
 
 **Do / don’t**
 
@@ -58,7 +58,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
-| Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). **Parked contacts:** Vett, Scotty, Grok still in `ACTIVE_AGENTS`. |
+| Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). **Parked:** Vett, Scotty in `ACTIVE_AGENTS`. **Grok:** desktop Grok Bots, not a house agent. |
 | Heartbeat / dream / automations | **Live** |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |

@@ -141,20 +141,6 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
         ),
         (),  # no dedicated process unit on the tower yet — invoked on demand
     ),
-    (
-        Citizen(
-            id="grok",
-            display_name="Grok",
-            soul_path="data/memory/souls/grok.md",
-            model_server="grok_build",
-            workspace_path=str(DEFAULT_WORKSPACES / "grok"),
-            notes=(
-                "Cloud coding peer (headless Grok Build CLI). No local VRAM. "
-                "Messages turns enqueue — composer does not own the HTTP thread."
-            ),
-        ),
-        (),  # cloud — nothing on the tower to probe
-    ),
 )
 
 
@@ -214,6 +200,12 @@ def take_census(conn, *, workspaces: Path = DEFAULT_WORKSPACES,
     from soveryn.citizens.registry import retire
     retire(conn, "vett", at=stamp)
     conn.execute("UPDATE duties SET enabled = 0 WHERE citizen_id = 'vett'")
+    # Grok pulled — desktop Grok Bots, not a house citizen.
+    try:
+        retire(conn, "grok", at=stamp)
+        conn.execute("UPDATE duties SET enabled = 0 WHERE citizen_id = 'grok'")
+    except Exception:
+        pass
     conn.commit()
 
     # Autonomy: keep at least one SOVERYN improve + one CWG watch objective

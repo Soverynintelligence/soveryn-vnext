@@ -46,9 +46,6 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     ("kernel:chat", "kernel", "chat", "Chat", None),
     ("kernel:commission_worker", "kernel", "commission_worker",
      "Commission runtime — build / code assignments", "continuous"),
-    ("grok:chat", "grok", "chat", "Chat", None),
-    ("grok:commission_worker", "grok", "commission_worker",
-     "Commission runtime — Messages deferred turns", "continuous"),
 )
 
 

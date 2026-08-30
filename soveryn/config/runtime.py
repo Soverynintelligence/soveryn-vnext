@@ -21,13 +21,14 @@ from pathlib import Path
 #: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
 ACTIVE_AGENTS: tuple[str, ...] = (
-    "aetheria", "vett", "scotty", "kernel", "eve", "grok",
+    "aetheria", "vett", "scotty", "kernel", "eve",
 )
 
 #: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
 #: inboxes are layered in the UI. Fleet freeze: frontier few — one card /
-#: one frontier mind. Vett / Scotty / Grok stay in ACTIVE_AGENTS for
-#: engine-room / CLI but are **not** Messages contacts.
+#: one frontier mind. Vett / Scotty stay in ACTIVE_AGENTS for engine-room
+#: but are **not** Messages contacts. Grok is desktop Grok Bots, not a
+#: house chat agent.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # soul / face — Blackwell alone
     "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
@@ -35,7 +36,7 @@ MESSAGES_CONTACTS: tuple[str, ...] = (
 )
 
 #: Parked as Messages peers (still may exist as ACTIVE_AGENTS).
-MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty", "grok"})
+MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
 
 #: Do not enqueue new CoS commissions / standing objectives to these ids.
 #: Engine-room loops may still exist; new work goes to Eve / Kernel.
@@ -331,17 +332,6 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
     ),
     _kernel_server(),
     _eve_flash_server(),
-    # Grok Build — Messages coding peer. Not a llama-server; AgentLoop injects
-    # grok_build_client chat_fn/stream_fn. Port is bookkeeping only.
-    ModelServer(
-        name="grok_build",
-        port=5099,
-        host="127.0.0.1",
-        model_path=MODEL_ROOT / ".grok_build_external",
-        role="Grok Build CLI — Messages coding peer (headless grok)",
-        model_alias="grok-build",
-        skip_preflight=True,
-    ),
 )
 
 #: Per-agent routing: agent name → MODEL_SERVERS.name
@@ -352,7 +342,6 @@ AGENT_TO_SERVER: dict[str, str] = {
     "kernel":   "kernel_build",
     # Eve stays on Quadros Flash even when Kernel rides Spark Qwen3.8.
     "eve":      "eve_flash",
-    "grok":     "grok_build",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────

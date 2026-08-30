@@ -12,7 +12,7 @@ def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
     # Cover every ACTIVE_AGENTS citizen — Kernel/Eve souls are required at loop boot.
-    for name in ("aetheria", "vett", "scotty", "kernel", "eve", "grok"):
+    for name in ("aetheria", "vett", "scotty", "kernel", "eve"):
         (souls_dir / f"{name}.md").write_text(f"# {name.title()}\n", encoding="utf-8")
     return souls_dir
 

@@ -60,7 +60,7 @@ def test_ares_daemon_surface_now_scans_without_llm(tmp_path):
 def test_explicit_cast_matches_active_roster_and_ares_daemon():
     """Chat roster is ACTIVE_AGENTS; Ares stays a daemon, never a chat agent."""
     assert set(ACTIVE_AGENTS) == {
-        "aetheria", "vett", "scotty", "kernel", "eve", "grok",
+        "aetheria", "vett", "scotty", "kernel", "eve",
     }
     assert DAEMONS == frozenset({"ares"})
     assert "ares" not in ACTIVE_AGENTS
