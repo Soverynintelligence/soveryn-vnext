@@ -167,6 +167,14 @@ def test_kernel_and_eve_request_direction(app):
     assert "request_direction" in eve
 
 
+def test_eve_has_decode_qr_kernel_does_not(app):
+    eve = _tool_names(_loops(app)["eve"], "eve")
+    assert "decode_qr" in eve
+    for agent in ("aetheria", "vett", "scotty", "kernel"):
+        names = _tool_names(_loops(app)[agent], agent)
+        assert "decode_qr" not in names, f"{agent} must not have decode_qr"
+
+
 def test_scotty_tool_scope(app):
     names = _tool_names(_loops(app)["scotty"], "scotty")
     assert "read_file" in names

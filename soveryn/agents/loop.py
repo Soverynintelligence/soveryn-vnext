@@ -1297,7 +1297,10 @@ class AgentLoop:
                 ),)
                 result_messages = [
                     self._tool_result_message(
-                        tool_call, session_id=session_id, source=source,
+                        tool_call,
+                        session_id=session_id,
+                        source=source,
+                        attachments=attachments,
                     )
                     for tool_call in response.tool_calls
                 ]
@@ -1590,6 +1593,7 @@ class AgentLoop:
         session_id: str | None = None,
         source: str = "direct",
         skip_approval_gate: bool = False,
+        attachments: tuple[str, ...] | None = None,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1643,7 +1647,12 @@ class AgentLoop:
                 args = dict(args)
                 args["dm_session_id"] = session_id
             try:
-                result = self.tool_registry.invoke(self.agent_name, tool_name, args)
+                from soveryn.platform.intake.turn_images import turn_images_bound
+
+                with turn_images_bound(attachments):
+                    result = self.tool_registry.invoke(
+                        self.agent_name, tool_name, args,
+                    )
             except ToolArgError as exc:
                 result = {"error": "ToolArgError", "message": str(exc)}
             except Exception as exc:  # noqa: BLE001 — handler failures must surface
@@ -2095,10 +2104,14 @@ class AgentLoop:
                             session_id=session_id,
                             source=source,
                             skip_approval_gate=True,
+                            attachments=attachments,
                         )
                     else:
                         result_message = self._tool_result_message(
-                            tool_call, session_id=session_id, source=source,
+                            tool_call,
+                            session_id=session_id,
+                            source=source,
+                            attachments=attachments,
                         )
                     yield ToolResultEvent(
                         call_id=call_id,

@@ -709,6 +709,16 @@ def create_app(
                 allowed_roots=_intake_roots,
             )
 
+        # QR decode — Eve's Messages desk tool. Same allowed roots as intake.
+        # Not on the all-agent intake loop: do not give this to Kernel.
+        from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
+        for _qr_agent in ("eve",):
+            _register_qr_tools(
+                tool_registry,
+                owner_agent=_qr_agent,
+                allowed_roots=_intake_roots,
+            )
+
         # Aetheria-initiated signal_send — the outbound half of her Direct
         # Line. Bridge daemon handles inbound → response; this tool lets her
         # send WITHOUT a prior inbound (heartbeat-driven thoughts, alerts,
