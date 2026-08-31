@@ -65,6 +65,9 @@ def test_eve_persona_mentions_decode_qr(no_persona_overrides):
     assert "pixels" in text.lower()
     assert "make_qr" in text
     assert "compose_image" in text
+    assert "make_canvas" in text
+    assert "draw_rect" in text
+    assert "draw_text" in text
 
 
 def test_persona_override_round_trip(tmp_path, monkeypatch):

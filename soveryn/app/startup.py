@@ -709,9 +709,10 @@ def create_app(
                 allowed_roots=_intake_roots,
             )
 
-        # Eve desk — decode_qr / make_qr / compose_image. Same allowed roots
-        # as intake; writes land under data/media (Canva / compose_post).
-        # Not on the all-agent intake loop: do not give this to Kernel.
+        # Eve desk — decode_qr / make_qr / compose_image / make_canvas /
+        # draw_rect / draw_text. Same allowed roots as intake; writes land
+        # under data/media (Canva / compose_post). Not on the all-agent
+        # intake loop: do not give this to Kernel or Aetheria.
         from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
         for _qr_agent in ("eve",):
             _register_qr_tools(

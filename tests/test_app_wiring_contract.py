@@ -174,12 +174,16 @@ def test_eve_has_decode_qr_kernel_does_not(app):
     a Vett or Scotty Messages loop.
     """
     eve = _tool_names(_loops(app)["eve"], "eve")
-    for tool in ("decode_qr", "make_qr", "compose_image"):
+    desk = (
+        "decode_qr", "make_qr", "compose_image",
+        "make_canvas", "draw_rect", "draw_text",
+    )
+    for tool in desk:
         assert tool in eve, f"eve missing {tool!r}"
     registry = _ext(app)["tool_registry"]
     for agent in ("kernel", "aetheria"):
         names = {t.name for t in registry.iter_tools_for_agent(agent)}
-        for tool in ("decode_qr", "make_qr", "compose_image"):
+        for tool in desk:
             assert tool not in names, f"{agent} must not have {tool}"
 
 

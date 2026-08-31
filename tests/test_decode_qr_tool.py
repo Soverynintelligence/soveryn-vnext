@@ -141,8 +141,12 @@ def test_register_qr_tools_eve_only():
     eve = {t.name for t in reg.iter_tools_for_agent("eve")}
     kernel = {t.name for t in reg.iter_tools_for_agent("kernel")}
     aetheria = {t.name for t in reg.iter_tools_for_agent("aetheria")}
-    assert {"decode_qr", "make_qr", "compose_image"} <= eve
-    for name in ("decode_qr", "make_qr", "compose_image"):
+    desk = {
+        "decode_qr", "make_qr", "compose_image",
+        "make_canvas", "draw_rect", "draw_text",
+    }
+    assert desk <= eve
+    for name in desk:
         assert name not in kernel
         assert name not in aetheria
 

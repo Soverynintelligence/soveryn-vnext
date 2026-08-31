@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.platform.intake.compose import compose_overlay
+from soveryn.platform.intake.draw import (
+    draw_rectangle,
+    draw_text_on_image,
+    make_solid_canvas,
+    parse_hex_color,
+)
 from soveryn.platform.intake.pdf import extract_pdf_path
 from soveryn.platform.intake.qr import decode_qr_bytes, encode_qr_png
 from soveryn.platform.intake.turn_images import current_turn_images
@@ -440,6 +446,304 @@ def build_compose_image_tool(
     )
 
 
+_CANVAS_EDGE_MIN = 1
+_CANVAS_EDGE_MAX = 4096
+_FONT_KINDS = frozenset({"serif", "sans", "serif_italic"})
+_ALIGN_KINDS = frozenset({"left", "center", "right"})
+
+
+def _hex_color(name: str, raw: Any) -> tuple[int, int, int]:
+    if not isinstance(raw, str):
+        raise ToolArgError(f"{name} must be a #RGB or #RRGGBB hex color")
+    try:
+        return parse_hex_color(raw)
+    except ValueError:
+        raise ToolArgError(f"{name} must be a #RGB or #RRGGBB hex color") from None
+
+
+def _optional_hex(name: str, raw: Any) -> tuple[int, int, int] | None:
+    if raw is None or raw == "":
+        return None
+    return _hex_color(name, raw)
+
+
+def _canvas_edge(name: str, raw: Any) -> int:
+    value = _as_int(name, raw)
+    if value is None or value < _CANVAS_EDGE_MIN or value > _CANVAS_EDGE_MAX:
+        raise ToolArgError(
+            f"{name} must be an integer from {_CANVAS_EDGE_MIN} to {_CANVAS_EDGE_MAX}"
+        )
+    return value
+
+
+def _positive_int(name: str, raw: Any) -> int:
+    value = _as_int(name, raw)
+    if value is None or value < 1:
+        raise ToolArgError(f"{name} must be a positive integer")
+    return value
+
+
+def build_make_canvas_tool(
+    *,
+    owner_agent: str,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Solid RGB PNG under data/media/canvas/. Hex fill is an argument."""
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        width = _canvas_edge("width", args.get("width"))
+        height = _canvas_edge("height", args.get("height"))
+        fill = _hex_color("fill", args.get("fill"))
+        raw_name = args.get("name")
+        if raw_name is None or raw_name == "":
+            stem = "canvas"
+        elif isinstance(raw_name, str):
+            stem = _safe_stem(raw_name, fallback="canvas")
+        else:
+            raise ToolArgError("name must be a string")
+        dest = _alloc_png_path(out_root, "canvas", stem)
+        return make_solid_canvas(dest, width=width, height=height, fill=fill).as_dict()
+
+    return ToolSpec(
+        name="make_canvas",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "width": {
+                    "type": "integer",
+                    "description": "Canvas width in pixels (1..4096).",
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Canvas height in pixels (1..4096).",
+                },
+                "fill": {
+                    "type": "string",
+                    "description": (
+                        "Solid fill as #RGB or #RRGGBB (e.g. \"#071A2C\"). "
+                        "Not a color name."
+                    ),
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Optional filename stem under data/media/canvas/.",
+                },
+            },
+            "required": ["width", "height", "fill"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Create a solid RGB PNG under data/media/canvas/. Use this for a "
+            "branded field instead of SVG/HTML. Returns ok, path, width, height."
+        ),
+    )
+
+
+def build_draw_rect_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Draw a rectangle onto an existing PNG; write a new composed PNG."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_path = args.get("path", "")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ToolArgError("path must be a non-empty string")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        width = _positive_int("width", args.get("width"))
+        height = _positive_int("height", args.get("height"))
+        fill = _optional_hex("fill", args.get("fill"))
+        outline = _optional_hex("outline", args.get("outline"))
+        if fill is None and outline is None:
+            raise ToolArgError("at least one of fill or outline is required")
+        raw_stroke = args.get("stroke")
+        if outline is not None:
+            stroke = 1 if raw_stroke is None else _positive_int("stroke", raw_stroke)
+        else:
+            stroke = 1
+        raw_radius = args.get("radius")
+        if raw_radius is None:
+            radius = 0
+        else:
+            radius = _as_int("radius", raw_radius)
+            if radius is None or radius < 0:
+                raise ToolArgError("radius must be an integer >= 0")
+
+        src = _resolve_allowed(Path(raw_path.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "rect")
+        return draw_rectangle(
+            src,
+            dest,
+            x=int(x),
+            y=int(y),
+            width=width,
+            height=height,
+            fill=fill,
+            outline=outline,
+            stroke=stroke,
+            radius=int(radius),
+        ).as_dict()
+
+    return ToolSpec(
+        name="draw_rect",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to an existing PNG under allowed roots. "
+                        "The input is not overwritten."
+                    ),
+                },
+                "x": {"type": "integer", "description": "Left pixel of the rectangle."},
+                "y": {"type": "integer", "description": "Top pixel of the rectangle."},
+                "width": {"type": "integer", "description": "Rectangle width in pixels."},
+                "height": {"type": "integer", "description": "Rectangle height in pixels."},
+                "fill": {
+                    "type": "string",
+                    "description": "Optional fill as #RGB or #RRGGBB.",
+                },
+                "outline": {
+                    "type": "string",
+                    "description": "Optional stroke color as #RGB or #RRGGBB.",
+                },
+                "stroke": {
+                    "type": "integer",
+                    "description": "Outline width in pixels (default 1 if outline is set).",
+                },
+                "radius": {
+                    "type": "integer",
+                    "description": "Corner radius; 0 is sharp (default).",
+                },
+            },
+            "required": ["path", "x", "y", "width", "height"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Draw a rectangle (gold frame, white plate; rounded if radius > 0) "
+            "onto an existing PNG and write a new file under data/media/composed/. "
+            "At least one of fill or outline is required. miss=file_not_found / "
+            "unreadable / would_clip (fully outside; overhang is clipped)."
+        ),
+    )
+
+
+def build_draw_text_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Draw type onto an existing PNG; write a new composed PNG."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_path = args.get("path", "")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ToolArgError("path must be a non-empty string")
+        raw_text = args.get("text")
+        if not isinstance(raw_text, str) or not raw_text.strip():
+            raise ToolArgError("text must be a non-empty string")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        size = _positive_int("size", args.get("size"))
+        color = _hex_color("color", args.get("color"))
+        raw_font = args.get("font") or "serif"
+        if not isinstance(raw_font, str) or raw_font not in _FONT_KINDS:
+            raise ToolArgError("font must be serif, sans, or serif_italic")
+        raw_align = args.get("align") or "left"
+        if not isinstance(raw_align, str) or raw_align not in _ALIGN_KINDS:
+            raise ToolArgError("align must be left, center, or right")
+        raw_max = args.get("max_width")
+        max_width = (
+            None if raw_max is None else _positive_int("max_width", raw_max)
+        )
+
+        src = _resolve_allowed(Path(raw_path.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "text")
+        return draw_text_on_image(
+            src,
+            dest,
+            text=raw_text,
+            x=int(x),
+            y=int(y),
+            size=size,
+            color=color,
+            font_kind=raw_font,
+            align=raw_align,
+            max_width=max_width,
+        ).as_dict()
+
+    return ToolSpec(
+        name="draw_text",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to an existing PNG under allowed roots. "
+                        "The input is not overwritten."
+                    ),
+                },
+                "text": {"type": "string", "description": "Non-empty string to draw."},
+                "x": {
+                    "type": "integer",
+                    "description": "Horizontal anchor (left / center / right of the text box).",
+                },
+                "y": {
+                    "type": "integer",
+                    "description": "Top of the text box (not the baseline).",
+                },
+                "size": {"type": "integer", "description": "Type size in points."},
+                "color": {
+                    "type": "string",
+                    "description": "Type color as #RGB or #RRGGBB.",
+                },
+                "font": {
+                    "type": "string",
+                    "enum": ["serif", "sans", "serif_italic"],
+                    "description": "serif (default), sans, or serif_italic.",
+                },
+                "align": {
+                    "type": "string",
+                    "enum": ["left", "center", "right"],
+                    "description": "Horizontal anchor at x. Default left.",
+                },
+                "max_width": {
+                    "type": "integer",
+                    "description": "Optional wrap width in pixels.",
+                },
+            },
+            "required": ["path", "text", "x", "y", "size", "color"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Draw type (serif / sans / serif_italic, hex color, left/center/right) "
+            "onto an existing PNG and write a new file under data/media/composed/. "
+            "x,y is the top of the text box. miss=file_not_found / unreadable."
+        ),
+    )
+
+
 def register_qr_tools(
     registry: ToolRegistry,
     *,
@@ -447,7 +751,7 @@ def register_qr_tools(
     allowed_roots: tuple[Path, ...] | None = None,
     media_root: Path | None = None,
 ) -> None:
-    """Register Eve's QR/compositor desk tools. Default owner is Eve."""
+    """Register Eve's QR/canvas/type desk tools. Default owner is Eve."""
     registry.register(
         build_decode_qr_tool(
             owner_agent=owner_agent,
@@ -462,6 +766,26 @@ def register_qr_tools(
     )
     registry.register(
         build_compose_image_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_make_canvas_tool(
+            owner_agent=owner_agent,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_draw_rect_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_draw_text_tool(
             owner_agent=owner_agent,
             allowed_roots=allowed_roots,
             media_root=media_root,
