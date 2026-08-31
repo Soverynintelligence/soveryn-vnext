@@ -142,10 +142,9 @@ def test_register_qr_tools_eve_only():
     kernel = {t.name for t in reg.iter_tools_for_agent("kernel")}
     aetheria = {t.name for t in reg.iter_tools_for_agent("aetheria")}
     assert {"decode_qr", "make_qr", "compose_image"} <= eve
-    assert "decode_qr" not in kernel
-    assert "make_qr" not in kernel
-    assert "compose_image" not in kernel
-    assert "decode_qr" not in aetheria
+    for name in ("decode_qr", "make_qr", "compose_image"):
+        assert name not in kernel
+        assert name not in aetheria
 
 
 def test_loop_in_flight_attachment_reaches_decode_qr(tmp_path):
