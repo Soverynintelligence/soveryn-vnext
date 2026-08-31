@@ -196,6 +196,41 @@ def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
     assert runtime.resolve_kernel_brain() == "flash"
 
 
+def test_eve_flash_names_qwen38_mmproj_kernel_does_not():
+    """Eve's Quadros Qwen3.8 seat names the same projector Aetheria already
+    loads. Kernel is Spark GLM — no Qwen mmproj, not vision-capable."""
+    from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
+
+    eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
+    kernel = next(s for s in runtime.MODEL_SERVERS if s.name == "kernel_build")
+    aetheria = next(s for s in runtime.MODEL_SERVERS if s.name == "aetheria_primary")
+    expected = runtime.MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf"
+    assert eve.mmproj_path == expected
+    assert aetheria.mmproj_path == expected
+    assert kernel.mmproj_path is None
+    assert "eve" in VISION_CAPABLE_AGENTS
+    assert "kernel" not in VISION_CAPABLE_AGENTS
+    assert eve.port == 8091
+    assert eve.model_alias == "bench-flash"
+
+
+def test_quadro_qwen38_preset_names_qwen38_mmproj_not_shepherd():
+    """File-only wiring so a later human quadro-router reload loads vision
+    for Eve. Do not point [qwen38] at the shepherd/Gemma projector."""
+    import configparser
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "runtime" / "router-presets-quadro.ini"
+    cp = configparser.ConfigParser(interpolation=None)
+    cp.read(path)
+    assert cp.has_section("qwen38")
+    mmproj = cp["qwen38"]["mmproj"]
+    assert mmproj == "/mnt/soveryn_models/GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
+    assert "shepherd" not in mmproj.lower()
+    assert "gemma" not in mmproj.lower()
+    assert "eve" in cp["qwen38"]["alias"]
+
+
 def test_eve_stays_on_flash_when_kernel_on_qwen38(tmp_path, monkeypatch):
     monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "qwen38")
     # Re-import factory through resolve — MODEL_SERVERS is built at import.

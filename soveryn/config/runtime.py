@@ -281,7 +281,7 @@ def _eve_flash_server() -> ModelServer:
         host=str(flash["host"]),
         port=int(flash["port"]),
         model_path=MODEL_ROOT / str(flash["path"]),
-        mmproj_path=None,
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
         role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is on Spark GLM",
         supports_multi_system_messages=False,
         model_alias=str(flash["alias"]),

@@ -245,12 +245,11 @@ def test_chat_stream_rejects_oversized_attachment(app_state):
     assert app_state["stream"].calls == []
 
 
-@pytest.mark.parametrize("agent", ["vett", "scotty"])
+@pytest.mark.parametrize("agent", ["vett", "scotty", "eve"])
 def test_chat_stream_accepts_attachments_on_vision_capable_agents(app_state, agent):
-    """Vett + Scotty share the vett-scotty mmproj server — their attachments
-    must stream through, not 400 as Aetheria-only. (Route-level rejection of a
-    genuinely non-vision agent is unit-tested in test_app_chat_routes.py via
-    _validate_attachments, since every ACTIVE_AGENT is now vision-capable.)"""
+    """Vett + Scotty share the vett-scotty mmproj server; Eve is on the
+    Quadros Qwen3.8 seat. Attachments must stream through, not 400.
+    Kernel (Spark GLM) stays text-only — see test_app_chat_routes."""
     img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
     sid = _new_session(client, agent=agent)
@@ -266,6 +265,20 @@ def test_chat_stream_accepts_attachments_on_vision_capable_agents(app_state, age
     assert isinstance(last_user.content, list)
     assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
                for p in last_user.content)
+
+
+def test_chat_stream_rejects_kernel_images(app_state):
+    """Kernel is Spark GLM text-only — images 400; he still gets the
+    Messages paperclip for PDF intake."""
+    client = app_state["client"]
+    sid = _new_session(client, agent="kernel")
+    resp = _post_stream(client, {
+        "agent": "kernel", "session_id": sid, "message": "what's this?",
+        "attachments": ["data:image/jpeg;base64,AAAA"],
+    })
+    assert resp.status_code == 400
+    assert json.loads(resp.data)["error"]["code"] == "agent_does_not_support_vision"
+    assert app_state["stream"].calls == []
 
 
 def test_chat_stream_rejects_non_list_attachments(app_state):

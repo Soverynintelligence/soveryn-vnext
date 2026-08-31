@@ -384,11 +384,11 @@ def test_chat_rejects_oversized_attachment(app_state):
     assert _err(resp)["code"] == "invalid_attachments"
 
 
-@pytest.mark.parametrize("agent", ["vett", "scotty"])
+@pytest.mark.parametrize("agent", ["vett", "scotty", "eve"])
 def test_chat_accepts_attachments_on_vision_capable_agents(app_state, agent):
-    """Vett + Scotty share the vett-scotty server which loads an mmproj
-    vision projector — their attachments must be accepted and plumbed to
-    the loop, not rejected as Aetheria-only."""
+    """Vett + Scotty share the vett-scotty mmproj server; Eve is on Quadros
+    Qwen3.8-27B with the same projector Aetheria uses. Attachments must
+    be accepted and plumbed to the loop."""
     img = "data:image/jpeg;base64,AAAA"
     client = app_state["client"]
     sid = _new_session(client, agent=agent)
@@ -426,14 +426,16 @@ def test_validate_attachments_rejects_non_vision_agent(app_state):
     from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 
     assert "cognition" not in VISION_CAPABLE_AGENTS
+    assert "kernel" not in VISION_CAPABLE_AGENTS
     with app_state["app"].app_context():
-        images, pdfs, err = _validate_attachments(
-            ["data:image/jpeg;base64,AAAA"], "cognition")
-        assert images is None
-        assert pdfs == ()
-        resp, status = err
-        assert status == 400
-        assert json.loads(resp.get_data())["error"]["code"] == "agent_does_not_support_vision"
+        for agent in ("cognition", "kernel"):
+            images, pdfs, err = _validate_attachments(
+                ["data:image/jpeg;base64,AAAA"], agent)
+            assert images is None
+            assert pdfs == ()
+            resp, status = err
+            assert status == 400
+            assert json.loads(resp.get_data())["error"]["code"] == "agent_does_not_support_vision"
 
 
 def test_validate_attachments_accepts_pdf_for_any_agent(app_state):
