@@ -1,0 +1,244 @@
+/* Citizen faces — shared animated SVG marks.
+   Quiet idle motion; stronger when .is-busy / [data-busy] / parent working.
+   Transform + opacity only. Static when prefers-reduced-motion. */
+
+.sov-cit {
+  --cit-hi: #e8d5a3;
+  --cit-mid: #c6a664;
+  --cit-lo: #8a7038;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  border-radius: 50%;
+  box-sizing: border-box;
+  padding: 0;
+  background: #0a0908 !important;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  overflow: visible;
+}
+
+.sov-cit.avatar,
+.sov-cit.mp-av,
+.sov-cit.collab-av,
+.sov-cit.disc {
+  font-size: 0 !important;
+  color: transparent !important;
+  line-height: 0 !important;
+  background: #0a0908 !important;
+}
+
+.sov-cit svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+.sov-cit-letter {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sov-cit--aetheria { --cit-hi: #f0e2b8; --cit-mid: #c6a664; --cit-lo: #8a7038; }
+.sov-cit--kernel   { --cit-hi: #c5f0d4; --cit-mid: #9ee0b8; --cit-lo: #3d7a55; }
+.sov-cit--eve      { --cit-hi: #f0d4ff; --cit-mid: #e0b0ff; --cit-lo: #7a4a9a; }
+.sov-cit--t_critic { --cit-hi: #e8c9a0; --cit-mid: #d4a574; --cit-lo: #6b4a2e; }
+.sov-cit--t_scout  { --cit-hi: #c5dcec; --cit-mid: #8eb8d4; --cit-lo: #3a5a70; }
+.sov-cit--vett     { --cit-hi: #d4f0f8; --cit-mid: #7ec8e3; --cit-lo: #3a7a9a; }
+.sov-cit--scotty   { --cit-hi: #f0c9a8; --cit-mid: #e8a87c; --cit-lo: #a65d3b; }
+
+/* Default size when the host is not already an avatar/chip */
+.sov-cit:not(.avatar):not(.mp-av):not(.collab-av) {
+  width: 32px;
+  height: 32px;
+}
+
+.sov-cit .sov-orbit,
+.sov-cit .sov-sweep,
+.sov-cit .sov-petals,
+.sov-cit .sov-lid,
+.sov-cit .sov-spin {
+  transform-box: view-box;
+  transform-origin: 32px 32px;
+}
+
+.sov-cit--aetheria .sov-orbit {
+  animation: sov-orbit 28s linear infinite;
+}
+.sov-cit--aetheria .sov-spin {
+  animation: sov-orbit-rev 48s linear infinite;
+}
+.sov-cit--kernel .sov-scan {
+  animation: sov-scan 3.8s linear infinite;
+}
+.sov-cit--eve .sov-petals {
+  animation: sov-breathe 5.6s ease-in-out infinite;
+}
+.sov-cit--t_critic .sov-lid {
+  transform: scaleY(0.05);
+  opacity: 0;
+  animation: sov-blink 5.4s ease-in-out infinite;
+}
+.sov-cit--t_scout .sov-sweep {
+  animation: sov-orbit 6.4s linear infinite;
+}
+.sov-cit--vett .sov-shimmer {
+  animation: sov-shimmer 4.2s ease-in-out infinite;
+}
+.sov-cit--scotty .sov-pulse {
+  animation: sov-pulse 3.8s ease-in-out infinite;
+}
+
+/* Busy: existing collab/working/on_duty signals — no new polling */
+.sov-cit.is-busy .sov-ring,
+.sov-cit[data-busy="1"] .sov-ring,
+a.messaged-peer[data-state="working"] .sov-cit .sov-ring,
+a.messaged-peer[data-state="gate"] .sov-cit .sov-ring,
+.row .sov-cit.is-busy .sov-ring {
+  animation: sov-busy-ring 1.5s ease-in-out infinite;
+}
+
+.sov-cit.is-busy.sov-cit--aetheria .sov-orbit,
+.sov-cit[data-busy="1"].sov-cit--aetheria .sov-orbit,
+a.messaged-peer[data-state="working"] .sov-cit--aetheria .sov-orbit,
+a.messaged-peer[data-state="gate"] .sov-cit--aetheria .sov-orbit {
+  animation-duration: 8s;
+}
+.sov-cit.is-busy.sov-cit--aetheria .sov-spin,
+.sov-cit[data-busy="1"].sov-cit--aetheria .sov-spin {
+  animation-duration: 16s;
+}
+
+.sov-cit.is-busy.sov-cit--kernel .sov-scan,
+.sov-cit[data-busy="1"].sov-cit--kernel .sov-scan,
+a.messaged-peer[data-state="working"] .sov-cit--kernel .sov-scan,
+a.messaged-peer[data-state="gate"] .sov-cit--kernel .sov-scan {
+  animation-duration: 1.05s;
+}
+
+.sov-cit.is-busy.sov-cit--eve .sov-petals,
+.sov-cit[data-busy="1"].sov-cit--eve .sov-petals,
+a.messaged-peer[data-state="working"] .sov-cit--eve .sov-petals,
+a.messaged-peer[data-state="gate"] .sov-cit--eve .sov-petals {
+  animation-duration: 2.1s;
+}
+
+.sov-cit.is-busy.sov-cit--t_critic .sov-lid,
+.sov-cit[data-busy="1"].sov-cit--t_critic .sov-lid,
+a.messaged-peer[data-state="working"] .sov-cit--t_critic .sov-lid,
+a.messaged-peer[data-state="gate"] .sov-cit--t_critic .sov-lid {
+  animation-duration: 2.3s;
+}
+
+.sov-cit.is-busy.sov-cit--t_scout .sov-sweep,
+.sov-cit[data-busy="1"].sov-cit--t_scout .sov-sweep,
+a.messaged-peer[data-state="working"] .sov-cit--t_scout .sov-sweep,
+a.messaged-peer[data-state="gate"] .sov-cit--t_scout .sov-sweep {
+  animation-duration: 2.1s;
+}
+
+.sov-cit.is-busy.sov-cit--vett .sov-shimmer,
+.sov-cit[data-busy="1"].sov-cit--vett .sov-shimmer {
+  animation-duration: 1.5s;
+}
+.sov-cit.is-busy.sov-cit--scotty .sov-pulse,
+.sov-cit[data-busy="1"].sov-cit--scotty .sov-pulse {
+  animation-duration: 1.35s;
+}
+
+@keyframes sov-orbit {
+  to { transform: rotate(360deg); }
+}
+@keyframes sov-orbit-rev {
+  to { transform: rotate(-360deg); }
+}
+@keyframes sov-scan {
+  0%   { transform: translateY(-16px); opacity: 0.12; }
+  14%  { opacity: 0.95; }
+  86%  { opacity: 0.95; }
+  100% { transform: translateY(38px); opacity: 0.12; }
+}
+@keyframes sov-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.82; }
+  50%      { transform: scale(1.07); opacity: 1; }
+}
+@keyframes sov-blink {
+  0%, 84%, 92%, 100% { transform: scaleY(0.05); opacity: 0; }
+  88%, 89%           { transform: scaleY(1); opacity: 1; }
+}
+@keyframes sov-shimmer {
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.9; }
+}
+@keyframes sov-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+@keyframes sov-busy-ring {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+
+.sov-cit.has-eyes .sov-eyes,
+.sov-cit.has-eyes .sov-pupils {
+  transform-box: view-box;
+  transform-origin: 32px 31px;
+}
+.sov-cit.has-eyes .sov-eyes {
+  animation: sov-eye-blink 5.8s ease-in-out infinite;
+}
+.sov-cit.has-eyes .sov-pupils {
+  animation: sov-glance 9.2s ease-in-out infinite;
+}
+.sov-cit--eve.has-eyes .sov-eyes {
+  animation-delay: 1.35s;
+}
+.sov-cit--eve.has-eyes .sov-pupils {
+  animation-delay: -3.2s;
+}
+
+.sov-cit.is-busy.has-eyes .sov-eyes,
+.sov-cit[data-busy="1"].has-eyes .sov-eyes,
+a.messaged-peer[data-state="working"] .sov-cit.has-eyes .sov-eyes,
+a.messaged-peer[data-state="gate"] .sov-cit.has-eyes .sov-eyes {
+  animation-duration: 2.7s;
+}
+.sov-cit.is-busy.has-eyes .sov-pupils,
+.sov-cit[data-busy="1"].has-eyes .sov-pupils,
+a.messaged-peer[data-state="working"] .sov-cit.has-eyes .sov-pupils,
+a.messaged-peer[data-state="gate"] .sov-cit.has-eyes .sov-pupils {
+  animation-duration: 3.4s;
+}
+
+@keyframes sov-eye-blink {
+  0%, 84%, 92%, 100% { transform: scaleY(1); }
+  88%                { transform: scaleY(0.1); }
+}
+@keyframes sov-glance {
+  0%, 16%  { transform: translateX(0); }
+  24%, 36% { transform: translateX(2.3px); }
+  46%, 58% { transform: translateX(-2.1px); }
+  68%, 100%{ transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sov-cit *,
+  .sov-cit *::before,
+  .sov-cit *::after,
+  a.messaged-peer[data-state="working"] .mp-av,
+  a.messaged-peer[data-state="gate"] .mp-av {
+    animation: none !important;
+    transition: none !important;
+  }
+}
