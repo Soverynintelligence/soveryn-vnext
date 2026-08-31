@@ -11,6 +11,7 @@
 <link rel="manifest" href="/static/messages/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
 <style>
   :root {
     --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
@@ -38,7 +39,16 @@
     color: var(--gold); text-decoration: none; font-size: 17px;
     padding: 6px 4px; flex-shrink: 0;
   }
+  .avatar.sov-cit {
+    font-size: 0 !important;
+    background: #0a0908 !important;
+    color: transparent !important;
+    padding: 0;
+    overflow: hidden;
+  }
+  .avatar.sov-cit svg { width: 100%; height: 100%; display: block; }
   .avatar {
+
     width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 15px; color: #0c0b0a;
@@ -86,6 +96,18 @@
   .bubble.them {
     align-self: flex-start;
     background: var(--bubble-them); border-bottom-left-radius: 4px;
+  }
+  .bubble.them.heartbeat {
+    border: 1px solid rgba(198,166,100,0.28);
+  }
+  .bubble.them.heartbeat::before {
+    content: "Reflection";
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 4px;
   }
   .bubble.me {
     align-self: flex-end; white-space: pre-wrap;
@@ -234,21 +256,58 @@
 
   .composer {
     position: sticky; bottom: 0; z-index: 4;
-    display: flex; gap: 8px; align-items: flex-end;
+    display: flex; flex-direction: column; gap: 6px;
     padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); background: rgba(0,0,0,0.95);
   }
-  .composer input {
+  .composer-row {
+    display: flex; gap: 8px; align-items: flex-end; width: 100%;
+  }
+  .composer-row input[type="text"] {
     flex: 1; font: inherit; font-size: 16px; padding: 10px 14px;
     border-radius: 20px; border: 1px solid var(--line);
     background: #141210; color: var(--ink); outline: none;
   }
-  .composer button {
+  .composer button[data-send] {
     width: 36px; height: 36px; border-radius: 50%; border: none;
     background: var(--gold); color: #0c0b0a; font-size: 18px; font-weight: 700;
     cursor: pointer; flex-shrink: 0;
   }
-  .composer button:disabled { opacity: 0.4; }
+  .composer button[data-send]:disabled { opacity: 0.4; }
+  .composer-attachments-row {
+    display: flex; gap: 8px; padding: 0 2px 2px; flex-wrap: wrap;
+  }
+  .composer-attachments-row[hidden] { display: none; }
+  .composer-attachment-thumb {
+    position: relative; width: 64px; height: 64px;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--line); background: #141210;
+  }
+  .composer-attachment-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .composer-attachment-thumb .remove-attachment {
+    position: absolute; top: 3px; right: 3px;
+    width: 20px; height: 20px; line-height: 16px;
+    border: 0; background: rgba(0, 0, 0, 0.75); color: white;
+    border-radius: 50%; cursor: pointer; font-size: 14px; padding: 0;
+  }
+  .composer-attach-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: transparent; color: var(--ink); opacity: 0.55;
+    font-size: 20px; cursor: pointer; flex-shrink: 0; line-height: 1;
+    padding: 0;
+  }
+  .composer-attach-btn:hover { opacity: 1; }
+  .composer-attach-btn[hidden] { display: none; }
+  .bubble-images {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;
+  }
+  .bubble-images img {
+    max-width: 220px; max-height: 220px; border-radius: 10px;
+    display: block; object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
   [data-push-banner] {
     margin: 0; padding: 10px 12px;
     border-bottom: 1px solid var(--line);
@@ -294,11 +353,20 @@
   <div class="thread" data-thread role="log" aria-live="polite"></div>
 
   <form class="composer" data-composer onsubmit="return false">
-    <input type="text" data-input placeholder="Message" aria-label="Message" autocomplete="off">
-    <button type="button" data-send aria-label="Send">↑</button>
+    <div class="composer-attachments-row" data-composer-attachments hidden></div>
+    <div class="composer-row">
+      <button type="button" class="composer-attach-btn" data-attach
+              title="Attach image" aria-label="Attach image">📎</button>
+      <input type="file" data-file-input
+             accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+             capture="environment" multiple hidden>
+      <input type="text" data-input placeholder="Message" aria-label="Message" autocomplete="off">
+      <button type="button" data-send aria-label="Send">↑</button>
+    </div>
   </form>
 
 <script src="/messages-push-client.js?v=20260825c" defer></script>
+<script src="/static/citizen-icons.js?v=20260830msg"></script>
 <script>
 (function () {
   // Fleet freeze: Vett/Scotty parked as Messages peers (engine room only).
@@ -316,6 +384,21 @@
   // Teammates overnight inboxes — read-only (no chat_stream agent).
   const INBOX_ONLY = { t_critic: true, t_scout: true };
 
+  // Attachments — mirror of soveryn.platform.vision_types (static HTML).
+  // Paperclip is on every Messages seat (PDFs splice for any agent).
+  // ATTACH_CAPABLE_AGENTS gates *images* only — same set as chat.html.
+  const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
+  const MAX_ATTACHMENT_COUNT = 4;
+  const ALLOWED_IMAGE_MIMES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+  ]);
+  const ALLOWED_PDF_MIME = "application/pdf";
+  const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
+  const ATTACH_CAPABLE_AGENTS = new Set([
+    "aetheria", "vett", "scotty", "eve",
+  ]);
+  const ATT_CACHE_PREFIX = "soveryn.msg.att.";
+
   const params = new URLSearchParams(location.search);
   const pathAgent = (location.pathname.split("/").pop() || "").toLowerCase();
   const agent = (params.get("agent") || pathAgent || "aetheria").toLowerCase();
@@ -324,9 +407,11 @@
 
   const state = {
     agent, sessionId: params.get("session") || null, sending: false,
-    turnCount: 0, waitingPeers: false, pollTimer: null,
+    turnCount: 0, userTurnCount: 0, waitingPeers: false, pollTimer: null,
     gatePollTimer: null, peerGate: {}, bootDone: false,
     gateFailStreak: 0,
+    pendingAttachments: [],
+    attByUserIdx: {},
   };
 
   const $ = (s) => document.querySelector(s);
@@ -334,8 +419,12 @@
   const chips = () => $("[data-collab-chips]");
 
   document.title = contact.name + " · Messages";
-  $("[data-agent-av]").dataset.agent = agent;
-  $("[data-agent-av]").textContent = contact.letter;
+  if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+    soverynCitizenIcon.paint($("[data-agent-av]"), agent, { letter: contact.letter, label: contact.name });
+  } else {
+    $("[data-agent-av]").dataset.agent = agent;
+    $("[data-agent-av]").textContent = contact.letter;
+  }
   $("[data-agent-name]").textContent = contact.name;
   $("[data-agent-sub]").textContent = contact.sub;
 
@@ -412,20 +501,122 @@
     return s;
   }
 
-  function appendBubble(kind, text) {
+  function appendBubble(kind, text, opts) {
+    opts = opts || {};
     const b = document.createElement("div");
     b.className = "bubble " + kind;
-    if (kind === "them") {
-      const body = document.createElement("div");
-      body.className = "md-body";
-      body.innerHTML = renderMarkdown(text);
-      b.appendChild(body);
-    } else {
-      b.textContent = text;
+    if (kind === "them" && opts.source === "heartbeat") b.classList.add("heartbeat");
+    const images = opts.images || [];
+    if (images.length) {
+      const imgRow = document.createElement("div");
+      imgRow.className = "bubble-images";
+      images.forEach((url) => {
+        if (!url || typeof url !== "string") return;
+        if (url.startsWith("data:application/pdf")) {
+          const label = document.createElement("span");
+          label.textContent = "PDF";
+          label.style.cssText = "display:flex;align-items:center;justify-content:center;min-width:64px;min-height:64px;font:600 11px/1 var(--mono);color:var(--mute);";
+          imgRow.appendChild(label);
+        } else {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = "";
+          imgRow.appendChild(img);
+        }
+      });
+      b.appendChild(imgRow);
+    }
+    const hideText = images.length && (!text || text === "(image)");
+    if (!hideText && text) {
+      if (kind === "them") {
+        const body = document.createElement("div");
+        body.className = "md-body";
+        body.innerHTML = renderMarkdown(text);
+        b.appendChild(body);
+      } else {
+        const txt = document.createElement("div");
+        txt.textContent = text;
+        b.appendChild(txt);
+      }
     }
     thread().appendChild(b);
     thread().scrollTop = thread().scrollHeight;
     return b;
+  }
+
+  let _attSession = null;
+  function bindAttCache(sessionId) {
+    if (sessionId === _attSession) return;
+    _attSession = sessionId || null;
+    state.attByUserIdx = {};
+    if (!sessionId) return;
+    try {
+      const raw = sessionStorage.getItem(ATT_CACHE_PREFIX + sessionId);
+      if (raw) state.attByUserIdx = JSON.parse(raw) || {};
+    } catch (_) {}
+  }
+
+  function persistAttCache(sessionId) {
+    if (!sessionId) return;
+    try {
+      sessionStorage.setItem(ATT_CACHE_PREFIX + sessionId, JSON.stringify(state.attByUserIdx));
+    } catch (_) { /* quota — thumbs still live in this page */ }
+  }
+
+  function imagesForUserTurn(idx) {
+    const hit = state.attByUserIdx[String(idx)];
+    return Array.isArray(hit) ? hit : [];
+  }
+
+  function rememberTurnImages(idx, images) {
+    if (!images || !images.length) return;
+    state.attByUserIdx[String(idx)] = images;
+    persistAttCache(state.sessionId);
+  }
+
+  function renderAttachmentsRow() {
+    const row = $("[data-composer-attachments]");
+    if (!row) return;
+    if (state.pendingAttachments.length === 0) {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    row.hidden = false;
+    row.innerHTML = "";
+    state.pendingAttachments.forEach((att, idx) => {
+      const thumb = document.createElement("div");
+      thumb.className = "composer-attachment-thumb";
+      const isPdf = att.kind === "pdf" || (att.dataUrl || "").startsWith("data:application/pdf");
+      if (isPdf) {
+        const label = document.createElement("span");
+        label.textContent = "PDF";
+        label.title = att.name || "document.pdf";
+        label.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:600 10px/1 var(--mono);";
+        thumb.appendChild(label);
+      } else {
+        const img = document.createElement("img");
+        img.src = att.dataUrl;
+        img.alt = att.name || "";
+        thumb.appendChild(img);
+      }
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-attachment";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", "Remove " + (att.name || "attachment"));
+      removeBtn.addEventListener("click", () => {
+        state.pendingAttachments.splice(idx, 1);
+        renderAttachmentsRow();
+      });
+      thumb.appendChild(removeBtn);
+      row.appendChild(thumb);
+    });
+  }
+
+  function clearPendingAttachments() {
+    state.pendingAttachments = [];
+    renderAttachmentsRow();
   }
 
   function setBubbleText(el, text, asMarkdown) {
@@ -483,7 +674,9 @@
       : "Open group chat with " + name;
     a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
     a.innerHTML =
-      '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>' +
+      (typeof soverynCitizenIcon === 'function'
+        ? soverynCitizenIcon(peer, { size: 36, className: 'mp-av', letter: name.charAt(0), busy: st === 'working' || st === 'gate', label: name })
+        : '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>') +
       '<span class="mp-name">' + esc(name) + '</span>' +
       '<span class="mp-status">' + esc(status) + '</span>';
     thread().appendChild(a);
@@ -688,9 +881,14 @@
     });
     const shown = new Set();
     let waiting = false;
+    let userIdx = 0;
     (turns || []).forEach((t) => {
-      if (t.role === "user") appendBubble("me", t.content);
-      else if (t.role === "assistant") appendBubble("them", t.content);
+      if (t.role === "user") {
+        appendBubble("me", t.content, { images: imagesForUserTurn(userIdx) });
+        userIdx += 1;
+      }
+      else if (t.role === "assistant") appendBubble("them", t.content, { source: t.source });
+
       else if (t.role === "system") {
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
         const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
@@ -709,6 +907,7 @@
       }
     });
     state.turnCount = (turns || []).length;
+    state.userTurnCount = userIdx;
     state.waitingPeers = waiting;
     if (Object.keys(state.peerGate || {}).length) {
       const g = Object.keys(state.peerGate)[0];
@@ -734,15 +933,8 @@
         startPoll();
       }
     } else {
-      const last = (turns || [])[(turns || []).length - 1];
-      if (last && last.role === "user" && agent === "kernel") {
-        state.deferred = true;
-        $("[data-agent-sub]").textContent = "working in the background";
-        startPoll();
-      } else {
-        $("[data-agent-sub]").textContent = contact.sub;
-        stopPoll();
-      }
+      $("[data-agent-sub]").textContent = contact.sub;
+      stopPoll();
     }
     // History rebuild wiped Gate cards — re-pull pending so Allow returns.
     if (agent === "aetheria" || agent === "eve" || Object.keys(state.peerGate || {}).length) {
@@ -793,7 +985,9 @@
       const name = peer.charAt(0).toUpperCase() + peer.slice(1);
       html.push(
         '<a class="collab-chip" href="' + roomHref(peer, ev.room_session_id) + '">' +
-          '<span class="collab-av">' + esc(name.charAt(0)) + '</span>' +
+          (typeof soverynCitizenIcon === 'function'
+            ? soverynCitizenIcon(peer, { size: 28, className: 'collab-av', letter: name.charAt(0), label: name })
+            : '<span class="collab-av">' + esc(name.charAt(0)) + '</span>') +
           '<span>' + esc(name) + '</span></a>'
       );
     }
@@ -827,6 +1021,7 @@
       throw new Error(msg);
     }
     state.sessionId = d.session_id;
+    bindAttCache(state.sessionId);
     const u = new URL(location.href);
     u.searchParams.set("session", state.sessionId);
     history.replaceState({}, "", u);
@@ -880,6 +1075,7 @@
       clearSessionFromUrl();
       return null;
     }
+    bindAttCache(sessionId);
     const c = await collabs();
     renderTurns(d.turns || [], c);
     renderChips(c);
@@ -982,22 +1178,36 @@
     if (!state.bootDone) return; // wait for initial history so we don't race a new session
     const input = $("[data-input]");
     const msg = (input.value || "").trim();
-    if (!msg || state.sending) return;
+    const canSee = ATTACH_CAPABLE_AGENTS.has(agent);
+    const pending = canSee
+      ? state.pendingAttachments.slice()
+      : state.pendingAttachments.filter(
+          (a) => a.kind === "pdf" || (a.dataUrl || "").startsWith("data:application/pdf")
+        );
+    const attachUrls = pending.map((a) => a.dataUrl);
+    if ((!msg && attachUrls.length === 0) || state.sending) return;
+    // Wire payload synthesizes "(image)" so the server's non-empty check
+    // passes; the bubble shows the pic and any real text (same as chat.html).
+    const wireMessage = msg || "(image)";
     state.sending = true;
     $("[data-send]").disabled = true;
     input.value = "";
-    appendBubble("me", msg);
+    appendBubble("me", msg, { images: attachUrls });
+    clearPendingAttachments();
     const them = appendBubble("them", "…");
     try {
       await ensureSession();
+      rememberTurnImages(state.userTurnCount, attachUrls);
+      const body = {
+        agent: state.agent,
+        session_id: state.sessionId,
+        message: wireMessage,
+      };
+      if (attachUrls.length > 0) body.attachments = attachUrls;
       const r = await fetch("/chat_stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agent: state.agent,
-          session_id: state.sessionId,
-          message: msg,
-        }),
+        body: JSON.stringify(body),
       });
       if (!r.ok) {
         const errBody = await r.json().catch(() => ({}));
@@ -1091,11 +1301,53 @@
 
   const _sendBtn = $("[data-send]");
   const _inp = $("[data-input]");
+  const _attachBtn = $("[data-attach]");
+  const _fileInput = $("[data-file-input]");
   if (_sendBtn && !inboxOnly) _sendBtn.disabled = true;
   if (_sendBtn) _sendBtn.addEventListener("click", send);
   if (_inp) {
     _inp.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") { ev.preventDefault(); send(); }
+    });
+  }
+  // Paperclip on every chat seat (Aetheria / Eve / Kernel / Grok / deep-links).
+  // Overnight inboxes replace the composer, so they never see it.
+  if (_attachBtn && _fileInput && !inboxOnly) {
+    _attachBtn.addEventListener("click", () => _fileInput.click());
+    _fileInput.addEventListener("change", async (evt) => {
+      const files = Array.from(evt.target.files || []);
+      for (const file of files) {
+        if (state.pendingAttachments.length >= MAX_ATTACHMENT_COUNT) {
+          alert("Max " + MAX_ATTACHMENT_COUNT + " attachments per message");
+          break;
+        }
+        if (!ALLOWED_ATTACH_MIMES.has(file.type)) {
+          alert("Not a supported attachment: " + file.name + " (" + (file.type || "unknown") + "). Images or PDF.");
+          continue;
+        }
+        const kind = file.type === ALLOWED_PDF_MIME ? "pdf" : "image";
+        if (kind === "image" && !ATTACH_CAPABLE_AGENTS.has(agent)) {
+          alert(contact.name + " can take PDFs, not pictures.");
+          continue;
+        }
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          alert(file.name + " exceeds 16MB");
+          continue;
+        }
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error("read failed"));
+            r.readAsDataURL(file);
+          });
+          state.pendingAttachments.push({ name: file.name, dataUrl, kind });
+        } catch (e) {
+          alert("Failed to read " + file.name + ": " + e.message);
+        }
+      }
+      renderAttachmentsRow();
+      _fileInput.value = "";
     });
   }
 

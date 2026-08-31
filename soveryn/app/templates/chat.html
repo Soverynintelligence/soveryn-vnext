@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
 <link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830faces">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
 <style>
 
   :root {
@@ -1031,7 +1031,7 @@
   </main>
 </div><!-- /.chat-shell -->
 <script src="/static/voice/presence.js?v=alive5"></script>
-<script src="/static/citizen-icons.js?v=20260830faces"></script>
+<script src="/static/citizen-icons.js?v=20260830msg"></script>
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
@@ -1069,7 +1069,7 @@
   // parity test fails if this drifts from the backend. (Named without the
   // v-word so the retired-agent hygiene test stays green.)
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty",
+    "aetheria", "vett", "scotty", "eve",
   ]);
 
   // ─── State ─────────────────────────────────────────────────────────────────

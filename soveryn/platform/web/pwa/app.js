@@ -88,9 +88,19 @@ async function fetchThreads(secret) {
 // --- Agent presentation -----------------------------------------------------
 const AGENT_TAGLINE = {
   aetheria: 'Strategy + coordination',
+  kernel:   'Build + local models',
+  eve:      'Ship + CWG',
   vett:     'Research + verification',
   scotty:   'Execution + bounded fixes',
 };
+
+function citIcon(agent, size) {
+  const id = String(agent || '').toLowerCase();
+  if (typeof window.soverynCitizenIcon === 'function') {
+    return window.soverynCitizenIcon(id, { size: size || 40, className: 'pwa-cit' });
+  }
+  return `<span class="agent-dot agent-${escapeHtml(id)}"></span>`;
+}
 
 // Which agents have voice configured (from /m/voice/agents). Cached for the
 // session — voice config doesn't change between page loads.
@@ -344,7 +354,7 @@ async function renderThreadListView($view) {
         <div class="thread-card${t.unread ? ' has-unread' : ''}"
              data-tid="${escapeHtml(t.thread_id)}"
              data-agent="${escapeHtml(t.agent)}">
-          <span class="agent-dot agent-dot thread-card-dot agent-${escapeHtml(t.agent)}"></span>
+          ${citIcon(t.agent, 40)}
           <div class="thread-card-body">
             <div class="thread-card-row1">
               <span class="thread-card-name agent-${escapeHtml(t.agent)}">${escapeHtml(t.agent)}</span>
@@ -373,12 +383,12 @@ async function renderAgentPickView($view) {
     showBack: true,
     rightHtml: '',
   });
-  const agents = ['aetheria', 'vett', 'scotty'];
+  const agents = ['aetheria', 'kernel', 'eve'];
   $view.innerHTML = `
     <div id="agent-pick-list">
       ${agents.map(a => `
         <div class="agent-pick-card" data-agent="${a}">
-          <span class="agent-dot agent-${a}"></span>
+          ${citIcon(a, 44)}
           <div>
             <div class="agent-pick-name agent-${a}">${a.toUpperCase()}</div>
             <div class="agent-pick-tagline">${escapeHtml(AGENT_TAGLINE[a] || '')}</div>
@@ -425,7 +435,7 @@ async function renderThreadView($view, { tid, agent }) {
       (canCall
         ? `<button class="call-btn" id="hdr-call" aria-label="Voice call">&#9742;</button>`
         : '') +
-      `<span class="agent-dot agent-${currentThreadAgent}" style="margin:0 12px"></span>`,
+      citIcon(currentThreadAgent, 28),
   });
   if (canCall) {
     const callBtn = document.getElementById('hdr-call');

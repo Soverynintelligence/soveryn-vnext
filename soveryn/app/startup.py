@@ -518,12 +518,13 @@ def create_app(
             build_list_directory_tool(owner_agent="eve", root=Path.home())
         )
         # Kernel — build brain: Lattice search (above) + read/list in house
-        # workspaces. Writes go through OpenCode (run_opencode), not AgentLoop
-        # bash/edit.
+        # workspaces. Default writes: Aider. OpenCode is a short --auto fallback.
         tool_registry.register(build_read_file_tool(owner_agent="kernel"))
         tool_registry.register(build_list_directory_tool(owner_agent="kernel"))
+        from soveryn.platform.aider_tool import build_run_aider_tool
         from soveryn.platform.opencode_tool import build_run_opencode_tool
 
+        tool_registry.register(build_run_aider_tool(owner_agent="kernel"))
         tool_registry.register(build_run_opencode_tool(owner_agent="kernel"))
 
         # Library layer tools — shared write surface for verified reference
@@ -711,6 +712,16 @@ def create_app(
             _register_intake_tools(
                 tool_registry,
                 owner_agent=_intake_agent,
+                allowed_roots=_intake_roots,
+            )
+
+        # QR decode — Eve's Messages desk tool. Same allowed roots as intake.
+        # Not on the all-agent intake loop: do not give this to Kernel.
+        from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
+        for _qr_agent in ("eve",):
+            _register_qr_tools(
+                tool_registry,
+                owner_agent=_qr_agent,
                 allowed_roots=_intake_roots,
             )
 

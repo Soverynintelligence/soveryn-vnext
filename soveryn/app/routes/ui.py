@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlencode
 
 from flask import Blueprint, jsonify, make_response, redirect, request
 
@@ -33,6 +34,37 @@ _PHONE_UA_RE = re.compile(
 )
 
 
+# Phone Home Screen PWA caches /messages by URL. Bump this when the list chrome
+# changes so iOS is forced onto a new document (start_url + 302).
+_MESSAGES_BUILD = "20260830attach"
+_CITIZEN_ICONS_CSS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.css"
+_CITIZEN_ICONS_JS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.js"
+
+
+def _inline_citizen_icons(html: str) -> str:
+    """Bake faces into Messages HTML. Phone PWAs often fail /static/ (gate or cache)
+    and then fall back to letter circles."""
+    css = (
+        _CITIZEN_ICONS_CSS.read_text(encoding="utf-8")
+        if _CITIZEN_ICONS_CSS.is_file() else ""
+    )
+    js = (
+        _CITIZEN_ICONS_JS.read_text(encoding="utf-8")
+        if _CITIZEN_ICONS_JS.is_file() else ""
+    )
+    html = html.replace(
+        '<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">',
+        "<style id=\"citizen-icons\">\n" + css + "\n</style>",
+        1,
+    )
+    html = html.replace(
+        '<script src="/static/citizen-icons.js?v=20260830msg"></script>',
+        "<script>\n" + js + "\n</script>",
+        1,
+    )
+    return html
+
+
 def _serve_html(path: Path, *, missing_label: str):
     if not path.is_file():
         return jsonify({"error": {
@@ -40,6 +72,8 @@ def _serve_html(path: Path, *, missing_label: str):
             "message": f"{missing_label} template missing at {path}",
         }}), 500
     html = path.read_text(encoding="utf-8")
+    if path.name in ("messages.html", "message_thread.html"):
+        html = _inline_citizen_icons(html)
     resp = make_response(html, 200)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
@@ -143,9 +177,25 @@ def room_page():
     return _serve_html(ROOM_TEMPLATE, missing_label="Room")
 
 
+def _messages_build_redirect():
+    """Force iOS Home Screen off a frozen /messages URL onto a new query."""
+    if request.args.get("b") == _MESSAGES_BUILD:
+        return None
+    args = request.args.to_dict(flat=True)
+    args["b"] = _MESSAGES_BUILD
+    qs = urlencode(args)
+    dest = f"/messages?{qs}" if qs else f"/messages?b={_MESSAGES_BUILD}"
+    resp = redirect(dest, code=302)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
+
+
 @bp.get("/messages")
 def messages_page():
     """Messenger-style contacts list — tap a citizen to open their 1:1."""
+    bounced = _messages_build_redirect()
+    if bounced is not None:
+        return bounced
     return _serve_html(MESSAGES_TEMPLATE, missing_label="Messages")
 
 

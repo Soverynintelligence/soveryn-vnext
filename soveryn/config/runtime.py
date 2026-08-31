@@ -43,7 +43,9 @@ COMMISSION_BLOCKED: frozenset[str] = frozenset({"vett", "scotty"})
 
 #: Messages contacts whose turn must not own the HTTP/SSE thread. Work is
 #: enqueued as a commission; the composer unblocks after a short ack.
-DEFERRED_CHAT_AGENTS: frozenset[str] = frozenset({"kernel"})
+#: Kernel chats live in Messages (OpenCode/Aider still own writes). Empty:
+#: live SSE for every contact. Machinery stays for optional re-enable.
+DEFERRED_CHAT_AGENTS: frozenset[str] = frozenset()
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
@@ -284,7 +286,7 @@ def _eve_flash_server() -> ModelServer:
         host=str(flash["host"]),
         port=int(flash["port"]),
         model_path=MODEL_ROOT / str(flash["path"]),
-        mmproj_path=None,
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
         role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is on Spark GLM",
         supports_multi_system_messages=False,
         model_alias=str(flash["alias"]),

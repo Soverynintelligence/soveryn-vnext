@@ -27,6 +27,8 @@
   --danger:      #b4685c;    /* down */
   /* Agent identity (not the HUD chrome) */
   --agent-aetheria: #c6a664; /* gold */
+  --agent-kernel:   #9ee0b8; /* mint */
+  --agent-eve:      #e0b0ff; /* lilac */
   --agent-vett:     #6b8290; /* steel */
   --agent-scotty:   #c26a4c; /* terracotta / maroon-bright */
   --font-mono: 'IBM Plex Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -101,6 +103,18 @@ body {
   display: flex; align-items: center; justify-content: center;
   height: 44px; width: 44px;
 }
+.app-header-right {
+  width: auto;
+  min-width: 44px;
+  gap: 6px;
+  padding-right: 4px;
+}
+.sov-cit.pwa-cit {
+  font-size: 0 !important;
+  color: transparent !important;
+  line-height: 0 !important;
+  overflow: hidden;
+}
 .app-header-title {
   text-align: center;
   font-family: var(--font-mono);
@@ -111,6 +125,8 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .app-header-title.agent-aetheria { color: var(--agent-aetheria); }
+.app-header-title.agent-kernel   { color: var(--agent-kernel); }
+.app-header-title.agent-eve      { color: var(--agent-eve); }
 .app-header-title.agent-vett     { color: var(--agent-vett); }
 .app-header-title.agent-scotty   { color: var(--agent-scotty); }
 
@@ -241,9 +257,9 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   border-bottom: 1px solid var(--rule);
   cursor: pointer;
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 44px 1fr;
   column-gap: 12px;
-  align-items: start;
+  align-items: center;
 }
 .thread-card:active { background: #111; }
 .thread-card-dot {
@@ -262,6 +278,8 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   color: var(--muted);
 }
 .thread-card-name.agent-aetheria { color: var(--agent-aetheria); }
+.thread-card-name.agent-kernel   { color: var(--agent-kernel); }
+.thread-card-name.agent-eve      { color: var(--agent-eve); }
 .thread-card-name.agent-vett     { color: var(--agent-vett); }
 .thread-card-name.agent-scotty   { color: var(--agent-scotty); }
 .thread-card-time {
@@ -308,7 +326,7 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   border-bottom: 1px solid var(--rule);
   cursor: pointer;
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 48px 1fr;
   column-gap: 14px;
   align-items: center;
 }
@@ -321,6 +339,8 @@ h1, h2 { font-weight: 500; letter-spacing: -0.02em; }
   color: var(--muted);
 }
 .agent-pick-name.agent-aetheria { color: var(--agent-aetheria); }
+.agent-pick-name.agent-kernel   { color: var(--agent-kernel); }
+.agent-pick-name.agent-eve      { color: var(--agent-eve); }
 .agent-pick-name.agent-vett     { color: var(--agent-vett); }
 .agent-pick-name.agent-scotty   { color: var(--agent-scotty); }
 .agent-pick-tagline {
