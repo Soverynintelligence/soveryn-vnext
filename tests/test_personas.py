@@ -63,6 +63,8 @@ def test_eve_persona_mentions_decode_qr(no_persona_overrides):
     text = get_persona("eve")
     assert "decode_qr" in text
     assert "pixels" in text.lower()
+    assert "make_qr" in text
+    assert "compose_image" in text
 
 
 def test_persona_override_round_trip(tmp_path, monkeypatch):

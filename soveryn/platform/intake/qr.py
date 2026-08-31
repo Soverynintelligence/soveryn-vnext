@@ -128,9 +128,50 @@ def _try_decode(img: Any) -> tuple[tuple[str, ...], bool]:
     return (), detected
 
 
+def encode_qr_png(
+    payload: str,
+    *,
+    module_px: int = 10,
+    quiet_modules: int = 4,
+    min_edge: int = 400,
+) -> bytes:
+    """Encode ``payload`` as a scannable PNG (high ECC + quiet zone).
+
+    Does not fetch URLs. Caller is responsible for URL policy.
+    """
+    if not isinstance(payload, str) or not payload:
+        raise ValueError("payload must be a non-empty string")
+    import cv2
+
+    params = cv2.QRCodeEncoder_Params()
+    params.correction_level = cv2.QRCodeEncoder_CORRECT_LEVEL_H
+    encoder = cv2.QRCodeEncoder.create(params)
+    img = encoder.encode(payload)
+    if img is None or getattr(img, "size", 0) == 0:
+        raise ValueError("QR encode produced no image")
+    border = max(1, int(quiet_modules))
+    img = cv2.copyMakeBorder(
+        img, border, border, border, border,
+        cv2.BORDER_CONSTANT, value=255,
+    )
+    scale = max(1, int(module_px))
+    h, w = img.shape[:2]
+    if min(h, w) * scale < min_edge:
+        scale = max(scale, (min_edge + min(h, w) - 1) // min(h, w))
+    if scale > 1:
+        img = cv2.resize(
+            img, (w * scale, h * scale), interpolation=cv2.INTER_NEAREST,
+        )
+    ok, buf = cv2.imencode(".png", img)
+    if not ok:
+        raise ValueError("QR encode failed to write PNG")
+    return bytes(buf.tobytes())
+
+
 __all__ = [
     "DEFAULT_MAX_BYTES",
     "DecodeResult",
     "decode_qr_bytes",
     "decode_qr_image",
+    "encode_qr_png",
 ]

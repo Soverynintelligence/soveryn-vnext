@@ -709,7 +709,8 @@ def create_app(
                 allowed_roots=_intake_roots,
             )
 
-        # QR decode — Eve's Messages desk tool. Same allowed roots as intake.
+        # Eve desk — decode_qr / make_qr / compose_image. Same allowed roots
+        # as intake; writes land under data/media (Canva / compose_post).
         # Not on the all-agent intake loop: do not give this to Kernel.
         from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
         for _qr_agent in ("eve",):
@@ -717,6 +718,7 @@ def create_app(
                 tool_registry,
                 owner_agent=_qr_agent,
                 allowed_roots=_intake_roots,
+                media_root=env.data_root / "media",
             )
 
         # Aetheria-initiated signal_send — the outbound half of her Direct

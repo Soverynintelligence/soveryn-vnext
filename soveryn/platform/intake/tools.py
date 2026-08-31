@@ -7,8 +7,9 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from soveryn.platform.intake.compose import compose_overlay
 from soveryn.platform.intake.pdf import extract_pdf_path
-from soveryn.platform.intake.qr import decode_qr_bytes
+from soveryn.platform.intake.qr import decode_qr_bytes, encode_qr_png
 from soveryn.platform.intake.turn_images import current_turn_images
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
@@ -220,16 +221,249 @@ def build_decode_qr_tool(
     )
 
 
+# Match soveryn.platform.web.fetch.ALLOWED_SCHEMES. make_qr encodes only —
+# it must never fetch the URL. SSRF does not apply to encode-only.
+_QR_URL_SCHEMES = frozenset({"http", "https"})
+
+
+def _default_media_root() -> Path:
+    try:
+        from soveryn.config.loader import DEFAULT_DATA_ROOT
+
+        return Path(DEFAULT_DATA_ROOT) / "media"
+    except Exception:
+        return Path.home() / "soveryn_vnext" / "data" / "media"
+
+
+def _require_http_url(raw: Any) -> str:
+    """House URL rule (fetch scheme whitelist) without fetching."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ToolArgError("url must be a non-empty http(s) URL")
+    url = raw.strip()
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in _QR_URL_SCHEMES:
+        raise ToolArgError(
+            f"scheme {parsed.scheme!r} not allowed (only http/https)"
+        )
+    if not parsed.hostname:
+        raise ToolArgError("url has no hostname")
+    return url
+
+
+def _as_int(name: str, raw: Any, *, required: bool = True) -> int | None:
+    if raw is None:
+        if required:
+            raise ToolArgError(f"{name} is required")
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ToolArgError(f"{name} must be an integer")
+    if int(raw) != raw:
+        raise ToolArgError(f"{name} must be an integer")
+    return int(raw)
+
+
+def _safe_stem(raw: str, *, fallback: str) -> str:
+    import re
+
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw).strip("-._")
+    return (cleaned[:48] or fallback)
+
+
+def _alloc_png_path(media_root: Path, subdir: str, stem: str) -> Path:
+    import uuid
+
+    dest_dir = media_root.expanduser().resolve() / subdir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    return (dest_dir / f"{stem}_{uuid.uuid4().hex[:8]}.png").resolve()
+
+
+def _write_png(media_root: Path, subdir: str, stem: str, data: bytes) -> Path:
+    dest = _alloc_png_path(media_root, subdir, stem)
+    dest.write_bytes(data)
+    return dest
+
+
+def build_make_qr_tool(
+    *,
+    owner_agent: str,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """URL → scannable PNG under data/media/qr/. Encodes only — never fetches."""
+    root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        url = _require_http_url(args.get("url"))
+        from urllib.parse import urlparse
+
+        stem = _safe_stem(urlparse(url).hostname or "qr", fallback="qr")
+        try:
+            png = encode_qr_png(url)
+        except Exception as exc:  # noqa: BLE001 — miss, don't crash the loop
+            return {
+                "ok": False,
+                "path": None,
+                "url": url,
+                "miss": "encode_failed",
+                "message": str(exc),
+            }
+        dest = _write_png(root, "qr", stem, png)
+        return {
+            "ok": True,
+            "path": str(dest),
+            "url": url,
+            "miss": None,
+        }
+
+    return ToolSpec(
+        name="make_qr",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "http(s) URL to encode. The tool writes a scannable PNG "
+                        "under data/media/qr/ and returns the absolute path. "
+                        "It does not fetch the URL."
+                    ),
+                },
+            },
+            "required": ["url"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Encode an http(s) URL as a scannable QR PNG under data/media/qr/. "
+            "Use this instead of HTML with a placeholder src. Returns the "
+            "absolute path. Does not fetch the URL."
+        ),
+    )
+
+
+def build_compose_image_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Paste an overlay onto a base/template PNG at (x, y)."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_base = args.get("base") or args.get("template") or ""
+        raw_overlay = args.get("overlay") or ""
+        if not isinstance(raw_base, str) or not raw_base.strip():
+            raise ToolArgError("base must be a non-empty path")
+        if not isinstance(raw_overlay, str) or not raw_overlay.strip():
+            raise ToolArgError("overlay must be a non-empty path")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        width = _as_int("width", args.get("width"), required=False)
+        height = _as_int("height", args.get("height"), required=False)
+        clip = args.get("clip", False)
+        if clip is not None and not isinstance(clip, bool):
+            raise ToolArgError("clip must be a boolean")
+
+        base = _resolve_allowed(Path(raw_base.strip()), roots)
+        overlay = _resolve_allowed(Path(raw_overlay.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "card")
+        result = compose_overlay(
+            base,
+            overlay,
+            x=int(x),
+            y=int(y),
+            width=width,
+            height=height,
+            clip=bool(clip),
+            dest=dest,
+        )
+        return result.as_dict()
+
+    return ToolSpec(
+        name="compose_image",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to the template / base PNG (data/media, "
+                        "citizens desks, History's Ledger, or Downloads)."
+                    ),
+                },
+                "overlay": {
+                    "type": "string",
+                    "description": "Absolute path to the overlay image (QR, photo).",
+                },
+                "x": {
+                    "type": "integer",
+                    "description": "Left pixel of the overlay on the base.",
+                },
+                "y": {
+                    "type": "integer",
+                    "description": "Top pixel of the overlay on the base.",
+                },
+                "width": {
+                    "type": "integer",
+                    "description": "Optional overlay width in pixels (keeps file aspect if omitted with height).",
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Optional overlay height in pixels.",
+                },
+                "clip": {
+                    "type": "boolean",
+                    "description": (
+                        "If false (default), refuse when the overlay would "
+                        "extend past the base (miss=would_clip). If true, "
+                        "PIL clips the overlay to the base."
+                    ),
+                },
+            },
+            "required": ["base", "overlay", "x", "y"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Local compositor: drop an overlay (QR, photo) onto a template at "
+            "x,y and export a PNG under data/media/composed/. Not Canva. "
+            "Returns the absolute path. miss=file_not_found / would_clip "
+            "unless clip=true."
+        ),
+    )
+
+
 def register_qr_tools(
     registry: ToolRegistry,
     *,
     owner_agent: str,
     allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
 ) -> None:
-    """Register decode_qr for one agent. Default owner is Eve (Messages)."""
+    """Register Eve's QR/compositor desk tools. Default owner is Eve."""
     registry.register(
         build_decode_qr_tool(
             owner_agent=owner_agent,
             allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_make_qr_tool(
+            owner_agent=owner_agent,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_compose_image_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
         )
     )
