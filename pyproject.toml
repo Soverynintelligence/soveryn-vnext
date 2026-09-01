@@ -47,7 +47,14 @@ soveryn = ["automations/routines/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -p no:langsmith_plugin"
+# langsmith's autoloaded pytest plugin imports requests at config-parse time,
+# before ini filterwarnings apply, so its env-version warning breaks out onto
+# raw stderr in every run. The plugin is unused here; block it and keep the
+# filter as belt-and-suspenders for any in-capture occurrences.
+filterwarnings = [
+    "ignore:urllib3.*doesn't match a supported version",
+]
 markers = [
     "integration: tests that hit live services (router, lattice, etc.); opt-in with --run-integration",
     "rig: runs against real GPUs; fleet must be down",

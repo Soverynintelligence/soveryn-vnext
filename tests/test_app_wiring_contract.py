@@ -156,6 +156,30 @@ def test_kernel_and_eve_request_direction(app):
     assert "request_direction" in eve
 
 
+def test_eve_has_decode_qr_kernel_does_not(app):
+    """Desk tools are Eve-only. Vett is merged into Eve; Scotty is off chat.
+
+    Negative checks use the shared registry so this test does not require
+    a Vett or Scotty Messages loop.
+    """
+    eve = _tool_names(_loops(app)["eve"], "eve")
+    desk = (
+        "decode_qr", "make_qr", "compose_image",
+        "make_canvas", "draw_rect", "draw_text",
+    )
+    for tool in desk:
+        assert tool in eve, f"eve missing {tool!r}"
+    registry = _ext(app)["tool_registry"]
+    for agent in ("kernel", "aetheria"):
+        names = {t.name for t in registry.iter_tools_for_agent(agent)}
+        desk = (
+        "decode_qr", "make_qr", "compose_image",
+        "make_canvas", "draw_rect", "draw_text",
+    )
+    for tool in desk:
+            assert tool not in names, f"{agent} must not have {tool}"
+
+
 def test_scotty_tool_scope(app):
     registry = _ext(app)["tool_registry"]
     names = {t.name for t in registry.iter_tools_for_agent("scotty")}

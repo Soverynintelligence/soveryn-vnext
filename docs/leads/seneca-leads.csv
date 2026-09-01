@@ -1,0 +1,2 @@
+date,source,ip,signal,status,note
+2026-08-23,Seneca web (Spark ~/soveryn-agent/conversations.log),89.187.177.74,"hardware yes then cost; no name/email/phone; empty session_id",open-uncontactable,"IP is DataCamp/CDN77 NYC (proxy). Two turns 16:48Z. Capture/CONTACT_ASK landed 08-24 — this chat predates it. Cannot email. Quote process: docs/ops/soveryn-quote-skeleton.md"

@@ -32,6 +32,19 @@ from soveryn.platform.acttruth.lessons import (
 from soveryn.platform.acttruth.unprompted import CREW_AGENTS, crew_status
 
 
+def test_acttruth_dir_env_isolates_from_house_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AgentLoop tests must not read the live house ledger."""
+    iso = tmp_path / "iso-acttruth"
+    monkeypatch.setenv("ACTTRUTH_DIR", str(iso))
+    from soveryn.platform.acttruth.hooks import reset_acttruth_cache
+    from soveryn.platform.acttruth.paths import default_acttruth_dir
+
+    reset_acttruth_cache()
+    assert default_acttruth_dir() == iso
+
+
 @pytest.fixture
 def at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ActTruth:
     """Isolated ActTruth root — no pollution of house data/."""

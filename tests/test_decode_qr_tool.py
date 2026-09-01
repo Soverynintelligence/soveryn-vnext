@@ -69,6 +69,23 @@ def test_decode_qr_bytes_no_code_image():
     assert result.symbology is None
 
 
+def test_decode_qr_bytes_reads_code_with_no_quiet_zone():
+    """Google/Canva exports often omit the quiet zone. Do not miss those."""
+    enc = cv2.QRCodeEncoder.create()
+    img = enc.encode(PAYLOAD)
+    img = cv2.resize(
+        img,
+        (img.shape[1] * 4, img.shape[0] * 4),
+        interpolation=cv2.INTER_NEAREST,
+    )
+    ok, buf = cv2.imencode(".png", img)
+    assert ok
+    result = decode_qr_bytes(buf.tobytes())
+    assert result.ok is True
+    assert result.miss is None
+    assert PAYLOAD in result.payloads
+
+
 def test_tool_decodes_path_under_allowed_root(tmp_path):
     png = _make_qr_png(PAYLOAD)
     path = tmp_path / "jon-qr.png"

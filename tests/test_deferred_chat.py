@@ -17,7 +17,7 @@ def test_parse_messages_turn_round_trip():
     assert parse_messages_turn("plain commission") is None
 
 
-def test_kernel_chat_stream_defers_when_citizens_db_ready(tmp_path, monkeypatch):
+def test_kernel_chat_stream_is_live_not_deferred(tmp_path, monkeypatch):
     from soveryn.agents.loop import AgentLoop
     from soveryn.app.startup import create_app
     from soveryn.config.runtime import ACTIVE_AGENTS
@@ -31,11 +31,17 @@ def test_kernel_chat_stream_defers_when_citizens_db_ready(tmp_path, monkeypatch)
     def stream_fn(request, server, timeout=120.0):
         stream_calls.append(1)
         def _g():
-            yield StreamChunk(delta="nope", finish_reason="stop", raw={})
+            yield StreamChunk(
+                delta="here.",
+                finish_reason="stop",
+                tool_calls_delta=None,
+                usage=None,
+                raw={},
+            )
         return _g()
 
     fake_chat = lambda req, server, timeout=60: ChatResponse(
-        content="done in bg", finish_reason="stop", tool_calls=None, usage=None, raw={}
+        content="here.", finish_reason="stop", tool_calls=None, usage=None, raw={}
     )
     loops = {
         n: AgentLoop(n, conv, chat_fn=fake_chat, stream_fn=stream_fn)
@@ -53,26 +59,22 @@ def test_kernel_chat_stream_defers_when_citizens_db_ready(tmp_path, monkeypatch)
     client = app.test_client()
     resp = client.post(
         "/chat_stream",
-        data=json.dumps({"agent": "kernel", "session_id": sid, "message": "mend it"}),
+        data=json.dumps({"agent": "kernel", "session_id": sid, "message": "hi"}),
         content_type="application/json",
     )
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "deferred" in body
-    assert "This thread stays yours" in body
-    assert stream_calls == []
-    turns = conv.load_history(sid)
-    assert turns[-1].role == "user"
-    assert turns[-1].content == "mend it"
+    assert "This thread stays yours" not in body
+    assert '"deferred": true' not in body
+    assert stream_calls == [1]
     with connect(db) as conn:
         rows = conn.execute(
-            "SELECT body, state FROM commissions WHERE citizen_id='kernel'"
+            "SELECT body FROM commissions WHERE citizen_id='kernel'"
         ).fetchall()
-    assert len(rows) == 1
-    assert "[MESSAGES_TURN]" in rows[0]["body"]
+    assert rows == []
 
 
-def test_try_defer_skips_aetheria(tmp_path):
+def test_try_defer_skips_kernel_and_aetheria(tmp_path):
     from soveryn.agents.loop import AgentLoop
     from soveryn.app.deferred_chat import try_defer_chat
     from soveryn.app.startup import create_app
@@ -80,7 +82,8 @@ def test_try_defer_skips_aetheria(tmp_path):
     from soveryn.inference.llama_server_client import ChatResponse
 
     conv = ConversationStore(tmp_path / "conv.db")
-    sid = conv.new_session("aetheria", title="a")
+    sid_a = conv.new_session("aetheria", title="a")
+    sid_k = conv.new_session("kernel", title="k")
     fake_chat = lambda req, server, timeout=60: ChatResponse(
         content="x", finish_reason="stop", tool_calls=None, usage=None, raw={}
     )
@@ -88,17 +91,19 @@ def test_try_defer_skips_aetheria(tmp_path):
     db = tmp_path / "citizens.db"
     with connect(db) as conn:
         register(conn, Citizen(id="aetheria", display_name="Aetheria"))
+        register(conn, Citizen(id="kernel", display_name="Kernel"))
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["DEFER_CHAT"] = True
     app.config["CITIZENS_DB"] = str(db)
     with app.app_context():
-        assert try_defer_chat(
-            agent="aetheria",
-            session_id=sid,
-            message="hi",
-            state={"conv_store": conv},
-        ) is None
-    assert list(conv.load_history(sid)) == []
+        for sid, agent in ((sid_a, "aetheria"), (sid_k, "kernel")):
+            assert try_defer_chat(
+                agent=agent,
+                session_id=sid,
+                message="hi",
+                state={"conv_store": conv},
+            ) is None
+            assert list(conv.load_history(sid)) == []
 
 
 def test_skip_user_save_does_not_duplicate(tmp_path):

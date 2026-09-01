@@ -69,12 +69,10 @@ def test_default_chat_timeout_is_120_seconds(conv_store):
     assert loop.chat_timeout_seconds == 120.0
 
 
-def test_construction_routes_vett_to_vett_scotty_shared(conv_store):
-    """Phase 7 — agent → logical identity, not port (all share :8090 now)."""
-    from soveryn.config.runtime import resolve_vett_brain, _VETT_BRAIN_PROFILES
-    loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
-    assert loop.server.name == "vett_scotty_shared"
-    assert loop.server.model_alias == _VETT_BRAIN_PROFILES[resolve_vett_brain()]["alias"]
+def test_construction_rejects_parked_vett(conv_store):
+    """Fleet freeze: Vett is not a chat AgentLoop (folded into Eve)."""
+    with pytest.raises(RoutingError, match="vett"):
+        AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
 
 
 def test_construction_normalizes_name_case(conv_store):
@@ -124,15 +122,15 @@ def test_missing_session_raises_before_chat(conv_store):
 
 
 def test_session_for_other_agent_raises_before_chat(conv_store):
-    """A Vett session can't be used by an Aetheria loop."""
-    vett_session = conv_store.new_session("vett")
+    """A Kernel session can't be used by an Aetheria loop."""
+    kernel_session = conv_store.new_session("kernel")
     fake = _CapturingChat()
     aetheria_loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
-    with pytest.raises(AgentLoopError, match="belongs to agent 'vett'"):
-        aetheria_loop.process_message(vett_session, "hi")
+    with pytest.raises(AgentLoopError, match="belongs to agent 'kernel'"):
+        aetheria_loop.process_message(kernel_session, "hi")
     assert fake.calls == []
     # No user turn snuck into the wrong session
-    assert conv_store.load_history(vett_session) == ()
+    assert conv_store.load_history(kernel_session) == ()
 
 
 # ─── Happy path ──────────────────────────────────────────────────────────────
@@ -274,7 +272,7 @@ def test_assistant_save_failure_propagates(conv_store, monkeypatch):
 
 # ─── Persona / system_prompt tri-state ───────────────────────────────────────
 
-from soveryn.agents.personas import AETHERIA_PERSONA, VETT_PERSONA
+from soveryn.agents.personas import AETHERIA_PERSONA, get_persona
 
 
 def test_default_system_prompt_loads_persona_for_agent(conv_store):
@@ -283,9 +281,9 @@ def test_default_system_prompt_loads_persona_for_agent(conv_store):
     assert loop.system_prompt == AETHERIA_PERSONA
 
 
-def test_default_system_prompt_loads_vett_persona(conv_store):
-    loop = AgentLoop("vett", conv_store, chat_fn=_CapturingChat())
-    assert loop.system_prompt == VETT_PERSONA
+def test_default_system_prompt_loads_kernel_persona(conv_store):
+    loop = AgentLoop("kernel", conv_store, chat_fn=_CapturingChat())
+    assert loop.system_prompt == get_persona("kernel")
 
 
 def test_custom_system_prompt_overrides_default(conv_store):
@@ -812,7 +810,7 @@ def test_soul_not_concatenated_into_persona(conv_store):
     assert system_msgs[1].content == "UNIQUE_SOUL_TOKEN"
 
 
-def test_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+def test_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
     """AgentLoop produces semantic layers (persona / pinned / soul / recall)
     as SEPARATE ChatMessages regardless of the server's multi-system support.
 
@@ -825,11 +823,11 @@ def test_soul_kept_separate_at_agent_loop_for_vett(conv_store):
     """
     capturing = _CapturingChat()
     loop = AgentLoop(
-        "vett", conv_store,
+        "kernel", conv_store,
         chat_fn=capturing,
-        soul_text="VETT_SOUL_TOKEN",
+        soul_text="KERNEL_SOUL_TOKEN",
     )
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("kernel")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
@@ -839,8 +837,8 @@ def test_soul_kept_separate_at_agent_loop_for_vett(conv_store):
         f"Wire folding happens at the transport adapter. Got {len(system_msgs)}."
     )
     # Persona first, then soul as its own message
-    assert "VETT_SOUL_TOKEN" not in system_msgs[0].content
-    assert system_msgs[1].content == "VETT_SOUL_TOKEN"
+    assert "KERNEL_SOUL_TOKEN" not in system_msgs[0].content
+    assert system_msgs[1].content == "KERNEL_SOUL_TOKEN"
 
 
 def test_soul_kept_separate_for_aetheria_whose_server_supports_multi_system(conv_store):
@@ -900,21 +898,21 @@ def test_pinned_text_added_between_persona_and_soul_for_aetheria(conv_store):
     assert system_msgs[2].content == "SOUL_TOKEN"        # soul
 
 
-def test_pinned_and_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+def test_pinned_and_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
     """AgentLoop produces persona / pinned / soul as THREE separate
     ChatMessages even when the server's template can't honor multi-system.
-    Wire folding happens at the transport adapter. (In production, Vett gets
+    Wire folding happens at the transport adapter. (In production, Kernel gets
     pinned_text='' anyway; this verifies the safety net if pinned ever WERE
     passed.)
     """
     capturing = _CapturingChat()
     loop = AgentLoop(
-        "vett", conv_store,
+        "kernel", conv_store,
         chat_fn=capturing,
-        soul_text="VETT_SOUL",
-        pinned_text="VETT_PINNED",
+        soul_text="KERNEL_SOUL",
+        pinned_text="KERNEL_PINNED",
     )
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("kernel")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
@@ -924,10 +922,10 @@ def test_pinned_and_soul_kept_separate_at_agent_loop_for_vett(conv_store):
         f"Got {len(system_msgs)}."
     )
     # Order: persona first, pinned second, soul third
-    assert "VETT_PINNED" not in system_msgs[0].content  # persona
-    assert "VETT_SOUL" not in system_msgs[0].content    # persona
-    assert system_msgs[1].content == "VETT_PINNED"
-    assert system_msgs[2].content == "VETT_SOUL"
+    assert "KERNEL_PINNED" not in system_msgs[0].content  # persona
+    assert "KERNEL_SOUL" not in system_msgs[0].content    # persona
+    assert system_msgs[1].content == "KERNEL_PINNED"
+    assert system_msgs[2].content == "KERNEL_SOUL"
 
 
 def test_pinned_alone_without_soul_for_aetheria(conv_store):
@@ -997,18 +995,13 @@ def test_process_message_without_attachments_unchanged(conv_store):
 
 def test_process_message_attachments_on_non_vision_agent_raises_before_save(conv_store):
     """Vision guard fires BEFORE save_turn so guard rejections don't pollute
-    history with a phantom user turn. 'cognition' is not in
-    VISION_CAPABLE_AGENTS (no mmproj on its server)."""
+    history with a phantom user turn. cognition is not in VISION_CAPABLE_AGENTS."""
     fake = _CapturingChat()
-    # Construct with a routable agent (route_for_agent runs in __init__ and
-    # only knows aetheria/vett/scotty), then override agent_name to a
-    # non-vision agent to exercise the guard branch — every routable agent is
-    # now vision-capable, so this is the only way to hit it.
-    loop_cog = AgentLoop("vett", conv_store, chat_fn=fake)
-    loop_cog.agent_name = "cognition"
+    loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    loop.agent_name = "cognition"
     sid = conv_store.new_session("cognition")
     with pytest.raises(AgentLoopError, match="attachments only supported"):
-        loop_cog.process_message(
+        loop.process_message(
             sid, "hi", attachments=("data:image/jpeg;base64,AAAA",),
         )
     # No user turn saved, no chat dispatched
@@ -1016,14 +1009,28 @@ def test_process_message_attachments_on_non_vision_agent_raises_before_save(conv
     assert fake.calls == []
 
 
-def test_process_message_attachments_on_vision_capable_agent_splices(conv_store):
-    """Vett/Scotty share the vett-scotty mmproj server — the guard must NOT
-    fire, and the wire-level current user message becomes a vision list."""
+def test_process_message_attachments_on_kernel_splices(conv_store):
+    """GLM-5.3-Flash is natively multimodal — Kernel splices image_url."""
     fake = _CapturingChat()
-    loop_vett = AgentLoop("vett", conv_store, chat_fn=fake)
-    sid = conv_store.new_session("vett")
+    loop = AgentLoop("kernel", conv_store, chat_fn=fake)
+    sid = conv_store.new_session("kernel")
     img = "data:image/jpeg;base64,AAAA"
-    loop_vett.process_message(sid, "what's this?", attachments=(img,))
+    loop.process_message(sid, "what's this?", attachments=(img,))
+    sent_user = fake.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in sent_user.content)
+
+
+def test_process_message_attachments_on_vision_capable_agent_splices(conv_store):
+    """Aetheria is vision-capable — the guard must NOT fire, and the
+    wire-level current user message becomes a vision list."""
+    fake = _CapturingChat()
+    loop_a = AgentLoop("aetheria", conv_store, chat_fn=fake)
+    sid = conv_store.new_session("aetheria")
+    img = "data:image/jpeg;base64,AAAA"
+    loop_a.process_message(sid, "what's this?", attachments=(img,))
     sent_user = fake.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, list)
