@@ -36,23 +36,9 @@ STANDING: tuple[dict[str, Any], ...] = (
             "receipts ready for Jon verify"
         ),
     },
-    {
-        "desk": "cwg",
-        "owner_id": "eve",
-        "title": "Standing · CWG pricing & competitor watch",
-        "brief": (
-            "Standing Carolina Water Gardens / PondWright watch. Refresh "
-            "competitor or service pricing that matters to quotes — house Apex/"
-            "AKT catalogs and rate book first; web only for comps the house "
-            "books cannot answer. Produce a scannable table Jon or PondWright "
-            "can use. Cite-or-stop; never invent prices. (Fleet freeze: Eve "
-            "owns research+ship; Vett parked as Messages peer.)"
-        ),
-        "success_criteria": (
-            "Markdown table Brand|Model|Price|Source with ≥3 verified rows "
-            "or honest gap list of attempted sources"
-        ),
-    },
+    # CWG pricing watch was minting a ready_for_verify brief into Jon's DM
+    # on a loop. He did not ask for it and cancelled 2026-09-01. Do not
+    # re-seed. Quote/catalog work is on-demand via PondWright tools.
 )
 
 

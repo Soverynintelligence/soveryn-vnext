@@ -18,7 +18,7 @@ Mon / Wed / Fri at 10:00 local.
 ## How
 
 1. `objective_status` for active SOVERYN + CWG work.
-2. If gaps, `objective_assign` (Kernel for SOVERYN improve; Eve for CWG).
+2. If SOVERYN has no active, `objective_assign` Kernel a bounded improve. Do **not** mint CWG pricing watch (Jon cancelled that standing brief).
 3. No duplicate stacks. Partner tone — not bossy CoS.
 
 ## Verify

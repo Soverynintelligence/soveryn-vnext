@@ -32,19 +32,17 @@ def db(tmp_path: Path):
         yield conn
 
 
-def test_ensure_standing_creates_soveryn_and_cwg(db):
+def test_ensure_standing_creates_soveryn_only(db):
     created = ensure_standing_objectives(db)
-    assert len(created) == 2
-    desks = {r["desk"] for r in created}
-    assert desks == {"soveryn", "cwg"}
+    assert len(created) == 1
+    assert created[0]["desk"] == "soveryn"
+    assert created[0]["owner_id"] == "kernel"
     # Idempotent
     assert ensure_standing_objectives(db) == []
     open_s = objectives_mod.list_objectives(db, desk="soveryn", state="active")
     open_c = objectives_mod.list_objectives(db, desk="cwg", state="active")
     assert len(open_s) == 1
-    assert len(open_c) == 1
-    assert open_s[0]["owner_id"] == "kernel"
-    assert open_c[0]["owner_id"] == "eve"
+    assert open_c == []
 
 
 def test_build_vs_research_commission_body():

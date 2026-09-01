@@ -1,7 +1,8 @@
 # Citizen email identity (ours — not AgentMail)
 
 **Date:** 2026-08-23  
-**Status:** designed in code; **NOT PRODUCTION / not armed** (DNS + SMTP + `SOVERYN_EMAIL_PRODUCTION=1` pending)  
+**Status:** **Pending — not armed.** Code + identity map exist. DNS/SMTP/`SOVERYN_EMAIL_PRODUCTION=1` have not been flipped. Checklist below is complete through step 7; nothing after 08-24 contradicts that.  
+**Roster note:** Vett/Scotty still have From *design* rows. They are **not** live Messages citizens (Vett folded into Eve, Scotty into Kernel).  
 **Trigger:** Musk / Grok Bot “why its own email?” + AgentMail pitch. Same problem we’ve held: agents must not write as Jon from his personal inbox.
 
 ## Claim (design intent — not live)

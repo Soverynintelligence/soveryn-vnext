@@ -20,4 +20,10 @@
 - `data/media/canva/*` exports
 
 ## Next when fresh
-Kill list lives in **`docs/CURRENT_TRUTH.md` §4** (authority). Do not re-state it here.
+Authority for live/blocked is still **`docs/CURRENT_TRUTH.md`**. Concrete leftover as of 2026-09-01:
+
+1. **Citizen email** — designed, **not armed** (`SOVERYN_EMAIL_PRODUCTION` off). Checklist in the 08-23 note; do not send.
+2. **Meta IG / CRM** — parked. Eve IG desk is Gate-only; cadence never posts live.
+3. **Public buy** is History’s Ledger ($19 / week on soverynintelligence.com), not a Seneca dollar quote.
+
+CWG standing pricing-watch briefs were cancelled 2026-09-01 (they were looping Jon’s DM). Second Spark is **live** (GLM TP=2), not ETA.
