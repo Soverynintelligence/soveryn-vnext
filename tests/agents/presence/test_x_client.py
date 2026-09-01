@@ -65,6 +65,26 @@ def test_create_tweet_returns_id():
     assert c.create_tweet("hello") == "99"
 
 
+def test_create_tweet_attaches_media_ids():
+    http = FakeHTTP(FakeResp(201, {"data": {"id": "100"}}))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    assert c.create_tweet("hello", media_ids=["777"]) == "100"
+    _method, url, kw = http.calls[0]
+    assert url.endswith("/2/tweets")
+    assert kw["json"]["media"]["media_ids"] == ["777"]
+
+
+def test_upload_media_returns_id(tmp_path):
+    img = tmp_path / "chess.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 16)
+    http = FakeHTTP(FakeResp(200, {"media_id_string": "555"}))
+    c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
+    assert c.upload_media(str(img)) == "555"
+    _method, url, kw = http.calls[0]
+    assert "upload.twitter.com" in url
+    assert "files" in kw
+
+
 def test_error_status_raises_without_leaking_creds():
     http = FakeHTTP(FakeResp(403, {"title": "Forbidden"}))
     c = XClient(bearer="B", oauth=("k", "s", "t", "ts"), http=http)
