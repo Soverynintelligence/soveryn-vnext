@@ -145,12 +145,13 @@ def test_default_budget_is_two():
     assert VerificationGate().forced_verify_budget == 2
 
 
-def test_owner_scoping_defaults_to_vett_only():
+def test_owner_scoping_defaults_to_eve():
+    """Vett folded into Eve — the gate's default owner followed the lane."""
     gate = VerificationGate()
-    assert gate.applies_to("vett") is True
-    assert gate.applies_to("Vett") is True
+    assert gate.applies_to("eve") is True
+    assert gate.applies_to("Eve") is True
     assert gate.applies_to("aetheria") is False
-    assert gate.applies_to("scotty") is False
+    assert gate.applies_to("kernel") is False
 
 
 def test_owner_set_is_configurable():

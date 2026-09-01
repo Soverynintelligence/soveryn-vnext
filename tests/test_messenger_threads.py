@@ -43,12 +43,12 @@ def test_create_thread_rejects_invalid_agent(stores):
 def test_list_threads_returns_per_user_only(stores):
     m, conv = stores
     create_thread(m, conv, user_id="jon", agent="aetheria", title="A")
-    create_thread(m, conv, user_id="jon", agent="vett", title="B")
+    create_thread(m, conv, user_id="jon", agent="kernel", title="B")
     create_thread(m, conv, user_id="someone-else", agent="aetheria", title="X")
     out = list_threads(m, user_id="jon")
     assert len(out) == 2
     agents = {t.agent for t in out}
-    assert agents == {"aetheria", "vett"}
+    assert agents == {"aetheria", "kernel"}
 
 
 def test_get_thread_returns_none_for_unknown(stores):

@@ -104,7 +104,8 @@ class VerificationGate:
     """Config holder + pure decision function for the finalization guard.
 
     Owner-scoped: `applies_to(agent)` is True only for agents in `owner_agents`
-    (default: Vett only). The loop consults this BEFORE running any gate logic,
+    (default: Eve only — Vett's verification lane folded into Eve 2026-08). The loop
+    consults this BEFORE running any gate logic,
     so non-owner turns finalize on the exact pre-gate code path.
 
     The gate never performs I/O and never raises for ordinary inputs; the loop
@@ -115,7 +116,7 @@ class VerificationGate:
         self,
         *,
         detector: ClaimRiskSignal | None = None,
-        owner_agents: frozenset[str] = frozenset({"vett"}),
+        owner_agents: frozenset[str] = frozenset({"eve"}),
         forced_verify_budget: int = 2,
         verify_tools: frozenset[str] = VERIFY_TOOLS,
     ) -> None:
@@ -129,7 +130,7 @@ class VerificationGate:
         self.verify_tools = frozenset(verify_tools)
 
     def applies_to(self, agent_name: str) -> bool:
-        """True only for agents this gate governs. v1: Vett only."""
+        """True only for agents this gate governs. v2: Eve (Vett folded in)."""
         return (agent_name or "").lower().strip() in self.owner_agents
 
     def evaluate(

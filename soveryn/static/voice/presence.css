@@ -84,6 +84,10 @@
 .voice-presence[data-state="connecting"] .voice-presence-canvas {
   opacity: 0.9;
 }
+.voice-presence[data-state="interrupted"] .voice-presence-canvas {
+  filter: drop-shadow(0 0 24px rgba(var(--vp-hue), 0.28));
+  opacity: 0.8;
+}
 
 .voice-overlay {
   background:

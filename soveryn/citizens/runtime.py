@@ -486,7 +486,16 @@ def requeue_stale_running(
     from datetime import datetime, timezone
 
     try:
-        now = datetime.now(timezone.utc)
+        # Determinism: honor the caller's clock when provided (tests, backfills).
+        # A real-wall-clock comparison against a supplied `at` made every fixed-date
+        # claim look 18 days stale.
+        now = (
+            datetime.fromisoformat(when.replace("Z", "+00:00"))
+            if when
+            else datetime.now(timezone.utc)
+        )
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
     except Exception:
         return []
     requeued: list[str] = []

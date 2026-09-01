@@ -517,20 +517,21 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     can drop pending audio cleanly. Mimics the real interruption path where
     process_frame -> _cancel_inflight cancels the task.
 
-    Sentence aggregation note (fa68d05): the bridge only flushes a frame at
-    sentence boundaries (or when the buffer hits 40 chars).  The pre-cancel
-    chunk must end with a sentence terminator so it flushes BEFORE cancellation;
-    otherwise it stays buffered and the wait loop never fires."""
+    Sentence aggregation (current contract): the bridge HOLDS tokens until
+    the 320-char safety mark or stream end — the early first-sentence flush
+    caused the gap users hated. So a short pre-cancel sentence stays
+    buffered: this asserts the hold AND the clean cancel."""
 
     async def _run():
-        # Slow generator: emits one complete sentence, then blocks until
-        # externally signalled cancelled. We cancel the task partway through
-        # and assert the End frame still fires from the finally block.
+        # Slow generator: emits one short sentence (stays buffered), then
+        # blocks until externally signalled cancelled. We cancel the task
+        # partway through and assert the End frame still fires from the
+        # finally block.
         cancel_signal = {"cancel": False}
 
         class _SlowAgentLoop:
             def process_message_stream(self, session_id, user_message, **kwargs):
-                # "first." ends with "." → flushes immediately under sentence aggregation
+                # "first." is 6 chars — far under the 320-char hold mark.
                 yield TTSTokenEvent(text="first.")
                 # Spin until the test signals cancel
                 deadline = time.monotonic() + 5.0
@@ -547,12 +548,11 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
         # Spawn the turn as a task so we can cancel it externally.
         turn_task = asyncio.create_task(bridge._run_turn("hi"))
 
-        # Wait for the first chunk to land.
-        deadline = time.monotonic() + 2.0
+        # Hold contract: no text frame may flush before the safety mark or
+        # stream end. Wait out a window and confirm silence.
+        deadline = time.monotonic() + 0.5
         while time.monotonic() < deadline:
             await asyncio.sleep(0.005)
-            if any(isinstance(f, LLMTextFrame) for f, _ in captured):
-                break
 
         # Cancel the task (mimics what _cancel_inflight does)
         turn_task.cancel()
@@ -570,8 +570,8 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    # Got the first sentence before cancellation (flushed at "." boundary)
-    assert any(f.text == "first." for f in text_frames)
+    # Held: the short sentence never flushed before cancellation.
+    assert not any(f.text == "first." for f in text_frames)
     # Never got the second chunk (the cancellation interrupted the wait)
     assert not any(f.text == "never" for f in text_frames)
     # Start + End wrappers both fired (End emitted in the finally block)

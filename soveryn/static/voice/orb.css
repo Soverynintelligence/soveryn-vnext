@@ -2,7 +2,7 @@
  *
  * Aligned with Lab console / Command Center: pure black ground, gold
  * instrument chrome. Aetheria = Lab gold (not status-green sage).
- * Vett = weathered steel, Scotty = terracotta.
+ * Eve = weathered steel (Vett's lane folded in), Kernel = terracotta.
  */
 
 :root {
@@ -25,14 +25,14 @@
     --orb-glow: rgba(198, 166, 100, 0.48);
 }
 
-.orb-vett {
+.orb-eve {
     --orb-primary: #404e59;    /* weathered steel, deep */
     --orb-secondary: #9eb4c2;  /* steel, light */
     --orb-mid: #6b8290;
     --orb-glow: rgba(107, 130, 144, 0.48);
 }
 
-.orb-scotty {
+.orb-kernel {
     --orb-primary: #54271b;    /* terracotta, deep */
     --orb-secondary: #c47a6e;  /* terracotta, light */
     --orb-mid: #a3543a;

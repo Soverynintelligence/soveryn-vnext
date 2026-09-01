@@ -198,20 +198,20 @@ def test_chat_eve_affirm_publishes_her_slot(app_state):
 
 
 def test_chat_non_aetheria_agent_hook_is_noop(app_state):
-    # Stage a post for aetheria (agent-slot keyed) — a "yes" from vett's
+    # Stage a post for aetheria (agent-slot keyed) — a "yes" from kernel's
     # session must NOT resolve it; the hook only applies to aetheria/eve.
-    sid = _new_session(app_state["client"], "vett")
+    sid = _new_session(app_state["client"], "kernel")
     app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat",
-                 {"agent": "vett", "session_id": sid, "message": "yes"})
+                 {"agent": "kernel", "session_id": sid, "message": "yes"})
 
     assert resp.status_code == 200
     payload = json.loads(resp.data)
     assert "x_resolution" not in payload
     assert app_state["rec"].publish_calls == []
-    assert len(app_state["fake_chat"].calls) == 1  # vett's normal turn ran
+    assert len(app_state["fake_chat"].calls) == 1  # kernel's normal turn ran
     assert app_state["staged"].pending("aetheria") is not None  # untouched
 
 
