@@ -143,7 +143,7 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 
 | Repo | Branch / tip |
 |------|----------------|
-| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `076ed3c` — **not pushed** (ahead 7: messenger faces, Eve vision/QR, Kernel composer) |
+| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `ecf5635` — **pushed 2026-09-01** (12 commits: messenger faces, Eve vision/QR, Kernel composer, Pi harness, chess3d, citizen shapes, lattice scan cache, X media upload, reference KB) |
 | `teammates` | `feat/phase-0` · overnight + Messages bridge (`6f9ae24`) |
 
 Notes in `docs/notes/` are **not** authority. **This file is.**
