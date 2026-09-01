@@ -70,6 +70,12 @@ data/eve_ig_profile/
 data/desks/
 # Fat tool-result spills from the 32k lean-tail (recoverable stubs in-prompt)
 data/tool_spill/
+data/citizen_shapes.json
+data/kb/
+
+# Pi harness runtime (auth tokens if ever set, session transcripts)
+config/pi/auth.json
+config/pi/sessions/
 
 # Local environment secrets
 .env

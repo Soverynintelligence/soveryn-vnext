@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Kernel via Pi (Mario Zechner / earendil). Local GLM on Spark :8001.
+# OpenCode compacted and 8k-capped long writes; Pi is the TTY for those jobs.
+# Aider stays the surgical fallback: soveryn-aider --kernel
+#
+# Usage:
+#   soveryn-pi                         # TUI, cwd, GLM
+#   soveryn-pi /path/to/repo           # TUI in that project
+#   soveryn-pi --qwen                  # Aetheria Qwen :8090
+#   soveryn-pi -p "mend X"             # print one-shot
+#   kernel                             # same as soveryn-pi (~/bin/kernel)
+#
+# Compaction is off in config/pi/settings.json. Nothing leaves the machine
+# unless you change models.json baseUrl.
+
+set -euo pipefail
+
+PI_BIN="${PI_BIN:-}"
+if [[ -z "$PI_BIN" ]]; then
+  PI_BIN="$(command -v pi 2>/dev/null || true)"
+fi
+if [[ -z "$PI_BIN" || ! -x "$PI_BIN" ]]; then
+  echo "pi not found. Install: npm install -g --ignore-scripts @earendil-works/pi-coding-agent" >&2
+  exit 1
+fi
+
+CFG_DIR="${PI_CODING_AGENT_DIR:-$HOME/soveryn_vnext/config/pi}"
+if [[ ! -f "$CFG_DIR/models.json" ]]; then
+  echo "soveryn-pi: missing $CFG_DIR/models.json" >&2
+  exit 1
+fi
+
+export PI_CODING_AGENT_DIR="$CFG_DIR"
+export PI_TELEMETRY=0
+export PI_SKIP_VERSION_CHECK=1
+export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
+
+USE_QWEN=0
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "--qwen" ]]; then
+    USE_QWEN=1
+  elif [[ "$arg" == "--flash" || "$arg" == "--glm" ]]; then
+    USE_QWEN=0
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+
+if [[ "$USE_QWEN" -eq 1 ]]; then
+  MODEL="kernel-qwen/aetheria"
+  CHECK_URL="http://127.0.0.1:8090/v1/models"
+  LABEL="Kernel · Qwen 3.8 @ http://127.0.0.1:8090/v1"
+else
+  MODEL="kernel-glm/glm-5.3-flash"
+  CHECK_URL="http://10.10.10.2:8001/v1/models"
+  LABEL="Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 @ http://10.10.10.2:8001/v1"
+fi
+
+if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
+  echo "soveryn-pi: WARN — $CHECK_URL not answering; warm the brain first" >&2
+fi
+
+echo "soveryn-pi: $LABEL" >&2
+echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384)" >&2
+
+# First non-flag arg that is an existing directory = project cwd.
+CWD=""
+REST=()
+for arg in "${ARGS[@]+"${ARGS[@]}"}"; do
+  if [[ -z "$CWD" && "$arg" != -* && -d "$arg" ]]; then
+    CWD="$arg"
+  else
+    REST+=("$arg")
+  fi
+done
+
+HAS_MODEL=0
+for a in "${REST[@]+"${REST[@]}"}"; do
+  [[ "$a" == "--model" || "$a" == --model=* ]] && HAS_MODEL=1
+done
+EXTRA=()
+[[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
+
+if [[ -n "$CWD" ]]; then
+  cd "$CWD"
+fi
+
+exec "$PI_BIN" --offline "${EXTRA[@]+"${EXTRA[@]}"}" "${REST[@]+"${REST[@]}"}"
