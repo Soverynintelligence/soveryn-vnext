@@ -362,10 +362,13 @@ def _apply_history_budget(
     *,
     charge_prelude: bool = False,
 ) -> tuple[tuple[ChatMessage, ...], ChatMessage | None, int]:
-    """Drop oldest history turns until the charged set fits inside budget.
+    """Drop oldest *complete turns* until the charged set fits inside budget.
 
-    Always preserves history[-1] (the just-saved user message). Returns:
-      (possibly_trimmed_history, elision_marker_or_None, elided_count)
+    A turn is a user message plus its follow-on assistant/tool messages.
+    Never pops a single message off a pair (that orphaned Kernel mends).
+    Always preserves the last turn. Fat older assistant bodies may be capped
+    (lean-tail); user words stay verbatim. Returns:
+      (possibly_trimmed_history, elision_marker_or_None, elided_turn_count)
 
     Default charge_prelude=False (Memory Grades PR5, fleet-wide): only history
     tokens count against budget. Prelude still rides the wire; it is governed
@@ -379,31 +382,15 @@ def _apply_history_budget(
     blows the budget, we keep the newest turn, drop older history when
     possible, and surface pressure via context_usage.
     """
-    if not history:
-        return history, None, 0
-    prelude_tokens = sum(_estimate_message_tokens(m) for m in prelude)
-    history_tokens = [_estimate_message_tokens(m) for m in history]
-    history_sum = sum(history_tokens)
-    charged = (prelude_tokens + history_sum) if charge_prelude else history_sum
-    if charged <= budget:
-        return history, None, 0
+    from soveryn.agents.lean_tail import reap_history
 
-    kept = list(history)
-    kept_tokens = list(history_tokens)
-    dropped = 0
-    # Running charged total as we drop oldest history turns.
-    total = charged
-    while len(kept) > 1 and total > budget:
-        total -= kept_tokens.pop(0)
-        kept.pop(0)
-        dropped += 1
-    if dropped == 0:
-        return history, None, 0
-    marker = ChatMessage(
-        role="system",
-        content=f"[Context: {dropped} older turn(s) elided to fit token budget.]",
+    return reap_history(
+        prelude,
+        history,
+        budget,
+        charge_prelude=charge_prelude,
+        estimate_fn=_estimate_message_tokens,
     )
-    return tuple(kept), marker, dropped
 
 
 ContinuityTailFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | None], ...]], ...]
@@ -1728,7 +1715,14 @@ class AgentLoop:
         except Exception:
             pass
 
-        result_content = dump_tool_result(result)
+        from soveryn.agents.lean_tail import maybe_spill_tool_content
+
+        result_content = maybe_spill_tool_content(
+            dump_tool_result(result),
+            tool_name=tool_name,
+            call_id=call_id,
+            session_id=session_id,
+        )
 
         # ── Steering rack post-dispatch observe.
         # observe() handles the watched-tool check internally; opaque tools

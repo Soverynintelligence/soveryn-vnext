@@ -63,6 +63,8 @@ eval_runs/*.stderr
 data/eve_ig_profile/
 # Per-agent browser desks (Google Ads/Business, etc.) — cookies, not git
 data/desks/
+# Fat tool-result spills from the 32k lean-tail (recoverable stubs in-prompt)
+data/tool_spill/
 
 # Local environment secrets
 .env

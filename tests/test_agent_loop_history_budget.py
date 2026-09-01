@@ -131,7 +131,9 @@ def test_budgeter_over_budget_drops_oldest_and_returns_marker():
     assert marker.role == "system"
     assert "elided" in marker.content
     assert trimmed[-1] is history[-1]  # newest always preserved
-    assert len(trimmed) == 3
+    # Turn-reaper drops the whole oldest user+assistant pair, not one message.
+    assert trimmed == (history[2], history[3])
+    assert len(trimmed) == 2
 
 
 def test_budgeter_charge_prelude_true_legacy_envelope():
@@ -147,7 +149,7 @@ def test_budgeter_charge_prelude_true_legacy_envelope():
     trimmed, marker, elided = _apply_history_budget(
         prelude, history, budget=50, charge_prelude=True,
     )
-    assert elided >= 2
+    assert elided >= 1
     assert marker is not None
     assert trimmed[-1] is history[-1]
 
@@ -193,7 +195,7 @@ def test_budgeter_preserves_newest_when_multi_turn_overflow():
     trimmed, marker, elided = _apply_history_budget(prelude, history, budget=100)
     assert trimmed == (history[-1],)
     assert marker is not None
-    assert elided == 2
+    assert elided == 1  # one older turn (user+assistant), not two messages
 
 
 # ─── AgentLoop integration ──────────────────────────────────────────────────
@@ -277,20 +279,20 @@ def test_process_message_elides_when_history_exceeds_budget(conv_store):
         f"elision marker missing from system messages: {system_contents}"
 
 
-def test_process_message_history_only_budget_works_for_vett(conv_store):
+def test_process_message_history_only_budget_works_for_kernel(conv_store):
     """PR5 acceptance (d): same history-only semantics for a non-Aetheria agent."""
     chat = _CapturingChat()
     loop = AgentLoop(
-        "vett", conv_store, chat_fn=chat,
+        "kernel", conv_store, chat_fn=chat,
         history_token_budget=6_000, context_window=32_768,
-        soul_text="vett soul " * 200,  # non-empty prelude
+        soul_text="kernel soul " * 200,  # non-empty prelude
     )
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("kernel")
     # History that fits comfortably in 6000 tokens — must not elide.
     for i in range(3):
-        conv_store.save_turn(sid, "vett", "user", f"short user {i}")
-        conv_store.save_turn(sid, "vett", "assistant", f"short asst {i}")
-    response = loop.process_message(sid, "hello vett")
+        conv_store.save_turn(sid, "kernel", "user", f"short user {i}")
+        conv_store.save_turn(sid, "kernel", "assistant", f"short asst {i}")
+    response = loop.process_message(sid, "hello kernel")
     assert response.context_usage is not None
     assert response.context_usage["budget_tokens"] == 6_000
     assert response.context_usage["elided_turns"] == 0

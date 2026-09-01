@@ -91,7 +91,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, EXL3 TR3 4bpw, house ctx 32768) |
+| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, EXL3 TR3 4bpw, house ctx 32768; lean-tail + fat-tool spill) |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
 | Shared Spark workers | `:8001` GLM TP=2 (Spark2 worker on fabric) |
 | Second Spark | **Live** — `gx10-a733` / soverynspark2, GLM rank 1 |
