@@ -248,3 +248,13 @@ def test_desk_status_pill_does_not_steal_focus(app_state):
     body = app_state.get("/command-center").data.decode("utf-8")
     # Status pill marker present
     assert 'class="status-pill"' in body
+
+
+def test_messages_inlines_citizen_icons_js_with_regex_escapes(app_state):
+    """citizen-icons.js contains `\\w`; inlining must not re.sub it as a backref."""
+    resp = app_state.get("/messages", follow_redirects=True)
+    assert resp.status_code == 200
+    body = resp.data.decode("utf-8")
+    assert "internal_error" not in body
+    assert "soverynCitizenIcon" in body
+    assert "openPicker" in body

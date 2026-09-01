@@ -362,7 +362,7 @@ async function renderThreadListView($view) {
         <div class="thread-card${t.unread ? ' has-unread' : ''}"
              data-tid="${escapeHtml(t.thread_id)}"
              data-agent="${escapeHtml(t.agent)}">
-          ${citIcon(t.agent, 40)}
+          <span data-pick-shape="${escapeHtml(t.agent)}" title="Change shape">${citIcon(t.agent, 40)}</span>
           <div class="thread-card-body">
             <div class="thread-card-row1">
               <span class="thread-card-name agent-${escapeHtml(t.agent)}">${escapeHtml(t.agent)}</span>

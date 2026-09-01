@@ -1706,6 +1706,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_botdirectory_bp)
     from soveryn.app.routes.api_citizens import bp as api_citizens_bp
     app.register_blueprint(api_citizens_bp)
+    from soveryn.app.routes.api_citizen_shapes import bp as api_citizen_shapes_bp
+    app.register_blueprint(api_citizen_shapes_bp)
     from soveryn.app.routes.api_teammates_bridge import bp as api_teammates_bridge_bp
     app.register_blueprint(api_teammates_bridge_bp)
     from soveryn.app.routes.api_push import bp as api_push_bp

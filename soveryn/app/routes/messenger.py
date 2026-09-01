@@ -391,7 +391,7 @@ def build_messenger_blueprint(
     # Bump this whenever the phone shell must invalidate. iOS Home Screen apps
     # often ignore Cache-Control and keep the old index forever until the entry
     # URL changes — so /m/ 302s to /m/?b=<build> and the HTML pins JS/CSS to it.
-    _PWA_BUILD = "20260831-swoosh"
+    _PWA_BUILD = "20260901-bots3"
 
     def _pwa_response(path: str):
         """Serve a PWA file with cache policy that lets Home Screen apps update.

@@ -36,7 +36,7 @@ _PHONE_UA_RE = re.compile(
 
 # Phone Home Screen PWA caches /messages by URL. Bump this when the list chrome
 # changes so iOS is forced onto a new document (start_url + 302).
-_MESSAGES_BUILD = "20260830attach"
+_MESSAGES_BUILD = "20260901bots3"
 _CITIZEN_ICONS_CSS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.css"
 _CITIZEN_ICONS_JS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.js"
 
@@ -52,17 +52,32 @@ def _inline_citizen_icons(html: str) -> str:
         _CITIZEN_ICONS_JS.read_text(encoding="utf-8")
         if _CITIZEN_ICONS_JS.is_file() else ""
     )
-    html = html.replace(
-        '<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">',
+    # Do not use re.sub with the file body as the replacement string.
+    # citizen-icons.js contains `\w` / `\b`; Python treats those as backrefs
+    # and 500s Messages. Literal replace only.
+    html = _replace_once(
+        html,
+        r'<link rel="stylesheet" href="/static/citizen-icons.css?v=',
+        '">',
         "<style id=\"citizen-icons\">\n" + css + "\n</style>",
-        1,
     )
-    html = html.replace(
-        '<script src="/static/citizen-icons.js?v=20260830msg"></script>',
+    html = _replace_once(
+        html,
+        r'<script src="/static/citizen-icons.js?v=',
+        '"></script>',
         "<script>\n" + js + "\n</script>",
-        1,
     )
     return html
+
+
+def _replace_once(html: str, prefix: str, suffix: str, block: str) -> str:
+    start = html.find(prefix)
+    if start < 0:
+        return html
+    end = html.find(suffix, start)
+    if end < 0:
+        return html
+    return html[:start] + block + html[end + len(suffix):]
 
 
 def _serve_html(path: Path, *, missing_label: str):
