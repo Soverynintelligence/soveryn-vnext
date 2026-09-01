@@ -303,13 +303,18 @@ def get_history(session_id: str):
     if session is None:
         return _err("missing_session", f"No session {session_id!r}", 404)
     history = conv.load_history(session_id)
+    turns = [
+        {"role": t.role, "content": t.content, "timestamp": t.timestamp, "source": t.source}
+        for t in history
+    ]
+    if session.agent == "aetheria":
+        from soveryn.app.heartbeat_in_messages import fold_heartbeat_notes
+
+        turns = fold_heartbeat_notes(conv, session, turns)
     return jsonify({
         "session_id": session_id,
         "agent": session.agent,
-        "turns": [
-            {"role": t.role, "content": t.content, "timestamp": t.timestamp, "source": t.source}
-            for t in history
-        ],
+        "turns": turns,
     }), 200
 
 

@@ -232,7 +232,52 @@ a.messaged-peer[data-state="gate"] .sov-cit.has-eyes .sov-pupils {
   68%, 100%{ transform: translateX(0); }
 }
 
+
+/* Grok-style thinking swoosh: a light that travels around the face while working. */
+.sov-cit.is-busy,
+.sov-cit[data-busy="1"],
+a.messaged-peer[data-state="working"] .sov-cit,
+a.messaged-peer[data-state="gate"] .sov-cit {
+  overflow: visible;
+}
+.sov-cit.is-busy::after,
+.sov-cit[data-busy="1"]::after,
+a.messaged-peer[data-state="working"] .sov-cit::after,
+a.messaged-peer[data-state="gate"] .sov-cit::after,
+.chat-header .disc.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 228deg,
+    color-mix(in srgb, var(--cit-hi, #e8d5a3) 40%, transparent) 268deg,
+    var(--cit-hi, #f4e6c0) 304deg,
+    #fff 324deg,
+    var(--cit-mid, #c6a664) 344deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+  animation: sov-swoosh 0.95s linear infinite;
+}
+@keyframes sov-swoosh {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .sov-cit.is-busy::after,
+  .sov-cit[data-busy="1"]::after,
+  a.messaged-peer[data-state="working"] .sov-cit::after,
+  a.messaged-peer[data-state="gate"] .sov-cit::after,
+  .chat-header .disc.is-busy::after {
+    animation: none !important;
+    content: none !important;
+  }
   .sov-cit *,
   .sov-cit *::before,
   .sov-cit *::after,

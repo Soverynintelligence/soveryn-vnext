@@ -113,7 +113,7 @@ body {
   font-size: 0 !important;
   color: transparent !important;
   line-height: 0 !important;
-  overflow: hidden;
+  overflow: visible;
 }
 .app-header-title {
   text-align: center;

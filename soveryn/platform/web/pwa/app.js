@@ -94,12 +94,20 @@ const AGENT_TAGLINE = {
   scotty:   'Execution + bounded fixes',
 };
 
-function citIcon(agent, size) {
+function citIcon(agent, size, busy) {
   const id = String(agent || '').toLowerCase();
   if (typeof window.soverynCitizenIcon === 'function') {
-    return window.soverynCitizenIcon(id, { size: size || 40, className: 'pwa-cit' });
+    return window.soverynCitizenIcon(id, { size: size || 40, className: 'pwa-cit', busy: !!busy, label: id });
   }
   return `<span class="agent-dot agent-${escapeHtml(id)}"></span>`;
+}
+
+function setPwaHeaderBusy(on) {
+  const el = document.querySelector('#hdr-right .sov-cit, #hdr-right .pwa-cit');
+  if (!el) return;
+  el.classList.toggle('is-busy', !!on);
+  if (on) el.setAttribute('data-busy', '1');
+  else el.removeAttribute('data-busy');
 }
 
 // Which agents have voice configured (from /m/voice/agents). Cached for the
@@ -592,10 +600,12 @@ async function sendMessage(tid, currentThreadAgent, $view) {
     client_ts: new Date().toISOString(),
   });
   await IDB.outboxPut({ client_msg_id, url, headers, body });
+  setPwaHeaderBusy(true);
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers, body });
   } catch (netErr) {
+    setPwaHeaderBusy(false);
     // Network failure — entry stays in outbox. Register a background-sync
     // so the SW drains it once connectivity returns. Server idempotency
     // (Task 6) makes the same client_msg_id replay safe.
@@ -609,6 +619,7 @@ async function sendMessage(tid, currentThreadAgent, $view) {
     return;
   }
   if (!r.ok) {
+    setPwaHeaderBusy(false);
     contentEl.textContent += `\n[error: HTTP ${r.status}]`;
     return;
   }
@@ -646,6 +657,7 @@ async function sendMessage(tid, currentThreadAgent, $view) {
   }
   // Stream completed successfully — clear the outbox entry.
   await IDB.outboxDelete(client_msg_id);
+  setPwaHeaderBusy(false);
 }
 
 // Register the service worker so its `sync` listener can drain the outbox

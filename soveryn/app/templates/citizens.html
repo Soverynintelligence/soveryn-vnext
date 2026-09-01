@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260831swoosh">
 <style>
   body { min-height: 100vh; }
   .page { max-width: 1100px; margin: 0 auto; }
@@ -361,7 +361,7 @@
 
 <footer class="lab-foot">House network · my data is my data · no corporate call-home</footer>
 
-<script src="/static/citizen-icons.js?v=20260830msg"></script>
+<script src="/static/citizen-icons.js?v=20260831swoosh"></script>
 <script>
 (function () {
   const rosterEl = document.querySelector("[data-roster]");
@@ -423,7 +423,7 @@
       return `
         <article class="citizen" data-citizen="${esc(c.id)}" data-state="${esc(c.status)}">
           <div>
-            <div class="name"><span class="dot ${esc(c.status)}"></span>${typeof soverynCitizenIcon === 'function' ? soverynCitizenIcon(c.id, { size: 32, letter: (c.display_name || c.id || '?').charAt(0), busy: (c.status || '') === 'on_duty', label: c.display_name || c.id }) : ''}${esc(c.display_name || c.id)}${c.is_chief_of_staff ? '<span class="chip" style="margin-left:8px">chief of staff</span>' : ''}</div>
+            <div class="name"><span class="dot ${esc(c.status)}"></span>${typeof soverynCitizenIcon === 'function' ? soverynCitizenIcon(c.id, { size: 32, letter: (c.display_name || c.id || '?').charAt(0), busy: false,  /* on_duty is the status dot, not thinking */ label: c.display_name || c.id }) : ''}${esc(c.display_name || c.id)}${c.is_chief_of_staff ? '<span class="chip" style="margin-left:8px">chief of staff</span>' : ''}</div>
             <div class="meta">
               <strong>${esc(c.id)}</strong> · model ${esc(c.model_server || "—")} · ${last}
               · open commissions <strong>${open}</strong>${spawned}${(c.unread_post || 0) ? ` · <strong>${c.unread_post}</strong> unread post` : ""}
