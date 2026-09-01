@@ -361,4 +361,24 @@ def test_kernel_has_house_web_tools(
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     loop = app.extensions["soveryn"]["agent_loops"]["kernel"]
     names = {schema["function"]["name"] for schema in loop._tool_schemas()}
-    assert {"web_search", "fetch_url", "run_opencode"} <= names
+    assert {"web_search", "fetch_url", "run_aider", "run_opencode", "kernel_child"} <= names
+
+
+def test_cron_notepad_registered_for_automation_agents(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice,
+) -> None:
+    _configure_startup_env(
+        monkeypatch,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice=recall_lattice,
+    )
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    registry = app.extensions["soveryn"]["tool_registry"]
+    for agent in ("aetheria", "eve", "kernel"):
+        names = {spec.name for spec in registry.iter_tools_for_agent(agent)}
+        assert "cron_notepad" in names, f"{agent} missing cron_notepad"

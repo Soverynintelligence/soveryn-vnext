@@ -122,5 +122,6 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     assert requires_approval("eve_ig_post", source="direct") is True
     assert requires_approval("eve_gbp_post", source="automation") is True
     assert requires_approval("eve_gbp_status", source="direct") is False
+    assert requires_approval("eve_google_desk_status", source="direct") is False
     assert requires_approval("read_x", source="direct") is False
     assert requires_approval("read_x", source="automation") is False

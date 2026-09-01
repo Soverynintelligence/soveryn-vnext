@@ -1,4 +1,4 @@
-"""Kernel — SOVERYN local build brain (GLM-5.3-Flash NVFP4 under the hood).
+"""Kernel — SOVERYN local build brain (GLM-5.3-Flash EXL3 under the hood).
 
 House name: Kernel. Live weights: GLM-5.3-Flash TP=2 on both Sparks.
 API ``http://10.10.10.2:8001`` alias ``glm-5.3-flash``. DeepSeek Flash GGUF parked.
@@ -20,7 +20,7 @@ from typing import Any
 ROUTER_BASE = "http://10.10.10.2:8001"
 MODEL_ALIAS = "glm-5.3-flash"
 # Live weights are on the Sparks, not a tower GGUF. Path is display-only.
-ENTRY_SHARD = Path("/home/soverynspark/models/GLM-5.3-Flash-NVFP4")
+ENTRY_SHARD = Path("/home/soverynspark/models/GLM-5.3-Flash-EXL3-TR3-4bpw")
 WEIGHTS_DIR = ENTRY_SHARD
 AIDER_CMD = (
     "AIDER_BASE=http://10.10.10.2:8001/v1 "
@@ -397,7 +397,7 @@ def _chat_plain(
     except Exception:
         system = (
             "You are Kernel, the SOVERYN house build brain. "
-            "You run locally (GLM-5.3-Flash NVFP4 on dual Spark). "
+            "You run locally (GLM-5.3-Flash EXL3 on dual Spark). "
             "You make and mend code — patches, refactors, technical work. "
             "You are not the soul, not the verifier, not the political executor. "
             "Be direct. Prefer concrete patches and commands over essays."

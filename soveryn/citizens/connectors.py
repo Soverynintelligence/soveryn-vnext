@@ -182,7 +182,7 @@ CATALOG: dict[str, ConnectorDef] = {
             "Compose Instagram/Facebook post drafts. In Messages, Gate Allow "
             "sends the pack to Signal for manual publishing."
         ),
-        tools=("compose_post", "eve_ig_post", "eve_gbp_post", "eve_gbp_status"),
+        tools=("compose_post", "eve_ig_post", "eve_gbp_post", "eve_gbp_status", "eve_google_desk_status"),
         class_="channel",
         sovereignty_note=(
             "Interactive compose_post is Gate-approved (Allow → Signal). "
@@ -274,6 +274,8 @@ AUTOMATION_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "read_x",
     # Eve Mon/Thu cadence must not hang overnight waiting for Gate.
     "compose_post",
+    # Local KV for scheduled jobs — no egress.
+    "cron_notepad",
 })
 
 

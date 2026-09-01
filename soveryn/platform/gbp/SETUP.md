@@ -55,6 +55,13 @@ Browser: sign in as the **CWG Google account** (the one that owns the listing / 
 
 Photos: `Desktop/CWG-Instagram`. Text still posts if GBP will not take a local file (Google wants a public URL or media upload).
 
-## 6. Ads
+## 6. Ads (browser desk, not the GBP API)
 
-Leave ads in Google Ads. Eve must not spend.
+Listing posts stay on the OAuth API above. **Ads** use Eve's Chrome desk:
+
+```bash
+python -m soveryn.platform.social.agent_desk login eve google
+python -m soveryn.platform.social.agent_desk status eve google
+```
+
+Sign in as the CWG Google account (Business + Ads). Cookies: `data/desks/eve/google/chrome` (gitignored). Eve checks `eve_google_desk_status`. She does **not** create campaigns or change budget from a tool.

@@ -61,6 +61,8 @@ eval_runs/*.stderr
 
 # Eve CWG Instagram desk — session cookies, not git
 data/eve_ig_profile/
+# Per-agent browser desks (Google Ads/Business, etc.) — cookies, not git
+data/desks/
 
 # Local environment secrets
 .env

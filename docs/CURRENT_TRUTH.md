@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-31  
+> **Last rotated:** 2026-08-31 (agent browser desks: Eve Google login)  
 > Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -64,7 +64,8 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
 | Eve CWG Instagram desk | **Session live.** `eve_ig_post` Gate-only (never cadence). Pics: `~/Desktop/CWG-Instagram`. Profile `data/eve_ig_profile/`. |
-| Eve CWG Google Business | **Wired, not armed.** `eve_gbp_post` Gate-only (never cadence, never ads). OAuth: `python -m soveryn.platform.gbp authorize`. Needs Cloud client + Google access/quota. Tokens: `data/gbp/`. |
+| Eve CWG Google Business | **Wired, not armed.** `eve_gbp_post` Gate-only (never cadence). OAuth listing posts: `python -m soveryn.platform.gbp authorize`. Tokens: `data/gbp/`. |
+| Agent browser desks | **Live.** Persistent Chrome per agent under `data/desks/<agent>/<seat>/chrome`. Jon signs in: `python -m soveryn.platform.social.agent_desk login eve google` (CWG Google — Business + Ads). Eve: `eve_google_desk_status`. **No auto-spend.** Instagram remains `data/eve_ig_profile/`. |
 | Eve X | **Live.** House @Soveryn_AI (`read_x` / `post_to_x`, `X_*` in `x_presence.env`). Stages until Jon says `post it`. **Aetheria off X** (no tools, no heartbeat tweet nudge). |
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |

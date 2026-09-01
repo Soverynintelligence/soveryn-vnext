@@ -41,7 +41,10 @@ class DeliveryPreview:
 
 
 def preview_delivery(
-    spec: AutomationSpec, *, channels: Optional[Sequence[str]] = None
+    spec: AutomationSpec,
+    *,
+    channels: Optional[Sequence[str]] = None,
+    prompt: Optional[str] = None,
 ) -> DeliveryPreview:
     """Build a delivery preview without sending anything."""
     effective: List[str]
@@ -52,11 +55,12 @@ def preview_delivery(
     if not effective:
         effective = ["command_center"]
     chan_list = ", ".join(effective)
+    body_prompt = prompt if prompt is not None else spec.prompt
     body = (
         f"[dry-run] {spec.title} ({spec.id})\n"
         f"agent: {spec.agent}\n"
         f"channels: {chan_list}\n"
-        f"prompt: {spec.prompt}"
+        f"prompt: {body_prompt}"
     )
     return DeliveryPreview(
         channels=tuple(effective),
@@ -94,6 +98,7 @@ def deliver_live(
     conv_store: "ConversationStore",
     *,
     channels: Optional[Sequence[str]] = None,
+    prompt: Optional[str] = None,
 ) -> Dict[str, object]:
     """Run one live turn of ``spec`` through ``agent_loop`` in-process.
 
@@ -137,9 +142,23 @@ def deliver_live(
     session_id = _find_or_create_session(
         conv_store, spec.agent, _automation_session_title(spec)
     )
-    response = agent_loop.process_message(
-        session_id, spec.prompt, source="automation"
-    )
+    turn_prompt = prompt if prompt is not None else spec.prompt
+    token = None
+    try:
+        from .notepad_tool import current_automation_id
+
+        token = current_automation_id.set(spec.id)
+    except Exception:  # pragma: no cover — tool module optional at import
+        token = None
+    try:
+        response = agent_loop.process_message(
+            session_id, turn_prompt, source="automation"
+        )
+    finally:
+        if token is not None:
+            from .notepad_tool import current_automation_id
+
+            current_automation_id.reset(token)
     logger.info(
         "live delivery: %s (agent=%s, session=%s, finish=%s)",
         spec.id,
@@ -171,6 +190,7 @@ def deliver(
     channels: Optional[Sequence[str]] = None,
     agent_loop: Optional["AgentLoop"] = None,
     conv_store: Optional["ConversationStore"] = None,
+    prompt: Optional[str] = None,
 ) -> Dict[str, object]:
     """Deliver (or preview, in dry-run) an automation's output.
 
@@ -180,7 +200,7 @@ def deliver(
                      a clear error if either is missing, so a caller that
                      forgot the live context can never silently no-op.
     """
-    preview = preview_delivery(spec, channels=channels)
+    preview = preview_delivery(spec, channels=channels, prompt=prompt)
     if not dry_run:
         if agent_loop is None or conv_store is None:
             logger.error(
@@ -201,7 +221,7 @@ def deliver(
                 ),
             }
         return deliver_live(
-            spec, agent_loop, conv_store, channels=channels
+            spec, agent_loop, conv_store, channels=channels, prompt=prompt
         )
 
     logger.info(

@@ -8,6 +8,14 @@ from datetime import datetime
 from flask import Blueprint, current_app, jsonify, request
 
 from soveryn.automations.inbox import append_inbox, list_inbox
+from soveryn.automations.memory import (
+    ack_incident,
+    is_failure_acked,
+    list_incidents,
+    mark_incident_alerted,
+    should_write_inbox,
+    upsert_incident,
+)
 from soveryn.automations.prefs import (
     AVAILABLE_CHANNELS,
     resolve_channels,
@@ -247,17 +255,60 @@ def api_automations_run(automation_id: str):
 
     inbox_row = None
     if live:
-        status = "ok" if result.get("status") == "ok" else "error"
+        raw_status = str(result.get("status") or "")
+        status = "ok" if raw_status in ("ok", "no_change") else "error"
         run_id = None
         if result.get("session_id"):
             run_id = str(result["session_id"])
+        if status == "error":
+            err = str(result.get("message") or raw_status or "error")
+            result["message"] = err
+            iid, _ = upsert_incident(automation_id, err)
+            if is_failure_acked(automation_id, err):
+                result["incident_acked"] = True
+                result["incident_id"] = iid
+            else:
+                result["incident_id"] = iid
         record_fire(automation_id, status=status, run_id=run_id)
-        inbox_row = _maybe_inbox(result, source=source)
+        if should_write_inbox(result):
+            inbox_row = _maybe_inbox(result, source=source)
+            if status == "error" and inbox_row and result.get("incident_id"):
+                mark_incident_alerted(str(result["incident_id"]))
 
     return jsonify({
-        "ok": result.get("status") == "ok",
+        "ok": result.get("status") in ("ok", "no_change"),
         "result": result,
         "inbox": inbox_row,
         "signal_live_armed": _SIGNAL_LIVE,
+        "fetched_at": datetime.now().isoformat(),
+    }), 200
+
+
+@bp.get("/api/automations/incidents")
+def api_automations_incidents():
+    """Durable failure incidents (acked signatures stay silent)."""
+    aid = request.args.get("automation_id") or None
+    items = list_incidents(automation_id=aid)
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "incidents": items,
+        "fetched_at": datetime.now().isoformat(),
+    }), 200
+
+
+@bp.post("/api/automations/incidents/<incident_id>/ack")
+def api_automations_ack_incident(incident_id: str):
+    """Ack a failure signature so the same error stops filling the inbox."""
+    if not ack_incident(incident_id):
+        return jsonify({
+            "ok": False,
+            "error": "not_found",
+            "message": f"unknown incident {incident_id!r}",
+        }), 404
+    return jsonify({
+        "ok": True,
+        "id": incident_id,
+        "state": "closed",
         "fetched_at": datetime.now().isoformat(),
     }), 200

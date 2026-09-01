@@ -18,10 +18,12 @@ Weekdays/weekends at 07:30 local — first signal of the day.
 
 ## How
 
-1. Pull overnight macro + AI/ML + house-product surface signals (web_search/fetch as needed).
-2. Rank by decision relevance to Jon / the house.
-3. Lead with the single most material item; cap ~200 words.
-4. If nothing material, say so in one line — do not pad.
+1. Read the previous-run block (continuity) and job notepad if present — do not rehash yesterday.
+2. Pull overnight macro + AI/ML + house-product surface signals (web_search/fetch as needed).
+3. Rank by decision relevance to Jon / the house.
+4. Lead with the single most material item; cap ~200 words.
+5. If nothing material versus yesterday, reply `[SILENT]` (or one line if this is the first run).
+6. Optional: `cron_notepad` set a cursor/watchlist for tomorrow.
 
 ## Verify
 

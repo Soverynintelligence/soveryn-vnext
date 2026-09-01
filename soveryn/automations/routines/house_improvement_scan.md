@@ -18,7 +18,7 @@ Mon / Wed / Fri at 10:00 local.
 ## How
 
 1. `objective_status` for active SOVERYN + CWG work.
-2. If gaps, `objective_assign` (Kernel for SOVERYN improve; Vett for CWG).
+2. If gaps, `objective_assign` (Kernel for SOVERYN improve; Eve for CWG).
 3. No duplicate stacks. Partner tone — not bossy CoS.
 
 ## Verify

@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 
 from .registry import AutomationSpec, get_automation, load_automations
 from .deliver import deliver
+from .memory import prepare_run, save_last_output
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ..agents.loop import AgentLoop
@@ -57,11 +58,44 @@ def run_automation(
             "message": f"automation {spec.id!r} is disabled in the catalog",
         }
 
+    assembled: str | None = None
+    if not dry_run:
+        prep = prepare_run(spec)
+        if prep.skip:
+            skip_status = prep.reason or "no_change"
+            channels = ["command_center"]
+            return {
+                "id": spec.id,
+                "title": spec.title,
+                "category": spec.category,
+                "agent": spec.agent,
+                "cron": spec.cron,
+                "status": skip_status,
+                "dry_run": False,
+                "mode": "skipped",
+                "prompt": spec.prompt,
+                "content": "",
+                "message": prep.error,
+                "channels": channels,
+                "delivery": {
+                    "channel": channels[0],
+                    "channels": channels,
+                    "target": spec.delivery.target,
+                    "preview": None,
+                },
+            }
+        assembled = prep.prompt
+    else:
+        from .memory import assemble_run_prompt
+
+        assembled = assemble_run_prompt(spec)
+
     delivery = deliver(
         spec,
         dry_run=dry_run,
         agent_loop=agent_loop,
         conv_store=conv_store,
+        prompt=assembled,
     )
 
     status = "ok" if delivery["status"] in ("would_send", "ok") else delivery["status"]  # type: ignore[assignment]
@@ -94,6 +128,9 @@ def run_automation(
         result["tool_calls"] = delivery.get("tool_calls")
         result["usage"] = delivery.get("usage")
         result["context_usage"] = delivery.get("context_usage")
+        content = str(delivery.get("content") or "")
+        if status == "ok" and content:
+            save_last_output(spec.id, content)
 
     return result
 

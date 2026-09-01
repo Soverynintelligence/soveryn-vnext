@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | id | `ai_news_digest` |
-| agent | `vett` |
+| agent | `eve` |
 | category | `news` |
 | cron | `0 8 * * *` |
 

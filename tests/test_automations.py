@@ -25,12 +25,13 @@ REQUIRED_IDS = [
     "weekend_deep_dive",
     "eve_product_advertise",
     "house_improvement_scan",
+    "pond_academy_watch",
 ]
 
 
 def test_catalog_count_at_least_nine():
     catalog, order = load_automations()
-    assert len(order) >= 11
+    assert len(order) >= 12
     assert len(catalog) == len(order)
 
 
@@ -53,7 +54,8 @@ def test_spec_fields_populated():
         assert spec.category in {
             "news", "productivity", "research", "marketing", "ops",
         }
-        assert spec.agent in {"aetheria", "vett", "eve", "kernel", "scotty"}
+        assert spec.agent in {"aetheria", "eve", "kernel"}
+        assert spec.agent not in {"vett", "scotty"}
         assert spec.cron
         assert spec.prompt.strip()
         assert spec.delivery.channel

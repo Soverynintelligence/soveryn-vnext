@@ -26,6 +26,10 @@ class AutomationSpec:
     delivery: Delivery
     enabled: bool = True
     dry_run: bool = True
+    remember: bool = True
+    notepad: bool = True
+    monitor_url: str | None = None
+    monitor_file: str | None = None
 
 
 def load_automations() -> Tuple[Dict[str, AutomationSpec], List[str]]:

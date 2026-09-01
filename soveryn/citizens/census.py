@@ -120,7 +120,8 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
                 "web/docs; owns house @Soveryn_AI (read_x / post_to_x). "
                 "Aetheria is off X. Ship Canva + Signal drafts; live CWG "
                 "Instagram via eve_ig_post and Google Business via eve_gbp_post "
-                "after Allow. Facebook still Signal-only. GBP not ads."
+                "after Allow. Facebook still Signal-only. Google Ads/Business "
+                "desk: Jon signs in; Eve uses that session; no auto-spend."
             ),
         ),
         (),
@@ -133,7 +134,7 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="kernel_build",
             workspace_path=str(DEFAULT_WORKSPACES / "kernel"),
             notes=(
-                "Build / code desk. GLM-5.3-Flash NVFP4 (RedHat compressed-tensors) "
+                "Build / code desk. GLM-5.3-Flash EXL3 TR3 4bpw "
                 f"TP=2 on both Sparks (:8001 / {_alias_of('kernel_build')}, ctx 32k). "
                 "Eve stays on Quadros Qwen 3.8 :8091. DeepSeek Flash parked. Jon "
                 "assigns build work here — not Scotty's repair queue."

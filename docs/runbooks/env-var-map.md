@@ -25,6 +25,7 @@ One page. Full dump of every `SOVERYN_*` is not the point — these are the vars
 | `SOVERYN_COS_RELAY_SIGNAL` | rooms store | CoS Signal relay. Default on. | on |
 
 Eve CWG Instagram desk session lives in `data/eve_ig_profile/` (gitignored cookies, not an env var). Login: `python -m soveryn.platform.social.instagram_desk login`.
+Agent browser desks (Eve Google Ads/Business, Aetheria/Kernel browser): `data/desks/<agent>/<seat>/chrome`. Login: `python -m soveryn.platform.social.agent_desk login eve google`.
 
 Teammates secrets are in `~/teammates/.env`, not this tree.
 

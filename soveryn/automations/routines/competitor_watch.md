@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | id | `competitor_watch` |
-| agent | `vett` |
+| agent | `eve` |
 | category | `news` |
 | cron | `0 9 * * 1` |
 

@@ -38,15 +38,7 @@ def find_aider() -> str | None:
     return None
 
 
-def run_aider(
-    prompt: str,
-    *,
-    repo: Path,
-    launcher: str,
-    timeout_s: int,
-    files: tuple[str, ...] = (),
-    runner=subprocess.run,
-) -> dict[str, Any]:
+def aider_argv(launcher: str, prompt: str, files: tuple[str, ...] = ()) -> list[str]:
     cmd = [
         launcher,
         "--kernel",
@@ -63,38 +55,74 @@ def run_aider(
         prompt,
     ]
     cmd.extend(files)
+    return cmd
+
+
+def run_aider(
+    prompt: str,
+    *,
+    repo: Path,
+    launcher: str,
+    timeout_s: int,
+    files: tuple[str, ...] = (),
+    runner=None,
+    wait: bool = True,
+    follow_of: str | None = None,
+    store=None,
+) -> dict[str, Any]:
+    cmd = aider_argv(launcher, prompt, files)
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "local")
     env["AIDER_SHOW_MODEL_WARNINGS"] = "false"
     env["AIDER_DETECT_URLS"] = "false"
     env["AIDER_YES_ALWAYS"] = "true"
-    try:
-        proc = runner(
-            cmd,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-            timeout=timeout_s,
-            cwd=str(repo),
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        out = (exc.stdout or "") + (exc.stderr or "")
+    if runner is not None:
+        try:
+            proc = runner(
+                cmd,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=timeout_s,
+                cwd=str(repo),
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            out = (exc.stdout or "") + (exc.stderr or "")
+            return {
+                "ok": False,
+                "error": f"aider timed out after {timeout_s}s",
+                "output": out[-MAX_OUTPUT_CHARS:],
+                "repo": str(repo),
+            }
+        except OSError as exc:
+            return {"ok": False, "error": f"aider failed to start: {exc}", "repo": str(repo)}
+        blob = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
         return {
-            "ok": False,
-            "error": f"aider timed out after {timeout_s}s",
-            "output": out[-MAX_OUTPUT_CHARS:],
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "output": blob[-MAX_OUTPUT_CHARS:],
             "repo": str(repo),
         }
-    except OSError as exc:
-        return {"ok": False, "error": f"aider failed to start: {exc}", "repo": str(repo)}
-    blob = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
-    return {
-        "ok": proc.returncode == 0,
-        "exit_code": proc.returncode,
-        "output": blob[-MAX_OUTPUT_CHARS:],
-        "repo": str(repo),
-    }
+    from soveryn.platform.kernel_jobs import get_store
+
+    st = store or get_store()
+    job = st.spawn(
+        kind="aider",
+        prompt=prompt,
+        repo=str(repo),
+        cmd=cmd,
+        cwd=str(repo),
+        env=env,
+        timeout_s=timeout_s,
+        follow_of=follow_of,
+    )
+    if not wait:
+        snap = st.snapshot(job)
+        snap["ok"] = True
+        snap["job"] = job
+        return snap
+    return st.wait(job.id)
 
 
 def build_run_aider_tool(*, owner_agent: str = "kernel") -> ToolSpec:

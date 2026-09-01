@@ -28,7 +28,7 @@ CATALOG: List[AutomationSpec] = [
         id="ai_news_digest",
         title="AI News Digest",
         category="news",
-        agent="vett",
+        agent="eve",
         cron="0 8 * * *",
         prompt=(
             "Produce the AI news digest. Cover the last 24 hours: model releases "
@@ -43,7 +43,7 @@ CATALOG: List[AutomationSpec] = [
         id="x_trends_digest",
         title="X Trends Digest",
         category="news",
-        agent="vett",
+        agent="eve",
         cron="0 12 * * *",
         prompt=(
             "Summarize what is trending on X in AI/ML and developer tooling right "
@@ -58,7 +58,7 @@ CATALOG: List[AutomationSpec] = [
         id="competitor_watch",
         title="Competitor Watch",
         category="news",
-        agent="vett",
+        agent="eve",
         cron="0 9 * * 1",
         prompt=(
             "Weekly competitor watch. Review the tracked competitor set for the "
@@ -119,7 +119,7 @@ CATALOG: List[AutomationSpec] = [
         id="paper_watch",
         title="Paper Watch",
         category="research",
-        agent="vett",
+        agent="eve",
         cron="0 9 * * 3",
         prompt=(
             "Mid-week paper watch. Review new papers in the tracked research "
@@ -134,7 +134,7 @@ CATALOG: List[AutomationSpec] = [
         id="weekend_deep_dive",
         title="Weekend Deep Dive",
         category="research",
-        agent="vett",
+        agent="eve",
         cron="0 10 * * 6",
         prompt=(
             "Weekend deep dive. Pick the single most important open technical "
@@ -206,7 +206,7 @@ CATALOG: List[AutomationSpec] = [
             "name from recent reality (Flash speed, citizen proactive loops, "
             "Messages UX, PondWright, spine debt). Success criteria: a bounded "
             "fix or design note Jon can verify.\n"
-            "2) If CWG has no active objective, assign desk=cwg owner_id=vett "
+            "2) If CWG has no active objective, assign desk=cwg owner_id=eve "
             "a standing competitor/pricing or service-watch brief (house "
             "catalogs first).\n"
             "3) If actives already exist, do NOT stack duplicates — report their "
@@ -215,5 +215,23 @@ CATALOG: List[AutomationSpec] = [
             "under 180 words after the tool calls."
         ),
         delivery=_SJON,
+    ),
+    # --- Watch (monitor-mode: no LLM if the source hash is unchanged) ---------
+    AutomationSpec(
+        id="pond_academy_watch",
+        title="Pond Academy Watch",
+        category="ops",
+        agent="eve",
+        cron="0 7 * * *",
+        prompt=(
+            "Pond Academy watch for CWG. The MONITOR block is the source of "
+            "truth for this tick — do not invent a page that was not in it. "
+            "Report only what changed for pond work, competitors, or academy-"
+            "class training/content. If the change is noise, say so in one "
+            "line. Use cron_notepad to keep a short watchlist/cursor. No "
+            "prices unless they appear in the monitor output."
+        ),
+        delivery=_SJON,
+        monitor_file="automations/watches/pond_academy.txt",
     ),
 ]

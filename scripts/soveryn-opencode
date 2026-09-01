@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Kernel via OpenCode.
-# Default coding brain: GLM-5.3-Flash NVFP4 TP=2 on both Sparks :8001.
+# Default coding brain: GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on both Sparks :8001.
 # Optional Qwen 3.8 on Blackwell :8090 — pass --qwen.
 # Aider surgical fallback:
 #   soveryn-aider --kernel   # GLM @ :8001
@@ -61,7 +61,7 @@ if [[ "$USE_QWEN" -eq 1 ]]; then
 else
   MODEL="kernel-glm/glm-5.3-flash"
   CHECK_URL="http://10.10.10.2:8001/v1/models"
-  LABEL="Kernel · GLM-5.3-Flash TP=2 @ http://10.10.10.2:8001/v1"
+  LABEL="Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 @ http://10.10.10.2:8001/v1"
 fi
 
 if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then

@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | id | `x_trends_digest` |
-| agent | `vett` |
+| agent | `eve` |
 | category | `news` |
 | cron | `0 12 * * *` |
 

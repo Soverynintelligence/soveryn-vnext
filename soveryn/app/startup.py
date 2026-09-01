@@ -536,6 +536,14 @@ def create_app(
 
         tool_registry.register(build_run_aider_tool(owner_agent="kernel"))
         tool_registry.register(build_run_opencode_tool(owner_agent="kernel"))
+        from soveryn.platform.kernel_child_tool import build_kernel_child_tool
+
+        tool_registry.register(build_kernel_child_tool(owner_agent="kernel"))
+        tool_registry.register(build_kernel_child_tool(owner_agent="aetheria"))
+        from soveryn.automations.notepad_tool import build_cron_notepad_tool
+
+        for _notepad_owner in ("aetheria", "eve", "kernel"):
+            tool_registry.register(build_cron_notepad_tool(owner_agent=_notepad_owner))
 
         # Library layer tools — shared write surface for verified reference
         # material (per the 2026-06-02 design discussion, "Option B": passive
@@ -932,6 +940,13 @@ def create_app(
             register_gbp_tools(tool_registry, owner_agent="eve")
         except Exception:
             logger.exception("gbp tools not registered")
+        try:
+            from soveryn.platform.social.google_desk_tools import (
+                register_google_desk_tools,
+            )
+            register_google_desk_tools(tool_registry, owner_agent="eve")
+        except Exception:
+            logger.exception("google desk tools not registered")
 
         # Eve — Canva Connect (create/autofill/export). Publish to IG stays in
         # Canva Content Planner or manual paste — see platform/canva/SETUP.md.

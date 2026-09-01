@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | id | `paper_watch` |
-| agent | `vett` |
+| agent | `eve` |
 | category | `research` |
 | cron | `0 9 * * 3` |
 

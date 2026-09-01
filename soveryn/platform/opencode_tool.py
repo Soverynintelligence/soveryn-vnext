@@ -1,7 +1,7 @@
 """Kernel's write harness from Messages — headless OpenCode on GLM.
 
-AgentLoop stays read/search. Mends go through ``soveryn-opencode run --auto``
-on Spark :8001. Composer already unblocked (deferred chat).
+AgentLoop stays read/search in Messages. Mends go through
+``soveryn-opencode run --auto`` on Spark :8001.
 """
 
 from __future__ import annotations
@@ -71,43 +71,70 @@ def find_launcher() -> str | None:
     return None
 
 
+def opencode_argv(launcher: str, repo: Path, prompt: str) -> list[str]:
+    return [launcher, "run", "--auto", "--dir", str(repo), prompt]
+
+
 def run_opencode(
     prompt: str,
     *,
     repo: Path,
     launcher: str,
     timeout_s: int,
-    runner=subprocess.run,
+    runner=None,
+    wait: bool = True,
+    follow_of: str | None = None,
+    store=None,
 ) -> dict[str, Any]:
-    cmd = [launcher, "run", "--auto", "--dir", str(repo), prompt]
+    cmd = opencode_argv(launcher, repo, prompt)
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "local")
-    try:
-        proc = runner(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_s,
-            cwd=str(repo),
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        out = (exc.stdout or "") + (exc.stderr or "")
+    if runner is not None:
+        try:
+            proc = runner(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+                cwd=str(repo),
+                env=env,
+            )
+        except subprocess.TimeoutExpired as exc:
+            out = (exc.stdout or "") + (exc.stderr or "")
+            return {
+                "ok": False,
+                "error": f"opencode timed out after {timeout_s}s",
+                "output": out[-MAX_OUTPUT_CHARS:],
+                "repo": str(repo),
+            }
+        except OSError as exc:
+            return {"ok": False, "error": f"opencode failed to start: {exc}", "repo": str(repo)}
+        blob = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
         return {
-            "ok": False,
-            "error": f"opencode timed out after {timeout_s}s",
-            "output": out[-MAX_OUTPUT_CHARS:],
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "output": blob[-MAX_OUTPUT_CHARS:],
             "repo": str(repo),
         }
-    except OSError as exc:
-        return {"ok": False, "error": f"opencode failed to start: {exc}", "repo": str(repo)}
-    blob = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
-    return {
-        "ok": proc.returncode == 0,
-        "exit_code": proc.returncode,
-        "output": blob[-MAX_OUTPUT_CHARS:],
-        "repo": str(repo),
-    }
+    from soveryn.platform.kernel_jobs import get_store
+
+    st = store or get_store()
+    job = st.spawn(
+        kind="opencode",
+        prompt=prompt,
+        repo=str(repo),
+        cmd=cmd,
+        cwd=str(repo),
+        env=env,
+        timeout_s=timeout_s,
+        follow_of=follow_of,
+    )
+    if not wait:
+        snap = st.snapshot(job)
+        snap["ok"] = True
+        snap["job"] = job
+        return snap
+    return st.wait(job.id)
 
 
 def build_run_opencode_tool(*, owner_agent: str = "kernel") -> ToolSpec:
@@ -159,8 +186,7 @@ def build_run_opencode_tool(*, owner_agent: str = "kernel") -> ToolSpec:
         },
         handler=handler,
         description=(
-            "Drive a Kernel OpenCode mend (soveryn-opencode run --auto on GLM "
-            ":8001). Use this for patches, tests, and file writes. Do not use "
-            "for a lookup — use read_file / web_search instead."
+            "Short soveryn-opencode run --auto on GLM :8001. Prefer run_aider "
+            "for real patches. Do not use this for a lookup."
         ),
     )

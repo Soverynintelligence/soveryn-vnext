@@ -8,7 +8,7 @@
 | Field | Value |
 |-------|-------|
 | id | `weekend_deep_dive` |
-| agent | `vett` |
+| agent | `eve` |
 | category | `research` |
 | cron | `0 10 * * 6` |
 
