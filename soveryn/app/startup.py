@@ -450,6 +450,16 @@ def create_app(
                         message_head=message_head,
                     )
 
+            from soveryn.agents.direct_communication.read_collab import (
+                build_read_collab_tool,
+            )
+            tool_registry.register(
+                build_read_collab_tool(
+                    owner_agent="aetheria",
+                    conv_store=conv_store,
+                    data_root=env.data_root,
+                )
+            )
             tool_registry.register(
                 build_direct_message_agent_tool(
                     owner_agent="aetheria",
@@ -715,14 +725,17 @@ def create_app(
                 allowed_roots=_intake_roots,
             )
 
-        # QR decode — Eve's Messages desk tool. Same allowed roots as intake.
-        # Not on the all-agent intake loop: do not give this to Kernel.
+        # Eve desk — decode_qr / make_qr / compose_image / make_canvas /
+        # draw_rect / draw_text. Same allowed roots as intake; writes land
+        # under data/media (Canva / compose_post). Not on the all-agent
+        # intake loop: do not give this to Kernel or Aetheria.
         from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
         for _qr_agent in ("eve",):
             _register_qr_tools(
                 tool_registry,
                 owner_agent=_qr_agent,
                 allowed_roots=_intake_roots,
+                media_root=env.data_root / "media",
             )
 
         # Aetheria-initiated signal_send — the outbound half of her Direct

@@ -31,6 +31,15 @@ for arg in "$@"; do
     export AIDER_BASE="${AIDER_BASE:-http://10.10.10.2:8001/v1}"
     export AIDER_MODEL="${AIDER_MODEL:-openai/glm-5.3-flash}"
     echo "soveryn-aider: using Kernel (glm-5.3-flash) @ ${AIDER_BASE}" >&2
+    # Headless: --yes is an alias for --yes-always. Without
+    # --no-show-model-warnings, GLM's unknown-context warning opens a docs
+    # URL prompt; empty stdin takes [Yes] and Aider then auto-adds every
+    # markdown path mentioned in README (the 2026-08-31 Kernel docs-pass stall).
+    export AIDER_SHOW_MODEL_WARNINGS=false
+    export AIDER_DETECT_URLS=false
+    export AIDER_YES_ALWAYS=true
+    export AIDER_AUTO_LINT=false
+    ARGS+=(--yes-always --no-show-model-warnings --no-browser --no-detect-urls --no-auto-lint --map-tokens 0)
     if [[ -f "$KERNEL_SOUL" ]]; then
       EXTRA_READ+=(--read "$KERNEL_SOUL")
       echo "soveryn-aider: loading Kernel persona from $KERNEL_SOUL" >&2

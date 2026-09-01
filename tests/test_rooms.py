@@ -170,7 +170,7 @@ def test_record_house_post_collab_chip(room_app):
     assert ev.get("commission_id") == "cid-test-1"
     dm_hist = conv.load_history(dm)
     assert any("Messaged Eve" in t.content for t in dm_hist if t.role == "system")
-    assert any("working" in t.content for t in dm_hist if t.role == "system")
+    assert any("waiting on reply" in t.content for t in dm_hist if t.role == "system")
     room_hist = conv.load_history(ev["room_session_id"])
     assert any("[To Eve]" in t.content for t in room_hist if t.role == "assistant")
     assert any("Commissioned Eve" in t.content for t in room_hist if t.role == "system")

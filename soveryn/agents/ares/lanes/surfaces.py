@@ -25,9 +25,12 @@ must never say that.
 """
 from __future__ import annotations
 
+import time
+
 from soveryn.agents.ares.findings import AresFinding, Severity
 from soveryn.platform.surfaces import registry
 from soveryn.platform.surfaces.probe import Status, probe_all
+from soveryn.platform.surfaces.registry import Kind
 from soveryn.platform.surfaces.staleness import Observations
 
 
@@ -43,6 +46,24 @@ FAIL_STREAK = 2
 _STREAK: dict[str, int] = {}
 
 
+def _due_for_probe(surface, *, now: float, last_healthy_at: float | None) -> bool:
+    """Cheap HTTP/unit probes run every Ares scan. FUNCTIONAL POST /chat
+    hits the live model (Eve on the Quadros). Those already declare
+    interval_s=1800; probing them every 60s was burning watts while idle.
+
+    Re-probe function when never verified, when the interval has elapsed,
+    or while a fail streak is open (need the next look to confirm).
+    GET /health (model_ok) still runs every scan.
+    """
+    if surface.kind is not Kind.FUNCTIONAL:
+        return True
+    if _STREAK.get(surface.name, 0) > 0:
+        return True
+    if last_healthy_at is None:
+        return True
+    return (now - last_healthy_at) >= surface.interval_s
+
+
 def collect(*, observations: Observations | None = None,
             surfaces=None, timeout: float = 20.0) -> tuple[AresFinding, ...]:
     surfaces = tuple(surfaces if surfaces is not None else registry.live())
@@ -51,8 +72,13 @@ def collect(*, observations: Observations | None = None,
                                 "which is not the same as everything being healthy")
 
     obs = observations or Observations()
+    now = time.time()
+    due = tuple(
+        s for s in surfaces
+        if _due_for_probe(s, now=now, last_healthy_at=obs.last_healthy(s.name))
+    )
     try:
-        results = probe_all(surfaces, timeout=timeout)
+        results = probe_all(due, timeout=timeout)
     except Exception as exc:                      # pragma: no cover - defensive
         raise SurfaceProbeError(f"probe pass failed: {type(exc).__name__}: {exc}") from exc
 

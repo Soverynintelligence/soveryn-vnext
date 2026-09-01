@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-30  
+> **Last rotated:** 2026-08-31  
 > Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -28,7 +28,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | Dual Spark GLM-5.3-Flash NVFP4 (RedHat, 32k) |
+| **Kernel** | Local build | Dual Spark GLM-5.3-Flash EXL3 TR3 4bpw (32k house ctx) |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
@@ -90,7 +90,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, RedHat compressed-tensors, ctx 32768) |
+| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, EXL3 TR3 4bpw, house ctx 32768) |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
 | Shared Spark workers | `:8001` GLM TP=2 (Spark2 worker on fabric) |
 | Second Spark | **Live** — `gx10-a733` / soverynspark2, GLM rank 1 |
@@ -142,7 +142,7 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 
 | Repo | Branch / tip |
 |------|----------------|
-| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `5c1e880` — **pushed** (Messages door, push, spine) |
+| `soveryn_vnext` | `feat/mission-control-spark-tile` @ `076ed3c` — **not pushed** (ahead 7: messenger faces, Eve vision/QR, Kernel composer) |
 | `teammates` | `feat/phase-0` · overnight + Messages bridge (`6f9ae24`) |
 
 Notes in `docs/notes/` are **not** authority. **This file is.**

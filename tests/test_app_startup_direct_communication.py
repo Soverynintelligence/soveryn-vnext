@@ -81,8 +81,10 @@ def test_direct_message_agent_registered_for_aetheria_only(app_state):
     vett_tool_names = {t.name for t in registry.iter_tools_for_agent("vett")}
     scotty_tool_names = {t.name for t in registry.iter_tools_for_agent("scotty")}
     assert "direct_message_agent" in aetheria_tool_names
+    assert "read_collab" in aetheria_tool_names
     assert "direct_message_agent" not in vett_tool_names
     assert "direct_message_agent" not in scotty_tool_names
+    assert "read_collab" not in vett_tool_names
 
 
 def test_request_direction_registered_for_kernel_and_eve_only(app_state):

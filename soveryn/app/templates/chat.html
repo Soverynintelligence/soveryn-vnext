@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
 <link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260831swoosh">
 <style>
 
   :root {
@@ -267,7 +267,16 @@
     background:var(--sage-sheen);
     flex-shrink:0;
     box-shadow:inset 0 0 0 1px rgba(198,166,100,0.35);
+    position: relative;
+    overflow: visible;
   }
+  .chat-header .disc.sov-cit {
+    font-size: 0;
+    background: #0a0908 !important;
+    box-shadow: none;
+    padding: 0;
+  }
+  .chat-header .disc.sov-cit svg { width: 100%; height: 100%; display: block; }
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
   .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
@@ -1031,7 +1040,7 @@
   </main>
 </div><!-- /.chat-shell -->
 <script src="/static/voice/presence.js?v=alive5"></script>
-<script src="/static/citizen-icons.js?v=20260830msg"></script>
+<script src="/static/citizen-icons.js?v=20260831swoosh"></script>
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
@@ -1069,7 +1078,7 @@
   // parity test fails if this drifts from the backend. (Named without the
   // v-word so the retired-agent hygiene test stays green.)
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty", "eve",
+    "aetheria", "vett", "scotty", "eve", "kernel",
   ]);
 
   // ─── State ─────────────────────────────────────────────────────────────────
@@ -1492,15 +1501,19 @@
   }
 
   function isActiveCollab(ev) {
-    // Only surface peers while a collab is live — stale "Messaged Vett"
-    // chips made Aetheria's 1:1 feel like a permanent group.
+    // Ticket overlay is the only "working". Done/failed never linger.
     if (!ev || !ev.peer) return false;
     const st = (ev.state || "").toLowerCase();
-    if (st === "working") return true;
-    if (!ev.at) return false;
-    try {
-      return (Date.now() - new Date(ev.at).getTime()) < 2 * 3600 * 1000;
-    } catch (_) { return false; }
+    const overlay = (ev.commission_state || "").toLowerCase();
+    if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
+    const ttlMs = 45 * 60 * 1000;
+    let age = Infinity;
+    if (ev.at) {
+      try { age = Date.now() - new Date(ev.at).getTime(); } catch (_) { age = Infinity; }
+    }
+    if (overlay === "queued" || overlay === "running") return age < ttlMs;
+    if (st === "working") return age < ttlMs;
+    return false;
   }
 
   function renderCollabChips(events) {
@@ -1560,6 +1573,18 @@
     return list;
   }
 
+  function setThinking(on) {
+    const disc = elAgentDisc();
+    if (!disc) return;
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint && state.agent) {
+      soverynCitizenIcon.paint(disc, state.agent, { label: state.agent, busy: !!on });
+    } else {
+      disc.classList.toggle("is-busy", !!on);
+      if (on) disc.setAttribute("data-busy", "1");
+      else disc.removeAttribute("data-busy");
+    }
+  }
+
   function setAgent(name) {
     state.agent = name;
     localStorage.setItem("soveryn.agent", name);
@@ -1569,7 +1594,12 @@
     // directly — no wrapping. The pre-2026-06-04 wrapping forced every agent
     // through a bronze-trailing gradient, which doesn't serve the spectrum
     // treatment Aetheria needs.
-    elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
+    const disc = elAgentDisc();
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+      soverynCitizenIcon.paint(disc, name, { label: name, busy: false });
+    } else {
+      disc.style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
+    }
     // Paperclip is always available: images need a vision-capable agent,
     // PDFs use house intake (text splice) for any agent. Drop pending *images*
     // when switching to a non-vision agent; keep PDFs.
@@ -1754,6 +1784,7 @@
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
+    setThinking(true);
     let cleared = false;
     let finalContent = "";
 
@@ -1862,6 +1893,7 @@
         setBubbleText(respBubble, `error · ${e.message}`);
       }
     } finally {
+      setThinking(false);
       stopApprovalPoll();
       // One last poll in case the stream ended before the card painted.
       try {
@@ -1888,6 +1920,7 @@
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
+    setThinking(true);
     startApprovalPoll();
     try {
       await ensureSession();
@@ -1912,6 +1945,7 @@
     } catch (e) {
       setBubbleText(respBubble, `error · ${e.message}`);
     } finally {
+      setThinking(false);
       stopApprovalPoll();
     }
   }
@@ -1934,12 +1968,26 @@
       });
       const peerState = {};
       const shown = new Set();
+      const closedPeers = new Set();
+      for (const t of data.turns || []) {
+        if (t.role !== "system") continue;
+        const c = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+        if (c) closedPeers.add(c[1]);
+      }
+      activeCollabs.forEach((ev) => {
+        const p = (ev.peer || "").toLowerCase();
+        if (p) peerState[p] = "working";
+      });
       for (const t of data.turns || []) {
         if (t.role === "system") {
           const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
-          if (m) peerState[m[1]] = /working/i.test(t.content || "") ? "working" : (peerState[m[1]] || "messaged");
+          if (m && !peerState[m[1]]) {
+            peerState[m[1]] = closedPeers.has(m[1]) ? "done" : "messaged";
+          }
           const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
-          if (r) peerState[r[1]] = "replied";
+          if (r) peerState[r[1]] = closedPeers.has(r[1]) ? "done" : "replied";
+          const cl = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+          if (cl) peerState[cl[1]] = "done";
         }
       }
       for (const t of data.turns || []) {

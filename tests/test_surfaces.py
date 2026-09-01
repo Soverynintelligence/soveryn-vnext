@@ -169,6 +169,64 @@ def test_retired_surface_does_not_alarm(tmp_path):
     assert registry.BY_NAME["tg-bridge"] not in registry.live()
 
 
+def test_functional_chat_probe_is_not_fired_every_ares_scan(tmp_path, monkeypatch):
+    """Ares scans every 60s. atticus-chat / soveryn-agent / pondwright-chat
+    POST /chat into Eve. Doing that every scan is the idle-GPU bill.
+
+    interval_s on FUNCTIONAL surfaces is how often the live-model path must
+    be re-proven. Cheap GET /health still runs every scan.
+    """
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    cheap = Surface("seneca-public", Kind.HTTP, "https://x/health")
+    burn = Surface(
+        "atticus-chat", Kind.FUNCTIONAL, "https://x/chat",
+        interval_s=1800, method="POST",
+        payload={"session_id": "surface-probe"},
+        expect_json_field="reply",
+    )
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["atticus-chat"] = now - 60  # proven a minute ago
+    obs._save()
+    probed = []
+
+    def capture(surfaces, timeout=0):
+        probed.extend(s.name for s in surfaces)
+        return [Result(s.name, Status.HEALTHY, "ok", 0.01, now) for s in surfaces]
+
+    monkeypatch.setattr(lane_mod, "probe_all", capture)
+    lane_mod._STREAK.clear()
+    lane_mod.collect(observations=obs, surfaces=(cheap, burn))
+    assert "seneca-public" in probed
+    assert "atticus-chat" not in probed
+
+
+def test_functional_chat_probe_runs_when_interval_elapsed(tmp_path, monkeypatch):
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    burn = Surface(
+        "atticus-chat", Kind.FUNCTIONAL, "https://x/chat",
+        interval_s=1800, method="POST",
+    )
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["atticus-chat"] = now - 1801
+    obs._save()
+    probed = []
+    monkeypatch.setattr(
+        lane_mod, "probe_all",
+        lambda surfaces, timeout=0: (
+            probed.extend(s.name for s in surfaces) or [
+                Result(s.name, Status.HEALTHY, "ok", 0.01, now) for s in surfaces
+            ]
+        ),
+    )
+    lane_mod._STREAK.clear()
+    lane_mod.collect(observations=obs, surfaces=(burn,))
+    assert probed == ["atticus-chat"]
+
+
 def test_lane_emits_critical_for_down_and_never_verified(tmp_path, monkeypatch):
     from soveryn.agents.ares.lanes import surfaces as lane_mod
 

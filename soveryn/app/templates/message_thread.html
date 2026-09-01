@@ -11,7 +11,7 @@
 <link rel="manifest" href="/static/messages/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260831swoosh">
 <style>
   :root {
     --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
@@ -44,7 +44,8 @@
     background: #0a0908 !important;
     color: transparent !important;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
   }
   .avatar.sov-cit svg { width: 100%; height: 100%; display: block; }
   .avatar {
@@ -366,7 +367,7 @@
   </form>
 
 <script src="/messages-push-client.js?v=20260825c" defer></script>
-<script src="/static/citizen-icons.js?v=20260830msg"></script>
+<script src="/static/citizen-icons.js?v=20260831swoosh"></script>
 <script>
 (function () {
   // Fleet freeze: Vett/Scotty parked as Messages peers (engine room only).
@@ -395,7 +396,7 @@
   const ALLOWED_PDF_MIME = "application/pdf";
   const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty", "eve",
+    "aetheria", "vett", "scotty", "eve", "kernel",
   ]);
   const ATT_CACHE_PREFIX = "soveryn.msg.att.";
 
@@ -425,6 +426,18 @@
     $("[data-agent-av]").dataset.agent = agent;
     $("[data-agent-av]").textContent = contact.letter;
   }
+  function setHeaderBusy(on) {
+    const el = $("[data-agent-av]");
+    if (!el) return;
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+      soverynCitizenIcon.paint(el, agent, { letter: contact.letter, label: contact.name, busy: !!on });
+    } else {
+      el.classList.toggle("is-busy", !!on);
+      if (on) el.setAttribute("data-busy", "1");
+      else el.removeAttribute("data-busy");
+    }
+  }
+
   $("[data-agent-name]").textContent = contact.name;
   $("[data-agent-sub]").textContent = contact.sub;
 
@@ -870,14 +883,27 @@
     active.forEach((ev) => {
       if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
     });
-    // Latest state per peer from system markers (replied wins over working)
     const peerState = {};
+    const closedPeers = new Set();
+    (turns || []).forEach((t) => {
+      if (t.role !== "system") return;
+      const c = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+      if (c) closedPeers.add(c[1]);
+    });
+    active.forEach((ev) => {
+      const p = (ev.peer || "").toLowerCase();
+      if (p) peerState[p] = "working";
+    });
     (turns || []).forEach((t) => {
       if (t.role !== "system") return;
       const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
-      if (m) peerState[m[1]] = /working/i.test(t.content || "") ? "working" : (peerState[m[1]] || "messaged");
+      if (m && !peerState[m[1]]) {
+        peerState[m[1]] = closedPeers.has(m[1]) ? "done" : "messaged";
+      }
       const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
-      if (r) peerState[r[1]] = "replied";
+      if (r) peerState[r[1]] = closedPeers.has(r[1]) ? "done" : "replied";
+      const cl = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+      if (cl) peerState[cl[1]] = "done";
     });
     const shown = new Set();
     let waiting = false;
@@ -1118,11 +1144,17 @@
 
   function isActiveCollab(ev) {
     if (!ev || !ev.peer) return false;
-    if ((ev.state || "").toLowerCase() === "working") return true;
-    if (!ev.at) return false;
-    try {
-      return (Date.now() - new Date(ev.at).getTime()) < 2 * 3600 * 1000;
-    } catch (_) { return false; }
+    const st = (ev.state || "").toLowerCase();
+    const overlay = (ev.commission_state || "").toLowerCase();
+    if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
+    const ttlMs = 45 * 60 * 1000;
+    let age = Infinity;
+    if (ev.at) {
+      try { age = Date.now() - new Date(ev.at).getTime(); } catch (_) { age = Infinity; }
+    }
+    if (overlay === "queued" || overlay === "running") return age < ttlMs;
+    if (st === "working") return age < ttlMs;
+    return false;
   }
 
   async function findLatestDmSession() {
@@ -1190,6 +1222,7 @@
     // passes; the bubble shows the pic and any real text (same as chat.html).
     const wireMessage = msg || "(image)";
     state.sending = true;
+    setHeaderBusy(true);
     $("[data-send]").disabled = true;
     input.value = "";
     appendBubble("me", msg, { images: attachUrls });
@@ -1294,6 +1327,7 @@
       them.textContent = "error · " + e.message;
     } finally {
       state.sending = false;
+      setHeaderBusy(false);
       $("[data-send]").disabled = false;
       if (input) input.focus();
     }

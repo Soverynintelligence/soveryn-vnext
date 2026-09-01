@@ -65,6 +65,30 @@ def _commission_peer_for_dm(
             os.environ.get("SOVERYN_CITIZENS_DB")
             or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
         )
+        dm = None
+        root = None
+        try:
+            from soveryn.rooms import context as room_ctx
+
+            dm = room_ctx.dm_session_id.get()
+            root = room_ctx.data_root.get()
+        except Exception:
+            dm = None
+            root = None
+        if dm and root:
+            from soveryn.rooms.store import find_open_collab
+
+            open_ev = find_open_collab(
+                root, dm_session_id=dm, peer=target, citizens_db=db
+            )
+            if open_ev and open_ev.get("commission_id"):
+                return {
+                    "ok": True,
+                    "commission_id": open_ev["commission_id"],
+                    "reused": True,
+                    "room_event": open_ev,
+                    "routing": {"commission_id": open_ev["commission_id"]},
+                }
         body = (
             f"(coord:{coord_node_id})\n\n{brief.strip()}"
         )
@@ -78,9 +102,15 @@ def _commission_peer_for_dm(
                 subject=f"coord {coord_node_id[:8]}",
             )
         commission_id = routing.get("commission_id")
-        dm = room_ctx.dm_session_id.get()
-        room_sid = room_ctx.room_session_id.get()
-        root = room_ctx.data_root.get()
+        room_sid = None
+        try:
+            if dm is None:
+                dm = room_ctx.dm_session_id.get()
+            room_sid = room_ctx.room_session_id.get()
+            if root is None:
+                root = room_ctx.data_root.get()
+        except Exception:
+            room_sid = None
         conv = None
         try:
             from flask import current_app
@@ -144,7 +174,6 @@ def _project_peer_looped_in(
             body=brief,
             dm_session_id=dm,
             room_session_id=room_sid,
-            mark_working=True,
         )
     except Exception:
         logger.exception("room loop-in projection failed for %s → %s", owner_agent, target)
@@ -305,19 +334,27 @@ def build_direct_message_agent_tool(
                             "lattice forensic record failed for async coord %s",
                             coord_node_id,
                         )
+                cid8 = (async_out.get("commission_id") or "")[:8]
+                if async_out.get("reused"):
+                    content = (
+                        f"Already working with {target} via commission `{cid8}`. "
+                        "Use read_collab — do not re-dispatch."
+                    )
+                else:
+                    content = (
+                        f"Looped in {target} via commission `{cid8}`. "
+                        "Their reply will land in the group room — Jon can tap "
+                        "their icon in this chat to watch."
+                    )
                 return {
                     "target": target,
                     "session_id": None,
-                    "response_content": (
-                        f"Looped in {target} via commission "
-                        f"`{(async_out.get('commission_id') or '')[:8]}`. "
-                        "Their reply will land in the group room — Jon can tap "
-                        "their icon in this chat to watch."
-                    ),
+                    "response_content": content,
                     "finish_reason": "commissioned",
                     "coord_node_id": coord_node_id,
                     "commission_id": async_out.get("commission_id"),
                     "commissioned": True,
+                    "reused": bool(async_out.get("reused")),
                     "room_event": async_out.get("room_event"),
                 }
             # Fall through to nested chat if commission path failed.

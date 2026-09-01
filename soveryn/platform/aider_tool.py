@@ -50,19 +50,30 @@ def run_aider(
     cmd = [
         launcher,
         "--kernel",
-        "--yes",
+        "--yes-always",
         "--no-pretty",
+        "--no-show-model-warnings",
+        "--no-browser",
+        "--no-detect-urls",
+        "--no-auto-lint",
+        "--no-auto-test",
+        "--map-tokens",
+        "0",
         "--message",
         prompt,
     ]
     cmd.extend(files)
     env = os.environ.copy()
     env.setdefault("OPENAI_API_KEY", "local")
+    env["AIDER_SHOW_MODEL_WARNINGS"] = "false"
+    env["AIDER_DETECT_URLS"] = "false"
+    env["AIDER_YES_ALWAYS"] = "true"
     try:
         proc = runner(
             cmd,
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=timeout_s,
             cwd=str(repo),
             env=env,

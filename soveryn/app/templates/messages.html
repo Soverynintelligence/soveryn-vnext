@@ -11,7 +11,7 @@
 <link rel="manifest" href="/static/messages/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260830msg">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260831swoosh">
 <style>
   :root {
     --bg: #000; --row: #0c0b0a; --line: rgba(255,255,255,0.08);
@@ -83,7 +83,8 @@
     background: #0a0908 !important;
     color: transparent !important;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
   }
   .avatar.sov-cit svg { width: 100%; height: 100%; display: block; }
   .avatar {
@@ -144,7 +145,7 @@
     <!-- filled by JS -->
   </ul>
 <script src="/messages-push-client.js?v=20260825c" defer></script>
-<script src="/static/citizen-icons.js?v=20260830msg"></script>
+<script src="/static/citizen-icons.js?v=20260831swoosh"></script>
 <script>
 (function () {
   // Fleet freeze 2026-08-27: MESSAGES_CONTACTS only (Vett/Scotty parked).
@@ -236,14 +237,16 @@
             const cj = await c.json();
             const active = (cj.collabs || []).find((ev) => {
               const st = (ev.state || "").toLowerCase();
-              return st === "working" || (!st && ev.peer);
+              const overlay = (ev.commission_state || "").toLowerCase();
+              if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
+              if (st !== "working" && overlay !== "queued" && overlay !== "running") return false;
+              if (!ev.at) return false;
+              const age = Date.now() - new Date(ev.at).getTime();
+              return age < 45 * 60 * 1000;
             });
-            if (active && active.peer && active.at) {
-              const age = Date.now() - new Date(active.at).getTime();
-              if (age < 2 * 3600 * 1000) {
-                text = "Working with " + active.peer;
-                hot = true;
-              }
+            if (active && active.peer) {
+              text = "Working with " + active.peer;
+              hot = true;
             }
           }
         } catch (_) {}
@@ -276,7 +279,7 @@
             (unread ? ' aria-label="' + esc(c.name) + ', unread"' : "") + ">" +
             '<div class="av-wrap">' +
               (typeof soverynCitizenIcon === 'function'
-              ? soverynCitizenIcon(c.id, { size: 56, className: 'avatar', letter: c.letter, busy: !!p.hot, label: c.name })
+              ? soverynCitizenIcon(c.id, { size: 56, className: 'avatar', letter: c.letter, busy: false,  /* swoosh is in-turn only; hot stays mint preview */ label: c.name })
               : '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>') +
               dot +
             "</div>" +

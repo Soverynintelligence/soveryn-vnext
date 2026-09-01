@@ -20,6 +20,10 @@ COS_ID = "aetheria"
 
 # Marker embedded in 1:1 system turns so chat.html can render a chip.
 MESSAGED_MARKER = "⟦room:messaged:{peer}⟧"
+CLOSED_MARKER = "⟦room:closed:{peer}⟧"
+# Desk stops calling a collab "working" after this even if the ticket is still
+# running. Ticket lifetime is separate (runtime requeue / abandon).
+COLLAB_TTL_SECONDS = 45 * 60
 
 
 def _utc_now() -> str:
@@ -414,6 +418,162 @@ def find_latest_room_for_peer(
     return best
 
 
+
+def _close_matching_messaged_peer(
+    room: dict[str, Any],
+    *,
+    peer: str,
+    commission_id: str | None,
+    ok: bool,
+) -> bool:
+    """Flip matching messaged_peer chip to done/failed. True if patched."""
+    events = room.get("events") or []
+    terminal = "done" if ok else "failed"
+    hit = None
+    cid = (commission_id or "").strip()
+    peer_l = (peer or "").strip().lower()
+    if cid:
+        for ev in reversed(events):
+            if ev.get("type") == "messaged_peer" and ev.get("commission_id") == cid:
+                hit = ev
+                break
+    if hit is None:
+        for ev in reversed(events):
+            if (
+                ev.get("type") == "messaged_peer"
+                and (ev.get("peer") or "").strip().lower() == peer_l
+                and (ev.get("state") or "").strip().lower() == "working"
+            ):
+                hit = ev
+                break
+    if hit is None:
+        return False
+    if (hit.get("state") or "").strip().lower() in ("done", "failed"):
+        return False
+    hit["state"] = terminal
+    return True
+
+
+def _parse_at(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    raw = str(value).strip()
+    try:
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
+
+
+def collab_is_active(
+    ev: dict[str, Any],
+    *,
+    now: datetime | None = None,
+    commission_row: dict[str, Any] | None = None,
+) -> bool:
+    """True only while the desk should show this collab as live."""
+    if not ev or not ev.get("peer"):
+        return False
+    st = (ev.get("state") or "").strip().lower()
+    live = ((commission_row or {}).get("state") or "").strip().lower()
+    if st in ("done", "failed") or live in ("done", "failed"):
+        return False
+    clock = now or datetime.now(timezone.utc)
+    at = _parse_at(ev.get("at") if isinstance(ev.get("at"), str) else None)
+    aged_out = bool(
+        at is not None and (clock - at).total_seconds() > COLLAB_TTL_SECONDS
+    )
+    if live in ("queued", "running"):
+        return not aged_out
+    if st == "working":
+        if at is None:
+            return False
+        return not aged_out
+    return False
+
+
+def find_open_collab(
+    data_root: Path | str,
+    *,
+    dm_session_id: str,
+    peer: str,
+    citizens_db: Path | str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any] | None:
+    """Live working collab for this 1:1 + peer, if any."""
+    peer_l = (peer or "").strip().lower()
+    if not dm_session_id or peer_l not in PEERS:
+        return None
+    for ev in collabs_for_dm(data_root, dm_session_id):
+        if (ev.get("peer") or "").strip().lower() != peer_l:
+            continue
+        cid = ev.get("commission_id")
+        if not cid:
+            continue
+        row = None
+        if citizens_db is not None:
+            row = peer_commission_status(citizens_db, cid)
+            if row is not None and (row.get("state") or "") not in ("queued", "running"):
+                continue
+        if collab_is_active(ev, now=now, commission_row=row):
+            return ev
+    return None
+
+
+def close_collab_for_commission(
+    conv: ConversationStore,
+    *,
+    data_root: Path | str,
+    commission_id: str,
+    ok: bool = True,
+    peer: str | None = None,
+) -> dict[str, Any] | None:
+    """Persist chip done/failed and write a terminal DM line. Idempotent."""
+    cid = (commission_id or "").strip()
+    if not cid:
+        return None
+    room = find_room_for_commission(data_root, cid)
+    if room is None:
+        return None
+    peer_l = (peer or "").strip().lower()
+    if not peer_l:
+        for ev in reversed(room.get("events") or []):
+            if ev.get("commission_id") == cid:
+                peer_l = (ev.get("peer") or "").strip().lower()
+                break
+    if not peer_l:
+        peers = room_peers(room)
+        peer_l = peers[0] if peers else ""
+    if not peer_l:
+        return None
+    _close_matching_messaged_peer(
+        room, peer=peer_l, commission_id=cid, ok=ok
+    )
+    dm = room.get("dm_session_id")
+    marker = CLOSED_MARKER.format(peer=peer_l)
+    terminal = "done" if ok else "failed"
+    if dm and conv.get_session(dm) is not None:
+        already = any(
+            marker in (t.content or "")
+            for t in conv.load_history(dm)
+            if t.role == "system"
+        )
+        if not already:
+            conv.save_turn(
+                dm,
+                COS_ID,
+                "system",
+                f"{marker} {peer_l.title()} {terminal}",
+                source="room",
+            )
+    _save_room(data_root, room)
+    return room
+
+
 def record_house_post_collab(
     conv: ConversationStore,
     *,
@@ -449,8 +609,10 @@ def record_house_post_collab(
         sid = room["session_id"]
         marker = MESSAGED_MARKER.format(peer=peer)
         excerpt = body if len(body) <= 800 else body[:797] + "…"
-        is_working = bool(commission_id) or mark_working
-        working = " — working…" if is_working else ""
+        # Working requires a commission ticket. mark_working without an id
+        # used to paint an immortal chip the overlay could never close.
+        is_working = bool(commission_id)
+        working = " — waiting on reply" if is_working else ""
         conv.save_turn(
             sid,
             COS_ID,
@@ -562,6 +724,9 @@ def record_house_post_collab(
         if commission_id:
             event["commission_id"] = commission_id
         matched.setdefault("events", []).append(event)
+        _close_matching_messaged_peer(
+            matched, peer=peer, commission_id=commission_id, ok=ok
+        )
         _save_room(data_root, matched)
         return event
 
@@ -883,6 +1048,66 @@ def project_commission_result(
         room_session_id=room.get("session_id") if room else None,
         commission_id=commission_id,
     )
+
+
+
+def overlay_collab_commission_states(
+    events: list[dict[str, Any]],
+    *,
+    citizens_db: Path | str,
+    data_root: Path | str | None = None,
+    persist: bool = True,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Attach commission_state; close leftover working chips when ended or TTL."""
+    out: list[dict[str, Any]] = []
+    rooms_to_save: dict[str, dict[str, Any]] = {}
+    terminal = {"done", "failed"}
+    clock = now or datetime.now(timezone.utc)
+    for ev in events:
+        e = dict(ev)
+        cid = e.get("commission_id")
+        row = peer_commission_status(citizens_db, cid) if cid else None
+        if row:
+            e["commission_state"] = row.get("state")
+            e["commission_error"] = row.get("error")
+        sidecar = (e.get("state") or "").strip().lower()
+        live = ((row or {}).get("state") or "").strip().lower()
+        should_close = sidecar == "working" and (
+            live in terminal
+            or not collab_is_active(e, now=clock, commission_row=row)
+        )
+        if should_close:
+            new_state = live if live in terminal else "failed"
+            e["state"] = new_state
+            if new_state == "failed" and live not in terminal:
+                e["commission_error"] = e.get("commission_error") or "ttl_expired"
+            sid = e.get("room_session_id")
+            if persist and data_root and sid:
+                room = rooms_to_save.get(sid)
+                if room is None:
+                    room = load_room(data_root, sid)
+                if room is not None:
+                    patched = False
+                    for orig in room.get("events") or []:
+                        if orig.get("type") != "messaged_peer":
+                            continue
+                        if cid and orig.get("commission_id") != cid:
+                            continue
+                        if not cid and orig is not ev:
+                            if orig.get("at") != e.get("at"):
+                                continue
+                        if (orig.get("state") or "").strip().lower() != "working":
+                            continue
+                        orig["state"] = new_state
+                        patched = True
+                    if patched:
+                        rooms_to_save[sid] = room
+        out.append(e)
+    if persist and data_root:
+        for room in rooms_to_save.values():
+            _save_room(data_root, room)
+    return out
 
 
 def peer_commission_status(

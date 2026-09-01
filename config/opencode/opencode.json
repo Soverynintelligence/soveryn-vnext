@@ -17,7 +17,7 @@
       },
       "models": {
         "glm-5.3-flash": {
-          "name": "Kernel · GLM-5.3-Flash NVFP4 TP=2 (OpenCode default)",
+          "name": "Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 (OpenCode default)",
           "limit": {
             "context": 32768,
             "output": 8192

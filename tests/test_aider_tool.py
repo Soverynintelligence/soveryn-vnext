@@ -28,16 +28,15 @@ def test_run_aider_invokes_kernel_yes_message(tmp_path):
     )
     assert out["ok"] is True
     cmd, kw = calls[0]
-    assert cmd[:5] == [
-        "/bin/soveryn-aider",
-        "--kernel",
-        "--yes",
-        "--no-pretty",
-        "--message",
-    ]
-    assert cmd[5] == "fix the seats"
-    assert cmd[6] == "seats.py"
+    assert cmd[0:3] == ["/bin/soveryn-aider", "--kernel", "--yes-always"]
+    assert "--no-show-model-warnings" in cmd
+    assert "--no-browser" in cmd
+    assert "--no-detect-urls" in cmd
+    assert cmd[cmd.index("--message") + 1] == "fix the seats"
+    assert cmd[-1] == "seats.py"
     assert kw["cwd"] == str(tmp_path)
+    assert kw["stdin"] is not None
+    assert kw["env"]["AIDER_SHOW_MODEL_WARNINGS"] == "false"
 
 
 def test_run_aider_tool_empty_prompt():

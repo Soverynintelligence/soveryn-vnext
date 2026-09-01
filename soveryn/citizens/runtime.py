@@ -163,6 +163,40 @@ def _project_commission_to_room(
         )
 
 
+def _cos_relay_already_queued(conn, source_commission_id: str) -> bool:
+    needle = f"source_commission: {source_commission_id}"
+    for row in commissions.for_citizen(conn, "aetheria", limit=80):
+        if needle in (row.get("body") or ""):
+            return True
+    return False
+
+
+def _close_collab_ticket(
+    *,
+    conv_store,
+    data_root: Path | str | None,
+    commission_id: str,
+    citizen_id: str,
+    ok: bool,
+) -> None:
+    if conv_store is None or not data_root:
+        return
+    if citizen_id not in ("kernel", "eve"):
+        return
+    try:
+        from soveryn.rooms.store import close_collab_for_commission
+
+        close_collab_for_commission(
+            conv_store,
+            data_root=data_root,
+            commission_id=commission_id,
+            ok=ok,
+            peer=citizen_id,
+        )
+    except Exception:
+        logger.exception("collab close failed for %s / %s", citizen_id, commission_id)
+
+
 def _enqueue_cos_summary(
     db_path: str | Path,
     *,
@@ -208,6 +242,12 @@ def _enqueue_cos_summary(
     )
     try:
         with connect(db_path) as conn:
+            if _cos_relay_already_queued(conn, source_commission_id):
+                logger.info(
+                    "skip duplicate CoS relay for source=%s",
+                    source_commission_id[:8],
+                )
+                return None
             cid = commissions.enqueue(conn, CHIEF_OF_STAFF_ID, brief, at=at)
         logger.info(
             "queued CoS summary relay %s for peer=%s source=%s",
@@ -335,6 +375,13 @@ def execute_claimed(
                 commission_id=commission_id,
             )
         else:
+            _close_collab_ticket(
+                conv_store=conv_store,
+                data_root=data_root,
+                commission_id=commission_id,
+                citizen_id=citizen_id,
+                ok=True,
+            )
             _project_commission_to_room(
                 conv_store=conv_store,
                 data_root=data_root,
@@ -398,6 +445,13 @@ def execute_claimed(
                 commission_id=commission_id,
             )
         else:
+            _close_collab_ticket(
+                conv_store=conv_store,
+                data_root=data_root,
+                commission_id=commission_id,
+                citizen_id=citizen_id,
+                ok=False,
+            )
             _project_commission_to_room(
                 conv_store=conv_store,
                 data_root=data_root,
@@ -424,7 +478,7 @@ def execute_claimed(
 def requeue_stale_running(
     db_path: str | Path,
     *,
-    older_than_seconds: int = 45 * 60,
+    older_than_seconds: int = 10 * 60,
     at: str | None = None,
 ) -> list[str]:
     """Requeue commissions stuck in running with no progress (zombie after restart)."""

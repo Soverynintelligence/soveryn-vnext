@@ -15,6 +15,7 @@ from soveryn.rooms.store import (
     collabs_for_dm,
     load_room,
     open_room,
+    overlay_collab_commission_states,
     peer_commission_status,
     room_peers,
 )
@@ -178,5 +179,11 @@ def api_rooms_collabs():
     dm = (request.args.get("dm_session_id") or "").strip()
     if not dm:
         return jsonify({"error": {"code": "missing_field", "message": "dm_session_id"}}), 400
-    events = collabs_for_dm(_data_root(), dm)
+    root = _data_root()
+    events = overlay_collab_commission_states(
+        collabs_for_dm(root, dm),
+        citizens_db=_citizens_db(),
+        data_root=root,
+        persist=True,
+    )
     return jsonify({"ok": True, "collabs": events, "count": len(events)}), 200

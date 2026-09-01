@@ -236,11 +236,11 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
     "glm": {
         "alias": "glm-5.3-flash",
         "house_name": "GLM 5.3 Flash",
-        "blurb": "NVFP4 · TP=2 both Sparks :8001 · Lightning parked",
+        "blurb": "EXL3 TR3 4bpw · TP=2 both Sparks :8001 · NVFP4 parked",
         "host": "10.10.10.2",
         "port": 8001,
-        "path": "GLM-5.3-Flash-NVFP4",
-        "role": "Kernel — GLM-5.3-Flash NVFP4 TP=2 on Spark1+Spark2 :8001",
+        "path": "GLM-5.3-Flash-EXL3-TR3-4bpw",
+        "role": "Kernel — GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Spark1+Spark2 :8001",
     },
 }
 _KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
@@ -269,6 +269,7 @@ def _kernel_server() -> ModelServer:
         host=str(prof["host"]),
         port=int(prof["port"]),
         model_path=MODEL_ROOT / str(prof["path"]),
+        # Native GLM vision (vLLM image_url). llama mmproj is N/A.
         mmproj_path=None,
         role=str(prof["role"]),
         supports_multi_system_messages=False,

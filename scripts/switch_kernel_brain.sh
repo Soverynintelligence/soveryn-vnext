@@ -20,7 +20,7 @@ VETT_SWITCH="${REPO}/scripts/switch_vett_brain.sh"
 
 usage() {
   echo "Usage: $0 [glm|flash|qwen38] [--take-spark]"
-  echo "  glm      GLM-5.3-Flash NVFP4 TP=2 on Sparks :8001 (alias glm-5.3-flash)"
+  echo "  glm      GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Sparks :8001 (alias glm-5.3-flash)"
   echo "  flash    Qwen3.8 GGUF on Quadros :8091 (legacy alias bench-flash)"
   echo "  qwen38   Qwen3.8-27B NVFP4 on Spark :8001 (alias qwen38-27b)"
   echo "  --take-spark   with qwen38: load that brain on Spark via switch_vett_brain.sh"

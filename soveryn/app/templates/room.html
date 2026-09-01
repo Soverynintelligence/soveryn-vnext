@@ -521,10 +521,16 @@
           appendBubble("system", t.content, "Room");
           return;
         }
+        const closed = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+        if (closed) {
+          peerStates[closed[1]] = /failed/i.test(t.content || "") ? "failed" : "done";
+        }
         const commissioned = /Commissioned ([A-Za-z]+)|Looped in ([A-Za-z]+)/i.exec(t.content || "");
         if (commissioned) {
           const name = (commissioned[1] || commissioned[2] || "").toLowerCase();
-          if (name && peerStates[name] !== "replied") peerStates[name] = "working";
+          if (name && peerStates[name] !== "replied" && peerStates[name] !== "done" && peerStates[name] !== "failed") {
+            peerStates[name] = "working";
+          }
         }
         // Hide old instructional welcome chrome from earlier room v0.
         if (/^Room · You \+/.test(t.content || "")) return;

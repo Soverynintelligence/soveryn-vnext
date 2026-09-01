@@ -38,6 +38,20 @@ from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
 from soveryn.agents.skills import get_skill_index
 from soveryn.agents.souls import get_soul
 from soveryn.agents.turn_scope import is_trivial_user_turn
+
+
+def dump_tool_result(result: object) -> str:
+    """Serialize a tool result for the model. Bytes in the payload used to
+    raise TypeError and kill the whole Kernel commission (OpenCode/GLM
+    session blobs, binary stdout). Decode instead of crashing the turn.
+    """
+
+    def _default(o: object) -> str:
+        if isinstance(o, (bytes, bytearray)):
+            return bytes(o).decode("utf-8", "replace")
+        return str(o)
+
+    return json.dumps(result, sort_keys=True, default=_default)
 from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
@@ -1302,7 +1316,10 @@ class AgentLoop:
                 ),)
                 result_messages = [
                     self._tool_result_message(
-                        tool_call, session_id=session_id, source=source,
+                        tool_call,
+                        session_id=session_id,
+                        source=source,
+                        attachments=attachments,
                     )
                     for tool_call in response.tool_calls
                 ]
@@ -1572,7 +1589,7 @@ class AgentLoop:
         }
         return ChatMessage(
             role="tool",
-            content=json.dumps(result, sort_keys=True),
+            content=dump_tool_result(result),
             tool_call_id=call_id,
         )
 
@@ -1595,6 +1612,7 @@ class AgentLoop:
         session_id: str | None = None,
         source: str = "direct",
         skip_approval_gate: bool = False,
+        attachments: tuple[str, ...] | None = None,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1617,7 +1635,7 @@ class AgentLoop:
             result = self.steering_rack.synthetic_error(tool_name=tool_name)
             return ChatMessage(
                 role="tool",
-                content=json.dumps(result, sort_keys=True),
+                content=dump_tool_result(result),
                 tool_call_id=call_id,
             )
 
@@ -1648,7 +1666,12 @@ class AgentLoop:
                 args = dict(args)
                 args["dm_session_id"] = session_id
             try:
-                result = self.tool_registry.invoke(self.agent_name, tool_name, args)
+                from soveryn.platform.intake.turn_images import turn_images_bound
+
+                with turn_images_bound(attachments):
+                    result = self.tool_registry.invoke(
+                        self.agent_name, tool_name, args,
+                    )
             except ToolArgError as exc:
                 result = {"error": "ToolArgError", "message": str(exc)}
             except Exception as exc:  # noqa: BLE001 — handler failures must surface
@@ -1705,7 +1728,7 @@ class AgentLoop:
         except Exception:
             pass
 
-        result_content = json.dumps(result, sort_keys=True)
+        result_content = dump_tool_result(result)
 
         # ── Steering rack post-dispatch observe.
         # observe() handles the watched-tool check internally; opaque tools
@@ -2100,10 +2123,14 @@ class AgentLoop:
                             session_id=session_id,
                             source=source,
                             skip_approval_gate=True,
+                            attachments=attachments,
                         )
                     else:
                         result_message = self._tool_result_message(
-                            tool_call, session_id=session_id, source=source,
+                            tool_call,
+                            session_id=session_id,
+                            source=source,
+                            attachments=attachments,
                         )
                     yield ToolResultEvent(
                         call_id=call_id,

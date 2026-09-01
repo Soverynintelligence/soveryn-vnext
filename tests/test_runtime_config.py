@@ -198,9 +198,10 @@ def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
     assert runtime.resolve_kernel_brain() == "flash"
 
 
-def test_eve_flash_names_qwen38_mmproj_kernel_does_not():
+def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
     """Eve's Quadros Qwen3.8 seat names the same projector Aetheria already
-    loads. Kernel is Spark GLM — no Qwen mmproj, not vision-capable."""
+    loads. Kernel is Spark GLM — no llama mmproj, but GLM-5.3-Flash is
+    natively multimodal via vLLM image_url."""
     from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 
     eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
@@ -211,7 +212,7 @@ def test_eve_flash_names_qwen38_mmproj_kernel_does_not():
     assert aetheria.mmproj_path == expected
     assert kernel.mmproj_path is None
     assert "eve" in VISION_CAPABLE_AGENTS
-    assert "kernel" not in VISION_CAPABLE_AGENTS
+    assert "kernel" in VISION_CAPABLE_AGENTS
     assert eve.port == 8091
     assert eve.model_alias == "bench-flash"
 

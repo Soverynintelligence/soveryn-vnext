@@ -59,9 +59,10 @@ def test_message_thread_has_paperclip_capture_and_posts_attachments():
     assert '"(image)"' in html
 
 
-def test_vision_capable_agents_include_eve_not_kernel_or_qwen38_peers():
+def test_vision_capable_agents_include_kernel_glm_native_vision():
+    """GLM-5.3-Flash is natively multimodal (vLLM image_url) — no llama mmproj."""
     assert VISION_CAPABLE_AGENTS == frozenset(
-        {"aetheria", "vett", "scotty", "eve"}
+        {"aetheria", "vett", "scotty", "eve", "kernel"}
     )
-    for name in ("kernel", "grok", "pondwright", "seneca", "atticus", "cognition"):
+    for name in ("grok", "pondwright", "seneca", "atticus", "cognition"):
         assert name not in VISION_CAPABLE_AGENTS
