@@ -70,6 +70,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | House improvement scan | **Live** Mon/Wed/Fri |
 | Canva Connect | **Live** (tokens local-only) |
 | Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (Gate / needs-you / Critic·Scout brief ready); Signal = Aetheria-only |
+| Verification gate | **Live — owner: Eve** (default was Vett; silently inert after the fold — repointed 2026-09-01, `58cb1e9`) |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
