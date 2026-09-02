@@ -8,6 +8,8 @@ def test_trivial_greetings_and_acks():
         "hi", "hey", "Hey!", "hello", "good morning",
         "ok", "okay", "thanks", "thank you", "yes", "nope",
         "got it", "sounds good", "cool",
+        "Hello?", "Yo.", "Can you hear me?", "can you hear me now",
+        "you there?", "mm-hmm", "mhm",
     ):
         assert is_trivial_user_turn(text), text
 

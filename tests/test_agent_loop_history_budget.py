@@ -15,6 +15,7 @@ from soveryn.agents.loop import (
     AgentLoop,
     DoneEvent,
     TokenEvent,
+    VOICE_HISTORY_TOKEN_BUDGET,
     _apply_history_budget,
     _estimate_message_tokens,
     _estimate_tokens,
@@ -444,6 +445,31 @@ def test_stream_done_event_carries_context_usage_when_budget_set(conv_store):
     assert done[0].context_usage["budget_tokens"] == 20_000
     assert done[0].context_usage["context_window"] == 32_768
     assert done[0].context_usage["elided_turns"] == 0
+
+
+def test_voice_stream_caps_history_under_voice_budget(conv_store):
+    """Duplex must not prefill a 6k-token Messages thread on 'Hello?'."""
+    stream = _CapturingStream()
+    loop = AgentLoop(
+        "eve", conv_store,
+        chat_fn=_CapturingChat(),
+        stream_fn=stream,
+        history_token_budget=6_000, context_window=32_768,
+        soul_text="eve soul " * 50,
+    )
+    sid = conv_store.new_session("eve")
+    for i in range(12):
+        conv_store.save_turn(sid, "eve", "user", ("u" * 400) + f" turn {i}")
+        conv_store.save_turn(sid, "eve", "assistant", ("a" * 400) + f" turn {i}")
+    events = list(loop.process_message_stream(sid, "Hello?", source="voice"))
+    done = [e for e in events if isinstance(e, DoneEvent)]
+    assert len(done) == 1
+    usage = done[0].context_usage
+    assert usage is not None
+    assert usage["history_tokens"] <= VOICE_HISTORY_TOKEN_BUDGET + 50
+    assert usage["elided_turns"] > 0
+    req = stream.calls[-1]
+    assert req.tools is None
 
 
 def test_stream_done_event_context_usage_none_without_budget(conv_store):

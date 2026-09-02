@@ -353,6 +353,10 @@ def _fit_tool_loop_messages(
 # prelude. Soft budgets on prelude/total are reported via context_usage only.
 PRELUDE_SOFT_BUDGET_TOKENS = 3500
 TOTAL_INPUT_SOFT_BUDGET_TOKENS = 12_000
+# Voice duplex: a 6k-history + fat prelude prefill is ~30s of silence on
+# Quadros Qwen. The user then says "can you hear me?" which barge-in
+# cancels TTS before F5 ever runs. Cap voice history so first audio is soon.
+VOICE_HISTORY_TOKEN_BUDGET = 1500
 
 
 def _apply_history_budget(
@@ -945,6 +949,19 @@ class AgentLoop:
                 },
             })
         return tuple(schemas)
+
+    def _history_budget_for(self, source: str) -> int | None:
+        """History-only token cap for this turn.
+
+        Voice keeps a tighter envelope so duplex first-audio isn't a 30s
+        prefill of a long Messages thread.
+        """
+        budget = self.history_token_budget
+        if (source or "").strip().lower() != "voice":
+            return budget
+        if budget is None:
+            return VOICE_HISTORY_TOKEN_BUDGET
+        return min(budget, VOICE_HISTORY_TOKEN_BUDGET)
 
     def _tools_for_user_turn(self, user_message: str) -> tuple[dict, ...] | None:
         """Tool schemas for this turn, or None when the turn should be tool-free.
@@ -1800,6 +1817,10 @@ class AgentLoop:
         recall_context = self._build_recall_context(session_id, user_message)
         identity_context = self._build_identity_context()
         skills_index = self._build_skills_index()
+        # Voice greetings: drop recall + skills so "Hello?" isn't an 18k prefill.
+        if source == "voice" and is_trivial_user_turn(user_message):
+            recall_context = ""
+            skills_index = ""
 
         # ── Build messages
         history_messages = tuple(
@@ -1824,9 +1845,10 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=skills_index),)
 
         elided_turns = 0
-        if self.history_token_budget is not None:
+        history_budget = self._history_budget_for(source)
+        if history_budget is not None:
             history_messages, marker, elided_turns = _apply_history_budget(
-                prelude, history_messages, self.history_token_budget,
+                prelude, history_messages, history_budget,
                 charge_prelude=False,
             )
             if marker is not None:
@@ -2190,7 +2212,7 @@ class AgentLoop:
                             prelude=_usage_prelude,
                             history=_usage_history,
                         )
-                        if self.history_token_budget is not None else None
+                        if history_budget is not None else None
                     ),
                 )
                 return
@@ -2301,7 +2323,7 @@ class AgentLoop:
                     prelude=_usage_prelude,
                     history=_usage_history,
                 )
-                if self.history_token_budget is not None else None
+                if history_budget is not None else None
             ),
         )
 

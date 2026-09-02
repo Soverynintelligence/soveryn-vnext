@@ -22,6 +22,10 @@ _TRIVIAL_USER_RE = re.compile(
     r"yes|yep|yeah|yup|sure|no|nope|nah|"
     r"continue|go\s+on|proceed|carry\s+on|"
     r"bye|later|night|"
+    r"can\s+you\s+hear\s+me(?:\s+now)?|"
+    r"you\s+there|anyone\s+there|"
+    r"mm-?h+m+|uh-?huh|mhm|"
+    r"testing|test\s+test|"
     r"\.{1,3}|!{1,3}|\?{1,3}"
     r")\s*[.!?]?\s*$"
 )

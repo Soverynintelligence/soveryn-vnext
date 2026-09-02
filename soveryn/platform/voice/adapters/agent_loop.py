@@ -67,10 +67,18 @@ class AgentLoopAdapter(AgentAdapterBase):
             # Hold everything until stream end (or a very large safety chunk).
             safety_chars = 320 if sentence_only else flush_chars
 
+            def _put(item) -> None:
+                if loop.is_closed():
+                    return
+                try:
+                    loop.call_soon_threadsafe(queue.put_nowait, item)
+                except RuntimeError:
+                    return
+
             def _flush() -> None:
                 nonlocal pending
                 if pending.strip():
-                    loop.call_soon_threadsafe(queue.put_nowait, pending)
+                    _put(pending)
                 pending = ""
 
             try:
@@ -107,7 +115,7 @@ class AgentLoopAdapter(AgentAdapterBase):
                 )
             finally:
                 _flush()
-                loop.call_soon_threadsafe(queue.put_nowait, _SENTINEL)
+                _put(_SENTINEL)
 
         producer = asyncio.create_task(asyncio.to_thread(_producer))
         try:
