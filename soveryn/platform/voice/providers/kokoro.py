@@ -39,12 +39,13 @@ HELPER_GPU_UUID = "GPU-305d1801-319e-3330-d75e-0676387a91f2"
 BLACKWELL_GPU_UUID = "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 
 # Agent names from the voice registry → Kokoro voice stem.
+# Aetheria = flagship heart. Eve = Bella (other A-grade US female).
 AGENT_TO_VOICE = {
     "aetheria": "af_heart",
-    "eve": "af_heart",
+    "eve": "af_bella",
     "kernel": "af_heart",
     # Folded names still resolve if something old asks.
-    "vett": "af_heart",
+    "vett": "af_bella",
     "scotty": "af_heart",
 }
 
@@ -72,14 +73,23 @@ def _voices_dir() -> Path:
     return Path(raw) if raw else _snapshot_dir() / "voices"
 
 
-def resolve_kokoro_voice(agent_or_voice: str | None) -> str:
-    """Map an agent name / env override to a Kokoro voice stem."""
+def _env_default_voice() -> str:
     env = (os.environ.get("SOVERYN_KOKORO_VOICE") or "").strip()
-    if env:
-        return env[:-3] if env.endswith(".pt") else env
-    name = (agent_or_voice or DEFAULT_VOICE).strip()
+    if env.endswith(".pt"):
+        env = env[:-3]
+    return env or DEFAULT_VOICE
+
+
+def resolve_kokoro_voice(agent_or_voice: str | None) -> str:
+    """Map an agent name to a Kokoro voice stem.
+
+    Per-agent ``AGENT_TO_VOICE`` wins so Eve is not forced onto Aetheria's
+    ``af_heart`` when ``SOVERYN_KOKORO_VOICE`` is set as the house default.
+    Unmapped names pass through; empty falls back to the env / ``af_heart``.
+    """
+    name = (agent_or_voice or "").strip()
     if not name:
-        return DEFAULT_VOICE
+        return _env_default_voice()
     key = name.lower()
     if key in AGENT_TO_VOICE:
         return AGENT_TO_VOICE[key]

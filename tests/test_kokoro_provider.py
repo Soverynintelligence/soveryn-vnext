@@ -21,7 +21,7 @@ def test_resolve_kokoro_voice_maps_aetheria():
 
 
 def test_resolve_kokoro_voice_maps_folded_roster():
-    assert resolve_kokoro_voice("eve") == "af_heart"
+    assert resolve_kokoro_voice("eve") == "af_bella"
     assert resolve_kokoro_voice("kernel") == "af_heart"
 
 
@@ -30,9 +30,11 @@ def test_resolve_kokoro_voice_passthrough_stem():
     assert resolve_kokoro_voice("af_bella") == "af_bella"
 
 
-def test_resolve_kokoro_voice_env_override(monkeypatch):
+def test_resolve_kokoro_voice_env_is_default_not_agent_override(monkeypatch):
     monkeypatch.setenv("SOVERYN_KOKORO_VOICE", "bf_emma")
-    assert resolve_kokoro_voice("aetheria") == "bf_emma"
+    assert resolve_kokoro_voice("aetheria") == "af_heart"
+    assert resolve_kokoro_voice("eve") == "af_bella"
+    assert resolve_kokoro_voice(None) == "bf_emma"
 
 
 def test_default_voice_is_af_heart():
@@ -80,7 +82,7 @@ def test_build_tts_service_eve_uses_kokoro_when_primary_kokoro(monkeypatch):
         elevenlabs_api_key=None,
     )
     assert service.provider_name == "kokoro"
-    assert service.voice_id == "af_heart"
+    assert service.voice_id == "af_bella"
 
 
 def test_build_tts_service_kernel_uses_f5_clone_when_primary_kokoro(monkeypatch):
