@@ -12,7 +12,7 @@ Architecture (pipecat 1.3.0):
         | TranscriptionFrame
     AgentLoopBridge
         | LLMFullResponseStart/Text/End
-    TTS (F5 primary / ElevenLabs fallback)
+    TTS (Kokoro primary / F5 leftover / ElevenLabs fallback)
         | TTSAudioRawFrame
     FirstAudioMetricsProbe (PR1)
         |
@@ -374,8 +374,9 @@ def build_voice_pipeline(
         transport.input() -> VAD -> stt -> bridge -> tts -> first_audio_probe
         -> transport.output()
 
-    F5-TTS uses ``adapter.agent_id`` as the voice registry key. ElevenLabs
-    keys are optional when ``SOVEREIGN_TTS_PRIMARY=f5tts``.
+    Kokoro maps ``adapter.agent_id`` to a local voice (Aetheria →
+    ``af_heart``). F5-TTS uses the agent id as the voice registry key.
+    ElevenLabs keys are optional when primary is kokoro or f5tts.
     """
     if aiohttp_session is None:
         aiohttp_session = aiohttp.ClientSession()
@@ -472,15 +473,16 @@ def build_voice_pipeline(
 
 
 def _f5_safe_adapter_agg(duplex: DuplexConfig) -> tuple[str, int]:
-    """F5 is clause/HTTP — TOKEN bridge flush chops playout. Force sentence."""
+    """Local synth (Kokoro / F5) — TOKEN bridge flush chops playout. Force sentence."""
     import os
 
     primary = (os.environ.get("SOVEREIGN_TTS_PRIMARY") or "f5tts").strip().lower()
     tts_agg = duplex.tts_agg
     flush = duplex.bridge_flush_chars
-    if primary == "f5tts" and tts_agg == "token":
+    if primary in ("f5tts", "kokoro") and tts_agg == "token":
         logger.info(
-            "F5-TTS: coercing adapter tts_agg token→sentence (avoids choppy speech)"
+            "%s: coercing adapter tts_agg token→sentence (avoids choppy speech)",
+            primary,
         )
         return "sentence", max(flush, 40)
     return tts_agg, flush

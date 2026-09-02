@@ -147,6 +147,8 @@ def test_message_thread_has_attach_control(room_app, agent):
     assert b"data-attach" in r.data
     assert b"data-file-input" in r.data
     assert b"body.attachments" in r.data
+    assert b"data-mic" in r.data
+    assert b"/voice/transcribe" in r.data or b"/voice/session/" in r.data
 
 
 def test_record_house_post_collab_chip(room_app):

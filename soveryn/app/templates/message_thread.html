@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
 <link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
+<link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
 <style>
   :root {
     --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
@@ -306,6 +307,80 @@
   }
   .composer-attach-btn:hover { opacity: 1; }
   .composer-attach-btn[hidden] { display: none; }
+  .composer-mic-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: transparent; color: var(--ink); opacity: 0.55;
+    font-size: 18px; cursor: pointer; flex-shrink: 0; line-height: 1;
+    padding: 0;
+  }
+  .composer-mic-btn:hover { opacity: 1; }
+  .composer-mic-btn[hidden] { display: none; }
+  .composer-mic-btn.is-live, .composer-mic-btn.is-recording {
+    opacity: 1; color: var(--gold);
+  }
+  .voice-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.94);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .voice-overlay.visible { display: flex; }
+  .voice-orb {
+    width: min(280px, 68vw);
+    height: min(280px, 68vw);
+    position: relative;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .voice-title {
+    margin-top: 36px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .voice-status {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--mute);
+    text-transform: uppercase;
+    min-height: 1.2em;
+  }
+  .voice-error {
+    position: absolute;
+    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    color: #d49696;
+    font-family: var(--mono);
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .voice-error.visible { opacity: 1; }
+  .voice-hangup {
+    position: absolute;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    border: 1px solid rgba(198,166,100,0.55);
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    padding: 14px 32px;
+    border-radius: 32px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .voice-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
   .bubble-images {
     display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;
   }
@@ -363,6 +438,8 @@
     <div class="composer-row">
       <button type="button" class="composer-attach-btn" data-attach
               title="Attach image" aria-label="Attach image">📎</button>
+      <button type="button" class="composer-mic-btn" data-mic
+              title="Voice" aria-label="Voice">🎤</button>
       <input type="file" data-file-input
              accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
              capture="environment" multiple hidden>
@@ -371,8 +448,20 @@
     </div>
   </form>
 
+    <div class="voice-overlay" data-voice-overlay role="dialog"
+         aria-modal="true" aria-label="Voice call" aria-hidden="true">
+      <div class="voice-orb" data-voice-orb data-state="idle" data-agent="aetheria"
+           role="img" aria-label="Living presence"></div>
+      <div class="voice-title" data-voice-title data-agent="aetheria">LIVE</div>
+      <div class="voice-status" data-voice-status>connecting&hellip;</div>
+      <div class="voice-error" data-voice-error></div>
+      <button class="voice-hangup" data-voice-hangup type="button">END CALL</button>
+      <audio class="voice-audio" data-voice-audio playsinline autoplay></audio>
+    </div>
+
 <script src="/messages-push-client.js?v=20260825c" defer></script>
 <script src="/static/citizen-icons.js?v=20260901bots3"></script>
+<script src="/static/voice/presence.js?v=alive5"></script>
 <script>
 (function () {
   // Fleet freeze: Vett/Scotty parked as Messages peers (engine room only).
@@ -1398,6 +1487,392 @@
     seen[agent] = new Date().toISOString();
     localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
   } catch (_) {}
+
+  // ─── Voice / mic (existing tower pipeline: Parakeet STT + F5-TTS duplex) ──
+  // Aetheria (in /voice/agents): composer mic starts the same WebRTC call as
+  // /chat Menu → Voice — POST /voice/session/<id>/offer.
+  // Eve / Kernel (no F5 clone): hold-to-stop dictation via POST /voice/transcribe
+  // → Parakeet :8087. Do not invent a new TTS engine.
+  const elVoiceOverlay = () => $("[data-voice-overlay]");
+  const elVoiceOrb     = () => $("[data-voice-orb]");
+  const elVoiceTitle   = () => $("[data-voice-title]");
+  const elVoiceStatus  = () => $("[data-voice-status]");
+  const elVoiceError   = () => $("[data-voice-error]");
+  const elVoiceHangup  = () => $("[data-voice-hangup]");
+  const elVoiceAudio   = () => $("[data-voice-audio]");
+  const elMicBtn       = () => $("[data-mic]");
+
+  let _voiceAgentsCache = null;
+  async function fetchVoiceAgents() {
+    if (_voiceAgentsCache !== null) return _voiceAgentsCache;
+    try {
+      const r = await fetch("/voice/agents");
+      if (!r.ok) { _voiceAgentsCache = []; return _voiceAgentsCache; }
+      const data = await r.json();
+      _voiceAgentsCache = data.agents || [];
+    } catch (e) {
+      _voiceAgentsCache = [];
+    }
+    return _voiceAgentsCache;
+  }
+
+  const VOICE_STATE = {
+    IDLE: "idle", CONNECTING: "connecting", LISTENING: "listening",
+    HEARING: "hearing", THINKING: "thinking", SPEAKING: "speaking",
+    INTERRUPTED: "interrupted",
+  };
+  const VOICE_LABEL = {
+    idle: "Ready", connecting: "Connecting…", listening: "Listening…",
+    hearing: "Hearing you…", thinking: "Thinking…", speaking: "Speaking…",
+    interrupted: "You first…",
+  };
+  const VOICE_ENTER = 0.055;
+  const VOICE_LEAVE = 0.028;
+  const VOICE_SILENCE_MS = 1400;
+  const VOICE_MIN_DWELL_MS = 280;
+  const VOICE_THINK_FALLBACK_MS = 8000;
+  const VOICE_EMA_ALPHA = 0.22;
+  const voice = {
+    pc: null, micStream: null, audioCtx: null,
+    outAnalyser: null, inAnalyser: null,
+    state: VOICE_STATE.IDLE, raf: null,
+    lastSpokenAt: 0, stateChangedAt: 0,
+    outEma: 0, inEma: 0, userActive: false, botActive: false,
+    presence: null, sessionAtStart: null,
+  };
+  const dictate = { rec: null, stream: null, chunks: [] };
+
+  function voiceEnsurePresence() {
+    const orb = elVoiceOrb();
+    if (!orb || typeof LivingPresence === "undefined") return null;
+    if (!voice.presence) {
+      voice.presence = LivingPresence.mount(orb, { agent: agent || "aetheria" });
+    } else {
+      voice.presence.setAgent(agent || "aetheria");
+      voice.presence.start();
+    }
+    return voice.presence;
+  }
+  function voicePausePresence() {
+    if (voice.presence) {
+      try { voice.presence.stop(); } catch (e) {}
+      voice.presence.setState("idle");
+    }
+  }
+  function voiceSetState(s, force) {
+    if (!force && s === voice.state) return;
+    const now = performance.now();
+    if (!force && voice.state !== VOICE_STATE.IDLE && voice.state !== VOICE_STATE.CONNECTING) {
+      const elapsed = now - voice.stateChangedAt;
+      const sticky = (
+        (voice.state === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+        (voice.state === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING)
+      );
+      if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+    }
+    voice.state = s;
+    voice.stateChangedAt = now;
+    const orb = elVoiceOrb();
+    const st = elVoiceStatus();
+    if (orb) orb.dataset.state = s;
+    if (st) st.textContent = VOICE_LABEL[s] || s;
+    if (voice.presence) voice.presence.setState(s);
+  }
+  function voiceShowError(msg) {
+    const e = elVoiceError();
+    if (!e) return;
+    e.textContent = msg;
+    e.classList.add("visible");
+    setTimeout(() => e.classList.remove("visible"), 5000);
+  }
+  function voiceAmp(an) {
+    const data = new Uint8Array(an.frequencyBinCount);
+    an.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / data.length);
+  }
+  function voiceGate(ema, wasActive) {
+    if (wasActive) return ema > VOICE_LEAVE;
+    return ema > VOICE_ENTER;
+  }
+  function voiceTick() {
+    if (!voice.outAnalyser) return;
+    const orb = elVoiceOrb();
+    if (!orb) return;
+    const outRaw = voiceAmp(voice.outAnalyser);
+    const innRaw = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    voice.outEma = voice.outEma + VOICE_EMA_ALPHA * (outRaw - voice.outEma);
+    voice.inEma  = voice.inEma  + VOICE_EMA_ALPHA * (innRaw - voice.inEma);
+    const now = performance.now();
+    const userSpeaking = voiceGate(voice.outEma, voice.userActive);
+    const botSpeaking  = voiceGate(voice.inEma, voice.botActive);
+    voice.userActive = userSpeaking;
+    voice.botActive = botSpeaking;
+    if (voice.presence) voice.presence.setLevels({ out: voice.outEma, inn: voice.inEma });
+    if (botSpeaking && userSpeaking && voice.state === VOICE_STATE.SPEAKING) {
+      voiceSetState(VOICE_STATE.INTERRUPTED, true);
+      setTimeout(() => { if (voice.pc) voiceSetState(VOICE_STATE.HEARING, true); }, 220);
+      voice.lastSpokenAt = now;
+    } else if (botSpeaking) {
+      voiceSetState(VOICE_STATE.SPEAKING);
+    } else if (userSpeaking) {
+      voiceSetState(VOICE_STATE.HEARING);
+      voice.lastSpokenAt = now;
+    } else {
+      if (voice.state === VOICE_STATE.HEARING && now - voice.lastSpokenAt > VOICE_SILENCE_MS) {
+        voiceSetState(VOICE_STATE.THINKING);
+      } else if (voice.state === VOICE_STATE.SPEAKING) {
+        voiceSetState(VOICE_STATE.LISTENING);
+      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > VOICE_THINK_FALLBACK_MS) {
+        voiceSetState(VOICE_STATE.LISTENING);
+      }
+    }
+    voice.raf = requestAnimationFrame(voiceTick);
+  }
+  function waitForIceGathering(pc, timeoutMs) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => { if (pc.iceGatheringState === "complete") finish(); };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      setTimeout(finish, timeoutMs || 600);
+    });
+  }
+  function openVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    const title = elVoiceTitle();
+    const orb = elVoiceOrb();
+    if (title) {
+      title.dataset.agent = agent;
+      title.textContent = (contact.name || agent) + " — LIVE";
+    }
+    if (orb) orb.dataset.agent = agent;
+    ov.classList.add("visible");
+    ov.setAttribute("aria-hidden", "false");
+    const pr = voiceEnsurePresence();
+    if (pr) pr.setState("connecting");
+  }
+  function closeVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    ov.classList.remove("visible");
+    ov.setAttribute("aria-hidden", "true");
+    voicePausePresence();
+    const orb = elVoiceOrb();
+    if (orb) { orb.dataset.state = "idle"; orb.style.transform = ""; }
+    const mic = elMicBtn();
+    if (mic) mic.classList.remove("is-live");
+  }
+  async function startVoiceCall() {
+    try {
+      await ensureSession();
+    } catch (e) {
+      voiceShowError("session error: " + e.message);
+      return;
+    }
+    voice.sessionAtStart = state.sessionId;
+    voice.outEma = 0; voice.inEma = 0;
+    voice.userActive = false; voice.botActive = false;
+    const mic = elMicBtn();
+    if (mic) mic.classList.add("is-live");
+    openVoiceOverlay();
+    voiceSetState(VOICE_STATE.CONNECTING, true);
+    const status = elVoiceStatus();
+    if (status) status.textContent = "Microphone…";
+    try {
+      voice.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true, noiseSuppression: true,
+          autoGainControl: true, channelCount: 1,
+        },
+        video: false,
+      });
+    } catch (e) {
+      voiceShowError("microphone access denied");
+      await endVoiceCall({ reloadHistory: false });
+      return;
+    }
+    if (status) status.textContent = "Connecting…";
+    voice.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (voice.audioCtx.state === "suspended") {
+      try { await voice.audioCtx.resume(); } catch (e) {}
+    }
+    const outSrc = voice.audioCtx.createMediaStreamSource(voice.micStream);
+    voice.outAnalyser = voice.audioCtx.createAnalyser();
+    voice.outAnalyser.fftSize = 512;
+    voice.outAnalyser.smoothingTimeConstant = 0.65;
+    outSrc.connect(voice.outAnalyser);
+    voice.pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    const audioTransceiver = voice.pc.addTransceiver("audio", { direction: "sendrecv" });
+    const micTrack = voice.micStream.getAudioTracks()[0];
+    if (micTrack) await audioTransceiver.sender.replaceTrack(micTrack);
+    voice.pc.addTransceiver("video", { direction: "sendrecv" });
+    voice.pc.ontrack = (ev) => {
+      if (ev.track.kind !== "audio") return;
+      const stream = new MediaStream([ev.track]);
+      const audioEl = elVoiceAudio();
+      if (audioEl) {
+        audioEl.srcObject = stream;
+        audioEl.play().catch(() => {});
+      }
+      if (voice.audioCtx) {
+        voice.inAnalyser = voice.audioCtx.createAnalyser();
+        voice.inAnalyser.fftSize = 512;
+        voice.inAnalyser.smoothingTimeConstant = 0.65;
+        voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      }
+    };
+    try {
+      const offer = await voice.pc.createOffer();
+      await voice.pc.setLocalDescription(offer);
+      if (status) status.textContent = "Negotiating…";
+      await waitForIceGathering(voice.pc, 600);
+      const local = voice.pc.localDescription || offer;
+      const resp = await fetch("/voice/session/" + voice.sessionAtStart + "/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: local.sdp, type: local.type, agent: state.agent }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error("signaling failed (" + resp.status + "): " + txt);
+      }
+      const answer = await resp.json();
+      await voice.pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+      voiceSetState(VOICE_STATE.LISTENING, true);
+      voiceTick();
+    } catch (e) {
+      console.error("voice start failed:", e);
+      voiceShowError(e.message || "voice connection failed");
+      await endVoiceCall({ reloadHistory: false });
+    }
+  }
+  async function endVoiceCall(opts) {
+    opts = opts || {};
+    const reloadHistory = opts.reloadHistory !== false;
+    if (voice.raf) { cancelAnimationFrame(voice.raf); voice.raf = null; }
+    if (voice.pc) { try { voice.pc.close(); } catch (e) {} voice.pc = null; }
+    if (voice.micStream) {
+      for (const t of voice.micStream.getTracks()) t.stop();
+      voice.micStream = null;
+    }
+    const audioEl = elVoiceAudio();
+    if (audioEl) { try { audioEl.srcObject = null; } catch (e) {} }
+    if (voice.audioCtx) { try { await voice.audioCtx.close(); } catch (e) {} voice.audioCtx = null; }
+    voice.outAnalyser = null; voice.inAnalyser = null;
+    voice.outEma = 0; voice.inEma = 0;
+    voice.userActive = false; voice.botActive = false;
+    voice.state = VOICE_STATE.IDLE;
+    closeVoiceOverlay();
+    if (reloadHistory && voice.sessionAtStart && voice.sessionAtStart === state.sessionId) {
+      try { await applyHistory(state.sessionId); } catch (e) {}
+    }
+    voice.sessionAtStart = null;
+  }
+
+  function pickRecorderMime() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+    for (let i = 0; i < types.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+    }
+    return "";
+  }
+  async function toggleDictation() {
+    const mic = elMicBtn();
+    if (dictate.rec && dictate.rec.state === "recording") {
+      try { dictate.rec.stop(); } catch (e) {}
+      return;
+    }
+    try {
+      dictate.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+        video: false,
+      });
+    } catch (e) {
+      alert("Microphone access denied");
+      return;
+    }
+    const mime = pickRecorderMime();
+    dictate.chunks = [];
+    dictate.rec = mime ? new MediaRecorder(dictate.stream, { mimeType: mime }) : new MediaRecorder(dictate.stream);
+    dictate.rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) dictate.chunks.push(ev.data); };
+    dictate.rec.onstop = async () => {
+      if (dictate.stream) {
+        for (const t of dictate.stream.getTracks()) t.stop();
+        dictate.stream = null;
+      }
+      if (mic) mic.classList.remove("is-recording");
+      const blob = new Blob(dictate.chunks, { type: dictate.rec.mimeType || "application/octet-stream" });
+      dictate.rec = null;
+      if (!blob.size) return;
+      try {
+        const r = await fetch("/voice/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": blob.type || "application/octet-stream" },
+          body: blob,
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alert((d.error || ("STT HTTP " + r.status)));
+          return;
+        }
+        const said = (d.text || "").trim();
+        if (!said) { alert("Heard nothing — try again"); return; }
+        const inp = $("[data-input]");
+        if (inp) {
+          inp.value = inp.value ? (inp.value.replace(/\s+$/, "") + " " + said) : said;
+          inp.focus();
+        }
+      } catch (e) {
+        alert("STT failed: " + (e.message || e));
+      }
+    };
+    if (mic) mic.classList.add("is-recording");
+    dictate.rec.start();
+  }
+
+  (function bindMic() {
+    const mic = elMicBtn();
+    if (!mic || inboxOnly) {
+      if (mic) mic.hidden = true;
+      return;
+    }
+    mic.dataset.mode = "dictate";
+    mic.title = "Speak to type";
+    fetchVoiceAgents().then((agents) => {
+      if (agents.indexOf(agent) >= 0) {
+        mic.dataset.mode = "call";
+        mic.title = "Voice call";
+      }
+    });
+    mic.addEventListener("click", () => {
+      if (mic.dataset.mode === "call") startVoiceCall();
+      else toggleDictation();
+    });
+    const hang = elVoiceHangup();
+    if (hang) hang.addEventListener("click", () => { endVoiceCall(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && voice.pc) {
+        e.preventDefault();
+        endVoiceCall();
+      }
+    });
+  })();
 
   bindKeyboardInset();
   loadLatestOrHistory()

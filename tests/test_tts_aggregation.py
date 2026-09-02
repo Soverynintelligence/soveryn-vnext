@@ -1,4 +1,4 @@
-"""TTS TextAggregationMode wiring — F5 uses TOKEN so Pipecat does not re-split."""
+"""TTS TextAggregationMode wiring — F5 keeps SENTENCE; adapter holds ~320."""
 
 from __future__ import annotations
 
@@ -18,11 +18,10 @@ def test_resolve_text_aggregation_mode():
     assert resolve_text_aggregation_mode("SENT") == TextAggregationMode.SENTENCE
 
 
-def test_f5_forces_token_aggregation(monkeypatch):
-    """Pipecat SENTENCE mode re-splits multi-sentence chunks into N F5 calls.
+def test_f5_keeps_sentence_aggregation(monkeypatch):
+    """F5 keeps SENTENCE; adapter 320-hold makes a normal reply one clip.
 
-    That caused ~1.5s gaps between 'I'm here.' / 'Ready when you are.'
-    F5 path must use TOKEN so each adapter chunk is one continuous synth.
+    TOKEN fragments each became a full HTTP synth and slurred Aetheria.
     """
     monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "f5tts")
     monkeypatch.delenv("SOVERYN_VOICE_TTS_AGG", raising=False)
@@ -32,11 +31,11 @@ def test_f5_forces_token_aggregation(monkeypatch):
         elevenlabs_api_key=None,
     )
     assert isinstance(svc, ProviderBackedTTSService)
-    assert svc.text_aggregation_mode == TextAggregationMode.TOKEN
+    assert svc.text_aggregation_mode == TextAggregationMode.SENTENCE
     assert svc.voice_id == "aetheria"
 
 
-def test_f5_forces_token_even_when_sentence_requested(monkeypatch):
+def test_f5_honors_sentence_aggregation(monkeypatch):
     monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "f5tts")
     svc = build_tts_service(
         agent_name="aetheria",
@@ -44,7 +43,7 @@ def test_f5_forces_token_even_when_sentence_requested(monkeypatch):
         elevenlabs_api_key=None,
         tts_agg="sentence",
     )
-    assert svc.text_aggregation_mode == TextAggregationMode.TOKEN
+    assert svc.text_aggregation_mode == TextAggregationMode.SENTENCE
 
 
 def test_adapter_single_flush_for_normal_reply():

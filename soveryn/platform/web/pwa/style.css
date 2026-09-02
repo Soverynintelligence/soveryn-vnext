@@ -96,7 +96,7 @@ body {
   height: var(--header-h);
   padding: 0 12px;
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: 44px 1fr auto;
   align-items: center;
 }
 .app-header-left, .app-header-right {

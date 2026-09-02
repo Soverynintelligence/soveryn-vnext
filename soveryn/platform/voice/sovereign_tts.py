@@ -10,9 +10,12 @@ Provider selection
 ``build_tts_service`` reads the ``SOVEREIGN_TTS_PRIMARY`` env var to pick
 between providers:
 
-- ``f5tts`` (default): :class:`F5TTSProvider`, talking to the local
+- ``kokoro``: :class:`KokoroTTSProvider`, in-process hexgrad Kokoro-82M
+  from a pinned local snapshot (Aetheria duplex path).
+- ``f5tts`` (code default): :class:`F5TTSProvider`, talking to the local
   service on ``F5TTS_URL`` (default ``http://127.0.0.1:8088``).
 - ``elevenlabs``: :class:`ElevenLabsTTSProvider`, the cloud fallback.
+  Not used as primary.
 
 Cutover / rollback is a single env-var change — no code changes required.
 """
@@ -46,6 +49,11 @@ from soveryn.platform.voice.providers.f5tts import (
     DEFAULT_SAMPLE_RATE as F5TTS_SAMPLE_RATE,
     DEFAULT_URL as F5TTS_DEFAULT_URL,
     F5TTSProvider,
+)
+from soveryn.platform.voice.providers.kokoro import (
+    DEFAULT_SAMPLE_RATE as KOKORO_SAMPLE_RATE,
+    KokoroTTSProvider,
+    resolve_kokoro_voice,
 )
 
 
@@ -283,16 +291,18 @@ def build_tts_service(
     """Construct the Pipecat TTSService, selecting provider via env / arg.
 
     Selection precedence: ``primary`` arg > ``SOVEREIGN_TTS_PRIMARY`` env
-    > ``DEFAULT_PRIMARY`` (``"f5tts"``).
+    > ``DEFAULT_PRIMARY`` (``"f5tts"``). Production Aetheria uses
+    ``SOVEREIGN_TTS_PRIMARY=kokoro``.
 
-    ``agent_name`` is the registry key the local F5-TTS service keys on
-    (e.g. ``"aetheria"``); ``elevenlabs_voice_id`` is the cloud UUID for
-    the fallback provider. Each provider gets the voice_id shape it expects.
+    ``agent_name`` is the registry key (e.g. ``"aetheria"``). Kokoro maps
+    that to a local voice stem (default ``af_heart``); F5-TTS keys on the
+    agent name; ``elevenlabs_voice_id`` is the cloud UUID for the fallback.
+    Each provider gets the voice_id shape it expects.
 
     ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``sentence`` (default — whole
     clauses for F5) or ``token`` (streaming providers / latency experiments).
-    **F5 always uses SENTENCE**: token fragments create choppy playout
-    because each fragment is a full HTTP synthesize with its own prosody.
+    F5 keeps SENTENCE. TOKEN fragments were each a full HTTP synth with
+    their own prosody (slur / chop). Adapter holds ~320 chars per turn.
 
     ``f5tts_url`` overrides the local service URL; useful for tests.
     ``aiohttp_session`` is accepted for API parity with the previous
@@ -302,17 +312,30 @@ def build_tts_service(
     selection = (primary or os.environ.get("SOVEREIGN_TTS_PRIMARY") or DEFAULT_PRIMARY).lower()
     agg_mode = resolve_text_aggregation_mode(tts_agg)
 
-    if selection == "f5tts":
-        # CRITICAL: Pipecat SENTENCE mode re-splits "A. B. C." into three
-        # run_tts calls → three F5 HTTP renders with ~1.5s gaps (choppy).
-        # TOKEN mode synthesizes each adapter chunk as one continuous clip.
-        # The adapter controls batch size (first line + remainder).
-        if agg_mode != TextAggregationMode.TOKEN:
+    if selection == "kokoro":
+        # Sentence aggregation: Kokoro is a local synth, not a token
+        # stream. TOKEN fragments would each be a full forward pass.
+        if agg_mode != TextAggregationMode.SENTENCE:
             logger.info(
-                "F5-TTS uses TOKEN aggregation (one continuous synth per "
-                "adapter chunk; SENTENCE re-split caused choppy playout)"
+                "Kokoro using %s aggregation (default SENTENCE)",
+                agg_mode,
             )
-            agg_mode = TextAggregationMode.TOKEN
+        provider = KokoroTTSProvider(sample_rate=KOKORO_SAMPLE_RATE)
+        return ProviderBackedTTSService(
+            provider=provider,
+            voice_id=resolve_kokoro_voice(agent_name),
+            sample_rate=KOKORO_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
+        )
+
+    if selection == "f5tts":
+        # Keep SENTENCE. Adapter already holds ~320 chars so a normal
+        # reply is one clip; TOKEN fragments slurred F5 prosody.
+        if agg_mode != TextAggregationMode.SENTENCE:
+            logger.info(
+                "F5-TTS using %s aggregation (default SENTENCE)",
+                agg_mode,
+            )
         provider = F5TTSProvider(
             url=f5tts_url or os.environ.get("F5TTS_URL", F5TTS_DEFAULT_URL),
             sample_rate=F5TTS_SAMPLE_RATE,
@@ -342,7 +365,7 @@ def build_tts_service(
 
     raise ValueError(
         f"unknown SOVEREIGN_TTS_PRIMARY={selection!r}; "
-        "expected 'f5tts' or 'elevenlabs'"
+        "expected 'kokoro', 'f5tts', or 'elevenlabs'"
     )
 
 

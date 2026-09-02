@@ -1533,8 +1533,8 @@ def _register_access_log(app: Flask) -> None:
 def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None:
     """Wire the voice blueprint for all voice-enabled agents.
 
-    Phase 2 (2026-06-15): F5-TTS is the primary provider — voice is wired
-    whenever ``SOVEREIGN_TTS_PRIMARY=f5tts`` (the default), independent of
+    Local TTS (Kokoro or F5) is the primary provider — voice is wired
+    whenever ``SOVEREIGN_TTS_PRIMARY`` is not ``elevenlabs``, independent of
     ElevenLabs configuration. When ``SOVEREIGN_TTS_PRIMARY=elevenlabs``,
     voice still requires the relevant ElevenLabs key + voice_id.
 
@@ -1576,7 +1576,7 @@ def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None
     else:
         logger.info(
             "voice disabled — no voice-enabled agents have a configured provider "
-            "(check SOVEREIGN_TTS_PRIMARY, F5-TTS service, ELEVENLABS_API_KEY)"
+            "(check SOVEREIGN_TTS_PRIMARY, Kokoro snapshot, F5-TTS service, ELEVENLABS_API_KEY)"
         )
 
 
