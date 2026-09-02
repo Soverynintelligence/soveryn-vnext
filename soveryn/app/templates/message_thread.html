@@ -450,9 +450,9 @@
 
     <div class="voice-overlay" data-voice-overlay role="dialog"
          aria-modal="true" aria-label="Voice call" aria-hidden="true">
-      <div class="voice-orb" data-voice-orb data-state="idle" data-agent="aetheria"
+      <div class="voice-orb" data-voice-orb data-state="idle" data-agent=""
            role="img" aria-label="Living presence"></div>
-      <div class="voice-title" data-voice-title data-agent="aetheria">LIVE</div>
+      <div class="voice-title" data-voice-title data-agent="">LIVE</div>
       <div class="voice-status" data-voice-status>connecting&hellip;</div>
       <div class="voice-error" data-voice-error></div>
       <button class="voice-hangup" data-voice-hangup type="button">END CALL</button>
@@ -1488,11 +1488,10 @@
     localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
   } catch (_) {}
 
-  // ─── Voice / mic (existing tower pipeline: Parakeet STT + F5-TTS duplex) ──
-  // Aetheria (in /voice/agents): composer mic starts the same WebRTC call as
-  // /chat Menu → Voice — POST /voice/session/<id>/offer.
-  // Eve / Kernel (no F5 clone): hold-to-stop dictation via POST /voice/transcribe
-  // → Parakeet :8087. Do not invent a new TTS engine.
+  // ─── Voice / mic (Parakeet STT + F5/Kokoro duplex) ──
+  // Agents listed in /voice/agents (Aetheria, Eve, Kernel) start the same
+  // WebRTC call as /chat Menu → Voice. Everyone else: hold-to-stop
+  // dictation via POST /voice/transcribe → Parakeet :8087.
   const elVoiceOverlay = () => $("[data-voice-overlay]");
   const elVoiceOrb     = () => $("[data-voice-orb]");
   const elVoiceTitle   = () => $("[data-voice-title]");
@@ -1854,6 +1853,10 @@
     }
     mic.dataset.mode = "dictate";
     mic.title = "Speak to type";
+    const orbEl = elVoiceOrb();
+    const titleEl = elVoiceTitle();
+    if (orbEl) orbEl.dataset.agent = agent || "aetheria";
+    if (titleEl) titleEl.dataset.agent = agent || "aetheria";
     fetchVoiceAgents().then((agents) => {
       if (agents.indexOf(agent) >= 0) {
         mic.dataset.mode = "call";

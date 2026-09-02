@@ -41,6 +41,9 @@ BLACKWELL_GPU_UUID = "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 # Agent names from the voice registry → Kokoro voice stem.
 AGENT_TO_VOICE = {
     "aetheria": "af_heart",
+    "eve": "af_heart",
+    "kernel": "af_heart",
+    # Folded names still resolve if something old asks.
     "vett": "af_heart",
     "scotty": "af_heart",
 }

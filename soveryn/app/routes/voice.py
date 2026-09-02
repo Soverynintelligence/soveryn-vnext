@@ -1,7 +1,6 @@
 """Voice blueprint — /voice landing + /voice/<agent> per-agent voice room.
 
-Aetheria-only in Phase 1. SUPPORTED_AGENTS extends to include vett +
-scotty in Phase 1.5 once their voice characters are sourced.
+Roster fold: Aetheria, Eve (Vett's clone), Kernel (Scotty's clone).
 
 WebRTC signaling: POST /voice/<agent>/offer receives the browser's SDP
 offer, returns an SDP answer via Pipecat's SmallWebRTCConnection. Per
@@ -51,8 +50,8 @@ bp = Blueprint(
 logger = logging.getLogger(__name__)
 
 
-# Phase 2 (2026-06-15): all three voices clone-locally via F5-TTS.
-SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
+# Live roster: Eve speaks Vett's F5 clone, Kernel speaks Scotty's.
+SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "kernel")
 
 
 def _voice_state() -> dict:
@@ -71,8 +70,7 @@ def _voice_state() -> dict:
 def voice_landing():
     """Agent picker landing page. Lists the agents with voice configured.
 
-    Phase 1: only Aetheria. Phase 1.5 adds Vett + Scotty as their voice
-    characters land. Agents not in voice_state are silently omitted.
+    Agents not in voice_state are silently omitted.
     """
     state = _voice_state()
     available = [agent for agent in SUPPORTED_AGENTS if agent in state]

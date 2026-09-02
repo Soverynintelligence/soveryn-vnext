@@ -20,6 +20,11 @@ def test_resolve_kokoro_voice_maps_aetheria():
     assert resolve_kokoro_voice("Aetheria") == "af_heart"
 
 
+def test_resolve_kokoro_voice_maps_folded_roster():
+    assert resolve_kokoro_voice("eve") == "af_heart"
+    assert resolve_kokoro_voice("kernel") == "af_heart"
+
+
 def test_resolve_kokoro_voice_passthrough_stem():
     assert resolve_kokoro_voice("bf_emma") == "bf_emma"
     assert resolve_kokoro_voice("af_bella") == "af_bella"

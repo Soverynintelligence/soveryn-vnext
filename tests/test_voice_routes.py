@@ -149,8 +149,7 @@ def test_voice_aetheria_room_renders(app_with_voice):
 
 
 def test_voice_unconfigured_agent_404(app_with_voice):
-    """Agents not in SUPPORTED_AGENTS (aetheria/vett/scotty) get 404.
-    Phase 2 (F5-TTS): vett and scotty are now supported; use 'ares' instead."""
+    """Agents not in SUPPORTED_AGENTS (aetheria/eve/kernel) get 404."""
     client = app_with_voice.test_client()
     rv = client.get("/voice/ares")
     assert rv.status_code == 404
@@ -184,8 +183,7 @@ def test_voice_offer_rejects_empty_sdp_string(app_with_voice):
 
 
 def test_voice_offer_rejects_unknown_agent(app_with_voice):
-    """POST /voice/<unknown>/offer for an agent not in SUPPORTED_AGENTS returns 404.
-    Phase 2 (F5-TTS): scotty is now supported; use 'nobody' instead."""
+    """POST /voice/<unknown>/offer for an agent not in SUPPORTED_AGENTS returns 404."""
     client = app_with_voice.test_client()
     rv = client.post(
         "/voice/nobody/offer",

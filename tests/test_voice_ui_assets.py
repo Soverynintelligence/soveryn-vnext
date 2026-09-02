@@ -42,6 +42,8 @@ def test_orb_css_defines_all_state_machine_states():
     content = css_path.read_text()
     for state in ("idle", "listening", "hearing", "thinking", "speaking", "interrupted"):
         assert f'data-state="{state}"' in content, f"missing state CSS: {state}"
+    assert 'data-agent="eve"' in content
+    assert 'data-agent="kernel"' in content
 
 
 def test_voice_html_template_loads_orb_css_and_voice_client():

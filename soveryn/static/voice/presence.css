@@ -14,6 +14,8 @@
 }
 
 .voice-presence[data-agent="aetheria"] { --vp-hue: 198, 166, 100; }
+.voice-presence[data-agent="eve"]      { --vp-hue: 107, 130, 144; }
+.voice-presence[data-agent="kernel"]   { --vp-hue: 196, 122, 110; }
 .voice-presence[data-agent="vett"]     { --vp-hue: 107, 130, 144; }
 .voice-presence[data-agent="scotty"]   { --vp-hue: 196, 122, 110; }
 

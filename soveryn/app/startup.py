@@ -1539,7 +1539,7 @@ def _maybe_register_voice(app: Flask, agent_loops: dict[str, AgentLoop]) -> None
     voice still requires the relevant ElevenLabs key + voice_id.
 
     Iterates ``VOICE_ENABLED_AGENTS`` from
-    ``soveryn.platform.voice.config`` — currently aetheria, vett, scotty.
+    ``soveryn.platform.voice.config`` — aetheria, eve, kernel.
     """
     import os
     from soveryn.platform.voice.config import VOICE_ENABLED_AGENTS, VoiceConfig
