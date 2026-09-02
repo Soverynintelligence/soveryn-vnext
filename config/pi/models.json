@@ -6,7 +6,7 @@
       "apiKey": "local",
       "compat": {
         "supportsDeveloperRole": false,
-        "supportsReasoningEffort": false
+        "supportsReasoningEffort": true
       },
       "models": [
         {
@@ -16,6 +16,14 @@
           "input": ["text", "image"],
           "contextWindow": 32768,
           "maxTokens": 16384,
+          "thinkingLevelMap": {
+            "off": "low",
+            "minimal": "low",
+            "low": "low",
+            "medium": "high",
+            "high": "max",
+            "xhigh": "max"
+          },
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]

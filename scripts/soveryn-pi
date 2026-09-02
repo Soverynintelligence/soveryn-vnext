@@ -4,11 +4,13 @@
 # Aider stays the surgical fallback: soveryn-aider --kernel
 #
 # Usage:
-#   soveryn-pi                         # TUI, cwd, GLM
+#   soveryn-pi                         # TUI, cwd, GLM (thinking medium)
+#   soveryn-pi --build                 # same, thinking low — long file/canvas jobs
 #   soveryn-pi /path/to/repo           # TUI in that project
 #   soveryn-pi --qwen                  # Aetheria Qwen :8090
 #   soveryn-pi -p "mend X"             # print one-shot
 #   kernel                             # same as soveryn-pi (~/bin/kernel)
+#   kernel --build                     # implement mode (thinking low)
 #
 # Compaction is off in config/pi/settings.json. Nothing leaves the machine
 # unless you change models.json baseUrl.
@@ -36,12 +38,15 @@ export PI_SKIP_VERSION_CHECK=1
 export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
 
 USE_QWEN=0
+BUILD=0
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--qwen" ]]; then
     USE_QWEN=1
   elif [[ "$arg" == "--flash" || "$arg" == "--glm" ]]; then
     USE_QWEN=0
+  elif [[ "$arg" == "--build" ]]; then
+    BUILD=1
   else
     ARGS+=("$arg")
   fi
@@ -63,7 +68,11 @@ if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
 fi
 
 echo "soveryn-pi: $LABEL" >&2
-echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384)" >&2
+if [[ "$BUILD" -eq 1 ]]; then
+  echo "soveryn-pi: BUILD thinking=low (skeleton write first; CoT must not eat the 16k cap)" >&2
+else
+  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium)" >&2
+fi
 
 # First non-flag arg that is an existing directory = project cwd.
 CWD=""
@@ -82,6 +91,7 @@ for a in "${REST[@]+"${REST[@]}"}"; do
 done
 EXTRA=()
 [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
+[[ $BUILD -eq 1 ]] && EXTRA+=(--thinking low)
 
 if [[ -n "$CWD" ]]; then
   cd "$CWD"
