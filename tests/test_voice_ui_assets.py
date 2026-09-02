@@ -46,6 +46,17 @@ def test_orb_css_defines_all_state_machine_states():
     assert 'data-agent="kernel"' in content
 
 
+def test_voice_landing_roles_follow_live_roster():
+    template_path = (
+        Path(__file__).parent.parent / "soveryn" / "app" / "templates" / "voice_landing.html"
+    )
+    content = template_path.read_text()
+    assert "agent == 'eve'" in content
+    assert "agent == 'kernel'" in content
+    assert "agent == 'vett'" not in content
+    assert "agent == 'scotty'" not in content
+
+
 def test_voice_html_template_loads_orb_css_and_voice_client():
     template_path = Path(__file__).parent.parent / "soveryn" / "app" / "templates" / "voice.html"
     content = template_path.read_text()

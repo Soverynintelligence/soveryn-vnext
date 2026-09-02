@@ -71,6 +71,28 @@ def test_build_tts_service_explicit_kokoro_overrides_env(monkeypatch):
     assert service.voice_id == "af_heart"
 
 
+def test_build_tts_service_eve_uses_f5_clone_when_primary_kokoro(monkeypatch):
+    monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "kokoro")
+    service = build_tts_service(
+        agent_name="eve",
+        elevenlabs_voice_id=None,
+        elevenlabs_api_key=None,
+    )
+    assert service.provider_name == "f5tts"
+    assert service.voice_id == "eve"
+
+
+def test_build_tts_service_kernel_uses_f5_clone_when_primary_kokoro(monkeypatch):
+    monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "kokoro")
+    service = build_tts_service(
+        agent_name="kernel",
+        elevenlabs_voice_id=None,
+        elevenlabs_api_key=None,
+    )
+    assert service.provider_name == "f5tts"
+    assert service.voice_id == "kernel"
+
+
 def test_unknown_primary_mentions_kokoro():
     with pytest.raises(ValueError, match="kokoro"):
         build_tts_service(
