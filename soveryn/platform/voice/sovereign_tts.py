@@ -17,8 +17,8 @@ between providers:
 - ``elevenlabs``: :class:`ElevenLabsTTSProvider`, the cloud fallback.
   Not used as primary.
 
-Eve and Kernel always ride F5 when primary is ``kokoro`` or ``f5tts`` —
-those are Vett's and Scotty's clones, keyed as ``eve`` / ``kernel``.
+Kernel keeps Scotty's F5 clone when primary is ``kokoro``. Eve is on
+Kokoro with Aetheria — the Vett clone was choppy.
 
 Cutover / rollback is a single env-var change — no code changes required.
 """
@@ -302,9 +302,8 @@ def build_tts_service(
     agent name; ``elevenlabs_voice_id`` is the cloud UUID for the fallback.
     Each provider gets the voice_id shape it expects.
 
-    Eve and Kernel keep the F5 clones (Vett / Scotty ref WAVs) even when
-    ``SOVEREIGN_TTS_PRIMARY=kokoro``. Aetheria stays on the selected
-    primary.
+    Kernel keeps Scotty's F5 clone when ``SOVEREIGN_TTS_PRIMARY=kokoro``.
+    Eve follows Kokoro with Aetheria.
 
     ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``sentence`` (default — whole
     clauses for F5) or ``token`` (streaming providers / latency experiments).
@@ -318,8 +317,8 @@ def build_tts_service(
     """
     selection = (primary or os.environ.get("SOVEREIGN_TTS_PRIMARY") or DEFAULT_PRIMARY).lower()
     agent_key = (agent_name or "").lower().strip()
-    # Roster fold: those two speak the inherited F5 clones, not Kokoro.
-    if selection == "kokoro" and agent_key in ("eve", "kernel"):
+    # Kernel still speaks Scotty's F5 clone. Eve is Kokoro.
+    if selection == "kokoro" and agent_key == "kernel":
         selection = "f5tts"
     agg_mode = resolve_text_aggregation_mode(tts_agg)
 
