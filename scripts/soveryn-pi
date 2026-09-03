@@ -4,12 +4,14 @@
 # Aider stays the surgical fallback: soveryn-aider --kernel
 #
 # Usage:
-#   soveryn-pi                         # TUI, cwd, GLM (thinking medium)
-#   soveryn-pi --build                 # same, thinking low — long file/canvas jobs
+#   soveryn-pi                         # TUI, cwd, GLM (Pi medium → GLM high)
+#   soveryn-pi --high                  # Pi high → GLM max (hungry; 16k includes CoT)
+#   soveryn-pi --build                 # thinking low — long file/canvas jobs
 #   soveryn-pi /path/to/repo           # TUI in that project
 #   soveryn-pi --qwen                  # Aetheria Qwen :8090
 #   soveryn-pi -p "mend X"             # print one-shot
 #   kernel                             # same as soveryn-pi (~/bin/kernel)
+#   kernel --high                      # GLM max
 #   kernel --build                     # implement mode (thinking low)
 #
 # Compaction is off in config/pi/settings.json. Nothing leaves the machine
@@ -38,7 +40,7 @@ export PI_SKIP_VERSION_CHECK=1
 export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
 
 USE_QWEN=0
-BUILD=0
+THINKING=""
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--qwen" ]]; then
@@ -46,7 +48,9 @@ for arg in "$@"; do
   elif [[ "$arg" == "--flash" || "$arg" == "--glm" ]]; then
     USE_QWEN=0
   elif [[ "$arg" == "--build" ]]; then
-    BUILD=1
+    THINKING="low"
+  elif [[ "$arg" == "--high" ]]; then
+    THINKING="high"
   else
     ARGS+=("$arg")
   fi
@@ -68,10 +72,12 @@ if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
 fi
 
 echo "soveryn-pi: $LABEL" >&2
-if [[ "$BUILD" -eq 1 ]]; then
+if [[ "$THINKING" == "low" ]]; then
   echo "soveryn-pi: BUILD thinking=low (skeleton write first; CoT must not eat the 16k cap)" >&2
+elif [[ "$THINKING" == "high" ]]; then
+  echo "soveryn-pi: HIGH thinking=high → GLM max (16k includes CoT; write early)" >&2
 else
-  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium)" >&2
+  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium → GLM high)" >&2
 fi
 
 # First non-flag arg that is an existing directory = project cwd.
@@ -91,7 +97,7 @@ for a in "${REST[@]+"${REST[@]}"}"; do
 done
 EXTRA=()
 [[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
-[[ $BUILD -eq 1 ]] && EXTRA+=(--thinking low)
+[[ -n "$THINKING" ]] && EXTRA+=(--thinking "$THINKING")
 
 if [[ -n "$CWD" ]]; then
   cd "$CWD"
