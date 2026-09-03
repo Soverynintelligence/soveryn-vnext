@@ -142,9 +142,8 @@ def create_app(
         }
         active_context_service = active_context_services["aetheria"]
 
-        # Recall wiring (Aetheria only). Prod lattice remains the embedding
-        # recall source; vnext lattice supplies the reviewed identity spine.
-        # Both are read-only in AgentLoop. Writes stay out of live recall.
+        # Recall wiring. Prod lattice remains house memory (Aetheria).
+        # Reference KB is a sibling store (intake docs) — not a lattice re-index.
         recall_lattice = None
         identity_spine_lattice = None
         if env.recall_lattice_db.is_file():
@@ -157,6 +156,15 @@ def create_app(
                 "recall_lattice_db missing at %s — Aetheria will run without recall",
                 env.recall_lattice_db,
             )
+
+        kb_store = None
+        try:
+            from soveryn.platform.kb.store import KBStore
+            kb_store = KBStore(env.data_root / "kb")
+        except ImportError:
+            logger.warning("turbovec missing — reference KB recall disabled")
+        except Exception:
+            logger.exception("reference KB failed to open — recall stays lattice-only")
 
         tool_registry = ToolRegistry()
 
@@ -1086,6 +1094,12 @@ def create_app(
                     kwargs["recall_threshold"] = 0.25
                     # embed_fn defaults to _default_embed (calls the embeddings
                     # ModelServer, now the Nemotron-8B server on :8096)
+                if kb_store is not None:
+                    kwargs["kb_store"] = kb_store
+                    kwargs["recall_k"] = max(int(kwargs.get("recall_k") or 0), 5)
+                    kwargs["recall_threshold"] = float(
+                        kwargs.get("recall_threshold") or 0.25
+                    )
                 # Soul: hard rules only on hot path (get_soul default). Origin
                 # essay is aetheria.origin.md via read_soul_origin tool (PR5).
                 kwargs["history_token_budget"] = 6_000
@@ -1208,6 +1222,15 @@ def create_app(
                 kwargs["max_tool_rounds"] = 12
                 kwargs["max_tokens"] = 8192
                 kwargs["context_window"] = 65536
+                # Reference KB (intake docs). Lattice memories are eve-scoped
+                # and usually empty; KB is the shared catalog.
+                if recall_lattice is not None:
+                    kwargs["lattice_store"] = recall_lattice
+                if kb_store is not None:
+                    kwargs["kb_store"] = kb_store
+                if recall_lattice is not None or kb_store is not None:
+                    kwargs["recall_k"] = 5
+                    kwargs["recall_threshold"] = 0.25
             # Fit prompt+completion to the live server window. GLM was 16k
             # (now 32k); still clamp if a server is ≤16k so we don't 400.
             _srv = next(

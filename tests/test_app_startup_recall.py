@@ -67,6 +67,23 @@ def test_aetheria_gets_recall_when_recall_lattice_exists(
     assert aetheria.lattice_store is not None
 
 
+def test_eve_gets_kb_recall_when_lattice_exists(
+    tmp_path, fake_chat, seeded_recall_lattice, fake_souls_dir, fake_pinned, monkeypatch
+):
+    monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
+    monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(seeded_recall_lattice))
+    conv = ConversationStore(tmp_path / "conv.db")
+    app = create_app(conv_store=conv)
+    eve = app.extensions["soveryn"]["agent_loops"]["eve"]
+    assert eve.recall_k == 5
+    assert eve.recall_threshold == pytest.approx(0.25)
+    assert eve.lattice_store is not None
+    # kb_store is None only if turbovec is missing in this env.
+    if eve.kb_store is not None:
+        assert eve.kb_store.root.name == "kb"
+
+
 
 def test_aetheria_gets_identity_spine_store_when_vnext_lattice_exists(
     tmp_path, fake_chat, seeded_recall_lattice, fake_souls_dir, fake_pinned, monkeypatch
@@ -127,8 +144,12 @@ def test_aetheria_runs_without_recall_if_recall_lattice_missing(
     app = create_app(conv_store=conv)
     state = app.extensions["soveryn"]
     aetheria = state["agent_loops"]["aetheria"]
-    assert aetheria.recall_k == 0
     assert aetheria.lattice_store is None
+    # Lattice missing: house memory off. Reference KB can still be attached.
+    if aetheria.kb_store is None:
+        assert aetheria.recall_k == 0
+    else:
+        assert aetheria.recall_k == 5
 
 
 def test_env_config_default_recall_path_matches_lattice_db():

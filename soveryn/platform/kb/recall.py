@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from soveryn.platform.kb.store import KBStore
+from soveryn.platform.kb.store import KBHit, KBStore
 from soveryn.platform.lattice.legacy import (
     DEFAULT_EMBED_LIMIT,
     DEFAULT_EMBED_THRESHOLD,
@@ -50,3 +50,29 @@ def recall(
 
     scored.sort(key=lambda item: item[0], reverse=True)
     return tuple(entry for _, entry in scored[:limit])
+
+
+def format_kb_hits(
+    hits: Sequence[KBHit],
+    *,
+    threshold: float,
+    limit: int,
+    max_chars: int = 400,
+) -> str:
+    """Render reference hits as a prelude block. Empty if nothing clears the bar."""
+    lines: list[str] = []
+    for hit in hits:
+        if hit.score < threshold:
+            continue
+        body = " ".join((hit.content or "").split())
+        if not body:
+            continue
+        if len(body) > max_chars:
+            body = body[: max_chars - 3] + "..."
+        src = hit.source_path or hit.chunk_id
+        lines.append(f"- ({src}) {body}")
+        if len(lines) >= limit:
+            break
+    if not lines:
+        return ""
+    return "Reference:\n" + "\n".join(lines)

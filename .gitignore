@@ -72,6 +72,8 @@ data/desks/
 data/tool_spill/
 data/citizen_shapes.json
 data/kb/
+data/intake/**
+!data/intake/README.md
 
 # Pi harness runtime (auth tokens if ever set, session transcripts)
 config/pi/auth.json

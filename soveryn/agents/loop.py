@@ -496,6 +496,7 @@ class AgentLoop:
         max_tool_rounds: int = 4,
         system_prompt: str | None = None,
         lattice_store: LatticeStore | None = None,
+        kb_store=None,
         identity_spine_store: LatticeStore | None = None,
         recall_k: int = 0,
         recall_threshold: float = 0.70,
@@ -554,10 +555,10 @@ class AgentLoop:
         if recall_k < 0:
             raise ValueError(f"recall_k must be >= 0 (got {recall_k})")
         if recall_k > 0:
-            if lattice_store is None:
+            if lattice_store is None and kb_store is None:
                 raise ValueError(
-                    "recall_k > 0 requires lattice_store; "
-                    "pass a LatticeStore instance or set recall_k=0"
+                    "recall_k > 0 requires lattice_store or kb_store; "
+                    "pass a store instance or set recall_k=0"
                 )
             if not (0.0 < recall_threshold <= 1.0):
                 raise ValueError(
@@ -565,6 +566,7 @@ class AgentLoop:
                     f"(got {recall_threshold})"
                 )
         self.lattice_store = lattice_store
+        self.kb_store = kb_store
         self.identity_spine_store = identity_spine_store
         self.recall_k = recall_k
         self.recall_threshold = recall_threshold
@@ -835,23 +837,39 @@ class AgentLoop:
             query_vector = self.embed_fn(user_message, prompt="query")
         except TypeError:
             query_vector = self.embed_fn(user_message)
-        ranked = self.lattice_store.find_nodes_by_embedding(
-            self.agent_name,
-            query_vector,
-            limit=self.recall_k,
-            threshold=self.recall_threshold,
-        )
-        facts: tuple = ()
-        impl = getattr(type(self.lattice_store), "find_canonical_facts", None)
-        if callable(impl) and getattr(impl, "__name__", "") == "find_canonical_facts":
-            try:
-                facts = impl(self.lattice_store, self.agent_name, user_message, limit=3) or ()
-            except Exception:
-                logging.getLogger(__name__).exception(
-                    "canonical fact rail failed; serving cosine recall only"
-                )
-                facts = ()
-        text = assemble_ranked_recall(ranked, fact_nodes=facts)
+        parts: list[str] = []
+        if self.lattice_store is not None:
+            ranked = self.lattice_store.find_nodes_by_embedding(
+                self.agent_name,
+                query_vector,
+                limit=self.recall_k,
+                threshold=self.recall_threshold,
+            )
+            facts: tuple = ()
+            impl = getattr(type(self.lattice_store), "find_canonical_facts", None)
+            if callable(impl) and getattr(impl, "__name__", "") == "find_canonical_facts":
+                try:
+                    facts = impl(
+                        self.lattice_store, self.agent_name, user_message, limit=3,
+                    ) or ()
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "canonical fact rail failed; serving cosine recall only"
+                    )
+                    facts = ()
+            lattice_text = assemble_ranked_recall(ranked, fact_nodes=facts)
+            if lattice_text:
+                parts.append(lattice_text)
+        if self.kb_store is not None:
+            from soveryn.platform.kb.recall import format_kb_hits
+
+            hits = self.kb_store.search(query_vector, k=self.recall_k)
+            kb_text = format_kb_hits(
+                hits, threshold=self.recall_threshold, limit=self.recall_k,
+            )
+            if kb_text:
+                parts.append(kb_text)
+        text = "\n\n".join(parts)
         self.session_context_cache.recall[session_id] = RecallCacheEntry(
             text=text,
             query_text=user_message,

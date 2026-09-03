@@ -40,6 +40,17 @@ def default_kb_dir(data_root: Path | None = None) -> Path:
     return Path(DEFAULT_DATA_ROOT) / "kb"
 
 
+def default_intake_dir(data_root: Path | None = None) -> Path:
+    if data_root is not None:
+        return Path(data_root) / "intake"
+    raw = os.environ.get("SOVERYN_DATA_ROOT")
+    if raw:
+        return Path(raw) / "intake"
+    from soveryn.config.loader import DEFAULT_DATA_ROOT
+
+    return Path(DEFAULT_DATA_ROOT) / "intake"
+
+
 @dataclass(frozen=True)
 class KBHit:
     chunk_id: str

@@ -77,6 +77,67 @@ def test_recall_lattice_only_skips_kb(tmp_path):
     assert all(e.source == "legacy_lattice" for e in hits)
 
 
+def test_format_kb_hits_skips_low_scores():
+    from soveryn.platform.kb.recall import format_kb_hits
+    from soveryn.platform.kb.store import KBHit
+
+    hits = (
+        KBHit("a#1", 0.1, "too weak", "intake/a.md", {}),
+        KBHit("b#1", 0.4, "EPDM liner 45 mil", "intake/pond.md", {}),
+    )
+    text = format_kb_hits(hits, threshold=0.25, limit=5)
+    assert text.startswith("Reference:")
+    assert "EPDM" in text
+    assert "too weak" not in text
+
+
+def test_iter_doc_files_includes_pdf_and_md(tmp_path):
+    from soveryn.platform.kb.chunk import iter_doc_files
+
+    (tmp_path / "note.md").write_text("# hi\n", encoding="utf-8")
+    (tmp_path / "scan.pdf").write_bytes(b"%PDF-1.4\n%\n")
+    (tmp_path / "skip.bin").write_bytes(b"\x00")
+    files = {p.name for p in iter_doc_files(tmp_path)}
+    assert files == {"note.md", "scan.pdf"}
+
+
+def test_read_doc_text_junk_pdf_is_empty(tmp_path):
+    from soveryn.platform.kb.chunk import read_doc_text
+
+    p = tmp_path / "junk.pdf"
+    p.write_bytes(b"%PDF-1.4 not a real file")
+    assert read_doc_text(p) == ""
+
+
+def test_build_recall_context_includes_kb_reference(tmp_path):
+    from soveryn.agents.loop import AgentLoop
+    from soveryn.inference.llama_server_client import ChatResponse
+    from soveryn.memory.conversation_store import ConversationStore
+
+    conv = ConversationStore(tmp_path / "c.db")
+    kb = KBStore(tmp_path / "kb")
+    kb.add("intake/pond.md#1", _vec(1), "EPDM liner 45 mil for CWG ponds")
+
+    def embed(text: str, prompt: str | None = None) -> tuple[float, ...]:
+        return _vec(1)
+
+    loop = AgentLoop(
+        "eve",
+        conv,
+        chat_fn=lambda req, server, timeout=60: ChatResponse(
+            content="ok", finish_reason="stop", tool_calls=None, usage=None, raw={},
+        ),
+        kb_store=kb,
+        recall_k=5,
+        recall_threshold=0.01,
+        embed_fn=embed,
+        soul_text="",
+    )
+    text = loop._build_recall_context("sid", "pond liner")
+    assert "Reference:" in text
+    assert "EPDM" in text
+
+
 def test_chunk_markdown_splits_headings():
     text = "# Title\n\nintro\n\n## One\n\nalpha\n\n## Two\n\nbeta"
     chunks = chunk_markdown(text, source_path="docs/x.md")
