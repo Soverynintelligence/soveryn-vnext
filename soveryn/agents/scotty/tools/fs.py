@@ -19,6 +19,9 @@ from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 # alongside the ~13K base prompt + 8K history budget (see startup
 # context_window wiring). Larger files return truncated=True; read in parts.
 READ_FILE_MAX_BYTES = 40 * 1024             # 40 KB
+# Spill files are recovery pointers. Dumping them hits SPILL_TRIGGER (~8k)
+# and the stub used to say "read_file that path" — infinite cascade.
+SPILL_REREAD_MAX_BYTES = 2_400
 LIST_DIRECTORY_MAX_ENTRIES = 200
 
 
@@ -44,24 +47,46 @@ def build_read_file_tool(
             raise ToolArgError(str(e))
         if not resolved.is_file():
             raise ToolArgError(f"path {path_arg!r} is not a regular file")
+        try:
+            offset = int(args.get("offset") or 0)
+        except (TypeError, ValueError):
+            offset = 0
+        if offset < 0:
+            offset = 0
+        is_spill = "tool_spill" in resolved.as_posix()
+        cap = SPILL_REREAD_MAX_BYTES if is_spill else READ_FILE_MAX_BYTES
+        try:
+            requested = int(args.get("max_bytes") or cap)
+        except (TypeError, ValueError):
+            requested = cap
+        max_bytes = max(1, min(requested, cap))
         size = resolved.stat().st_size
         with resolved.open("rb") as f:
-            raw = f.read(READ_FILE_MAX_BYTES + 1)
-        truncated = len(raw) > READ_FILE_MAX_BYTES
-        if truncated:
-            raw = raw[:READ_FILE_MAX_BYTES]
+            if offset:
+                f.seek(min(offset, size))
+            raw = f.read(max_bytes + 1)
+        truncated = len(raw) > max_bytes or (offset + min(len(raw), max_bytes)) < size
+        if len(raw) > max_bytes:
+            raw = raw[:max_bytes]
         try:
             content = raw.decode("utf-8")
         except UnicodeDecodeError:
-            # Fall back to replacement so the model sees something useful.
             content = raw.decode("utf-8", errors="replace")
-        return {
+        out = {
             "path": str(resolved),
             "size_bytes": size,
+            "offset": offset,
             "content": content,
             "truncated": truncated,
-            "max_bytes": READ_FILE_MAX_BYTES,
+            "max_bytes": max_bytes,
         }
+        if is_spill:
+            out["spill_reread"] = True
+            out["hint"] = (
+                "This is a lean-tail spill file. Do not read_file it again. "
+                "Page the original path with offset/max_bytes if you need a slice."
+            )
+        return out
 
     return ToolSpec(
         name="read_file",
@@ -77,6 +102,16 @@ def build_read_file_tool(
                         "escapes are rejected."
                     ),
                 },
+                "offset": {
+                    "type": "integer",
+                    "description": "Byte offset to start reading (default 0).",
+                },
+                "max_bytes": {
+                    "type": "integer",
+                    "description": (
+                        f"Max bytes to return (capped at {READ_FILE_MAX_BYTES})."
+                    ),
+                },
             },
             "required": ["path"],
             "additionalProperties": False,
@@ -85,8 +120,9 @@ def build_read_file_tool(
         description=(
             f"Read a single file from the vnext repository. Returns up to "
             f"{READ_FILE_MAX_BYTES // 1024} KB; sets truncated=true if the file "
-            f"is larger than that. UTF-8 decoded (with replacement on bad bytes). "
-            f"Paths outside the project root are rejected."
+            f"is larger. Pass offset/max_bytes to page. Do not read_file paths "
+            f"under tool_spill/ — those are already spilled stubs. UTF-8 decoded "
+            f"(replacement on bad bytes). Paths outside the project root are rejected."
         ),
     )
 

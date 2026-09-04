@@ -326,6 +326,30 @@ def test_add_peer_grows_shared_group(room_app):
     assert any("Added Eve" in t.content for t in hist if t.role == "system")
 
 
+def test_house_post_list_truncates_fat_bodies(room_app, monkeypatch):
+    from soveryn.citizens.registry import connect
+    from soveryn.citizens import post as house_post
+    from soveryn.platform.house_post_tools import register_house_post_tools
+    from soveryn.platform.tools.registry import ToolRegistry
+
+    app, conv, tmp_path = room_app
+    db = Path(app.config["CITIZENS_DB"])
+    monkeypatch.setenv("SOVERYN_CITIZENS_DB", str(db))
+    with connect(db) as conn:
+        house_post.send(
+            conn, from_id="jon", to_id="aetheria",
+            body="X" * 2000, at="2026-09-03T00:00:00Z", kind="memo",
+        )
+    reg = ToolRegistry(active_agents=("aetheria",), audit_hook=None)
+    register_house_post_tools(reg, owner_agent="aetheria")
+    tool = next(t for t in reg.iter_tools_for_agent("aetheria") if t.name == "house_post_list")
+    out = tool.handler({"box": "inbox", "limit": 5})
+    assert out["ok"] is True
+    assert out["posts"][0]["body_truncated"] is True
+    assert len(out["posts"][0]["body"]) < 500
+    assert out["posts"][0]["body_chars"] == 2000
+
+
 def test_house_post_send_commissions_peer(room_app, monkeypatch):
     """Aetheria house_post_send to Eve must enqueue a commission (wake path)."""
     from soveryn.citizens import commissions

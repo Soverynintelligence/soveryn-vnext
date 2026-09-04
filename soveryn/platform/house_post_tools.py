@@ -113,13 +113,24 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
     def list_posts(args: Mapping[str, Any]) -> dict[str, Any]:
         box = (args.get("box") or "inbox").strip()
         try:
-            limit = int(args.get("limit") or 20)
+            limit = int(args.get("limit") or 12)
         except (TypeError, ValueError):
-            limit = 20
+            limit = 12
+        limit = max(1, min(limit, 30))
+        preview = 400
         try:
             with connect(_db()) as conn:
                 rows = house_post.list_for(conn, owner_agent, box=box, limit=limit)
-            return {"ok": True, "posts": rows, "count": len(rows)}
+            posts = []
+            for row in rows:
+                item = dict(row)
+                body = str(item.get("body") or "")
+                if len(body) > preview:
+                    item["body"] = body[:preview] + "…"
+                    item["body_truncated"] = True
+                    item["body_chars"] = len(body)
+                posts.append(item)
+            return {"ok": True, "posts": posts, "count": len(posts)}
         except Exception as exc:
             return {"ok": False, "error": repr(exc)}
 

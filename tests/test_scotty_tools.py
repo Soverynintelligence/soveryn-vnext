@@ -111,6 +111,29 @@ def test_read_file_truncates_oversized(tmp_path, monkeypatch):
             test_file.unlink()
 
 
+def test_read_file_offset_pages(tmp_path):
+    target = tmp_path / "page.txt"
+    target.write_text("ABCDEFGHIJ")
+    tool = build_read_file_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(target), "offset": 3, "max_bytes": 4})
+    assert result["content"] == "DEFG"
+    assert result["offset"] == 3
+    assert result["truncated"] is True
+
+
+def test_read_file_spill_path_does_not_dump_40kb(tmp_path):
+    from soveryn.agents.scotty.tools.fs import SPILL_REREAD_MAX_BYTES
+
+    spill = tmp_path / "tool_spill" / "sess" / "fat.txt"
+    spill.parent.mkdir(parents=True)
+    spill.write_text("Z" * (READ_FILE_MAX_BYTES + 5000))
+    tool = build_read_file_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(spill)})
+    assert result["spill_reread"] is True
+    assert len(result["content"]) <= SPILL_REREAD_MAX_BYTES
+    assert result["truncated"] is True
+
+
 # ─── custom root (Vett's wider "view outside soveryn" scope) ─────────────────
 
 def test_read_file_honors_custom_root(tmp_path):

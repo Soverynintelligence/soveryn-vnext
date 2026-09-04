@@ -7,6 +7,7 @@ Hermes steal (mechanisms, not their compressor LLM):
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -48,6 +49,26 @@ def _safe_id(value: str, fallback: str) -> str:
     return cleaned or fallback
 
 
+def name_safe(tool_name: str) -> str:
+    return _safe_id(tool_name or "tool", "tool")
+
+
+def _spill_reread_path(tool_name: str, dumped: str) -> str | None:
+    """If this dump is a read_file of a tool_spill file, return that path."""
+    if (tool_name or "").strip() != "read_file":
+        return None
+    try:
+        data = json.loads(dumped)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    path = str(data.get("path") or "")
+    if "tool_spill" in path.replace("\\", "/"):
+        return path
+    return None
+
+
 def maybe_spill_tool_content(
     content: str,
     *,
@@ -64,6 +85,15 @@ def maybe_spill_tool_content(
     text = str(content or "")
     if len(text) <= SPILL_TRIGGER_CHARS:
         return text
+    # Cascade break: read_file of an existing spill dumps 40 KB JSON, which
+    # would spill again and tell the model to read_file the new spill.
+    reread_path = _spill_reread_path(tool_name, text)
+    if reread_path is not None:
+        return (
+            f"[{name_safe(tool_name)} refused to re-dump spill {reread_path}. "
+            "Do not read_file tool_spill files. Page the original with "
+            "read_file offset/max_bytes if you need a slice.]"
+        )
     sid = _safe_id(session_id or "anon", "anon")
     cid = _safe_id(call_id or "tool", "tool")
     name = _safe_id(tool_name or "tool", "tool")
@@ -82,7 +112,8 @@ def maybe_spill_tool_content(
     omitted = len(text) - SPILL_HEAD_CHARS - SPILL_TAIL_CHARS
     marker = (
         f"\n\n[{name} output {len(text)} chars — middle {max(0, omitted)} "
-        f"spilled to {rel}. read_file that path if you need the rest.]\n\n"
+        f"spilled to {rel}. Do not read_file the spill. Page the original "
+        f"with read_file offset/max_bytes if you need a slice.]\n\n"
     )
     return text[:SPILL_HEAD_CHARS] + marker + text[-SPILL_TAIL_CHARS:]
 

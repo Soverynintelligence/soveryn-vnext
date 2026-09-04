@@ -59,6 +59,24 @@ def test_spill_fat_body_writes_file_and_stub(tmp_path, monkeypatch):
     spilled = list((tmp_path / "tool_spill" / "sess-9").glob("*.txt"))
     assert len(spilled) == 1
     assert spilled[0].read_text(encoding="utf-8") == body
+    assert "Do not read_file the spill" in stub
+
+
+def test_spill_refuses_read_file_of_existing_spill(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
+    dump = json.dumps({
+        "path": str(tmp_path / "tool_spill" / "sess" / "c1.txt"),
+        "content": "Y" * (SPILL_TRIGGER_CHARS + 2000),
+        "truncated": True,
+        "size_bytes": 90_000,
+    })
+    stub = maybe_spill_tool_content(
+        dump, tool_name="read_file", call_id="c2", session_id="sess-9"
+    )
+    assert "refused to re-dump spill" in stub
+    assert not list((tmp_path / "tool_spill").rglob("c2.txt"))
 
 
 def test_reaper_drops_whole_turn_not_one_message():
