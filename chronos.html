@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHRONOS — editorial clock</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#efe9df;color:#141210;
+  font-family:'Space Mono',monospace;
+  cursor:default}
+/* paper grain */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;z-index:9;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E")}
+#stage{position:fixed;inset:0}
+/* giant background digit */
+#bgnum{
+  position:fixed;left:50%;top:50%;transform:translate(-50%,-52%);
+  font-family:'Archivo Black',sans-serif;font-size:min(58vh,58vw);line-height:1;
+  color:transparent;-webkit-text-stroke:2px rgba(20,18,16,.16);user-select:none;pointer-events:none}
+/* headline time */
+#time{
+  position:fixed;left:6vw;top:50%;transform:translateY(-50%);
+  font-family:'Archivo Black',sans-serif;
+  font-size:clamp(3rem,11vw,10rem);line-height:.95;letter-spacing:-.02em;z-index:2}
+#time .sec{color:#e33d1e;font-size:.35em;vertical-align:top}
+/* marquee rail */
+#rail{
+  position:fixed;left:0;right:0;top:12vh;border-top:3px solid #141210;border-bottom:3px solid #141210;
+  overflow:hidden;white-space:nowrap;padding:8px 0;z-index:3;background:rgba(239,233,223,.85)}
+#rail span{display:inline-block;font-size:13px;letter-spacing:.3em;text-transform:uppercase;
+  animation:slide 22s linear infinite}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+/* rotating stamp */
+#stamp{
+  position:fixed;right:6vw;top:50%;transform:translateY(-50%);
+  width:min(30vmin,220px);height:min(30vmin,220px);z-index:2}
+#stamp svg{width:100%;height:100%;animation:spin 24s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#stamp text{font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:4px;text-transform:uppercase;fill:#141210}
+/* footer meta */
+#meta{
+  position:fixed;left:6vw;right:6vw;bottom:6vh;display:flex;justify-content:space-between;
+  align-items:flex-end;z-index:2}
+#meta .block{font-size:12px;letter-spacing:.12em;line-height:1.8}
+#meta .k{color:#e33d1e;font-weight:700}
+#meta .bar{width:min(24vw,220px);height:8px;border:2px solid #141210;margin-top:6px;position:relative;overflow:hidden}
+#meta .bar i{position:absolute;inset:0;background:#141210;transform-origin:left;display:block}
+#date{position:fixed;right:6vw;top:6vh;font-size:12px;letter-spacing:.3em;text-transform:uppercase;text-align:right;z-index:2}
+@media(max-width:700px){#stamp{display:none}#meta .bar{width:30vw}}
+</style>
+</head>
+<body>
+<div id="bgnum">8</div>
+<div id="rail"><span id="railtxt"></span></div>
+<div id="date"></div>
+<div id="time"></div>
+<div id="stamp">
+  <svg viewBox="0 0 200 200">
+    <defs><path id="cp" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0"/></defs>
+    <circle cx="100" cy="100" r="96" fill="none" stroke="#141210" stroke-width="2"/>
+    <circle cx="100" cy="100" r="60" fill="none" stroke="#141210" stroke-width="1" stroke-dasharray="2 5"/>
+    <text><textPath href="#cp">EVERY SECOND IS A SMALL ETERNITY · CHRONOS ·</textPath></text>
+  </svg>
+</div>
+<div id="meta">
+  <div class="block"><span class="k">HOUR PROGRESS</span><div class="bar"><i id="bar"></i></div></div>
+  <div class="block" style="text-align:right"><span class="k">LOCAL</span><br><span id="tz"></span><br><span id="epoch"></span></div>
+</div>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const DAYS=['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+const MON=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+const WORDS=['NOW','TICK','TOCK','FLOW','PULSE','DRIFT','MOMENT','INSTANT','ETERNITY','PASSING','BREATH','STILLNESS'];
+
+$('tz').textContent=Intl.DateTimeFormat().resolvedOptions().timeZone.replace('_',' ');
+$('railtxt').textContent=(WORDS.join(' · ')+' · ').repeat(6);
+
+let lastSec=-1;
+function tick(){
+  const d=new Date();
+  const h=d.getHours()%12||12,m=d.getMinutes(),s=d.getSeconds(),ms=d.getMilliseconds();
+  if(s!==lastSec){
+    lastSec=s;
+    $('time').innerHTML=pad(h)+':'+pad(m)+'<span class="sec">'+pad(s)+'</span>';
+    $('bgnum').textContent=h;
+    $('date').textContent=DAYS[d.getDay()]+' · '+pad(d.getDate())+' '+MON[d.getMonth()]+' '+d.getFullYear();
+    $('epoch').textContent=Math.floor(d.getTime()/1000)+' EPOCH';
+  }
+  // smooth sub-second progress bar
+  $('bar').style.transform='scaleX('+((m*60+s+ms/1000)/3600).toFixed(4)+')';
+  requestAnimationFrame(tick);
+}
+tick();
+
+// press the background digit: it flips to the day of year
+document.addEventListener('click',()=>{
+  const b=$('bgnum');
+  const flip=b.style.opacity==='0';
+  if(flip){b.textContent=new Date().getHours()%12||12;b.style.opacity='';}
+  else{b.textContent=Math.ceil((new Date()-new Date(new Date().getFullYear(),0,0))/864e5);b.style.opacity='0';b.style.transition='opacity .4s';setTimeout(()=>b.style.opacity='1',10);b.style.webkitTextStroke='2px rgba(227,61,30,.35)';}
+});
+
+</script>
+</body>
+</html>

@@ -88,6 +88,10 @@ def test_glm_kernel_window_is_32k():
     if runtime.resolve_kernel_brain() == "glm":
         assert kernel.n_ctx == 32768
         assert kernel.host == "10.10.10.2" and kernel.port == 8001
+    if runtime.resolve_kernel_brain() == "flashnext":
+        assert kernel.n_ctx == 131072
+        assert kernel.host == "127.0.0.1" and kernel.port == 8888
+        assert kernel.model_alias == "qwen3.8-flash-next"
     eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
     assert eve.n_ctx == 65536
     assert eve.port == 8091
@@ -136,9 +140,11 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
     live_others = [s for s in others if not s.skip_preflight]
-    assert {s.port for s in live_others} == {8001, 8091, 8096}
-    # Local quadro slots stay on loopback; Spark tenants are remote.
-    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8091, 8096))
+    ports = {s.port for s in live_others}
+    assert {8091, 8096}.issubset(ports)
+    assert 8001 in ports or 8888 in ports
+    # Local quadro slots (and Flash-Next tunnel) stay on loopback; Spark :8001 is remote.
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8091, 8096, 8888))
     assert all(s.host != "127.0.0.1" for s in live_others if s.port == 8001)
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
@@ -196,12 +202,14 @@ def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
     assert runtime.resolve_kernel_brain() == "qwen38"
     monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flash")
     assert runtime.resolve_kernel_brain() == "flash"
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flashnext")
+    assert runtime.resolve_kernel_brain() == "flashnext"
 
 
 def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
     """Eve's Quadros Qwen3.8 seat names the same projector Aetheria already
-    loads. Kernel is Spark GLM — no llama mmproj, but GLM-5.3-Flash is
-    natively multimodal via vLLM image_url."""
+    loads. Kernel is vLLM (Flash-Next or GLM rollback) — no llama mmproj,
+    natively multimodal via image_url."""
     from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
 
     eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
@@ -261,9 +269,13 @@ def test_all_ports_includes_parakeet():
     and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    # 8001 = Spark vLLM (qwen-serve), added 2026-08-02 on :8000 and moved to
-    # :8001 on 2026-08-12 when laguna-serve was stopped and disabled.
-    assert ports == {8001, 8087, 8090, 8091, 8096}
+    # 8001 = Spark vLLM (qwen-serve). 8888 = Flash-Next tunnel when Kernel is flashnext.
+    assert {8090, 8091, 8096}.issubset(ports)
+    assert 8001 in ports or 8888 in ports
+    expected = {8001, 8087, 8090, 8091, 8096}
+    if runtime.resolve_kernel_brain() == "flashnext":
+        expected.add(8888)
+    assert ports == expected
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():

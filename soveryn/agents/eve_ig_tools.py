@@ -4,7 +4,9 @@ Always Gate-approved. Never cadence. No password. Session or needs_login.
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.platform.social.instagram_desk import InstagramDesk, default_desk
@@ -101,6 +103,50 @@ def build_eve_ig_post_tool(
     )
 
 
+def build_eve_photo_inbox_tool(*, owner_agent: str = "eve") -> ToolSpec:
+    def handler(_args: Mapping[str, Any]) -> Any:
+        from soveryn.platform.social.instagram_desk import (
+            DEFAULT_INBOX,
+            list_inbox_images,
+        )
+        inbox = DEFAULT_INBOX
+        paths = list_inbox_images(inbox)
+        items = []
+        for raw in paths[:40]:
+            p = Path(raw)
+            folder = p.parent.name if p.parent != inbox else "."
+            items.append(
+                {
+                    "path": raw,
+                    "name": p.name,
+                    "folder": folder,
+                    "mtime": time.ctime(p.stat().st_mtime) if p.is_file() else None,
+                }
+            )
+        return {
+            "ok": True,
+            "inbox": str(inbox),
+            "count": len(paths),
+            "showing": len(items),
+            "photos": items,
+            "note": (
+                "AirDrop / save-to-Files into Desktop/CWG-Instagram "
+                "(or before/after subfolders). Newest first."
+            ),
+        }
+
+    return ToolSpec(
+        name="eve_photo_inbox",
+        owner=owner_agent,
+        schema={"type": "object", "properties": {}, "additionalProperties": False},
+        handler=handler,
+        description=(
+            "List field photos in Desktop/CWG-Instagram (recursive, newest first). "
+            "Read-only. Jon drops phone pics there for before/after collages."
+        ),
+    )
+
+
 def register_eve_ig_post_tool(
     registry: ToolRegistry,
     *,
@@ -110,3 +156,4 @@ def register_eve_ig_post_tool(
     registry.register(
         build_eve_ig_post_tool(owner_agent=owner_agent, desk=desk)
     )
+    registry.register(build_eve_photo_inbox_tool(owner_agent=owner_agent))

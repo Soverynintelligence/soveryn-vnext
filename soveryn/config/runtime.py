@@ -29,7 +29,7 @@ ACTIVE_AGENTS: tuple[str, ...] = (
 #: one frontier mind. Vett folded into Eve; Scotty coding into Kernel.
 #: Grok is desktop Grok Bots, not a house chat agent.
 MESSAGES_CONTACTS: tuple[str, ...] = (
-    "aetheria",  # soul / face — Blackwell alone
+    "aetheria",  # house closer — Blackwell alone (GPU move is a later cut)
     "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
     "eve",       # ship posts (Canva / Signal) — Quadro Qwen 3.8
 )
@@ -206,10 +206,10 @@ def _vett_scotty_server() -> ModelServer:
     )
 
 
-# Kernel build brain — live default is GLM TP=2 on Sparks (`~/.soveryn/kernel_brain` = glm).
-# Switch:  scripts/switch_kernel_brain.sh glm|flash|qwen38
+# Kernel build brain — live default is Flash-Next TP=1 on spark2 (`~/.soveryn/kernel_brain`).
+# Switch:  scripts/switch_kernel_brain.sh flashnext|glm|flash|qwen38
 # Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash (test/fallback)
-# glm: Spark :8001 alias glm-5.3-flash (Lightning parked). Eve stays on Quadros Qwen 3.8.
+# glm remains a rollback key (EXL3 TP=2 :8001). Eve stays on Quadros Qwen 3.8.
 _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
     "flash": {
         # Router preset [kernel]; alias bench-flash kept so old callers still hit it.
@@ -220,6 +220,7 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
         "port": 8091,
         "path": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
         "role": "Kernel — house build brain (Qwen3.8-27B on Quadros :8091, ctx 65536)",
+        "n_ctx": 65536,
     },
     "qwen38": {
         "alias": "qwen38-27b",
@@ -232,22 +233,37 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
             "Kernel — house build brain (Qwen3.8-27B NVFP4 on Spark :8001). "
             "Shares the Spark slot with Vett/Scotty when that brain is loaded."
         ),
+        "n_ctx": 65536,
     },
     "glm": {
         "alias": "glm-5.3-flash",
         "house_name": "GLM 5.3 Flash",
-        "blurb": "EXL3 TR3 4bpw · TP=2 both Sparks :8001 · NVFP4 parked",
+        "blurb": "EXL3 TR3 4bpw · TP=2 both Sparks :8001 · parked 2026-09-06",
         "host": "10.10.10.2",
         "port": 8001,
         "path": "GLM-5.3-Flash-EXL3-TR3-4bpw",
-        "role": "Kernel — GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Spark1+Spark2 :8001",
+        "role": "Kernel — GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Spark1+Spark2 :8001 (rollback)",
+        "n_ctx": 32768,
+    },
+    "flashnext": {
+        "alias": "qwen3.8-flash-next",
+        "house_name": "Qwen3.8-Flash-Next",
+        "blurb": "NVFP4 TP=1 spark2 :8888 · PLE mmap vLLM · thinking via Pi",
+        "host": "127.0.0.1",
+        "port": 8888,
+        "path": "Qwen3.8-Flash-Next-NVFP4",
+        "role": (
+            "Kernel — Qwen3.8-Flash-Next NVFP4 TP=1 on spark2 "
+            "(tower 127.0.0.1:8888 SSH tunnel)"
+        ),
+        "n_ctx": 131072,
     },
 }
 _KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
 
 
 def resolve_kernel_brain() -> str:
-    """Return Kernel brain key: flash | qwen38 | glm."""
+    """Return Kernel brain key: flash | qwen38 | glm | flashnext."""
     env = (os.environ.get("SOVERYN_KERNEL_BRAIN") or "").strip().lower()
     if env in _KERNEL_BRAIN_PROFILES:
         return env
@@ -269,13 +285,14 @@ def _kernel_server() -> ModelServer:
         host=str(prof["host"]),
         port=int(prof["port"]),
         model_path=MODEL_ROOT / str(prof["path"]),
-        # Native GLM vision (vLLM image_url). llama mmproj is N/A.
+        # Native vision (vLLM image_url). llama mmproj is N/A.
         mmproj_path=None,
         role=str(prof["role"]),
         supports_multi_system_messages=False,
         model_alias=str(prof["alias"]),
+        # House chat: thinking off. Pi maps medium/high itself.
         chat_template_kwargs={"enable_thinking": False, "thinking": False},
-        n_ctx=32768 if key == "glm" else 65536,
+        n_ctx=int(prof.get("n_ctx") or 65536),
     )
 
 
@@ -288,7 +305,7 @@ def _eve_flash_server() -> ModelServer:
         port=int(flash["port"]),
         model_path=MODEL_ROOT / str(flash["path"]),
         mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
-        role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is on Spark GLM",
+        role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is Flash-Next :8888",
         supports_multi_system_messages=False,
         model_alias=str(flash["alias"]),
         chat_template_kwargs={"enable_thinking": False},

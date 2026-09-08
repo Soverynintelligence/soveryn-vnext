@@ -138,3 +138,10 @@ data/canva/
 
 # Google Business Profile OAuth tokens (never commit)
 data/gbp/
+
+# Google Calendar OAuth tokens (never commit)
+data/gcal/
+
+# Live tax books and receipt evidence (EIN, address, invoices). Public repo.
+docs/ops/tax/
+docs/ops/tax-cwg/

@@ -1,8 +1,8 @@
-"""Kernel — SOVERYN local build brain (GLM-5.3-Flash EXL3 under the hood).
+"""Kernel — SOVERYN local build brain (Flash-Next under the hood).
 
-House name: Kernel. Live weights: GLM-5.3-Flash TP=2 on both Sparks.
-API ``http://10.10.10.2:8001`` alias ``glm-5.3-flash``. DeepSeek Flash GGUF parked.
-Command Center uses this so operators can warm and talk without CLI.
+House name: Kernel. Live weights follow ``~/.soveryn/kernel_brain``
+(default: Qwen3.8-Flash-Next on 127.0.0.1:8888). Command Center uses this
+so operators can warm and talk without CLI.
 """
 
 from __future__ import annotations
@@ -17,14 +17,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROUTER_BASE = "http://10.10.10.2:8001"
-MODEL_ALIAS = "glm-5.3-flash"
-# Live weights are on the Sparks, not a tower GGUF. Path is display-only.
-ENTRY_SHARD = Path("/home/soverynspark/models/GLM-5.3-Flash-EXL3-TR3-4bpw")
+def _kernel_ep() -> tuple[str, str]:
+    from soveryn.config.runtime import _kernel_server
+
+    s = _kernel_server()
+    return f"http://{s.host}:{s.port}", s.model_alias
+
+
+ROUTER_BASE, MODEL_ALIAS = _kernel_ep()
+# Display-only. Live weights are on spark2 vLLM, not a tower GGUF.
+ENTRY_SHARD = Path("/home/soverynspark2/Qwen3.8-Flash-Next-Single-DGX-Spark")
 WEIGHTS_DIR = ENTRY_SHARD
 AIDER_CMD = (
-    "AIDER_BASE=http://10.10.10.2:8001/v1 "
-    "AIDER_MODEL=openai/glm-5.3-flash soveryn-aider"
+    f"AIDER_BASE={ROUTER_BASE}/v1 "
+    f"AIDER_MODEL=openai/{MODEL_ALIAS} soveryn-aider"
 )
 OPENCODE_CMD = "soveryn-opencode"
 HOUSE_NAME = "Kernel"
@@ -61,9 +67,8 @@ class BenchFlashStatus:
     talk_path: str = "/build"
     note: str = (
         "Kernel — house build brain. "
-        "OpenCode / Aider / Messages: GLM-5.3-Flash TP=2 on Sparks :8001 "
-        "(`soveryn-opencode`, `soveryn-aider --kernel`). "
-        "Quadros :8091 Qwen 3.8 is Eve + public, not Kernel."
+        "TTY is Pi (`kernel` / `soveryn-pi`). Aider: `soveryn-aider --kernel`. "
+        "OpenCode parked. Quadros :8091 Qwen 3.8 is Eve + public, not Kernel."
     )
     fetched_at: str = ""
 

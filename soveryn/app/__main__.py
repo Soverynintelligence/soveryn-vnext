@@ -129,7 +129,8 @@ def main(argv: list[str] | None = None, *, app_factory=create_app, runner=None) 
 
 def _default_runner(app: Flask, *, host: str, port: int) -> None:
     """Default runner: Flask's dev server with debug + reloader OFF."""
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    # threaded=True: SSE producer + /history poll + approval decide must coexist
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":

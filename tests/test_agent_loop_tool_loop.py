@@ -84,6 +84,62 @@ def test_single_tool_call_dispatched_and_result_threaded_back(conv_store):
     assert response.content == "echo result was hi"
 
 
+def test_tool_vision_spliced_onto_user_turn_not_dumped_in_tool_json(conv_store):
+    """look_at-style `_vision` URLs land on the next user turn as image_url
+    parts. The tool message JSON must not contain the data URL."""
+    img = "data:image/jpeg;base64,LOOKATPIXELS"
+
+    def handler(_args):
+        return {
+            "ok": True,
+            "files": [{"name": "IMG_6061.jpeg"}],
+            "count": 1,
+            "_vision": [img],
+        }
+
+    registry = _make_registry(handler, tool_name="look_at")
+    fake = _ScriptedChat([
+        ChatResponse(
+            content="",
+            finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "look_at", {"text": "before"}),),
+            usage={},
+            raw={},
+        ),
+        ChatResponse(
+            content="6061 is algae",
+            finish_reason="stop",
+            tool_calls=None,
+            usage={},
+            raw={},
+        ),
+    ])
+    sid = conv_store.new_session("aetheria")
+    loop = AgentLoop(
+        "aetheria", conv_store, chat_fn=fake,
+        tool_registry=registry, max_tool_rounds=4,
+    )
+    response = loop.process_message(sid, "which shot is ugly?")
+    assert response.content == "6061 is algae"
+    assert len(fake.calls) == 2
+    second = fake.calls[1]["request"].messages
+    tool_msg = next(m for m in second if m.role == "tool")
+    payload = json.loads(tool_msg.content)
+    assert payload["ok"] is True
+    assert "_vision" not in payload
+    assert "LOOKATPIXELS" not in tool_msg.content
+    users = [m for m in second if m.role == "user"]
+    last_user = users[-1]
+    assert isinstance(last_user.content, list)
+    urls = [
+        p["image_url"]["url"]
+        for p in last_user.content
+        if isinstance(p, dict) and p.get("type") == "image_url"
+    ]
+    assert img in urls
+    assert last_user.content[0]["text"].endswith("which shot is ugly?")
+
+
 def test_two_tool_calls_in_one_round_both_dispatched(conv_store):
     registry = _make_registry(lambda args: {"echoed": args["text"]})
     fake = _ScriptedChat([

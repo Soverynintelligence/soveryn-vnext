@@ -1,7 +1,7 @@
-"""Kernel's write harness from Messages — headless OpenCode on GLM.
+"""Kernel's write harness from Messages — headless OpenCode on Flash-Next.
 
 AgentLoop stays read/search in Messages. Mends go through
-``soveryn-opencode run --auto`` on Spark :8001.
+``soveryn-opencode run --auto`` on :8888. GLM :8001 is parked.
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ def build_run_opencode_tool(*, owner_agent: str = "kernel") -> ToolSpec:
                     "type": "string",
                     "description": (
                         "The mend. Concrete: files, expected behavior, how to "
-                        "verify. OpenCode edits and runs on GLM :8001."
+                        "verify. OpenCode edits and runs on Flash-Next :8888."
                     ),
                 },
                 "repo": {
@@ -186,7 +186,7 @@ def build_run_opencode_tool(*, owner_agent: str = "kernel") -> ToolSpec:
         },
         handler=handler,
         description=(
-            "Short soveryn-opencode run --auto on GLM :8001. Prefer run_aider "
+            "Short soveryn-opencode run --auto on Flash-Next :8888. Prefer run_aider "
             "for real patches. Do not use this for a lookup."
         ),
     )

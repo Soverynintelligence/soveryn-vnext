@@ -35,8 +35,8 @@ _PHONE_UA_RE = re.compile(
 
 
 # Phone Home Screen PWA caches /messages by URL. Bump this when the list chrome
-# changes so iOS is forced onto a new document (start_url + 302).
-_MESSAGES_BUILD = "20260901bots3"
+# or thread JS changes so iOS is forced onto a new document (start_url + 302).
+_MESSAGES_BUILD = "20260905bgturn2"
 _CITIZEN_ICONS_CSS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.css"
 _CITIZEN_ICONS_JS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.js"
 
@@ -250,9 +250,25 @@ def messages_push_client():
     )
 
 
+def _thread_build_redirect(agent: str):
+    """Same iOS cache-bust as the contacts list — /messages/<agent> is its own URL."""
+    if request.args.get("b") == _MESSAGES_BUILD:
+        return None
+    args = request.args.to_dict(flat=True)
+    args["b"] = _MESSAGES_BUILD
+    qs = urlencode(args)
+    dest = f"/messages/{agent}?{qs}" if qs else f"/messages/{agent}?b={_MESSAGES_BUILD}"
+    resp = redirect(dest, code=302)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
+
+
 @bp.get("/messages/<agent>")
 def message_thread_page(agent: str):
     """iMessage-style 1:1 thread — matches /messages list chrome."""
+    bounced = _thread_build_redirect(agent)
+    if bounced is not None:
+        return bounced
     return _serve_html(MESSAGE_THREAD_TEMPLATE, missing_label="Message thread")
 
 

@@ -7,7 +7,7 @@ from typing import Any
 
 from soveryn.platform.lattice.attic import AtticStore
 from soveryn.platform.lattice.fact_rail import CANONICAL_FACT_TAG
-from soveryn.platform.lattice.legacy import LatticeStore
+from soveryn.platform.lattice.legacy import LAYER_PRIVATE, LatticeStore
 from soveryn.platform.lattice.provenance import Provenance
 from soveryn.platform.lattice.receipt import ActionReceipt, ReceiptKind
 from soveryn.platform.lattice.types import Region
@@ -38,7 +38,19 @@ class LatticeWriter:
         provenance: Provenance,
         confirmed: bool = False,
         receipt: ActionReceipt | None = None,
+        layer: str | None = None,
+        node_type: str | None = None,
+        extra_tags: tuple[str, ...] = (),
+        embedding: tuple[float, ...] | None = None,
+        on_overflow: str = "raise",
     ) -> WriteResult:
+        """Write through the Attic gate.
+
+        Defaults preserve legacy behavior: ``node_type=region.value``,
+        ``layer=private``. Teach / house-fact callers pass ``layer`` /
+        ``node_type`` / ``extra_tags`` explicitly (e.g. global + fact +
+        entity:<slug>).
+        """
         normalized_region = region if isinstance(region, Region) else Region(str(region))
         decision = classify_write(region=normalized_region, kind=kind)
         earned = _earned_receipt(confirmed=confirmed, receipt=receipt)
@@ -66,12 +78,22 @@ class LatticeWriter:
             )
             return WriteResult(destination="attic", attic_id=record.id)
 
-        tags = (CANONICAL_FACT_TAG,) if _normalize_kind(kind) == "factual_anchor" else ()
+        resolved_type = node_type if node_type is not None else normalized_region.value
+        resolved_layer = layer if layer is not None else LAYER_PRIVATE
+        tags: list[str] = []
+        if _normalize_kind(kind) == "factual_anchor":
+            tags.append(CANONICAL_FACT_TAG)
+        for tag in extra_tags:
+            t = (tag or "").strip()
+            if t and t not in tags:
+                tags.append(t)
         node_id = self.lattice_store.write_node(
             self.agent,
             content,
-            node_type=normalized_region.value,
-            tags=tags or None,
+            node_type=resolved_type,
+            layer=resolved_layer,
+            tags=tuple(tags) or None,
+            embedding=embedding,
             provenance=_provenance_payload(
                 provenance,
                 confirmed=confirmed,
@@ -79,6 +101,7 @@ class LatticeWriter:
                 write_kind=kind,
                 receipt=earned,
             ),
+            on_overflow=on_overflow,
         )
         return WriteResult(destination="lattice", lattice_id=node_id)
 
@@ -94,6 +117,11 @@ def write(
     lattice_store: LatticeStore,
     attic_store: AtticStore,
     agent: str = "aetheria",
+    layer: str | None = None,
+    node_type: str | None = None,
+    extra_tags: tuple[str, ...] = (),
+    embedding: tuple[float, ...] | None = None,
+    on_overflow: str = "raise",
 ) -> WriteResult:
     writer = LatticeWriter(lattice_store=lattice_store, attic_store=attic_store, agent=agent)
     return writer.write(
@@ -103,6 +131,11 @@ def write(
         provenance=provenance,
         confirmed=confirmed,
         receipt=receipt,
+        layer=layer,
+        node_type=node_type,
+        extra_tags=extra_tags,
+        embedding=embedding,
+        on_overflow=on_overflow,
     )
 
 

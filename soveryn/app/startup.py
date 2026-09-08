@@ -286,7 +286,29 @@ def create_app(
         from soveryn.agents.aetheria.tools.comfyui_gen import (
             build_generate_image_tool,
         )
-        tool_registry.register(build_generate_image_tool())
+        tool_registry.register(build_generate_image_tool(owner_agent="aetheria"))
+        tool_registry.register(build_generate_image_tool(owner_agent="eve"))
+
+        # Lattice teach loop (S3) — Jon teaches once → shared current facts.
+        # Aetheria + Eve only in v1 (both desks). Uses AtticStore for the
+        # Writer gate; USER_REMEMBER receipt is minted inside remember_fact.
+        if recall_lattice is not None:
+            try:
+                from soveryn.platform.lattice.attic import AtticStore
+                from soveryn.platform.lattice.teach import build_remember_fact_tool
+
+                _teach_attic = AtticStore()
+                for _teach_agent in ("aetheria", "eve"):
+                    tool_registry.register(
+                        build_remember_fact_tool(
+                            recall_lattice,
+                            _teach_attic,
+                            _teach_agent,
+                            embed_fn=_default_embed,
+                        )
+                    )
+            except Exception:
+                logger.exception("remember_fact tool not registered")
 
         # Project Sandbox - Aetheria-only deterministic agency gym. State lives
         # under data/sandbox/runs/<run_id>/state.json so each seeded station run
@@ -741,16 +763,28 @@ def create_app(
                 allowed_roots=_intake_roots,
             )
 
+        # Two tax books (SOVERYN vs CWG). Same agents as PDF intake.
+        from soveryn.platform.ledgers.tools import (
+            register_ledger_tools as _register_ledger_tools,
+        )
+
+        for _ledger_agent in _INTAKE_AGENTS:
+            _register_ledger_tools(tool_registry, owner_agent=_ledger_agent)
+
         # Eve desk — decode_qr / make_qr / compose_image / make_canvas /
-        # draw_rect / draw_text. Same allowed roots as intake; writes land
-        # under data/media (Canva / compose_post). Not on the all-agent
-        # intake loop: do not give this to Kernel or Aetheria.
+        # draw_rect / draw_text / look_at / make_collage / file_away. Same
+        # allowed roots as intake plus CWG Instagram drop folder. Writes
+        # land under data/media, CWG-Instagram, or named file_away buckets.
+        # Not on the all-agent intake loop: do not give this to Kernel or
+        # Aetheria.
         from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
+        _cwg_ig = Path.home() / "Desktop" / "CWG-Instagram"
+        _qr_roots = _intake_roots + (_cwg_ig,)
         for _qr_agent in ("eve",):
             _register_qr_tools(
                 tool_registry,
                 owner_agent=_qr_agent,
-                allowed_roots=_intake_roots,
+                allowed_roots=_qr_roots,
                 media_root=env.data_root / "media",
             )
 
@@ -948,6 +982,11 @@ def create_app(
             register_gbp_tools(tool_registry, owner_agent="eve")
         except Exception:
             logger.exception("gbp tools not registered")
+        try:
+            from soveryn.platform.gcal import register_gcal_tools
+            register_gcal_tools(tool_registry, owner_agent="eve")
+        except Exception:
+            logger.exception("gcal tools not registered")
         try:
             from soveryn.platform.social.google_desk_tools import (
                 register_google_desk_tools,

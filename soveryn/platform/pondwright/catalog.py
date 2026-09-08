@@ -208,6 +208,64 @@ def search_catalog(
     }
 
 
+def find_apex_xlsx() -> Path | None:
+    """Newest Apex price-list xlsx in Pictures / Downloads / Desktop, else default."""
+    cands: list[Path] = []
+    for root in (
+        Path.home() / "Pictures",
+        Path.home() / "Downloads",
+        Path.home() / "Desktop",
+    ):
+        if not root.is_dir():
+            continue
+        for p in root.glob("*.xlsx"):
+            name = p.name.lower()
+            if "apex" in name or "master price" in name or "price list" in name:
+                cands.append(p)
+    pinned = apex_xlsx_path()
+    if pinned.is_file():
+        cands.append(pinned)
+    if not cands:
+        return None
+    return max(cands, key=lambda p: p.stat().st_mtime)
+
+
+def refresh_apex_catalog(*, xlsx: Path | None = None) -> dict[str, Any]:
+    """Rebuild catalog.json from the Apex xlsx. Reloads the in-process cache."""
+    src = xlsx or find_apex_xlsx()
+    if src is None or not src.is_file():
+        return {
+            "ok": False,
+            "error": "no_xlsx",
+            "hint": (
+                "Drop the Apex Master Price List .xlsx in Pictures, Downloads, "
+                "or Desktop, then call again."
+            ),
+        }
+    import importlib.util
+
+    importer = Path.home() / "pondpro" / "tools" / "import_apex_catalog.py"
+    if not importer.is_file():
+        return {"ok": False, "error": "importer_missing", "path": str(importer)}
+    spec = importlib.util.spec_from_file_location("import_apex_catalog", importer)
+    if spec is None or spec.loader is None:
+        return {"ok": False, "error": "importer_load"}
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    items = mod.import_catalog(src)
+    out = catalog_path()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(items) + "\n", encoding="utf-8")
+    load_catalog(force=True)
+    load_akt_catalog(force=True)
+    stats = catalog_stats()
+    stats["ok"] = True
+    stats["refreshed"] = "apex"
+    stats["xlsx_used"] = str(src)
+    stats["skus_written"] = len(items)
+    return stats
+
+
 def catalog_stats() -> dict[str, Any]:
     apex = load_catalog()
     akt = load_akt_catalog()

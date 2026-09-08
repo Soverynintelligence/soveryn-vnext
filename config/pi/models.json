@@ -1,30 +1,36 @@
 {
   "providers": {
     "kernel-glm": {
-      "baseUrl": "http://10.10.10.2:8001/v1",
+      "baseUrl": "http://127.0.0.1:8888/v1",
       "api": "openai-completions",
       "apiKey": "local",
       "compat": {
         "supportsDeveloperRole": false,
-        "supportsReasoningEffort": true
+        "supportsReasoningEffort": false,
+        "thinkingFormat": "qwen-chat-template"
       },
       "models": [
         {
-          "id": "glm-5.3-flash",
-          "name": "Kernel · GLM-5.3-Flash EXL3",
+          "id": "qwen3.8-flash-next",
+          "name": "Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
           "reasoning": true,
           "input": ["text", "image"],
-          "contextWindow": 32768,
+          "contextWindow": 262144,
           "maxTokens": 16384,
           "thinkingLevelMap": {
-            "off": "low",
-            "minimal": "low",
-            "low": "low",
-            "medium": "high",
-            "high": "max",
-            "xhigh": "max"
+            "off": "off",
+            "minimal": "off",
+            "low": "off",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "high"
           },
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     },
@@ -44,7 +50,12 @@
           "input": ["text"],
           "contextWindow": 32768,
           "maxTokens": 16384,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     }

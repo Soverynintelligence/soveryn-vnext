@@ -743,6 +743,331 @@ def build_draw_text_tool(
     )
 
 
+def _default_cwg_ig_root() -> Path:
+    return Path.home() / "Desktop" / "CWG-Instagram"
+
+
+def build_look_at_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    default_root: Path | None = None,
+) -> ToolSpec:
+    """Put house-disk photos on the current vision turn. Eve desk only."""
+    roots = allowed_roots if allowed_roots is not None else (
+        _default_cwg_ig_root(),
+        Path.home() / "soveryn_vnext" / "data",
+        Path.home() / "Downloads",
+    )
+    default = (default_root or _default_cwg_ig_root()).expanduser()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        from soveryn.platform.intake.look import (
+            MAX_FILES,
+            collect_photo_paths,
+            encode_for_vision,
+            find_side_dir,
+        )
+
+        raw_root = args.get("root") or ""
+        if raw_root is not None and not isinstance(raw_root, str):
+            raise ToolArgError("root must be a string")
+        root = (
+            Path(raw_root.strip())
+            if isinstance(raw_root, str) and raw_root.strip()
+            else default
+        )
+        resolved_root = _resolve_allowed(root, roots)
+
+        raw_path = args.get("path") or ""
+        if raw_path is not None and not isinstance(raw_path, str):
+            raise ToolArgError("path must be a string")
+        side = args.get("side") or ""
+        if side is not None and not isinstance(side, str):
+            raise ToolArgError("side must be a string")
+        side_s = side.strip().lower() if isinstance(side, str) else ""
+        if side_s and side_s not in {"before", "after"}:
+            raise ToolArgError("side must be \"before\" or \"after\"")
+
+        if isinstance(raw_path, str) and raw_path.strip():
+            target = _resolve_allowed(Path(raw_path.strip()), roots)
+        elif side_s:
+            found = find_side_dir(resolved_root, side_s)
+            if found is None:
+                return {
+                    "ok": False,
+                    "miss": "no_images",
+                    "files": [],
+                    "count": 0,
+                    "hint": (
+                        f"no folder whose name contains {side_s!r} under "
+                        f"{resolved_root}"
+                    ),
+                }
+            target = _resolve_allowed(found, roots)
+        else:
+            target = resolved_root
+
+        pick = args.get("pick") or ""
+        if pick is not None and not isinstance(pick, str):
+            raise ToolArgError("pick must be a string")
+        max_n = args.get("max", MAX_FILES)
+        max_n = MAX_FILES if max_n is None else _as_int("max", max_n)
+        if max_n is None or max_n < 1 or max_n > MAX_FILES:
+            raise ToolArgError(f"max must be an integer from 1 to {MAX_FILES}")
+
+        paths = collect_photo_paths(
+            target,
+            pick=pick.strip() if isinstance(pick, str) and pick.strip() else None,
+            max_files=int(max_n),
+        )
+        if not paths:
+            return {
+                "ok": False,
+                "miss": "no_images",
+                "files": [],
+                "count": 0,
+                "path": str(target),
+            }
+
+        files: list[dict[str, Any]] = []
+        vision: list[str] = []
+        for p in paths:
+            try:
+                vision.append(encode_for_vision(p))
+            except Exception as exc:  # noqa: BLE001 — skip unreadables
+                files.append({
+                    "name": p.name,
+                    "path": str(p),
+                    "miss": type(exc).__name__,
+                })
+                continue
+            files.append({"name": p.name, "path": str(p)})
+        if not vision:
+            return {
+                "ok": False,
+                "miss": "unreadable",
+                "files": files,
+                "count": 0,
+                "path": str(target),
+            }
+        return {
+            "ok": True,
+            "path": str(target),
+            "files": files,
+            "count": len(vision),
+            "hint": (
+                "Photos are on this turn as images. Name what is in each "
+                "frame, then make_collage with pick_before/pick_after. "
+                "Do not guess from filenames."
+            ),
+            "_vision": vision,
+        }
+
+    return ToolSpec(
+        name="look_at",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "side": {
+                    "type": "string",
+                    "description": (
+                        "\"before\" or \"after\" — opens the matching folder "
+                        "under CWG-Instagram (handles trailing spaces in "
+                        "the folder name)."
+                    ),
+                },
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute file or folder to look at. Optional if "
+                        "side is set. Default is ~/Desktop/CWG-Instagram."
+                    ),
+                },
+                "pick": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments "
+                        "(IMG_6061, 6062, …), in order."
+                    ),
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Max photos this look (1–8, default 8).",
+                },
+                "root": {
+                    "type": "string",
+                    "description": (
+                        "Parent of before/after folders. Default "
+                        "~/Desktop/CWG-Instagram."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Look at photos on disk so you can see the frames (not just "
+            "filenames). Use this before make_collage: look_at side=before, "
+            "then side=after, then pick IMG numbers from what you saw. "
+            "Writes nothing. Caps at 8 thumbnails per call."
+        ),
+    )
+
+
+def build_make_collage_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    default_root: Path | None = None,
+) -> ToolSpec:
+    """CWG Instagram before/after collage. Eve desk only."""
+    roots = allowed_roots if allowed_roots is not None else (
+        _default_cwg_ig_root(),
+        Path.home() / "soveryn_vnext" / "data",
+        Path.home() / "Downloads",
+    )
+    default = (default_root or _default_cwg_ig_root()).expanduser()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_root = args.get("root") or ""
+        if raw_root is not None and not isinstance(raw_root, str):
+            raise ToolArgError("root must be a string")
+        root = Path(raw_root.strip()) if isinstance(raw_root, str) and raw_root.strip() else default
+        resolved = _resolve_allowed(root, roots)
+        title = args.get("title") or "Pond Clean-Out"
+        if not isinstance(title, str) or not title.strip():
+            raise ToolArgError("title must be a non-empty string")
+        max_n = args.get("max", 4)
+        max_n = 4 if max_n is None else _as_int("max", max_n)
+        if max_n is None or max_n < 1 or max_n > 8:
+            raise ToolArgError("max must be an integer from 1 to 8")
+        pick_b = args.get("pick_before") or args.get("pick_b")
+        pick_a = args.get("pick_after") or args.get("pick_a")
+        if pick_b is not None and not isinstance(pick_b, str):
+            raise ToolArgError("pick_before must be a string")
+        if pick_a is not None and not isinstance(pick_a, str):
+            raise ToolArgError("pick_after must be a string")
+        from soveryn.platform.intake.collage import build_before_after_collage
+
+        return build_before_after_collage(
+            resolved,
+            title=title.strip(),
+            max_per_side=int(max_n),
+            pick_before=pick_b.strip() if isinstance(pick_b, str) and pick_b.strip() else None,
+            pick_after=pick_a.strip() if isinstance(pick_a, str) and pick_a.strip() else None,
+        ).as_dict()
+
+    return ToolSpec(
+        name="make_collage",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": (
+                        "Headline under CAROLINA WATER GARDENS "
+                        "(default Pond Clean-Out)."
+                    ),
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Max photos per BEFORE/AFTER column (1–8, default 4).",
+                },
+                "pick_before": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments to pick "
+                        "from *before* folders, in order."
+                    ),
+                },
+                "pick_after": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments to pick "
+                        "from *after* folders, in order."
+                    ),
+                },
+                "root": {
+                    "type": "string",
+                    "description": (
+                        "Folder that contains *before* / *after* subfolders. "
+                        "Default ~/Desktop/CWG-Instagram."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Build a Carolina Water Gardens Instagram before/after collage "
+            "(1080×1350 PNG) from *before* and *after* photo folders. "
+            "Writes under CWG-Instagram/collages/. Not compose_image. "
+            "Use for pond clean-out posts. miss=no_images if those folders "
+            "are empty. If you have not seen the photos, call look_at "
+            "first — do not guess IMG numbers from filenames."
+        ),
+    )
+
+
+def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
+    """Eve files a Downloads/Desktop item into a named house bucket."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        from soveryn.platform.intake.file_away import file_away
+
+        src = args.get("path") or args.get("src") or ""
+        dest = args.get("dest") or args.get("bucket") or ""
+        if not isinstance(src, str) or not src.strip():
+            raise ToolArgError("path must be a non-empty string")
+        if not isinstance(dest, str) or not dest.strip():
+            raise ToolArgError(
+                "dest must be models, cwg_ig, cwg_evidence, "
+                "soveryn_evidence, pictures, or installers"
+            )
+        return file_away(src.strip(), dest.strip())
+
+    return ToolSpec(
+        name="file_away",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "File or folder under ~/Downloads or ~/Desktop."
+                    ),
+                },
+                "dest": {
+                    "type": "string",
+                    "description": (
+                        "Bucket: models (.gguf → /mnt/soveryn_models/GGUF), "
+                        "cwg_ig (pond photos → Desktop/CWG-Instagram), "
+                        "cwg_evidence (CWG receipt image/PDF), "
+                        "soveryn_evidence (SOVERYN receipt), "
+                        "pictures (iCloud dumps), "
+                        "installers (.deb/.AppImage). "
+                        "Receipts still need ledger_ingest after filing."
+                    ),
+                },
+            },
+            "required": ["path", "dest"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Move one Downloads or Desktop item into a house bucket. "
+            "Use when Jon says clean/file Downloads. look_at photos first. "
+            "GGUF → dest=models. Pond shots → cwg_ig. Receipts → "
+            "cwg_evidence or soveryn_evidence then ledger_ingest. "
+            "Does not delete. Does not overwrite. Not a free mv."
+        ),
+    )
+
+
 def register_qr_tools(
     registry: ToolRegistry,
     *,
@@ -789,4 +1114,19 @@ def register_qr_tools(
             allowed_roots=allowed_roots,
             media_root=media_root,
         )
+    )
+    registry.register(
+        build_look_at_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_make_collage_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_file_away_tool(owner_agent=owner_agent)
     )

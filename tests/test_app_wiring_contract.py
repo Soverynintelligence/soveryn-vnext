@@ -156,6 +156,14 @@ def test_kernel_and_eve_request_direction(app):
     assert "request_direction" in eve
 
 
+def test_eve_has_generate_image_kernel_does_not(app):
+    eve = _tool_names(_loops(app)["eve"], "eve")
+    assert "generate_image" in eve
+    registry = _ext(app)["tool_registry"]
+    kernel = {t.name for t in registry.iter_tools_for_agent("kernel")}
+    assert "generate_image" not in kernel
+
+
 def test_eve_has_decode_qr_kernel_does_not(app):
     """Desk tools are Eve-only. Vett is merged into Eve; Scotty is off chat.
 
@@ -166,17 +174,14 @@ def test_eve_has_decode_qr_kernel_does_not(app):
     desk = (
         "decode_qr", "make_qr", "compose_image",
         "make_canvas", "draw_rect", "draw_text",
+        "look_at", "make_collage", "file_away",
     )
     for tool in desk:
         assert tool in eve, f"eve missing {tool!r}"
     registry = _ext(app)["tool_registry"]
     for agent in ("kernel", "aetheria"):
         names = {t.name for t in registry.iter_tools_for_agent(agent)}
-        desk = (
-        "decode_qr", "make_qr", "compose_image",
-        "make_canvas", "draw_rect", "draw_text",
-    )
-    for tool in desk:
+        for tool in desk:
             assert tool not in names, f"{agent} must not have {tool}"
 
 

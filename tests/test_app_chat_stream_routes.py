@@ -248,3 +248,86 @@ def test_chat_stream_rejects_oversized_attachment(app_state):
 @pytest.mark.parametrize("agent", ["aetheria", "eve"])
 def test_chat_stream_accepts_attachments_on_vision_capable_agents(app_state, agent):
     """Aetheria is the live vision door. Eve uses the Qwen3.8-27B projector. Vett/Scotty are folded."""
+
+
+def test_chat_stream_client_disconnect_still_saves_assistant(tmp_path):
+    """Closing the SSE generator mid-turn must not abort AgentLoop.
+
+    Mobile Messages backgrounds kill the fetch; the server must finish the
+    turn and persist the assistant reply for reconnect/poll.
+    """
+    import threading
+    import time
+
+    conv = ConversationStore(tmp_path / "conv.db")
+    gate = threading.Event()
+
+    def stream_fn(request, server, timeout=120.0):
+        def _g():
+            yield StreamChunk(
+                delta="hello",
+                finish_reason=None,
+                tool_calls_delta=None,
+                usage=None,
+                raw={},
+            )
+            # Block until the client-side generator has closed (disconnect).
+            assert gate.wait(timeout=5.0)
+            yield StreamChunk(
+                delta=" world",
+                finish_reason="stop",
+                tool_calls_delta=None,
+                usage={"prompt_tokens": 1, "completion_tokens": 2},
+                raw={},
+            )
+        return _g()
+
+    fake_chat = lambda req, server, timeout=60: ChatResponse(
+        content="hello world", finish_reason="stop", tool_calls=None, usage=None, raw={}
+    )
+    loops = {
+        n: AgentLoop(n, conv, chat_fn=fake_chat, stream_fn=stream_fn)
+        for n in ACTIVE_AGENTS
+    }
+    app = create_app(conv_store=conv, agent_loops=loops)
+    app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
+    app.config["DEFER_CHAT"] = False
+    client = app.test_client()
+    s = client.post(
+        "/sessions",
+        data=json.dumps({"agent": "eve"}),
+        content_type="application/json",
+    )
+    sid = json.loads(s.data)["session_id"]
+
+    with app.test_request_context(
+        "/chat_stream",
+        method="POST",
+        data=json.dumps({"agent": "eve", "session_id": sid, "message": "hi"}),
+        content_type="application/json",
+    ):
+        from soveryn.app.routes import chat as chat_routes
+
+        resp = chat_routes.chat_stream()
+        assert resp.status_code == 200
+        gen = resp.response
+        it = iter(gen)
+        first = next(it)
+        first_s = first if isinstance(first, str) else first.decode("utf-8", "replace")
+        assert "hello" in first_s or "token" in first_s
+        # Simulate client disconnect while producer is blocked on gate.
+        close = getattr(gen, "close", None) or getattr(it, "close", None)
+        if close:
+            close()
+        gate.set()
+
+    deadline = time.time() + 5.0
+    assistant = []
+    while time.time() < deadline:
+        turns = conv.load_history(sid)
+        assistant = [t for t in turns if t.role == "assistant"]
+        if assistant and "hello" in (assistant[-1].content or ""):
+            break
+        time.sleep(0.05)
+    assert assistant, "assistant turn was not saved after client disconnect"
+    assert "hello" in (assistant[-1].content or "")

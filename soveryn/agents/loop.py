@@ -250,6 +250,43 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text or "") // 4)
 
 
+def _splice_images_onto_last_user(
+    messages: tuple[ChatMessage, ...], urls: tuple[str, ...]
+) -> tuple[ChatMessage, ...]:
+    """Append image_url parts to the last user message (in-flight only).
+
+    look_at (and any tool that queues `_vision`) cannot put pixels on a
+    role=tool message — Qwen mmproj reads images on the user turn. Same
+    splice shape as chat attachments.
+    """
+    if not urls:
+        return messages
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].role != "user":
+            continue
+        msg = messages[i]
+        if isinstance(msg.content, list):
+            parts = list(msg.content)
+        else:
+            parts = [{"type": "text", "text": msg.content or ""}]
+        existing = {
+            (p.get("image_url") or {}).get("url")
+            for p in parts
+            if isinstance(p, dict) and p.get("type") == "image_url"
+        }
+        for url in urls:
+            if url not in existing:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+        spliced = ChatMessage(
+            role="user",
+            content=parts,
+            tool_call_id=msg.tool_call_id,
+            tool_calls=msg.tool_calls,
+        )
+        return messages[:i] + (spliced,) + messages[i + 1 :]
+    return messages
+
+
 def _estimate_message_tokens(msg: ChatMessage) -> int:
     """Per-message estimate with small overhead for role/structure framing.
 
@@ -1161,6 +1198,9 @@ class AgentLoop:
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
 
+        from soveryn.platform.intake.turn_images import take_queued_tool_vision as _drop_stale_vision
+        _drop_stale_vision()
+
         # 1. Save user turn (constraint 6: stays saved if chat later fails).
         # Text-only by design — vision parts live in-flight, not in the DB.
         if not skip_user_save:
@@ -1354,6 +1394,11 @@ class AgentLoop:
                         ],
                     )
                 messages = messages + tuple(result_messages)
+                from soveryn.platform.intake.turn_images import take_queued_tool_vision
+
+                extra_vision = take_queued_tool_vision()
+                if extra_vision and self.agent_name in VISION_CAPABLE_AGENTS:
+                    messages = _splice_images_onto_last_user(messages, extra_vision)
                 messages = self._fit(messages)
                 # Last allowed tool dispatch → next generation is force-final
                 # (no tools). Prevents burning the final slot on another tool
@@ -1688,7 +1733,11 @@ class AgentLoop:
                 args = dict(args)
                 args["dm_session_id"] = session_id
             try:
-                from soveryn.platform.intake.turn_images import turn_images_bound
+                from soveryn.platform.intake.turn_images import (
+                    pop_tool_vision,
+                    queue_tool_vision,
+                    turn_images_bound,
+                )
 
                 with turn_images_bound(attachments):
                     result = self.tool_registry.invoke(
@@ -1703,6 +1752,10 @@ class AgentLoop:
                 # crashes the whole turn. BaseException stays unhandled —
                 # SystemExit / KeyboardInterrupt propagate as intended.
                 result = {"error": type(exc).__name__, "message": str(exc)}
+            else:
+                result, vision_urls = pop_tool_vision(result)
+                if vision_urls and self.agent_name in VISION_CAPABLE_AGENTS:
+                    queue_tool_vision(vision_urls)
 
         # ActTruth soft lesson — if this failure continues a streak, tell the
         # model in-band so same-turn retry loops can stop.
@@ -1823,6 +1876,9 @@ class AgentLoop:
                 f"attachments only supported for vision-capable agents "
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
+
+        from soveryn.platform.intake.turn_images import take_queued_tool_vision as _drop_stale_vision
+        _drop_stale_vision()
 
         # ── Save user turn FIRST (honest state if stream fails later).
         # Text-only by design — vision parts live in-flight, not in the DB.
@@ -2176,6 +2232,11 @@ class AgentLoop:
                         round_observations.append(
                             _build_observation_entry(tool_call, result_message)
                         )
+                from soveryn.platform.intake.turn_images import take_queued_tool_vision
+
+                extra_vision = take_queued_tool_vision()
+                if extra_vision and self.agent_name in VISION_CAPABLE_AGENTS:
+                    messages = _splice_images_onto_last_user(messages, extra_vision)
                 if recorder is not None and round_observations:
                     recorder.record_observation(
                         round_index=tool_rounds,

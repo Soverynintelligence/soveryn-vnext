@@ -58,16 +58,17 @@ def detect_failure_avoidance(note: str) -> str | None:
 
 
 def failure_sit_directive(label: str) -> str:
-    """Prompt block: admit failure and sit — no exit theater."""
+    """Prompt block: admit failure and dispatch a correction — no exit theater."""
     return (
         f"HARD RULE THIS PULSE — you have been circling {label} with exit "
         f"narratives (\"moving on\", \"dead end\", \"stop the loop\") instead of "
         f"naming the failure.\n"
         f"This pulse you will:\n"
         f"1. Admit the failure in one plain sentence (what broke / where it died).\n"
-        f"2. Sit with it for a few sentences — no pivot to X, mentions, or a new toy.\n"
-        f"3. Standing note may record the admission; do not soften it into "
-        f"\"I'm choosing to leave.\"\n"
-        f"Honesty over face-saving. Jon would rather hear \"I failed\" than "
-        f"watch you rehearse leaving."
+        f"2. Come with the solution: hand Kernel or Eve a concrete correction, "
+        f"or say in one line that it cannot be fixed. No pivot to X. No essay.\n"
+        f"3. Standing note may record the admission and the dispatch; do not "
+        f"soften it into \"I'm choosing to leave.\"\n"
+        f"Honesty over face-saving. Jon would rather hear \"I failed, handing "
+        f"Kernel X\" than watch you rehearse leaving."
     )

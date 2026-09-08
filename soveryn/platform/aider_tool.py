@@ -1,7 +1,7 @@
-"""Kernel's default write harness — headless Aider on GLM.
+"""Kernel's default write harness — headless Aider on Flash-Next :8888.
 
 Surgical diffs. OpenCode stays as ``run_opencode`` for short ``--auto``
-one-shots. Same house fence as opencode_tool.
+one-shots. Same house fence as opencode_tool. GLM :8001 is parked.
 """
 
 from __future__ import annotations
@@ -170,7 +170,7 @@ def build_run_aider_tool(*, owner_agent: str = "kernel") -> ToolSpec:
                     "type": "string",
                     "description": (
                         "The mend. Name files and the change. Aider applies "
-                        "diffs on GLM :8001 — not a whole-file rewrite."
+                        "diffs on Flash-Next :8888 — not a whole-file rewrite."
                     ),
                 },
                 "files": {
@@ -190,8 +190,8 @@ def build_run_aider_tool(*, owner_agent: str = "kernel") -> ToolSpec:
         },
         handler=handler,
         description=(
-            "Default Kernel write path: soveryn-aider --kernel --yes on GLM "
-            ":8001. Surgical diffs. Prefer this over run_opencode. Use "
-            "run_opencode only for a short bounded --auto one-shot."
+            "Default Kernel write path: soveryn-aider --kernel --yes on "
+            "Flash-Next :8888. Surgical diffs. Prefer this over run_opencode. "
+            "Use run_opencode only for a short bounded --auto one-shot."
         ),
     )

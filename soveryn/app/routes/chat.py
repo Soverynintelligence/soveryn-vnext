@@ -303,10 +303,21 @@ def get_history(session_id: str):
     if session is None:
         return _err("missing_session", f"No session {session_id!r}", 404)
     history = conv.load_history(session_id)
-    turns = [
-        {"role": t.role, "content": t.content, "timestamp": t.timestamp, "source": t.source}
-        for t in history
-    ]
+    from soveryn.app.comfy_chat_urls import comfy_urls_from_text
+
+    turns = []
+    for t in history:
+        row = {
+            "role": t.role,
+            "content": t.content,
+            "timestamp": t.timestamp,
+            "source": t.source,
+        }
+        if t.role == "assistant":
+            imgs = comfy_urls_from_text(t.content)
+            if imgs:
+                row["images"] = imgs
+        turns.append(row)
     if session.agent == "aetheria":
         from soveryn.app.heartbeat_in_messages import fold_heartbeat_notes
 
@@ -361,6 +372,12 @@ def chat():
         message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
     elif not message.strip():
         message = "(image)"
+    if images:
+        from soveryn.platform.ledgers.auto import apply_chat_receipt
+
+        ledger_block = apply_chat_receipt(message, images)
+        if ledger_block:
+            message = ledger_block + "\n\n" + message
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -521,6 +538,12 @@ def chat_stream():
         message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
     elif not message.strip():
         message = "(image)"
+    if images:
+        from soveryn.platform.ledgers.auto import apply_chat_receipt
+
+        ledger_block = apply_chat_receipt(message, images)
+        if ledger_block:
+            message = ledger_block + "\n\n" + message
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -657,21 +680,91 @@ def chat_stream():
         room_ctx.room_session_id.reset(tok_room)
         return _err("chat_server_error", f"{type(e).__name__}: {e}", 502)
 
-    # ── Setup OK. Now wrap the iterator in an SSE response.
-    def _generate():
+    # ── Setup OK. Pump AgentLoop in a daemon thread; SSE only observes.
+    # Mobile Messages (iOS) cancels fetch on background/sleep. If the agent
+    # generator lived inside the WSGI response iterator, GeneratorExit aborted
+    # Eve mid tool/vision turn. Owning the turn off the socket means the
+    # assistant reply is still saved; the phone reconnects and polls history.
+    import logging
+    import queue
+    import threading
+
+    log = logging.getLogger("soveryn.app.routes.chat")
+    dm_val = session_id if agent == "aetheria" else None
+    root_val = root or None
+    room_val = room_sid
+    app_obj = current_app._get_current_object()
+    # Request-thread ContextVars are not needed by the producer.
+    room_ctx.dm_session_id.reset(tok_dm)
+    room_ctx.data_root.reset(tok_root)
+    room_ctx.room_session_id.reset(tok_room)
+
+    _DONE = object()
+    out_q: queue.Queue = queue.Queue()
+
+    def _produce() -> None:
+        t_dm = room_ctx.dm_session_id.set(dm_val)
+        t_root = room_ctx.data_root.set(root_val)
+        t_room = room_ctx.room_session_id.set(room_val)
         try:
-            # First event was already pulled — emit it (skip if voice-only).
-            first_payload = _event_to_dict(first_event)
-            if first_payload is not None:
-                yield _sse(first_payload)
-            for event in event_iter:
-                payload = _event_to_dict(event)
-                if payload is not None:
-                    yield _sse(payload)
+            with app_obj.app_context():
+                first_payload = _event_to_dict(first_event)
+                if first_payload is not None:
+                    out_q.put(_sse(first_payload))
+                for event in event_iter:
+                    payload = _event_to_dict(event)
+                    if payload is not None:
+                        out_q.put(_sse(payload))
+        except Exception:
+            log.exception(
+                "chat_stream producer failed agent=%s session=%s",
+                agent,
+                session_id,
+            )
+            try:
+                out_q.put(_sse({
+                    "type": "error",
+                    "code": "internal_error",
+                    "message": "turn failed after client detach",
+                }))
+            except Exception:
+                pass
         finally:
-            room_ctx.dm_session_id.reset(tok_dm)
-            room_ctx.data_root.reset(tok_root)
-            room_ctx.room_session_id.reset(tok_room)
+            room_ctx.dm_session_id.reset(t_dm)
+            room_ctx.data_root.reset(t_root)
+            room_ctx.room_session_id.reset(t_room)
+            out_q.put(_DONE)
+
+    threading.Thread(
+        target=_produce,
+        name=f"chat-turn-{agent}",
+        daemon=True,
+    ).start()
+
+    def _generate():
+        # Immediate byte so mobile proxies / Safari open the SSE body before
+        # Eve's verification-gated first token (which can take tens of seconds).
+        yield ": connected\n\n"
+        try:
+            while True:
+                try:
+                    item = out_q.get(timeout=1.0)
+                except queue.Empty:
+                    # Keepalive comment; does not affect JSON event parsing.
+                    yield ": ka\n\n"
+                    continue
+                if item is _DONE:
+                    break
+                yield item
+        except GeneratorExit:
+            # Client gone — producer keeps running; reply lands in history.
+            log.info(
+                "chat_stream client disconnect; turn continues server-side "
+                "agent=%s session=%s",
+                agent,
+                session_id,
+            )
+            return
 
     return Response(
         stream_with_context(_generate()),

@@ -49,14 +49,30 @@ def test_message_thread_attach_capable_agents_match_canonical():
     assert _js_set(_read(), "ATTACH_CAPABLE_AGENTS") == VISION_CAPABLE_AGENTS
 
 
-def test_message_thread_has_paperclip_capture_and_posts_attachments():
+def test_message_thread_has_paperclip_library_not_camera():
+    """capture= forces the iPhone camera; paperclip must open the library."""
     html = _read()
     assert 'data-attach' in html
     assert 'data-file-input' in html
     assert 'data-composer-attachments' in html
-    assert re.search(r"\bcapture=", html)
+    assert not re.search(r"\bcapture=", html)
     assert re.search(r"body\.attachments\s*=", html)
     assert '"(image)"' in html
+
+
+def test_message_thread_renders_comfy_stills_in_bubbles():
+    """Eve/Aetheria generate_image stills must show in Messages, not only on disk."""
+    html = _read()
+    assert "function extractComfyUrls" in html
+    assert "function attachComfyImages" in html
+    assert "function urlsFromGenerateImage" in html
+    assert "function mergeStashedComfy" in html
+    assert 'payload.name === "generate_image"' in html
+    assert r"\b((?:eve|aetheria)_" in html
+    assert "/aetheria/img/" in html
+    assert "Never el.textContent" in html
+    assert "_COMFY_HASH_RE" in html
+    assert "t.images" in html
 
 
 def test_vision_capable_agents_include_kernel_glm_native_vision():

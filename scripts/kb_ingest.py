@@ -42,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     from soveryn.platform.kb.chunk import chunk_markdown, iter_doc_files, read_doc_text
     from soveryn.platform.kb.store import KBStore, default_intake_dir, default_kb_dir
     from soveryn.platform.lattice.legacy import embed_text
+    from soveryn.platform.ledgers.paths import is_ledger_intake
 
     intake = default_intake_dir()
     roots: list[Path] = [intake]
@@ -55,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
     for root in roots:
         for path in iter_doc_files(root):
             if path.name.lower() == "readme.md" and path.parent.name == "intake":
+                continue
+            if is_ledger_intake(path):
                 continue
             resolved = path.resolve()
             if resolved in seen:

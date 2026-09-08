@@ -130,7 +130,7 @@ def test_messages_page_ok(room_app):
 def test_message_thread_page_ok(room_app):
     app, _, _ = room_app
     client = app.test_client()
-    r = client.get("/messages/aetheria")
+    r = client.get("/messages/aetheria", follow_redirects=True)
     assert r.status_code == 200
     assert b"data-thread" in r.data
     assert b"data-send" in r.data
@@ -142,7 +142,7 @@ def test_message_thread_has_attach_control(room_app, agent):
     server-side; PDFs splice for any agent."""
     app, _, _ = room_app
     client = app.test_client()
-    r = client.get(f"/messages/{agent}")
+    r = client.get(f"/messages/{agent}", follow_redirects=True)
     assert r.status_code == 200
     assert b"data-attach" in r.data
     assert b"data-file-input" in r.data

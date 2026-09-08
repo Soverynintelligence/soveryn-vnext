@@ -157,6 +157,7 @@ CATALOG: dict[str, ConnectorDef] = {
             "apex_catalog_search",
             "akt_catalog_search",
             "pondwright_pricing_book",
+            "pondwright_catalog_refresh",
         ),
         class_="house",
         sovereignty_note=(
@@ -182,13 +183,25 @@ CATALOG: dict[str, ConnectorDef] = {
             "Compose Instagram/Facebook post drafts. In Messages, Gate Allow "
             "sends the pack to Signal for manual publishing."
         ),
-        tools=("compose_post", "eve_ig_post", "eve_gbp_post", "eve_gbp_status", "eve_google_desk_status"),
+        tools=(
+            "compose_post",
+            "eve_ig_post",
+            "eve_gbp_post",
+            "eve_gbp_status",
+            "eve_google_desk_status",
+            "eve_calendar_status",
+            "eve_calendar_list",
+            "eve_calendar_create",
+            "eve_calendar_complete",
+            "eve_photo_inbox",
+        ),
         class_="channel",
         sovereignty_note=(
             "Interactive compose_post is Gate-approved (Allow → Signal). "
             "Scheduled Eve cadence may auto-drop drafts. "
-            "eve_ig_post and eve_gbp_post are Gate-only (never cadence) — "
-            "CWG Instagram desk / Google Business. No password, no ads spend."
+            "eve_ig_post, eve_gbp_post, and eve_calendar_create are Gate-only "
+            "(never cadence) — CWG Instagram / Google Business / Calendar. "
+            "No password, no ads spend. Calendar list/status are read-only."
         ),
     ),
 }
@@ -259,6 +272,14 @@ PONDWRIGHT_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "apex_catalog_search",
     "akt_catalog_search",
     "pondwright_pricing_book",
+    "pondwright_catalog_refresh",
+})
+
+# CWG Google Calendar reads — no egress.
+GCAL_READ_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
+    "eve_calendar_status",
+    "eve_calendar_list",
+    "eve_photo_inbox",
 })
 
 
@@ -289,7 +310,8 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
 
     ``compose_post`` is gated for interactive Messages (Allow → Signal pack).
     Scheduled automations may auto-approve it via AUTOMATION_AUTO_APPROVE_TOOLS.
-    ``eve_ig_post`` / ``eve_gbp_post`` are always gated — live CWG surfaces, never cadence.
+    ``eve_ig_post`` / ``eve_gbp_post`` / ``eve_calendar_create`` are always
+    gated — live CWG surfaces, never cadence. Calendar list/status are reads.
 
     ``web_search`` / ``fetch_url`` are always ungated (house SearXNG reads).
     ``read_x`` is always ungated (house X feed). ``post_to_x`` stays gated.
@@ -303,6 +325,8 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
     if tool_name in X_READ_AUTO_APPROVE_TOOLS:
         return False
     if tool_name in PONDWRIGHT_AUTO_APPROVE_TOOLS:
+        return False
+    if tool_name in GCAL_READ_AUTO_APPROVE_TOOLS:
         return False
     if source == "automation" and tool_name in AUTOMATION_AUTO_APPROVE_TOOLS:
         return False
@@ -319,6 +343,8 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
         "compose_post",
         "eve_ig_post",
         "eve_gbp_post",
+        "eve_calendar_create",
+        "eve_calendar_complete",
     ):
         return True
     return False

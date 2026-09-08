@@ -10,6 +10,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 ---
 
 ## 0. House spine (locked 2026-08-24)
+*Last observed: 2026-08-24.*
 
 **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
 
@@ -19,16 +20,17 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
-| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces — **not** the house OS. Messie is Qwen3.5-9B on `:5066` (TGTHR helper), not the Quadros 27B public slot. |
+| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces — **not** the house OS. Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot. Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
 
 ### 0a. Fleet freeze — frontier few (locked 2026-08-27)
+*Last observed: 2026-08-27.*
 
 **Constraint:** you cannot run six frontier minds and six personas on this iron. One card → one frontier mind. Extra agents only for **different tools** or a **different clock** — never another wig on the same weights.
 
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | Dual Spark GLM-5.3-Flash EXL3 TR3 4bpw (32k house ctx) |
+| **Kernel** | Local build | spark2 Qwen3.8-Flash-Next NVFP4 TP=1 (`:8888`, house ctx 131072). GLM TP=2 parked. |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
@@ -50,9 +52,18 @@ If runtime behavior changes, **update this file first**, then code/notes.
 Funnel: `https://soveryn-1.tail70bbcc.ts.net/messages` (Basic once → 30-day cookie).  
 Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
+### 0b. Critic / Scout brief contract
+*Last observed: 2026-09-07.*
+
+- **Cadence:** Critic `02:00` ET, Scout `07:30` ET. **Overnight** = `00:00–08:00` ET.
+- **Brief file format:** one markdown file per run. Required front-matter keys: `run_id`, `citizen` (`critic`|`scout`), `generated_at` (ISO-8601 ET), `severity` (`info`|`warn`|`act`), `targets` (list of repo paths or surfaces touched). Body: `## Findings` then `## Proposed actions`.
+- **Delivery:** Teammates POST the brief to `POST /api/internal/teammates_brief` (localhost only). The bridge files it into the Messages inbox thread — Critic → `t_critic`, Scout → `t_scout`. Teammates observe & brief; they are **not** chat peers and do not appear in `ACTIVE_AGENTS`.
+- **Halt:** `teammates stop` = HALT.
+
 ---
 
 ## 1. What is live
+*Last observed: 2026-09-01.*
 
 ### House (soveryn_vnext) — tower `:5001`
 | Surface | Status |
@@ -92,18 +103,20 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | Dual Spark GLM `:8001` (`glm-5.3-flash`, EXL3 TR3 4bpw, house ctx 32768; lean-tail + fat-tool spill) |
+| Kernel | spark2 Flash-Next `:8888` (`qwen3.8-flash-next`, NVFP4 TP=1, house ctx 131072; GLM `:8001` parked) |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
-| Shared Spark workers | `:8001` GLM TP=2 (Spark2 worker on fabric) |
-| Second Spark | **Live** — `gx10-a733` / soverynspark2, GLM rank 1 |
+| Shared Spark workers | `:8001` GLM TP=2 **parked** (power-cut 2026-09-06; Kernel moved to Flash-Next) |
+| Second Spark | **Live** — `gx10-a733` / soverynspark2, Flash-Next vLLM `:8888` |
 
 ---
 
 ## 2. Incomplete / blocked
+*Last observed: 2026-08-25.*
 
 | Item | State |
 |------|--------|
-| Citizen email | **Not production — NOT ARMED.** Gated checklist (source: `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist): 1) aliases on soverynintelligence.com + carolinawatergardens.com · 2) SPF/DKIM/DMARC both domains · 3) arm `SOVERYN_SMTP_HOST`/`SOVERYN_SMTP_FROM` + creds · 4) optional IMAP house inbox · 5) `SOVERYN_EMAIL_PRODUCTION=1` only after controlled smoke · 6) smoke: Messages → Aetheria → Gate Allow → test as `aetheria@soverynintelligence.com` · 7) flip this row to **Live** only after smoke |
+| Citizen email | **Not production — NOT ARMED.** Gated checklist (source: `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist): 1) aliases on soverynintelligence.com + carolinawatergardens.com · 2) SPF/DKIM/DMARC both domains · 3) arm `SOVERYN_SMTP_HOST`/`SOVERYN_SMTP_FROM` + creds · 4) optional IMAP house inbox · 5) `SOVERYN_EMAIL_PRODUCTION=1` only after controlled smoke · 6) smoke: Messages → Aetheria → Gate Allow → test as `aetheria@soverynintelligence.com` · 7) flip this row to **Live** only after smoke · 8) bounce/complaint policy (write before the latch flips) |
+| ↳ canonical checklist | Authoritative checklist lives in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist. This §2 row is a summary only — edit the note, not this row, to avoid drift. |
 | CoS rename | **Deferred** — Aetheria still `COS_ID` |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
 | Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
@@ -114,6 +127,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ---
 
 ## 3. Brands (one place)
+*Last observed: 2026-08-31.*
 
 | Brand | Owns | Voice |
 |-------|------|--------|
@@ -126,6 +140,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ---
 
 ## 4. Kill list
+*Last observed: 2026-08-31.*
 
 1. ~~Rotate source of authority~~ → this file  
 2. ~~Secrets/state backup~~ → runbook + drill PASS  
@@ -141,6 +156,7 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 ---
 
 ## 5. Git / ops
+*Last observed: 2026-09-01.*
 
 | Repo | Branch / tip |
 |------|----------------|

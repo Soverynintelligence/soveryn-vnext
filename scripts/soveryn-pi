@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Kernel via Pi (Mario Zechner / earendil). Local GLM on Spark :8001.
-# OpenCode compacted and 8k-capped long writes; Pi is the TTY for those jobs.
-# Aider stays the surgical fallback: soveryn-aider --kernel
+# Kernel via Pi (Mario Zechner / earendil). Flash-Next on spark2 :8888.
+# OpenCode is parked (8k cap + thinking ate writes). Pi is the TTY.
+# Aider surgical fallback: soveryn-aider --kernel
 #
 # Usage:
-#   soveryn-pi                         # TUI, cwd, GLM (Pi medium → GLM high)
-#   soveryn-pi --high                  # Pi high → GLM max (hungry; 16k includes CoT)
-#   soveryn-pi --build                 # thinking low — long file/canvas jobs
+#   soveryn-pi                         # TUI, cwd (Pi medium → thinking on)
+#   soveryn-pi --high                  # Pi high → thinking on (hungry; 16k includes CoT)
+#   soveryn-pi --build                 # thinking off — long file/canvas jobs
 #   soveryn-pi /path/to/repo           # TUI in that project
 #   soveryn-pi --qwen                  # Aetheria Qwen :8090
 #   soveryn-pi -p "mend X"             # print one-shot
 #   kernel                             # same as soveryn-pi (~/bin/kernel)
-#   kernel --high                      # GLM max
-#   kernel --build                     # implement mode (thinking low)
+#   kernel --high                      # thinking on, hungry
+#   kernel --build                     # thinking off (Flash-Next thinking is binary)
 #
-# Compaction is off in config/pi/settings.json. Nothing leaves the machine
-# unless you change models.json baseUrl.
+# Compaction is on (2026-09-07): Flash-Next is 262144 ctx; 16k maxTokens
+# plus a stuffed prompt overflowed vLLM by 1 token with compaction off.
+# Nothing leaves the machine unless you change models.json baseUrl.
 
 set -euo pipefail
 
@@ -48,7 +49,7 @@ for arg in "$@"; do
   elif [[ "$arg" == "--flash" || "$arg" == "--glm" ]]; then
     USE_QWEN=0
   elif [[ "$arg" == "--build" ]]; then
-    THINKING="low"
+    THINKING="off"
   elif [[ "$arg" == "--high" ]]; then
     THINKING="high"
   else
@@ -62,9 +63,9 @@ if [[ "$USE_QWEN" -eq 1 ]]; then
   CHECK_URL="http://127.0.0.1:8090/v1/models"
   LABEL="Kernel · Qwen 3.8 @ http://127.0.0.1:8090/v1"
 else
-  MODEL="kernel-glm/glm-5.3-flash"
-  CHECK_URL="http://10.10.10.2:8001/v1/models"
-  LABEL="Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 @ http://10.10.10.2:8001/v1"
+  MODEL="kernel-glm/qwen3.8-flash-next"
+  CHECK_URL="http://127.0.0.1:8888/v1/models"
+  LABEL="Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 @ http://127.0.0.1:8888/v1"
 fi
 
 if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
@@ -72,12 +73,12 @@ if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
 fi
 
 echo "soveryn-pi: $LABEL" >&2
-if [[ "$THINKING" == "low" ]]; then
-  echo "soveryn-pi: BUILD thinking=low (skeleton write first; CoT must not eat the 16k cap)" >&2
+if [[ "$THINKING" == "off" ]]; then
+  echo "soveryn-pi: BUILD thinking=off (Flash-Next thinking is binary; CoT must not eat the 16k cap)" >&2
 elif [[ "$THINKING" == "high" ]]; then
-  echo "soveryn-pi: HIGH thinking=high → GLM max (16k includes CoT; write early)" >&2
+  echo "soveryn-pi: HIGH thinking=on (16k includes CoT; write early)" >&2
 else
-  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium → GLM high)" >&2
+  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium → on)" >&2
 fi
 
 # First non-flag arg that is an existing directory = project cwd.

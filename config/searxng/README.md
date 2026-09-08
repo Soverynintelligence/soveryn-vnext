@@ -26,5 +26,6 @@ The unit passes `SEARXNG_SECRET_KEY` into the container. Never put the real key 
 systemctl --user restart soveryn-searxng.service
 ```
 
-Note: the container may chown this folder to uid 977 while running; reclaim with
-`chown -R $(id -u):$(id -g) config/searxng` before editing.
+Note: the container may chown this folder to uid 977 while running. Reclaim without
+host sudo: `docker exec soveryn-searxng chown -R 1000:1000 /etc/searxng` (or
+`chown -R $(id -u):$(id -g) config/searxng` if you have sudo). Then edit.

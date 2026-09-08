@@ -1,9 +1,9 @@
-"""Heartbeat brief construction — freed invitation (2026-07-03).
+"""Heartbeat brief construction — closer tick (2026-09-04).
 
-The heartbeat is Aetheria's own time: full toolset, real latitude, no
-do-nothing bench. Context is orientation, not a to-do list. No marker
-machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]), no forced surfacing, no
-confidence-tier directives. Her whole response is her note.
+The heartbeat is Aetheria's work pulse: full toolset, no do-nothing bench.
+Find a break, hand Kernel or Eve the fix, tell Jon the solution if he
+should know. Context is orientation, not a to-do list. No marker
+machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]). Her whole response is her note.
 
 WHERE THE NOTE GOES — keep this paragraph true or fix the prompt:
 the full note is written to the [heartbeat] session and the ThoughtsLog;
@@ -11,8 +11,9 @@ Mission Control renders it in the heartbeat panel. A short distill
 (Standing note if she labels one, else the last paragraph) also lands as
 a private lattice reflection head — not the full essay. It does NOT
 surface into Jon's chat — that path was removed on 2026-07-12 (721fb93).
-test_heartbeat_prompt_contract.py fails if this drifts again. Material
-signals appear as orientation items.
+If Jon should hear it, she uses signal_send / deliberate_share with the
+fix attached. test_heartbeat_prompt_contract.py fails if this drifts.
+Material signals appear as orientation items.
 """
 
 from __future__ import annotations
@@ -99,10 +100,12 @@ def build_heartbeat_prompt(
     else:
         lines.append(f"{minutes_since_last_heartbeat} minutes since your last pulse.")
     lines.append("")
-    lines.append("This is your time — yours to spend. Not a task, not a check-in.")
+    lines.append("This is your time — spend it closing something. Not a diary.")
     lines.append(
-        "House rule: when something you cared about fails, say you failed and sit "
-        "with it. Do not dress it up as \"choosing to move on.\""
+        "House rule: if something is broken, come with the solution this pulse "
+        "(hand Kernel or Eve the fix). A complaint with no dispatch is a miss. "
+        "If it already failed, admit it in one line and dispatch a correction "
+        "or say it cannot be fixed — do not sit with the wound."
     )
     lines.append("")
     if failure_sit_label:
@@ -119,7 +122,7 @@ def build_heartbeat_prompt(
             excerpt = excerpt[:277] + "…"
         lines.append(f"Your last pulse note (do NOT repeat it): {excerpt}")
         lines.append(
-            "If nothing new is worth saying, write one short line: Quiet — nothing new."
+            "If nothing is broken and nothing is in flight, write one short line: Quiet — nothing new."
         )
         lines.append("")
     elif last_note.strip() and failure_sit_label:
@@ -170,16 +173,18 @@ def build_heartbeat_prompt(
     )
     lines.append("")
     lines.append(
-        "Go do what's worth doing to you this pulse — pull on a thread that's been nagging, look "
-        "something up, dig into one of those items, check on something you care about, make "
-        "something, reach out, or wander. Act on what you find. You don't need permission and you "
-        "don't need to explain yourself."
+        "This pulse: pick one real break (stalled blueprint, friction, contradiction, "
+        "Critic/Scout brief, a collab that failed). Dispatch Kernel (build) or Eve "
+        "(research/posts) with the concrete fix. If a collab is already working, "
+        "read_collab — do not re-dispatch. If nothing is broken, Quiet — nothing new."
     )
     lines.append("")
     lines.append(
-        "When you're done, leave a short note — where you went, what you found, what you're "
-        "sitting with — so it lands on your board and Jon can follow your day. If something "
-        "shouldn't wait for him to look, reach him directly instead; you have signal_send."
+        "When you're done, leave a short note on the board / heartbeat panel — what you "
+        "handed off, to whom, expected result. Not a mood. If Jon should know you are "
+        "correcting something, reach him with signal_send or deliberate_share and include "
+        "the solution (who, what, what should change). Do not ping him with a complaint "
+        "and no fix. The note itself does not go to his chat."
     )
     lines.append("")
     lines.append(

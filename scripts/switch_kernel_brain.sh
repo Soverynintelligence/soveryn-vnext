@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Switch Kernel between GLM (dual Spark), Quadros Qwen3.8, or Spark Qwen3.8 NVFP4.
+# Switch Kernel between Flash-Next (spark2 :8888), GLM rollback, Quadros Qwen3.8,
+# or Spark Qwen3.8 NVFP4.
 #
 # Usage:
 #   switch_kernel_brain.sh                 # show current
-#   switch_kernel_brain.sh glm             # GLM-5.3-Flash TP=2 on Sparks :8001 (live)
+#   switch_kernel_brain.sh flashnext       # Qwen3.8-Flash-Next TP=1 spark2 :8888 (live)
+#   switch_kernel_brain.sh glm             # GLM-5.3-Flash TP=2 on Sparks :8001 (rollback)
 #   switch_kernel_brain.sh flash           # Qwen3.8 GGUF on Quadros :8091 (legacy)
 #   switch_kernel_brain.sh qwen38          # Qwen3.8-27B NVFP4 on Spark :8001
 #   switch_kernel_brain.sh qwen38 --take-spark
 #
-# Eve stays on Quadros Qwen 3.8 either way.
+# Eve stays on Quadros Qwen 3.8 either way. Pi is the TTY (OpenCode parked).
 set -euo pipefail
 
 SPARK_HOST="${SPARK_HOST:-spark}"
@@ -19,10 +21,11 @@ PY="${SOVERYN_PYTHON:-/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python}"
 VETT_SWITCH="${REPO}/scripts/switch_vett_brain.sh"
 
 usage() {
-  echo "Usage: $0 [glm|flash|qwen38] [--take-spark]"
-  echo "  glm      GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Sparks :8001 (alias glm-5.3-flash)"
-  echo "  flash    Qwen3.8 GGUF on Quadros :8091 (legacy alias bench-flash)"
-  echo "  qwen38   Qwen3.8-27B NVFP4 on Spark :8001 (alias qwen38-27b)"
+  echo "Usage: $0 [flashnext|glm|flash|qwen38] [--take-spark]"
+  echo "  flashnext  Qwen3.8-Flash-Next NVFP4 TP=1 spark2 via 127.0.0.1:8888"
+  echo "  glm        GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Sparks :8001 (rollback)"
+  echo "  flash      Qwen3.8 GGUF on Quadros :8091 (legacy alias bench-flash)"
+  echo "  qwen38     Qwen3.8-27B NVFP4 on Spark :8001 (alias qwen38-27b)"
   echo "  --take-spark   with qwen38: load that brain on Spark via switch_vett_brain.sh"
   exit 1
 }
@@ -56,7 +59,7 @@ for arg in "$@"; do
   case "$arg" in
     --take-spark) TAKE_SPARK=1 ;;
     -h|--help) usage ;;
-    flash|qwen38|glm) BRAIN="$arg" ;;
+    flash|qwen38|glm|flashnext) BRAIN="$arg" ;;
     *)
       if [[ -n "$arg" ]]; then
         echo "unknown arg: $arg" >&2
@@ -74,6 +77,17 @@ fi
 mkdir -p "${HOME}/.soveryn"
 echo "$BRAIN" > "$BRAIN_FILE_TOWER"
 echo "wrote tower $BRAIN_FILE_TOWER → $BRAIN"
+
+if [[ "$BRAIN" == "flashnext" ]]; then
+  body="$(curl -sS -m 5 http://127.0.0.1:8888/v1/models 2>/dev/null || true)"
+  if ! echo "$body" | grep -q '"qwen3.8-flash-next"'; then
+    echo "ERROR: 127.0.0.1:8888 is not serving qwen3.8-flash-next." >&2
+    echo "  Tunnel: systemctl --user status soveryn-spark2-flashnext-8888" >&2
+    echo "  Current: $(echo "$body" | "$PY" -c 'import sys,json; d=json.load(sys.stdin); print(",".join(m["id"] for m in d.get("data",[])))' 2>/dev/null || echo 'unreachable')" >&2
+    exit 2
+  fi
+  echo "Flash-Next already serving on 127.0.0.1:8888"
+fi
 
 if [[ "$BRAIN" == "glm" ]]; then
   body="$(curl -sS -m 5 "$SPARK_URL/v1/models" 2>/dev/null || true)"

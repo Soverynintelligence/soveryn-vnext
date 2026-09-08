@@ -957,6 +957,7 @@ class LatticeStore:
                     "WHERE NOT (agent != ? AND layer = ?) "
                     "  AND layer != ? "
                     "  AND IFNULL(tags, '[]') LIKE ? "
+                    "  AND IFNULL(tags, '[]') NOT LIKE '%historical_snapshot%' "
                     "  AND LOWER(content) LIKE ? "
                     "ORDER BY salience DESC, updated_at DESC LIMIT ?",
                     (agent, LAYER_PRIVATE, LAYER_DREAM, tag_like, like, max(limit, 8)),

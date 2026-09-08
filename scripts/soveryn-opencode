@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# Kernel via OpenCode.
-# Default coding brain: GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on both Sparks :8001.
+# Kernel via OpenCode. Default coding brain: Flash-Next spark2 :8888.
+# GLM :8001 is parked (power-cut 2026-09-06). TTY is Pi (`kernel`).
 # Optional Qwen 3.8 on Blackwell :8090 — pass --qwen.
 # Aider surgical fallback:
-#   soveryn-aider --kernel   # GLM @ :8001
+#   soveryn-aider --kernel   # Flash-Next @ :8888
 #   soveryn-aider            # Qwen / aetheria @ :8090
 #
 # Usage:
-#   kernel                                   # same as soveryn-opencode (~/bin/kernel)
-#   soveryn-opencode                         # TUI, Kernel agent, GLM
+#   kernel                                   # Pi TTY (`soveryn-pi`)
+#   soveryn-opencode                         # TUI, Kernel agent, Flash-Next
 #   soveryn-opencode --qwen                  # TUI on Aetheria Qwen :8090
-#   soveryn-opencode --flash                 # same as default (GLM 5.3 Flash)
+#   soveryn-opencode --flash                 # same as default (Flash-Next)
 #   soveryn-opencode /path/to/repo           # TUI in that project
-#   soveryn-opencode run "mend X"            # headless one-shot (GLM)
+#   soveryn-opencode run "mend X"            # headless one-shot
 #   soveryn-opencode run --auto "…"          # auto-approve non-denied perms
 #
-# GLM ctx is 32768 — still prefer precise greps over blind hunts.
 # Nothing leaves the machine unless you change the provider baseURL.
 
 set -euo pipefail
@@ -59,9 +58,9 @@ if [[ "$USE_QWEN" -eq 1 ]]; then
   CHECK_URL="http://127.0.0.1:8090/v1/models"
   LABEL="Kernel · Qwen 3.8 large-ctx @ http://127.0.0.1:8090/v1"
 else
-  MODEL="kernel-glm/glm-5.3-flash"
-  CHECK_URL="http://10.10.10.2:8001/v1/models"
-  LABEL="Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 @ http://10.10.10.2:8001/v1"
+  MODEL="kernel-glm/qwen3.8-flash-next"
+  CHECK_URL="http://127.0.0.1:8888/v1/models"
+  LABEL="Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 @ http://127.0.0.1:8888/v1"
 fi
 
 if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then

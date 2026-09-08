@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from soveryn.platform.pondwright.catalog import (
     akt_catalog_path,
     catalog_path,
     catalog_stats,
+    refresh_apex_catalog,
     search_catalog,
 )
 from soveryn.platform.pondwright.pricing_book import load_pricing_book, pricing_book_path
@@ -143,7 +145,42 @@ def build_pricing_book_tool(*, owner_agent: str) -> ToolSpec:
     )
 
 
+def build_catalog_refresh_tool(*, owner_agent: str) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw = args.get("xlsx")
+        xlsx = None
+        if raw is not None:
+            if not isinstance(raw, str) or not raw.strip():
+                raise ToolArgError("xlsx must be a path string")
+            xlsx = Path(raw.strip()).expanduser()
+        return refresh_apex_catalog(xlsx=xlsx)
+
+    return ToolSpec(
+        name="pondwright_catalog_refresh",
+        owner=owner_agent,
+        description=(
+            "Rebuild the Apex house catalog from the newest Master Price List "
+            ".xlsx in Pictures/Downloads/Desktop (or a path you pass). "
+            "Reloads SKUs so quotes use current MAP/MSRP/WS. AKT JSON is "
+            "reloaded as-is (dealer scrape is a separate login). Pricing book "
+            "is ~/pondpro/pricing_book.json — edit that file for labor rates."
+        ),
+        schema={
+            "type": "object",
+            "properties": {
+                "xlsx": {
+                    "type": "string",
+                    "description": "Optional path to an Apex price-list .xlsx.",
+                }
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
 def register_pondwright_tools(registry: ToolRegistry, *, owner_agent: str) -> None:
     registry.register(build_apex_catalog_search_tool(owner_agent=owner_agent))
     registry.register(build_akt_catalog_search_tool(owner_agent=owner_agent))
     registry.register(build_pricing_book_tool(owner_agent=owner_agent))
+    registry.register(build_catalog_refresh_tool(owner_agent=owner_agent))

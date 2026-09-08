@@ -389,6 +389,11 @@
     display: block; object-fit: cover;
     border: 1px solid rgba(255, 255, 255, 0.08);
   }
+  .assistant-image {
+    display: block; margin: 8px 0;
+    max-width: 100%; max-height: 480px; border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
   [data-push-banner] {
     margin: 0; padding: 10px 12px;
     border-bottom: 1px solid var(--line);
@@ -437,12 +442,12 @@
     <div class="composer-attachments-row" data-composer-attachments hidden></div>
     <div class="composer-row">
       <button type="button" class="composer-attach-btn" data-attach
-              title="Attach image" aria-label="Attach image">📎</button>
+              title="Attach photo or PDF" aria-label="Attach photo or PDF">📎</button>
       <button type="button" class="composer-mic-btn" data-mic
               title="Voice" aria-label="Voice">🎤</button>
       <input type="file" data-file-input
              accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-             capture="environment" multiple hidden>
+             multiple hidden>
       <input type="text" data-input placeholder="Message" aria-label="Message" autocomplete="off">
       <button type="button" data-send aria-label="Send">↑</button>
     </div>
@@ -507,7 +512,15 @@
     gateFailStreak: 0,
     pendingAttachments: [],
     attByUserIdx: {},
+    // Server owns the turn after send — keep polling if the phone sleeps.
+    deferred: false,
+    awaitingServer: false,
+    awaitBaseline: 0,
   };
+  // iOS suspends fetch on background; we never AbortController.abort() on hide.
+  const CAN_BEACON = typeof navigator !== "undefined"
+    && typeof navigator.sendBeacon === "function";
+  void CAN_BEACON; // available if we need a tiny keepalive ping later
 
   const $ = (s) => document.querySelector(s);
   const thread = () => $("[data-thread]");
@@ -606,7 +619,145 @@
     s = "<p>" + s + "</p>";
     s = s.replace(/<p>\s*<\/p>/g, "");
     s = s.replace(/<p>(<(?:h[1-6]|ul|ol|pre|blockquote)[\s\S]*?<\/(?:h[1-6]|ul|ol|pre|blockquote)>)<\/p>/g, "$1");
+    s = s.replace(
+      /(\/aetheria\/img\/[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g,
+      '<img class="assistant-image" src="$1" alt="">'
+    );
     return s;
+  }
+
+  function enhanceComfyImages(root) {
+    if (!root) return;
+    const re = /\/aetheria\/img\/[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif)/;
+    root.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (!re.test(href)) return;
+      const img = document.createElement("img");
+      img.src = href;
+      img.className = "assistant-image";
+      img.alt = "";
+      a.replaceWith(img);
+    });
+  }
+
+  const COMFY_CACHE_PREFIX = "soveryn.msg.comfy.";
+  const _COMFY_URL_RE = /\/aetheria\/img\/([A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g;
+  const _COMFY_PATH_RE = /(?:~\/)?ComfyUI\/output\/([A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g;
+  const _COMFY_NAME_RE = /\b((?:eve|aetheria)_[A-Za-z0-9_\-]{1,120}\.(?:png|jpg|jpeg|webp|gif))\b/gi;
+  const _COMFY_HASH_RE = /(?:^|[\s(])#(\d{1,2})\b/g;
+
+  function comfyChatUrl(filename) {
+    const name = String(filename || "").split(/[/\\]/).pop() || "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif)$/.test(name)) return null;
+    return "/aetheria/img/" + name;
+  }
+
+  function extractComfyUrls(text) {
+    const out = [];
+    const seen = new Set();
+    const add = (name) => {
+      const u = comfyChatUrl(name);
+      if (!u || seen.has(u)) return;
+      seen.add(u);
+      out.push(u);
+    };
+    const t = String(text || "");
+    let m;
+    _COMFY_URL_RE.lastIndex = 0;
+    while ((m = _COMFY_URL_RE.exec(t)) !== null) add(m[1]);
+    _COMFY_PATH_RE.lastIndex = 0;
+    while ((m = _COMFY_PATH_RE.exec(t)) !== null) add(m[1]);
+    _COMFY_NAME_RE.lastIndex = 0;
+    while ((m = _COMFY_NAME_RE.exec(t)) !== null) add(m[1]);
+    const stillTurn = /eve_\d{3,}|aetheria_\d{3,}|\.png\b|comfyui|generate_image|\bstills\b|honest eyes|generated (?:those|them|the (?:pic|face|still))/i.test(t);
+    if (stillTurn) {
+      _COMFY_HASH_RE.lastIndex = 0;
+      while ((m = _COMFY_HASH_RE.exec(t)) !== null) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= 20) add("eve_" + String(n).padStart(5, "0") + "_.png");
+      }
+    }
+    return out;
+  }
+
+  function attachComfyImages(el, urls) {
+    if (!el || !urls || !urls.length) return;
+    const have = new Set();
+    el.querySelectorAll("img").forEach((img) => {
+      const src = img.getAttribute("src") || "";
+      have.add(src);
+      try { have.add(new URL(src, location.origin).pathname); } catch (_) {}
+    });
+    const fresh = [];
+    urls.forEach((url) => {
+      if (!url || typeof url !== "string") return;
+      const mapped = url.startsWith("/aetheria/img/") ? url : comfyChatUrl(url);
+      if (!mapped || have.has(mapped)) return;
+      have.add(mapped);
+      fresh.push(mapped);
+    });
+    if (!fresh.length) return;
+    const md = el.querySelector(":scope > .md-body");
+    fresh.forEach((url) => {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      img.className = "assistant-image";
+      if (md) el.insertBefore(img, md);
+      else el.appendChild(img);
+    });
+  }
+
+  function persistComfyUrls(urls) {
+    if (!state.sessionId || !urls || !urls.length) return;
+    try {
+      const key = COMFY_CACHE_PREFIX + state.sessionId;
+      const prev = JSON.parse(sessionStorage.getItem(key) || "[]");
+      const merged = [];
+      const seen = new Set();
+      (Array.isArray(prev) ? prev : []).concat(urls).forEach((u) => {
+        const mapped = (typeof u === "string" && u.startsWith("/aetheria/img/")) ? u : comfyChatUrl(u);
+        if (!mapped || seen.has(mapped)) return;
+        seen.add(mapped);
+        merged.push(mapped);
+      });
+      sessionStorage.setItem(key, JSON.stringify(merged));
+    } catch (_) { /* quota */ }
+  }
+
+  function mergeStashedComfy() {
+    if (!state.sessionId) return;
+    let stashed = [];
+    try {
+      stashed = JSON.parse(sessionStorage.getItem(COMFY_CACHE_PREFIX + state.sessionId) || "[]");
+    } catch (_) { return; }
+    if (!Array.isArray(stashed) || !stashed.length) return;
+    const already = new Set();
+    thread().querySelectorAll(".bubble.them img").forEach((img) => {
+      const src = img.getAttribute("src") || "";
+      already.add(src);
+      try { already.add(new URL(src, location.origin).pathname); } catch (_) {}
+    });
+    const missing = stashed.filter((u) => typeof u === "string" && !already.has(u));
+    if (!missing.length) return;
+    const bubbles = thread().querySelectorAll(".bubble.them");
+    if (!bubbles.length) return;
+    attachComfyImages(bubbles[bubbles.length - 1], missing);
+  }
+
+  function urlsFromGenerateImage(tr) {
+    const urls = [];
+    const seen = new Set();
+    const add = (u) => {
+      const mapped = comfyChatUrl(u) || (typeof u === "string" && u.startsWith("/aetheria/img/") ? u : null);
+      if (!mapped || seen.has(mapped)) return;
+      seen.add(mapped);
+      urls.push(mapped);
+    };
+    if (!tr || typeof tr !== "object") return urls;
+    if (Array.isArray(tr.urls)) tr.urls.forEach(add);
+    if (Array.isArray(tr.images)) tr.images.forEach(add);
+    return urls;
   }
 
   function appendBubble(kind, text, opts) {
@@ -640,7 +791,9 @@
         const body = document.createElement("div");
         body.className = "md-body";
         body.innerHTML = renderMarkdown(text);
+        enhanceComfyImages(body);
         b.appendChild(body);
+        attachComfyImages(b, extractComfyUrls(text));
       } else {
         const txt = document.createElement("div");
         txt.textContent = text;
@@ -729,18 +882,20 @@
 
   function setBubbleText(el, text, asMarkdown) {
     if (!el) return;
-    if (asMarkdown) {
-      let body = el.querySelector(".md-body");
-      if (!body) {
-        el.textContent = "";
-        body = document.createElement("div");
-        body.className = "md-body";
-        el.appendChild(body);
-      }
-      body.innerHTML = renderMarkdown(text);
-    } else {
-      el.textContent = text;
+    // Never el.textContent = … — that wipes generate_image <img> siblings.
+    let body = el.querySelector(":scope > .md-body");
+    if (!body) {
+      body = document.createElement("div");
+      body.className = "md-body";
+      el.appendChild(body);
     }
+    if (asMarkdown) {
+      body.innerHTML = renderMarkdown(text);
+      enhanceComfyImages(body);
+    } else {
+      body.textContent = text;
+    }
+    attachComfyImages(el, extractComfyUrls(text));
   }
 
   // Keep composer above the iOS keyboard when visualViewport shrinks.
@@ -1008,7 +1163,10 @@
         appendBubble("me", t.content, { images: imagesForUserTurn(userIdx) });
         userIdx += 1;
       }
-      else if (t.role === "assistant") appendBubble("them", t.content, { source: t.source });
+      else if (t.role === "assistant") {
+        const b = appendBubble("them", t.content, { source: t.source });
+        if (Array.isArray(t.images) && t.images.length) attachComfyImages(b, t.images);
+      }
 
       else if (t.role === "system") {
         const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
@@ -1042,20 +1200,46 @@
     } else if (Object.values(peerState).includes("replied")) {
       $("[data-agent-sub]").textContent = "peer replied — tap shape to read in group";
       stopPoll();
-    } else if (state.deferred) {
-      const lastA = [...(turns || [])].reverse().find((t) => t.role === "assistant");
+    } else if (state.deferred || state.awaitingServer) {
+      const turnsArr = turns || [];
+      const last = turnsArr[turnsArr.length - 1];
       const ack = "This thread stays yours";
-      if (lastA && lastA.content && String(lastA.content).indexOf(ack) === -1) {
+      const isAck = !!(last && last.role === "assistant" && last.content
+        && String(last.content).indexOf(ack) !== -1);
+      // History grew past pre-send baseline and ends on a real assistant reply.
+      const done = turnsArr.length > (state.awaitBaseline || 0)
+        && last && last.role === "assistant" && !isAck;
+      if (done) {
         state.deferred = false;
+        state.awaitingServer = false;
         $("[data-agent-sub]").textContent = contact.sub;
         stopPoll();
+        setHeaderBusy(false);
       } else {
         $("[data-agent-sub]").textContent = "working in the background";
         startPoll();
       }
     } else {
-      $("[data-agent-sub]").textContent = contact.sub;
-      stopPoll();
+      // iOS may kill the page mid turn. Producer still finishes server-side;
+      // re-open must resume polling when history ends on a fresh user turn.
+      const turnsArr = turns || [];
+      const last = turnsArr[turnsArr.length - 1];
+      let recovered = false;
+      if (!state.sending && last && last.role === "user" && last.timestamp) {
+        const ageMs = Date.now() - Date.parse(last.timestamp);
+        if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 15 * 60 * 1000) {
+          state.awaitingServer = true;
+          state.awaitBaseline = Math.max(0, turnsArr.length - 1);
+          $("[data-agent-sub]").textContent = "working in the background";
+          setHeaderBusy(true);
+          startPoll();
+          recovered = true;
+        }
+      }
+      if (!recovered) {
+        $("[data-agent-sub]").textContent = contact.sub;
+        stopPoll();
+      }
     }
     // History rebuild wiped Gate cards — re-pull pending so Allow returns.
     if (agent === "aetheria" || agent === "eve" || Object.keys(state.peerGate || {}).length) {
@@ -1065,7 +1249,7 @@
 
   function startPoll() {
     if (state.pollTimer) return;
-    if (agent !== "aetheria" && !state.deferred) return;
+    if (agent !== "aetheria" && !state.deferred && !state.awaitingServer) return;
     state.pollTimer = setInterval(async () => {
       if (!state.sessionId || state.sending) return;
       try {
@@ -1199,6 +1383,7 @@
     bindAttCache(sessionId);
     const c = await collabs();
     renderTurns(d.turns || [], c);
+    mergeStashedComfy();
     renderChips(c);
     if (inboxOnly && !(d.turns || []).length) {
       appendBubble("sys", "Overnight inbox — waiting for the next Critic/Scout brief.");
@@ -1317,6 +1502,9 @@
     // passes; the bubble shows the pic and any real text (same as chat.html).
     const wireMessage = msg || "(image)";
     state.sending = true;
+    state.awaitingServer = true;
+    state.deferred = false;
+    state.awaitBaseline = state.turnCount;
     setHeaderBusy(true);
     $("[data-send]").disabled = true;
     input.value = "";
@@ -1332,6 +1520,8 @@
         message: wireMessage,
       };
       if (attachUrls.length > 0) body.attachments = attachUrls;
+      // No AbortController / signal — backgrounding must not cancel Eve.
+      // Server finishes the turn even if this fetch is killed by iOS.
       const r = await fetch("/chat_stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1368,7 +1558,7 @@
           if (payload.type === "token" && payload.delta) {
             text += payload.delta;
             // Stream plain text; render markdown once the turn finishes.
-            them.textContent = text;
+            setBubbleText(them, text, false);
             thread().scrollTop = thread().scrollHeight;
           } else if (payload.type === "approval_pending") {
             renderApprovalCard(payload);
@@ -1378,6 +1568,12 @@
           } else if (payload.type === "tool_result") {
             try {
               const tr = JSON.parse(payload.content || "{}");
+              if (payload.name === "generate_image") {
+                const genUrls = urlsFromGenerateImage(tr);
+                attachComfyImages(them, genUrls);
+                persistComfyUrls(genUrls);
+                thread().scrollTop = thread().scrollHeight;
+              }
               if (tr && tr.commissioned && (tr.to_id || tr.target)) {
                 appendBubble("sys", "Commissioned " + (tr.to_id || tr.target) + " — tap their shape for the group");
                 startGatePoll();
@@ -1404,8 +1600,14 @@
                 thread().scrollTop = thread().scrollHeight;
               }
             } catch (_) {}
-          } else if (payload.type === "done" && payload.deferred) {
-            state.deferred = true;
+          } else if (payload.type === "done") {
+            if (payload.deferred) {
+              state.deferred = true;
+            } else if (!text && payload.content) {
+              // Eve verification gate buffers tokens; Done may be the first text.
+              text = String(payload.content);
+              setBubbleText(them, text, false);
+            }
           } else if (payload.type === "error") {
             them.textContent = "error · " + (payload.message || payload.code);
           }
@@ -1415,18 +1617,49 @@
       else setBubbleText(them, text, true);
       if (state.deferred) {
         startPoll();
+      } else if (text) {
+        state.awaitingServer = false;
+        await applyHistory(state.sessionId);
+      } else if (state.awaitingServer) {
+        // Stream ended without tokens (or was cut) — poll for server-owned reply.
+        them.textContent = "working in the background…";
+        startPoll();
       } else {
+        state.awaitingServer = false;
         await applyHistory(state.sessionId);
       }
     } catch (e) {
-      them.textContent = "error · " + e.message;
+      // iOS kills fetch on pagehide/sleep — treat as server-owned turn.
+      const msg = String((e && e.message) || e || "");
+      const soft = /abort|AbortError|network|Failed to fetch|Load failed|The network connection was lost|cancelled|canceled/i.test(msg)
+        || (e && e.name === "AbortError");
+      if (soft || state.awaitingServer) {
+        them.textContent = "working in the background — reopen anytime";
+        state.awaitingServer = true;
+        setHeaderBusy(true);
+        $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      } else {
+        them.textContent = "error · " + msg;
+        state.awaitingServer = false;
+      }
     } finally {
       state.sending = false;
-      setHeaderBusy(false);
+      if (!state.awaitingServer && !state.deferred) setHeaderBusy(false);
       $("[data-send]").disabled = false;
-      if (input) input.focus();
+      if (input && document.visibilityState === "visible") input.focus();
     }
   }
+
+  // Never cancel in-flight /chat_stream when the phone sleeps or apps switch.
+  document.addEventListener("pagehide", () => {
+    /* intentional no-op: do not abort fetch; server owns the turn */
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!(state.deferred || state.awaitingServer) || !state.sessionId) return;
+    applyHistory(state.sessionId).catch(() => {});
+  });
 
   const _sendBtn = $("[data-send]");
   const _inp = $("[data-input]");

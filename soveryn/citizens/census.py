@@ -134,9 +134,9 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="kernel_build",
             workspace_path=str(DEFAULT_WORKSPACES / "kernel"),
             notes=(
-                "Build / code desk. GLM-5.3-Flash EXL3 TR3 4bpw "
-                f"TP=2 on both Sparks (:8001 / {_alias_of('kernel_build')}, ctx 32k). "
-                "Eve stays on Quadros Qwen 3.8 :8091. DeepSeek Flash parked. Jon "
+                "Build / code desk. Qwen3.8-Flash-Next NVFP4 TP=1 spark2 "
+                f"(:8888 / {_alias_of('kernel_build')}, house ctx 131072). "
+                "GLM TP=2 parked. Eve stays on Quadros Qwen 3.8 :8091. Jon "
                 "assigns build work here — not Scotty's repair queue."
             ),
         ),

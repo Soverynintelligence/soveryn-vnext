@@ -1,14 +1,14 @@
 {
   "defaultProvider": "kernel-glm",
-  "defaultModel": "glm-5.3-flash",
+  "defaultModel": "qwen3.8-flash-next",
   "defaultThinkingLevel": "medium",
   "theme": "dark",
   "quietStartup": false,
   "defaultProjectTrust": "always",
   "enableInstallTelemetry": false,
   "compaction": {
-    "enabled": false,
-    "reserveTokens": 16384,
+    "enabled": true,
+    "reserveTokens": 20480,
     "keepRecentTokens": 20000
   },
   "retry": {

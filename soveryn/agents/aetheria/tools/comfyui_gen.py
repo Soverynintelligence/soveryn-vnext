@@ -65,6 +65,7 @@ def _build_workflow(
     cfg: float,
     sampler_name: str,
     scheduler: str,
+    filename_prefix: str = "aetheria",
 ) -> dict[str, Any]:
     """Build the workflow JSON ComfyUI's API expects.
 
@@ -111,7 +112,7 @@ def _build_workflow(
         "7": {
             "class_type": "SaveImage",
             "inputs": {
-                "filename_prefix": "aetheria",
+                "filename_prefix": filename_prefix,
                 "images": ["6", 0],
             },
         },
@@ -296,14 +297,16 @@ def _path_to_chat_url(path: Path) -> str | None:
 
 def build_generate_image_tool(
     *,
+    owner_agent: str = "aetheria",
     comfyui_url: str = DEFAULT_COMFYUI_URL,
 ) -> ToolSpec:
-    """Aetheria's text-to-image tool. Owned by aetheria.
+    """Text-to-image via ComfyUI. Owner is Aetheria or Eve.
 
     Returns the local file path(s) of generated images. v1 is sync —
-    Aetheria's chat turn blocks until generation completes (typically
+    the chat turn blocks until generation completes (typically
     5-30s depending on checkpoint + steps).
     """
+    prefix = "".join(ch for ch in (owner_agent or "aetheria") if ch.isalnum())[:32] or "aetheria"
 
     def handler(args: Mapping[str, Any]) -> dict:
         prompt = str(args.get("prompt", "")).strip()
@@ -341,6 +344,7 @@ def build_generate_image_tool(
                 width=width, height=height,
                 seed=seed, steps=steps, cfg=cfg,
                 sampler_name=sampler_name, scheduler=scheduler,
+                filename_prefix=prefix,
             )
 
             client_id = str(uuid.uuid4())
@@ -400,14 +404,16 @@ def build_generate_image_tool(
 
     return ToolSpec(
         name="generate_image",
-        owner="aetheria",
+        owner=owner_agent,
         description=(
             "Generate an image from a text prompt via ComfyUI (on-demand GPU: "
             "starts Quadro Comfy for this call, then stops so Kernel keeps "
             "VRAM). Defaults to JuggernautXL Lightning (~5–15s once warm; "
             "cold start adds a bit). Returns file path + UI URL "
             "(`/aetheria/img/<filename>`). Include the URL inline in your "
-            "reply — the chat UI auto-renders it."
+            "reply — the chat UI auto-renders it. Real pond photos still "
+            "use look_at / make_collage — do not pass a generated still off "
+            "as a CWG job shot."
         ),
         schema={
             "type": "object",

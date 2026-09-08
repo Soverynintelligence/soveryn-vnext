@@ -101,6 +101,12 @@ def test_requires_approval_web_ungated_writes_gated():
     assert requires_approval("compose_post") is True  # Messages Allow → Signal
     assert requires_approval("eve_ig_post") is True  # Messages Allow → CWG Instagram desk
     assert requires_approval("eve_gbp_post") is True  # Messages Allow → CWG Google Business
+    assert requires_approval("eve_calendar_create") is True  # Messages Allow → CWG Calendar
+    assert requires_approval("eve_calendar_complete") is True
+    assert requires_approval("eve_photo_inbox") is False
+    assert requires_approval("pondwright_catalog_refresh") is False
+    assert requires_approval("eve_calendar_list") is False
+    assert requires_approval("eve_calendar_status") is False
     assert requires_approval("signal_send") is False  # Direct Line, ungated
     assert requires_approval("read_file") is False  # house-local
 
@@ -122,6 +128,9 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     assert requires_approval("eve_ig_post", source="direct") is True
     assert requires_approval("eve_gbp_post", source="automation") is True
     assert requires_approval("eve_gbp_status", source="direct") is False
+    assert requires_approval("eve_calendar_create", source="automation") is True
+    assert requires_approval("eve_calendar_list", source="direct") is False
+    assert requires_approval("eve_calendar_list", source="automation") is False
     assert requires_approval("eve_google_desk_status", source="direct") is False
     assert requires_approval("read_x", source="direct") is False
     assert requires_approval("read_x", source="automation") is False

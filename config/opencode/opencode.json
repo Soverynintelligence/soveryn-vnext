@@ -1,23 +1,37 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "kernel-glm/glm-5.3-flash",
-  "small_model": "kernel-glm/glm-5.3-flash",
-  "enabled_providers": ["kernel-glm", "kernel-qwen"],
+  "model": "kernel-glm/qwen3.8-flash-next",
+  "small_model": "kernel-glm/qwen3.8-flash-next",
+  "enabled_providers": [
+    "kernel-glm",
+    "kernel-qwen"
+  ],
   "provider": {
     "kernel-glm": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel coding · GLM-5.3-Flash dual Spark (:8001)",
+      "name": "Kernel coding · Qwen3.8-Flash-Next :8888 (OpenCode parked; Pi is the TTY)",
       "options": {
-        "baseURL": "http://10.10.10.2:8001/v1",
+        "baseURL": "http://127.0.0.1:8888/v1",
         "apiKey": "local",
         "chat_template_kwargs": {
-          "enable_thinking": false,
-          "thinking": false
+          "enable_thinking": false
+        },
+        "extraBody": {
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
         }
       },
       "models": {
+        "qwen3.8-flash-next": {
+          "name": "Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+          "limit": {
+            "context": 131072,
+            "output": 32768
+          }
+        },
         "glm-5.3-flash": {
-          "name": "Kernel · GLM-5.3-Flash EXL3 TR3 4bpw TP=2 (OpenCode default)",
+          "name": "Kernel · GLM-5.3-Flash (DISABLED — rollback bak)",
           "limit": {
             "context": 32768,
             "output": 8192
@@ -45,9 +59,9 @@
   },
   "agent": {
     "kernel": {
-      "description": "SOVERYN house build brain — autonomous mend/patch on GLM-5.3-Flash",
+      "description": "SOVERYN house build brain — Flash-Next eval (was GLM-5.3-Flash)",
       "mode": "primary",
-      "model": "kernel-glm/glm-5.3-flash",
+      "model": "kernel-glm/qwen3.8-flash-next",
       "temperature": 0.2,
       "prompt": "{file:./agents/kernel.md}",
       "color": "#6aa84f",
@@ -66,10 +80,10 @@
       }
     },
     "build": {
-      "model": "kernel-glm/glm-5.3-flash"
+      "model": "kernel-glm/qwen3.8-flash-next"
     },
     "plan": {
-      "model": "kernel-glm/glm-5.3-flash"
+      "model": "kernel-glm/qwen3.8-flash-next"
     }
   },
   "permission": {
@@ -80,5 +94,6 @@
       "git push --force*": "deny"
     },
     "external_directory": "ask"
-  }
+  },
+  "_rollback_note": "OpenCode is parked. Kernel TTY is Pi (`kernel`). GLM rollback: switch_kernel_brain.sh glm + restore config/pi/models.json.bak-20260906-glm-tp2. Flash-Next tunnel: soveryn-spark2-flashnext-8888.service."
 }
