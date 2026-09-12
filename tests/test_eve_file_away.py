@@ -85,6 +85,31 @@ def test_file_away_tool_requires_path(tmp_path: Path):
         tool.handler({"dest": "pictures"})
 
 
+def test_file_away_unknown_dest_lists_cwg_business_buckets():
+    out = file_away("missing.pdf", "not_a_real_dest")
+    assert out["ok"] is False
+    assert out["miss"] == "unknown_dest"
+    for name in ("cwg_insurance", "cwg_licenses", "cwg_vehicles", "cwg_contracts"):
+        assert name in out["buckets"]
+
+
+def test_file_away_cwg_insurance_bucket(tmp_path: Path):
+    src_root = tmp_path / "Downloads"
+    src_root.mkdir()
+    src = src_root / "coi.pdf"
+    src.write_bytes(b"%PDF")
+    dest = tmp_path / "cwg-business" / "insurance"
+    out = file_away(
+        src,
+        "cwg_insurance",
+        src_roots=(src_root,),
+        buckets={"cwg_insurance": dest},
+    )
+    assert out["ok"] is True
+    assert not src.exists()
+    assert (dest / "coi.pdf").is_file()
+
+
 def test_file_away_registered_eve_only():
     reg = ToolRegistry(
         active_agents=("eve", "kernel", "aetheria"),
