@@ -143,5 +143,12 @@ data/gbp/
 data/gcal/
 
 # Live tax books and receipt evidence (EIN, address, invoices). Public repo.
+# Keep the tax-cwg README so Eve can see COI vs receipt routing.
 docs/ops/tax/
-docs/ops/tax-cwg/
+docs/ops/tax-cwg/*
+!docs/ops/tax-cwg/README.md
+# Live CWG compliance docs (COI, titles, contracts). Shelf markers stay.
+docs/ops/cwg-business/**/*
+!docs/ops/cwg-business/**/
+!docs/ops/cwg-business/README.md
+!docs/ops/cwg-business/**/.gitkeep

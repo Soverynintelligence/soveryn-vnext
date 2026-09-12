@@ -1025,7 +1025,8 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
         if not isinstance(dest, str) or not dest.strip():
             raise ToolArgError(
                 "dest must be models, cwg_ig, cwg_evidence, "
-                "soveryn_evidence, pictures, or installers"
+                "cwg_insurance, cwg_licenses, cwg_vehicles, "
+                "cwg_contracts, soveryn_evidence, pictures, or installers"
             )
         return file_away(src.strip(), dest.strip())
 
@@ -1046,11 +1047,15 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
                     "description": (
                         "Bucket: models (.gguf → /mnt/soveryn_models/GGUF), "
                         "cwg_ig (pond photos → Desktop/CWG-Instagram), "
-                        "cwg_evidence (CWG receipt image/PDF), "
+                        "cwg_evidence (CWG paid receipt image/PDF), "
+                        "cwg_insurance (COI / insurance certificates — not bills), "
+                        "cwg_licenses (licenses / EIN), "
+                        "cwg_vehicles (title / registration), "
+                        "cwg_contracts (vendor contracts — not customer quotes), "
                         "soveryn_evidence (SOVERYN receipt), "
                         "pictures (iCloud dumps), "
                         "installers (.deb/.AppImage). "
-                        "Receipts still need ledger_ingest after filing."
+                        "Paid receipts still need ledger_ingest after filing."
                     ),
                 },
             },
@@ -1061,8 +1066,11 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
         description=(
             "Move one Downloads or Desktop item into a house bucket. "
             "Use when Jon says clean/file Downloads. look_at photos first. "
-            "GGUF → dest=models. Pond shots → cwg_ig. Receipts → "
+            "GGUF → dest=models. Pond shots → cwg_ig. Paid receipts → "
             "cwg_evidence or soveryn_evidence then ledger_ingest. "
+            "COI / insurance certificates → cwg_insurance (not ledger). "
+            "Licenses/EIN → cwg_licenses. Vehicle title/reg → cwg_vehicles. "
+            "Vendor contracts → cwg_contracts. "
             "Does not delete. Does not overwrite. Not a free mv."
         ),
     )
