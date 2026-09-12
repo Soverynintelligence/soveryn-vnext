@@ -80,7 +80,7 @@ _SHIP = re.compile(
     re.I,
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
-_GRAND = re.compile(r"Grand Total:|Amount due\b|\bAMOUNT\b", re.I)
+_GRAND = re.compile(r"Grand Total:|Amount due\b|Payment amount:?", re.I)
 _TOTAL = re.compile(r"\bTOTAL\b|\bTotal\b", re.I)
 
 
