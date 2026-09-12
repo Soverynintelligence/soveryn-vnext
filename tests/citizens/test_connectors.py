@@ -105,6 +105,11 @@ def test_requires_approval_web_ungated_writes_gated():
     assert requires_approval("eve_calendar_complete") is True
     assert requires_approval("eve_photo_inbox") is False
     assert requires_approval("pondwright_catalog_refresh") is False
+    assert requires_approval("pondwright_leads") is False
+    assert requires_approval("pondwright_save_lead") is False
+    assert requires_approval("pondwright_save_quote") is False
+    assert requires_approval("pondwright_jobs") is False
+    assert requires_approval("pondwright_customers") is False
     assert requires_approval("eve_calendar_list") is False
     assert requires_approval("eve_calendar_status") is False
     assert requires_approval("signal_send") is False  # Direct Line, ungated

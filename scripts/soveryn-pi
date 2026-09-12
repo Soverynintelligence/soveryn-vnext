@@ -1,107 +1,53 @@
 #!/usr/bin/env bash
-# Kernel via Pi (Mario Zechner / earendil). Flash-Next on spark2 :8888.
-# OpenCode is parked (8k cap + thinking ate writes). Pi is the TTY.
-# Aider surgical fallback: soveryn-aider --kernel
+# Kernel via Pi (Mario Zechner / earendil). Brain switcher → Flash / GLM / Aetheria.
+# Profiles SSOT: config/soveryn-cli/profiles.json (symlinked at config/pi/profiles.json).
+# Regenerates config/pi/models.json + settings.json from the active profile.
 #
 # Usage:
-#   soveryn-pi                         # TUI, cwd (Pi medium → thinking on)
-#   soveryn-pi --high                  # Pi high → thinking on (hungry; 16k includes CoT)
-#   soveryn-pi --build                 # thinking off — long file/canvas jobs
-#   soveryn-pi /path/to/repo           # TUI in that project
-#   soveryn-pi --qwen                  # Aetheria Qwen :8090
-#   soveryn-pi -p "mend X"             # print one-shot
-#   kernel                             # same as soveryn-pi (~/bin/kernel)
-#   kernel --high                      # thinking on, hungry
-#   kernel --build                     # thinking off (Flash-Next thinking is binary)
+#   kernel | soveryn-pi              # TUI, active brain (default flash)
+#   kernel use flash|aetheria        # persist active brain
+#   kernel use glm                   # REFUSES if parked (never silent flash)
+#   kernel model                     # interactive picker
+#   kernel status                    # brain + health + endpoint
+#   kernel --flash / --glm / --qwen|--aetheria / --profile NAME
+#   kernel --high / --build / --offline / --online
+#   kernel /path/to/repo
+#   kernel -p "mend X"
 #
-# Compaction is on (2026-09-07): Flash-Next is 262144 ctx; 16k maxTokens
-# plus a stuffed prompt overflowed vLLM by 1 token with compaction off.
-# Nothing leaves the machine unless you change models.json baseUrl.
+# Active brain files (kept in sync):
+#   ~/.soveryn/kernel_brain
+#   ~/.soveryn/soveryn-cli-profile
+#
+# Default: ONLINE. Thinking off for flash.
+# Park/unpark: kernel unpark glm [--confirm|--if-healthy|--dry-run]; kernel park glm [--confirm]
+# GLM unpark is owner-gated (stops Flash-Next). Prefer --if-healthy when :8001 already live.
 
 set -euo pipefail
 
-PI_BIN="${PI_BIN:-}"
-if [[ -z "$PI_BIN" ]]; then
-  PI_BIN="$(command -v pi 2>/dev/null || true)"
-fi
-if [[ -z "$PI_BIN" || ! -x "$PI_BIN" ]]; then
-  echo "pi not found. Install: npm install -g --ignore-scripts @earendil-works/pi-coding-agent" >&2
+REPO="${SOVERYN_VNEXT:-$HOME/soveryn_vnext}"
+CLI_JS="${REPO}/packages/soveryn-cli/src/cli.js"
+if [[ ! -f "$CLI_JS" ]]; then
+  echo "soveryn-pi: missing $CLI_JS" >&2
   exit 1
 fi
 
-CFG_DIR="${PI_CODING_AGENT_DIR:-$HOME/soveryn_vnext/config/pi}"
-if [[ ! -f "$CFG_DIR/models.json" ]]; then
-  echo "soveryn-pi: missing $CFG_DIR/models.json" >&2
+# Kernel always owns config/pi (ignore ambient SOVERYN_CLI_DIR from soveryn-cli).
+KERNEL_CFG="${SOVERYN_KERNEL_DIR:-$REPO/config/pi}"
+
+export SOVERYN_HARNESS=kernel
+export SOVERYN_VNEXT="$REPO"
+export SOVERYN_CLI_DIR="$KERNEL_CFG"
+export PI_CODING_AGENT_DIR="$KERNEL_CFG"
+export SOVERYN_PROFILES_PATH="${SOVERYN_PROFILES_PATH:-$REPO/config/soveryn-cli/profiles.json}"
+export SOVERYN_CLI_PROFILE_FILE="${SOVERYN_CLI_PROFILE_FILE:-$HOME/.soveryn/kernel_brain}"
+
+NODE_BIN="${NODE_BIN:-}"
+if [[ -z "$NODE_BIN" ]]; then
+  NODE_BIN="$(command -v node 2>/dev/null || true)"
+fi
+if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
+  echo "soveryn-pi: node not found on PATH" >&2
   exit 1
 fi
 
-export PI_CODING_AGENT_DIR="$CFG_DIR"
-export PI_TELEMETRY=0
-export PI_SKIP_VERSION_CHECK=1
-export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
-
-USE_QWEN=0
-THINKING=""
-ARGS=()
-for arg in "$@"; do
-  if [[ "$arg" == "--qwen" ]]; then
-    USE_QWEN=1
-  elif [[ "$arg" == "--flash" || "$arg" == "--glm" ]]; then
-    USE_QWEN=0
-  elif [[ "$arg" == "--build" ]]; then
-    THINKING="off"
-  elif [[ "$arg" == "--high" ]]; then
-    THINKING="high"
-  else
-    ARGS+=("$arg")
-  fi
-done
-set -- "${ARGS[@]+"${ARGS[@]}"}"
-
-if [[ "$USE_QWEN" -eq 1 ]]; then
-  MODEL="kernel-qwen/aetheria"
-  CHECK_URL="http://127.0.0.1:8090/v1/models"
-  LABEL="Kernel · Qwen 3.8 @ http://127.0.0.1:8090/v1"
-else
-  MODEL="kernel-glm/qwen3.8-flash-next"
-  CHECK_URL="http://127.0.0.1:8888/v1/models"
-  LABEL="Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 @ http://127.0.0.1:8888/v1"
-fi
-
-if ! curl -sf --max-time 2 "$CHECK_URL" >/dev/null; then
-  echo "soveryn-pi: WARN — $CHECK_URL not answering; warm the brain first" >&2
-fi
-
-echo "soveryn-pi: $LABEL" >&2
-if [[ "$THINKING" == "off" ]]; then
-  echo "soveryn-pi: BUILD thinking=off (Flash-Next thinking is binary; CoT must not eat the 16k cap)" >&2
-elif [[ "$THINKING" == "high" ]]; then
-  echo "soveryn-pi: HIGH thinking=on (16k includes CoT; write early)" >&2
-else
-  echo "soveryn-pi: config $CFG_DIR (compaction off, maxTokens 16384, thinking medium → on)" >&2
-fi
-
-# First non-flag arg that is an existing directory = project cwd.
-CWD=""
-REST=()
-for arg in "${ARGS[@]+"${ARGS[@]}"}"; do
-  if [[ -z "$CWD" && "$arg" != -* && -d "$arg" ]]; then
-    CWD="$arg"
-  else
-    REST+=("$arg")
-  fi
-done
-
-HAS_MODEL=0
-for a in "${REST[@]+"${REST[@]}"}"; do
-  [[ "$a" == "--model" || "$a" == --model=* ]] && HAS_MODEL=1
-done
-EXTRA=()
-[[ $HAS_MODEL -eq 0 ]] && EXTRA+=(--model "$MODEL")
-[[ -n "$THINKING" ]] && EXTRA+=(--thinking "$THINKING")
-
-if [[ -n "$CWD" ]]; then
-  cd "$CWD"
-fi
-
-exec "$PI_BIN" --offline "${EXTRA[@]+"${EXTRA[@]}"}" "${REST[@]+"${REST[@]}"}"
+exec "$NODE_BIN" "$CLI_JS" "$@"

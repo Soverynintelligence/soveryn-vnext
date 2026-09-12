@@ -1,10 +1,11 @@
-"""PondWright house pricing — Apex catalog + estimator rate book.
+"""PondWright house CRM + pricing.
 
-Source of truth for SKU prices:
+CRM (leads, quotes, jobs, customers) lives in pondwright-crm on the Spark.
+Citizens reach it with the field token — they do not copy leads into the lattice.
+
+SKU prices:
   ~/Pictures/Apex Distribution Master Price List 2026v2.xlsx
   → rebuilt into ~/pondpro/catalog.json (import_apex_catalog.py)
-
-Citizens quote from the house catalog — not thin web digs.
 """
 from __future__ import annotations
 

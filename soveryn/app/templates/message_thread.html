@@ -1518,6 +1518,7 @@
         agent: state.agent,
         session_id: state.sessionId,
         message: wireMessage,
+        source: "messages",
       };
       if (attachUrls.length > 0) body.attachments = attachUrls;
       // No AbortController / signal — backgrounding must not cancel Eve.
@@ -1607,6 +1608,14 @@
               // Eve verification gate buffers tokens; Done may be the first text.
               text = String(payload.content);
               setBubbleText(them, text, false);
+            }
+            // tool_round_limit / tool_round_limit_hit must NEVER render as success.
+            const fr = String(payload.finish_reason || "");
+            if (fr === "tool_round_limit" || fr === "tool_round_limit_hit") {
+              const note = "⚠ stopped · tool_round_limit (not success)";
+              text = text ? (text + "\n\n" + note) : note;
+              setBubbleText(them, text, false);
+              them.classList.add("fail-limit");
             }
           } else if (payload.type === "error") {
             them.textContent = "error · " + (payload.message || payload.code);

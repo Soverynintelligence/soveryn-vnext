@@ -148,20 +148,26 @@ CATALOG: dict[str, ConnectorDef] = {
     ),
     "pondwright": ConnectorDef(
         id="pondwright",
-        title="PondWright pricing",
+        title="PondWright CRM + pricing",
         description=(
-            "House Apex Distribution catalog (MAP/MSRP/WS), AKT Specialty dealer "
-            "catalog, and estimator rate book for CWG quotes — not the public web."
+            "CWG lead/quote/job CRM plus Apex and AKT catalogs and the estimator "
+            "rate book — not the public web."
         ),
         tools=(
             "apex_catalog_search",
             "akt_catalog_search",
             "pondwright_pricing_book",
             "pondwright_catalog_refresh",
+            "pondwright_leads",
+            "pondwright_save_lead",
+            "pondwright_save_quote",
+            "pondwright_jobs",
+            "pondwright_customers",
         ),
         class_="house",
         sovereignty_note=(
-            "Separate pickable catalogs: Apex (xlsx) and AKT Specialty. "
+            "CRM is PondWright SQLite on the Spark (field token). "
+            "Catalogs: Apex (xlsx) and AKT Specialty stay separate. "
             "Wholesale stays house-only."
         ),
     ),

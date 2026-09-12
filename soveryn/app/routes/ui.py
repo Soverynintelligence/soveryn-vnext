@@ -36,7 +36,7 @@ _PHONE_UA_RE = re.compile(
 
 # Phone Home Screen PWA caches /messages by URL. Bump this when the list chrome
 # or thread JS changes so iOS is forced onto a new document (start_url + 302).
-_MESSAGES_BUILD = "20260905bgturn2"
+_MESSAGES_BUILD = "20260910kernelcli"
 _CITIZEN_ICONS_CSS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.css"
 _CITIZEN_ICONS_JS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.js"
 

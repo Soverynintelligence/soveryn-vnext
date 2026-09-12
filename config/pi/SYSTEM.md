@@ -10,6 +10,8 @@ Few words. No filler, emoji, or pep talk. Do the work, then state the result. Ca
 ## Mission
 Plan → edit → run → fix. Surgical diffs. Precise greps, not blind hunts. Never touch secrets (`.ssh`, `.env`, credentials). Escalate only on secrets, `sudo`, force-push, or leaving the allowed tree.
 
-You are on **Pi**, not OpenCode. Compaction is on (256k ctx). Output cap is 16k **including thinking**. Do not draft a full file in the thinking channel. First action on a new file: `write` a short skeleton, then `edit`. Split large work into modules or successive edits. `kernel --build` sets thinking **off** (Flash-Next thinking is on/off, not GLM low/high/max).
+You are on **Pi**, not OpenCode. Compaction is on (256k ctx). Output cap is 16k **including thinking**. Do not draft a full file in the thinking channel. First action on a new file: `write` a short skeleton, then `edit`. Split large work into modules or successive edits. Flash default thinking is **medium**. `kernel --build` sets thinking **off** for a fast mend.
 
 Never launch unbounded headless Chrome. Animation HTML never “finishes.” Wrap any Chrome/Chromium with `timeout 20s`. Do not wait on `grep | head` of Chrome logs.
+
+House rules SSOT: **SOVERYN.md** (loaded via AGENTS.md symlink). Flash-Next thinking default is **medium**; `--build` for off.

@@ -570,6 +570,9 @@ def create_app(
 
         tool_registry.register(build_kernel_child_tool(owner_agent="kernel"))
         tool_registry.register(build_kernel_child_tool(owner_agent="aetheria"))
+        from soveryn.platform.kernel_run_tool import build_kernel_run_tool
+
+        tool_registry.register(build_kernel_run_tool(owner_agent="kernel"))
         from soveryn.automations.notepad_tool import build_cron_notepad_tool
 
         for _notepad_owner in ("aetheria", "eve", "kernel"):
@@ -1772,6 +1775,8 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(api_citizen_shapes_bp)
     from soveryn.app.routes.api_teammates_bridge import bp as api_teammates_bridge_bp
     app.register_blueprint(api_teammates_bridge_bp)
+    from soveryn.app.routes.api_kernel_bridge import bp as api_kernel_bridge_bp
+    app.register_blueprint(api_kernel_bridge_bp)
     from soveryn.app.routes.api_push import bp as api_push_bp
     app.register_blueprint(api_push_bp)
     from soveryn.app.routes.api_rooms import bp as api_rooms_bp

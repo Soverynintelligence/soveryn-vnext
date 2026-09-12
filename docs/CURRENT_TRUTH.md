@@ -3,14 +3,18 @@
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
 > **Last rotated:** 2026-08-31 (agent browser desks: Eve Google login)  
-> Prior archive: `docs/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
+> Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
+> If the date below is >7 days old, treat as stale and re-observe.
 
 If runtime behavior changes, **update this file first**, then code/notes.
 
 ---
 
 ## 0. House spine (locked 2026-08-24)
-*Last observed: 2026-08-24.*
+*Last observed: 2026-08-24; public-products row re-checked 2026-09-09 (Kernel).*
+*As of 2026-09-12; rows below show last-observed dates.*
+
+> Dated note 2026-09-09: superseded snapshot 2026-05-23 moved to docs/archive/ — this file is the only live truth.
 
 **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
 
@@ -20,10 +24,14 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
-| **Public products** | Seneca, PondWright, Atticus, TGTHRmess | Customer/brand surfaces — **not** the house OS. Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot. Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
+| **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG | Customer/brand surface. |
+| **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot. Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
+
+*These three are the surfaces the README public-surface table has actually fetched; README lists only fetched surfaces.*
 
 ### 0a. Fleet freeze — frontier few (locked 2026-08-27)
 *Last observed: 2026-08-27.*
+*How to verify: `nvidia-smi` shows ≤1 frontier model per card; `systemctl --user list-units 'soveryn*'` (and the `:PORT` listeners in §1) list the live agent services.*
 
 **Constraint:** you cannot run six frontier minds and six personas on this iron. One card → one frontier mind. Extra agents only for **different tools** or a **different clock** — never another wig on the same weights.
 
@@ -33,6 +41,16 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Kernel** | Local build | spark2 Qwen3.8-Flash-Next NVFP4 TP=1 (`:8888`, house ctx 131072). GLM TP=2 parked. |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
+
+Per-row verification dates — model swaps are the most common silent drift; do not trust the section-level date alone:
+
+| Row (model/endpoint) | Last verified |
+|----------------------|---------------|
+| Aetheria — Blackwell `:8090` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 Brains |
+| Kernel — spark2 `:8888` Qwen3.8-Flash-Next NVFP4 TP=1 | 2026-09-06 (Flash-Next move; GLM `:8001` parked — power-cut note §1 Brains) |
+| Eve — Quadros `:8091` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 |
+| TGTHR helper Messie — `:5066` Qwen3.5-9B Q6 | 2026-09-09 (Kernel — re-checked vs §0 public-products note; in-house TGTHR helper, not the Quadros 27B public slot) |
+| Critic / Scout — Teammates inbox | 2026-09-07 (§0b brief contract) |
 
 | Pulled from house chat | Notes |
 |------------------------|--------|
@@ -115,8 +133,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 | Item | State |
 |------|--------|
-| Citizen email | **Not production — NOT ARMED.** Gated checklist (source: `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist): 1) aliases on soverynintelligence.com + carolinawatergardens.com · 2) SPF/DKIM/DMARC both domains · 3) arm `SOVERYN_SMTP_HOST`/`SOVERYN_SMTP_FROM` + creds · 4) optional IMAP house inbox · 5) `SOVERYN_EMAIL_PRODUCTION=1` only after controlled smoke · 6) smoke: Messages → Aetheria → Gate Allow → test as `aetheria@soverynintelligence.com` · 7) flip this row to **Live** only after smoke · 8) bounce/complaint policy (write before the latch flips) |
-| ↳ canonical checklist | Authoritative checklist lives in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist. This §2 row is a summary only — edit the note, not this row, to avoid drift. |
+| Citizen email | **Not production — NOT ARMED.** Gated checklist is canonical in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (single source for the step list and its count — this row deliberately does not restate or number the steps). Latch `SOVERYN_EMAIL_PRODUCTION=1` off; SMTP alone does not arm egress. |
 | CoS rename | **Deferred** — Aetheria still `COS_ID` |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
 | Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
@@ -145,7 +162,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 1. ~~Rotate source of authority~~ → this file  
 2. ~~Secrets/state backup~~ → runbook + drill PASS  
 3. ~~Seneca lead capture~~ → `docs/leads/seneca-leads.csv` (retroactive 08-24)  
-4. ~~Citizen email~~ → **NOT ARMED** — gated checklist in §2  
+4. ~~Citizen email~~ → **NOT ARMED** — gated checklist in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (9 steps; §2 is the live-state pointer)  
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 

@@ -1,15 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "kernel-glm/qwen3.8-flash-next",
-  "small_model": "kernel-glm/qwen3.8-flash-next",
+  "model": "soveryn/coding",
+  "small_model": "soveryn/coding",
   "enabled_providers": [
-    "kernel-glm",
+    "soveryn",
     "kernel-qwen"
   ],
   "provider": {
-    "kernel-glm": {
+    "soveryn": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel coding · Qwen3.8-Flash-Next :8888 (OpenCode parked; Pi is the TTY)",
+      "name": "SOVERYN coding harness \u00b7 Flash-Next :8888",
       "options": {
         "baseURL": "http://127.0.0.1:8888/v1",
         "apiKey": "local",
@@ -23,32 +23,37 @@
         }
       },
       "models": {
-        "qwen3.8-flash-next": {
-          "name": "Kernel · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+        "coding": {
+          "id": "qwen3.8-flash-next",
+          "name": "SOVERYN coding \u00b7 Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+          "tool_call": true,
+          "reasoning": true,
           "limit": {
             "context": 131072,
             "output": 32768
           }
         },
-        "glm-5.3-flash": {
-          "name": "Kernel · GLM-5.3-Flash (DISABLED — rollback bak)",
+        "qwen3.8-flash-next": {
+          "name": "SOVERYN \u00b7 Qwen3.8-Flash-Next (direct id)",
+          "tool_call": true,
+          "reasoning": true,
           "limit": {
-            "context": 32768,
-            "output": 8192
+            "context": 131072,
+            "output": 32768
           }
         }
       }
     },
     "kernel-qwen": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel alt · Qwen 3.8 (:8090)",
+      "name": "Kernel alt \u00b7 Qwen 3.8 (:8090)",
       "options": {
         "baseURL": "http://127.0.0.1:8090/v1",
         "apiKey": "local"
       },
       "models": {
         "aetheria": {
-          "name": "Kernel · Qwen 3.8 (large-ctx / speed lane)",
+          "name": "Kernel \u00b7 Qwen 3.8 (large-ctx / speed lane)",
           "limit": {
             "context": 49152,
             "output": 8192
@@ -59,9 +64,9 @@
   },
   "agent": {
     "kernel": {
-      "description": "SOVERYN house build brain — Flash-Next eval (was GLM-5.3-Flash)",
+      "description": "SOVERYN house build brain \u2014 Week1 Flash-Next harness",
       "mode": "primary",
-      "model": "kernel-glm/qwen3.8-flash-next",
+      "model": "soveryn/coding",
       "temperature": 0.2,
       "prompt": "{file:./agents/kernel.md}",
       "color": "#6aa84f",
@@ -80,10 +85,10 @@
       }
     },
     "build": {
-      "model": "kernel-glm/qwen3.8-flash-next"
+      "model": "soveryn/coding"
     },
     "plan": {
-      "model": "kernel-glm/qwen3.8-flash-next"
+      "model": "soveryn/coding"
     }
   },
   "permission": {
@@ -95,5 +100,5 @@
     },
     "external_directory": "ask"
   },
-  "_rollback_note": "OpenCode is parked. Kernel TTY is Pi (`kernel`). GLM rollback: switch_kernel_brain.sh glm + restore config/pi/models.json.bak-20260906-glm-tp2. Flash-Next tunnel: soveryn-spark2-flashnext-8888.service."
+  "_rollback_note": "Week1 2026-09-09: provider kernel-glm renamed to soveryn; alias soveryn/coding \u2192 upstream qwen3.8-flash-next via model.id. GLM :8001 parked (bak-20260906-glm-tp2 + bak-20260909-week1-pre). Tunnel: soveryn-spark2-flashnext-8888.service. Thinking forced off via chat_template_kwargs.enable_thinking=false."
 }
