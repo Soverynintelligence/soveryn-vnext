@@ -46,7 +46,7 @@ class ParsedRow:
 # Allow 4+ digit amounts without commas ($4279.99) — Amazon prints those.
 _MONEY = re.compile(r"\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)")
 _MONEY_AFTER_LABEL = re.compile(
-    r"\s*-?\s*\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
+    r"[:\s]*-?\s*\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
 )
 
 _ORDER_PATTERNS = (
@@ -80,8 +80,12 @@ _SHIP = re.compile(
     re.I,
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
-_GRAND = re.compile(r"Grand Total:|Amount due\b|Payment amount:?", re.I)
+_GRAND = re.compile(
+    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?|\bAMOUNT\b",
+    re.I,
+)
 _TOTAL = re.compile(r"\bTOTAL\b|\bTotal\b", re.I)
+_PER_MONTH = re.compile(r"\s*/\s*mo", re.I)
 
 
 def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
@@ -196,14 +200,25 @@ def _cash(
 
 
 def _labeled_money(text: str, label: re.Pattern[str]) -> Decimal | None:
-    m = label.search(text)
-    if not m:
-        return None
-    window = text[m.end() : m.end() + 40]
-    hit = _MONEY_AFTER_LABEL.match(window)
-    if not hit:
-        return None
-    return _dec(hit.group(1))
+    """First label that is actually followed by money. Skip monthly rates.
+
+    Gmail/confirmation bodies say "any amount owed" long before
+    "Payment amount: $163.33". A single .search() would stop on the
+    prose and never book the cash total.
+    """
+    for m in label.finditer(text):
+        window = text[m.end() : m.end() + 80]
+        hit = _MONEY_AFTER_LABEL.match(window)
+        if not hit:
+            continue
+        value = _dec(hit.group(1))
+        if value is None:
+            continue
+        tail = window[hit.end() : hit.end() + 8]
+        if _PER_MONTH.match(tail):
+            continue
+        return value
+    return None
 
 
 def _dec(raw: str) -> Decimal | None:
@@ -260,6 +275,8 @@ def _vendor(text: str, source_name: str) -> str:
     blob = f"{text}\n{source_name}".lower()
     if "star ridge" in blob:
         return "Star Ridge Aquatics"
+    if "next insurance" in blob or "ergo next" in blob:
+        return "Next Insurance"
     if "openai" in blob or "chatgpt" in blob:
         return "OpenAI"
     if "opticswave" in blob:
@@ -306,10 +323,17 @@ def _payment(text: str) -> str:
     m = re.search(r"PayPal", blob, re.I)
     if m:
         return "PayPal"
+    if re.search(r"\bACH\b", blob):
+        m = re.search(r"Account ending in:\s*(\d{4})", blob, re.I)
+        if m:
+            return f"ACH {m.group(1)}"
+        return "ACH"
     return ""
 
 
 _PRODUCT_HINTS = (
+    "general liability",
+    "business insurance",
     "registrar registration fee",
     "registrar transfer fee",
     "aquascape",
@@ -336,8 +360,9 @@ def _product(text: str, source_name: str) -> str:
         r"delivered |prime visa|view related|page \d|https://|invoice number|"
         r"date of issue|date due|bill to|pay online|description qty|subtotal|"
         r"amount due|company name|cloudflare|order placed|jon deoliveira|"
-        r"gmail\.com|fairmount|townsend|summer wind|invoice to|customer details|"
-        r"@",
+        r"gmail\.com|gmail - |fairmount|townsend|summer wind|invoice to|"
+        r"customer details|congratulations|policy details|payment summary|"
+        r"hi jon|next insurance <|1 message|@",
         re.I,
     )
     lines: list[str] = []
@@ -385,6 +410,11 @@ def _schedule(text: str, desc: str, vendor: str) -> str:
         return "Form 4562 CAPEX"
     if "cloudflare" in blob or "registrar" in blob or "domain" in blob:
         return "other / advertising"
+    if any(
+        tok in blob
+        for tok in ("next insurance", "ergo next", "general liability")
+    ):
+        return "insurance / overhead"
     if any(
         tok in blob
         for tok in ("aquascape", "hiblow", "pond", "uv", "bacteria", "liner")
