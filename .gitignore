@@ -152,3 +152,14 @@ docs/ops/cwg-business/**/*
 !docs/ops/cwg-business/**/
 !docs/ops/cwg-business/README.md
 !docs/ops/cwg-business/**/.gitkeep
+
+# SOVERYN CLI harness — runtime state / secrets / backups, never commit
+.soveryn/
+packages/soveryn-cli/.soveryn/
+config/pi/sessions/
+config/soveryn-cli/sessions/
+config/pi/auth.json
+config/soveryn-cli/auth.json
+*.bak
+*.bak-*
+docs/runtime-config/*.bak-*
