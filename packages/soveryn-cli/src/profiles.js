@@ -162,7 +162,7 @@ function providerEntry(profile) {
   };
 }
 
-function generatePiConfig(data, activeProfile) {
+function buildPiConfig(data, activeProfile) {
   const providers = {};
   for (const id of listProfileIds(data)) {
     const p = data.profiles[id];
@@ -195,7 +195,11 @@ function generatePiConfig(data, activeProfile) {
     httpIdleTimeoutMs: 600000,
     lastChangelogVersion: '0.74.2',
   };
+  return { models, settings };
+}
 
+function generatePiConfig(data, activeProfile) {
+  const { models, settings } = buildPiConfig(data, activeProfile);
   fs.mkdirSync(CFG_DIR, { recursive: true });
   fs.writeFileSync(
     path.join(CFG_DIR, 'models.json'),
@@ -313,6 +317,7 @@ module.exports = {
   writeActiveId,
   assertEnabled,
   generatePiConfig,
+  buildPiConfig,
   piModelSpec,
   banner,
   compactionWarnings,

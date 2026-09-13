@@ -1,7 +1,7 @@
 {
   "name": "soveryn",
   "version": "0.1.0",
-  "description": "SOVERYN branded CLI coding harness (Pi 0.74.2 wrapper). Parallel to kernel/soveryn-pi — does not touch config/pi.",
+  "description": "SOVERYN branded CLI coding harness (Pi 0.74.2 wrapper). Parallel to kernel/soveryn-pi \u2014 does not touch config/pi.",
   "bin": {
     "soveryn": "./bin/soveryn"
   },
@@ -10,5 +10,8 @@
     "node": ">=20"
   },
   "private": true,
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test test/"
+  }
 }

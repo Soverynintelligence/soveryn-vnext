@@ -92,6 +92,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Cognition surface (Gemma 4 26B-A4B Q5, CPU-only `:8089`, alias `dream`) | **Live** 2026-09-13 (Kernel — restarted; was silently down since ~Aug 30, starved `soveryn-representation.service` into a 4.8k-restart loop) |
 | Representation daemon (memory-as-reasoning, DRY RUN) | **Live** 2026-09-13 — readiness gate passes again; artifacts `data/memory/representation_dryrun.jsonl`. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) |
 | Service crash watch (`soveryn-crash-watch.timer` 15min + automation `service_crash_watch` 30min, monitor-mode) | **Live** 2026-09-13 — deterministic `scripts/systemd_health_watch.py` writes `data/automations/watches/systemd_health.txt` only on failed/activating/NRestarts≥10 units; unchanged file = no LLM, change = Aetheria briefs Jon. Canary-tested (caught + cleared) |
+| SOVERYN CLI harness hardening | **Live** 2026-09-13 (Kernel) — `doctor --json` (machine-readable health/drift/gates, exit 1 on problems — house monitors can consume); parked-but-live drift check; generated-config freshness gate (`config/pi` + `config/soveryn-cli` audited per-harness vs profiles SSOT); `npm test` 25/25 (`packages/soveryn-cli/test/`) |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |

@@ -21,7 +21,11 @@ const {
   BRAND,
   CMD,
 } = require('./paths');
-const { probe } = require('./health');
+const { probe, probeStable } = require('./health');
+const {
+  checkProfileStateDrift,
+  generatedConfigDrift,
+} = require('./drift');
 const { pickProfile } = require('./picker');
 const { findPi, piVersion, launchPi, hasSessionFlag, isPrintMode } = require('./launch');
 const {
@@ -49,8 +53,10 @@ const {
 } = require('./chrome');
 
 function helpText() {
+  const piBin = findPi();
+  const piVer = piBin ? piVersion(piBin) : 'pi not found';
   if (IS_KERNEL) {
-    return `Kernel — Pi coding agent brain switcher (Pi 0.74.2)
+    return `Kernel — Pi coding agent brain switcher (Pi ${piVer})
 
 Usage:
   kernel                        Launch Pi TUI (new session; stale threads are not auto-resumed)
@@ -60,6 +66,7 @@ Usage:
   kernel resume [id]            Reload last (or named) session transcript
   kernel sessions               List recent sessions (both harness dirs)
   kernel doctor                 Status + config paths + policy gates
+  kernel doctor --json          Machine-readable status+health+drift+gates (exit 1 on problems)
   kernel park glm [--confirm]   Re-park GLM (owner-gated; restores Flash-Next)
   kernel unpark glm             Print Lab swap warning/steps (exit 2)
   kernel unpark glm --if-healthy  Enable if :8001 already serves glm-5.3-flash
@@ -102,7 +109,7 @@ Active:  ${ACTIVE_PROFILE_PATH}
 Synced:  ${SIBLING_ACTIVE_PROFILE_PATH}
 `;
   }
-  return `SOVERYN CLI — branded coding harness (Pi 0.74.2)
+  return `SOVERYN CLI — branded coding harness (Pi ${piVer})
 Parallel to kernel/soveryn-pi; shares profiles SSOT.
 
 Usage:
@@ -115,6 +122,8 @@ Usage:
   soveryn sessions            List recent sessions (soveryn-cli + kernel dirs)
   soveryn doctor              Status + config paths + policy gates
   soveryn doctor --gates      Policy gate status only (native controls)
+  soveryn doctor --json       Machine-readable status+health+drift+gates (exit 1 on problems)
+  soveryn status --json       Same shape without gate run
   soveryn doctor --self-test  Unit self-test (assertExact must fail on mismatch)
   soveryn park glm [--confirm]   Re-park GLM (owner-gated; restores Flash-Next)
   soveryn unpark glm             Print Lab swap warning/steps (exit 2)
@@ -300,7 +309,7 @@ function cmdSelfTest() {
   console.log('  summary: SELF-TEST OK (mismatch correctly rejected)');
 }
 
-async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false } = {}) {
+async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false, json = false } = {}) {
   if (selfTest) {
     cmdSelfTest();
     return;
@@ -324,6 +333,94 @@ async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false }
     compactLine = 'off';
   } else {
     compactLine = `on  reserve=${comp.reserveTokens ?? '?'} keepRecent=${comp.keepRecentTokens ?? '?'}`;
+  }
+
+  // Collect probe rows + drift once; used by HUD, doctor, and --json.
+  const profileRows = [];
+  for (const id of listProfileIds(data)) {
+    const p = data.profiles[id];
+    if (p.enabled === false) {
+      const h = await probeStable(p, 1500, { requireModel: true, retries: 1 });
+      profileRows.push({
+        id,
+        parked: true,
+        reason: p.disabledReason || '',
+        probe: h,
+        drift: h.ok
+          ? `parked but ${shortEndpoint(p.baseUrl)} serves "${p.modelId}"`
+          : null,
+      });
+    } else {
+      const h = await probeStable(p, 1000, { retries: 1 });
+      profileRows.push({
+        id,
+        parked: false,
+        probe: h,
+        detail: `${p.modelId} @ ${shortEndpoint(p.baseUrl)} (${h.detail})`,
+      });
+    }
+  }
+  const drift = profileRows
+    .filter((r) => r.drift)
+    .map((r) => ({ profileId: r.id, message: r.drift }));
+
+  // Generated-config freshness (doctor + json only — keep status fast/quiet)
+  let configDrift = [];
+  if (doctor || json) {
+    try {
+      const { buildPiConfig } = require('./profiles');
+      const built = buildPiConfig(data, profile);
+      configDrift = generatedConfigDrift(built, CFG_DIR);
+    } catch (e) {
+      configDrift = [
+        { file: 'config', message: `config freshness check failed: ${e.message}` },
+      ];
+    }
+  }
+
+  if (json) {
+    let gates = null;
+    if (doctor) {
+      const report = runGates(data, { strict: false });
+      gates = {
+        ok: report.ok,
+        failed: report.failed.map((r) => ({ id: r.id, detail: r.detail })),
+        warned: report.warned.map((r) => ({ id: r.id, detail: r.detail })),
+      };
+    }
+    const problems =
+      drift.length + configDrift.length + (gates && !gates.ok ? 1 : 0);
+    console.log(
+      JSON.stringify(
+        {
+          harness: BRAND,
+          cmd: CMD,
+          activeId,
+          activeProfile: {
+            modelId: profile.modelId,
+            baseUrl: profile.baseUrl,
+            piProviderId: profile.piProviderId,
+          },
+          pi: ver,
+          ok: problems === 0,
+          profiles: profileRows.map((r) => ({
+            id: r.id,
+            parked: r.parked,
+            status: r.parked ? 'PARKED' : r.probe.ok ? 'OK' : 'DOWN',
+            detail: r.parked ? r.reason : r.detail,
+            drift: r.drift || null,
+          })),
+          drift,
+          configDrift,
+          compactionWarnings: compactionWarnings(profile),
+          gates,
+        },
+        null,
+        2
+      )
+    );
+    if (doctor && problems > 0) process.exit(1);
+    return;
   }
   console.log(
     statusHud(profile, {
@@ -358,34 +455,26 @@ async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false }
   }
 
   console.log(colorMuted('  profiles:'));
-  const driftWarns = [];
-  for (const id of listProfileIds(data)) {
-    const p = data.profiles[id];
-    if (p.enabled === false) {
-      console.log(
-        profileRow(id, activeId, 'PARKED', p.disabledReason || '')
-      );
-      // Drift check: parked profile whose serve is actually live.
-      const h = await probe(p, 1500, { requireModel: true });
-      if (h.ok) {
-        driftWarns.push(
-          `profile "${id}" is PARKED but ${shortEndpoint(p.baseUrl)} serves "${p.modelId}" — recorded state is stale.\n` +
-          `               Fix: ${CMD} unpark ${id} --if-healthy   (or re-park the serve)`
+  for (const row of profileRows) {
+    if (row.parked) {
+      console.log(profileRow(row.id, activeId, 'PARKED', row.reason));
+      if (row.drift) {
+        console.log(
+          `  DRIFT:     profile "${row.id}" is ${row.drift} — recorded state is stale.\n` +
+          `               Fix: ${CMD} unpark ${row.id} --if-healthy   (or re-park the serve)`
         );
       }
     } else {
-      const h = await probe(p, 1000);
-      const detail = `${p.modelId} @ ${shortEndpoint(p.baseUrl)} (${h.detail})`;
-      console.log(profileRow(id, activeId, h.ok ? 'OK' : 'DOWN', detail));
+      console.log(profileRow(row.id, activeId, row.probe.ok ? 'OK' : 'DOWN', row.detail));
     }
-  }
-  for (const w of driftWarns) {
-    console.log(`  DRIFT:     ${w}`);
   }
 
   if (doctor) {
     console.log('');
-    if (driftWarns.length > 0) {
+    if (drift.length > 0 || configDrift.length > 0) {
+      for (const d of configDrift) {
+        console.error(`  CONFIG-DRIFT: ${d.file} — ${d.message}`);
+      }
       process.exit(1);
     }
     const report = printGates(data, { exitOnFail: false });
@@ -595,10 +684,11 @@ function cmdResume(cmdArgs, peeled) {
 }
 
 function parseDoctorArgs(args) {
-  const out = { doctor: true, gatesOnly: false, selfTest: false };
+  const out = { doctor: true, gatesOnly: false, selfTest: false, json: false };
   for (const a of args) {
     if (a === '--gates' || a === 'gates') out.gatesOnly = true;
     else if (a === '--self-test' || a === 'self-test') out.selfTest = true;
+    else if (a === '--json') out.json = true;
     else if (a === '--help' || a === '-h') out.help = true;
   }
   return out;
@@ -640,7 +730,7 @@ async function main(argv) {
       return;
     }
     if (cmd === 'status') {
-      await cmdStatus({ doctor: false });
+      await cmdStatus({ doctor: false, json: cmdArgs.includes('--json') });
       return;
     }
     if (cmd === 'sessions' || cmd === 'session') {

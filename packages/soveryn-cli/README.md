@@ -30,7 +30,9 @@ soveryn model            # interactive picker
 soveryn status           # active + health + pi version
 soveryn doctor           # status + paths + policy gates
 soveryn doctor --gates    # policy gates only
+soveryn doctor --json     # machine-readable: health + drift + config freshness + gates (exit 1 on problems)
 soveryn doctor --self-test # assertExact self-test
+npm test                  # unit tests (node --test test/)
 soveryn --flash --build  # one-shot flags
 soveryn --glm            # error if parked — never silently Flash
 soveryn unpark glm --dry-run     # Lab steps (no swap)
@@ -47,7 +49,7 @@ GLM unpark is **not** hot-standby: needs both Sparks; stops Flash-Next first. Se
 `config/soveryn-cli/profiles.json` drives generated `models.json` / `settings.json` in the same directory.
 
 - `flash` → `http://127.0.0.1:8888/v1` / `qwen3.8-flash-next` (live)
-- `glm` → `http://10.10.10.2:8001/v1` / `glm-5.3-flash` (park/unpark is owner-gated; `soveryn status` shows live truth, `doctor` flags parked-but-live drift)
+- `glm` → `http://10.10.10.2:8001/v1` / `glm-5.3-flash` (park/unpark is owner-gated; `soveryn status` shows live truth, `doctor` flags parked-but-live drift and hand-edited generated configs)
 - `aetheria` → `http://127.0.0.1:8090/v1` / `aetheria` (live)
 
 Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.

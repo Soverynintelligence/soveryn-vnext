@@ -89,4 +89,21 @@ function probe(profile, timeoutMs = 1000, opts = {}) {
   });
 }
 
-module.exports = { probe };
+/**
+ * probe with retries — one flaky timeout/reset over the house network should
+ * not read as DOWN. `retries` = extra attempts (default 0 = single shot).
+ */
+async function probeStable(profile, timeoutMs = 1000, opts = {}) {
+  const retries = Math.max(0, Number(opts.retries) || 0);
+  let last;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    last = await probe(profile, timeoutMs, opts);
+    if (last.ok) return last;
+    if (attempt < retries) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  return last;
+}
+
+module.exports = { probe, probeStable };
