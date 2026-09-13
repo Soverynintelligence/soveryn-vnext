@@ -9,23 +9,15 @@
   "provider": {
     "soveryn": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "SOVERYN coding harness \u00b7 Flash-Next :8888",
+      "name": "SOVERYN coding harness \u00b7 GLM-5.3-Flash EXL3 TP=2 :8001",
       "options": {
-        "baseURL": "http://127.0.0.1:8888/v1",
-        "apiKey": "local",
-        "chat_template_kwargs": {
-          "enable_thinking": false
-        },
-        "extraBody": {
-          "chat_template_kwargs": {
-            "enable_thinking": false
-          }
-        }
+        "baseURL": "http://10.10.10.2:8001/v1",
+        "apiKey": "local"
       },
       "models": {
         "coding": {
-          "id": "qwen3.8-flash-next",
-          "name": "SOVERYN coding \u00b7 Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+          "id": "glm-5.3-flash",
+          "name": "SOVERYN coding \u00b7 GLM-5.3-Flash EXL3 TP=2",
           "tool_call": true,
           "reasoning": true,
           "limit": {
@@ -33,8 +25,8 @@
             "output": 32768
           }
         },
-        "qwen3.8-flash-next": {
-          "name": "SOVERYN \u00b7 Qwen3.8-Flash-Next (direct id)",
+        "glm-5.3-flash": {
+          "name": "SOVERYN \u00b7 GLM-5.3-Flash (direct id)",
           "tool_call": true,
           "reasoning": true,
           "limit": {
@@ -64,7 +56,7 @@
   },
   "agent": {
     "kernel": {
-      "description": "SOVERYN house build brain \u2014 Week1 Flash-Next harness",
+      "description": "SOVERYN house build brain \u2014 GLM-5.3-Flash EXL3 TP=2",
       "mode": "primary",
       "model": "soveryn/coding",
       "temperature": 0.2,
@@ -100,5 +92,5 @@
     },
     "external_directory": "ask"
   },
-  "_rollback_note": "Week1 2026-09-09: provider kernel-glm renamed to soveryn; alias soveryn/coding \u2192 upstream qwen3.8-flash-next via model.id. GLM :8001 parked (bak-20260906-glm-tp2 + bak-20260909-week1-pre). Tunnel: soveryn-spark2-flashnext-8888.service. Thinking forced off via chat_template_kwargs.enable_thinking=false."
+  "_rollback_note": "2026-09-13: Kernel unparked to GLM EXL3 TP=2 @ http://10.10.10.2:8001/v1 model glm-5.3-flash (Mia-AiLab EXL3-TR3-4bpw). Flash-Next spark2 parked. Prior Flash-Next week1 config: opencode.json.bak-20260913-pre-glm-unpark + bak-20260909-week1-pre."
 }
