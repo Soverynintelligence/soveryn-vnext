@@ -218,6 +218,26 @@ CATALOG: List[AutomationSpec] = [
     ),
     # --- Watch (monitor-mode: no LLM if the source hash is unchanged) ---------
     AutomationSpec(
+        id="service_crash_watch",
+        title="Service Crash Watch",
+        category="ops",
+        agent="aetheria",
+        cron="*/30 * * * *",
+        prompt=(
+            "House service health watch. The MONITOR block is the source of "
+            "truth — it lists user units that are failed, stuck in activating "
+            "(start-pre), or above the restart threshold. If it shows "
+            "problems: one line per unit (name, state, restart count) plus the "
+            "single most likely fix (e.g. the restart command or the missing "
+            "upstream port). If the diff shows a unit recovered or the block "
+            "is now empty, send one short all-clear line naming the unit. "
+            "Do not speculate beyond the block. Never restart services "
+            "yourself — report only. Under 120 words."
+        ),
+        delivery=_SJON,
+        monitor_file="automations/watches/systemd_health.txt",
+    ),
+    AutomationSpec(
         id="pond_academy_watch",
         title="Pond Academy Watch",
         category="ops",

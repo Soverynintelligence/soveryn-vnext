@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> Last rotated: 2026-09-13 (staleness rule re-keyed to newest per-row last-observed date)  
+> Last rotated: 2026-09-13  
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
 
@@ -38,7 +38,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | spark2 Qwen3.8-Flash-Next NVFP4 TP=1 (`:8888`, house ctx 131072). GLM TP=2 parked. |
+| **Kernel** | Local build | **GLM-5.3-Flash EXL3 TP=2 `:8001` active** (2026-09-13, Jon-confirmed unpark). Flash-Next `:8888` parked (spark2 vLLM stopped, tower tunnel idle). |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
@@ -47,7 +47,7 @@ Per-row verification dates — model swaps are the most common silent drift; do 
 | Row (model/endpoint) | Last verified |
 |----------------------|---------------|
 | Aetheria — Blackwell `:8090` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 Brains |
-| Kernel — spark2 `:8888` Qwen3.8-Flash-Next NVFP4 TP=1 | 2026-09-06 (Flash-Next move; GLM `:8001` parked — power-cut note §1 Brains) |
+| Kernel — GLM `:8001` GLM-5.3-Flash EXL3 TP=2 (Flash-Next `:8888` parked) | 2026-09-13 (Jon-confirmed unpark; `kernel status` glm OK, :8888 reset — Kernel) |
 | Eve — Quadros `:8091` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 |
 | TGTHR helper Messie — `:5066` Qwen3.5-9B Q6 | 2026-09-09 (Kernel — re-checked vs §0 public-products note; in-house TGTHR helper, not the Quadros 27B public slot) |
 | Critic / Scout — Teammates inbox | 2026-09-07 (§0b brief contract) |
@@ -89,6 +89,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Flask vNext | **Live** |
 | Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). Vett/Scotty/Grok **not** house chat agents. |
 | Heartbeat / dream / automations | **Live** |
+| Cognition surface (Gemma 4 26B-A4B Q5, CPU-only `:8089`, alias `dream`) | **Live** 2026-09-13 (Kernel — restarted; was silently down since ~Aug 30, starved `soveryn-representation.service` into a 4.8k-restart loop) |
+| Representation daemon (memory-as-reasoning, DRY RUN) | **Live** 2026-09-13 — readiness gate passes again; artifacts `data/memory/representation_dryrun.jsonl`. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) |
+| Service crash watch (`soveryn-crash-watch.timer` 15min + automation `service_crash_watch` 30min, monitor-mode) | **Live** 2026-09-13 — deterministic `scripts/systemd_health_watch.py` writes `data/automations/watches/systemd_health.txt` only on failed/activating/NRestarts≥10 units; unchanged file = no LLM, change = Aetheria briefs Jon. Canary-tested (caught + cleared) |
 | Citizens commissions + standing objectives | **Live** |
 | Eve marketing cadence | **Live** Mon/Thu — Canva + Signal (automation auto-Allow) |
 | Eve interactive compose | **Live** — Messages Gate **Allow → Signal** (caption + image) |
@@ -121,10 +124,10 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | spark2 Flash-Next `:8888` (`qwen3.8-flash-next`, NVFP4 TP=1, house ctx 131072; GLM `:8001` parked) |
+| Kernel | GLM `:8001` — `glm-5.3-flash` EXL3 TP=2, both Sparks (**active** 2026-09-13, Jon-confirmed; `~/.soveryn/kernel_brain` = glm) |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
-| Shared Spark workers | `:8001` GLM TP=2 **parked** (power-cut 2026-09-06; Kernel moved to Flash-Next) |
-| Second Spark | **Live** — `gx10-a733` / soverynspark2, Flash-Next vLLM `:8888` |
+| Shared Spark workers | `:8001` GLM TP=2 **LIVE** (unparked 2026-09-13; Flash-Next `:8888` parked) |
+| Second Spark | **Parked** — `gx10-a733` / soverynspark2 Flash-Next vLLM stopped; tunnel unit `soveryn-spark2-flashnext-8888.service` idle (restart on re-park per lab) |
 
 ---
 

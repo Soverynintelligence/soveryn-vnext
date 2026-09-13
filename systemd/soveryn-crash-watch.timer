@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SOVERYN systemd health watch every 15 minutes
+PartOf=soveryn.target
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
