@@ -2,9 +2,9 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> **Last rotated:** 2026-08-31 (agent browser desks: Eve Google login)  
+> Last rotated: 2026-09-13 (staleness rule re-keyed to newest per-row last-observed date)  
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
-> If the date below is >7 days old, treat as stale and re-observe.
+> Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
 
 If runtime behavior changes, **update this file first**, then code/notes.
 
