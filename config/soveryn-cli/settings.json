@@ -1,15 +1,15 @@
 {
-  "defaultProvider": "soveryn-flash",
-  "defaultModel": "qwen3.8-flash-next",
+  "defaultProvider": "soveryn-glm",
+  "defaultModel": "glm-5.3-flash",
   "defaultThinkingLevel": "medium",
   "theme": "soveryn-lab",
   "quietStartup": false,
   "defaultProjectTrust": "always",
   "enableInstallTelemetry": false,
   "compaction": {
-    "enabled": true,
-    "reserveTokens": 18432,
-    "keepRecentTokens": 65536
+    "enabled": false,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
   },
   "retry": {
     "enabled": true,
