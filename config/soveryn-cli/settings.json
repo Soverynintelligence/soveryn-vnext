@@ -1,0 +1,25 @@
+{
+  "defaultProvider": "soveryn-flash",
+  "defaultModel": "qwen3.8-flash-next",
+  "defaultThinkingLevel": "medium",
+  "theme": "soveryn-lab",
+  "quietStartup": false,
+  "defaultProjectTrust": "always",
+  "enableInstallTelemetry": false,
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 18432,
+    "keepRecentTokens": 65536
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 2000,
+    "provider": {
+      "timeoutMs": 3600000,
+      "maxRetries": 0
+    }
+  },
+  "httpIdleTimeoutMs": 600000,
+  "lastChangelogVersion": "0.74.2"
+}

@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "note": "Gate 3 — hardening a sink obliges auditing its callers. Doctor fails if any callers_audited is not true.",
+  "sinks": [
+    {
+      "id": "spawn_pi_launch",
+      "file": "src/launch.js",
+      "symbol": "launchPi / child_process.spawn",
+      "description": "Spawns pi binary for TUI and -p print mode",
+      "callers_audited": true,
+      "callers": [
+        "src/cli.js cmdCode → launchPi",
+        "src/launch.js launchPi (entry)"
+      ],
+      "audited_at": "2026-09-10"
+    },
+    {
+      "id": "profile_write",
+      "file": "src/profiles.js",
+      "symbol": "writeActiveId / generatePiConfig",
+      "description": "Writes active profile id and regenerates models.json/settings.json under config/soveryn-cli",
+      "callers_audited": true,
+      "callers": [
+        "src/cli.js cmdUse",
+        "src/cli.js cmdModel",
+        "src/launch.js launchPi → generatePiConfig"
+      ],
+      "audited_at": "2026-09-10"
+    },
+    {
+      "id": "curl_health",
+      "file": "src/launch.js",
+      "symbol": "spawnSync(curl) health preflight",
+      "description": "curl -sf --max-time 2 against profile /models before launch",
+      "callers_audited": true,
+      "callers": [
+        "src/launch.js launchPi (inline)",
+        "src/health.js probe (http/https; parallel path for doctor/status)"
+      ],
+      "audited_at": "2026-09-10"
+    },
+    {
+      "id": "evidence_sidecar",
+      "file": "src/evidence.js",
+      "symbol": "appendEvidence / readRecentEvidence",
+      "description": "Durable JSONL tool-evidence log under <cwd>/.soveryn/evidence/ (survives compaction); also used by harness-controls.ts",
+      "callers_audited": true,
+      "callers": [
+        "extensions/harness-controls.ts tool_result + session_before_compact",
+        "src/policy/gates.js gateToolEvidence (doctor execute)",
+        "src/evidence.js (module entry)"
+      ],
+      "audited_at": "2026-09-10"
+    },
+    {
+      "id": "chrome_web_probe",
+      "file": "scripts/web/web-api-probe.mjs",
+      "symbol": "main / google-chrome --dump-dom",
+      "description": "Live Chromium typeof/existence probe for browser APIs (G7); bounded by timeout",
+      "callers_audited": true,
+      "callers": [
+        "extensions/web-pack.ts web-api-probe tool",
+        "src/policy/gates.js gateApiSurface (doctor execute)",
+        "scripts/web/open-html.mjs (sibling chrome path)"
+      ],
+      "audited_at": "2026-09-10"
+    },
+    {
+      "id": "fidelity_probe",
+      "file": "src/policy/fidelity.js",
+      "symbol": "runFidelityProbes / deliberateFailCase",
+      "description": "G8 output-fidelity corruption battery (code-point + invented API tokens)",
+      "callers_audited": true,
+      "callers": [
+        "src/policy/gates.js gateOutputFidelity",
+        "src/policy/gates.js runSelfTest"
+      ],
+      "audited_at": "2026-09-10"
+    }
+  ]
+}
