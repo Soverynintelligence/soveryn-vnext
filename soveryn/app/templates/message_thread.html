@@ -733,16 +733,41 @@
     } catch (_) { return; }
     if (!Array.isArray(stashed) || !stashed.length) return;
     const already = new Set();
-    thread().querySelectorAll(".bubble.them img").forEach((img) => {
-      const src = img.getAttribute("src") || "";
-      already.add(src);
-      try { already.add(new URL(src, location.origin).pathname); } catch (_) {}
+    const bubbles = Array.from(thread().querySelectorAll(".bubble.them"));
+    bubbles.forEach((el) => {
+      el.querySelectorAll("img").forEach((img) => {
+        const src = img.getAttribute("src") || "";
+        already.add(src);
+        try { already.add(new URL(src, location.origin).pathname); } catch (_) {}
+      });
     });
     const missing = stashed.filter((u) => typeof u === "string" && !already.has(u));
     if (!missing.length) return;
-    const bubbles = thread().querySelectorAll(".bubble.them");
-    if (!bubbles.length) return;
-    attachComfyImages(bubbles[bubbles.length - 1], missing);
+    // Re-home orphans to the bubble that actually talks about them. Never
+    // dump them onto the newest reply — a stash entry with no matching turn
+    // stays unattached rather than migrating forward every re-render.
+    const STILL_TURN_RE = /eve_\d{3,}|aetheria_\d{3,}|\.png\b|comfyui|generate_image|\bstills\b|honest eyes|generated (?:those|them|the (?:pic|face|still))/i;
+    const base = (u) => String(u).split("/").pop();
+    const stillBubbles = bubbles.filter((el) => STILL_TURN_RE.test(el.textContent || ""));
+    let heuristicIdx = 0;
+    missing.forEach((u) => {
+      const name = base(u);
+      const stem = name.replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
+      const num = (stem.match(/(\d{3,})/) || [])[1];
+      let target = null;
+      if (name) target = bubbles.find((el) => (el.textContent || "").includes(name)) || null;
+      if (!target && num) {
+        const hashRe = new RegExp("#" + parseInt(num, 10) + "\\b");
+        target = bubbles.find((el) => hashRe.test(el.textContent || "")) || null;
+      }
+      if (!target && stillBubbles.length) {
+        // No filename in the text — assign orphans to still-turn bubbles in
+        // chronological order (images were generated in stash order).
+        target = stillBubbles[Math.min(heuristicIdx, stillBubbles.length - 1)];
+        heuristicIdx += 1;
+      }
+      if (target) attachComfyImages(target, [u]);
+    });
   }
 
   function urlsFromGenerateImage(tr) {
