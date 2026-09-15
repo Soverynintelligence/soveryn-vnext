@@ -2429,6 +2429,23 @@
     background: rgba(111,185,138,0.07);
   }
   .needs-you .ny-chip[data-tone="ok"] .n { color: var(--cc-mint); }
+  /* Dismiss (mark reviewed) — CRM new-leads chip only */
+  .needs-you .ny-chip .ny-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    margin-left: 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    line-height: 1;
+    color: rgba(232,227,213,0.55);
+    cursor: pointer;
+  }
+  .needs-you .ny-chip .ny-x:hover {
+    background: rgba(240,193,74,0.25);
+    color: var(--text);
+  }
 
   /* Active now — activity, not urgency (mint/quiet vs Needs-you gold/hot) */
   .active-now {
@@ -4391,7 +4408,7 @@
     const intake = publicA && publicA.intake;
     const crmNew = (intake && intake.crm_new) || (publicA && publicA.crm && publicA.crm.leads_new) || 0;
     const wlToday = (intake && intake.waitlist_today) || 0;
-    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn" });
+    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn", dismiss: true });
 
     const crit = ares && ares.counts && ((ares.counts.emergency || 0) + (ares.counts.critical || 0));
     if (crit > 0) chips.push({ n: crit, label: "Ares critical", href: "#ares-anchor", tone: "hot", scroll: "[data-testid='ares-panel']" });
@@ -4430,12 +4447,25 @@
       const n = (typeof c.n === "number") ? c.n : c.n;
       const href = c.href || "#";
       const scroll = c.scroll ? ` data-scroll="${c.scroll}"` : "";
-      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span></a>`;
+      const x = c.dismiss ? `<span class="ny-x" role="button" tabindex="0" aria-label="Clear ${c.label}" title="Mark reviewed (clears until new leads arrive)">&times;</span>` : "";
+      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span>${x}</a>`;
     }).join("");
     const openChapter = (id) => {
       const ch = document.querySelector(`[data-testid="${id}"]`);
       if (ch && ch.tagName === "DETAILS") ch.open = true;
     };
+    chipsEl.querySelectorAll(".ny-x").forEach((x) => {
+      const clear = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        try {
+          await fetch("/api/system/crm/ack", { method: "POST" });
+        } catch (e) { /* endpoint down: chip stays, nothing breaks */ }
+        renderNeedsYou();
+      };
+      x.addEventListener("click", clear);
+      x.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") clear(ev); });
+    });
     chipsEl.querySelectorAll("a.ny-chip").forEach((a) => {
       a.addEventListener("click", (ev) => {
         const href = a.getAttribute("href") || "";
