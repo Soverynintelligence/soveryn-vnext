@@ -3,7 +3,7 @@ Roster authority: README §What is SOVERYN — Vett/Scotty rows are design-only 
 # Citizen email identity (ours — not AgentMail)
 
 **Date:** 2026-08-23  
-**Status:** **Pending — not armed.** Code + identity map exist. DNS/SMTP/`SOVERYN_EMAIL_PRODUCTION=1` have not been flipped. The canonical step list and its count live in `docs/CURRENT_TRUTH.md` §2 (Citizen email row); this note holds the full checklist body and does not restate the number. The latch stays off.  
+**Status:** **Pending — not armed.** Code + identity map exist. DNS/SMTP/`SOVERYN_EMAIL_PRODUCTION=1` have not been flipped. The canonical step list and its count live in `docs/CURRENT_TRUTH.md` §2 (Citizen email row); this note holds the full checklist body and does not restate the number. The latch stays off. Owner: Kernel. Next re-check: 2026-10-01.  
 **Roster note:** Vett/Scotty still have From *design* rows. They are **not** live Messages citizens (Vett folded into Eve, Scotty into Kernel).  
 **Trigger:** Musk / Grok Bot “why its own email?” + AgentMail pitch. Same problem we’ve held: agents must not write as Jon from his personal inbox.
 
@@ -22,9 +22,9 @@ Roster authority: README §What is SOVERYN — Vett/Scotty rows are design-only 
 | Who | Default From | Also allowed |
 |-----|--------------|--------------|
 | Aetheria | `aetheria@soverynintelligence.com` | `aetheria@carolinawatergardens.com` |
-| Vett (folded — see README roster) | `vett@soverynintelligence.com` | `vett@carolinawatergardens.com` |
+| Vett (folded — see README roster) | `vett@soverynintelligence.com` **(design-only — do-not-arm; folded into Eve)** | `vett@carolinawatergardens.com` **(design-only — do-not-arm)** |
 | Eve / Kernel (Scotty folded — see README roster) | `{name}@soverynintelligence.com` | — |
-| PondWright (desk) | `pondwright@carolinawatergardens.com` | Aetheria/Vett may send-as |
+| PondWright (desk) | `pondwright@carolinawatergardens.com` **(design-only — do-not-arm; desk alias)** | Aetheria/Vett may send-as |
 
 Override: `SOVERYN_EMAIL_IDENTITIES` JSON (see `soveryn/platform/email/identities.py`).
 

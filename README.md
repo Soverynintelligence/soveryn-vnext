@@ -11,7 +11,7 @@
 - **What's live:** Messages is the house front door. Runtime facts: [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md) (rotated 2026-08-31). Public buy: History's Ledger ($19 / one week) on [soverynintelligence.com/ledger](https://soverynintelligence.com/ledger).
 - **What's not:** no cloud dependency, no token. Citizen email is designed and **not armed**. Seneca does not quote dollars.
 
-Session notes in [`docs/notes/`](docs/notes/) are not authority. Index: [`docs/notes/INDEX.md`](docs/notes/INDEX.md). Archive of an older truth file: `docs/archive/CURRENT_TRUTH_2026-05-23.md`.
+Archive of an older truth file: `docs/archive/CURRENT_TRUTH_2026-05-23.md` — **do not treat as live**; the only live truth is [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md).
 
 ## Status
 
