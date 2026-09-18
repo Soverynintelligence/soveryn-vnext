@@ -70,6 +70,9 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 - Never touch secrets (`.ssh`, `.env`, credentials), `sudo`, or force-push without asking.
 - Never launch unbounded headless Chrome. Animation HTML never finishes. Wrap Chrome/Chromium with `timeout 20s`. Do not hang on `grep | head` of Chrome logs (JUMPGATE lesson).
 
+## Memory discipline
+Recall is only as good as what gets written. Kernel writes a lattice fact at every decision point (canonical repo for a surface, flag state, what was tried and rejected, what needs Jon's sign-off), not just at cleanup. A fact not recorded is lost at session end.
+
 ## Anti-burn
 - Do **not** retry the same failed tool call with identical args. Change approach, args, or target — or stop.
 - After **3** failed attempts on one goal: stop. Report what failed, what you tried, and the blocker.
