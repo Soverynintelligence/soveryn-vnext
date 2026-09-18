@@ -89,7 +89,16 @@ def test_file_away_unknown_dest_lists_cwg_business_buckets():
     out = file_away("missing.pdf", "not_a_real_dest")
     assert out["ok"] is False
     assert out["miss"] == "unknown_dest"
-    for name in ("cwg_insurance", "cwg_licenses", "cwg_vehicles", "cwg_contracts"):
+    for name in (
+        "cwg_insurance",
+        "cwg_licenses",
+        "cwg_vehicles",
+        "cwg_contracts",
+        "soveryn_licenses",
+        "soveryn_insurance",
+        "soveryn_contracts",
+        "soveryn_evidence",
+    ):
         assert name in out["buckets"]
 
 
@@ -108,6 +117,41 @@ def test_file_away_cwg_insurance_bucket(tmp_path: Path):
     assert out["ok"] is True
     assert not src.exists()
     assert (dest / "coi.pdf").is_file()
+
+
+def test_file_away_current_writes_in_flight_pdf_to_bucket(tmp_path: Path):
+    from soveryn.platform.intake.turn_files import InFlightFile, turn_files_bound
+
+    dest = tmp_path / "insurance"
+    tool = build_file_away_tool(
+        owner_agent="eve",
+        buckets={"cwg_insurance": dest},
+    )
+    pdf = InFlightFile(name="DEOLIVEIRA AUTO COVERAGE.pdf", data=b"%PDF-1.4 coverage", mime="application/pdf")
+    with turn_files_bound((pdf,)):
+        out = tool.handler({"path": "current", "dest": "cwg_insurance"})
+    assert out["ok"] is True
+    saved = dest / "DEOLIVEIRA AUTO COVERAGE.pdf"
+    assert saved.is_file()
+    assert saved.read_bytes().startswith(b"%PDF")
+
+
+def test_file_away_current_2_picks_second_attachment(tmp_path: Path):
+    from soveryn.platform.intake.turn_files import InFlightFile, turn_files_bound
+
+    dest = tmp_path / "evidence"
+    tool = build_file_away_tool(
+        owner_agent="eve",
+        buckets={"cwg_evidence": dest},
+    )
+    files = (
+        InFlightFile(name="scan.pdf", data=b"%PDF-scan", mime="application/pdf"),
+        InFlightFile(name="DEOLIVEIRA RECEIPT.pdf", data=b"%PDF-receipt", mime="application/pdf"),
+    )
+    with turn_files_bound(files):
+        out = tool.handler({"path": "current:2", "dest": "cwg_evidence"})
+    assert out["ok"] is True
+    assert (dest / "DEOLIVEIRA RECEIPT.pdf").read_bytes() == b"%PDF-receipt"
 
 
 def test_file_away_registered_eve_only():

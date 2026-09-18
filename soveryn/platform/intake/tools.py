@@ -1012,11 +1012,12 @@ def build_make_collage_tool(
     )
 
 
-def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
+def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> ToolSpec:
     """Eve files a Downloads/Desktop item into a named house bucket."""
 
     def handler(args: Mapping[str, Any]) -> Any:
-        from soveryn.platform.intake.file_away import file_away
+        from soveryn.platform.intake.file_away import BUCKETS, file_away
+        from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 
         src = args.get("path") or args.get("src") or ""
         dest = args.get("dest") or args.get("bucket") or ""
@@ -1026,9 +1027,55 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
             raise ToolArgError(
                 "dest must be models, cwg_ig, cwg_evidence, "
                 "cwg_insurance, cwg_licenses, cwg_vehicles, "
-                "cwg_contracts, soveryn_evidence, pictures, or installers"
+                "cwg_contracts, soveryn_evidence, soveryn_licenses, "
+                "soveryn_insurance, soveryn_contracts, pictures, or installers"
             )
-        return file_away(src.strip(), dest.strip())
+        dest_key = dest.strip()
+        src_s = src.strip()
+        if parse_current_index(src_s) is not None:
+            hit = pick_current(src_s)
+            if hit is None:
+                return {
+                    "ok": False,
+                    "miss": "no_current_file",
+                    "hint": (
+                        "No in-flight PDF on this turn. Attach the file in "
+                        "chat and file_away path=current (current:2 for the "
+                        "second). Do not look for attachment-1.pdf on disk."
+                    ),
+                }
+            bucks = buckets if buckets is not None else BUCKETS
+            key = dest_key.lower().replace("-", "_")
+            if key not in bucks:
+                return {
+                    "ok": False,
+                    "miss": "unknown_dest",
+                    "buckets": sorted(bucks),
+                }
+            dest_dir = bucks[key].expanduser()
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            safe = Path(hit.name).name or "attachment.pdf"
+            if safe in {".", ".."} or "/" in safe:
+                safe = "attachment.pdf"
+            target = dest_dir / safe
+            if target.exists():
+                return {
+                    "ok": False,
+                    "miss": "already_there",
+                    "dest": str(target),
+                }
+            target.write_bytes(hit.data)
+            return {
+                "ok": True,
+                "src": "current",
+                "dest": str(target),
+                "bucket": key,
+                "name": safe,
+            }
+        kwargs = {}
+        if buckets is not None:
+            kwargs["buckets"] = buckets
+        return file_away(src_s, dest_key, **kwargs)
 
     return ToolSpec(
         name="file_away",
@@ -1039,7 +1086,9 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
                 "path": {
                     "type": "string",
                     "description": (
-                        "File or folder under ~/Downloads or ~/Desktop."
+                        "File under ~/Downloads or ~/Desktop, or "
+                        "'current' / 'current:2' for a PDF Jon just attached "
+                        "in this chat turn (not a disk filename)."
                     ),
                 },
                 "dest": {
@@ -1053,6 +1102,9 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
                         "cwg_vehicles (title / registration), "
                         "cwg_contracts (vendor contracts — not customer quotes), "
                         "soveryn_evidence (SOVERYN receipt), "
+                        "soveryn_licenses (SOVERYN LLC / EIN), "
+                        "soveryn_insurance (SOVERYN COI, not bills), "
+                        "soveryn_contracts, "
                         "pictures (iCloud dumps), "
                         "installers (.deb/.AppImage). "
                         "Paid receipts still need ledger_ingest after filing."
@@ -1064,8 +1116,9 @@ def build_file_away_tool(*, owner_agent: str) -> ToolSpec:
         },
         handler=handler,
         description=(
-            "Move one Downloads or Desktop item into a house bucket. "
-            "Use when Jon says clean/file Downloads. look_at photos first. "
+            "Move one Downloads/Desktop item, or an in-flight chat PDF "
+            "(path=current / current:2), into a house bucket. Chat PDFs "
+            "are not saved as attachment-1.pdf — use current. "
             "GGUF → dest=models. Pond shots → cwg_ig. Paid receipts → "
             "cwg_evidence or soveryn_evidence then ledger_ingest. "
             "COI / insurance certificates → cwg_insurance (not ledger). "

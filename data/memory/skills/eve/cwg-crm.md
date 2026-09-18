@@ -5,7 +5,8 @@ Jon 2026-09-09: you told him there was no CRM and offered to build `customers.js
 ## The book
 - Admin: https://crm.pondwright.com/  (Leads)
 - Estimator: https://estimator.pondwright.com/
-- Code: `~/pondwright-crm/` on the Spark — **not** inside `carolinawatergardens/`
+- Code: `~/pondwright-cwg-ops/` on the Spark — **not** the old `pondwright-crm/` sqlite, **not** inside `carolinawatergardens/`
+- Auth: Eve ops Basic (`OPS_USERS`). The old field token does not open Leads.
 
 It stores **leads, quotes, jobs, customers**. Status: new → contacted → quoted → won / lost.
 

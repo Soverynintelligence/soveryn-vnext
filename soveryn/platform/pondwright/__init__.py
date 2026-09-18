@@ -1,7 +1,7 @@
 """PondWright house CRM + pricing.
 
-CRM (leads, quotes, jobs, customers) lives in pondwright-crm on the Spark.
-Citizens reach it with the field token — they do not copy leads into the lattice.
+CRM (leads, quotes, jobs, customers) lives in pondwright-cwg-ops on the Spark.
+Citizens reach it with Eve's ops Basic login — they do not copy leads into the lattice.
 
 SKU prices:
   ~/Pictures/Apex Distribution Master Price List 2026v2.xlsx

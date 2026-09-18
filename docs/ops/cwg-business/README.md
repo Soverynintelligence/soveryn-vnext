@@ -7,7 +7,7 @@ Paid receipts and insurance **bills** stay in [tax-cwg](../tax-cwg/README.md) vi
 | Folder | What goes here | `file_away` dest |
 |---|---|---|
 | `insurance/` | COI, policies, certificates | `cwg_insurance` |
-| `licenses/` | Business licenses, EIN letters | `cwg_licenses` |
+| `licenses/` | NC LLC articles, IRS EIN letter | `cwg_licenses` |
 | `vehicles/` | Title, registration | `cwg_vehicles` |
 | `contracts/` | Vendor / supplier contracts | `cwg_contracts` |
 

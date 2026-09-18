@@ -21,6 +21,9 @@ BUCKETS: dict[str, Path] = {
     "cwg_vehicles": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "vehicles",
     "cwg_contracts": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "contracts",
     "soveryn_evidence": _HOME / "soveryn_vnext" / "docs" / "ops" / "tax" / "evidence",
+    "soveryn_licenses": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "licenses",
+    "soveryn_insurance": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "insurance",
+    "soveryn_contracts": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "contracts",
     "pictures": _HOME / "Pictures",
     "installers": _HOME / "Downloads" / "installers",
 }

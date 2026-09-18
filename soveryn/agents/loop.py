@@ -1144,6 +1144,7 @@ class AgentLoop:
         *,
         source: str = "direct",
         skip_user_save: bool = False,
+        files: tuple | None = None,
     ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
 
@@ -1382,6 +1383,7 @@ class AgentLoop:
                         session_id=session_id,
                         source=source,
                         attachments=attachments,
+                        files=files,
                     )
                     for tool_call in response.tool_calls
                 ]
@@ -1680,6 +1682,7 @@ class AgentLoop:
         source: str = "direct",
         skip_approval_gate: bool = False,
         attachments: tuple[str, ...] | None = None,
+        files: tuple | None = None,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1733,13 +1736,14 @@ class AgentLoop:
                 args = dict(args)
                 args["dm_session_id"] = session_id
             try:
+                from soveryn.platform.intake.turn_files import turn_files_bound
                 from soveryn.platform.intake.turn_images import (
                     pop_tool_vision,
                     queue_tool_vision,
                     turn_images_bound,
                 )
 
-                with turn_images_bound(attachments):
+                with turn_images_bound(attachments), turn_files_bound(files):
                     result = self.tool_registry.invoke(
                         self.agent_name, tool_name, args,
                     )
@@ -1837,6 +1841,7 @@ class AgentLoop:
         attachments: tuple[str, ...] | None = None,
         *,
         source: str = "direct",
+        files: tuple | None = None,
     ) -> "Iterator[AgentStreamEvent]":
         """Streaming variant. Yields TokenEvent per content delta, then either
         DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
@@ -2214,6 +2219,7 @@ class AgentLoop:
                             source=source,
                             skip_approval_gate=True,
                             attachments=attachments,
+                            files=files,
                         )
                     else:
                         result_message = self._tool_result_message(
@@ -2221,6 +2227,7 @@ class AgentLoop:
                             session_id=session_id,
                             source=source,
                             attachments=attachments,
+                            files=files,
                         )
                     yield ToolResultEvent(
                         call_id=call_id,

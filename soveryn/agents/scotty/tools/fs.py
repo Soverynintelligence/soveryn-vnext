@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -145,10 +146,22 @@ def build_list_directory_tool(
             raise ToolArgError(str(e))
         if not resolved.is_dir():
             raise ToolArgError(f"path {path_arg!r} is not a directory")
+        glob_arg = args.get("glob")
+        if glob_arg is not None and not isinstance(glob_arg, str):
+            raise ToolArgError("glob must be a string")
+        sort_arg = args.get("sort") or "name"
+        if sort_arg not in ("name", "mtime"):
+            raise ToolArgError("sort must be name or mtime")
+        children = list(resolved.iterdir())
+        if glob_arg:
+            children = [c for c in children if fnmatch.fnmatch(c.name, glob_arg)]
+        if sort_arg == "mtime":
+            children.sort(key=lambda c: c.stat().st_mtime, reverse=True)
+        else:
+            children.sort(key=lambda c: c.name)
         entries = []
         truncated = False
-        # Sort for deterministic output; matches `ls` default.
-        for i, child in enumerate(sorted(resolved.iterdir())):
+        for i, child in enumerate(children):
             if i >= LIST_DIRECTORY_MAX_ENTRIES:
                 truncated = True
                 break
@@ -178,15 +191,31 @@ def build_list_directory_tool(
                         "Directory path. Defaults to vnext repo root if omitted."
                     ),
                 },
+                "glob": {
+                    "type": "string",
+                    "description": (
+                        "Optional filename glob (e.g. *.pdf). Applied before "
+                        "the entry cap."
+                    ),
+                },
+                "sort": {
+                    "type": "string",
+                    "enum": ["name", "mtime"],
+                    "description": (
+                        "name (default, A-Z) or mtime (newest first). Use "
+                        "mtime on ~/Downloads so new receipts are not hidden "
+                        "behind the 200-entry cap."
+                    ),
+                },
             },
             "additionalProperties": False,
         },
         handler=handler,
         description=(
-            f"List the contents of a directory in the vnext repository. Returns "
-            f"up to {LIST_DIRECTORY_MAX_ENTRIES} entries sorted by name; sets "
-            f"truncated=true if the directory has more. Each entry has name, "
-            f"kind (file/directory/symlink), and size_bytes (for files only). "
-            f"Paths outside the project root are rejected."
+            f"List the contents of a directory. Returns up to "
+            f"{LIST_DIRECTORY_MAX_ENTRIES} entries. Default sort is name. "
+            f"Pass sort=mtime for newest first, glob=*.pdf to filter. "
+            f"truncated=true if more remain. Each entry has name, kind, "
+            f"size_bytes. Paths outside the project root are rejected."
         ),
     )

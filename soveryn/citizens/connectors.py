@@ -440,7 +440,7 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
     # house connectors always "armed" as local
     if connector_id in (
         "files", "documents", "system", "delegation", "house_post", "git",
-        "patrol", "code",
+        "patrol", "code", "pondwright",
     ):
         return True, "house-local"
     return False, "unknown connector"

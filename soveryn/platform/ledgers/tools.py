@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.platform.intake.tools import _DEFAULT_ALLOWED_ROOTS, _resolve_allowed
+from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 from soveryn.platform.intake.turn_images import current_turn_images
 from soveryn.platform.ledgers.extract import RECEIPT_SUFFIXES
 from soveryn.platform.ledgers.ingest import (
@@ -43,6 +44,26 @@ def _decode_data_url(url: str) -> tuple[bytes, str]:
     else:
         suffix = ".jpg"
     return data, suffix
+
+
+def _save_current_file(*, book: str, src: str) -> Path:
+    hit = pick_current(src)
+    if hit is None:
+        raise ToolArgError(
+            "no in-flight PDF on this turn — attach the file in chat "
+            "and pass path=current (current:2 for the second). "
+            "Do not look for attachment-1.pdf on disk."
+        )
+    folder = book if book in {"soveryn", "cwg"} else "unsorted"
+    dest_dir = ensure_drop_dirs() / folder
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    suffix = Path(hit.name).suffix.lower() or ".pdf"
+    if suffix not in RECEIPT_SUFFIXES:
+        suffix = ".pdf"
+    dest = dest_dir / f"chat-{stamp}{suffix}"
+    dest.write_bytes(hit.data)
+    return dest
 
 
 def _save_current_photo(*, book: str) -> Path:
@@ -94,8 +115,17 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
             except ValueError as exc:
                 raise ToolArgError(str(exc)) from exc
 
-        if splits and order_id and not path_s and image_s.lower() != "current":
+        if splits and order_id and not path_s and image_s.lower() != "current" and parse_current_index(path_s) is None:
             return split_existing_order(order_id, splits).as_dict()
+
+        if parse_current_index(path_s) is not None:
+            saved = _save_current_file(book=book, src=path_s)
+            return ingest_path(
+                saved,
+                folder_hint=forced,
+                book=forced,
+                splits=splits,
+            ).as_dict()
 
         if image_s.lower() == "current" or (image_s and not path_s):
             if image_s.lower() != "current" and image_s:
@@ -143,9 +173,9 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 "path": {
                     "type": "string",
                     "description": (
-                        "Absolute path to a receipt PDF or photo "
-                        "(Downloads or data/intake/ledgers/). "
-                        "Omit with image=\"current\" for the picture Jon just sent."
+                        "Absolute path, or 'current' / 'current:2' for a PDF "
+                        "Jon just attached in this chat turn. "
+                        "Omit with image=\"current\" for a picture."
                     ),
                 },
                 "image": {

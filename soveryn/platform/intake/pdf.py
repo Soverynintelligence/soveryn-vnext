@@ -147,7 +147,9 @@ def extract_pdf_bytes(
             truncated=truncated,
             gap=(
                 "no extractable text layer — likely a scan or image-only PDF. "
-                "OCR is not in v0 intake; print the gap, do not invent page content."
+                "OCR is not in v0 intake; print the gap, do not invent page content. "
+                "You can still file it: file_away path=current dest=cwg_insurance "
+                "(or current:2). It is not a file named attachment-1.pdf on disk."
             ),
             source_name=source_name,
         )

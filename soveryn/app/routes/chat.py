@@ -422,8 +422,11 @@ def chat():
         pass
     tok_room = room_ctx.room_session_id.set(room_sid)
     try:
+        from soveryn.platform.intake.turn_files import files_from_pdf_data_urls
+
         response = loop.process_message(
             session_id, message, attachments=images, source=source,
+            files=files_from_pdf_data_urls(pdfs) if pdfs else None,
         )
     except AgentLoopError as e:
         msg = str(e)
@@ -636,8 +639,11 @@ def chat_stream():
     # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
     # per constraint 3, rather than appearing inside a half-opened text/event-stream.
     try:
+        from soveryn.platform.intake.turn_files import files_from_pdf_data_urls
+
         event_iter = loop.process_message_stream(
             session_id, message, attachments=images, source=source,
+            files=files_from_pdf_data_urls(pdfs) if pdfs else None,
         )
         # Pre-fetch the first event so setup errors surface here.
         try:

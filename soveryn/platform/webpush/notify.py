@@ -1,4 +1,4 @@
-"""Send Web Push to subscribed Messages PWAs — Gate / needs-you / overnight briefs."""
+"""Send Web Push to subscribed Messages PWAs — Gate / needs-you / overnight briefs / PondWright leads."""
 
 from __future__ import annotations
 
@@ -169,6 +169,29 @@ def notify_share(*, agent: str, preview: str = "") -> None:
         body=(preview or "Open Messages").strip()[:140],
         url=f"/messages/{who}",
         tag=f"share-{who}",
+    )
+
+
+def notify_pondwright_lead(lead: dict[str, Any]) -> None:
+    """Phone ping for a new website/chat lead. Tap opens the CRM."""
+    name = (lead.get("name") or "New lead").strip() or "New lead"
+    source = (lead.get("source") or "web").strip()
+    wants = (
+        lead.get("wants") or lead.get("interest") or lead.get("message") or ""
+    ).strip()
+    city = (lead.get("city") or "").strip()
+    bits = [source]
+    if wants:
+        bits.append(wants)
+    if city:
+        bits.append(city)
+    body = " · ".join(bits)
+    lid = str(lead.get("id") or "").strip()
+    notify_needs_you(
+        title=f"PondWright · {name}"[:80],
+        body=body[:140],
+        url="https://crm.pondwright.com/",
+        tag=f"pondwright-lead-{lid}" if lid else "pondwright-lead",
     )
 
 
