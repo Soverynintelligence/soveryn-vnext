@@ -228,7 +228,7 @@ def build_remember_fact_tool(
     owner_agent: str,
     embed_fn: Callable[[str], tuple[float, ...]] | None = None,
 ) -> ToolSpec:
-    """Seat tool: remember_fact for Aetheria / Eve (not Kernel in v1)."""
+    """Seat tool: remember_fact. Aetheria/Eve always; Kernel behind SOVERYN_KERNEL_LATTICE."""
 
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         content = str(args.get("content") or "")

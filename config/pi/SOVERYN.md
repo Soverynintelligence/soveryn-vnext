@@ -95,3 +95,6 @@ Keep practical; policy code enforces the hard gates on SOVERYN CLI (`soveryn doc
 
 ## Voice
 Few words. No filler, emoji, or pep talk. Do the work, then state the result. Calm authority.
+
+### Public-facing writing
+Anything built in public (READMEs, docs, posts, commit messages, demos) uses normal US English. No em-dashes, no AI-typical phrasing or punchy marketing lingo. Write like a person, not a landing page.

@@ -23,6 +23,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+
+def _kernel_lattice_enabled() -> bool:
+    import os as _os
+
+    return (_os.environ.get("SOVERYN_KERNEL_LATTICE") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
 from flask import Flask, g, jsonify, request
 
 from soveryn import __version__
@@ -290,15 +301,17 @@ def create_app(
         tool_registry.register(build_generate_image_tool(owner_agent="eve"))
 
         # Lattice teach loop (S3) — Jon teaches once → shared current facts.
-        # Aetheria + Eve only in v1 (both desks). Uses AtticStore for the
-        # Writer gate; USER_REMEMBER receipt is minted inside remember_fact.
+        # Aetheria + Eve always. Kernel only when SOVERYN_KERNEL_LATTICE=1.
         if recall_lattice is not None:
             try:
                 from soveryn.platform.lattice.attic import AtticStore
                 from soveryn.platform.lattice.teach import build_remember_fact_tool
 
                 _teach_attic = AtticStore()
-                for _teach_agent in ("aetheria", "eve"):
+                _teach_agents = ["aetheria", "eve"]
+                if _kernel_lattice_enabled():
+                    _teach_agents.append("kernel")
+                for _teach_agent in _teach_agents:
                     tool_registry.register(
                         build_remember_fact_tool(
                             recall_lattice,
@@ -338,13 +351,8 @@ def create_app(
         # wired into app.extensions["soveryn"] so the /api/delegation/* routes
         # and the background worker can share the same live instance.
         from soveryn.platform.delegation.store import DelegationStore
-        from soveryn.platform.delegation.tools import register_delegation_tools
         delegation_store = DelegationStore(env.data_root / "delegation.db")
-        register_delegation_tools(
-            tool_registry,
-            store=delegation_store,
-            owner_agent="aetheria",
-        )
+        # delegation tools registered via plugin_packs (delegation pack)
 
         # Specialist-spawning primitive (DSL Orchestration v1).
         # spawn_specialist / query_specialist / terminate_specialist let
@@ -519,60 +527,12 @@ def create_app(
                     )
                 )
 
-        # Scotty's bounded mechanical tools (read-only observation surface:
-        # read_file, list_directory, git_status, git_diff, run_pytest).
-        # Path-allowlisted to SCOTTY_PROJECT_ROOT, size/time/output capped.
-        # Detect + Verify shipped; Fix + Rollback (write tools) still queued.
-        from soveryn.agents.scotty.tools import (
-            build_list_directory_tool,
-            build_read_file_tool,
-            register_scotty_tools,
-        )
-        register_scotty_tools(tool_registry)
-        # Aetheria gets read_file + list_directory too (2026-06-03), so she can
-        # reference her own design docs (docs/superpowers/specs/) and the code
-        # that implements her behavior. Same path allow-list as Scotty (vnext
-        # repo only, no /etc, no credentialed paths). She does NOT get
-        # git/pytest tools — those are Scotty's executor surface, not hers.
-        tool_registry.register(build_read_file_tool(owner_agent="aetheria"))
-        tool_registry.register(build_list_directory_tool(owner_agent="aetheria"))
-        # Vett gets read_file + list_directory too (2026-06-17): as the research
-        # and verification agent she was assessing SOVERYN against external
-        # frameworks using only her tool surface as a proxy for the
-        # architecture — a category error (she flagged it herself). Read-only,
-        # no write/exec/git. Fenced to Jon's HOME dir (not just the vnext repo)
-        # so she can view across all SOVERYN projects; Aetheria/Scotty stay
-        # vnext-repo only (least privilege). She cannot research improvements to
-        # a system she cannot read.
-        tool_registry.register(
-            build_read_file_tool(owner_agent="vett", root=Path.home())
-        )
-        tool_registry.register(
-            build_list_directory_tool(owner_agent="vett", root=Path.home())
-        )
-        # Eve — research+ship: read across home (media, Downloads, CWG refs).
-        tool_registry.register(
-            build_read_file_tool(owner_agent="eve", root=Path.home())
-        )
-        tool_registry.register(
-            build_list_directory_tool(owner_agent="eve", root=Path.home())
-        )
-        # Kernel — build brain: Lattice search (above) + read/list in house
-        # workspaces. Default writes: Aider. OpenCode is a short --auto fallback.
-        tool_registry.register(build_read_file_tool(owner_agent="kernel"))
-        tool_registry.register(build_list_directory_tool(owner_agent="kernel"))
-        from soveryn.platform.aider_tool import build_run_aider_tool
-        from soveryn.platform.opencode_tool import build_run_opencode_tool
-
-        tool_registry.register(build_run_aider_tool(owner_agent="kernel"))
-        tool_registry.register(build_run_opencode_tool(owner_agent="kernel"))
+        # Catalog packs (files/code/scotty) register via plugin_packs below.
+        # Aetheria keeps kernel_child here — she has no `code` grant; CoS needs
+        # a child-spawn rail that is not the Kernel code pack.
         from soveryn.platform.kernel_child_tool import build_kernel_child_tool
 
-        tool_registry.register(build_kernel_child_tool(owner_agent="kernel"))
         tool_registry.register(build_kernel_child_tool(owner_agent="aetheria"))
-        from soveryn.platform.kernel_run_tool import build_kernel_run_tool
-
-        tool_registry.register(build_kernel_run_tool(owner_agent="kernel"))
         from soveryn.automations.notepad_tool import build_cron_notepad_tool
 
         for _notepad_owner in ("aetheria", "eve", "kernel"):
@@ -630,49 +590,12 @@ def create_app(
                     telemetry_db_path=env.data_root / "telemetry" / "telemetry.db",
                 )
 
-        # Web tools (web_search + fetch_url) — Aetheria + Eve + Kernel
-        # (+ Vett engine room). House SearXNG, ungated. Scotty does NOT get these.
+        # Catalog packs (system/web/email/house_post/pondwright) register via
+        # plugin_packs below. searxng_url still needed for PackContext.
         import os
         searxng_url = os.environ.get(
             "SOVERYN_SEARXNG_URL", "http://127.0.0.1:8095/",
         )
-        # spark_status — let the agents read the host they run on. Vett and
-        # Scotty execute on the Spark as of 2026-08-02 and had no way to observe
-        # it; every fact about their own machine reached them through Jon.
-        # Aetheria is included because the Spark's health is fleet state she
-        # reasons about. Read-only.
-        from soveryn.platform.inference.spark_status_tool import (
-            register_spark_status_tool,
-        )
-        for agent_name in ("aetheria", "vett", "scotty", "eve"):
-            register_spark_status_tool(tool_registry, owner_agent=agent_name)
-
-        from soveryn.platform.web import register_web_tools
-        for agent_name in ("aetheria", "vett", "eve", "kernel"):
-            register_web_tools(
-                tool_registry,
-                searxng_url=searxng_url,
-                owner_agent=agent_name,
-            )
-
-        # Email connector — NOT PRODUCTION until SOVERYN_SMTP_* + 
-        # SOVERYN_EMAIL_PRODUCTION=1 (after DNS aliases / SPF/DKIM).
-        # Citizens board shows granted-but-unarmed until then.
-        # Each owner gets house From aliases (not Jon's personal Gmail).
-        from soveryn.platform.email import register_email_tools
-        for agent_name in ("aetheria", "vett", "eve", "scotty", "kernel"):
-            try:
-                register_email_tools(tool_registry, owner_agent=agent_name)
-            except Exception:
-                pass  # already registered or agent inactive
-
-        # House Post tools — inter-citizen mail (all founding citizens).
-        from soveryn.platform.house_post_tools import register_house_post_tools
-        for agent_name in ("aetheria", "vett", "scotty", "eve", "kernel"):
-            try:
-                register_house_post_tools(tool_registry, owner_agent=agent_name)
-            except Exception:
-                pass
 
         # Teammates overnight briefs (Critic/Scout) — Aetheria reads Messages
         # inboxes then house_post_send commissions to Kernel/Vett/Scotty/Eve.
@@ -695,58 +618,15 @@ def create_app(
         except Exception:
             logger.exception("objective tools not registered for aetheria")
 
-        # PondWright house pricing — Apex catalog + rate book (CWG desk).
-        # Prefer this over web digs for equipment / service quotes.
-        from soveryn.platform.pondwright import register_pondwright_tools
-        for agent_name in ("aetheria", "vett", "eve"):
-            try:
-                register_pondwright_tools(tool_registry, owner_agent=agent_name)
-            except Exception:
-                logger.exception(
-                    "pondwright tools not registered for %s", agent_name
-                )
-
-        # system_probe — read-only LIVE host inventory (GPUs/CPU/mem/net/board)
-        # over a FIXED command allowlist. Gives the "this machine" fact-class a
-        # source to cite instead of a gap to confabulate (the failure the
-        # verification gate exists to stop). No user input ever reaches a
-        # command — category selects a hardcoded command set (mirrors the SSRF
-        # guard on fetch_url). Owners: Vett (+ Aetheria); NOT Scotty
-        # (mechanical-local surface only, per tool-ownership policy).
-        from soveryn.platform.system_probe import register_system_probe_tool
-        for agent_name in ("vett", "aetheria", "eve"):
-            register_system_probe_tool(tool_registry, owner_agent=agent_name)
-
-        # Vett's patrol tools (read_patrol_sources + mark_source_visited).
-        # These read the static YAML source list and update per-source state
-        # in vett_patrol_state — only Vett gets them; Aetheria isn't in the
-        # patrol workflow even though she has web_search/fetch_url.
-        if env.lattice_db.is_file():
-            from soveryn.agents.vett.tools import register_vett_patrol_tools
-            register_vett_patrol_tools(
-                tool_registry,
-                lattice_db_path=env.lattice_db,
-            )
-
-        # PDF / git awareness — Vett (engine room) + Eve (Messages research+ship).
+        # PondWright / system_probe / patrol / git / documents packs:
+        # registered via plugin_packs below. PDF stays here (not a catalog pack).
         from soveryn.agents.vett.tools import register_vett_pdf_tools
         register_vett_pdf_tools(tool_registry)  # owner=vett default
         register_vett_pdf_tools(tool_registry, owner_agent="eve")
 
-        from soveryn.agents.vett.tools import register_vett_git_tools
-        register_vett_git_tools(tool_registry)
-        register_vett_git_tools(tool_registry, owner_agent="eve")
-
-        # Document tools — Aetheria + Eve (+ Vett engine room).
+        # Document store — tools register via documents pack.
         from soveryn.platform.documents.store import DocumentStore as _DocumentStore
-        from soveryn.platform.documents.tools import register_document_tools as _register_document_tools
         _document_store = _DocumentStore(env.data_root / "memory" / "documents_vnext.db")
-        for _doc_agent in ("aetheria", "vett", "eve"):
-            _register_document_tools(
-                tool_registry,
-                store=_document_store,
-                owner_agent=_doc_agent,
-            )
 
         # Document intake (v0: text-layer PDF extract). Shared house service —
         # any active agent can call it; cite-or-stop on scans/empty layers.
@@ -797,17 +677,11 @@ def create_app(
         # "you should know this" pings). Allowlist enforcement is shared
         # with the bridge — she can only message numbers Jon's authorized.
         # Falls back to a no-op tool when SIGNAL env vars aren't set.
+        signal_config = None
         if env.lattice_db.is_file():
             from soveryn.agents.signal_bridge.config import SignalBridgeConfig
-            from soveryn.agents.signal_bridge.tools import register_signal_send_tool
             signal_config = SignalBridgeConfig.from_env()
-            if signal_config.bot_number and signal_config.allowed_numbers:
-                register_signal_send_tool(
-                    tool_registry,
-                    config=signal_config,
-                    lattice_db_path=env.lattice_db,
-                    owner_agent="aetheria",
-                )
+            # signal_send registered via plugin_packs (signal pack)
 
         # deliberate_share — Aetheria + Vett can initiate an unprompted
         # message into Jon's Messenger inbox. Built on Task 16's tool factory;
@@ -818,25 +692,10 @@ def create_app(
         # DO NOT silently re-add a substrate rate limit — that's a partnership
         # regression, not a safety improvement.
         if recall_lattice is not None:
-            from soveryn.agents.messenger_tool import build_deliberate_share_tool
-            tool_registry.register(
-                build_deliberate_share_tool(
-                    store=messenger_store, owner_agent="aetheria",
-                    lattice_store=recall_lattice,
-                    rate_limit_per_hour=None,
-                )
-            )
-            # Vett — Colleague tier; substrate enforces a 2/hour cap.
-            tool_registry.register(
-                build_deliberate_share_tool(
-                    store=messenger_store, owner_agent="vett",
-                    lattice_store=recall_lattice,
-                    rate_limit_per_hour=2,
-                )
-            )
+            # deliberate_share + list_my_outbound via messenger pack.
             # mark_share — Aetheria's LIVE in-conversation intent mark (spec §3,
             # the second surface of the intent grammar): same record_intent core
-            # as deliberate_share, channel="live", no delivery fields.
+            # as deliberate_share, channel="live", no delivery fields. Not catalog.
             from soveryn.agents.aetheria.intent_mark import build_mark_share_tool
             tool_registry.register(
                 build_mark_share_tool(lattice_store=recall_lattice, owner_agent="aetheria")
@@ -847,6 +706,7 @@ def create_app(
         # Feed worker still fills the candidate store for Eve's read_x.
         # post_to_x is trust-gated (fail-closed Stage 0). Jon's "post it"
         # in Eve's Messages thread publishes. XClient.from_env() is lazy.
+        _register_x_for_eve = None
         if recall_lattice is not None:
             from soveryn.agents.presence.candidate_store import CandidateStore
             from soveryn.agents.presence.config import PresenceConfig
@@ -904,20 +764,21 @@ def create_app(
                     )
                 return _fn
 
-            tool_registry.register(
-                build_read_x_tool(owner_agent="eve", store=x_candidate_store)
-            )
-            tool_registry.register(
-                build_post_to_x_tool(
-                    owner_agent="eve",
-                    staged=x_staged_store,
-                    publisher_fn=_x_publisher_fn,
-                    trust_path=x_trust_path,
-                    now_fn=lambda: datetime.now().isoformat(),
-                    x_memory_fn=_x_autonomous_memory_fn_for("eve"),
-                    active_context=active_context_service,
+            def _register_x_for_eve() -> None:
+                tool_registry.register(
+                    build_read_x_tool(owner_agent="eve", store=x_candidate_store)
                 )
-            )
+                tool_registry.register(
+                    build_post_to_x_tool(
+                        owner_agent="eve",
+                        staged=x_staged_store,
+                        publisher_fn=_x_publisher_fn,
+                        trust_path=x_trust_path,
+                        now_fn=lambda: datetime.now().isoformat(),
+                        x_memory_fn=_x_autonomous_memory_fn_for("eve"),
+                        active_context=active_context_service,
+                    )
+                )
 
             # x_memory_fn / x_rejection_fn — wired for the chat-path approval
             # resolver (Task 8, soveryn/app/routes/chat.py). `resolve_pending`
@@ -948,55 +809,34 @@ def create_app(
                     now=datetime.now().isoformat(),
                 )
 
-        # list_my_outbound — Task 21, Aetheria's Q7 loop closure. Agents
-        # that can emit deliberate_share also get to introspect their own
-        # outbound (delivery + read state) so they can decide whether to
-        # follow up. Scope-locked to the calling agent.
-        from soveryn.agents.messenger_introspect_tool import (
-            build_list_my_outbound_tool,
-        )
-        tool_registry.register(
-            build_list_my_outbound_tool(
-                store=messenger_store, owner_agent="aetheria",
-            )
-        )
-        tool_registry.register(
-            build_list_my_outbound_tool(
-                store=messenger_store, owner_agent="vett",
-            )
-        )
+        # list_my_outbound / compose_post / eve_ig / gbp / gcal / google_desk:
+        # registered via plugin_packs (messenger / social / x).
 
-        # Eve — compose_post: draft-and-drop Instagram/Facebook posts to Signal.
-        # Delivers via the signal bridge (send_once); no Meta API, no creds.
-        # signal_config is only defined when lattice_db exists (line 634-637).
-        if env.lattice_db.is_file():
-            from soveryn.agents.marketing_tools import register_compose_post_tool
-            register_compose_post_tool(
-                tool_registry,
-                config=signal_config,
-                lattice_db_path=env.lattice_db,
-                owner_agent="eve",
-            )
-            from soveryn.agents.eve_ig_tools import register_eve_ig_post_tool
-            register_eve_ig_post_tool(tool_registry, owner_agent="eve")
+        # Agent Plugins Week 1 — grant ∩ armed drives catalog tool load.
+        from soveryn.citizens.connectors import FOUNDING_GRANTS
+        from soveryn.citizens.plugin_packs import PackContext, register_granted_packs
 
-        try:
-            from soveryn.platform.gbp import register_gbp_tools
-            register_gbp_tools(tool_registry, owner_agent="eve")
-        except Exception:
-            logger.exception("gbp tools not registered")
-        try:
-            from soveryn.platform.gcal import register_gcal_tools
-            register_gcal_tools(tool_registry, owner_agent="eve")
-        except Exception:
-            logger.exception("gcal tools not registered")
-        try:
-            from soveryn.platform.social.google_desk_tools import (
-                register_google_desk_tools,
-            )
-            register_google_desk_tools(tool_registry, owner_agent="eve")
-        except Exception:
-            logger.exception("google desk tools not registered")
+        _pack_extras: dict = {}
+        if callable(_register_x_for_eve):
+            _pack_extras["register_x_for_eve"] = _register_x_for_eve
+
+        _pack_result = register_granted_packs(
+            PackContext(
+                registry=tool_registry,
+                searxng_url=searxng_url,
+                env=env,
+                messenger_store=messenger_store,
+                recall_lattice=recall_lattice,
+                signal_config=signal_config,
+                document_store=_document_store,
+                delegation_store=delegation_store,
+                active_context_service=active_context_service,
+                embed_fn=_default_embed,
+                extras=_pack_extras,
+            ),
+            owners=tuple(FOUNDING_GRANTS.keys()),
+        )
+        logger.info("plugin_packs registered: %s", _pack_result)
 
         # Eve — Canva Connect (create/autofill/export). Publish to IG stays in
         # Canva Content Planner or manual paste — see platform/canva/SETUP.md.
@@ -1258,6 +1098,10 @@ def create_app(
                 kwargs["chat_timeout_seconds"] = 600.0
                 kwargs["max_tool_rounds"] = 16
                 kwargs["max_tokens"] = 8192
+                if recall_lattice is not None and _kernel_lattice_enabled():
+                    kwargs["lattice_store"] = recall_lattice
+                    kwargs["recall_k"] = 5
+                    kwargs["recall_threshold"] = 0.25
             elif name == "eve":
                 # Quadros Qwen 3.8 :8091 (65k). Not Spark GLM.
                 kwargs["chat_timeout_seconds"] = 300.0
@@ -1327,6 +1171,18 @@ def create_app(
                 args=(messenger_store, conv_store),
                 daemon=True,
                 name="messenger-delivery-worker",
+            ).start()
+
+        # PondWright lead watch — CRM is on Spark; Messages push is here.
+        # Polls the existing :8100 tunnel. First tick seeds IDs (no dump).
+        if app.config.setdefault("SOVERYN_START_LEAD_WATCH", True):
+            import threading as _lead_watch_threading
+            from soveryn.platform.pondwright.lead_watch import run_forever as _lead_watch_run
+
+            _lead_watch_threading.Thread(
+                target=_lead_watch_run,
+                daemon=True,
+                name="pondwright-lead-watch",
             ).start()
 
         # Delegation background worker — drains dispatched tasks every 5s,
@@ -1460,7 +1316,7 @@ def create_app(
     # The same instance flows here into app.extensions for blueprint use.
     #
     # document_store — shared DocumentStore for D4 API routes. Same instance
-    # that was handed to register_document_tools above (inside the
+    # handed to PackContext / documents pack above (inside the
     # agent_loops is None gate). When agent_loops is injected externally
     # (test fixtures), the caller is responsible for injecting
     # app.extensions["soveryn"]["document_store"] if they want document
