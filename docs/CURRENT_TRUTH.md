@@ -6,16 +6,14 @@
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
 > Machine check: `grep -oE '2026-[0-9]{2}-[0-9]{2}' docs/CURRENT_TRUTH.md | sort | tail -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe.
+> <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 
 If runtime behavior changes, **update this file first**, then code/notes.
 
 ---
 
 ## 0. House spine (locked 2026-08-24)
-*Last observed: 2026-08-24; public-products row re-checked 2026-09-09 (Kernel).*
-*As of 2026-09-12; rows below show last-observed dates.*
-
-> Dated note 2026-09-09: superseded snapshot 2026-05-23 moved to docs/archive/ — this file is the only live truth.
+*As of 2026-09-15; per-row dates are the source of truth.*
 
 **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
 
@@ -26,7 +24,9 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
 | **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG | Customer/brand surface. |
-| **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot. Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
+| **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot (public slot: unassigned as of 2026-09-15; no live check performed this pass). Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
+
+- 2026-09-09: superseded snapshot 2026-05-23 moved to docs/archive/ — this file is the only live truth.
 
 *These three are the surfaces the README public-surface table has actually fetched; README lists only fetched surfaces.*
 
@@ -39,7 +39,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | **GLM-5.3-Flash EXL3 TP=2 `:8001` active** (2026-09-13, Jon-confirmed unpark). Flash-Next `:8888` parked (spark2 vLLM stopped, tower tunnel idle). |
+| **Kernel** | Local build | **Flash-Next `:8888` NVFP4 TP=1 active** (2026-09-17, house standard — Kernel coding brain; GLM `:8001` parked). |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
@@ -48,7 +48,7 @@ Per-row verification dates — model swaps are the most common silent drift; do 
 | Row (model/endpoint) | Last verified |
 |----------------------|---------------|
 | Aetheria — Blackwell `:8090` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 Brains |
-| Kernel — GLM `:8001` GLM-5.3-Flash EXL3 TP=2 (Flash-Next `:8888` parked) | 2026-09-13 (Jon-confirmed unpark; `kernel status` glm OK, :8888 reset — Kernel) |
+| Kernel — Flash-Next `:8888` NVFP4 TP=1 (GLM `:8001` parked) | 2026-09-17 (Kernel — coding brain live on Flash-Next per house standard; aider/opencode runs confirm `:8888` serving) |
 | Eve — Quadros `:8091` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 |
 | TGTHR helper Messie — `:5066` Qwen3.5-9B Q6 | 2026-09-09 (Kernel — re-checked vs §0 public-products note; in-house TGTHR helper, not the Quadros 27B public slot) |
 | Critic / Scout — Teammates inbox | 2026-09-07 (§0b brief contract) |
@@ -126,9 +126,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | GLM `:8001` — `glm-5.3-flash` EXL3 TP=2, both Sparks (**active** 2026-09-13, Jon-confirmed; `~/.soveryn/kernel_brain` = glm) |
+| Kernel | Flash-Next `:8888` — `qwen3.8-flash-next` NVFP4 TP=1, spark2 (**active** 2026-09-17, house standard; GLM `:8001` parked) |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
-| Shared Spark workers | `:8001` GLM TP=2 **LIVE** (unparked 2026-09-13; Flash-Next `:8888` parked) |
+| Shared Spark workers | Flash-Next `:8888` NVFP4 TP=1 **LIVE** (house standard 2026-09-17; GLM `:8001` parked) |
 | Second Spark | **Parked** — `gx10-a733` / soverynspark2 Flash-Next vLLM stopped; tunnel unit `soveryn-spark2-flashnext-8888.service` idle (restart on re-park per lab) |
 
 ---
@@ -138,7 +138,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 
 | Item | State |
 |------|--------|
-| Citizen email | **Not production — NOT ARMED.** Gated checklist is canonical in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (single source for the step list and its count — this row deliberately does not restate or number the steps). Latch `SOVERYN_EMAIL_PRODUCTION=1` off; SMTP alone does not arm egress. |
+| Citizen email | **Not production — NOT ARMED.** Gated checklist body is canonical in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (single source for the step list and its count — this row deliberately does not restate or number the steps). Roster tiers (live/folded/teammates) are single-sourced in README §What is SOVERYN. Latch `SOVERYN_EMAIL_PRODUCTION=1` off; SMTP alone does not arm egress. |
 | CoS rename | **Deferred** — Aetheria still `COS_ID` |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
 | Critic → Aetheria commissions | **Live + E2E 2026-08-25** — `read_overnight_brief` → `house_post_send` → commission queued (sample: Vett verify run `aab8411e`) |
@@ -167,7 +167,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 1. ~~Rotate source of authority~~ → this file  
 2. ~~Secrets/state backup~~ → runbook + drill PASS  
 3. ~~Seneca lead capture~~ → `docs/leads/seneca-leads.csv` (retroactive 08-24)  
-4. ~~Citizen email~~ → **NOT ARMED** — gated checklist in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (9 steps; §2 is the live-state pointer)  
+4. ~~Citizen email~~ → **NOT ARMED** — gated checklist in `docs/notes/2026-08-23-citizen-email-identity.md` §Ops checklist (step count single-sourced there; §2 is the live-state pointer)  
 5. ~~House spine~~ → **§0 locked 2026-08-24**  
 6. Keep this file short when state changes  
 
