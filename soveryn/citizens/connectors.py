@@ -216,16 +216,18 @@ CATALOG: dict[str, ConnectorDef] = {
 # Founding grants — who may hold which connector (Jon’s grants).
 # Status "armed" still depends on runtime config (SMTP, signal bridge, …).
 FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
+    # Email stays eve + kernel only (Jon, 2026-09-18) — production latch is on,
+    # so granting it elsewhere puts them on live Zoho egress at next restart.
     "aetheria": (
-        "web", "email", "signal", "messenger", "files", "documents",
+        "web", "signal", "messenger", "files", "documents",
         "system", "delegation", "house_post", "pondwright",
     ),
     "vett": (
-        "web", "email", "files", "documents", "system", "house_post",
+        "web", "files", "documents", "system", "house_post",
         "git", "patrol", "pondwright",
     ),
     "scotty": (
-        "files", "system", "house_post", "code", "email",
+        "files", "system", "house_post", "code",
     ),
     "eve": (
         "social", "signal", "files", "documents", "house_post", "email",
