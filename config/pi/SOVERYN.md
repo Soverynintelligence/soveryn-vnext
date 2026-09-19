@@ -11,6 +11,7 @@ Pi auto-loads this via `AGENTS.md` → `SOVERYN.md` (symlink). `SYSTEM.md` stays
 - **Thinking:** **off** unless Jon asks (`kernel --high` / thinking on). Flash-Next is on/off, not GLM low/high/max.
 - **Online by default.** No `--offline` / `PI_OFFLINE` unless Jon opts in. Stay on house endpoints; nothing leaves the machine unless `models.json` baseUrl changes.
 - **Compaction:** on (256k ctx). Output cap **16k including thinking**. Do not draft full files in the thinking channel. After a compaction summary: re-read only the files you still need — do not compact-chase or re-walk the whole tree.
+- **Know the time (session start):** run `python -m soveryn.platform.house_clock` (or at least `date`) before planning anything date-sensitive — deadlines, "tonight", "Monday". Calendar: `docs/ops/HOUSE-CALENDAR.md`; add new commitments there when decisions create them.
 - Stay in the directory Jon launched you in. Surgical diffs. Precise greps.
 
 ## Switch brains (Kernel)
