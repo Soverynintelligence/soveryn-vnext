@@ -111,6 +111,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Backup encryption | **Live 2026-09-22** — secrets/ + docs-ops ship to easystore as AES-256 archive only (NTFS = no permissions; plaintext mirrors purged). Passphrase `~/.soveryn/house-keys/easystore-archive.key`, tower-only. Backup now covers docs/ops tax books + mirrors PondWright CRM ops.sqlite from Spark |
 | verify gates + DEPLOY.md | **Live 2026-09-22** — `scripts/verify.sh` in soveryn_vnext + pondwright-cwg-ops; DEPLOY.md in vnext/CRM/site repos; deploy-discipline rules in SOVERYN.md. Known red: `test_delegation_end_to_end_isolation` (pre-existing, needs investigation) |
 | House clock + calendar | **Live 2026-09-22** — `python -m soveryn.platform.house_clock`; `docs/ops/HOUSE-CALENDAR.md` shared calendar (reconcile Mon 08:30, security Sun 09:00) |
+| Scotty worker (`soveryn-scotty-worker.service`) | **PARKED 2026-09-22 (Jon: fully parked)** — folded citizen, empty desk since Aug 23, one failed commission ever. Re-enable only when the delegation engine (`execute_task`) is wired to production. Desk files kept at `~/soveryn_citizens/scotty/` |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
@@ -141,6 +142,17 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Flash-Next `:8888` | **PARKED 2026-09-22 (observed: endpoint down).** NVFP4 TP=1, spark2. Tunnel unit `soveryn-spark2-flashnext-8888.service` still running (forward only, backend down). Re-park per lab. **Gotcha (two-week leak, fixed 2026-09-22):** overnight jobs launched aider against this parked endpoint; `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and probes before start |
 | Second Spark | **LIVE — serving the GLM TP=2 half** (not parked; `:8001` spans both Sparks) |
 | House overnight rule | Overnight agents hand findings to Kernel as instructions; they never launch harnesses against unprobed endpoints (SOVERYN.md, 2026-09-22) |
+
+### Repo census (2026-09-22 — verdicts per Jon)
+| Repo | Verdict |
+|------|---------|
+| american-history-app, historys-ledger, historysledger-site | **LIVE products** — History's Ledger + Atticus fact-guard (Atticus `:8500`, Public Spark) |
+| carolinawatergardens, pondwright-cwg-ops, pondpro, pondwright-agent | **LIVE** — CWG + PondWright estate (see §1 Public Spark) |
+| acttruth, acttruth-site | **LIVE** — ActTruth budget/product |
+| teammates, shepherd | **LIVE** — Critic/Scout + FCC UI `:5055` |
+| soveryn_vnext, soveryn-agent, pondwright-crm (legacy, superseded by cwg-ops) | **LIVE / superseded** — house core; legacy CRM repo kept for history only |
+| llama.cpp, llama.cpp_head, llama.cpp_eval, llama.cpp_qwen4exp, llama-cpp-python, ComfyUI | **TOOLING / experiments** — inference engines and eval clones; not products |
+| tgthrmess-app, tgthrmess-site, atticus, sealed, self-report-eval, soveryn_cathedral, soveryn-site, american-history archives | **Unclassified — Jon verdict pending** (active, archive, or delete) |
 
 ---
 
