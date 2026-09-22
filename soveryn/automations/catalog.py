@@ -254,4 +254,22 @@ CATALOG: List[AutomationSpec] = [
         delivery=_SJON,
         monitor_file="automations/watches/pond_academy.txt",
     ),
+    AutomationSpec(
+        id="funding_watch",
+        title="Funding & Research Watch",
+        category="ops",
+        agent="eve",
+        cron="0 8 * * *",
+        prompt=(
+            "Funding and research watch — inherited from V.E.T.T. (folded "
+            "2026-09-22). Check the 7 sources in "
+            "data/memory/skills/eve/funding-watch.md (UK/EU/US AI funding, "
+            "NSF, SBIR, arxiv cs.AI, HF blog) with your web tools. Verify "
+            "or say nothing: every finding carries a source URL; nothing "
+            "new since yesterday = one line. Flag anything actionable for "
+            "SOVERYN (grants that fit a local AI house) with deadline and "
+            "first step, and add it to docs/ops/HOUSE-CALENDAR.md."
+        ),
+        delivery=_SJON,
+    ),
 ]
