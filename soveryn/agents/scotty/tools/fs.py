@@ -219,3 +219,99 @@ def build_list_directory_tool(
             f"size_bytes. Paths outside the project root are rejected."
         ),
     )
+
+
+# ─── write_file (added 2026-09-22) ──────────────────────────────────────────
+# The Messages Kernel had read/list only — no hands. It claimed file builds
+# that never landed (the demos/orrery phantom: twice). A builder seat needs
+# a write tool whose success is VERIFIED, not asserted.
+
+WRITE_FILE_MAX_BYTES = 256 * 1024  # 256 KB per write; larger means use git
+
+
+def build_write_file_tool(*, owner_agent: str, root: Path) -> ToolSpec:
+    """Verified file write, jailed to `root`.
+
+    The handler never reports success without proof: after writing it
+    re-stats the file and reads back the first line. Returns the byte count
+    and sha256 prefix so the caller's "done" claim has an artifact behind it.
+    """
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        import hashlib
+
+        path_arg = args.get("path", "")
+        content = args.get("content", "")
+        if not isinstance(path_arg, str) or not path_arg.strip():
+            raise ToolArgError("path must be a non-empty string")
+        if not isinstance(content, str):
+            raise ToolArgError("content must be a string")
+        # ~ expands to the jail root for the kernel seat — expand BEFORE the
+        # jail check so ~/soveryn_vnext/... lands inside the fence. A ~user
+        # form (~jon/...) does not expand (no such user) and would fall
+        # through as a relative path creating literal "~jon/" directories —
+        # refuse any other tilde usage outright.
+        if path_arg.startswith("~"):
+            import os as _os
+            expanded = _os.path.expanduser(path_arg)
+            if expanded.startswith("~"):
+                raise ToolArgError(
+                    f"unknown user in path {path_arg!r} — use a house path"
+                )
+            path_arg = expanded
+        if len(content.encode("utf-8")) > WRITE_FILE_MAX_BYTES:
+            raise ToolArgError(
+                f"content exceeds {WRITE_FILE_MAX_BYTES} bytes — write it in "
+                "parts or via git on the tower"
+            )
+        try:
+            resolved = resolve_within_root(path_arg, root=root, must_exist=False)
+        except PathOutOfBoundsError as e:
+            raise ToolArgError(str(e))
+        if resolved.is_dir():
+            raise ToolArgError(f"path {path_arg!r} is a directory")
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            resolved.write_text(content, encoding="utf-8")
+        except OSError as e:
+            raise ToolArgError(f"write failed: {e}")
+
+        # ── verification: the claim needs an artifact ──
+        stat = resolved.stat()
+        size = stat.st_size
+        expected = len(content.encode("utf-8"))
+        readback = resolved.read_text(encoding="utf-8")
+        if size != expected or readback != content:
+            raise ToolArgError(
+                f"write verification FAILED: on disk {size} bytes, "
+                f"expected {expected}. The file may be truncated — do not "
+                "claim this build is done."
+            )
+        sha = hashlib.sha256(readback.encode("utf-8")).hexdigest()[:12]
+        return {
+            "ok": True,
+            "path": str(resolved),
+            "bytes": size,
+            "sha256_12": sha,
+            "first_line": (readback.splitlines() or [""])[0][:120],
+        }
+
+    return ToolSpec(
+        name="write_file",
+        owner=owner_agent,
+        description=(
+            "Write a text file (path jailed to the house root). Creates parent "
+            "directories. Returns bytes written, sha256 prefix, and the first "
+            "line — verify these before claiming the file is built."
+        ),
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "File path (jailed to house root)"},
+                "content": {"type": "string", "description": "Full file content"},
+            },
+            "required": ["path", "content"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )

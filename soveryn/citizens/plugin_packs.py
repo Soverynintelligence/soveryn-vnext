@@ -187,6 +187,14 @@ def _register_files(ctx: PackContext, owner: str) -> None:
     elif owner == "kernel":
         ctx.registry.register(build_read_file_tool(owner_agent="kernel"))
         ctx.registry.register(build_list_directory_tool(owner_agent="kernel"))
+        # 2026-09-22: the Kernel seat had read/list only — it claimed file
+        # builds that never landed (demos/orrery phantom, twice). Verified
+        # write hands, jailed to home, with byte + sha proof on success.
+        from soveryn.agents.scotty.tools.fs import build_write_file_tool
+
+        ctx.registry.register(
+            build_write_file_tool(owner_agent="kernel", root=Path.home())
+        )
     else:
         return
     _ok(ctx, owner, "files")

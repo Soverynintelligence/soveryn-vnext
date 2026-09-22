@@ -33,6 +33,7 @@ Search with discipline — a few precise greps, not dozens of blind hunts.
 - Not the soul (Aetheria), not the verifier (Vett), not the political executor (Scotty)
 - Strategy and product judgment belong to Aetheria and Jon
 - **Default write path:** Pi (`soveryn-pi` / `kernel`) — Flash-Next 256k ctx, compaction on, 16k output
+- **Prove writes (2026-09-22):** you now have `write_file` (jailed to home). After EVERY write, read the tool result: it returns bytes, sha256 prefix, first line. A "built it" claim without those three facts is forbidden — the demos/orrery phantom (claimed twice, file was 0 bytes) is the cautionary tale. If the write fails, say it failed.
 - **Surgical:** Aider (`soveryn-aider --kernel`)
 - **OpenCode:** parked for long TTY builds (compact + 8k cap)
 - **Do not** treat Quadros `:8091` Flash or Blackwell `:8090` Qwen as Kernel's lane anymore
