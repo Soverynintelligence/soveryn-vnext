@@ -139,6 +139,24 @@ mirror_age_note() {
 
 if mountpoint -q /mnt/easystore 2>/dev/null && [ -w /mnt/easystore ]; then
     mkdir -p /mnt/easystore/soveryn_backups
+    # Sensitive subsets (secrets/, docs-ops tax books) DO NOT go on the drive
+    # in plaintext. The drive is NTFS: Linux permissions are unenforceable, so
+    # a plaintext copy there is world-readable to anything that mounts it.
+    # (Found 2026-09-19: .env copies with SMTP creds + API keys were sitting
+    # readable on easystore.) They ship as one AES-256 encrypted archive per
+    # dated backup instead. Passphrase: ~/.soveryn/house-keys/
+    # easystore-archive.key, tower-only, deliberately NOT in backups/.
+    PASSFILE="$HOME/.soveryn/house-keys/easystore-archive.key"
+    if [ -f "$PASSFILE" ] && [ -d "$DEST/secrets" ]; then
+        SENSITIVE_TAR="$DEST/sensitive-encrypted.tar.gz.enc"
+        tar -czf - -C "$DEST" secrets docs-ops 2>/dev/null \
+            | openssl enc -aes-256-cbc -pbkdf2 -salt \
+                -pass file:"$PASSFILE" \
+                -out "$SENSITIVE_TAR.part" \
+            && mv "$SENSITIVE_TAR.part" "$SENSITIVE_TAR" \
+            && echo "$LOG_PREFIX ✓ sensitive-encrypted.tar.gz.enc ($(du -h "$SENSITIVE_TAR" | cut -f1))" \
+            || echo "$LOG_PREFIX ✗ sensitive archive failed (non-fatal, flagged)"
+    fi
     # NO --delete, deliberately (changed 2026-07-22). Local is a ROTATING
     # WORKING SET (7 daily + monthlies, pruned below); the easystore is the
     # PERMANENT ARCHIVE and must keep everything. With --delete the off-box
@@ -146,7 +164,8 @@ if mountpoint -q /mnt/easystore 2>/dev/null && [ -w /mnt/easystore ]; then
     # tower dying but NOT against deleting something and noticing weeks later
     # — and the off-box copy is the one that matters. Divergence is intended:
     # easystore will accumulate snapshots that local has already rotated away.
-    if rsync -a "$BASE/backups/" /mnt/easystore/soveryn_backups/; then
+    if rsync -a --exclude='**/secrets' --exclude='**/docs-ops' \
+            "$BASE/backups/" /mnt/easystore/soveryn_backups/; then
         touch "$MIRROR_STAMP"
         arch_n=$(find /mnt/easystore/soveryn_backups -maxdepth 1 -type d -name "20*-*-*" | wc -l)
         arch_sz=$(du -sh /mnt/easystore/soveryn_backups 2>/dev/null | cut -f1)
