@@ -77,6 +77,11 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 - Every repo has a `DEPLOY.md` (branch, host, steps, gotchas). Read it before the first deploy of a session.
 - Commit hooks run gitleaks; if it blocks, fix the file — `GITLEAKS_SKIP=1` only for a documented false positive.
 
+## Overnight handoff (the aider rule)
+- Overnight agents (Aetheria, Critic, Scout, any scheduled seat) hand findings to **Kernel as instructions** — they do not launch aider/harnesses themselves. Kernel runs them with verify gates.
+- Any harness launch MUST probe the model endpoint first. `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and refuses to start (exit 2) if the active model is not actually serving. Never hardcode an endpoint.
+- Reason this rule exists: two weeks (2026-09-06 to 09-19) of overnight aider runs spinning ~46% of a core against the parked Flash-Next endpoint, every night, after GLM took over the Sparks. Dead CPU, hot office, zero work done.
+
 ## Memory discipline
 Recall is only as good as what gets written. Kernel writes a lattice fact at every decision point (canonical repo for a surface, flag state, what was tried and rejected, what needs Jon's sign-off), not just at cleanup. A fact not recorded is lost at session end.
 

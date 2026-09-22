@@ -21,9 +21,16 @@ Roster authority: README §What is SOVERYN — Vett/Scotty rows are design-only 
 | Who | Default From | Also allowed |
 |-----|--------------|--------------|
 | Aetheria | `aetheria@soverynintelligence.com` | `aetheria@carolinawatergardens.com` |
-| Vett (folded — see README roster) | `vett@soverynintelligence.com` **(design-only — do-not-arm; folded into Eve)** | `vett@carolinawatergardens.com` **(design-only — do-not-arm)** |
-| Eve / Kernel (Scotty folded — see README roster) | `{name}@soverynintelligence.com` | `pondwright@carolinawatergardens.com` (design-only — do-not-arm; desk alias) |
-| PondWright (desk) | `pondwright@carolinawatergardens.com` **(design-only — do-not-arm; desk alias)** | Aetheria/Vett may send-as **(design-only / do-not-arm)** |
+| Eve / Kernel | `{name}@soverynintelligence.com` | `pondwright@carolinawatergardens.com` (desk alias, Aetheria may send-as) |
+
+### Superseded — folded identities (folded)
+Vett and Scotty are folded (see README §What is SOVERYN roster tiers); PondWright is a desk alias, not a citizen. Retained for design history only — do not add to `ACTIVE_AGENTS`, the email allowlist, or `SOVERYN_EMAIL_IDENTITIES` as live identities:
+
+| Who | Default From | Also allowed |
+|-----|--------------|--------------|
+| Vett (folded ⇒ Eve) | `vett@soverynintelligence.com` (folded) | `vett@carolinawatergardens.com` (folded) |
+| Scotty (folded ⇒ Kernel) | `scotty@soverynintelligence.com` (folded) | — |
+| PondWright (desk) | `pondwright@carolinawatergardens.com` (folded; desk alias) | Aetheria may send-as (folded) |
 
 Override: `SOVERYN_EMAIL_IDENTITIES` JSON (see `soveryn/platform/email/identities.py`).
 
