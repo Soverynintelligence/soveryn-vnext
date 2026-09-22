@@ -29,6 +29,10 @@ move it to Done at the bottom (do not delete — the history is cheap).
 
 ## Done
 
+- 2026-09-22 — Vett patrol parked; sources + standard inherited by Eve as `funding_watch` (daily 08:00)
+- 2026-09-22 — Scotty worker fully parked (folded citizen; returns with delegation engine)
+- 2026-09-22 — Estate audit: truth file corrected (brains backwards), 4 undocumented services added, repo census added, /lead rate-limited, representation 7,921-restart loop parked
+
 - 2026-09-19 — Journal post 1 live: How to Clear a Green Pond Naturally (carolinawatergardens.com) — first content-engine post
 - 2026-09-19 — Field Notes index at /journal, month grouping, hover dropdown nav — site-wide
 
