@@ -28,14 +28,20 @@ def test_founding_grants_give_web_to_aetheria_and_vett_not_scotty():
 
 
 def test_for_citizen_marks_email_unarmed_without_smtp(monkeypatch):
+    # Email grants were scoped to eve + kernel (Jon, 2026-09-18). Aetheria's
+    # row must read not-granted; the unarmed-without-SMTP behavior is covered
+    # on eve, who still holds the grant.
     monkeypatch.delenv("SOVERYN_SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SOVERYN_SMTP_FROM", raising=False)
     monkeypatch.delenv("SMTP_FROM", raising=False)
     rows = {c.id: c for c in for_citizen("aetheria")}
-    assert rows["email"].granted is True
+    assert rows["email"].granted is False
     assert rows["email"].armed is False
     assert rows["web"].granted is True
+    eve = {c.id: c for c in for_citizen("eve")}
+    assert eve["email"].granted is True
+    assert eve["email"].armed is False
 
 
 def test_email_stays_unarmed_without_production_latch(monkeypatch):

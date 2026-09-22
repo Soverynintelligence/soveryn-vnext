@@ -97,6 +97,28 @@ copy_secret "$HOME/teammates/roster.toml" "teammates_roster.toml"
 chmod 600 "$SECRETS/MANIFEST.txt"
 echo "$LOG_PREFIX ✓ secrets/MANIFEST.txt"
 
+# ── Tax books + ops docs (added 2026-09-19) ────────────────────────────
+# docs/ops/tax-* and tax-cwg are gitignored BY DESIGN (public repo), which
+# means git is NOT a backup for them. They are the least replaceable files
+# in the house: receipts, expense ledgers, the reconcile report. Nightly
+# copy into the dated backup so the 4am job covers what git cannot.
+DOCS_SRC="$BASE/docs/ops"
+DOCS_DEST="$DEST/docs-ops"
+mkdir -p "$DOCS_DEST"
+for d in tax tax-cwg soveryn-business cwg-business house-economy; do
+    if [ -d "$DOCS_SRC/$d" ]; then
+        cp -rp "$DOCS_SRC/$d" "$DOCS_DEST/$d"
+        echo "$LOG_PREFIX ✓ docs-ops/$d"
+    fi
+done
+# Pondwright CRM ops DB lives on the Spark; mirror it here when the tunnel is up.
+if curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8100/health 2>/dev/null; then
+    ssh -o ConnectTimeout=8 spark "cat ~/pondwright-cwg-ops/data/ops.sqlite" \
+        > "$DOCS_DEST/pondwright-crm-ops.sqlite" 2>/dev/null \
+        && echo "$LOG_PREFIX ✓ docs-ops/pondwright-crm-ops.sqlite ($(stat -c%s "$DOCS_DEST/pondwright-crm-ops.sqlite") bytes)" \
+        || echo "$LOG_PREFIX ✗ pondwright CRM db copy failed (non-fatal, flagged)"
+fi
+
 # ── Off-disk mirror to easystore ─────────────────────────────────────────
 
 # A missing mirror used to be SILENT: both the skip and the failure branch

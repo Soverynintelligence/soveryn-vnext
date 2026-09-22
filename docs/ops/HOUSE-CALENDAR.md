@@ -29,6 +29,9 @@ move it to Done at the bottom (do not delete — the history is cheap).
 
 ## Done
 
+- 2026-09-19 — Journal post 1 live: How to Clear a Green Pond Naturally (carolinawatergardens.com) — first content-engine post
+- 2026-09-19 — Field Notes index at /journal, month grouping, hover dropdown nav — site-wide
+
 - 2026-09-18 — Invoices live in CRM + estimator (b5ad209, 3eb8e28)
 - 2026-09-18 — Ledger reconcile system built; books clean (0e444bc)
 - 2026-09-18 — Email grants scoped to eve + kernel (333b03f)

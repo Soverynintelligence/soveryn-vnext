@@ -71,6 +71,12 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 - Never touch secrets (`.ssh`, `.env`, credentials), `sudo`, or force-push without asking.
 - Never launch unbounded headless Chrome. Animation HTML never finishes. Wrap Chrome/Chromium with `timeout 20s`. Do not hang on `grep | head` of Chrome logs (JUMPGATE lesson).
 
+## Deploy discipline
+- No deploy or "done" claim without a green `scripts/verify.sh` in that repo (tests + compile + secrets).
+- Public-facing services: stage first (`stage_8110.sh` pattern), then cut over. Direct-to-prod is for one-line fixes only, said out loud.
+- Every repo has a `DEPLOY.md` (branch, host, steps, gotchas). Read it before the first deploy of a session.
+- Commit hooks run gitleaks; if it blocks, fix the file — `GITLEAKS_SKIP=1` only for a documented false positive.
+
 ## Memory discipline
 Recall is only as good as what gets written. Kernel writes a lattice fact at every decision point (canonical repo for a surface, flag state, what was tried and rejected, what needs Jon's sign-off), not just at cleanup. A fact not recorded is lost at session end.
 
