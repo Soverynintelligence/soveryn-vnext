@@ -2,10 +2,10 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> Last rotated: 2026-09-13  
+> Last rotated: 2026-09-22  
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
-> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort | tail -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
+> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
 > <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -17,14 +17,14 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
 
-| Layer | What | Role |
-|-------|------|------|
-| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = **MESSAGES_CONTACTS** + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. |
-| **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. |
-| **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). |
-| **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). |
-| **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG | Customer/brand surface. |
-| **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot (public slot: unassigned as of 2026-09-15; no live check performed this pass). Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). |
+| Layer | What | Role | Last observed |
+|-------|------|------|---------------|
+| **Phone OS / front door** | Messages (`/` → `/messages`) | **The product.** Contacts = **MESSAGES_CONTACTS** + Critic/Scout overnight inboxes. Talk → Gate Allow/Deny in-thread. | 2026-09-22 |
+| **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. | 2026-09-22 |
+| **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). | 2026-09-22 |
+| **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). | 2026-09-22 |
+| **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG | Customer/brand surface. | 2026-09-22 |
+| **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot (public slot: unassigned as of 2026-09-15; no live check performed this pass). Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). | 2026-09-15 |
 
 - 2026-09-09: superseded snapshot 2026-05-23 moved to docs/archive/ — this file is the only live truth.
 
@@ -91,7 +91,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). Vett/Scotty/Grok **not** house chat agents. |
 | Heartbeat / dream / automations | **Live** |
 | Cognition surface (Gemma 4 26B-A4B Q5, CPU-only `:8089`, alias `dream`) | **Live** 2026-09-13 (Kernel — restarted; was silently down since ~Aug 30, starved `soveryn-representation.service` into a 4.8k-restart loop) |
-| Representation daemon (memory-as-reasoning, DRY RUN) | **Live** 2026-09-13 — readiness gate passes again; artifacts `data/memory/representation_dryrun.jsonl`. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) |
+| Representation daemon | **PARKED 2026-09-22** — was stuck in a 7,921-restart loop since Sep 14: its readiness gate waits for the cognition brain on :8089, and cognition was intentionally stopped+disabled Sep 14. `systemctl --user disable --now soveryn-representation.service`. Re-enable BOTH together (`soveryn-cognition.service` + this) when the dream/representation experiment resumes. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) |
 | Service crash watch (`soveryn-crash-watch.timer` 15min + automation `service_crash_watch` 30min, monitor-mode) | **Live** 2026-09-13 — deterministic `scripts/systemd_health_watch.py` writes `data/automations/watches/systemd_health.txt` only on failed/activating/NRestarts≥10 units; unchanged file = no LLM, change = Aetheria briefs Jon. Canary-tested (caught + cleared) |
 | SOVERYN CLI harness hardening | **Live** 2026-09-13 (Kernel) — `doctor --json` (machine-readable health/drift/gates, exit 1 on problems — house monitors can consume); parked-but-live drift check; generated-config freshness gate (`config/pi` + `config/soveryn-cli` audited per-harness vs profiles SSOT); `npm test` 25/25 (`packages/soveryn-cli/test/`) |
 | Citizens commissions + standing objectives | **Live** |
@@ -105,6 +105,12 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Canva Connect | **Live** (tokens local-only) |
 | Messages / CoS | **Live** — **default `/` door**; PWA + **Web Push on** (Gate / needs-you / Critic·Scout brief ready); Signal = Aetheria-only |
 | Verification gate | **Live — owner: Eve** (default was Vett; silently inert after the fold — repointed 2026-09-01, `58cb1e9`) |
+| Deep Cognition Cycle (`soveryn-cognition-cycle.service`) | **Live** — Aetheria reflect → process → distill loop (added to truth 2026-09-22; was running undocumented) |
+| House security sweep (`soveryn-security-sweep.timer`, Sun 09:00) | **Live 2026-09-22** — gitleaks across house repos + pip-audit (house requirements) + backup freshness + endpoint health; report `docs/ops/security/SECURITY-LATEST.md`, webpush on findings. gitleaks pre-commit hooks on all house repos |
+| Ledger reconcile (`soveryn-ledger-reconcile.timer`, Mon 08:30) | **Live 2026-09-22** — books vs evidence parity; report `docs/ops/tax/RECONCILE-LATEST.md`, webpush on drift |
+| Backup encryption | **Live 2026-09-22** — secrets/ + docs-ops ship to easystore as AES-256 archive only (NTFS = no permissions; plaintext mirrors purged). Passphrase `~/.soveryn/house-keys/easystore-archive.key`, tower-only. Backup now covers docs/ops tax books + mirrors PondWright CRM ops.sqlite from Spark |
+| verify gates + DEPLOY.md | **Live 2026-09-22** — `scripts/verify.sh` in soveryn_vnext + pondwright-cwg-ops; DEPLOY.md in vnext/CRM/site repos; deploy-discipline rules in SOVERYN.md. Known red: `test_delegation_end_to_end_isolation` (pre-existing, needs investigation) |
+| House clock + calendar | **Live 2026-09-22** — `python -m soveryn.platform.house_clock`; `docs/ops/HOUSE-CALENDAR.md` shared calendar (reconcile Mon 08:30, security Sun 09:00) |
 
 ### Teammates — `~/teammates`
 | Surface | Status |
@@ -121,15 +127,20 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Seneca `:8400` | **Live** — lead capture wired → Toni notify |
 | PondWright `:8200` | **Live** |
 | Atticus `:8500` | **Live** |
+| Shepherd FCC UI `:5055` | **Live — added to truth 2026-09-22** (was running undocumented). shepherdfcc.com via pondwright tunnel; repo `~/shepherd` |
+| PondWright SMTP relay | **Live — added 2026-09-22** (undocumented before). SSH reverse relay: Spark `:2465` → tower → smtp.gmail.com:465 |
+| PondWright SSH forwards | **Live — added 2026-09-22** (undocumented before). Tunnel plumbing for crm/estimator/pondwright domains |
+| PondWright CRM ops (tower) | **Live 2026-09-22** — invoices shipped (quote-linked invoice editor, printable `/invoice/{id}`, INV numbering); `python-multipart` 0.0.31 security bump deployed. Known open: starlette major upgrade (sweep finding), `/lead` rate limit |
 
 ### Brains
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | Flash-Next `:8888` — `qwen3.8-flash-next` NVFP4 TP=1, spark2 (**active** 2026-09-17, house standard; GLM `:8001` parked) |
+| Kernel | **GLM-5.3-Flash EXL3 TP=2 `:8001` — LIVE 2026-09-22 (observed serving; spark2 116/121 GiB resident). Took over from Flash-Next ~2026-09-13. `~/.soveryn/kernel_brain` = `glm`.** |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
-| Shared Spark workers | Flash-Next `:8888` NVFP4 TP=1 **LIVE** (house standard 2026-09-17; GLM `:8001` parked) |
-| Second Spark | **Parked** — `gx10-a733` / soverynspark2 Flash-Next vLLM stopped; tunnel unit `soveryn-spark2-flashnext-8888.service` idle (restart on re-park per lab) |
+| Flash-Next `:8888` | **PARKED 2026-09-22 (observed: endpoint down).** NVFP4 TP=1, spark2. Tunnel unit `soveryn-spark2-flashnext-8888.service` still running (forward only, backend down). Re-park per lab. **Gotcha (two-week leak, fixed 2026-09-22):** overnight jobs launched aider against this parked endpoint; `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and probes before start |
+| Second Spark | **LIVE — serving the GLM TP=2 half** (not parked; `:8001` spans both Sparks) |
+| House overnight rule | Overnight agents hand findings to Kernel as instructions; they never launch harnesses against unprobed endpoints (SOVERYN.md, 2026-09-22) |
 
 ---
 
