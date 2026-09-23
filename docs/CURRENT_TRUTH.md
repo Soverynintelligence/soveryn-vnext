@@ -153,7 +153,13 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | teammates, shepherd | **LIVE** — Critic/Scout + FCC UI `:5055` |
 | soveryn_vnext, soveryn-agent, pondwright-crm (legacy, superseded by cwg-ops) | **LIVE / superseded** — house core; legacy CRM repo kept for history only |
 | llama.cpp, llama.cpp_head, llama.cpp_eval, llama.cpp_qwen4exp, llama-cpp-python, ComfyUI | **TOOLING / experiments** — inference engines and eval clones; not products |
-| tgthrmess-app, tgthrmess-site, atticus, sealed, self-report-eval, soveryn_cathedral, soveryn-site, american-history archives | **Unclassified — Jon verdict pending** (active, archive, or delete) |
+| tgthrmess-app, tgthrmess-site | **LIVE** — TGTHRmess product (site 200, Messie :5066, nightly backup timer) |
+| atticus | **LIVE** — History's Ledger corpus + fact-guard (WWI rework Sep 17; Atticus :8500) |
+| sealed | **ACTIVE DEV** — onchain quote-proof product (Monad QuoteSeal, keccak256 hash-only; voiceover notes Sep 17) |
+| self-report-eval | **ACTIVE RESEARCH** — self-report eval harness, feeds the honesty paper (results Sep 17) |
+| soveryn-site | **LIVE** — soverynintelligence.com (200; jumpgate/lab experiments Sep 17) |
+| acttruth-site | **LIVE stable** — acttruth.com (200; static, low churn is correct) |
+| soveryn_cathedral | **ARCHIVE** — superseded by soveryn_vnext lattice (last touched Jul 26); keep for history |
 
 ---
 
