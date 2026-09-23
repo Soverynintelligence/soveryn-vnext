@@ -3120,7 +3120,8 @@
   }
 
   /* ═══ Easy mode (default) — Grok-Bot-simple front door ═══ */
-  body.cc-easy .cc-advanced { display: none !important; }
+  /* legacy cc-advanced rule removed 2026-09-22: the advanced folds are re-homed
+   inside the labeled Advanced drawer, so nothing is deleted from the DOM. */
   body.cc-easy .acttruth-badge { display: none !important; }
   body.cc-easy .dispatch-box { display: none !important; }
   body.cc-easy .agent-more,
@@ -3190,6 +3191,14 @@
   .cc-mode-toggle:hover { border-color: rgba(192,130,79,0.55); color: #f3e7db; }
   body:not(.cc-easy) .cc-mode-toggle { border-color: rgba(94,225,160,0.35); color: #9ee0b8; }
 
+
+/* advanced drawer (2026-09-22 redesign) */
+details.cc-drawer{border:1px dashed rgba(107,118,132,.4);border-radius:12px;margin:26px 0}
+details.cc-drawer>summary{cursor:pointer;list-style:none;font-size:11.5px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--txt3);font-weight:600;padding:14px 18px}
+details.cc-drawer>summary::-webkit-details-marker{display:none}
+details.cc-drawer>summary::after{content:" +";color:var(--gold)}
+details.cc-drawer[open]>summary::after{content:" −"}
 </style>
 </head>
 <body class="lab cc-easy" data-lab data-testid="command-center" data-cc-mode="easy">
@@ -3332,453 +3341,6 @@
 
     
     <!-- ═══ 2. Gates ═══ -->
-    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
-      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
-      <div class="cc-fold-body">
-<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
-    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
-      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
-        <div class="empty">Nothing staged.</div>
-      </div>
-    </section>
-    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
-      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
-        <div class="empty">No proposals awaiting review.</div>
-      </div>
-    </section>
-    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
-      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
-        <div class="empty">Nothing at the gate.</div>
-      </div>
-    </section>
-    </div>
-
-    
-      </div>
-    </details>
-
-    <!-- ═══ 3. Work ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-work">
-      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
-      <div class="cc-fold-body">
-<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
-    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
-      <div class="boards-strip-head">
-        <h3>Boards</h3>
-        <span style="flex:1;"></span>
-        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
-      </div>
-      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
-        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
-          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
-            <option value="Signal">Signal</option>
-            <option value="Blueprint">Blueprint</option>
-            <option value="Friction">Friction</option>
-          </select>
-          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
-            <input type="checkbox" data-board-create-notify checked> notify team
-          </label>
-        </div>
-        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
-        <div class="row">
-          <span class="err" data-board-create-err></span>
-          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
-          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
-        </div>
-      </form>
-      <div class="boards">
-        <div class="board-col" data-board="signal">
-          <h4>Signal <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open signals.</div></div>
-        </div>
-        <div class="board-col" data-board="blueprint">
-          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open blueprints.</div></div>
-        </div>
-        <div class="board-col" data-board="friction">
-          <h4>Friction <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open friction.</div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Public agents + web intake: four equal columns across the width -->
-    <section class="panel public-agents-strip" data-testid="public-agents-panel">
-      <div class="boards-strip-head">
-        <h3>Public agents &amp; web intake</h3>
-        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
-          chat · waitlist · CRM — tracked here, not only email
-        </span>
-      </div>
-      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    <script>
-    (function(){
-      var el = document.querySelector('[data-public-agents]');
-      if(!el) return;
-      function esc(s){
-        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
-          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-        });
-      }
-      function relTime(iso){
-        if(!iso) return '—';
-        var t = Date.parse(iso);
-        if(!t) return esc(iso);
-        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
-        if(sec < 90) return 'just now';
-        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
-        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
-        return Math.floor(sec/86400) + 'd ago';
-      }
-      function card(a){
-        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
-        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
-        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
-        // Same live-ask stream PondWright has — Seneca/Atticus already publish
-        // recent visitor previews on /summary (polled every 20s).
-        var rec = (a.recent||[]).slice(0,5).map(function(r){
-          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
-            + esc(r.preview||'…')
-            + (r.captured ? ' · lead' : '')
-            + '</div>';
-        }).join('');
-        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
-        return '<div class="cc-pa-card">'
-          + '<div class="cc-pa-head">'
-          + '<h4>'+esc(a.name)+'</h4>'
-          + '<span class="cc-pa-status">'
-          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
-          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
-          + '<div class="cc-pa-stats">'
-          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
-          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
-          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
-          + '</div>'
-          + '<div class="cc-pa-asks-label">Recent asks</div>'
-          + '<div class="cc-pa-asks">'+rec+'</div>'
-          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
-          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
-          + '</div></div>';
-      }
-      function liveAsksStrip(agents){
-        // Cross-agent feed — same previews, newest first, so you scan all
-        // public desks the way you scan PondWright CRM lines.
-        var rows = [];
-        (agents||[]).forEach(function(a){
-          (a.recent||[]).forEach(function(r){
-            rows.push({
-              agent: a.name || a.id,
-              id: a.id,
-              ts: r.ts || '',
-              preview: r.preview || '',
-              captured: !!r.captured,
-            });
-          });
-        });
-        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
-        rows = rows.slice(0, 10);
-        if(!rows.length){
-          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
-        }
-        var body = rows.map(function(r){
-          return '<div class="cc-pa-live-row">'
-            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
-            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
-            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
-            + (r.captured ? ' <em>· lead</em>' : '')
-            + '</span></div>';
-        }).join('');
-        return '<div class="cc-pa-live">'
-          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
-          + '<div class="cc-pa-live-list">'+body+'</div>'
-          + '</div>';
-      }
-      function intakeCard(d){
-        var intake = (d && d.intake) || {};
-        var crm = (d && d.crm) || {};
-        var wl = (d && d.waitlist) || {};
-        var ok = !!intake.ok;
-        var pending = intake.pending || 0;
-        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
-        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
-        var lines = (intake.recent || []).slice(0, 4).map(function(r){
-          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
-          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
-            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
-            + esc(r.who || '—')
-            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
-            + '</div>';
-        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
-        return '<div class="cc-pa-card cc-pa-intake">'
-          + '<div class="cc-pa-head">'
-          + '<h4>Web intake</h4>'
-          + '<span class="cc-pa-status">'
-          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
-          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
-          + '<div class="cc-pa-stats">'
-          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
-          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
-          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
-          + '</div>'
-          + lines
-          + '<div class="cc-pa-foot">'
-          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
-          + ' <span class="cc-pa-model">·</span> '
-          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
-          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
-          + '</div></div>';
-      }
-      function paint(d){
-        var agents = (d && d.agents) || [];
-        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
-        var banner = (d.talking && d.talking.length)
-          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
-          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
-        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
-        el.innerHTML = banner
-          + liveAsksStrip(agents)
-          + '<div class="cc-pa-grid">'
-          + agents.map(card).join('')
-          + intakeCard(d)
-          + '</div>';
-      }
-      function load(){
-        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
-          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
-      }
-      load(); setInterval(load, 20000);
-    })();
-    </script>
-
-
-    
-      </div>
-    </details>
-
-<!-- Ops folded — power tools, not the default face -->
-    <details class="cc-fold cc-advanced" data-testid="ops-fold">
-      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
-      <div class="cc-fold-body">
-<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
-    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
-      <div class="hb-label">
-        <span class="hb-kicker">Spark hard brain</span>
-        <span class="hb-active" data-hard-brain-active>…</span>
-        <span class="hb-note" data-hard-brain-note></span>
-      </div>
-      <div class="hb-buttons" data-hard-brain-buttons></div>
-      <div class="hb-status" data-hard-brain-status></div>
-    </section>
-
-    <section class="panel ops-panel" data-testid="ops-panel">
-      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
-      <div class="ops-grid">
-        <div class="ops-block">
-          <h4>Run tests</h4>
-          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
-          <div class="ops-test-row" data-ops-test-buttons></div>
-          <div class="ops-status" data-ops-test-status></div>
-          <pre class="ops-log" data-ops-test-log></pre>
-        </div>
-      </div>
-    </section>
-    <script>
-    (function(){
-      var hardActive = document.querySelector('[data-hard-brain-active]');
-      var hardNote = document.querySelector('[data-hard-brain-note]');
-      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
-      var hardStatus = document.querySelector('[data-hard-brain-status]');
-      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
-      var brainMeta = null;
-      var brainStatus = hardStatus;
-      var brainLog = null;
-      var testBtns = document.querySelector('[data-ops-test-buttons]');
-      var testStatus = document.querySelector('[data-ops-test-status]');
-      var testLog = document.querySelector('[data-ops-test-log]');
-      if(!brainBtns && !testBtns) return;
-      var brainPoll = null, testPoll = null;
-
-      function setStatus(el, cls, text){
-        if(!el) return;
-        el.className = 'ops-status' + (cls ? ' '+cls : '');
-        el.textContent = text || '';
-      }
-      function setLog(el, text){
-        if(!el) return;
-        if(text && String(text).trim()){
-          el.textContent = text;
-          el.classList.add('show');
-        } else {
-          el.textContent = '';
-          el.classList.remove('show');
-        }
-      }
-      function paintBrain(d){
-        var cur = d.brain || '?';
-        var hname = d.house_name || cur;
-        if(hardActive){
-          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
-        }
-        if(hardNote){
-          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
-        }
-        if(hardBtns){
-          hardBtns.innerHTML = (d.brains||[]).map(function(b){
-            var active = b.id === cur ? ' is-active' : '';
-            var label = b.house_name || b.id;
-            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
-          }).join('');
-          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
-            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
-          });
-        }
-        if(d.job && d.job.status){
-          var st = d.job.status;
-          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
-          if(hardStatus){
-            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
-            hardStatus.textContent = d.job.message || st;
-          }
-          if(st==='running'||st==='starting') startBrainPoll();
-        }
-      }
-      function switchBrain(id){
-        if(!id) return;
-        var label = id;
-        var btn = document.querySelector('[data-brain="'+id+'"]');
-        if(btn) label = btn.textContent || id;
-        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
-        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
-        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
-        setLog(brainLog, '');
-        fetch('/api/ops/brain', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({brain:id})
-        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
-          .then(function(x){
-            if(!x.ok){
-              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
-              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
-              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              return;
-            }
-            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
-            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
-            startBrainPoll();
-          })
-          .catch(function(e){
-            setStatus(brainStatus, 'fail', String(e));
-            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
-            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-          });
-      }
-      function startBrainPoll(){
-        if(brainPoll) return;
-        brainPoll = setInterval(function(){
-          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
-            setLog(brainLog, d.log_tail || '');
-            var j = d.job;
-            if(!j) return;
-            var st = j.status;
-            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
-            setStatus(brainStatus, cls, j.message || st);
-            if(hardStatus){
-              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
-              hardStatus.textContent = j.message || st;
-            }
-            if(st==='ok' || st==='failed'){
-              clearInterval(brainPoll); brainPoll = null;
-              loadBrain();
-            }
-          }).catch(function(){ /* app may be restarting */ });
-        }, 4000);
-      }
-      function loadBrain(){
-        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
-          .catch(function(){
-            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
-            if(hardActive) hardActive.textContent = 'unavailable';
-          });
-      }
-
-      function paintSuites(d){
-        testBtns.innerHTML = (d.suites||[]).map(function(s){
-          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
-        }).join('');
-        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
-          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
-        });
-        if(d.job && d.job.status){
-          var st = d.job.status;
-          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
-          setStatus(testStatus, cls, d.job.message || st);
-          setLog(testLog, d.log_tail || d.job.summary || '');
-          if(st==='running'||st==='starting') startTestPoll();
-        }
-      }
-      function runTests(suite){
-        if(!suite) return;
-        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        setStatus(testStatus, 'run', 'Starting '+suite+'…');
-        setLog(testLog, '');
-        fetch('/api/ops/tests', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({suite:suite})
-        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
-          .then(function(x){
-            if(!x.ok){
-              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
-              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              return;
-            }
-            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
-            startTestPoll();
-          })
-          .catch(function(e){
-            setStatus(testStatus, 'fail', String(e));
-            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-          });
-      }
-      function startTestPoll(){
-        if(testPoll) return;
-        testPoll = setInterval(function(){
-          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
-            setLog(testLog, d.log_tail || '');
-            var j = d.job;
-            if(!j) return;
-            var st = j.status;
-            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
-            setStatus(testStatus, cls, j.message || st);
-            if(st==='ok' || st==='failed'){
-              clearInterval(testPoll); testPoll = null;
-              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-            }
-          }).catch(function(){});
-        }, 2000);
-      }
-      function loadTests(){
-        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
-          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
-      }
-
-      loadBrain();
-      loadTests();
-    })();
-    </script>
-      </div>
-    </details>
-
-    <!-- Automations — scheduler + CC inbox; Signal preview only -->
     <details class="cc-fold cc-chapter" open data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
       <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
       <div class="cc-fold-body">
@@ -4109,8 +3671,456 @@
       </div>
     </details>
 
-    <!-- ═══ Pulse (folded) ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-pulse">
+    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
+      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
+      <div class="cc-fold-body">
+<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
+      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
+        <div class="empty">Nothing staged.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
+      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
+        <div class="empty">No proposals awaiting review.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
+      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
+        <div class="empty">Nothing at the gate.</div>
+      </div>
+    </section>
+    </div>
+
+    
+      </div>
+    </details>
+
+    <!-- ═══ 3. Work ═══ -->
+<details class="cc-drawer" data-testid="advanced-drawer">
+  <summary>Advanced — configuration, memory, legacy surfaces</summary>
+    <details class="cc-fold" data-testid="ops-fold">
+      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
+      <div class="cc-fold-body">
+<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
+    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
+      <div class="hb-label">
+        <span class="hb-kicker">Spark hard brain</span>
+        <span class="hb-active" data-hard-brain-active>…</span>
+        <span class="hb-note" data-hard-brain-note></span>
+      </div>
+      <div class="hb-buttons" data-hard-brain-buttons></div>
+      <div class="hb-status" data-hard-brain-status></div>
+    </section>
+
+    <section class="panel ops-panel" data-testid="ops-panel">
+      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
+      <div class="ops-grid">
+        <div class="ops-block">
+          <h4>Run tests</h4>
+          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
+          <div class="ops-test-row" data-ops-test-buttons></div>
+          <div class="ops-status" data-ops-test-status></div>
+          <pre class="ops-log" data-ops-test-log></pre>
+        </div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var hardActive = document.querySelector('[data-hard-brain-active]');
+      var hardNote = document.querySelector('[data-hard-brain-note]');
+      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
+      var hardStatus = document.querySelector('[data-hard-brain-status]');
+      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
+      var brainMeta = null;
+      var brainStatus = hardStatus;
+      var brainLog = null;
+      var testBtns = document.querySelector('[data-ops-test-buttons]');
+      var testStatus = document.querySelector('[data-ops-test-status]');
+      var testLog = document.querySelector('[data-ops-test-log]');
+      if(!brainBtns && !testBtns) return;
+      var brainPoll = null, testPoll = null;
+
+      function setStatus(el, cls, text){
+        if(!el) return;
+        el.className = 'ops-status' + (cls ? ' '+cls : '');
+        el.textContent = text || '';
+      }
+      function setLog(el, text){
+        if(!el) return;
+        if(text && String(text).trim()){
+          el.textContent = text;
+          el.classList.add('show');
+        } else {
+          el.textContent = '';
+          el.classList.remove('show');
+        }
+      }
+      function paintBrain(d){
+        var cur = d.brain || '?';
+        var hname = d.house_name || cur;
+        if(hardActive){
+          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
+        }
+        if(hardNote){
+          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
+        }
+        if(hardBtns){
+          hardBtns.innerHTML = (d.brains||[]).map(function(b){
+            var active = b.id === cur ? ' is-active' : '';
+            var label = b.house_name || b.id;
+            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
+          }).join('');
+          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
+            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
+          });
+        }
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          if(hardStatus){
+            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+            hardStatus.textContent = d.job.message || st;
+          }
+          if(st==='running'||st==='starting') startBrainPoll();
+        }
+      }
+      function switchBrain(id){
+        if(!id) return;
+        var label = id;
+        var btn = document.querySelector('[data-brain="'+id+'"]');
+        if(btn) label = btn.textContent || id;
+        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
+        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
+        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
+        setLog(brainLog, '');
+        fetch('/api/ops/brain', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({brain:id})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
+              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
+              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
+            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
+            startBrainPoll();
+          })
+          .catch(function(e){
+            setStatus(brainStatus, 'fail', String(e));
+            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
+            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startBrainPoll(){
+        if(brainPoll) return;
+        brainPoll = setInterval(function(){
+          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
+            setLog(brainLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(brainStatus, cls, j.message || st);
+            if(hardStatus){
+              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+              hardStatus.textContent = j.message || st;
+            }
+            if(st==='ok' || st==='failed'){
+              clearInterval(brainPoll); brainPoll = null;
+              loadBrain();
+            }
+          }).catch(function(){ /* app may be restarting */ });
+        }, 4000);
+      }
+      function loadBrain(){
+        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
+          .catch(function(){
+            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
+            if(hardActive) hardActive.textContent = 'unavailable';
+          });
+      }
+
+      function paintSuites(d){
+        testBtns.innerHTML = (d.suites||[]).map(function(s){
+          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
+        }).join('');
+        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
+          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
+        });
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          setStatus(testStatus, cls, d.job.message || st);
+          setLog(testLog, d.log_tail || d.job.summary || '');
+          if(st==='running'||st==='starting') startTestPoll();
+        }
+      }
+      function runTests(suite){
+        if(!suite) return;
+        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(testStatus, 'run', 'Starting '+suite+'…');
+        setLog(testLog, '');
+        fetch('/api/ops/tests', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({suite:suite})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
+            startTestPoll();
+          })
+          .catch(function(e){
+            setStatus(testStatus, 'fail', String(e));
+            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startTestPoll(){
+        if(testPoll) return;
+        testPoll = setInterval(function(){
+          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
+            setLog(testLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(testStatus, cls, j.message || st);
+            if(st==='ok' || st==='failed'){
+              clearInterval(testPoll); testPoll = null;
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            }
+          }).catch(function(){});
+        }, 2000);
+      }
+      function loadTests(){
+        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
+          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
+      }
+
+      loadBrain();
+      loadTests();
+    })();
+    </script>
+      </div>
+    </details>
+
+    <!-- Automations — scheduler + CC inbox; Signal preview only -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-work">
+      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
+      <div class="cc-fold-body">
+<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
+    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
+      <div class="boards-strip-head">
+        <h3>Boards</h3>
+        <span style="flex:1;"></span>
+        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
+      </div>
+      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
+        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
+          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="Signal">Signal</option>
+            <option value="Blueprint">Blueprint</option>
+            <option value="Friction">Friction</option>
+          </select>
+          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" data-board-create-notify checked> notify team
+          </label>
+        </div>
+        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
+        <div class="row">
+          <span class="err" data-board-create-err></span>
+          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
+          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
+        </div>
+      </form>
+      <div class="boards">
+        <div class="board-col" data-board="signal">
+          <h4>Signal <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open signals.</div></div>
+        </div>
+        <div class="board-col" data-board="blueprint">
+          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open blueprints.</div></div>
+        </div>
+        <div class="board-col" data-board="friction">
+          <h4>Friction <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open friction.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Public agents + web intake: four equal columns across the width -->
+    <section class="panel public-agents-strip" data-testid="public-agents-panel">
+      <div class="boards-strip-head">
+        <h3>Public agents &amp; web intake</h3>
+        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
+          chat · waitlist · CRM — tracked here, not only email
+        </span>
+      </div>
+      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var el = document.querySelector('[data-public-agents]');
+      if(!el) return;
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function relTime(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso);
+        if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+        return Math.floor(sec/86400) + 'd ago';
+      }
+      function card(a){
+        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        // Same live-ask stream PondWright has — Seneca/Atticus already publish
+        // recent visitor previews on /summary (polled every 20s).
+        var rec = (a.recent||[]).slice(0,5).map(function(r){
+          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'…')
+            + (r.captured ? ' · lead' : '')
+            + '</div>';
+        }).join('');
+        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
+        return '<div class="cc-pa-card">'
+          + '<div class="cc-pa-head">'
+          + '<h4>'+esc(a.name)+'</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
+          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
+          + '</div>'
+          + '<div class="cc-pa-asks-label">Recent asks</div>'
+          + '<div class="cc-pa-asks">'+rec+'</div>'
+          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
+          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
+          + '</div></div>';
+      }
+      function liveAsksStrip(agents){
+        // Cross-agent feed — same previews, newest first, so you scan all
+        // public desks the way you scan PondWright CRM lines.
+        var rows = [];
+        (agents||[]).forEach(function(a){
+          (a.recent||[]).forEach(function(r){
+            rows.push({
+              agent: a.name || a.id,
+              id: a.id,
+              ts: r.ts || '',
+              preview: r.preview || '',
+              captured: !!r.captured,
+            });
+          });
+        });
+        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
+        rows = rows.slice(0, 10);
+        if(!rows.length){
+          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
+        }
+        var body = rows.map(function(r){
+          return '<div class="cc-pa-live-row">'
+            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
+            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
+            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
+            + (r.captured ? ' <em>· lead</em>' : '')
+            + '</span></div>';
+        }).join('');
+        return '<div class="cc-pa-live">'
+          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
+          + '<div class="cc-pa-live-list">'+body+'</div>'
+          + '</div>';
+      }
+      function intakeCard(d){
+        var intake = (d && d.intake) || {};
+        var crm = (d && d.crm) || {};
+        var wl = (d && d.waitlist) || {};
+        var ok = !!intake.ok;
+        var pending = intake.pending || 0;
+        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
+        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
+        var lines = (intake.recent || []).slice(0, 4).map(function(r){
+          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
+          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
+            + esc(r.who || '—')
+            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
+            + '</div>';
+        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
+        return '<div class="cc-pa-card cc-pa-intake">'
+          + '<div class="cc-pa-head">'
+          + '<h4>Web intake</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
+          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
+          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
+          + '</div>'
+          + lines
+          + '<div class="cc-pa-foot">'
+          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
+          + ' <span class="cc-pa-model">·</span> '
+          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
+          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
+          + '</div></div>';
+      }
+      function paint(d){
+        var agents = (d && d.agents) || [];
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
+        var banner = (d.talking && d.talking.length)
+          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
+          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
+        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
+        el.innerHTML = banner
+          + liveAsksStrip(agents)
+          + '<div class="cc-pa-grid">'
+          + agents.map(card).join('')
+          + intakeCard(d)
+          + '</div>';
+      }
+      function load(){
+        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
+      }
+      load(); setInterval(load, 20000);
+    })();
+    </script>
+
+
+    
+      </div>
+    </details>
+
+<!-- Ops folded — power tools, not the default face -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
       <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
       <div class="cc-fold-body">
 <!-- Daemon status strip — autonomous fleet at a glance. -->
@@ -4159,7 +4169,7 @@
     </details>
 
     <!-- ═══ 4. Memory ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-memory">
+    <details class="cc-fold cc-chapter" data-testid="chapter-memory">
       <summary>Memory &amp; lattice <span class="cc-fold-hint">cognition · bus · writes</span></summary>
       <div class="cc-fold-body">
 <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
@@ -4339,6 +4349,9 @@
     
       </div>
     </details>
+  </details>
+
+    <!-- ═══ Pulse (folded) ═══ -->
 
 
 
