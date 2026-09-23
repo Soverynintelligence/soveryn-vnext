@@ -3199,6 +3199,43 @@ details.cc-drawer>summary{cursor:pointer;list-style:none;font-size:11.5px;letter
 details.cc-drawer>summary::-webkit-details-marker{display:none}
 details.cc-drawer>summary::after{content:" +";color:var(--gold)}
 details.cc-drawer[open]>summary::after{content:" −"}
+
+/* ─── softdesk reskin layer (2026-09-22) — soft extruded dark plastic ─── */
+body{background:#0d1117 !important}
+.panel, section.panel, .cc-fold > .cc-fold-body, .card{
+  background:linear-gradient(145deg,#161d26,#070a0e) !important;
+  border:none !important;
+  border-radius:22px !important;
+  box-shadow:9px 9px 20px #04060a,-9px -9px 20px #1b2330 !important;
+}
+details.cc-fold{background:transparent;border:none;box-shadow:none}
+details.cc-fold > summary{
+  background:linear-gradient(145deg,#161d26,#070a0e) !important;
+  border:none !important;border-radius:18px !important;
+  box-shadow:5px 5px 12px #04060a,-5px -5px 12px #1b2330 !important;
+  padding:14px 20px;
+}
+details.cc-fold[open] > summary{
+  box-shadow:5px 5px 12px #04060a,-5px -5px 12px #1b2330,inset 3px 3px 8px #04060a,inset -3px -3px 8px #1b2330;
+}
+details.cc-drawer{background:transparent;border:1px dashed rgba(139,150,165,.35) !important;box-shadow:none !important;border-radius:18px}
+.auto-inbox-item, .easy-results .card, .chips span, .pill{
+  background:linear-gradient(145deg,#161d26,#070a0e) !important;
+  border:none !important;border-radius:12px !important;
+  box-shadow:4px 4px 10px #04060a,-4px -4px 10px #1b2330 !important;
+}
+.screen, .auto-panel .monitor, [data-testid="lattice-telemetry"]{
+  background:#070a0e !important;border-radius:16px !important;
+  box-shadow:inset 6px 6px 14px #04060a,inset -6px -6px 14px #1b2330 !important;
+  border:none !important;
+}
+.btn, .chips span, .pill{box-shadow:4px 4px 10px #04060a,-4px -4px 10px #1b2330 !important}
+.btn:hover{filter:brightness(1.15)}
+.panel > h3:first-child, .cc-fold .panel h3{
+  font-family:Georgia,serif;letter-spacing:.02em;
+}
+hr, .cc-line{border-color:rgba(139,150,165,.15) !important}
+/* ─── end softdesk reskin ─── */
 </style>
 </head>
 <body class="lab cc-easy" data-lab data-testid="command-center" data-cc-mode="easy">
