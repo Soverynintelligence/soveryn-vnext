@@ -77,7 +77,12 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 - Every repo has a `DEPLOY.md` (branch, host, steps, gotchas). Read it before the first deploy of a session.
 - Commit hooks run gitleaks; if it blocks, fix the file — `GITLEAKS_SKIP=1` only for a documented false positive.
 
-## Overnight handoff (the aider rule)
+## Visual work — see before you claim
+- Any visual/layout/redesign claim requires `scripts/see.sh <url-or-file>` and READING the returned PNG. Multimodal means use it.
+- Visual definition of done: approved mockup -> rebuild -> screenshot at halfway -> Jon's eyes before ship.
+- Stop rule (goal-level): two failed attempts at the same GOAL = revert to last good and restart from the approved design. Counting commands instead of goals is how the 2026-09-22 reskin churned through three patches of one failure.
+
+## Overnight handoff (the aider rule)## Overnight handoff (the aider rule)
 - Overnight agents (Aetheria, Critic, Scout, any scheduled seat) hand findings to **Kernel as instructions** — they do not launch aider/harnesses themselves. Kernel runs them with verify gates.
 - Any harness launch MUST probe the model endpoint first. `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and refuses to start (exit 2) if the active model is not actually serving. Never hardcode an endpoint.
 - Reason this rule exists: two weeks (2026-09-06 to 09-19) of overnight aider runs spinning ~46% of a core against the parked Flash-Next endpoint, every night, after GLM took over the Sparks. Dead CPU, hot office, zero work done.
