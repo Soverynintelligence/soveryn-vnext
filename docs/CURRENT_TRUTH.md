@@ -153,7 +153,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | teammates, shepherd | **LIVE** — Critic/Scout + FCC UI `:5055` |
 | soveryn_vnext, soveryn-agent, pondwright-crm (legacy, superseded by cwg-ops) | **LIVE / superseded** — house core; legacy CRM repo kept for history only |
 | llama.cpp, llama.cpp_head, llama.cpp_eval, llama.cpp_qwen4exp, llama-cpp-python, ComfyUI | **TOOLING / experiments** — inference engines and eval clones; not products |
-| tgthrmess-app, tgthrmess-site | **LIVE** — TGTHRmess product (site 200, Messie :5066, nightly backup timer) |
+| tgthrmess-app, tgthrmess-site | **LIVE** — TGTHRmess: built for Jon's sister, her app (site 200, Messie :5066 helper, nightly backup timer). Family product — treat as a customer-owned deployment, not a house lab |
 | atticus | **LIVE** — History's Ledger corpus + fact-guard (WWI rework Sep 17; Atticus :8500) |
 | sealed | **ACTIVE DEV** — onchain quote-proof product (Monad QuoteSeal, keccak256 hash-only; voiceover notes Sep 17) |
 | self-report-eval | **ACTIVE RESEARCH** — self-report eval harness, feeds the honesty paper (results Sep 17) |
