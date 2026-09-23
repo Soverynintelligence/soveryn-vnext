@@ -160,6 +160,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | soveryn-site | **LIVE** — soverynintelligence.com (200; jumpgate/lab experiments Sep 17) |
 | acttruth-site | **LIVE stable** — acttruth.com (200; static, low churn is correct) |
 | soveryn_cathedral | **ARCHIVE** — superseded by soveryn_vnext lattice (last touched Jul 26); keep for history |
+| legacy memory stores | **ARCHIVED to easystore 2026-09-22** — `~/soveryn_memory` (1 GB, pre-vnext memory) + June 10 complete memory backup tarball (947 MB) moved to `/mnt/easystore/archives/memory/`; verified byte-identical; pointer note `SOVERYN_MEMORY_ARCHIVED.txt` in home. Nothing live referenced them (compat route is a stub) |
 
 ---
 
