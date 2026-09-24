@@ -41,9 +41,30 @@ LOOK_SH = Path.home() / "soveryn_vnext" / "scripts" / "look.sh"
 
 ACTIONS = ("screen_latest", "screen_fresh", "cam")
 
+# Bounded retention: one JSONL receipt per look grows forever otherwise.
+# Keep only the newest HOUSE_LOOK_RECEIPT_KEEP receipt files (2026-09-24).
+HOUSE_LOOK_RECEIPT_KEEP = 50
+
 
 def _receipt_dir() -> Path:
     return Path(DEFAULT_DATA_ROOT) / "black_box" / "house_look"
+
+
+def _prune_receipts(keep: int = HOUSE_LOOK_RECEIPT_KEEP) -> None:
+    """Delete the oldest receipt files so at most `keep` remain."""
+    receipt_dir = _receipt_dir()
+    if not receipt_dir.is_dir():
+        return
+    receipts = sorted(
+        (p for p in receipt_dir.glob("look-*.jsonl") if p.is_file()),
+        key=lambda p: (p.stat().st_mtime_ns, p.name),
+        reverse=True,
+    )
+    for stale in receipts[keep:]:
+        try:
+            stale.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _write_receipt(*, run_id: str, action: str, ok: bool) -> None:
@@ -59,6 +80,7 @@ def _write_receipt(*, run_id: str, action: str, ok: bool) -> None:
         "a", encoding="utf-8"
     ) as fh:
         fh.write(json.dumps(line) + "\n")
+    _prune_receipts()
 
 
 def _latest_frame() -> Path:
