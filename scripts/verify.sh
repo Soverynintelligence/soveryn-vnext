@@ -15,6 +15,13 @@ else
   echo "pytest missing in this env — install the soveryn conda env or run manually"; fail=1
 fi
 
+# CLI suite (audit hole #7, 2026-09-24): packages/soveryn-cli has 25 node
+# tests that verify.sh never ran — CLI changes were only tested by hand.
+if command -v node >/dev/null 2>&1 && [ -f packages/soveryn-cli/package.json ]; then
+  echo "── cli tests ──"
+  if ! (cd packages/soveryn-cli && timeout 300 npm test 2>&1 | tail -3); then fail=1; fi
+fi
+
 echo "── staged secrets ──"
 if command -v gitleaks >/dev/null 2>&1; then
   if ! gitleaks protect --staged --redact --no-banner; then
