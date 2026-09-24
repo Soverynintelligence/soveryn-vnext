@@ -254,6 +254,13 @@ def scotty_run(
                     # worktree path, and the fact that this is a bounded execution.
                     directive = (
                         f"You are executing a bounded delegation task.\n\n"
+                        f"ROUND BUDGET: you have roughly {max_tool_rounds} tool "
+                        f"rounds TOTAL. Spend at most 2 on reading context, then "
+                        f"WRITE the deliverable immediately and spend the rest "
+                        f"running the acceptance command and fixing what it flags. "
+                        f"Reading is not progress; a passing acceptance is. Do not "
+                        f"end the turn without writing files unless the task is "
+                        f"genuinely impossible — and then say exactly why.\n\n"
                         f"OBJECTIVE: {objective}\n\n"
                         f"SCOPE: {scope}\n"
                         f"You may ONLY touch files within the specified scope. "
