@@ -105,6 +105,14 @@ def _register_system(ctx: PackContext, owner: str) -> None:
         from soveryn.platform.system_probe import register_system_probe_tool
 
         register_system_probe_tool(ctx.registry, owner_agent=owner)
+    # house_diag (2026-09-24): read-only diagnostic terminal view — see-when-
+    # it's-fixed for citizens. Aetheria (verifies her watch items) + Kernel.
+    # Allowlisted argv only, curl pinned to 127.0.0.1, receipts in
+    # data/black_box/diag/. Edit verbs stay Kernel-only via other tools.
+    if owner in ("aetheria", "kernel"):
+        from soveryn.platform.diag_view_tool import build_house_diag_tool
+
+        ctx.registry.register(build_house_diag_tool(owner_agent=owner))
     _ok(ctx, owner, "system")
 
 
