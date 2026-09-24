@@ -110,8 +110,10 @@ def test_ares_unit_is_user_scoped_and_timebounded():
     assert not unit.has_option("Service", "User")
     assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
     assert unit.get("Service", "Type") == "simple"
-    assert unit.get("Service", "StandardOutput") == "append:/tmp/soveryn-ares.log"
-    assert unit.get("Service", "StandardError") == "append:/tmp/soveryn-ares.log"
+    # journald since 2026-09-24 (audit hole #9): the /tmp append log never
+    # rotated and died on reboot.
+    assert unit.get("Service", "StandardOutput") == "journal"
+    assert unit.get("Service", "StandardError") == "journal"
 
 
 def _env_lines(name: str) -> list[str]:

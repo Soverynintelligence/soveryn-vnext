@@ -22,8 +22,9 @@ Environment=ARES_NET_PUBLIC_ALLOWLIST=22:sshd,5055:python,5065:python3,5075:team
 ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 60
 ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.agents.ares
 Restart=no
-StandardOutput=append:/tmp/soveryn-ares.log
-StandardError=append:/tmp/soveryn-ares.log
+# journald (audit hole #9, 2026-09-24): /tmp append log never rotated and died on reboot
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=soveryn.target
