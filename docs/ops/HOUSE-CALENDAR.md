@@ -22,6 +22,10 @@ move it to Done at the bottom (do not delete — the history is cheap).
 
 ## Dated
 
+- 2026-11 (expected) — Autonomous.ai robot lamp arrives (ordered 2026-09-24) — sits in
+  house_look's frame (low-light fix for webcam looks); reports say it carries temp +
+  air-quality sensors — candidate environmental feed if it exposes a local API
+  (van backup camera is screen-only, no network — not a Kernel source)
 - 2026-09-21 — First weekly ledger reconcile run — expect first report Monday morning
 - 2026-09-21 — Backup camera arrives (Amazon 111-9440800-7041010) — CWG van install
 - 2026-09-30 — OpenAI ChatGPT Plus Sep billing expected — book when billed (SOVERYN ledger)
