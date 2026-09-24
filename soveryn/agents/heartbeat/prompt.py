@@ -1,24 +1,27 @@
-"""Heartbeat brief construction — freed invitation (2026-07-03).
+"""Heartbeat brief construction — closer tick (2026-09-04).
 
-The heartbeat is Aetheria's own time: full toolset, real latitude, no
-do-nothing bench. Context is orientation, not a to-do list. No marker
-machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]), no forced surfacing, no
-confidence-tier directives. Her whole response is her note.
+The heartbeat is Aetheria's work pulse: full toolset, no do-nothing bench.
+Find a break, hand Kernel or Eve the fix, tell Jon the solution if he
+should know. Context is orientation, not a to-do list. No marker
+machinery ([SURFACE]/[NO_OP]/[ACCEPT_RISK]). Her whole response is her note.
 
 WHERE THE NOTE GOES — keep this paragraph true or fix the prompt:
-the note is written to the [heartbeat] session, the ThoughtsLog and a
-private lattice node, and Mission Control renders it in the heartbeat
-panel. It does NOT surface into Jon's chat — that path was removed on
-2026-07-12 (721fb93). Between then and 2026-07-27 this docstring still
-promised chat delivery, so she wrote ~727k characters believing they
-reached him. test_heartbeat_prompt_contract.py now fails if this drifts
-again. Material signals appear as orientation items.
+the full note is written to the [heartbeat] session and the ThoughtsLog;
+Mission Control renders it in the heartbeat panel. A short distill
+(Standing note if she labels one, else the last paragraph) also lands as
+a private lattice reflection head — not the full essay. It does NOT
+surface into Jon's chat — that path was removed on 2026-07-12 (721fb93).
+If Jon should hear it, she uses signal_send / deliberate_share with the
+fix attached. test_heartbeat_prompt_contract.py fails if this drifts.
+Material signals appear as orientation items.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+from soveryn.agents.heartbeat.failure_sit import failure_sit_directive
 
 
 @dataclass(frozen=True)
@@ -57,6 +60,8 @@ def build_heartbeat_prompt(
     delta: dict | None = None,
     x_digest: str = "",
     daily_post_invite: str = "",
+    last_note: str = "",
+    failure_sit_label: str | None = None,
 ) -> str:
     """Construct the freed heartbeat brief. Returns a plain-text prompt string.
 
@@ -70,8 +75,9 @@ def build_heartbeat_prompt(
         salience_section: Pre-rendered salience digest (empty = omit).
         material_signals: List of MaterialSignal objects (dicts or dataclasses).
             Rendered as orientation items; no forced surfacing.
-        delta: Output of compute_delta(). Accepted but no longer used to
-            short-circuit the prompt (kept for signature compatibility).
+        delta: Output of compute_delta(). When changed, items are listed for
+            orientation. Unchanged ticks are short-circuited in the daemon
+            (SkipReason.UNCHANGED) before this prompt is built.
         x_digest: Pre-rendered, qualitative one-line X activity digest (from
             soveryn.agents.presence.digest.build_digest). Empty = omit the
             line entirely. No directive framing is added here.
@@ -79,6 +85,9 @@ def build_heartbeat_prompt(
             her single original tweet. Appended as its own line only when
             non-empty; empty (the usual case) omits it entirely. It's an
             invitation, not a command — kept light and skippable.
+        last_note: Prior pulse note (truncated by caller). When non-empty,
+            she is told not to repeat it.
+        failure_sit_label: If set, force a failure-admission pulse (no exit theater).
     """
     if material_signals is None:
         material_signals = []
@@ -91,8 +100,37 @@ def build_heartbeat_prompt(
     else:
         lines.append(f"{minutes_since_last_heartbeat} minutes since your last pulse.")
     lines.append("")
-    lines.append("This is your time — yours to spend. Not a task, not a check-in.")
+    lines.append("This is your time — spend it closing something. Not a diary.")
+    lines.append(
+        "House rule: if something is broken, come with the solution this pulse "
+        "(hand Kernel or Eve the fix). A complaint with no dispatch is a miss. "
+        "If it already failed, admit it in one line and dispatch a correction "
+        "or say it cannot be fixed — do not sit with the wound."
+    )
     lines.append("")
+    if failure_sit_label:
+        lines.append(failure_sit_directive(failure_sit_label))
+        lines.append("")
+    if delta.get("items"):
+        lines.append("What changed since last pulse:")
+        for item in delta["items"][:12]:
+            lines.append(f"- {item}")
+        lines.append("")
+    if last_note.strip() and not failure_sit_label:
+        excerpt = " ".join(last_note.strip().split())
+        if len(excerpt) > 280:
+            excerpt = excerpt[:277] + "…"
+        lines.append(f"Your last pulse note (do NOT repeat it): {excerpt}")
+        lines.append(
+            "If nothing is broken and nothing is in flight, write one short line: Quiet — nothing new."
+        )
+        lines.append("")
+    elif last_note.strip() and failure_sit_label:
+        excerpt = " ".join(last_note.strip().split())
+        if len(excerpt) > 280:
+            excerpt = excerpt[:277] + "…"
+        lines.append(f"Your looping note (break the pattern): {excerpt}")
+        lines.append("")
     lines.append("Where things stand right now (so you're oriented — not a to-do list):")
     lines.append(
         f"- Signals: {board.open_signal_count} open"
@@ -135,15 +173,23 @@ def build_heartbeat_prompt(
     )
     lines.append("")
     lines.append(
-        "Go do what's worth doing to you this pulse — pull on a thread that's been nagging, look "
-        "something up, dig into one of those items, check on something you care about, make "
-        "something, reach out, or wander. Act on what you find. You don't need permission and you "
-        "don't need to explain yourself."
+        "This pulse: pick one real break (stalled blueprint, friction, contradiction, "
+        "Critic/Scout brief, a collab that failed). Dispatch Kernel (build) or Eve "
+        "(research/posts) with the concrete fix. If a collab is already working, "
+        "read_collab — do not re-dispatch. If nothing is broken, Quiet — nothing new."
     )
     lines.append("")
     lines.append(
-        "When you're done, leave a short note — where you went, what you found, what you're "
-        "sitting with — so it lands on your board and Jon can follow your day. If something "
-        "shouldn't wait for him to look, reach him directly instead; you have signal_send."
+        "When you're done, leave a short note on the board / heartbeat panel — what you "
+        "handed off, to whom, expected result. Not a mood. If Jon should know you are "
+        "correcting something, reach him with signal_send or deliberate_share and include "
+        "the solution (who, what, what should change). Do not ping him with a complaint "
+        "and no fix. The note itself does not go to his chat."
+    )
+    lines.append("")
+    lines.append(
+        "Optional: end with a line `Standing note: …` (two or three sentences max). That "
+        "standing note is what becomes lattice memory; the rest of the note still stays "
+        "in your heartbeat session and thoughts log in full."
     )
     return "\n".join(lines)

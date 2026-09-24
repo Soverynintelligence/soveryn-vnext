@@ -10,15 +10,22 @@ Provider selection
 ``build_tts_service`` reads the ``SOVEREIGN_TTS_PRIMARY`` env var to pick
 between providers:
 
-- ``f5tts`` (default): :class:`F5TTSProvider`, talking to the local
+- ``kokoro``: :class:`KokoroTTSProvider`, in-process hexgrad Kokoro-82M
+  from a pinned local snapshot (Aetheria duplex path).
+- ``f5tts`` (code default): :class:`F5TTSProvider`, talking to the local
   service on ``F5TTS_URL`` (default ``http://127.0.0.1:8088``).
 - ``elevenlabs``: :class:`ElevenLabsTTSProvider`, the cloud fallback.
+  Not used as primary.
+
+Kernel keeps Scotty's F5 clone when primary is ``kokoro``. Eve is on
+Kokoro with Aetheria — the Vett clone was choppy.
 
 Cutover / rollback is a single env-var change — no code changes required.
 """
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import os
@@ -28,11 +35,13 @@ from typing import Any
 from pipecat.frames.frames import (
     ErrorFrame,
     Frame,
+    InterruptionFrame,
     TTSAudioRawFrame,
     TTSStartedFrame,
     TTSStoppedFrame,
 )
-from pipecat.services.tts_service import TTSService
+from pipecat.processors.frame_processor import FrameDirection
+from pipecat.services.tts_service import TTSService, TextAggregationMode
 
 from soveryn.platform.voice.providers.base import TTSError, TTSProvider
 from soveryn.platform.voice.providers.elevenlabs import (
@@ -43,6 +52,11 @@ from soveryn.platform.voice.providers.f5tts import (
     DEFAULT_SAMPLE_RATE as F5TTS_SAMPLE_RATE,
     DEFAULT_URL as F5TTS_DEFAULT_URL,
     F5TTSProvider,
+)
+from soveryn.platform.voice.providers.kokoro import (
+    DEFAULT_SAMPLE_RATE as KOKORO_SAMPLE_RATE,
+    KokoroTTSProvider,
+    resolve_kokoro_voice,
 )
 
 
@@ -68,12 +82,36 @@ class ProviderBackedTTSService(TTSService):
         provider: TTSProvider,
         voice_id: str,
         sample_rate: int,
+        text_aggregation_mode: TextAggregationMode | None = None,
         **kwargs: Any,
     ) -> None:
-        super().__init__(sample_rate=sample_rate, **kwargs)
+        # Explicit aggregation mode. Default SENTENCE — F5 is clause/HTTP and
+        # TOKEN fragments sound broken. TOKEN via SOVERYN_VOICE_TTS_AGG for
+        # streaming providers.
+        if text_aggregation_mode is None:
+            text_aggregation_mode = TextAggregationMode.SENTENCE
+        # Pipecat 1.3: TTSSettings.validate_complete() errors if model/voice/
+        # language stay NOT_GIVEN (same class of bug as Parakeet STTSettings).
+        from pipecat.services.settings import TTSSettings
+
+        if "settings" not in kwargs:
+            kwargs["settings"] = TTSSettings(
+                model=getattr(provider, "name", None) or "sovereign_tts",
+                voice=voice_id,
+                language="en",
+            )
+        super().__init__(
+            sample_rate=sample_rate,
+            text_aggregation_mode=text_aggregation_mode,
+            **kwargs,
+        )
         self._provider = provider
         self._voice_id = voice_id
         self._native_sample_rate = sample_rate
+        self._text_aggregation_mode = text_aggregation_mode
+        # PR4b: set on InterruptionFrame so F5 stream acloses and stops PCM.
+        self._cancel_event = asyncio.Event()
+        self.last_f5_clauses_after_cancel: int | None = None
 
     @property
     def provider_name(self) -> str:
@@ -82,6 +120,33 @@ class ProviderBackedTTSService(TTSService):
     @property
     def voice_id(self) -> str:
         return self._voice_id
+
+    @property
+    def text_aggregation_mode(self) -> TextAggregationMode:
+        return self._text_aggregation_mode
+
+    async def _handle_interruption(
+        self, frame: InterruptionFrame, direction: FrameDirection
+    ) -> None:
+        """Abort in-flight provider stream, then Pipecat's queue drop."""
+        self._cancel_event.set()
+        abort = getattr(self._provider, "abort", None)
+        if abort is not None:
+            try:
+                await abort()
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "ProviderBackedTTSService(%s) abort failed",
+                    self._provider.name,
+                )
+        after = getattr(self._provider, "clauses_completed_after_cancel", None)
+        if isinstance(after, int) and after > 0:
+            self.last_f5_clauses_after_cancel = after
+            logger.info(
+                "F5 clauses completed after cancel=%s (playout dropped them)",
+                after,
+            )
+        await super()._handle_interruption(frame, direction)
 
     async def run_tts(
         self,
@@ -95,9 +160,26 @@ class ProviderBackedTTSService(TTSService):
             self._provider.name, text[:80],
         )
 
+        # Fresh cancel gate per utterance; interruptions set it.
+        self._cancel_event = asyncio.Event()
+        self.last_f5_clauses_after_cancel = None
+
         yield TTSStartedFrame()
         try:
-            async for chunk in self._provider.synthesize(text, voice_id=self._voice_id):
+            # Prefer cancel_event when provider supports it (F5 PR4b).
+            try:
+                stream = self._provider.synthesize(
+                    text,
+                    voice_id=self._voice_id,
+                    cancel_event=self._cancel_event,
+                )
+            except TypeError:
+                stream = self._provider.synthesize(
+                    text, voice_id=self._voice_id
+                )
+            async for chunk in stream:
+                if self._cancel_event.is_set():
+                    break
                 if chunk.is_final:
                     continue  # EOS marker — TTSStoppedFrame fires in finally
                 if not chunk.audio_bytes:
@@ -110,12 +192,28 @@ class ProviderBackedTTSService(TTSService):
                     sample_rate=chunk.sample_rate,
                     num_channels=1,
                 )
+        except asyncio.CancelledError:
+            self._cancel_event.set()
+            abort = getattr(self._provider, "abort", None)
+            if abort is not None:
+                await abort()
+            raise
         except TTSError as e:
-            logger.warning(
-                "ProviderBackedTTSService(%s) failed: %s", self._provider.name, e,
-            )
-            yield ErrorFrame(error=f"{self._provider.name} TTS failed: {e}")
+            if self._cancel_event.is_set():
+                logger.debug(
+                    "ProviderBackedTTSService(%s) ended after cancel: %s",
+                    self._provider.name, e,
+                )
+            else:
+                logger.warning(
+                    "ProviderBackedTTSService(%s) failed: %s",
+                    self._provider.name, e,
+                )
+                yield ErrorFrame(error=f"{self._provider.name} TTS failed: {e}")
         finally:
+            after = getattr(self._provider, "clauses_completed_after_cancel", None)
+            if isinstance(after, int) and after > 0:
+                self.last_f5_clauses_after_cancel = after
             yield TTSStoppedFrame()
 
 
@@ -168,6 +266,21 @@ def _decode_chunk_to_pcm(audio_bytes: bytes, expected_sr: int) -> bytes:
         return audio_bytes
 
 
+def resolve_text_aggregation_mode(
+    tts_agg: str | TextAggregationMode | None = None,
+) -> TextAggregationMode:
+    """Map DuplexConfig / env string to Pipecat TextAggregationMode.
+
+    Default is SENTENCE (safe for F5 clause synthesis).
+    """
+    if isinstance(tts_agg, TextAggregationMode):
+        return tts_agg
+    raw = (tts_agg or os.environ.get("SOVERYN_VOICE_TTS_AGG") or "sentence").strip().lower()
+    if raw in ("token", "tok"):
+        return TextAggregationMode.TOKEN
+    return TextAggregationMode.SENTENCE
+
+
 def build_tts_service(
     *,
     agent_name: str,
@@ -176,15 +289,26 @@ def build_tts_service(
     aiohttp_session: Any | None = None,
     primary: str | None = None,
     f5tts_url: str | None = None,
+    tts_agg: str | TextAggregationMode | None = None,
 ) -> ProviderBackedTTSService:
     """Construct the Pipecat TTSService, selecting provider via env / arg.
 
     Selection precedence: ``primary`` arg > ``SOVEREIGN_TTS_PRIMARY`` env
-    > ``DEFAULT_PRIMARY`` (``"f5tts"``).
+    > ``DEFAULT_PRIMARY`` (``"f5tts"``). Production Aetheria uses
+    ``SOVEREIGN_TTS_PRIMARY=kokoro``.
 
-    ``agent_name`` is the registry key the local F5-TTS service keys on
-    (e.g. ``"aetheria"``); ``elevenlabs_voice_id`` is the cloud UUID for
-    the fallback provider. Each provider gets the voice_id shape it expects.
+    ``agent_name`` is the registry key (e.g. ``"aetheria"``). Kokoro maps
+    that to a local voice stem (default ``af_heart``); F5-TTS keys on the
+    agent name; ``elevenlabs_voice_id`` is the cloud UUID for the fallback.
+    Each provider gets the voice_id shape it expects.
+
+    Kernel keeps Scotty's F5 clone when ``SOVEREIGN_TTS_PRIMARY=kokoro``.
+    Eve follows Kokoro with Aetheria.
+
+    ``tts_agg`` / ``SOVERYN_VOICE_TTS_AGG``: ``sentence`` (default — whole
+    clauses for F5) or ``token`` (streaming providers / latency experiments).
+    F5 keeps SENTENCE. TOKEN fragments were each a full HTTP synth with
+    their own prosody (slur / chop). Adapter holds ~320 chars per turn.
 
     ``f5tts_url`` overrides the local service URL; useful for tests.
     ``aiohttp_session`` is accepted for API parity with the previous
@@ -192,8 +316,36 @@ def build_tts_service(
     (httpx is used internally by the providers).
     """
     selection = (primary or os.environ.get("SOVEREIGN_TTS_PRIMARY") or DEFAULT_PRIMARY).lower()
+    agent_key = (agent_name or "").lower().strip()
+    # Kernel still speaks Scotty's F5 clone. Eve is Kokoro.
+    if selection == "kokoro" and agent_key == "kernel":
+        selection = "f5tts"
+    agg_mode = resolve_text_aggregation_mode(tts_agg)
+
+    if selection == "kokoro":
+        # Sentence aggregation: Kokoro is a local synth, not a token
+        # stream. TOKEN fragments would each be a full forward pass.
+        if agg_mode != TextAggregationMode.SENTENCE:
+            logger.info(
+                "Kokoro using %s aggregation (default SENTENCE)",
+                agg_mode,
+            )
+        provider = KokoroTTSProvider(sample_rate=KOKORO_SAMPLE_RATE)
+        return ProviderBackedTTSService(
+            provider=provider,
+            voice_id=resolve_kokoro_voice(agent_name),
+            sample_rate=KOKORO_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
+        )
 
     if selection == "f5tts":
+        # Keep SENTENCE. Adapter already holds ~320 chars so a normal
+        # reply is one clip; TOKEN fragments slurred F5 prosody.
+        if agg_mode != TextAggregationMode.SENTENCE:
+            logger.info(
+                "F5-TTS using %s aggregation (default SENTENCE)",
+                agg_mode,
+            )
         provider = F5TTSProvider(
             url=f5tts_url or os.environ.get("F5TTS_URL", F5TTS_DEFAULT_URL),
             sample_rate=F5TTS_SAMPLE_RATE,
@@ -202,6 +354,7 @@ def build_tts_service(
             provider=provider,
             voice_id=agent_name,
             sample_rate=F5TTS_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
         )
 
     if selection == "elevenlabs":
@@ -217,16 +370,19 @@ def build_tts_service(
             provider=provider,
             voice_id=elevenlabs_voice_id,
             sample_rate=ELEVENLABS_SAMPLE_RATE,
+            text_aggregation_mode=agg_mode,
         )
 
     raise ValueError(
         f"unknown SOVEREIGN_TTS_PRIMARY={selection!r}; "
-        "expected 'f5tts' or 'elevenlabs'"
+        "expected 'kokoro', 'f5tts', or 'elevenlabs'"
     )
 
 
 __all__ = [
     "DEFAULT_PRIMARY",
     "ProviderBackedTTSService",
+    "TextAggregationMode",
     "build_tts_service",
+    "resolve_text_aggregation_mode",
 ]

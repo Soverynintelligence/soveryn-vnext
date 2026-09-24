@@ -64,10 +64,10 @@ def test_stream_missing_session_raises_before_save(conv_store):
 
 
 def test_stream_session_belongs_to_other_agent_raises_before_save(conv_store):
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("kernel")
     stream = _CapturingStream()
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
-    with pytest.raises(AgentLoopError, match="belongs to agent 'vett'"):
+    with pytest.raises(AgentLoopError, match="belongs to agent 'kernel'"):
         list(loop.process_message_stream(sid, "hi"))
     assert stream.calls == []
     assert conv_store.load_history(sid) == ()
@@ -281,7 +281,7 @@ def test_stream_soul_text_added_as_second_system_message(conv_store):
     assert system_msgs[1].content == "STREAM_SOUL_TOKEN"
 
 
-def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_vett(conv_store):
+def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
     """Streaming path mirrors sync: AgentLoop keeps semantic layers separate;
     transport adapter `prepare_wire_messages` handles wire folding."""
     captured_requests = []
@@ -292,19 +292,19 @@ def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_vett(conv_store
         yield DoneEvent(content="ok", finish_reason="stop", tool_calls=None, usage=None)
 
     loop = AgentLoop(
-        "vett", conv_store,
+        "kernel", conv_store,
         stream_fn=stream,
-        soul_text="STREAM_VETT_SOUL",
+        soul_text="STREAM_KERNEL_SOUL",
     )
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("kernel")
     list(loop.process_message_stream(sid, "hi"))
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
     assert len(system_msgs) == 2, (
         f"AgentLoop stream path should also keep persona + soul as separate "
         f"ChatMessages. Got {len(system_msgs)}."
     )
-    assert "STREAM_VETT_SOUL" not in system_msgs[0].content
-    assert system_msgs[1].content == "STREAM_VETT_SOUL"
+    assert "STREAM_KERNEL_SOUL" not in system_msgs[0].content
+    assert system_msgs[1].content == "STREAM_KERNEL_SOUL"
 
 
 # ─── Pinned memory wiring (streaming path) ───────────────────────────────────
@@ -375,16 +375,13 @@ def test_stream_without_attachments_unchanged(conv_store):
 
 
 def test_stream_attachments_on_non_vision_agent_raises_before_save(conv_store):
-    """Vision guard fires BEFORE save_turn in streaming too — no phantom turn.
-    'cognition' is not in VISION_CAPABLE_AGENTS."""
+    """Vision guard fires BEFORE save_turn in streaming too — no phantom turn."""
     stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
-    # Construct with a routable agent (route_for_agent runs in __init__), then
-    # override agent_name to a non-vision agent to exercise the guard branch.
-    loop_cog = AgentLoop("vett", conv_store, stream_fn=stream)
-    loop_cog.agent_name = "cognition"
+    loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
+    loop.agent_name = "cognition"
     sid = conv_store.new_session("cognition")
     with pytest.raises(AgentLoopError, match="attachments only supported"):
-        list(loop_cog.process_message_stream(
+        list(loop.process_message_stream(
             sid, "hi", attachments=("data:image/jpeg;base64,AAAA",),
         ))
     # No user turn saved, no stream dispatched
@@ -392,14 +389,28 @@ def test_stream_attachments_on_non_vision_agent_raises_before_save(conv_store):
     assert stream.calls == []
 
 
-def test_stream_attachments_on_vision_capable_agent_splices(conv_store):
-    """Vett is vision-capable (shared mmproj server) — guard must NOT fire and
-    the wire-level current user message becomes a vision list."""
+def test_stream_attachments_on_kernel_splices(conv_store):
+    """GLM-5.3-Flash is natively multimodal — Kernel stream splices image_url."""
     stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
-    loop_vett = AgentLoop("vett", conv_store, stream_fn=stream)
-    sid = conv_store.new_session("vett")
+    loop = AgentLoop("kernel", conv_store, stream_fn=stream)
+    sid = conv_store.new_session("kernel")
     img = "data:image/jpeg;base64,AAAA"
-    list(loop_vett.process_message_stream(sid, "what's this?", attachments=(img,)))
+    list(loop.process_message_stream(sid, "what's this?", attachments=(img,)))
+    sent_user = stream.calls[0]["request"].messages[-1]
+    assert sent_user.role == "user"
+    assert isinstance(sent_user.content, list)
+    assert any(p.get("type") == "image_url" and p["image_url"]["url"] == img
+               for p in sent_user.content)
+
+
+def test_stream_attachments_on_vision_capable_agent_splices(conv_store):
+    """Aetheria is vision-capable — guard must NOT fire and the wire-level
+    current user message becomes a vision list."""
+    stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
+    loop_a = AgentLoop("aetheria", conv_store, stream_fn=stream)
+    sid = conv_store.new_session("aetheria")
+    img = "data:image/jpeg;base64,AAAA"
+    list(loop_a.process_message_stream(sid, "what's this?", attachments=(img,)))
     sent_user = stream.calls[0]["request"].messages[-1]
     assert sent_user.role == "user"
     assert isinstance(sent_user.content, list)

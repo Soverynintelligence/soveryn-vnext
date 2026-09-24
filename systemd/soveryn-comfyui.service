@@ -1,26 +1,28 @@
-# SOVERYN ComfyUI — user service.
-# Image generation surface. Listens on :8188 by default. Lives at ~/ComfyUI
-# with its own conda env (~/miniconda3/envs/comfyui/, Python 3.11).
+# SOVERYN ComfyUI — user service (ON-DEMAND).
+# Image generation on :8188. Lives at ~/ComfyUI (conda env comfyui).
 #
-# Migration note: when DGX Spark arrives, ComfyUI is a natural candidate
-# to move there — image diffusion is compute-heavy and benefits from
-# Blackwell. Keep on the tower for now.
+# 2026-08-17: Quadro 0 GPU, started only when Aetheria calls generate_image
+# (soveryn/agents/aetheria/tools/comfyui_gen.py). Tool stops this unit when
+# done so Kernel keeps Quadro headroom. Do NOT enable for soveryn.target —
+# leave disabled; start/stop via the tool (or manual systemctl --user).
+#
+# Pin by UUID: Quadro 0 only. Never Blackwell (Aetheria) or Quadro 1 (tight).
 
 [Unit]
-Description=SOVERYN ComfyUI image-generation surface (:8188)
-PartOf=soveryn.target
+Description=SOVERYN ComfyUI image-generation surface (:8188, Quadro 0, on-demand)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/jon-deoliveira/ComfyUI
-# Listen on localhost only — Tailscale handles remote access, not ComfyUI
+Environment=CUDA_VISIBLE_DEVICES=GPU-50b41c93-e957-fe4a-eb4d-001d7e7d990a
 ExecStart=/home/jon-deoliveira/miniconda3/envs/comfyui/bin/python main.py --listen 127.0.0.1 --port 8188
-Restart=on-failure
-RestartSec=5s
+Restart=no
 StandardOutput=append:/tmp/soveryn-comfyui.log
 StandardError=append:/tmp/soveryn-comfyui.log
 
 [Install]
+# On-demand only: Aetheria's generate_image starts/stops this unit.
+# `systemctl --user enable` is optional and NOT recommended for boot.
 WantedBy=soveryn.target

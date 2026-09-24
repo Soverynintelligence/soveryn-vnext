@@ -1,47 +1,48 @@
 # SOVERYN vNext
 
-Clean rebuild of SOVERYN, the local multi-agent system. Built beside the running production instance, not in place of it.
+Last reviewed: 2026-09-22 by Kernel
+Who: see CURRENT_TRUTH §0
+Staleness owner: Kernel — re-verifies this README against the tree and CURRENT_TRUTH on each docs pass; Jon arbitrates disputes.
+Staleness rule: re-verify against CURRENT_TRUTH per-row dates before relying on this file; update this line on each review.
 
-**Source of authority:** `docs/CURRENT_TRUTH_2026-05-23.md`. The active rebuild plan is tracked from `~/soveryn_complete/docs/superpowers/plans/2026-05-27-soveryn-rebuild-phase1-vnext-refactor.md`.
+> **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
+
+## What is SOVERYN
+
+- **What:** a fully local multi-agent AI house and SOVERYN Intelligence LLC (North Carolina). Not a crypto token, DAO, or chain.
+- **Where:** Jon-owned hardware — tower + dual DGX Sparks. Models stay local.
+- **What's live:** Messages is the house front door. Runtime facts: [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md).
+
+Archived snapshot of an older truth file: `docs/archive/CURRENT_TRUTH_2026-05-23.md` — historical only; live truth is [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md).
 
 ## Status
 
-vNext is a working side-by-side Flask app and Phase 1 platform refactor substrate. It now has:
+See **CURRENT_TRUTH** for live vs incomplete, [kill list](docs/CURRENT_TRUTH.md#4-kill-list), and hardware. Do not copy those here.
 
-- 3 active chat agents: Aetheria, V.E.T.T., Scotty
-- Explicit agent packages for Aetheria, Ares, Vett, and Scotty
-- Aetheria chat and heartbeat surfaces split at the code boundary
-- Platform packages for inference, lattice/memory, tools, bus, supervisor, telemetry, and repair recipes
-- Compatibility shims for old import paths during the refactor window
-- Command center UI, chat UI, sessions, streaming, compatibility routes, validation harness, and code-backup daemon from earlier vnext work
+## Public surfaces
 
-Phase 1 declares structure and preserves current behavior. Phase 2a closes the Ares-prerequisite platform slice: durable bus verification, telemetry log/query, supervisor health probes, tool schema validation, telemetry-backed tool audits, and a no-LLM Ares-readiness contract. Phase 2b-i adds the safe memory storage substrate: first-class provenance, write gates, durable Attic storage, additive promotion, a provenance-aware writer, and provisional metadata facets while freezing recall behavior. Phase 2b-ii-a adds Aetheria's deterministic speech-boundary components as a dark path: channel classification, provenance phrasing, uncertainty-only Channel B rendering, the two-channel assembler, no-ghost structural tests, and the IDK floor. Phase 2b-ii-b1 migrates prod-derived legacy memory into vnext Attic as raw low-confidence material and creates a bounded 12-entry reviewed identity spine in vnext lattice. Phase 2b-ii-b2 cuts Aetheria live recall over to the two-channel speech boundary: reviewed identity spine entries are Channel A, raw legacy matches are Channel B uncertainty, and Channel B content is not quoted. Phase 2c adds supervisor orchestration: user-unit router/vNext/Ares services, a readiness wait primitive, a thin status CLI, and an idempotent install script. Phase 3a ports Ares core + the hardware lane as a detection-only host sentinel with dry-run mode for shadow-bake operation beside prod Ares. Phase 3b extends Ares with network and architecture lanes: TCP listener delta, public-interface EMERGENCY detection, expected-service presence, raw-I/O guards, retired-agent absence, and tool-ownership checks, still dry-run-first. Phase 3c closes the Ares operational gap with a daemon launcher, loopback/process structural fixes, and a live snapshot verifier. Track 2 adds Aetheria's active read-only lattice tools: bounded non-streaming tool-call iteration plus channel-aware embedding search, keyword search, node lookup, and recent-entry access wired only to Aetheria. Later phases build and swap the remaining platform components one at a time.
+Public surfaces: see [CURRENT_TRUTH §1 — What is live](docs/CURRENT_TRUTH.md#1-what-is-live).
 
 ## Layout
 
 ```text
 soveryn/
 ├── agents/        # agent policy and entry surfaces
-├── app/           # Flask app and route surface, still top-level in Phase 1
+├── app/           # Flask app and route surface
 ├── backup/        # code backup daemon
+├── docs/          # truth, notes, runbooks, archive
 ├── config/        # runtime/config loading
 ├── inference/     # compatibility shims to platform.inference
 ├── memory/        # conversation store + lattice compatibility shim
 ├── platform/      # shared mechanisms
+│   └── email/     # citizen email (not armed)
 ├── tools/         # compatibility shim to platform.tools
 └── validation/    # prod-vnext comparison harness
+
+~/teammates/        # Critic/Scout overnight — briefs → Messages
 ```
 
-Phase 1 verification: `docs/PHASE1_VNEXT_REFACTOR_VERIFY.md`.
-Phase 2a verification: `docs/PHASE2_ARES_PREREQS_VERIFY.md`.
-Phase 2b-i verification: `docs/PHASE2B_I_VERIFY.md`.
-Phase 2b-ii-a verification: `docs/PHASE2B_II_A_VERIFY.md`.
-Phase 2b-ii-b1 verification: `docs/PHASE2B_II_B1_VERIFY.md`.
-Phase 2b-ii-b2 verification: `docs/PHASE2B_II_B2_VERIFY.md`.
-Phase 3a verification: `docs/PHASE3A_ARES_CORE_HARDWARE_VERIFY.md`.
-Phase 3b verification: `docs/PHASE3B_ARES_NETWORK_ARCHITECTURE_VERIFY.md`.
-Phase 3c verification: `docs/PHASE3C_ARES_OPERATIONAL_CLOSE_VERIFY.md`.
-Track 2 verification: `docs/TRACK2_AETHERIA_LATTICE_TOOLS_VERIFY.md`.
+Phase / track verify docs live under `docs/` (`PHASE1_…`, `PHASE2_…`, `TRACK2_…`).
 
 ## Running tests
 

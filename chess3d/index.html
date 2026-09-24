@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess 3D</title>
+  <link rel="stylesheet" href="./src/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div id="statusChip">
+    <span id="turnDot" class="dot w"></span>
+    <span id="statusText">White to move</span>
+  </div>
+
+  <aside id="panel">
+    <h1>Chess <span>3D</span></h1>
+
+    <div id="evalWrap">
+      <div id="evalBar"><div id="evalFill"></div></div>
+    </div>
+
+    <label class="field">
+      <span>Opponent</span>
+      <select id="modeSel">
+        <option value="ai" selected>Engine</option>
+        <option value="human">Two players</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Play as</span>
+      <select id="sideSel">
+        <option value="w" selected>White</option>
+        <option value="b">Black</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Strength</span>
+      <select id="levelSel">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
+
+    <div class="btns">
+      <button id="newBtn">New game</button>
+      <button id="undoBtn">Undo</button>
+      <button id="flipBtn">Flip view</button>
+      <button id="soundBtn">Sound on</button>
+    </div>
+
+    <div id="captured">
+      <div class="cap-row"><span class="cap-label">White took</span><span id="capW" class="cap-glyphs b"></span></div>
+      <div class="cap-row"><span class="cap-label">Black took</span><span id="capB" class="cap-glyphs w"></span></div>
+    </div>
+
+    <ol id="moveList"></ol>
+
+    <div id="engineInfo">&nbsp;</div>
+  </aside>
+
+  <div id="promoOverlay" class="overlay" hidden>
+    <div class="card promo-card">
+      <p>Promote to</p>
+      <div class="promo-choices">
+        <button data-p="q" title="Queen">&#9819;</button>
+        <button data-p="r" title="Rook">&#9820;</button>
+        <button data-p="b" title="Bishop">&#9821;</button>
+        <button data-p="n" title="Knight">&#9822;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="gameOver" class="overlay" hidden>
+    <div class="card over-card">
+      <p id="overText"></p>
+      <button id="overNewBtn">New game</button>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

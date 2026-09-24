@@ -24,7 +24,10 @@ from soveryn.inference.llama_server_client import (
 )
 # _wire_message is a module-private helper; `from ... import *` does not
 # re-export underscored names through the shim, so import from canonical.
-from soveryn.platform.inference.llama_server_client import _wire_message
+from soveryn.platform.inference.llama_server_client import (
+    _wire_message,
+    visible_assistant_text,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -237,6 +240,52 @@ def test_chat_200_returns_chatresponse_with_content():
     assert resp.finish_reason == "stop"
 
 
+def test_visible_assistant_text_strips_think_blocks():
+    raw = "<think>The user asked for pong. I should reply pong.</think>\nping"
+    assert visible_assistant_text(raw).strip() == "ping"
+    assert "user asked" not in visible_assistant_text(raw)
+
+
+def test_chat_does_not_promote_reasoning_into_content():
+    """GLM deepseek_r1 parser puts CoT in reasoning; Messages must not show it."""
+    server = _vett_server()
+    request = ChatRequest(
+        messages=(ChatMessage(role="user", content="ping"),),
+        model="glm-5.3-flash",
+    )
+    body = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "",
+                    "reasoning": "The user said ping so I will plan a pong.",
+                },
+                "finish_reason": "stop",
+            }
+        ]
+    }
+    _, ctx = _patch_urlopen(body=body)
+    with ctx:
+        resp = chat(request, server)
+    assert resp.content == ""
+    assert "plan a pong" not in resp.content
+
+
+def test_chat_strips_think_tags_from_content():
+    server = _vett_server()
+    request = ChatRequest(
+        messages=(ChatMessage(role="user", content="ping"),),
+        model="glm-5.3-flash",
+    )
+    body = _minimal_chat_ok_body("<think>secret chain</think>pong")
+    _, ctx = _patch_urlopen(body=body)
+    with ctx:
+        resp = chat(request, server)
+    assert resp.content.strip() == "pong"
+    assert "secret" not in resp.content
+
+
 def test_chat_preserves_raw_tool_calls():
     server = _vett_server()
     request = ChatRequest(
@@ -415,7 +464,7 @@ def test_embed_routes_to_embeddings_server_only():
     # Payload must carry the embeddings server's alias so the router
     # dispatches to the embeddings child subprocess, not an agent child.
     payload = json.loads(captured["body"].decode())
-    assert payload["model"] == "embeddings"
+    assert payload["model"] == "nemotron-embed-8b"
 
 
 def test_embed_response_parses_vectors():
@@ -592,9 +641,10 @@ def test_prepare_wire_messages_handles_single_prelude_system():
 
 
 def test_prepare_wire_messages_only_folds_prelude_not_interior_system():
-    """A 'system' message that appears AFTER user/assistant turns is part of
-    history (e.g. tool injection), not the prelude — adapter must not fold
-    it into the front."""
+    """A 'system' message AFTER user/assistant turns is not prelude — must not
+    fold into the front. Qwen3.x jinja also rejects mid-conversation system
+    roles, so the adapter rewrites them to user-role [System note] markers.
+    """
     msgs = (
         ChatMessage(role="system", content="persona"),
         ChatMessage(role="system", content="soul"),
@@ -603,12 +653,14 @@ def test_prepare_wire_messages_only_folds_prelude_not_interior_system():
         ChatMessage(role="user", content="follow-up"),
     )
     out = prepare_wire_messages(msgs, _server(supports_multi=False))
-    # The prelude (positions 0,1) folds into 1 system message; everything
-    # from position 2 onward is preserved exactly.
+    # Prelude (positions 0,1) folds into 1 system message; interior system
+    # becomes a user-role note so Qwen's template does not raise.
     assert out[0].role == "system"
     assert "persona" in out[0].content and "soul" in out[0].content
     assert out[1] == ChatMessage(role="user", content="q")
-    assert out[2] == ChatMessage(role="system", content="tool result note")
+    assert out[2].role == "user"
+    assert "tool result note" in (out[2].content or "")
+    assert "[System note]" in (out[2].content or "")
     assert out[3] == ChatMessage(role="user", content="follow-up")
 
 

@@ -4,9 +4,45 @@ import pytest
 from soveryn.config import runtime
 
 
-def test_active_agents_is_exactly_three():
-    """Spec §1, §8 Bucket A: Aetheria, Vett, Scotty. No more, no less."""
-    assert set(runtime.ACTIVE_AGENTS) == {"aetheria", "vett", "scotty"}
+def test_active_agents_includes_crew_kernel_and_eve():
+    """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
+    Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
+    assert set(runtime.ACTIVE_AGENTS) == {
+        "aetheria", "kernel", "eve",
+    }
+    assert "grok" not in runtime.ACTIVE_AGENTS
+    assert "vett" not in runtime.ACTIVE_AGENTS
+    assert "scotty" not in runtime.ACTIVE_AGENTS
+
+
+def test_grok_is_not_a_house_agent():
+    """Desktop Grok Bots — not a vNext AgentLoop / Messages contact."""
+    assert "grok" not in runtime.AGENT_TO_SERVER
+    assert all(s.name != "grok_build" for s in runtime.MODEL_SERVERS)
+
+
+def test_messages_contacts_fleet_freeze():
+    """Phone door is frontier few; Vett/Scotty/Grok parked as Messages peers."""
+    assert runtime.MESSAGES_CONTACTS == (
+        "aetheria", "kernel", "eve",
+    )
+    assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty"})
+    assert runtime.DEFERRED_CHAT_AGENTS == frozenset()
+    assert runtime.DEFERRED_CHAT_AGENTS <= set(runtime.MESSAGES_CONTACTS)
+    assert runtime.COMMISSION_BLOCKED == frozenset({"vett", "scotty"})
+    assert set(runtime.MESSAGES_CONTACTS).isdisjoint(runtime.MESSAGES_PARKED)
+    assert set(runtime.MESSAGES_CONTACTS) <= set(runtime.ACTIVE_AGENTS)
+    assert "vett" not in runtime.ACTIVE_AGENTS
+    assert "scotty" not in runtime.ACTIVE_AGENTS
+    assert "grok" not in runtime.ACTIVE_AGENTS
+
+
+def test_commission_peers_are_eve_and_kernel_only():
+    from soveryn.rooms.store import DEFAULT_PEER, PEERS
+
+    assert PEERS == frozenset({"eve", "kernel"})
+    assert DEFAULT_PEER == "eve"
+    assert PEERS.isdisjoint(runtime.COMMISSION_BLOCKED)
 
 
 def test_retired_includes_known_retired_agents():
@@ -46,9 +82,24 @@ def test_app_port_is_5001_during_side_by_side():
     assert runtime.APP_PORT == 5001
 
 
+def test_glm_kernel_window_is_32k():
+    """2026-08-30: Kernel GLM TP=2 is 32k (was 16k; 16k 400'd ~17k prompts)."""
+    kernel = next(s for s in runtime.MODEL_SERVERS if s.name == "kernel_build")
+    if runtime.resolve_kernel_brain() == "glm":
+        assert kernel.n_ctx == 32768
+        assert kernel.host == "10.10.10.2" and kernel.port == 8001
+    if runtime.resolve_kernel_brain() == "flashnext":
+        assert kernel.n_ctx == 131072
+        assert kernel.host == "127.0.0.1" and kernel.port == 8888
+        assert kernel.model_alias == "qwen3.8-flash-next"
+    eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
+    assert eve.n_ctx == 65536
+    assert eve.port == 8091
+    assert eve.model_alias == "bench-flash"
+
+
 def test_embeddings_url_resolves():
-    # 2026-07-17 — Librarian: embeddings moved to its own Nemotron-3-Embed-8B
-    # server on :8096 (off the Quadro router). Only aetheria_primary stays on :8090.
+    # 2026-08-29 — Librarian back on helper Quadro loopback :8096 (Spark GLM).
     assert runtime.embeddings_url() == "http://127.0.0.1:8096"
 
 
@@ -82,37 +133,123 @@ def test_aetheria_alone_on_8090_everyone_else_on_8091():
     assert aetheria[0].port == 8090
     assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
     # 2026-08-02: Vett + Scotty moved OFF the local routers entirely, to the
-    # Spark (10.10.10.2:8000, Laguna on vLLM), freeing 30 GB on a Quadro that
-    # was alerting at <1 GB free and 82 C. That strengthens this invariant
-    # rather than weakening it — one fewer tenant able to leak onto her card.
+    # Spark, freeing 30 GB on a Quadro that was alerting at <1 GB free and
+    # 82 C. That strengthens this invariant rather than weakening it — one
+    # fewer tenant able to leak onto her card.
+    # 2026-08-12: the Spark port moved :8000 -> :8001 when laguna-serve was
+    # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
-    assert {s.port for s in others} == {8000, 8091, 8096}
-    # The load-bearing half: nothing local shares Aetheria's router, and the
-    # remote entry is not even on this host.
-    assert all(s.host == "127.0.0.1" for s in others if s.port in (8091, 8096))
+    live_others = [s for s in others if not s.skip_preflight]
+    ports = {s.port for s in live_others}
+    assert {8091, 8096}.issubset(ports)
+    assert 8001 in ports or 8888 in ports
+    # Local quadro slots (and Flash-Next tunnel) stay on loopback; Spark :8001 is remote.
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8091, 8096, 8888))
+    assert all(s.host != "127.0.0.1" for s in live_others if s.port == 8001)
     # And no non-aetheria entry may share Aetheria's port.
     assert all(s.port != 8090 for s in others)
 
 
 def test_model_servers_have_distinct_logical_names():
-    """Even though they share a port, the four MODEL_SERVERS remain distinct
+    """Even though some share a port, MODEL_SERVERS remain distinct
     logical identities — that's the whole point of the (port, name) pair."""
     names = {s.name for s in runtime.MODEL_SERVERS}
-    assert names == {"aetheria_primary", "vett_scotty_shared", "embeddings", "cognition"}
+    assert names == {
+        "aetheria_primary",
+        "vett_scotty_shared",
+        "embeddings",
+        "cognition",
+        "kernel_build",
+        "eve_flash",
+    }
 
 
 def test_each_model_server_has_router_alias_populated():
     """Under router mode, the chat/embeddings payload "model" field must match
     a preset alias registered in router-presets.ini. Verify each ModelServer
-    carries the alias that router-presets.ini knows about."""
+    carries the alias that router-presets.ini knows about.
+
+    Vett/Scotty alias is brain-swappable (qwen36 | qwen38 | lightning) via
+    ~/.soveryn/vett_brain — assert the active profile, not a fixed id.
+    """
+    brain = runtime.resolve_vett_brain()
+    vett_alias = runtime._VETT_BRAIN_PROFILES[brain]["alias"]
+    kbrain = runtime.resolve_kernel_brain()
+    kernel_alias = runtime._KERNEL_BRAIN_PROFILES[kbrain]["alias"]
     expected = {
         "aetheria_primary": "aetheria",
-        "vett_scotty_shared": "laguna",
-        "embeddings": "embeddings",
+        "vett_scotty_shared": vett_alias,
+        "embeddings": "nemotron-embed-8b",
         "cognition": "cognition",
+        "kernel_build": kernel_alias,
+        "eve_flash": "bench-flash",
     }
     actual = {s.name: s.model_alias for s in runtime.MODEL_SERVERS}
     assert actual == expected
+
+
+def test_kernel_brain_defaults_to_flash(tmp_path, monkeypatch):
+    monkeypatch.delenv("SOVERYN_KERNEL_BRAIN", raising=False)
+    monkeypatch.setattr(runtime, "_KERNEL_BRAIN_FILE", tmp_path / "missing")
+    assert runtime.resolve_kernel_brain() == "flash"
+
+
+def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
+    path = tmp_path / "kernel_brain"
+    path.write_text("qwen38\n", encoding="utf-8")
+    monkeypatch.setattr(runtime, "_KERNEL_BRAIN_FILE", path)
+    monkeypatch.delenv("SOVERYN_KERNEL_BRAIN", raising=False)
+    assert runtime.resolve_kernel_brain() == "qwen38"
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flash")
+    assert runtime.resolve_kernel_brain() == "flash"
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flashnext")
+    assert runtime.resolve_kernel_brain() == "flashnext"
+
+
+def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
+    """Eve's Quadros Qwen3.8 seat names the same projector Aetheria already
+    loads. Kernel is vLLM (Flash-Next or GLM rollback) — no llama mmproj,
+    natively multimodal via image_url."""
+    from soveryn.platform.vision_types import VISION_CAPABLE_AGENTS
+
+    eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
+    kernel = next(s for s in runtime.MODEL_SERVERS if s.name == "kernel_build")
+    aetheria = next(s for s in runtime.MODEL_SERVERS if s.name == "aetheria_primary")
+    expected = runtime.MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf"
+    assert eve.mmproj_path == expected
+    assert aetheria.mmproj_path == expected
+    assert kernel.mmproj_path is None
+    assert "eve" in VISION_CAPABLE_AGENTS
+    assert "kernel" in VISION_CAPABLE_AGENTS
+    assert eve.port == 8091
+    assert eve.model_alias == "bench-flash"
+
+
+def test_quadro_qwen38_preset_names_qwen38_mmproj_not_shepherd():
+    """File-only wiring so a later human quadro-router reload loads vision
+    for Eve. Do not point [qwen38] at the shepherd/Gemma projector."""
+    import configparser
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "runtime" / "router-presets-quadro.ini"
+    cp = configparser.ConfigParser(interpolation=None)
+    cp.read(path)
+    assert cp.has_section("qwen38")
+    mmproj = cp["qwen38"]["mmproj"]
+    assert mmproj == "/mnt/soveryn_models/GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
+    assert "shepherd" not in mmproj.lower()
+    assert "gemma" not in mmproj.lower()
+    assert "eve" in cp["qwen38"]["alias"]
+
+
+def test_eve_stays_on_flash_when_kernel_on_qwen38(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "qwen38")
+    # Re-import factory through resolve — MODEL_SERVERS is built at import.
+    # Spot-check profile wiring instead of rebinding the frozen tuple.
+    assert runtime._KERNEL_BRAIN_PROFILES["qwen38"]["alias"] == "qwen38-27b"
+    assert runtime._KERNEL_BRAIN_PROFILES["flash"]["alias"] == "bench-flash"
+    assert runtime.AGENT_TO_SERVER["eve"] == "eve_flash"
+    assert runtime.AGENT_TO_SERVER["kernel"] == "kernel_build"
 
 
 def test_cognition_is_cognition_not_aetheria_public():
@@ -132,8 +269,13 @@ def test_all_ports_includes_parakeet():
     and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    # 8000 = Spark vLLM (Vett + Scotty), added 2026-08-02.
-    assert ports == {8000, 8087, 8090, 8091, 8096}
+    # 8001 = Spark vLLM (qwen-serve). 8888 = Flash-Next tunnel when Kernel is flashnext.
+    assert {8090, 8091, 8096}.issubset(ports)
+    assert 8001 in ports or 8888 in ports
+    expected = {8001, 8087, 8090, 8091, 8096}
+    if runtime.resolve_kernel_brain() == "flashnext":
+        expected.add(8888)
+    assert ports == expected
 
 
 def test_model_servers_can_share_port_but_not_with_service_endpoints():
@@ -228,15 +370,23 @@ def test_ares_daemon_is_a_process_not_an_agent():
     assert "ares" not in runtime.RETIRED
 
 
-def test_vett_scotty_shared_supports_multi_system_via_fixed_template():
-    """As of 2026-06-12 (commit 8c0726d), vett_scotty_shared uses
-    froggeric/Qwen-Fixed-Chat-Templates v20 (configured in router-presets.ini
-    [vett-scotty] via `chat-template-file`) which natively honors
-    messages[1:] role=system. The transport adapter `prepare_wire_messages`
-    becomes a pass-through. Sandbox + live-verified ('ALL_SURVIVED' probe)."""
+def test_vett_scotty_shared_does_not_support_multi_system_on_stock_qwen():
+    """INVERTED 2026-08-12, and the reason matters more than the value.
+
+    From 2026-06-12 this asserted True: the router child loaded
+    froggeric/Qwen-Fixed-Chat-Templates v20 via `chat-template-file`, which
+    natively honoured messages[1:] role=system, so `prepare_wire_messages`
+    was a pass-through.
+
+    That patched template went away with the router child. Vett and Scotty now
+    reach STOCK Qwen3.6 served by vLLM on the Spark, which returns
+    `400 System message must be at the beginning` for any system message after
+    position 0. True was only ever a property of the patched template, never of
+    the model — so the flag follows the server, and the adapter is load-bearing
+    again."""
     from soveryn.config.runtime import MODEL_SERVERS
     vs = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")
-    assert vs.supports_multi_system_messages is True
+    assert vs.supports_multi_system_messages is False
 
 
 def test_aetheria_primary_does_not_support_multi_system_qwen36_template():

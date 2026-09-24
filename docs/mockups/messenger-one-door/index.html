@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messenger one-door · mockups</title>
+<style>
+  :root {
+    --bg: #0a0908; --ink: #f5f2ea; --mute: rgba(245,242,234,0.5);
+    --gold: #c6a664; --line: rgba(255,255,255,0.08);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); padding: 32px 24px 64px;
+  }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .lede { color: var(--mute); max-width: 52rem; line-height: 1.5; margin: 0 0 28px; }
+  .grid {
+    display: grid; gap: 28px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    max-width: 1100px;
+  }
+  .card {
+    background: #12100e; border: 1px solid var(--line); border-radius: 20px;
+    overflow: hidden; text-decoration: none; color: inherit;
+    transition: border-color .15s, transform .15s;
+  }
+  .card:hover { border-color: rgba(198,166,100,0.4); transform: translateY(-2px); }
+  .phone {
+    aspect-ratio: 9/16; background: #000; display: flex; align-items: stretch;
+    justify-content: center; padding: 16px; border-bottom: 1px solid var(--line);
+  }
+  .phone iframe {
+    width: 100%; height: 100%; border: 0; border-radius: 16px;
+    background: #000; pointer-events: none;
+  }
+  .meta { padding: 16px 18px 18px; }
+  .meta h2 { margin: 0 0 6px; font-size: 17px; }
+  .meta p { margin: 0; font-size: 14px; color: var(--mute); line-height: 1.4; }
+  .note {
+    margin-top: 36px; max-width: 52rem; padding: 16px 18px;
+    border-left: 3px solid var(--gold); color: var(--mute); font-size: 14px; line-height: 1.5;
+  }
+  .note strong { color: var(--ink); }
+  a.open { color: var(--gold); font-size: 14px; }
+</style>
+</head>
+<body>
+  <h1>One door: Messages</h1>
+  <p class="lede">
+    Mockups for the consumer front door. Not Mission Control. Not a lab console.
+    Contacts → talk → group only when they work together. Active work shows up as a quiet strip — not a programmer dashboard.
+  </p>
+  <div class="grid">
+    <a class="card" href="01-contacts.html" target="_blank">
+      <div class="phone"><iframe src="01-contacts.html" title="Contacts"></iframe></div>
+      <div class="meta">
+        <h2>1 · Contacts</h2>
+        <p>Your team as people. Preview shows last human message — or “Working on CWG…” when an objective is live.</p>
+      </div>
+    </a>
+    <a class="card" href="02-dm.html" target="_blank">
+      <div class="phone"><iframe src="02-dm.html" title="DM"></iframe></div>
+      <div class="meta">
+        <h2>2 · Talk to Aetheria</h2>
+        <p>Plain 1:1. When she loops Vett in, his shape appears — tap opens the group. No sidebar. No agent pills.</p>
+      </div>
+    </a>
+    <a class="card" href="03-group.html" target="_blank">
+      <div class="phone"><iframe src="03-group.html" title="Group"></iframe></div>
+      <div class="meta">
+        <h2>3 · Group when needed</h2>
+        <p>You + Aetheria + peers. Add Eve. Ask someone. Work shows here. Still feels like Messages.</p>
+      </div>
+    </a>
+  </div>
+  <div class="note">
+    <strong>Direction locked:</strong> keep building on the Messages UI we have.
+    <code>/chat</code> (lab sidebar, pills, Fleet links) becomes secondary or redirects here.
+    Ease of use &gt; power-user chrome. Open any card full-size:
+    <a class="open" href="01-contacts.html">contacts</a> ·
+    <a class="open" href="02-dm.html">DM</a> ·
+    <a class="open" href="03-group.html">group</a>
+  </div>
+</body>
+</html>

@@ -20,6 +20,7 @@ parsing — nothing more.
 
 from __future__ import annotations
 import json
+import re
 import socket
 import urllib.error
 import urllib.request
@@ -32,6 +33,21 @@ from soveryn.config.runtime import MODEL_SERVERS, ModelServer
 DEFAULT_CHAT_TIMEOUT_SECONDS = 30.0
 DEFAULT_EMBED_TIMEOUT_SECONDS = 10.0
 EMBEDDINGS_SERVER_NAME = "embeddings"
+
+# GLM / DeepSeek-style parsers put chain-of-thought in `reasoning` /
+# `reasoning_content`. Never show that in Messages. Also strip think tags
+# if a backend leaked them into `content`.
+_THINK_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_THINK_TAG = re.compile(r"</?think>", re.IGNORECASE)
+
+
+def visible_assistant_text(text: str | None) -> str:
+    """User-visible assistant text: no <think> blocks or tags."""
+    if not text or not isinstance(text, str):
+        return ""
+    cleaned = _THINK_BLOCK.sub("", text)
+    cleaned = _THINK_TAG.sub("", cleaned)
+    return cleaned
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,6 +94,10 @@ class ChatRequest:
     top_p: float | None = None
     stop: tuple[str, ...] | None = None
     tools: tuple[dict, ...] | None = None   # OpenAI-schema passthrough
+    # OpenAI tool_choice: "auto" | "none" | "required" | {type,function}.
+    # "required" is used after a verification-gate HOLD so Vett cannot keep
+    # narrating "I'll check…" without actually invoking a tool (2026-08-14).
+    tool_choice: str | dict | None = None
     # Cap on hidden reasoning tokens (llama-server `thinking_budget_tokens`).
     # None = unrestricted (server-side `--reasoning-budget` default applies).
     # int  = per-request cap; lets visible answer fit inside max_tokens.
@@ -230,11 +250,38 @@ def prepare_wire_messages(
             prelude_end += 1
         else:
             break
-    if prelude_end <= 1:
-        return messages
-    joined = "\n\n".join(_content_as_str(m.content) for m in messages[:prelude_end] if m.content)
-    folded = ChatMessage(role="system", content=joined)
-    return (folded,) + messages[prelude_end:]
+    if prelude_end == 0:
+        head: tuple[ChatMessage, ...] = ()
+        rest = messages
+    elif prelude_end == 1:
+        head = messages[:1]
+        rest = messages[1:]
+    else:
+        joined = "\n\n".join(
+            _content_as_str(m.content) for m in messages[:prelude_end] if m.content
+        )
+        head = (ChatMessage(role="system", content=joined),)
+        rest = messages[prelude_end:]
+
+    # Qwen3.x jinja raises "System message must be at the beginning" on any
+    # mid-conversation role=system (tool-cap synth note, verification HOLD,
+    # etc.). Rewrite those to user-role notes so tool loops and force-final
+    # can still inject guidance without blowing up the template.
+    if not any(m.role == "system" for m in rest):
+        return head + rest
+    rewritten: list[ChatMessage] = []
+    for m in rest:
+        if m.role == "system":
+            note = _content_as_str(m.content)
+            rewritten.append(
+                ChatMessage(
+                    role="user",
+                    content=f"[System note]\n{note}" if note else "[System note]",
+                )
+            )
+        else:
+            rewritten.append(m)
+    return head + tuple(rewritten)
 
 
 def _wire_message(m: ChatMessage) -> dict[str, Any]:
@@ -270,6 +317,8 @@ def chat(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.tool_choice is not None and request.tools:
+        payload["tool_choice"] = request.tool_choice
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
     if server.chat_template_kwargs:
@@ -281,11 +330,14 @@ def chat(
     url = f"{server.base_url}/v1/chat/completions"
     parsed = _post_json(url, payload, timeout, server.name)
 
-    # llama-server emits OpenAI-compat: choices[0].message.{content,tool_calls}, finish_reason
+    # llama-server / vLLM emit OpenAI-compat: choices[0].message.{content,tool_calls}
+    # Do NOT copy reasoning / reasoning_content into the chat bubble — GLM-5.3
+    # (deepseek_r1 parser) puts hidden CoT there. Promoting it made Kernel's
+    # thinking print in Messages (2026-08-29).
     try:
         choice = parsed["choices"][0]
         message = choice["message"]
-        content = message.get("content") or ""
+        content = visible_assistant_text(message.get("content") or "")
         raw_tool_calls = message.get("tool_calls")
         tool_calls = tuple(raw_tool_calls) if raw_tool_calls else None
         finish_reason = choice.get("finish_reason", "")
@@ -359,6 +411,8 @@ def chat_stream(
         payload["stop"] = list(request.stop)
     if request.tools is not None:
         payload["tools"] = [dict(t) for t in request.tools]
+    if request.tool_choice is not None and request.tools:
+        payload["tool_choice"] = request.tool_choice
     if request.thinking_budget_tokens is not None:
         payload["thinking_budget_tokens"] = request.thinking_budget_tokens
     if server.chat_template_kwargs:
@@ -444,6 +498,10 @@ def _parse_sse_chunks(resp, server_name: str) -> "Iterator[StreamChunk]":
         content_delta = delta_obj.get("content") or ""
         if not isinstance(content_delta, str):
             content_delta = ""
+        # Never stream reasoning deltas into the UI (GLM CoT leak).
+        content_delta = visible_assistant_text(content_delta) if (
+            "<think>" in content_delta.lower() or "</think>" in content_delta.lower()
+        ) else content_delta
         finish_reason = choice.get("finish_reason")
         tc_delta = delta_obj.get("tool_calls")
         if tc_delta is not None and not isinstance(tc_delta, list):

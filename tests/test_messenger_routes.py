@@ -41,6 +41,23 @@ def test_pair_admin_route_rejects_non_localhost(client):
     assert resp.status_code == 403
 
 
+def test_pair_admin_route_rejects_public_gate(client):
+    """The gate dials from 127.0.0.1 and sets the edge mark. That is not local."""
+    resp = client.get(
+        "/m/pair",
+        environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        headers={"X-Soveryn-Edge": "public"},
+    )
+    assert resp.status_code == 403
+    resp = client.post(
+        "/m/pair",
+        json={"label": "phone"},
+        environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        headers={"X-Soveryn-Edge": "public"},
+    )
+    assert resp.status_code == 403
+
+
 def test_pair_claim_with_valid_code(client):
     # First mint a code (via admin POST)
     mint_resp = client.post(

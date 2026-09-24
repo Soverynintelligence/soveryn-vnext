@@ -97,13 +97,43 @@ def test_write_dream_outputs_writes_reflection_node_with_dream_layer(lattice_db)
     with sqlite3.connect(str(lattice_db)) as con:
         con.row_factory = sqlite3.Row
         rows = con.execute(
-            "SELECT id, layer, type, agent, content FROM nodes WHERE layer = ?",
+            "SELECT id, layer, type, agent, content, provenance FROM nodes WHERE layer = ?",
             (LAYER_DREAM,),
         ).fetchall()
     assert len(rows) == 1
     assert rows[0]["type"] == "reflection"
     assert rows[0]["agent"] == "aetheria"
     assert "seed-a" in rows[0]["content"]
+    import json
+    prov = json.loads(rows[0]["provenance"])
+    assert prov["cls"] == "witnessed"
+    assert prov["source"] == "dream_daemon"
+    assert prov["full_text_ref"] == f"dream_archive:{dream_run_id}"
+
+
+def test_write_dream_outputs_clamps_long_synthesis(lattice_db, tmp_path):
+    from soveryn.platform.lattice.content_caps import DREAM_SYNTHESIS_LATTICE_MAX
+    dream_run_id = str(uuid.uuid4())
+    long = ("Night after night the synthesis runs long. " * 80)
+    write_dream_outputs(
+        lattice_db,
+        dream_run_id=dream_run_id,
+        synthesis=long,
+        associations="", contradictions="",
+        loop_health=0.5, nodes_read=0, is_dry_run=False,
+    )
+    with sqlite3.connect(str(lattice_db)) as con:
+        content = con.execute(
+            "SELECT content FROM nodes WHERE layer = ?", (LAYER_DREAM,),
+        ).fetchone()[0]
+    assert len(content) <= DREAM_SYNTHESIS_LATTICE_MAX
+    # full text recoverable from archive next to lattice parent/data layout
+    data_root = lattice_db.resolve().parent
+    if data_root.name == "memory":
+        data_root = data_root.parent
+    arch = data_root / "memory" / "dream_archive" / f"{dream_run_id}.md"
+    assert arch.is_file()
+    assert "Night after night" in arch.read_text(encoding="utf-8")
 
 
 def test_write_dream_outputs_writes_edges_for_paired_refs(lattice_db):

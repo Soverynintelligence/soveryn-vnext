@@ -10,7 +10,8 @@ from datetime import datetime
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from soveryn.agents.loop import (
-    AgentLoop, AgentLoopError, AgentStreamEvent, DoneEvent, ErrorEvent, TokenEvent,
+    AgentLoop, AgentLoopError, AgentStreamEvent, ApprovalPendingEvent,
+    DoneEvent, ErrorEvent, TokenEvent,
     ToolCallEvent, ToolResultEvent, TTSTokenEvent,
 )
 from soveryn.agents.presence.resolver import ResolveResult, resolve_pending
@@ -19,6 +20,9 @@ from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerT
 from soveryn.inference.routing import RoutingError
 
 bp = Blueprint("chat", __name__)
+
+# Teammates overnight → Messages inboxes (read-only; not chattable agents).
+INBOX_AGENTS: frozenset[str] = frozenset({"t_critic", "t_scout"})
 
 
 # Vision attachments — accepted at /chat + /chat_stream, plumbed to AgentLoop.
@@ -35,6 +39,8 @@ from soveryn.platform.vision_types import (  # noqa: E402
 # the route boundary so a malformed client can't OOM the loop or the wire.
 MAX_ATTACHMENT_DATA_URL_BYTES = 33_000_000
 
+_PDF_DATA_PREFIX = "data:application/pdf"
+
 
 # ─── Small helpers (route-local, deliberately not abstracted further) ────────
 
@@ -43,37 +49,98 @@ def _err(code: str, message: str, status: int):
 
 
 def _validate_attachments(raw, agent: str):
-    """Validate and normalize the optional 'attachments' field.
+    """Validate attachments: images (vision) and/or PDFs (intake text splice).
 
-    Returns: (attachments_tuple_or_none, error_response_or_none).
-    On success: (None | tuple[str, ...], None).
-    On failure: (None, (jsonified_err, status_code)).
+    Returns: ``(images, pdfs, error)`` where
+      - images: ``None | tuple[str, ...]`` data:image URLs for AgentLoop vision
+      - pdfs: ``tuple[str, ...]`` data:application/pdf URLs (extracted before turn)
+      - error: Flask error response or None
 
-    Empty list is treated as absent (returns None) — the AgentLoop's
-    `if attachments:` truthiness gate then bypasses the vision splice.
+    Empty list is treated as absent. Images still require a vision-capable
+    agent; PDF-only attachments are allowed for any active agent.
     """
     if raw is None:
-        return None, None
+        return None, (), None
     if not isinstance(raw, list):
-        return None, _err("invalid_attachments",
-                          "attachments must be a list of data: URL strings", 400)
-    if not raw:  # empty list — treat as absent
-        return None, None
+        return None, (), _err(
+            "invalid_attachments",
+            "attachments must be a list of data: URL strings",
+            400,
+        )
+    if not raw:
+        return None, (), None
+
+    images: list[str] = []
+    pdfs: list[str] = []
     for a in raw:
         if not isinstance(a, str):
-            return None, _err("invalid_attachments",
-                              f"attachment entries must be strings, got {type(a).__name__}",
-                              400)
-        if not a.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
-            return None, _err("invalid_attachments",
-                              "only data:image/{jpeg,png,webp,gif} URLs accepted", 400)
+            return None, (), _err(
+                "invalid_attachments",
+                f"attachment entries must be strings, got {type(a).__name__}",
+                400,
+            )
         if len(a) > MAX_ATTACHMENT_DATA_URL_BYTES:
-            return None, _err("invalid_attachments",
-                              f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes", 400)
-    if agent not in VISION_CAPABLE_AGENTS:
-        return None, _err("agent_does_not_support_vision",
-                          f"agent {agent!r} has no vision model loaded", 400)
-    return tuple(raw), None
+            return None, (), _err(
+                "invalid_attachments",
+                f"attachment exceeds {MAX_ATTACHMENT_DATA_URL_BYTES} bytes",
+                400,
+            )
+        if a.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
+            images.append(a)
+        elif a.startswith(_PDF_DATA_PREFIX):
+            pdfs.append(a)
+        else:
+            return None, (), _err(
+                "invalid_attachments",
+                "only data:image/{jpeg,png,webp,gif} or data:application/pdf URLs accepted",
+                400,
+            )
+
+    if images and agent not in VISION_CAPABLE_AGENTS:
+        return None, (), _err(
+            "agent_does_not_support_vision",
+            f"agent {agent!r} has no vision model loaded",
+            400,
+        )
+    return (tuple(images) if images else None), tuple(pdfs), None
+
+
+def _splice_pdf_attachments(message: str, pdf_data_urls: tuple[str, ...]) -> str:
+    """Extract text-layer PDFs and prepend intake blocks to the user message."""
+    if not pdf_data_urls:
+        return message
+    import base64
+    import re
+
+    from soveryn.platform.intake.pdf import extract_pdf_bytes, splice_into_message
+
+    results = []
+    for i, url in enumerate(pdf_data_urls):
+        m = re.match(r"^data:application/pdf(;[^,]*)?,", url)
+        if not m:
+            continue
+        b64 = url.split(",", 1)[-1]
+        try:
+            data = base64.b64decode(b64, validate=False)
+        except Exception as exc:  # noqa: BLE001
+            from soveryn.platform.intake.pdf import ExtractResult
+
+            results.append(
+                ExtractResult(
+                    status="failed",
+                    text="",
+                    page_count=0,
+                    pages_with_text=0,
+                    chars=0,
+                    gap=f"base64 decode failed: {exc}",
+                    source_name=f"attachment-{i + 1}.pdf",
+                )
+            )
+            continue
+        results.append(
+            extract_pdf_bytes(data, source_name=f"attachment-{i + 1}.pdf")
+        )
+    return splice_into_message(message, results)
 
 
 def _validate_source(raw):
@@ -118,6 +185,16 @@ def _resolve_agent(name: str | None):
     return n, None
 
 
+def _resolve_agent_or_inbox(name: str | None):
+    """Like _resolve_agent, but allows Teammates overnight inbox ids for /sessions."""
+    if not isinstance(name, str) or not name.strip():
+        return None, _err("missing_field", "Required field: agent", 400)
+    n = name.lower().strip()
+    if n in INBOX_AGENTS:
+        return n, None
+    return _resolve_agent(name)
+
+
 def _state():
     return current_app.extensions["soveryn"]
 
@@ -130,12 +207,10 @@ def maybe_resolve_x_approval(
     Called from BOTH /chat and /chat_stream, before the AgentLoop turn — a
     hook in only one route would be bypassed by whichever surface uses the
     other (the desktop UI streams). Staged posts are keyed on the AGENT
-    ("aetheria"), not session_id, so this fires regardless of which session
-    Jon replies in — a post proposed during a heartbeat wake (session
-    `[heartbeat] aetheria`) can be approved from his primary thread.
+    (eve), not session_id. Approve from Eve's Messages thread with "post it".
 
     Returns None (caller proceeds into the normal turn unchanged) when:
-      - `agent != "aetheria"` (the only agent with an X presence),
+      - `agent` is not Eve (Aetheria is off X),
       - the X deps aren't wired on `state` (e.g. a test/fixture app that
         never populated app.extensions["soveryn"] — fail open, not KeyError),
       - there's nothing staged, or `message` doesn't classify as a clear
@@ -147,7 +222,7 @@ def maybe_resolve_x_approval(
     skip the agent's normal turn (a bare affirm's whole meaning was "post
     it"; running her normal turn on top would be a non sequitur).
     """
-    if agent != "aetheria":
+    if agent != "eve":
         return None
 
     x_staged = state.get("x_staged")
@@ -158,7 +233,7 @@ def maybe_resolve_x_approval(
         return None
 
     return resolve_pending(
-        agent="aetheria",
+        agent=agent,
         message=message,
         staged=x_staged,
         publisher_fn=x_publisher_fn,
@@ -197,7 +272,7 @@ def create_session():
 def list_sessions():
     agent_param = request.args.get("agent")
     if agent_param is not None:
-        agent, err = _resolve_agent(agent_param)
+        agent, err = _resolve_agent_or_inbox(agent_param)
         if err:
             return err
     else:
@@ -228,13 +303,29 @@ def get_history(session_id: str):
     if session is None:
         return _err("missing_session", f"No session {session_id!r}", 404)
     history = conv.load_history(session_id)
+    from soveryn.app.comfy_chat_urls import comfy_urls_from_text
+
+    turns = []
+    for t in history:
+        row = {
+            "role": t.role,
+            "content": t.content,
+            "timestamp": t.timestamp,
+            "source": t.source,
+        }
+        if t.role == "assistant":
+            imgs = comfy_urls_from_text(t.content)
+            if imgs:
+                row["images"] = imgs
+        turns.append(row)
+    if session.agent == "aetheria":
+        from soveryn.app.heartbeat_in_messages import fold_heartbeat_notes
+
+        turns = fold_heartbeat_notes(conv, session, turns)
     return jsonify({
         "session_id": session_id,
         "agent": session.agent,
-        "turns": [
-            {"role": t.role, "content": t.content, "timestamp": t.timestamp, "source": t.source}
-            for t in history
-        ],
+        "turns": turns,
     }), 200
 
 
@@ -265,12 +356,28 @@ def chat():
         return _err("missing_field", "Required field: session_id", 400)
 
     message = body.get("message")
-    if not isinstance(message, str) or not message.strip():
-        return _err("invalid_message", "message must be a non-empty string", 400)
+    if not isinstance(message, str):
+        return _err("invalid_message", "message must be a string", 400)
 
-    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    images, pdfs, attach_err = _validate_attachments(body.get("attachments"), agent)
     if attach_err is not None:
         return attach_err
+
+    if not message.strip() and not images and not pdfs:
+        return _err("invalid_message", "message must be a non-empty string", 400)
+
+    # PDF intake: splice extracted text into the turn before the loop.
+    # Images still go through AgentLoop vision splice unchanged.
+    if pdfs:
+        message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
+    elif not message.strip():
+        message = "(image)"
+    if images:
+        from soveryn.platform.ledgers.auto import apply_chat_receipt
+
+        ledger_block = apply_chat_receipt(message, images)
+        if ledger_block:
+            message = ledger_block + "\n\n" + message
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -299,9 +406,27 @@ def chat():
 
     # AgentLoop validates session ownership BEFORE chat; we translate its
     # AgentLoopError into the right HTTP status here.
+    from soveryn.rooms import context as room_ctx
+
+    env = state.get("env")
+    root = str(getattr(env, "data_root", "")) if env is not None else ""
+    tok_dm = room_ctx.dm_session_id.set(session_id if agent == "aetheria" else None)
+    tok_root = room_ctx.data_root.set(root or None)
+    # Room sessions use title [room:…] — mark room context for projection.
+    room_sid = None
     try:
+        meta = state["conv_store"].get_session(session_id)
+        if meta and meta.title and str(meta.title).startswith("[room:"):
+            room_sid = session_id
+    except Exception:
+        pass
+    tok_room = room_ctx.room_session_id.set(room_sid)
+    try:
+        from soveryn.platform.intake.turn_files import files_from_pdf_data_urls
+
         response = loop.process_message(
-            session_id, message, attachments=attachments, source=source,
+            session_id, message, attachments=images, source=source,
+            files=files_from_pdf_data_urls(pdfs) if pdfs else None,
         )
     except AgentLoopError as e:
         msg = str(e)
@@ -317,6 +442,10 @@ def chat():
     except RoutingError as e:
         # Shouldn't happen for an active agent, but be honest if it does.
         return _err("unknown_agent", str(e), 400)
+    finally:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
 
     return jsonify({
         "agent": agent,
@@ -361,6 +490,15 @@ def _event_to_dict(event: AgentStreamEvent) -> dict | None:
             "name": event.name,
             "args": event.args,
         }
+    if isinstance(event, ApprovalPendingEvent):
+        return {
+            "type": "approval_pending",
+            "approval_id": event.approval_id,
+            "citizen": event.citizen,
+            "tool": event.tool,
+            "args": event.args,
+            "call_id": event.call_id,
+        }
     if isinstance(event, ToolResultEvent):
         return {
             "type": "tool_result",
@@ -389,12 +527,26 @@ def chat_stream():
         return _err("missing_field", "Required field: session_id", 400)
 
     message = body.get("message")
-    if not isinstance(message, str) or not message.strip():
-        return _err("invalid_message", "message must be a non-empty string", 400)
+    if not isinstance(message, str):
+        return _err("invalid_message", "message must be a string", 400)
 
-    attachments, attach_err = _validate_attachments(body.get("attachments"), agent)
+    images, pdfs, attach_err = _validate_attachments(body.get("attachments"), agent)
     if attach_err is not None:
         return attach_err
+
+    if not message.strip() and not images and not pdfs:
+        return _err("invalid_message", "message must be a non-empty string", 400)
+
+    if pdfs:
+        message = _splice_pdf_attachments(message.strip() or "(pdf)", pdfs)
+    elif not message.strip():
+        message = "(image)"
+    if images:
+        from soveryn.platform.ledgers.auto import apply_chat_receipt
+
+        ledger_block = apply_chat_receipt(message, images)
+        if ledger_block:
+            message = ledger_block + "\n\n" + message
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -438,13 +590,60 @@ def chat_stream():
     if loop is None:
         return _err("unknown_agent", f"No loop registered for {agent!r}", 400)
 
+    from soveryn.app.deferred_chat import ACK, try_defer_chat
+
+    deferred_id = try_defer_chat(
+        agent=agent, session_id=session_id, message=message, state=state,
+    )
+    if deferred_id:
+        def _generate_deferred():
+            yield _sse({"type": "token", "delta": ACK})
+            yield _sse({
+                "type": "done",
+                "content": ACK,
+                "finish_reason": "stop",
+                "deferred": True,
+                "commission_id": deferred_id,
+                "tool_calls": None,
+                "usage": None,
+                "context_usage": None,
+            })
+
+        return Response(
+            stream_with_context(_generate_deferred()),
+            mimetype="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+                "Content-Type": "text/event-stream; charset=utf-8",
+            },
+        )
+
+    from soveryn.rooms import context as room_ctx
+
+    env = state.get("env")
+    root = str(getattr(env, "data_root", "")) if env is not None else ""
+    tok_dm = room_ctx.dm_session_id.set(session_id if agent == "aetheria" else None)
+    tok_root = room_ctx.data_root.set(root or None)
+    room_sid = None
+    try:
+        meta = state["conv_store"].get_session(session_id)
+        if meta and meta.title and str(meta.title).startswith("[room:"):
+            room_sid = session_id
+    except Exception:
+        pass
+    tok_room = room_ctx.room_session_id.set(room_sid)
+
     # ── Open the AgentLoop stream and pump the first chunk *before* returning
     # the SSE Response. This lets setup errors (session mismatch, recall
     # failure, upstream HTTP error before any chunk) translate to JSON 4xx/5xx
     # per constraint 3, rather than appearing inside a half-opened text/event-stream.
     try:
+        from soveryn.platform.intake.turn_files import files_from_pdf_data_urls
+
         event_iter = loop.process_message_stream(
-            session_id, message, attachments=attachments, source=source,
+            session_id, message, attachments=images, source=source,
+            files=files_from_pdf_data_urls(pdfs) if pdfs else None,
         )
         # Pre-fetch the first event so setup errors surface here.
         try:
@@ -452,8 +651,14 @@ def chat_stream():
         except StopIteration:
             # Generator returned without yielding anything (shouldn't happen on
             # success; AgentLoop always yields at least a DoneEvent or ErrorEvent).
+            room_ctx.dm_session_id.reset(tok_dm)
+            room_ctx.data_root.reset(tok_root)
+            room_ctx.room_session_id.reset(tok_room)
             return _err("internal_error", "AgentLoop yielded no events", 500)
     except AgentLoopError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         msg = str(e)
         if "does not exist" in msg:
             return _err("missing_session", msg, 404)
@@ -461,24 +666,111 @@ def chat_stream():
             return _err("session_agent_mismatch", msg, 409)
         return _err("internal_error", msg, 500)
     except LlamaServerTimeout as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_timeout", str(e), 504)
     except LlamaServerError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_server_error", str(e), 502)
     except RoutingError as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("unknown_agent", str(e), 400)
     except Exception as e:
+        room_ctx.dm_session_id.reset(tok_dm)
+        room_ctx.data_root.reset(tok_root)
+        room_ctx.room_session_id.reset(tok_room)
         return _err("chat_server_error", f"{type(e).__name__}: {e}", 502)
 
-    # ── Setup OK. Now wrap the iterator in an SSE response.
+    # ── Setup OK. Pump AgentLoop in a daemon thread; SSE only observes.
+    # Mobile Messages (iOS) cancels fetch on background/sleep. If the agent
+    # generator lived inside the WSGI response iterator, GeneratorExit aborted
+    # Eve mid tool/vision turn. Owning the turn off the socket means the
+    # assistant reply is still saved; the phone reconnects and polls history.
+    import logging
+    import queue
+    import threading
+
+    log = logging.getLogger("soveryn.app.routes.chat")
+    dm_val = session_id if agent == "aetheria" else None
+    root_val = root or None
+    room_val = room_sid
+    app_obj = current_app._get_current_object()
+    # Request-thread ContextVars are not needed by the producer.
+    room_ctx.dm_session_id.reset(tok_dm)
+    room_ctx.data_root.reset(tok_root)
+    room_ctx.room_session_id.reset(tok_room)
+
+    _DONE = object()
+    out_q: queue.Queue = queue.Queue()
+
+    def _produce() -> None:
+        t_dm = room_ctx.dm_session_id.set(dm_val)
+        t_root = room_ctx.data_root.set(root_val)
+        t_room = room_ctx.room_session_id.set(room_val)
+        try:
+            with app_obj.app_context():
+                first_payload = _event_to_dict(first_event)
+                if first_payload is not None:
+                    out_q.put(_sse(first_payload))
+                for event in event_iter:
+                    payload = _event_to_dict(event)
+                    if payload is not None:
+                        out_q.put(_sse(payload))
+        except Exception:
+            log.exception(
+                "chat_stream producer failed agent=%s session=%s",
+                agent,
+                session_id,
+            )
+            try:
+                out_q.put(_sse({
+                    "type": "error",
+                    "code": "internal_error",
+                    "message": "turn failed after client detach",
+                }))
+            except Exception:
+                pass
+        finally:
+            room_ctx.dm_session_id.reset(t_dm)
+            room_ctx.data_root.reset(t_root)
+            room_ctx.room_session_id.reset(t_room)
+            out_q.put(_DONE)
+
+    threading.Thread(
+        target=_produce,
+        name=f"chat-turn-{agent}",
+        daemon=True,
+    ).start()
+
     def _generate():
-        # First event was already pulled — emit it (skip if voice-only).
-        first_payload = _event_to_dict(first_event)
-        if first_payload is not None:
-            yield _sse(first_payload)
-        for event in event_iter:
-            payload = _event_to_dict(event)
-            if payload is not None:
-                yield _sse(payload)
+        # Immediate byte so mobile proxies / Safari open the SSE body before
+        # Eve's verification-gated first token (which can take tens of seconds).
+        yield ": connected\n\n"
+        try:
+            while True:
+                try:
+                    item = out_q.get(timeout=1.0)
+                except queue.Empty:
+                    # Keepalive comment; does not affect JSON event parsing.
+                    yield ": ka\n\n"
+                    continue
+                if item is _DONE:
+                    break
+                yield item
+        except GeneratorExit:
+            # Client gone — producer keeps running; reply lands in history.
+            log.info(
+                "chat_stream client disconnect; turn continues server-side "
+                "agent=%s session=%s",
+                agent,
+                session_id,
+            )
+            return
 
     return Response(
         stream_with_context(_generate()),

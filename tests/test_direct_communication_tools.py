@@ -36,14 +36,14 @@ def test_direct_message_agent_rejects_missing_coord_node_id():
     tool = _build_tool()
     with pytest.raises(ToolArgError, match="coord_node_id"):
         tool.handler({
-            "target": "vett",
+            "target": "eve",
             "message": "do X",
             # coord_node_id deliberately absent
         })
 
 
 def test_direct_message_agent_rejects_invalid_target():
-    """Only vett or scotty — Aetheria can't direct-message herself."""
+    """Only Eve/Kernel — Aetheria can't direct-message herself."""
     tool = _build_tool()
     with pytest.raises(ToolArgError, match="target"):
         tool.handler({
@@ -61,11 +61,21 @@ def test_direct_message_agent_rejects_unknown_target():
         })
 
 
+@pytest.mark.parametrize("parked", ["vett", "scotty"])
+def test_direct_message_agent_rejects_parked_vett_scotty(parked):
+    tool = _build_tool()
+    with pytest.raises(ToolArgError, match="target"):
+        tool.handler({
+            "target": parked,
+            "message": "x", "coord_node_id": "node-1",
+        })
+
+
 def test_direct_message_agent_rejects_invalid_mode():
     tool = _build_tool()
     with pytest.raises(ToolArgError, match="mode"):
         tool.handler({
-            "target": "vett",
+            "target": "eve",
             "message": "x", "coord_node_id": "node-1", "mode": "shout",
         })
 
@@ -74,17 +84,17 @@ def test_direct_message_agent_rejects_empty_message():
     tool = _build_tool()
     with pytest.raises(ToolArgError, match="message"):
         tool.handler({
-            "target": "vett",
+            "target": "eve",
             "message": "  ", "coord_node_id": "node-1",
         })
 
 
 def test_direct_message_agent_execute_mode_prefixes_directive():
-    """The wire message Vett sees is prefixed with [DIRECTIVE FROM AETHERIA, ...]."""
+    """The wire message the peer sees is prefixed with [DIRECTIVE FROM AETHERIA, ...]."""
     fake_poster, posted_calls = _ok_poster_factory(content="ack")
     tool = _build_tool(http_poster=fake_poster)
     result = tool.handler({
-        "target": "vett",
+        "target": "eve",
         "message": "process the new audit findings",
         "coord_node_id": "node-42",
         "mode": "execute",
@@ -93,11 +103,11 @@ def test_direct_message_agent_execute_mode_prefixes_directive():
     assert len(posted_calls) == 2
     chat_call = [c for c in posted_calls if c["url"].endswith("/chat")][0]
     body = chat_call["body"]
-    assert body["agent"] == "vett"
+    assert body["agent"] == "eve"
     assert "[DIRECTIVE FROM AETHERIA" in body["message"]
     assert "coord:node-42" in body["message"]
     assert "process the new audit findings" in body["message"]
-    assert result["target"] == "vett"
+    assert result["target"] == "eve"
     assert result["response_content"] == "ack"
     assert result["coord_node_id"] == "node-42"
     assert result["finish_reason"] == "stop"
@@ -108,7 +118,7 @@ def test_direct_message_agent_query_mode_prefixes_query():
     fake_poster, posted_calls = _ok_poster_factory(content="raw obs")
     tool = _build_tool(http_poster=fake_poster)
     tool.handler({
-        "target": "vett",
+        "target": "eve",
         "message": "what friction are you seeing right now?",
         "coord_node_id": "node-9",
         "mode": "query",
@@ -124,7 +134,7 @@ def test_direct_message_agent_default_mode_is_execute():
     fake_poster, posted_calls = _ok_poster_factory()
     tool = _build_tool(http_poster=fake_poster)
     tool.handler({
-        "target": "vett", "message": "x", "coord_node_id": "node-1",
+        "target": "eve", "message": "x", "coord_node_id": "node-1",
     })  # no mode arg
     chat_call = [c for c in posted_calls if c["url"].endswith("/chat")][0]
     assert "[DIRECTIVE FROM AETHERIA" in chat_call["body"]["message"]
@@ -149,14 +159,14 @@ def test_direct_message_agent_writes_lattice_forensic_record_on_success():
     fake_poster, _ = _ok_poster_factory()
     tool = _build_tool(edge_writer=fake_edge, http_poster=fake_poster)
     result = tool.handler({
-        "target": "vett", "message": "do X",
+        "target": "eve", "message": "do X",
         "coord_node_id": "node-1", "mode": "execute",
     })
     assert len(edge_calls) == 1
     call = edge_calls[0]
     assert call["coord_node_id"] == "node-1"
     assert call["sender"] == "aetheria"
-    assert call["target"] == "vett"
+    assert call["target"] == "eve"
     assert call["mode"] == "execute"
     assert "do X" in call["message_head"]
     assert result["edge_id"] == "edge-abc"
@@ -171,7 +181,7 @@ def test_direct_message_agent_continues_when_edge_writer_raises():
     fake_poster, _ = _ok_poster_factory()
     tool = _build_tool(edge_writer=boom_edge, http_poster=fake_poster)
     result = tool.handler({
-        "target": "vett", "message": "do X",
+        "target": "eve", "message": "do X",
         "coord_node_id": "node-1", "mode": "execute",
     })
     # Tool result reflects the chat response, not the audit failure
@@ -187,7 +197,7 @@ def test_direct_message_agent_returns_structured_error_when_rate_capped():
     fake_poster, posted_calls = _ok_poster_factory()
     tool = _build_tool(rate_limiter=limiter, http_poster=fake_poster)
     result = tool.handler({
-        "target": "vett", "message": "x",
+        "target": "eve", "message": "x",
         "coord_node_id": "node-1", "mode": "execute",
     })
     assert result.get("error") == "rate_limited"
@@ -206,7 +216,7 @@ def test_direct_message_agent_returns_structured_error_on_chat_failure():
         raise urllib.error.HTTPError(url, 502, "bad gateway", hdrs={}, fp=io.BytesIO(b""))
     tool = _build_tool(http_poster=failing_poster)
     result = tool.handler({
-        "target": "vett", "message": "x",
+        "target": "eve", "message": "x",
         "coord_node_id": "node-1", "mode": "execute",
     })
     assert result.get("error") == "dispatch_failed"
@@ -223,7 +233,7 @@ def test_direct_message_agent_returns_structured_error_on_session_failure():
         return {"content": "shouldn't reach"}
     tool = _build_tool(http_poster=failing_poster)
     result = tool.handler({
-        "target": "vett", "message": "x",
+        "target": "eve", "message": "x",
         "coord_node_id": "node-1", "mode": "execute",
     })
     assert result.get("error") == "dispatch_failed"

@@ -116,3 +116,23 @@ def test_empty_gpu_listing_is_also_a_failure(monkeypatch):
     monkeypatch.setattr(vitals.subprocess, "run", lambda *a, **k: _Result())
     with pytest.raises(vitals.GpuReadError):
         vitals._read_gpu_headroom_rows()
+
+
+def test_dry_run_never_writes_the_production_bus(tmp_path, monkeypatch):
+    """Regression 2026-09-23: a sinks-less dry-run surface used to route bus
+    writes to the REAL ares_bus.sqlite3, so every pytest run injected the
+    synthetic gpu.headroom:gpu0 (free_mb=942) and network.listener:n1
+    findings Jon kept seeing in Mission Control. Dry-run must write nothing."""
+    monkeypatch.setenv("SOVERYN_ARES_BUS_PATH", str(tmp_path / "bus.sqlite3"))
+    d = AresDaemonSurface(collectors=[lambda: (_finding(),)])  # dry_run default
+    d.scan_once()
+    bus = tmp_path / "bus.sqlite3"
+    if bus.exists():  # SQLiteBus() creates the file on init; rows are the crime
+        import sqlite3
+        conn = sqlite3.connect(str(bus))
+        n = conn.execute("SELECT COUNT(*) FROM events").fetchone()[0]
+        conn.close()
+        assert n == 0, (
+            f"dry-run scan wrote {n} synthetic event(s) to the bus — these "
+            "land in the production ares_bus.sqlite3 and page Jon forever"
+        )

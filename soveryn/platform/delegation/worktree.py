@@ -144,6 +144,39 @@ def merge_worktree(
             return False, message.strip()
 
 
+def preserve_branch(repo_root: Path | str, branch: str, tag: str) -> str | None:
+    """Tag a branch's head so its work survives the branch being deleted.
+
+    Rejecting a task calls ``remove_worktree`` with ``delete_branch=True``, which
+    runs ``git branch -D``. That leaves the commit as a dangling object — still
+    recoverable by sha, and gone at the next ``git gc``.
+
+    On 2026-08-07 a rejected task took 1,138 lines of working, tested code with
+    it. The work was recovered only because someone checked whether the branch
+    still existed; the rejection reported success either way, and the review
+    feedback told the agent to "build from branch task/…" — a branch the same
+    request had just destroyed.
+
+    Rejection should be reversible. A tag costs nothing, keeps the branch list
+    clean, and names why it exists. Returns the tag name, or None if tagging
+    failed — callers must treat None as "the work is NOT preserved", never as
+    routine.
+    """
+    repo_root = Path(repo_root).resolve()
+    try:
+        with _REPO_GIT_LOCK:
+            _git(repo_root, "rev-parse", "--verify", branch)
+            _git(repo_root, "tag", "-f", tag, branch)
+        logger.info("preserved %s as tag %s before deletion", branch, tag)
+        return tag
+    except Exception:
+        logger.exception(
+            "preserve_branch: could not tag %s as %s — the work will be LOST "
+            "when the branch is deleted", branch, tag,
+        )
+        return None
+
+
 def remove_worktree(
     repo_root: Path | str,
     worktree_path: Path | str,

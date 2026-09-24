@@ -67,3 +67,31 @@ class ThoughtsLog:
             if stripped:
                 return json.loads(stripped)
         return None
+
+    def last_standing_note(self, *, limit: int = 64) -> str:
+        """Most recent non-empty pulse note, walking back past unchanged skips.
+
+        Unchanged skips write ``note: ""`` so they do not re-surface as
+        "reflected" in Command Center; standing-note continuity still needs
+        the prior real admission / reflection.
+        """
+        if not self._path.exists():
+            return ""
+        with self._path.open("r", encoding="utf-8") as fh:
+            lines = fh.readlines()
+        seen = 0
+        for line in reversed(lines):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            seen += 1
+            if seen > limit:
+                break
+            try:
+                rec = json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+            note = str((rec or {}).get("note") or "").strip()
+            if note:
+                return note
+        return ""

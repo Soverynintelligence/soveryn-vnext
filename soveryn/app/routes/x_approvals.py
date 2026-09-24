@@ -33,9 +33,6 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("x_approvals", __name__)
 
-AGENT = "aetheria"
-
-
 def _ext() -> dict:
     return current_app.extensions.get("soveryn") or {}
 
@@ -69,8 +66,8 @@ def x_staged_pending():
         staged = _ext().get("x_staged")
         if staged is None:
             return jsonify([]), 200
-        post = staged.pending(AGENT)
-        return jsonify([_post_to_dict(post)] if post else []), 200
+        posts = staged.pending_all()
+        return jsonify([_post_to_dict(p) for p in posts]), 200
     except Exception:
         logger.exception("x_staged_pending: unexpected error; returning []")
         return jsonify([]), 200
@@ -86,15 +83,9 @@ def x_staged_approve(post_id: str):
     if staged is None or publisher_fn is None or x_memory_fn is None:
         return jsonify({"error": "x presence is not wired"}), 503
 
-    post = staged.pending(AGENT)
-    if post is None:
+    post = staged.get(post_id)
+    if post is None or post.state != "proposed":
         return jsonify({"error": "no staged post pending"}), 404
-    if post.id != post_id:
-        # Guards a stale panel: the post on screen is not the one pending now.
-        return jsonify({
-            "error": "staged post changed since this view was loaded",
-            "pending_id": post.id,
-        }), 409
 
     from soveryn.agents.presence.resolver import publish_staged
     result = publish_staged(
@@ -122,14 +113,9 @@ def x_staged_reject(post_id: str):
     if staged is None or rejection_fn is None:
         return jsonify({"error": "x presence is not wired"}), 503
 
-    post = staged.pending(AGENT)
-    if post is None:
+    post = staged.get(post_id)
+    if post is None or post.state != "proposed":
         return jsonify({"error": "no staged post pending"}), 404
-    if post.id != post_id:
-        return jsonify({
-            "error": "staged post changed since this view was loaded",
-            "pending_id": post.id,
-        }), 409
 
     reason = ""
     if request.is_json:

@@ -30,6 +30,14 @@ Expected ``current`` snapshot shape (Task 7 reference)::
             "recent_window_minutes":            int,
             "new_contradiction_flag_count":     int,
         },
+        "house": {
+            "automations_unread_count":        int,
+            "automations_inbox_latest_id":     str | None,
+            "gate_pending_count":              int,
+            "triage_open_count":               int,
+            "on_duty_count":                   int,
+            "active_now_count":                int,
+        },
     }
 
 ``prev_record`` is a ThoughtsLog record dict that carries a ``"snapshot"`` key
@@ -56,6 +64,17 @@ _BOARD_COUNT_FIELDS: tuple[tuple[str, str], ...] = (
     ("open_friction_count",     "open friction count"),
     ("stalled_blueprint_count", "stalled blueprint count"),
     ("blocked_blueprint_count", "blocked blueprint count"),
+)
+
+# House-work counts (automations / gate / triage / active-now). Any change wakes
+# the pulse even when the coord board is still — 2026-08-20: skip-unchanged had
+# silenced Aetheria all day while the house gained Results, Gate, skills.
+_HOUSE_COUNT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("automations_unread_count", "automations unread"),
+    ("gate_pending_count",       "gate pending"),
+    ("triage_open_count",        "triage open"),
+    ("on_duty_count",            "citizens on duty"),
+    ("active_now_count",         "active now"),
 )
 
 # Material-signal identity key: (kind, ref).  Two signals with the same kind+ref
@@ -109,6 +128,22 @@ def compute_delta(current: dict, prev_record: dict | None) -> dict:
             kind = sig.get("kind", "unknown")
             detail = sig.get("detail", "")
             items.append(f"new {kind} signal: {ref} — {detail}")
+
+    # ── House work (automations / gate / triage / active-now) ─────────────────
+    current_house: dict = current.get("house") or {}
+    prev_house: dict = prev_snapshot.get("house") or {}
+    # Missing house on prev (old thoughts-log rows) → treat as empty prev so the
+    # first pulse after upgrade sees a change if any house signal is non-zero.
+    for field, label in _HOUSE_COUNT_FIELDS:
+        cur_val = current_house.get(field, 0)
+        prv_val = prev_house.get(field, 0)
+        if cur_val != prv_val:
+            items.append(f"{label} changed: {prv_val} → {cur_val}")
+
+    cur_latest = current_house.get("automations_inbox_latest_id")
+    prv_latest = prev_house.get("automations_inbox_latest_id")
+    if cur_latest != prv_latest and cur_latest:
+        items.append(f"automations inbox latest: {prv_latest!r} → {cur_latest!r}")
 
     # ── Result ────────────────────────────────────────────────────────────────
     return {"changed": bool(items), "items": items}

@@ -195,3 +195,48 @@ def test_signal_cli_provider_returns_false_on_nonzero_exit(monkeypatch):
     provider = SignalCliProvider(bot_number="+15550000001", binary="/usr/bin/signal-cli")
 
     assert provider.send("Ares warning", "+15550000002") is False
+
+
+# --- The two brakes are independent (2026-08-10) -----------------------------
+#
+# They were one `priority` flag, which meant a CRITICAL could only escape quiet
+# hours by also escaping the flap cap. Because only EMERGENCY was granted it,
+# every CRITICAL raised between 23:00 and 07:00 was dropped with reason
+# "quiet-hours" — 37 minutes of surface.down that never reached the phone.
+
+_NIGHT = datetime(2026, 8, 10, 1, 0, tzinfo=timezone.utc)
+
+
+def test_bypass_quiet_hours_wakes_you_without_escaping_the_cap():
+    provider = FakeProvider()
+    limiter = RateLimiter()
+    sender = _sender(provider=provider, limiter=limiter, now=_NIGHT)
+
+    assert sender.send("first", bypass_quiet_hours=True).sent is True
+
+    for _ in range(sender.config.hourly_cap):
+        limiter.record(_NIGHT)
+    result = sender.send("after the cap is spent", bypass_quiet_hours=True)
+    assert result.sent is False
+    assert result.reason == "rate-capped"
+
+
+def test_bypass_rate_cap_alone_is_still_silenced_by_quiet_hours():
+    sender = _sender(now=_NIGHT)
+    result = sender.send("loud but nocturnal", bypass_rate_cap=True)
+    assert result.sent is False
+    assert result.reason == "quiet-hours"
+
+
+def test_neither_brake_means_quiet_hours_still_applies():
+    sender = _sender(now=_NIGHT)
+    assert sender.send("ordinary").reason == "quiet-hours"
+
+
+def test_priority_still_means_both_for_the_medic():
+    # soveryn/platform/medic/medic.py:214 passes priority=. Keep it working.
+    limiter = RateLimiter()
+    sender = _sender(limiter=limiter, now=_NIGHT)
+    for _ in range(sender.config.hourly_cap):
+        limiter.record(_NIGHT)
+    assert sender.send("medic escalation", priority=True).sent is True

@@ -1,0 +1,12 @@
+[Unit]
+Description=SOVERYN eyes — screen presence on trust (Jon's offer, revocable)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python /home/jon-deoliveira/soveryn_vnext/scripts/eyesd.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

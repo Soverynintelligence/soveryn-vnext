@@ -23,6 +23,11 @@ Thumbs.db
 *.swp
 *~
 
+# Aider local session junk
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v4/
+
 # Runtime
 *.log
 
@@ -38,9 +43,14 @@ data/ares/
 data/telemetry/
 # Conversation + lattice DBs, pinned memory, salience, .migrated markers.
 # Souls/ IS tracked (character config) — kept via the negation below.
-data/memory/
+# Exclude the CONTENTS, not the directory: git will not descend into an
+# excluded directory, so `data/memory/` made the souls negations below
+# unreachable. aetheria.origin.md was silently untracked because of it.
+data/memory/*
 !data/memory/souls/
 !data/memory/souls/**
+!data/memory/skills/
+!data/memory/skills/**
 data/aetheria_heartbeat_thoughts*
 data/heartbeat_deploy_started_at
 data/black_box/
@@ -54,6 +64,21 @@ data/router-presets.ini
 # Eval stderr capture (debug noise; .json artifacts stay committed)
 eval_runs/*.stderr
 
+# Eve CWG Instagram desk — session cookies, not git
+data/eve_ig_profile/
+# Per-agent browser desks (Google Ads/Business, etc.) — cookies, not git
+data/desks/
+# Fat tool-result spills from the 32k lean-tail (recoverable stubs in-prompt)
+data/tool_spill/
+data/citizen_shapes.json
+data/kb/
+data/intake/**
+!data/intake/README.md
+
+# Pi harness runtime (auth tokens if ever set, session transcripts)
+config/pi/auth.json
+config/pi/sessions/
+
 # Local environment secrets
 .env
 .env.local
@@ -61,3 +86,80 @@ eval_runs/*.stderr
 
 # Runtime data backups (created by scripts/backup_soveryn.sh — large, local-only)
 backups/
+
+# Thermal samples: a couple of MB a month of machine readings, regenerated
+# continuously. The collector is code and belongs in git; the log does not.
+data/thermal/
+
+# Operational noise (medic, watchdog, X capture, heartbeat) — live state only
+data/medic/
+data/watchdog/
+data/surfaces/
+data/xid_captures/
+data/x_daily_post_state.json
+data/x_rejections.jsonl
+data/heartbeat_thoughts.jsonl
+data/ops/
+
+# Local scratch, Cloudflare wrangler cache, backup copies of configs
+scratch/
+.wrangler/
+*.bak
+*.bak-*
+**/*.bak
+**/*.bak-*
+runtime/*.bak*
+soveryn/config/*.bak*
+
+# ActTruth / Continuum / Kernel HITL live ledgers (regenerated)
+data/acttruth/
+data/automations/
+data/media/
+data/continuum/
+data/kernel_proposals/
+
+# Local bake / spike scratch
+tmp/
+
+# OpenCode local install deps (config + plugins are tracked)
+config/opencode/node_modules/
+
+# Package build artifacts
+packages/*/build/
+packages/*/dist/
+
+# PondWright / AKT secrets live under ~/.config/soveryn/
+
+# Runtime group-room sidecars (not source)
+data/rooms/
+
+# Canva Connect OAuth tokens (never commit)
+data/canva/
+
+# Google Business Profile OAuth tokens (never commit)
+data/gbp/
+
+# Google Calendar OAuth tokens (never commit)
+data/gcal/
+
+# Live tax books and receipt evidence (EIN, address, invoices). Public repo.
+# Keep the tax-cwg README so Eve can see COI vs receipt routing.
+docs/ops/tax/
+docs/ops/tax-cwg/*
+!docs/ops/tax-cwg/README.md
+# Live CWG compliance docs (COI, titles, contracts). Shelf markers stay.
+docs/ops/cwg-business/**/*
+!docs/ops/cwg-business/**/
+!docs/ops/cwg-business/README.md
+!docs/ops/cwg-business/**/.gitkeep
+
+# SOVERYN CLI harness — runtime state / secrets / backups, never commit
+.soveryn/
+packages/soveryn-cli/.soveryn/
+config/pi/sessions/
+config/soveryn-cli/sessions/
+config/pi/auth.json
+config/soveryn-cli/auth.json
+*.bak
+*.bak-*
+docs/runtime-config/*.bak-*

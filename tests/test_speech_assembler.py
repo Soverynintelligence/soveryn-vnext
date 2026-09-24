@@ -1,4 +1,5 @@
-from soveryn.agents.aetheria.speech_assembler import assemble_recall
+from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall, assemble_recall
+from soveryn.platform.lattice.legacy import Node
 from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
 from soveryn.platform.lattice.types import Entry
 
@@ -151,6 +152,47 @@ def test_unsupplied_content_cannot_appear_in_assembled_context() -> None:
     )
 
     assert unsupplied not in rendered
+
+def test_assemble_ranked_recall_lists_locked_facts_ahead_of_cosine() -> None:
+    fact = Node(
+        id="fact-1",
+        type="semantic",
+        layer="private",
+        agent="aetheria",
+        content="CWG phone is (910) 581-3970",
+        intensity=1.0,
+        salience=1.0,
+        access_count=0,
+        tags=("canonical_fact",),
+        created_at="t",
+        updated_at="t",
+        embedding=None,
+        intent=None,
+        provenance=None,
+    )
+    other = Node(
+        id="story-1",
+        type="episodic",
+        layer="private",
+        agent="aetheria",
+        content="we talked about ponds",
+        intensity=0.3,
+        salience=0.3,
+        access_count=0,
+        tags=(),
+        created_at="t",
+        updated_at="t",
+        embedding=None,
+        intent=None,
+        provenance={"cls": "witnessed", "source": "s", "confidence": 0.9,
+                    "temporal_context": "t", "generator": "g", "chain": [],
+                    "derived_from": []},
+    )
+    rendered = assemble_ranked_recall(((other, 0.99),), fact_nodes=(fact,))
+    assert rendered.startswith("Locked facts:")
+    assert "(910) 581-3970" in rendered
+    assert rendered.index("Locked facts:") < rendered.index("Stateable recall:")
+
 
 def test_empty_entries_produce_empty_recall_context() -> None:
     assert assemble_recall(()) == ""

@@ -204,22 +204,22 @@ def test_agent_loop_no_brief_when_continuity_config_is_None(conv_store):
 # ─── 5. No brief for non-Aetheria agents ─────────────────────────────────────
 
 def test_agent_loop_no_brief_for_non_aetheria_agents(conv_store):
-    current = conv_store.new_session("vett", title="vett research")
-    _seed_signal_session(conv_store, agent="vett", title="vett signal-like other")
+    current = conv_store.new_session("eve", title="eve research")
+    _seed_signal_session(conv_store, agent="eve", title="eve signal-like other")
 
     fake = _CapturingChat()
     loop = _make_loop(
         conv_store,
-        agent="vett",
+        agent="eve",
         chat_fn=fake,
         continuity_config=ContinuityConfig(enabled=True, window_hours=24),
-        pinned_text="",  # Vett doesn't carry pinned in production
+        pinned_text="",  # Eve doesn't carry pinned in production
     )
     loop.process_message(current, "hi")
 
     systems = _system_contents(fake.calls[0]["request"])
     assert not any(BLOCK_HEADER in s for s in systems), (
-        f"Vett must not receive brief; got {systems!r}"
+        f"Eve must not receive brief; got {systems!r}"
     )
 
 
@@ -437,7 +437,7 @@ def test_agent_loop_active_focus_cache_invalidates_on_board_change(conv_store, t
 
     # A new directive lands on the boards between turns.
     store.create_node(
-        board=CoordBoard.SIGNAL, owner="vett",
+        board=CoordBoard.SIGNAL, owner="eve",
         content="New EU sovereign-AI funding window opened",
     )
 
@@ -448,53 +448,53 @@ def test_agent_loop_active_focus_cache_invalidates_on_board_change(conv_store, t
     assert any("EU sovereign-AI funding" in s for s in systems_2)
 
 
-# ─── 12. Vett gets Active Focus (board awareness), not cross-session tails ────
+# ─── 12. Eve gets Active Focus (board awareness), not cross-session tails ────
 
-def test_vett_gets_active_focus_but_not_cross_session_tails(conv_store, tmp_path):
+def test_eve_gets_active_focus_but_not_cross_session_tails(conv_store, tmp_path):
     from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
     from soveryn.platform.coordination.types import CoordBoard
 
-    current = conv_store.new_session("vett", title="vett research")
-    # A peer (signal-like) session exists — Aetheria would surface it; Vett must NOT.
-    _seed_signal_session(conv_store, agent="vett", title="[signal] vett other")
+    current = conv_store.new_session("eve", title="eve research")
+    # A peer (signal-like) session exists — Aetheria would surface it; Eve must NOT.
+    _seed_signal_session(conv_store, agent="eve", title="[signal] eve other")
     store = _coord_store(tmp_path)
-    store.create_node(board=CoordBoard.BLUEPRINT, owner="vett",
+    store.create_node(board=CoordBoard.BLUEPRINT, owner="eve",
                       content="DeerFlow architecture comparison")
 
     fake = _CapturingChat()
     loop = _make_loop(
-        conv_store, agent="vett", chat_fn=fake, pinned_text="",
+        conv_store, agent="eve", chat_fn=fake, pinned_text="",
         continuity_config=ContinuityConfig(enabled=True, window_hours=24),
         coord_store=store,
     )
     loop.process_message(current, "hi")
 
     systems = _system_contents(fake.calls[0]["request"])
-    assert any(AF_HEADER in s for s in systems), "Vett should get Active Focus"
+    assert any(AF_HEADER in s for s in systems), "Eve should get Active Focus"
     assert any("DeerFlow architecture" in s for s in systems)
     # Cross-session recent-activity brief (Aetheria's multi-rail thing) stays off.
     assert not any(BLOCK_HEADER in s for s in systems), (
-        "Vett must NOT get cross-session tails"
+        "Eve must NOT get cross-session tails"
     )
 
 
-def test_vett_active_focus_shows_her_delivery_state_to_aetheria(conv_store, tmp_path):
-    """Vett's own node reads 'sent to aetheria, received' once the ledger shows
+def test_eve_active_focus_shows_her_delivery_state_to_aetheria(conv_store, tmp_path):
+    """Eve's own node reads 'sent to aetheria, received' once the ledger shows
     Aetheria was triggered — the receipt mirror of Aetheria's dispatch view."""
     import sqlite3
     from soveryn.platform.continuity.active_focus import BLOCK_HEADER as AF_HEADER
     from soveryn.platform.coordination.types import CoordBoard
 
-    current = conv_store.new_session("vett", title="vett research")
+    current = conv_store.new_session("eve", title="eve research")
     store = _coord_store(tmp_path)
-    n = store.create_node(board=CoordBoard.SIGNAL, owner="vett",
+    n = store.create_node(board=CoordBoard.SIGNAL, owner="eve",
                           content="new EU funding lead")
     with sqlite3.connect(store.db_path) as conn:
         conn.execute("UPDATE coord_event_log SET triggered_agents='aetheria' WHERE node_id=?", (n.id,))
 
     fake = _CapturingChat()
     loop = _make_loop(
-        conv_store, agent="vett", chat_fn=fake, pinned_text="",
+        conv_store, agent="eve", chat_fn=fake, pinned_text="",
         continuity_config=ContinuityConfig(enabled=True, window_hours=24),
         coord_store=store,
     )

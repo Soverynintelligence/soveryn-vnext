@@ -43,20 +43,29 @@ IMAGE_EXT_TO_MIME: dict[str, str] = {
 }
 
 # Comma-separated `accept` attribute value for the UI file input.
-ACCEPT_ATTRIBUTE_VALUE: str = ",".join(mime for mime, _ in IMAGE_TYPES)
+# Images (vision) plus PDF (house intake text splice — not vision).
+ACCEPT_ATTRIBUTE_VALUE: str = ",".join(
+    (*(mime for mime, _ in IMAGE_TYPES), "application/pdf")
+)
 
 
-# Agents whose serving profile loads an mmproj vision projector — i.e. the
-# agents that can actually decode an image attachment. Aetheria runs on her
-# own vision-enabled server; Vett and Scotty share the `vett-scotty`
-# llama-server, which loads `mmproj-Qwen_Qwen3.6-27B-bf16.gguf`
-# (see runtime/router-presets.ini). Any agent NOT in this set has no
-# projector loaded and must have image attachments rejected.
+# Agents that can decode an image attachment on the wire.
+# Aetheria: Blackwell Qwen3.8 + `mmproj-Qwen3.8-27B-BF16.gguf`.
+# Eve: same Qwen3.8 GGUF + projector on Quadros Flash (`_eve_flash_server`).
+# Vett/Scotty: `vett-scotty` llama-server + `mmproj-Qwen_Qwen3.6-27B-bf16.gguf`.
+# Kernel: GLM-5.3-Flash on Spark vLLM :8001 — natively multimodal (image_url /
+# video_url). No llama mmproj (`mmproj_path=None`); vision is in the GLM
+# weights. Pondwright / Seneca / Atticus share Eve's GGUF but are not
+# chat-routed seats — do not add them here. Any agent NOT in this set
+# must have image attachments rejected.
 #
 # Single source of truth: the /chat route gate and the AgentLoop vision guard
 # import this set, and the UI's JS `ATTACH_CAPABLE_AGENTS` Set mirrors it
-# (chat.html is served as a static file, so it can't import Python directly;
-# the const is named ATTACH_CAPABLE_AGENTS rather than VISION_* only because
-# the served page is scanned for the retired 'Vision' agent name) — the
-# mirror is guarded by tests/test_vision_types_parity.py.
-VISION_CAPABLE_AGENTS: frozenset[str] = frozenset({"aetheria", "vett", "scotty"})
+# (chat.html / message_thread.html are served as static files, so they can't
+# import Python directly; the const is named ATTACH_CAPABLE_AGENTS rather
+# than VISION_* only because the served page is scanned for the retired
+# 'Vision' agent name) — the mirror is guarded by
+# tests/test_vision_types_parity.py and tests/test_vision_types_html_parity.py.
+VISION_CAPABLE_AGENTS: frozenset[str] = frozenset(
+    {"aetheria", "vett", "scotty", "eve", "kernel"}
+)

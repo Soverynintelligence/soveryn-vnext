@@ -8,6 +8,8 @@ Derived from docs/CURRENT_TRUTH_2026-05-23.md § 1, 3, 4, 8, 10.
 """
 
 from __future__ import annotations
+
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,8 +17,35 @@ from pathlib import Path
 # Agent identity
 # ─────────────────────────────────────────────────────────────────────────────
 
-#: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A)
-ACTIVE_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
+#: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
+#: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
+#: file writes stay via Aider / HITL, not free exec tools.
+ACTIVE_AGENTS: tuple[str, ...] = (
+    "aetheria", "kernel", "eve",
+)
+
+#: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
+#: inboxes are layered in the UI. Fleet freeze: frontier few — one card /
+#: one frontier mind. Vett folded into Eve; Scotty coding into Kernel.
+#: Grok is desktop Grok Bots, not a house chat agent.
+MESSAGES_CONTACTS: tuple[str, ...] = (
+    "aetheria",  # house closer — Blackwell alone (GPU move is a later cut)
+    "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
+    "eve",       # ship posts (Canva / Signal) — Quadro Qwen 3.8
+)
+
+#: Parked as Messages peers (still may exist as ACTIVE_AGENTS).
+MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
+
+#: Do not enqueue new CoS commissions / standing objectives to these ids.
+#: Engine-room loops may still exist; new work goes to Eve / Kernel.
+COMMISSION_BLOCKED: frozenset[str] = frozenset({"vett", "scotty"})
+
+#: Messages contacts whose turn must not own the HTTP/SSE thread. Work is
+#: enqueued as a commission; the composer unblocks after a short ack.
+#: Kernel chats live in Messages (OpenCode/Aider still own writes). Empty:
+#: live SSE for every contact. Machinery stays for optional re-enable.
+DEFERRED_CHAT_AGENTS: frozenset[str] = frozenset()
 
 #: Background processes that are NOT agents but are part of the active fleet
 #: (spec §2, §8 Bucket A). These have no `AgentLoop` and don't respond to /chat.
@@ -88,6 +117,13 @@ class ModelServer:
     #: /v1/chat/completions and /v1/embeddings request bodies. Must match a
     #: preset alias (section name or registered basename) in router-presets.ini.
     model_alias: str = ""
+    #: When True, preflight does not probe this endpoint (external backends
+    #: such as Grok Build CLI that inject custom chat_fn and never hit llama).
+    skip_preflight: bool = False
+    #: Server context window in tokens. AgentLoop must fit prompt+max_tokens
+    #: inside this or llama-server/vLLM returns HTTP 400 exceed_context_size.
+    #: GLM TP=2 on Sparks is 32768; Quadro Qwen 3.8 is 65536.
+    n_ctx: int = 32768
 
     @property
     def base_url(self) -> str:
@@ -95,77 +131,216 @@ class ModelServer:
         return f"http://{self.host}:{self.port}"
 
 
+# Vett/Scotty Spark "hard brains" — one live model on :8001 at a time.
+# Side-by-side as named peers (not dual-load). Does NOT touch Aetheria / Kernel.
+# Switch:  scripts/switch_vett_brain.sh qwen36|qwen38|lightning
+#          or CC Ops / Hard-brain strip → POST /api/ops/brain
+# Precedence: SOVERYN_VETT_BRAIN env > ~/.soveryn/vett_brain > qwen36
+# Aliases must match Spark serve-*.sh --served-model-name.
+_VETT_BRAIN_PROFILES: dict[str, dict] = {
+    "qwen36": {
+        "alias": "qwen36-35b",
+        "house_name": "Qwen 3.6",
+        "blurb": "MoE 35B-A3B · MTP · prior hard brain",
+        "role": "Vett + Scotty shared Qwen3.6-35B-A3B NVFP4 (Spark, vLLM, MTP)",
+        "path": "Qwen3.6-35B-A3B-NVFP4",
+    },
+    "qwen38": {
+        "alias": "qwen38-27b",
+        "house_name": "Qwen 3.8",
+        "blurb": "Dense 27B · local-class peak · NVFP4 on Spark",
+        "role": "Vett + Scotty shared Qwen3.8-27B NVFP4 dense (Spark, vLLM) — "
+                "named peer to Lightning; not Aetheria soul, not Kernel",
+        "path": "Qwen3.8-27B-NVFP4",
+    },
+    "lightning": {
+        "alias": "lightning-30b",
+        "house_name": "Lightning",
+        "blurb": "Nemotron 3.5 · MoE ~3B active · daily default",
+        "role": "Vett + Scotty shared Nemotron 3.5 Lightning 30B-A3B NVFP4 (Spark, vLLM)",
+        "path": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+    },
+    "glm": {
+        "alias": "glm-5.3-flash",
+        "house_name": "GLM 5.3 Flash",
+        "blurb": "NVFP4 TP=2 · both Sparks · Lightning parked",
+        "role": "Vett + Scotty on GLM-5.3-Flash NVFP4 (Spark TP=2 :8001)",
+        "path": "GLM-5.3-Flash-NVFP4",
+    },
+}
+_VETT_BRAIN_FILE = Path.home() / ".soveryn" / "vett_brain"
+
+
+def resolve_vett_brain() -> str:
+    """Return brain key: qwen36 | qwen38 | lightning | glm."""
+    env = (os.environ.get("SOVERYN_VETT_BRAIN") or "").strip().lower()
+    if env in _VETT_BRAIN_PROFILES:
+        return env
+    try:
+        key = _VETT_BRAIN_FILE.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        key = ""
+    if key in _VETT_BRAIN_PROFILES:
+        return key
+    return "qwen36"
+
+
+def _vett_scotty_server() -> ModelServer:
+    """Build the Spark backend ModelServer for the currently selected brain."""
+    key = resolve_vett_brain()
+    prof = _VETT_BRAIN_PROFILES[key]
+    return ModelServer(
+        name="vett_scotty_shared",
+        host="10.10.10.2",  # Spark, over the CX-7 link
+        port=8001,  # vLLM via qwen-serve.service -> serve-active.sh
+        model_path=MODEL_ROOT / prof["path"],  # cosmetic; weights live on Spark
+        mmproj_path=None,
+        role=prof["role"],
+        # Stock Qwen/Nemotron on vLLM reject multi system messages (HTTP 400).
+        supports_multi_system_messages=False,
+        model_alias=prof["alias"],
+        # Thinking off: overnight harness showed enable_thinking=True raised
+        # false-deny of the agent's own action on some backends.
+        chat_template_kwargs={"enable_thinking": False},
+        n_ctx=32768,
+    )
+
+
+# Kernel build brain — live default is Flash-Next TP=1 on spark2 (`~/.soveryn/kernel_brain`).
+# Switch:  scripts/switch_kernel_brain.sh flashnext|glm|flash|qwen38
+# Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash (test/fallback)
+# glm remains a rollback key (EXL3 TP=2 :8001). Eve stays on Quadros Qwen 3.8.
+_KERNEL_BRAIN_PROFILES: dict[str, dict] = {
+    "flash": {
+        # Router preset [kernel]; alias bench-flash kept so old callers still hit it.
+        "alias": "bench-flash",
+        "house_name": "Qwen 3.8",
+        "blurb": "Qwen3.8-27B · Quadros :8091 · ctx 65k · DeepSeek Flash parked",
+        "host": "127.0.0.1",
+        "port": 8091,
+        "path": "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+        "role": "Kernel — house build brain (Qwen3.8-27B on Quadros :8091, ctx 65536)",
+        "n_ctx": 65536,
+    },
+    "qwen38": {
+        "alias": "qwen38-27b",
+        "house_name": "Qwen 3.8",
+        "blurb": "Dense 27B NVFP4 · Spark :8001 · heavier build turns",
+        "host": "10.10.10.2",
+        "port": 8001,
+        "path": "Qwen3.8-27B-NVFP4",
+        "role": (
+            "Kernel — house build brain (Qwen3.8-27B NVFP4 on Spark :8001). "
+            "Shares the Spark slot with Vett/Scotty when that brain is loaded."
+        ),
+        "n_ctx": 65536,
+    },
+    "glm": {
+        "alias": "glm-5.3-flash",
+        "house_name": "GLM 5.3 Flash",
+        "blurb": "EXL3 TR3 4bpw · TP=2 both Sparks :8001 · parked 2026-09-06",
+        "host": "10.10.10.2",
+        "port": 8001,
+        "path": "GLM-5.3-Flash-EXL3-TR3-4bpw",
+        "role": "Kernel — GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Spark1+Spark2 :8001 (rollback)",
+        "n_ctx": 32768,
+    },
+    "flashnext": {
+        "alias": "qwen3.8-flash-next",
+        "house_name": "Qwen3.8-Flash-Next",
+        "blurb": "NVFP4 TP=1 spark2 :8888 · PLE mmap vLLM · thinking via Pi",
+        "host": "127.0.0.1",
+        "port": 8888,
+        "path": "Qwen3.8-Flash-Next-NVFP4",
+        "role": (
+            "Kernel — Qwen3.8-Flash-Next NVFP4 TP=1 on spark2 "
+            "(tower 127.0.0.1:8888 SSH tunnel)"
+        ),
+        "n_ctx": 131072,
+    },
+}
+_KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
+
+
+def resolve_kernel_brain() -> str:
+    """Return Kernel brain key: flash | qwen38 | glm | flashnext."""
+    env = (os.environ.get("SOVERYN_KERNEL_BRAIN") or "").strip().lower()
+    if env in _KERNEL_BRAIN_PROFILES:
+        return env
+    try:
+        key = _KERNEL_BRAIN_FILE.read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        key = ""
+    if key in _KERNEL_BRAIN_PROFILES:
+        return key
+    return "flash"
+
+
+def _kernel_server() -> ModelServer:
+    """Kernel build backend for the currently selected brain."""
+    key = resolve_kernel_brain()
+    prof = _KERNEL_BRAIN_PROFILES[key]
+    return ModelServer(
+        name="kernel_build",
+        host=str(prof["host"]),
+        port=int(prof["port"]),
+        model_path=MODEL_ROOT / str(prof["path"]),
+        # Native vision (vLLM image_url). llama mmproj is N/A.
+        mmproj_path=None,
+        role=str(prof["role"]),
+        supports_multi_system_messages=False,
+        model_alias=str(prof["alias"]),
+        # House chat: thinking off. Pi maps medium/high itself.
+        chat_template_kwargs={"enable_thinking": False, "thinking": False},
+        n_ctx=int(prof.get("n_ctx") or 65536),
+    )
+
+
+def _eve_flash_server() -> ModelServer:
+    """Eve always on Quadros Flash — does not follow Kernel to Spark."""
+    flash = _KERNEL_BRAIN_PROFILES["flash"]
+    return ModelServer(
+        name="eve_flash",
+        host=str(flash["host"]),
+        port=int(flash["port"]),
+        model_path=MODEL_ROOT / str(flash["path"]),
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
+        role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is Flash-Next :8888",
+        supports_multi_system_messages=False,
+        model_alias=str(flash["alias"]),
+        chat_template_kwargs={"enable_thinking": False},
+        n_ctx=65536,
+    )
+
+
 #: Endpoints vNext will route to. Mirrors spec §1/§3 exactly.
 MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="aetheria_primary",
         port=8090,
-        # Gemma 4 31B + its mmproj. Swapped off Qwen3.6-35B-A3B on
-        # 2026-06-01 — see project_soveryn_aetheria_gemma4.md. The router
-        # preset at ~/soveryn_vnext/runtime/router-presets.ini [aetheria] is
-        # what actually loads the model; this metadata only needs to
-        # agree with the preset.
-        model_path=MODEL_ROOT / "google_gemma-4-31B-it-Q8_0.gguf",
-        mmproj_path=MODEL_ROOT / "mmproj-google_gemma-4-31B-it-bf16.gguf",
-        role="Aetheria primary (Gemma 4 31B + mmproj on Blackwell)",
-        # Kept False for safety — the prelude fold is a pass-through when
-        # the template supports multi-system, so leaving it on costs
-        # nothing structurally. Flip to True only after a controlled probe
-        # confirms Gemma 4's template honors messages[1:] role=system.
+        # CUTOVER 2026-08-17: Qwen3.8-27B UD-Q6_K_XL (was Gemma 4 31B).
+        # Live weights come from router-presets-blackwell.ini [aetheria];
+        # this metadata must agree. Gemma rollback: model=aetheria-gemma.
+        model_path=MODEL_ROOT / "Qwen3.8-27B-UD-Q6_K_XL.gguf",
+        mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
+        role="Aetheria primary (Qwen3.8-27B + mmproj on Blackwell)",
+        # Kept False for safety — prelude fold is pass-through when multi-system
+        # works. Stock Qwen on some backends rejects multi system (vett path).
         supports_multi_system_messages=False,
         model_alias="aetheria",
-    ),
-    ModelServer(
-        name="vett_scotty_shared",
-        # MOVED TO THE SPARK 2026-08-02 (was 127.0.0.1:8091, Qwen3.6-27B Q8_0).
-        #
-        # Why: that Quadro sat at 45 of 49 GB with <1 GB free and 82 C, with
-        # Ares paging Signal about it. Qwen3.6-27B alone was 30 GB of it.
-        # Moving frees the card outright.
-        #
-        # Evidence it is not a downgrade: on the self-report harness Qwen3.6-27B
-        # denied its own action in 30/30 trials; Laguna in 20/30. And the
-        # 2026-07-28 delegation investigation found Scotty's failures were four
-        # harness defects, none of them the model. Measured latency on
-        # comparable prompts: Laguna/vLLM 1.6 s median vs Qwen3.6-27B/llama.cpp
-        # 11.2 s.
-        #
-        # Revert: host="127.0.0.1", port=8091, model_alias="vett-scotty".
-        # Backup at runtime.py.bak-before-spark-move.
-        host="10.10.10.2",              # Spark, over the CX-7 link
-        port=8000,                      # vLLM
-        model_path=MODEL_ROOT / "Laguna-S-2.1-NVFP4",   # cosmetic for a remote server
-        mmproj_path=None,
-        role="Vett + Scotty shared Laguna-S-2.1 (Spark, vLLM)",
-        # Flipped to True 2026-06-12: vett-scotty router child now uses
-        # froggeric/Qwen-Fixed-Chat-Templates v20 (configured via
-        # `chat-template-file = ...` in router-presets.ini [vett-scotty]),
-        # which natively honors messages[1:] role=system. Sandbox-verified
-        # + live-verified through router :8090 (multi-system probe returned
-        # "ALL_SURVIVED" exact). The transport adapter `prepare_wire_messages`
-        # becomes a pass-through for this server.
-        supports_multi_system_messages=True,
-        model_alias="laguna",           # the alias vLLM serves on the Spark
-        # FLIPPED TO FALSE 2026-08-03. Either value silences the </think> leak,
-        # so this is free to choose. Reasoning was ON from the move until now,
-        # and the overnight harness run showed reasoning is not a free good:
-        # on DeepSeek-V4-Flash-0731 it took false denial of the agent's own
-        # action from 0% to 79% (n=30/cell). Vett's judgement degraded over the
-        # same window — she picked the wrong tool, denied capabilities she held,
-        # and wrote in a consultant register. Testing whether that was the
-        # model or this flag, which I introduced.
+        # Thinking off for soul/desk feel (Qwen overthink was why we left before).
         chat_template_kwargs={"enable_thinking": False},
     ),
+    _vett_scotty_server(),
     ModelServer(
         name="embeddings",
-        # 2026-07-17 Librarian: repointed off the nomic router (:8091) to the
-        # standalone Nemotron-3-Embed-8B server (:8096, sentence-transformers in
-        # the isolated nemo-embed env). 4096-dim; lattice fully re-embedded.
-        # model_path below is cosmetic now — the :8096 server is self-contained.
+        # 2026-08-29: back on helper Quadro — GLM owns Spark UMA. Same 4096-d
+        # Nemotron-Embed-8B weights. Spark soveryn-embed stays disabled.
+        host="127.0.0.1",
         port=8096,
-        model_path=MODEL_ROOT / "nomic-embed-text-v1.5.Q8_0.gguf",
-        role="Embedding backend: Nemotron-3-Embed-8B on :8096, used by Lattice",
-        model_alias="embeddings",
+        model_path=Path("/mnt/soveryn_models/Nemotron-3-Embed-8B-BF16"),
+        role="Lattice librarian: Nemotron-3-Embed-8B on helper Quadro :8096",
+        model_alias="nemotron-embed-8b",
     ),
     ModelServer(
         name="cognition",
@@ -174,13 +349,15 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
         role="Cognition layer — dream consolidation, background dispatch worker",
         model_alias="cognition",
     ),
+    _kernel_server(),
+    _eve_flash_server(),
 )
 
 #: Per-agent routing: agent name → MODEL_SERVERS.name
 AGENT_TO_SERVER: dict[str, str] = {
     "aetheria": "aetheria_primary",
-    "vett":     "vett_scotty_shared",
-    "scotty":   "vett_scotty_shared",
+    "kernel":   "kernel_build",
+    "eve":      "eve_flash",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -315,6 +492,13 @@ def _validate() -> None:
     daemon_overlap = (DAEMONS & set(ACTIVE_AGENTS)) | (DAEMONS & RETIRED)
     if daemon_overlap:
         raise RuntimeError(f"DAEMONS overlaps active/retired: {daemon_overlap}")
+    # Messages contacts must be active chat agents (not overnight inboxes)
+    bad_msg = set(MESSAGES_CONTACTS) - set(ACTIVE_AGENTS)
+    if bad_msg:
+        raise RuntimeError(f"MESSAGES_CONTACTS not in ACTIVE_AGENTS: {bad_msg}")
+    parked_overlap = set(MESSAGES_CONTACTS) & MESSAGES_PARKED
+    if parked_overlap:
+        raise RuntimeError(f"MESSAGES_CONTACTS overlaps PARKED: {parked_overlap}")
     # Every agent routes to a real server
     server_names = {s.name for s in MODEL_SERVERS}
     for agent, server in AGENT_TO_SERVER.items():
@@ -374,9 +558,13 @@ def _validate() -> None:
 
 
 def all_ports() -> frozenset[int]:
-    """Every port the active fleet should be listening on (excluding APP_PORT)."""
+    """Every port the active fleet should be listening on (excluding APP_PORT).
+
+    External backends (skip_preflight) are omitted — they are not sockets.
+    """
     return frozenset(
-        {s.port for s in MODEL_SERVERS} | {e.port for e in SERVICE_ENDPOINTS}
+        {s.port for s in MODEL_SERVERS if not s.skip_preflight}
+        | {e.port for e in SERVICE_ENDPOINTS}
     )
 
 

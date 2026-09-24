@@ -1,0 +1,281 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   THE LAB console theme — shared by Command Center, Chat, Citizens.
+
+   Idiom (from soverynintelligence.com/lab/):
+     pure black ground · ruled gold grid · mono leads · numbered panels
+     indicators start UNKNOWN and light only from a real reading
+   ───────────────────────────────────────────────────────────────────────── */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap");
+
+:root {
+  --ground: #000000;
+  --panel: #0a0a09;
+  --panel-2: #151412;
+  --line: #26241f;
+  --line-lit: #38352e;
+
+  --ink: #e9e5dc;
+  --ink-2: #9a9384;
+  --ink-3: #655f55;
+
+  --gold: #c6a664;
+  --gold-dim: #7a6740;
+  --ok: #6fb98a;
+  --down: #b4685c;
+  --unknown: #332f29;
+
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Legacy aliases so existing template rules pick up the lab face */
+  --sov-canvas: var(--ground);
+  --canvas: var(--ground);
+  --sov-bronze: var(--gold);
+  --sov-amber: var(--gold);
+  --sov-sage: var(--ok);
+  --sov-sage-bright: var(--ok);
+  --sov-sage-deep: #3d6b4f;
+  --sov-electric-blue: var(--gold);
+  --sov-deep-blue: var(--ink-2);
+  --sov-maroon: var(--down);
+  --sov-maroon-bright: #c47a6e;
+  --sov-gray: var(--ink-2);
+  --sov-olive: var(--ink-2);
+  --text: var(--ink);
+  --text-dim: var(--ink-2);
+  --glass-bg: var(--panel);
+  --glass-border: var(--line);
+  --glass-blur: none;
+  --r-lg: 0;
+  --r-md: 0;
+  --r-sm: 3px;
+  --font: var(--mono);
+  --node: var(--gold);
+  --bronze: var(--gold);
+  --copper: var(--gold);
+  --leaf: var(--gold);
+  --earth: var(--panel-2);
+  --slate: var(--panel-2);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  background: var(--ground);
+}
+
+body.lab,
+body[data-lab] {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    linear-gradient(rgba(198, 166, 100, 0.038) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198, 166, 100, 0.038) 1px, transparent 1px);
+  background-size: 64px 64px, 64px 64px;
+  background-attachment: fixed;
+}
+
+/* Kill legacy medallion wallpaper layers when lab is on */
+body.lab::before,
+body.lab::after,
+body[data-lab]::before,
+body[data-lab]::after {
+  display: none !important;
+  content: none !important;
+}
+
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--ink); }
+:focus-visible { outline: 1px solid var(--gold); outline-offset: 3px; }
+
+button {
+  font-family: var(--mono);
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* ── plate (nameplate, not a nav bar) ───────────────────────────────────── */
+.plate {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 60;
+}
+.plate .id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  border-right: 1px solid var(--line);
+  color: inherit;
+}
+.plate .id img { width: 44px; height: 44px; display: block; }
+.plate .id b {
+  font-size: 0.78rem;
+  letter-spacing: 0.26em;
+  font-weight: 600;
+  display: block;
+  color: var(--ink);
+}
+.plate .id i {
+  font-style: normal;
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  color: var(--gold);
+  display: block;
+}
+.plate nav { display: flex; margin-left: auto; }
+.plate nav a {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-left: 1px solid var(--line);
+  font-size: 0.63rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.plate nav a:hover,
+.plate nav a.active {
+  background: var(--panel-2);
+  color: var(--ink);
+}
+.plate nav a.active { color: var(--gold); }
+.plate .status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border-left: 1px solid var(--line);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.plate .status-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--unknown);
+}
+@media (max-width: 820px) {
+  .plate nav a:not(.keep) { display: none; }
+  .plate .id img { width: 36px; height: 36px; }
+}
+
+/* ── numbered panels ────────────────────────────────────────────────────── */
+.lab-panel { border-bottom: 1px solid var(--line); background: transparent; }
+.lab-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 11px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.lab-panel-head .n {
+  color: var(--gold-dim);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+}
+.lab-panel-head h2,
+.lab-panel-head h3 {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.lab-panel-head .r {
+  margin-left: auto;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+}
+.lab-panel-body { padding: 18px 22px; }
+
+/* ── status dots (unknown / up / down / unmeasured) ─────────────────────── */
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--unknown);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+[data-state="unmeasured"] .dot,
+.dot.unmeasured,
+.dot.unobserved {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-3);
+}
+[data-state="up"] .dot,
+.dot.resident,
+.dot.up,
+.dot.ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(111, 185, 138, 0.14);
+}
+[data-state="on_duty"] .dot,
+.dot.on_duty {
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(198, 166, 100, 0.16);
+}
+[data-state="down"] .dot,
+.dot.offline,
+.dot.down {
+  background: var(--down);
+  box-shadow: 0 0 0 3px rgba(180, 104, 92, 0.16);
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+.act {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: transparent;
+  border: 1px solid var(--line-lit);
+  border-radius: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.act:hover { border-color: var(--gold); color: var(--ink); }
+.act.primary {
+  border-color: var(--gold-dim);
+  background: rgba(198, 166, 100, 0.08);
+}
+.act[disabled] { opacity: 0.45; cursor: default; }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 5px 10px;
+}
+.chip.heartbeat { border-color: var(--gold-dim); color: var(--gold); }
+.chip.patrol { border-color: var(--line-lit); }
+.chip.disabled { opacity: 0.4; text-decoration: line-through; }
+
+/* prose on instrument faces uses sans */
+.prose { font-family: var(--sans); color: var(--ink-2); line-height: 1.62; }

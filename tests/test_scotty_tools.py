@@ -111,6 +111,29 @@ def test_read_file_truncates_oversized(tmp_path, monkeypatch):
             test_file.unlink()
 
 
+def test_read_file_offset_pages(tmp_path):
+    target = tmp_path / "page.txt"
+    target.write_text("ABCDEFGHIJ")
+    tool = build_read_file_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(target), "offset": 3, "max_bytes": 4})
+    assert result["content"] == "DEFG"
+    assert result["offset"] == 3
+    assert result["truncated"] is True
+
+
+def test_read_file_spill_path_does_not_dump_40kb(tmp_path):
+    from soveryn.agents.scotty.tools.fs import SPILL_REREAD_MAX_BYTES
+
+    spill = tmp_path / "tool_spill" / "sess" / "fat.txt"
+    spill.parent.mkdir(parents=True)
+    spill.write_text("Z" * (READ_FILE_MAX_BYTES + 5000))
+    tool = build_read_file_tool(owner_agent="vett", root=tmp_path)
+    result = tool.handler({"path": str(spill)})
+    assert result["spill_reread"] is True
+    assert len(result["content"]) <= SPILL_REREAD_MAX_BYTES
+    assert result["truncated"] is True
+
+
 # ─── custom root (Vett's wider "view outside soveryn" scope) ─────────────────
 
 def test_read_file_honors_custom_root(tmp_path):
@@ -189,6 +212,23 @@ def test_list_directory_truncates_at_max_entries(tmp_path):
             for f in test_dir.iterdir():
                 f.unlink()
             test_dir.rmdir()
+
+
+def test_list_directory_glob_filters_and_mtime_puts_newest_first(tmp_path):
+    (tmp_path / "old.pdf").write_bytes(b"%PDF-old")
+    (tmp_path / "skip.txt").write_text("no")
+    (tmp_path / "new.pdf").write_bytes(b"%PDF-new")
+    import os, time
+    old = tmp_path / "old.pdf"
+    new = tmp_path / "new.pdf"
+    now = time.time()
+    os.utime(old, (now - 100, now - 100))
+    os.utime(new, (now, now))
+    tool = build_list_directory_tool(owner_agent="eve", root=tmp_path)
+    result = tool.handler({"path": str(tmp_path), "glob": "*.pdf", "sort": "mtime"})
+    names = [e["name"] for e in result["entries"]]
+    assert names == ["new.pdf", "old.pdf"]
+    assert result["truncated"] is False
 
 
 # ─── git_status ─────────────────────────────────────────────────────────────

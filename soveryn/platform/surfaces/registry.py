@@ -90,7 +90,7 @@ SURFACES: tuple[Surface, ...] = (
               "paper until 2026-08-03 because nothing declared what it should serve.",
     ),
     Surface(
-        "atticus", Kind.FUNCTIONAL, "https://atticus.historysledger.com/chat",
+        "atticus-chat", Kind.FUNCTIONAL, "https://atticus.historysledger.com/chat",
         owner="vett", interval_s=1800,
         method="POST",
         payload={"session_id": "surface-probe",
@@ -132,7 +132,16 @@ SURFACES: tuple[Surface, ...] = (
         "shepherd", Kind.HTTP, "http://127.0.0.1:5055/",
         owner="jon", interval_s=900, expect_status=401,
         notes="401 IS the healthy answer — the demo sits behind HTTP Basic. "
-              "Expecting 200 here would report a working auth gate as an outage.",
+              "Expecting 200 here would report a working auth gate as an outage. "
+              "This is the LOCAL check; the public path is the surface below.",
+    ),
+    Surface(
+        "shepherdfcc", Kind.PUBLIC, "https://shepherdfcc.com/",
+        owner="jon", interval_s=900, expect_status=401,
+        notes="The partner-facing address, live 2026-08-07. Path is Cloudflare -> "
+              "cloudflared on the SPARK -> CX-7 fabric -> Shepherd on the TOWER at "
+              "10.10.10.1:5055, so a failure here can be the tunnel, the fabric or "
+              "the app — check `shepherd` above to tell them apart. 401 is healthy.",
     ),
     Surface(
         "pondwright", Kind.PUBLIC, "https://pondwright.com/",
@@ -178,13 +187,42 @@ SURFACES: tuple[Surface, ...] = (
         owner="soveryn", interval_s=300,
     ),
     Surface(
-        "laguna-spark", Kind.HTTP, "http://10.10.10.2:8000/v1/models",
-        owner="vett", interval_s=600, expect_contains="laguna",
-        notes="Vett and Scotty's backend, over the CX-7 fabric.",
+        "qwen-spark", Kind.HTTP, "http://10.10.10.2:8001/v1/models",
+        owner="vett", interval_s=600, expect_contains="owned_by",
+        notes="Backend for Vett, Scotty, PondWright, Atticus and Seneca, over "
+              "the CX-7 fabric. Brain is swappable (qwen36-35b / qwen38-27b / "
+              "lightning-30b) via scripts/switch_vett_brain.sh — expect_contains "
+              "is deliberately the stable vLLM list shape, not a model id. "
+              "Was laguna on :8000 until 2026-08-12; laguna-serve is stopped "
+              "and disabled, so probing :8000 would page on purpose-down service.",
+    ),
+    # The three Spark apps, probed through their public hostnames so the check
+    # covers the whole path: Cloudflare -> app -> model. They bind 127.0.0.1 on
+    # the Spark, so the tower cannot reach them any other way.
+    #
+    # expect_contains model_ok is the point. On 2026-08-12 all three ran happily
+    # against a backend that had moved: systemd green, /health green, and every
+    # visitor got the fallback message. /health now asks the backend whether it
+    # serves the configured model, so a repeat says so instead of looking fine.
+    Surface(
+        "pondwright-health", Kind.HTTP, "https://chat.pondwright.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="CWG chat agent on the Spark; red means it lost its model backend.",
+    ),
+    Surface(
+        "seneca-public", Kind.HTTP, "https://ask.soverynintelligence.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="The public voice of SOVERYN. Visible to anyone reading the site.",
+    ),
+    Surface(
+        "atticus-health", Kind.HTTP, "https://atticus.historysledger.com/health",
+        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        notes="History's Ledger curator; cite-or-drop depends on a live model.",
     ),
     Surface(
         "embeddings", Kind.HTTP, "http://127.0.0.1:8096/health",
         owner="aetheria", interval_s=600,
+        notes="Lattice librarian on helper Quadro (Nemotron-Embed-8B); Spark embed parked.",
     ),
 
     # ── internal ──────────────────────────────────────────────────────────
@@ -215,6 +253,23 @@ SURFACES: tuple[Surface, ...] = (
               "recorded state, not an absence someone re-discovers in six months.",
     ),
 )
+
+_duplicate_names = sorted(
+    {s.name for s in SURFACES if sum(1 for t in SURFACES if t.name == s.name) > 1}
+)
+if _duplicate_names:
+    # BY_NAME is a dict, so a repeated name silently drops one declaration and
+    # any by-name lookup returns an arbitrary winner. Worse, Ares keys findings
+    # by surface name (`surface.down:<name>`), so two probes sharing a name
+    # cannot say WHICH one failed. Found 2026-08-13: `atticus` and
+    # `pondwright-chat` were each declared twice — a POST /chat probe and a GET
+    # /health probe — so an alert could not distinguish a dead chat endpoint
+    # from a dead health endpoint. Fail loudly at import rather than ship an
+    # ambiguous monitor.
+    raise ValueError(
+        "duplicate surface names: " + ", ".join(_duplicate_names) +
+        " — each surface needs its own name; findings are keyed by it"
+    )
 
 BY_NAME = {s.name: s for s in SURFACES}
 

@@ -8,6 +8,29 @@ from soveryn.inference.llama_server_client import ChatResponse
 from soveryn.memory.conversation_store import ConversationStore
 
 
+@pytest.fixture(autouse=True)
+def _isolate_acttruth_and_skills(tmp_path, monkeypatch):
+    """AgentLoop unit tests must not ingest the live house ActTruth ledger
+    or on-disk skill index — that leaked extra system messages and made
+    prelude-count assertions fail outside this machine."""
+    iso = tmp_path / ".acttruth-test"
+    monkeypatch.setenv("ACTTRUTH_DIR", str(iso))
+    from soveryn.platform.acttruth.hooks import reset_acttruth_cache
+    from soveryn.platform.acttruth.paths import set_default_root
+
+    set_default_root(iso)
+    reset_acttruth_cache()
+    from soveryn.agents.skills import get_skill_index as _real_index
+
+    def _index(agent, skills_dir=None):
+        if skills_dir is None:
+            return ""
+        return _real_index(agent, skills_dir=skills_dir)
+
+    monkeypatch.setattr("soveryn.agents.loop.get_skill_index", _index)
+    monkeypatch.setattr("soveryn.agents.skills.get_skill_index", _index)
+
+
 @pytest.fixture
 def fake_chat():
     return lambda req, server, timeout=60: ChatResponse(

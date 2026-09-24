@@ -1,0 +1,28 @@
+# SOVERYN Scotty worker — process residence for the repair citizen.
+# Keeps Scotty resident (census-visible) and drains his commission queue
+# via localhost vNext. Inference remains on Spark Qwen through AgentLoop.
+
+[Unit]
+Description=SOVERYN Scotty worker (commission drain + desk presence)
+Documentation=file:///home/jon-deoliveira/soveryn_vnext/docs/superpowers/specs/2026-08-13-soveryn-citizens-charter.md
+PartOf=soveryn.target
+After=soveryn-vnext.service network-online.target
+Wants=network-online.target soveryn-vnext.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin
+Environment=SOVERYN_VNEXT_BASE=http://127.0.0.1:5001
+Environment=SOVERYN_SCOTTY_WORKER_POLL=15
+EnvironmentFile=-/home/jon-deoliveira/soveryn_vnext/.env
+
+ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 90
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.citizens.scotty_worker
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/tmp/soveryn-scotty-worker.log
+StandardError=append:/tmp/soveryn-scotty-worker.log
+
+[Install]
+WantedBy=soveryn.target

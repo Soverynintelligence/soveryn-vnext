@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOVERYN · Kernel</title>
+<style>
+  :root {
+    --bg: #050608;
+    --panel: rgba(10,12,16,0.92);
+    --line: rgba(232,227,213,0.12);
+    --text: #e8e3d5;
+    --dim: rgba(232,227,213,0.55);
+    --mute: rgba(232,227,213,0.35);
+    --gold: #c6a664;
+    --mint: #6fb98a;
+    --hot: #ff6b6b;
+    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(198,166,100,0.08), transparent 55%),
+                radial-gradient(900px 500px at 90% 0%, rgba(80,120,160,0.06), transparent 50%),
+                var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+  }
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .brand .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+  .brand h1 {
+    margin: 4px 0 0;
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .brand p {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--dim);
+    max-width: 48ch;
+    line-height: 1.45;
+  }
+  .nav a {
+    color: var(--gold);
+    text-decoration: none;
+    font-size: 13px;
+    border: 1px solid rgba(198,166,100,0.3);
+    padding: 7px 12px;
+    border-radius: 10px;
+    background: rgba(198,166,100,0.08);
+  }
+  .nav a:hover { background: rgba(198,166,100,0.16); }
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .pill {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.35);
+  }
+  .pill[data-state="warm"] { border-color: rgba(111,185,138,0.45); color: var(--mint); }
+  .pill[data-state="loading"] { border-color: rgba(198,166,100,0.45); color: var(--gold); }
+  .pill[data-state="cold"] { border-color: var(--line); color: var(--dim); }
+  .pill[data-state="missing"],
+  .pill[data-state="router_down"] { border-color: rgba(255,107,107,0.4); color: var(--hot); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .actions button {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.4);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .actions button.primary {
+    border-color: rgba(198,166,100,0.4);
+    background: rgba(198,166,100,0.12);
+    color: #f3efe6;
+  }
+  .actions button:disabled { opacity: 0.45; cursor: wait; }
+  .log {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    padding: 14px;
+    overflow-y: auto;
+    min-height: 360px;
+    max-height: calc(100vh - 280px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 92%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: rgba(198,166,100,0.12);
+    border: 1px solid rgba(198,166,100,0.25);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--line);
+  }
+  .msg.meta {
+    align-self: center;
+    font-size: 12px;
+    color: var(--mute);
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+  .msg.err { color: var(--hot); border-color: rgba(255,107,107,0.35); }
+  form.composer {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  form.composer textarea {
+    flex: 1;
+    min-height: 52px;
+    max-height: 160px;
+    resize: vertical;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.45);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 14px;
+    padding: 12px;
+  }
+  form.composer button {
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(198,166,100,0.4);
+    background: rgba(198,166,100,0.16);
+    color: #f3efe6;
+    cursor: pointer;
+  }
+  form.composer button:disabled { opacity: 0.5; cursor: wait; }
+  .hint {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--mute);
+    font-family: var(--mono);
+  }
+  .msg.tool {
+    align-self: stretch;
+    max-width: 100%;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: rgba(126,184,212,0.08);
+    border-color: rgba(126,184,212,0.3);
+    white-space: pre-wrap;
+  }
+  .proposal {
+    align-self: stretch;
+    max-width: 100%;
+    border: 1px solid rgba(240,193,74,0.45);
+    background: rgba(240,193,74,0.08);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 4px 0;
+  }
+  .proposal .psum {
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .proposal .pmeta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--mute);
+    margin-bottom: 10px;
+  }
+  .proposal .pactions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .proposal button {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: rgba(0,0,0,0.4);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .proposal button.approve {
+    border-color: rgba(111,185,138,0.5);
+    background: rgba(111,185,138,0.15);
+    color: var(--mint);
+  }
+  .proposal button.reject {
+    border-color: rgba(255,107,107,0.45);
+    background: rgba(255,107,107,0.1);
+    color: var(--hot);
+  }
+  .proposal pre {
+    margin: 8px 0 0;
+    max-height: 180px;
+    overflow: auto;
+    font-size: 11px;
+    color: var(--dim);
+    white-space: pre-wrap;
+  }
+  .pending-strip {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="eyebrow">SOVERYN · local · HITL</div>
+        <h1>Kernel</h1>
+        <p>Build brain with hands. This page is the <strong>approve-before-apply</strong> Flash chat lane. Coding default: <code>soveryn-opencode</code> (Qwen 3.8). Flash dig: <code>soveryn-opencode --flash</code>.</p>
+      </div>
+      <div class="nav"><a href="/command-center">← Command Center</a></div>
+    </header>
+
+    <div class="status">
+      <span class="pill" data-state-pill data-state="cold">…</span>
+      <span data-status-detail>checking…</span>
+      <div class="actions">
+        <button type="button" class="primary" data-warm>Warm up</button>
+        <button type="button" data-refresh-props>Refresh proposals</button>
+        <button type="button" data-copy-opencode title="Copy soveryn-opencode (Qwen 3.8 coding)">Copy OpenCode</button>
+        <button type="button" data-copy-aider title="Copy soveryn-aider --kernel">Copy Aider</button>
+      </div>
+    </div>
+    <div class="pending-strip" data-pending-strip></div>
+
+    <div class="log" data-log aria-live="polite">
+      <div class="msg meta">Tools: list_dir · read_file · search_files (auto). write_file · run_shell (need your Approve). First message may load ~145G if cold.</div>
+    </div>
+
+    <form class="composer" data-form>
+      <textarea data-input rows="2" placeholder="e.g. List soveryn_vnext/soveryn/app and read routes/ui.py" required></textarea>
+      <button type="submit" data-send>Send</button>
+    </form>
+    <div class="hint" data-aider-hint></div>
+  </div>
+<script>
+(() => {
+  const log = document.querySelector("[data-log]");
+  const pill = document.querySelector("[data-state-pill]");
+  const detail = document.querySelector("[data-status-detail]");
+  const warmBtn = document.querySelector("[data-warm]");
+  const copyOpenBtn = document.querySelector("[data-copy-opencode]");
+  const copyBtn = document.querySelector("[data-copy-aider]");
+  const refreshPropsBtn = document.querySelector("[data-refresh-props]");
+  const pendingStrip = document.querySelector("[data-pending-strip]");
+  const form = document.querySelector("[data-form]");
+  const input = document.querySelector("[data-input]");
+  const sendBtn = document.querySelector("[data-send]");
+  const aiderHint = document.querySelector("[data-aider-hint]");
+  const history = [];
+  let aiderCmd = "soveryn-aider --kernel";
+  let openCodeCmd = "soveryn-opencode";
+  let busy = false;
+
+  function addMsg(role, text, cls) {
+    const el = document.createElement("div");
+    el.className = "msg " + (cls || role);
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  function addProposalCard(p) {
+    const box = document.createElement("div");
+    box.className = "proposal";
+    box.dataset.proposalId = p.id;
+    const sum = document.createElement("div");
+    sum.className = "psum";
+    sum.textContent = p.summary || (p.tool + " " + p.id);
+    const meta = document.createElement("div");
+    meta.className = "pmeta";
+    meta.textContent = "proposal " + p.id + " · " + (p.tool || "?") + " · " + (p.status || "pending");
+    const actions = document.createElement("div");
+    actions.className = "pactions";
+    const ap = document.createElement("button");
+    ap.type = "button";
+    ap.className = "approve";
+    ap.textContent = "Approve";
+    const rj = document.createElement("button");
+    rj.type = "button";
+    rj.className = "reject";
+    rj.textContent = "Reject";
+    const pre = document.createElement("pre");
+    const args = p.args || {};
+    if (p.tool === "write_file") {
+      const c = (args.content || "");
+      pre.textContent = "path: " + (args.path || "") + "\n\n" + c.slice(0, 2500) + (c.length > 2500 ? "\n…(truncated)" : "");
+    } else if (p.tool === "run_shell") {
+      pre.textContent = "$ " + (args.command || "") + (args.cwd ? "\ncwd: " + args.cwd : "");
+    } else {
+      pre.textContent = JSON.stringify(args, null, 2).slice(0, 2000);
+    }
+    actions.appendChild(ap);
+    actions.appendChild(rj);
+    box.appendChild(sum);
+    box.appendChild(meta);
+    box.appendChild(actions);
+    box.appendChild(pre);
+    log.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+
+    ap.addEventListener("click", async () => {
+      ap.disabled = true; rj.disabled = true;
+      ap.textContent = "Running…";
+      try {
+        const r = await fetch("/api/system/bench_flash/proposals/" + p.id + "/approve", { method: "POST" });
+        const d = await r.json();
+        meta.textContent = "proposal " + p.id + " · " + ((d.proposal && d.proposal.status) || "?");
+        if (d.proposal && d.proposal.result) {
+          const res = document.createElement("pre");
+          res.textContent = d.proposal.result;
+          box.appendChild(res);
+        }
+        if (d.proposal && d.proposal.error) {
+          addMsg("err", d.proposal.error, "err");
+        }
+        ap.textContent = d.ok ? "Executed" : "Failed";
+        history.push({ role: "user", content: "Operator " + (d.ok ? "APPROVED" : "FAILED") + " proposal " + p.id + ". Result: " + ((d.proposal && d.proposal.result) || d.proposal && d.proposal.error || "") });
+      } catch (e) {
+        addMsg("err", "Approve failed: " + e, "err");
+        ap.disabled = false; rj.disabled = false; ap.textContent = "Approve";
+      }
+      refreshProposals();
+    });
+    rj.addEventListener("click", async () => {
+      ap.disabled = true; rj.disabled = true;
+      try {
+        const r = await fetch("/api/system/bench_flash/proposals/" + p.id + "/reject", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "operator rejected" }),
+        });
+        const d = await r.json();
+        meta.textContent = "proposal " + p.id + " · rejected";
+        rj.textContent = "Rejected";
+        history.push({ role: "user", content: "Operator REJECTED proposal " + p.id + "." });
+      } catch (e) {
+        addMsg("err", "Reject failed: " + e, "err");
+        ap.disabled = false; rj.disabled = false;
+      }
+      refreshProposals();
+    });
+  }
+
+  async function refreshProposals() {
+    try {
+      const r = await fetch("/api/system/bench_flash/proposals?status=pending");
+      const d = await r.json();
+      const n = (d.proposals || []).length;
+      const ws = (d.workspaces || []).map(function(w){ return w.replace(/^\/home\/[^/]+/, "~"); }).join(", ");
+      pendingStrip.textContent = n
+        ? (n + " pending proposal(s) · workspaces: " + ws)
+        : ("No pending proposals · workspaces: " + (ws || "—"));
+    } catch {
+      pendingStrip.textContent = "";
+    }
+  }
+
+  async function refreshStatus() {
+    try {
+      const r = await fetch("/api/system/bench_flash");
+      const d = await r.json();
+      pill.dataset.state = d.state || "cold";
+      pill.textContent = d.state || "?";
+      const bits = [];
+      if (d.model_status) bits.push("router: " + d.model_status);
+      if (d.warm_job && d.warm_job.status && d.warm_job.status !== "idle") {
+        bits.push("job: " + d.warm_job.status + (d.warm_job.error ? " — " + d.warm_job.error : ""));
+      }
+      if (!d.weights_ok) bits.push("weights missing");
+      if (!d.router_ok) bits.push("router down");
+      detail.textContent = bits.join(" · ") || "build tools on";
+      if (d.soveryn_opencode) openCodeCmd = d.soveryn_opencode;
+      if (d.soveryn_aider_flash) aiderCmd = d.soveryn_aider_flash;
+      const hintBits = [];
+      if (openCodeCmd) hintBits.push("OpenCode (Qwen coding): " + openCodeCmd);
+      if (d.aider_cmd || aiderCmd) hintBits.push("Aider (surgical): " + (d.aider_cmd || aiderCmd));
+      if (aiderHint) aiderHint.textContent = hintBits.join(" · ");
+      warmBtn.disabled = d.state === "loading" || d.state === "warm" || d.state === "missing";
+      warmBtn.textContent = d.state === "warm" ? "Warm" : (d.state === "loading" ? "Loading…" : "Warm up");
+      return d;
+    } catch {
+      pill.dataset.state = "router_down";
+      pill.textContent = "error";
+      detail.textContent = "status fetch failed";
+      return null;
+    }
+  }
+
+  warmBtn.addEventListener("click", async () => {
+    warmBtn.disabled = true;
+    warmBtn.textContent = "Loading…";
+    addMsg("meta", "Warming Kernel — first load can take several minutes…", "meta");
+    try {
+      await fetch("/api/system/bench_flash/warm", { method: "POST" });
+    } catch {}
+    const poll = setInterval(async () => {
+      const d = await refreshStatus();
+      if (d && d.state !== "loading") {
+        clearInterval(poll);
+        if (d.state === "warm") addMsg("meta", "Kernel is warm.", "meta");
+        else if (d.warm_job && d.warm_job.error) addMsg("err", "Warm failed: " + d.warm_job.error, "err");
+      }
+    }, 4000);
+  });
+
+  if (copyOpenBtn) {
+    copyOpenBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(openCodeCmd);
+        copyOpenBtn.textContent = "Copied";
+        setTimeout(() => { copyOpenBtn.textContent = "Copy OpenCode"; }, 1500);
+      } catch {
+        addMsg("meta", openCodeCmd, "meta");
+      }
+    });
+  }
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(aiderCmd);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => { copyBtn.textContent = "Copy Aider"; }, 1500);
+    } catch {
+      addMsg("meta", aiderCmd, "meta");
+    }
+  });
+  refreshPropsBtn.addEventListener("click", () => refreshProposals());
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    const text = (input.value || "").trim();
+    if (!text) return;
+    busy = true;
+    sendBtn.disabled = true;
+    addMsg("user", text);
+    input.value = "";
+    const waiting = addMsg("meta", "Kernel thinking / tools…", "meta");
+    try {
+      const r = await fetch("/api/system/bench_flash/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history, tools: true }),
+      });
+      const d = await r.json();
+      waiting.remove();
+      if (!d.ok) {
+        addMsg("err", "Error: " + (d.error || r.status), "err");
+      } else {
+        // show tool steps
+        (d.transcript || []).forEach(function(step) {
+          if (step.role === "tool" && step.content) {
+            const c = step.content;
+            if (typeof c === "object") {
+              if (c.auto) {
+                const preview = (c.result || c.error || "").slice(0, 1200);
+                addMsg("tool", (c.tool || "tool") + (c.ok ? "" : " ERROR") + ":\n" + preview, "tool");
+              }
+            }
+          }
+        });
+        (d.proposals || []).forEach(function(p) {
+          // fetch full proposal for args
+          fetch("/api/system/bench_flash/proposals?status=pending")
+            .then(function(rr){ return rr.json(); })
+            .then(function(pd){
+              const full = (pd.proposals || []).find(function(x){ return x.id === p.id; }) || p;
+              addProposalCard(full);
+            })
+            .catch(function(){ addProposalCard(p); });
+        });
+        const content = d.content || "(empty)";
+        addMsg("assistant", content);
+        history.push({ role: "user", content: text });
+        history.push({ role: "assistant", content: content });
+        if (history.length > 24) history.splice(0, history.length - 24);
+      }
+    } catch (err) {
+      waiting.remove();
+      addMsg("err", "Request failed: " + err, "err");
+    }
+    busy = false;
+    sendBtn.disabled = false;
+    refreshStatus();
+    refreshProposals();
+    input.focus();
+  });
+
+  refreshStatus();
+  refreshProposals();
+  setInterval(refreshStatus, 8000);
+  setInterval(refreshProposals, 12000);
+})();
+</script>
+</body>
+</html>

@@ -126,13 +126,28 @@ def build_dispatch_task_tool(
                 ),
             }
 
+        # What happened last time this was asked. Not a block — the retry that
+        # fixed the 2026-08-07 connection leak was legitimate and must stay
+        # possible. But the same direction went out at least seven times in ten
+        # days because nothing put the previous outcome in front of her at the
+        # moment she asked again.
+        from soveryn.platform.delegation.history import (
+            dispatch_warning,
+            prior_attempts,
+        )
+        prior = prior_attempts(store, objective.strip())
+
         task_id = store.create_task(
             dispatched_by=owner_agent,
             objective=objective.strip(),
             scope=scope.strip(),
             acceptance=acceptance.strip(),
         )
-        return {"task_id": task_id, "status": "dispatched"}
+        result: dict[str, Any] = {"task_id": task_id, "status": "dispatched"}
+        if prior:
+            result["prior_attempts"] = [p.as_dict() for p in prior]
+            result["warning"] = dispatch_warning(prior)
+        return result
 
     return ToolSpec(
         name="dispatch_task",

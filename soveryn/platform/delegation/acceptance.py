@@ -59,6 +59,11 @@ def run_acceptance_in_worktree(
         "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
         # Import isolation: the worktree's code shadows the live editable install.
         "PYTHONPATH": str(Path(worktree_path)),
+        # Stale-pyc guard: a same-size, same-second edit after a baseline run
+        # otherwise imports the baseline bytecode (found 2026-09-22: V=1 ->
+        # V=2, both 6 bytes, same second -> pyc validity check passed on
+        # stale cache -> acceptance judged the OLD code).
+        "PYTHONDONTWRITEBYTECODE": "1",
     }
     try:
         result = subprocess.run(

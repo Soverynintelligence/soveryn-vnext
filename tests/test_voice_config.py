@@ -27,8 +27,7 @@ def test_voice_config_returns_none_for_unconfigured_agent():
         "ELEVENLABS_API_KEY": "key",
         "ELEVENLABS_VOICE_ID_AETHERIA": "voice-aetheria-id",
     })
-    # Agents not in VOICE_ENABLED_AGENTS (aetheria/vett/scotty) get None.
-    # Phase 2 (F5-TTS): all three named agents are now voice-enabled.
+    # Agents not in VOICE_ENABLED_AGENTS (aetheria/eve/kernel) get None.
     assert cfg.agent_character("ares") is None
     assert cfg.agent_character("heartbeat") is None
 
@@ -79,3 +78,25 @@ def test_aetheria_character_present_with_elevenlabs_voice_id_none():
     char = cfg.agent_character("aetheria")
     assert char is not None
     assert char.elevenlabs_voice_id is None
+
+
+def test_voice_config_eve_inherits_vett_elevenlabs_id():
+    cfg = VoiceConfig.from_env({
+        "ELEVENLABS_VOICE_ID_VETT": "voice-vett-id",
+    })
+    eve = cfg.agent_character("eve")
+    assert eve is not None
+    assert eve.agent_name == "eve"
+    assert eve.elevenlabs_voice_id == "voice-vett-id"
+    assert cfg.agent_character("vett") is None
+
+
+def test_voice_config_kernel_inherits_scotty_elevenlabs_id():
+    cfg = VoiceConfig.from_env({
+        "ELEVENLABS_VOICE_ID_SCOTTY": "voice-scotty-id",
+    })
+    kernel = cfg.agent_character("kernel")
+    assert kernel is not None
+    assert kernel.agent_name == "kernel"
+    assert kernel.elevenlabs_voice_id == "voice-scotty-id"
+    assert cfg.agent_character("scotty") is None

@@ -105,14 +105,24 @@ def test_write_library_node_rejects_non_string_tags(lattice_store):
         tool.handler({"content": "fact", "tags": [1, 2, 3]})
 
 
-def test_write_library_node_returns_content_head_for_truncation(lattice_store):
+def test_write_library_node_returns_content_head(lattice_store):
     tool = build_write_library_node_tool(
         lattice_store=lattice_store, owner_agent="aetheria",
     )
-    long_content = "x" * 1000
-    result = tool.handler({"content": long_content})
-    # Full content persists; head is for the response payload only
-    assert len(result["content_head"]) == 200
+    content = "x" * 150
+    result = tool.handler({"content": content})
+    assert result["content_head"] == content
+    assert len(result["content_head"]) == 150
+
+
+def test_write_library_node_rejects_over_cap(lattice_store):
+    """Memory Grades: interactive library write raises so the model rewrites shorter."""
+    from soveryn.platform.tools.registry import ToolArgError
+    tool = build_write_library_node_tool(
+        lattice_store=lattice_store, owner_agent="aetheria",
+    )
+    with pytest.raises(ToolArgError):
+        tool.handler({"content": "x" * 1000})
 
 
 # ─── search_library ─────────────────────────────────────────────────────────

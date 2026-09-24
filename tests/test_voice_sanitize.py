@@ -106,3 +106,9 @@ def test_preserve_outer_whitespace_keeps_chunk_boundaries():
     out = sanitize_for_tts(raw, preserve_outer_whitespace=True)
     assert out == "hello world"
     assert sanitize_for_tts("   ", preserve_outer_whitespace=True) == ""
+
+def test_strips_markdown_asterisks():
+    """F5 would speak leftover * / ** as 'asterisk'."""
+    assert sanitize_for_tts("This is **bold** and *italic*.") == "This is bold and italic."
+    assert "*" not in sanitize_for_tts("* bullet one")
+    assert sanitize_for_tts("She said **yes**.") == "She said yes."

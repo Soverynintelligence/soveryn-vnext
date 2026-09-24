@@ -25,7 +25,13 @@ def test_write_and_read_round_trip(store):
     assert node.content == "hello world"
     assert node.layer == LAYER_PRIVATE
     assert node.tags == ("greeting",)
-    assert node.embedding == (0.1, 0.2, 0.3)
+    # Embeddings are stored as float32 binary since 2026-08-14, so a round
+    # trip narrows: 0.1 comes back as 0.10000000149. That is deliberate — the
+    # JSON text format cost 1,231 ms to decode 2,000 rows and forced a 2,000-row
+    # salience cap that made 637 embedded nodes permanently unrecallable.
+    # node.embedding is consumed in exactly one place, the cosine scorer, where
+    # 1e-8 is far below any similarity that matters.
+    assert node.embedding == pytest.approx((0.1, 0.2, 0.3), abs=1e-6)
     assert node.intent == "test"
 
 

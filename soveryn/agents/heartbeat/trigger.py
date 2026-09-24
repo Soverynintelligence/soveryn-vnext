@@ -20,6 +20,9 @@ class SkipReason(str, Enum):
     INTERVAL = "interval"
     BACKOFF = "backoff"
     QUIET_HOURS = "quiet_hours"
+    # Board/lattice/material snapshot identical to last pulse — do not re-ask
+    # the model (2026-08-19: Aetheria looped the same Sandbox note all night).
+    UNCHANGED = "unchanged"
 
 
 @dataclass(frozen=True)

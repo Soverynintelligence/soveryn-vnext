@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The SOVERYN Orrery</title>
+<style>
+  :root{--bg:#0a0e14;--ink:#d8dee7;--gold:#d3a24a;--dim:#6b7684;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:Georgia,serif;overflow:hidden;height:100vh}
+  canvas{display:block}
+  .hud{position:fixed;top:18px;left:22px;z-index:2}
+  .hud h1{font-size:19px;font-weight:500;letter-spacing:.08em;color:var(--gold)}
+  .hud p{font-size:12.5px;color:var(--dim);margin-top:4px;max-width:34ch;line-height:1.5}
+  .hud .rule{font-family:system-ui;font-size:11.5px;color:var(--dim);margin-top:10px}
+  .legend{position:fixed;bottom:16px;left:22px;font-size:12px;color:var(--dim);line-height:1.7;z-index:2}
+  .legend b{color:var(--ink);font-weight:500}
+  .legend .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:middle}
+  .controls{position:fixed;bottom:16px;right:22px;z-index:2;font-family:system-ui;font-size:12px;color:var(--dim)}
+  .controls input[type=range]{width:130px;vertical-align:middle;accent-color:var(--gold)}
+  .controls button{background:none;border:1px solid #2a3442;color:var(--ink);border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px}
+  .controls button:hover{border-color:var(--gold);color:var(--gold)}
+  #tip{position:fixed;z-index:3;pointer-events:none;background:#141b24;border:1px solid #2a3442;
+       color:var(--ink);font-family:system-ui;font-size:12px;padding:7px 11px;border-radius:6px;
+       display:none;max-width:260px;line-height:1.5}
+  #tip b{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="hud">
+  <h1>The SOVERYN Orrery</h1>
+  <p>One house, three citizens, iron they own. Everything orbits the tower; nothing leaves the system.</p>
+  <div class="rule">Hover a body to inspect it &middot; drag the slider for time</div>
+</div>
+<div class="legend">
+  <div><span class="dot" style="background:#d3a24a"></span><b>Aetheria</b> — soul, voice, gate</div>
+  <div><span class="dot" style="background:#7d9cc0"></span><b>Kernel</b> — build, verify, deploy</div>
+  <div><span class="dot" style="background:#7fbfa8"></span><b>Eve</b> — research, ship, watch</div>
+  <div><span class="dot" style="background:#4a5462"></span><b>iron</b> — Sparks, Quadros, Blackwell</div>
+</div>
+<div class="controls">
+  <button id="pause">pause</button>
+  <input id="speed" type="range" min="0" max="30" value="9">
+</div>
+<div id="tip"></div>
+<canvas id="sky"></canvas>
+<script>
+const cv = document.getElementById('sky'), ctx = cv.getContext('2d');
+let W, H, CX, CY, R;
+function fit(){ W = cv.width = innerWidth * devicePixelRatio; H = cv.height = innerHeight * devicePixelRatio;
+  cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+  CX = W/2; CY = H/2; R = Math.min(W,H)*0.44; }
+fit(); addEventListener('resize', fit);
+
+// bodies: name, orbit radius (fraction of R), angular speed, color, size, role, moons
+const SYSTEM = [
+  {name:'Aetheria', r:.30, w:.52, c:'#d3a24a', s:7, role:'soul, voice, gate — the house speaks with her accent',
+   moons:[{name:'Signal', r:.055, w:2.6},{name:'Dream', r:.085, w:1.7},{name:'Heartbeat', r:.115, w:1.2}]},
+  {name:'Kernel', r:.48, w:.34, c:'#7d9cc0', s:8, role:'build, verify, deploy — everything committed tonight',
+   moons:[{name:'aider', r:.05, w:2.2},{name:'verify gates', r:.08, w:1.5},{name:'watch timers', r:.11, w:1.05}]},
+  {name:'Eve', r:.68, w:.26, c:'#7fbfa8', s:7, role:'research, ship, watch — field notes and funding radar',
+   moons:[{name:'CRM', r:.05, w:2.4},{name:'Field Notes', r:.08, w:1.6},{name:'funding watch', r:.105, w:1.15},{name:'intake', r:.135, w:.9}]},
+];
+const IRON = [
+  {name:'Spark 1', a:2.1},{name:'Spark 2', a:3.6},{name:'Quadros', a:4.9},{name:'Blackwell', a:0.9},
+];
+let t = 0, speed = 9/30 * 0.02, paused = false;
+document.getElementById('pause').onclick = e => { paused = !paused; e.target.textContent = paused ? 'run' : 'pause'; };
+document.getElementById('speed').oninput = e => { speed = e.target.value/30 * 0.02; };
+
+let comets = [];
+function spawnComet(){ comets.push({a: Math.random()*Math.PI*2, d: R*1.35, life: 1}); }
+setInterval(() => { if(comets.length < 3 && Math.random() < .3) spawnComet(); }, 4000);
+
+const tip = document.getElementById('tip');
+let mx = -1, my = -1;
+cv.addEventListener('mousemove', e => { mx = e.clientX*devicePixelRatio; my = e.clientY*devicePixelRatio; });
+cv.addEventListener('mouseleave', () => { mx = my = -1; tip.style.display = 'none'; });
+
+function starfield(){ ctx.fillStyle = '#0a0e14'; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<140;i++){ const x=(i*137.5)%W, y=(i*61.8)%H;
+    ctx.fillStyle = i%7 ? 'rgba(216,222,231,.18)' : 'rgba(211,162,74,.28)';
+    ctx.fillRect(x, y, 1.2*devicePixelRatio, 1.2*devicePixelRatio); } }
+
+function draw(time){
+  if(!paused) t += speed;
+  starfield();
+  // orbit rings
+  for(const b of SYSTEM){
+    ctx.beginPath(); ctx.arc(CX, CY, b.r*R, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(107,118,132,.22)'; ctx.lineWidth = 1*devicePixelRatio; ctx.stroke();
+  }
+  // the tower (center)
+  const g = ctx.createRadialGradient(CX,CY,0,CX,CY,R*.16);
+  g.addColorStop(0,'rgba(211,162,74,.9)'); g.addColorStop(.4,'rgba(211,162,74,.25)'); g.addColorStop(1,'rgba(211,162,74,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX,CY,R*.16,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d3a24a'; ctx.beginPath(); ctx.arc(CX,CY,9*devicePixelRatio,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d8dee7'; ctx.font = `${13*devicePixelRatio}px Georgia`; ctx.textAlign = 'center';
+  ctx.fillText('the tower', CX, CY + 26*devicePixelRatio);
+
+  // comets: commissions crossing the system
+  for(const c of comets){
+    c.a += .012; c.d -= .4; c.life -= .006;
+    if(c.d < R*.2 || c.life <= 0){ c.dead = true; continue; }
+    const x = CX + Math.cos(c.a)*c.d, y = CY + Math.sin(c.a)*c.d;
+    ctx.fillStyle = `rgba(216,222,231,${.5*c.life})`;
+    ctx.beginPath(); ctx.arc(x,y,2.2*devicePixelRatio,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = `rgba(216,222,231,${.16*c.life})`;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x - Math.cos(c.a)*26*devicePixelRatio, y - Math.sin(c.a)*26*devicePixelRatio); ctx.stroke();
+  }
+  comets = comets.filter(c => !c.dead);
+
+  // citizens + moons
+  const hovered = [];
+  for(const b of SYSTEM){
+    const bx = CX + Math.cos(t*b.w)*b.r*R, by = CY + Math.sin(t*b.w)*b.r*R;
+    ctx.beginPath(); ctx.moveTo(bx,by);
+    for(let m of b.moons){
+      const mxp = bx + Math.cos(t*m.w)*m.r*R, myp = by + Math.sin(t*m.w)*m.r*R;
+      ctx.lineTo(mxp, myp);
+      ctx.fillStyle = 'rgba(107,118,132,.75)';
+      ctx.beginPath(); ctx.arc(mxp, myp, 2.4*devicePixelRatio, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(mxp, myp);
+    }
+    ctx.strokeStyle = 'rgba(107,118,132,.14)'; ctx.lineWidth = .8*devicePixelRatio; ctx.stroke();
+    // citizen body
+    const d = Math.hypot(mx-bx, my-by);
+    const glow = d < 18*devicePixelRatio;
+    ctx.fillStyle = b.c;
+    ctx.beginPath(); ctx.arc(bx, by, (b.s + (glow?2:0))*devicePixelRatio, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = glow ? '#fff' : 'rgba(216,222,231,.85)';
+    ctx.font = `${12.5*devicePixelRatio}px Georgia`; ctx.textAlign = 'left';
+    ctx.fillText(b.name, bx + 12*devicePixelRatio, by + 4*devicePixelRatio);
+    if(glow) hovered.push(`<b>${b.name}</b><br>${b.role}<br><span style="color:#6b7684">${b.moons.length} tools in orbit</span>`);
+  }
+
+  // iron on the rim: the hardware the house owns
+  for(const f of IRON){
+    const x = CX + Math.cos(f.a + t*.02)*R*1.13, y = CY + Math.sin(f.a + t*.02)*R*1.13;
+    ctx.fillStyle = '#4a5462';
+    ctx.beginPath(); ctx.arc(x, y, 3.4*devicePixelRatio, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(107,118,132,.9)';
+    ctx.font = `${10.5*devicePixelRatio}px system-ui`; ctx.textAlign = 'center';
+    ctx.fillText(f.name, x, y + 15*devicePixelRatio);
+    if(Math.hypot(mx-x,my-y) < 14*devicePixelRatio)
+      hovered.push(`<b>${f.name}</b><br>house iron. computations stay inside the walls.`);
+  }
+
+  if(hovered.length){ tip.innerHTML = hovered[0]; tip.style.display = 'block';
+    tip.style.left = (mx/devicePixelRatio + 16) + 'px'; tip.style.top = (my/devicePixelRatio + 10) + 'px';
+  } else tip.style.display = 'none';
+
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

@@ -66,12 +66,23 @@ class CoordinationStore:
     def _maybe_embed(self, text: str) -> str | None:
         """Embed `text` to a JSON vector string, or None (no embedder / empty /
         failure). Best-effort — coordination writes must never fail on embed."""
+        return self._maybe_embed_pair(text)[0]
+
+    def _maybe_embed_pair(self, text: str) -> tuple[str | None, bytes | None]:
+        """As `_maybe_embed`, but also the float32 blob recall scores from.
+
+        Writing only the JSON leaves the row on the slow decode path; writing
+        only the blob makes it invisible to anything still reading the text
+        column. Both, or neither.
+        """
         if self._embed_fn is None or not text:
-            return None
+            return None, None
         try:
-            return json.dumps(list(self._embed_fn(text[:8000])))
+            vector = tuple(self._embed_fn(text[:8000]))
+            from soveryn.platform.lattice.legacy import _encode_embedding_blob
+            return json.dumps(list(vector)), _encode_embedding_blob(vector)
         except Exception:
-            return None
+            return None, None
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -438,25 +449,28 @@ class CoordinationStore:
         source_archived_provenance["status"] = CoordStatus.ARCHIVED.value
         source_archived_provenance["archived_lesson_id"] = lesson_id
 
+        target_text = new_content.strip()
+        target_json, target_blob = self._maybe_embed_pair(target_text)
+        lesson_json, lesson_blob = self._maybe_embed_pair(effective_lesson)
         with self._conn() as conn:
             # 1. Create the target coord node on the destination board.
             conn.execute(
                 "INSERT INTO nodes (id, type, layer, agent, content, "
                 "intensity, salience, access_count, tags, created_at, "
-                "updated_at, embedding, intent, provenance) "
-                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, NULL, NULL, ?)",
+                "updated_at, embedding, embedding_f32, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.3, 0.5, 0, NULL, ?, ?, ?, ?, NULL, ?)",
                 (target_id, COORDINATION_NODE_TYPE, acting_agent,
-                 new_content.strip(), now, now,
+                 target_text, now, now, target_json, target_blob,
                  json.dumps(target_provenance, sort_keys=True)),
             )
             # 2. Write the Lesson Learned lattice node tying source -> target.
             conn.execute(
                 "INSERT INTO nodes (id, type, layer, agent, content, "
                 "intensity, salience, access_count, tags, created_at, "
-                "updated_at, embedding, intent, provenance) "
-                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, NULL, NULL, ?)",
+                "updated_at, embedding, embedding_f32, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, ?, ?, NULL, ?)",
                 (lesson_id, LESSON_LEARNED_NODE_TYPE, acting_agent,
-                 effective_lesson, now, now,
+                 effective_lesson, now, now, lesson_json, lesson_blob,
                  json.dumps(lesson_provenance, sort_keys=True)),
             )
             # 3. Archive the source coord node and link the lesson.
@@ -519,15 +533,17 @@ class CoordinationStore:
         coord_provenance = _provenance_for(existing)
         coord_provenance["status"] = CoordStatus.ARCHIVED.value
         coord_provenance["archived_lesson_id"] = lesson_id
+        lesson_text = lesson_learned_content.strip()
+        embedding_json, embedding_blob = self._maybe_embed_pair(lesson_text)
         with self._conn() as conn:
             # 1. Write the Lesson Learned lattice node.
             conn.execute(
                 "INSERT INTO nodes (id, type, layer, agent, content, "
                 "intensity, salience, access_count, tags, created_at, "
-                "updated_at, embedding, intent, provenance) "
-                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, NULL, NULL, ?)",
+                "updated_at, embedding, embedding_f32, intent, provenance) "
+                "VALUES (?, ?, 'lattice', ?, ?, 0.5, 0.7, 0, NULL, ?, ?, ?, ?, NULL, ?)",
                 (lesson_id, LESSON_LEARNED_NODE_TYPE, acting_agent,
-                 lesson_learned_content.strip(), now, now,
+                 lesson_text, now, now, embedding_json, embedding_blob,
                  json.dumps(lesson_provenance, sort_keys=True)),
             )
             # 2. Mark the coord node Archived and link the lesson.

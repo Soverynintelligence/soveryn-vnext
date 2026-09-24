@@ -35,7 +35,23 @@ from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
+from soveryn.agents.skills import SkillNameError, get_skill_index
 from soveryn.agents.souls import get_soul
+from soveryn.agents.turn_scope import is_trivial_user_turn
+
+
+def dump_tool_result(result: object) -> str:
+    """Serialize a tool result for the model. Bytes in the payload used to
+    raise TypeError and kill the whole Kernel commission (OpenCode/GLM
+    session blobs, binary stdout). Decode instead of crashing the turn.
+    """
+
+    def _default(o: object) -> str:
+        if isinstance(o, (bytes, bytearray)):
+            return bytes(o).decode("utf-8", "replace")
+        return str(o)
+
+    return json.dumps(result, sort_keys=True, default=_default)
 from soveryn.inference.llama_server_client import (
     ChatMessage,
     ChatRequest,
@@ -57,6 +73,11 @@ from soveryn.platform.tools.registry import ToolArgError, ToolRegistry
 from soveryn.platform.verification.gate import GateDecision, VerificationGate
 from soveryn.platform.voice.sanitize import sanitize_for_tts
 
+try:
+    from soveryn.platform.approval.store import ApprovalBroker
+except ImportError:  # pragma: no cover
+    ApprovalBroker = None  # type: ignore[assignment]
+
 
 ChatFn = Callable[..., ChatResponse]
 EmbedFn = Callable[[str], tuple[float, ...]]
@@ -68,6 +89,18 @@ StreamFn = Callable[..., Iterator[StreamChunk]]
 # valid JSON. Observed 2026-06-17: Qwen3.6 on the shared vett-scotty server
 # occasionally truncates tool-call args under heavy read_file use.
 _TOOLCALL_PARSE_MAX_ATTEMPTS = 3
+
+# Injected when the tool-round budget is spent so the model must answer from
+# results already in context instead of requesting more tools (and leaving the
+# user with tool_round_limit + empty content). Lightning / tool-eager MoEs hit
+# this often on greetings and light research (2026-08-14).
+_TOOL_CAP_SYNTH_NOTE = (
+    "Tool-call budget for this turn is exhausted. Do NOT call any tools. "
+    "Answer the user NOW using only the tool results already in this conversation. "
+    "If this was a greeting, chit-chat, or the tools added nothing useful, reply "
+    "naturally and briefly. This is your final message for this turn — emit "
+    "visible content only, no tool calls."
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,6 +161,19 @@ class ToolResultEvent:
 
 
 @dataclass(frozen=True)
+class ApprovalPendingEvent:
+    """Egress tool is held at the Approval Gate. Emitted after the pending
+    request is created and *before* wait(), so /chat_stream can show Allow/Deny
+    while the loop blocks for a human decision (or TTL expiry).
+    """
+    approval_id: str
+    citizen: str
+    tool: str
+    args: dict
+    call_id: str
+
+
+@dataclass(frozen=True)
 class TTSTokenEvent:
     """Sanitized assistant text fragment for TTS consumption.
 
@@ -147,7 +193,7 @@ class TTSTokenEvent:
 # Union type alias for typing
 AgentStreamEvent = (
     TokenEvent | DoneEvent | ErrorEvent | ToolCallEvent | ToolResultEvent
-    | TTSTokenEvent
+    | ApprovalPendingEvent | TTSTokenEvent
 )
 
 
@@ -202,6 +248,43 @@ def _estimate_tokens(text: str) -> int:
     """Char/4 ballpark. Actual token count comes back from llama-server's
     usage.prompt_tokens post-call; this estimator only drives trim decisions."""
     return max(1, len(text or "") // 4)
+
+
+def _splice_images_onto_last_user(
+    messages: tuple[ChatMessage, ...], urls: tuple[str, ...]
+) -> tuple[ChatMessage, ...]:
+    """Append image_url parts to the last user message (in-flight only).
+
+    look_at (and any tool that queues `_vision`) cannot put pixels on a
+    role=tool message — Qwen mmproj reads images on the user turn. Same
+    splice shape as chat attachments.
+    """
+    if not urls:
+        return messages
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].role != "user":
+            continue
+        msg = messages[i]
+        if isinstance(msg.content, list):
+            parts = list(msg.content)
+        else:
+            parts = [{"type": "text", "text": msg.content or ""}]
+        existing = {
+            (p.get("image_url") or {}).get("url")
+            for p in parts
+            if isinstance(p, dict) and p.get("type") == "image_url"
+        }
+        for url in urls:
+            if url not in existing:
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+        spliced = ChatMessage(
+            role="user",
+            content=parts,
+            tool_call_id=msg.tool_call_id,
+            tool_calls=msg.tool_calls,
+        )
+        return messages[:i] + (spliced,) + messages[i + 1 :]
+    return messages
 
 
 def _estimate_message_tokens(msg: ChatMessage) -> int:
@@ -301,43 +384,54 @@ def _fit_tool_loop_messages(
     return tuple(head + nonresult + sized)
 
 
+# Memory Grades PR5 (2026-08-11): history budget is HISTORY-ONLY by default.
+# Prelude (soul / pinned / continuity / spine / recall) is not charged against
+# history_token_budget — charging it starved chat history under a fat Aetheria
+# prelude. Soft budgets on prelude/total are reported via context_usage only.
+PRELUDE_SOFT_BUDGET_TOKENS = 3500
+TOTAL_INPUT_SOFT_BUDGET_TOKENS = 12_000
+# Voice duplex: a 6k-history + fat prelude prefill is ~30s of silence on
+# Quadros Qwen. The user then says "can you hear me?" which barge-in
+# cancels TTS before F5 ever runs. Cap voice history so first audio is soon.
+VOICE_HISTORY_TOKEN_BUDGET = 1500
+
+
 def _apply_history_budget(
     prelude: tuple[ChatMessage, ...],
     history: tuple[ChatMessage, ...],
     budget: int,
+    *,
+    charge_prelude: bool = False,
 ) -> tuple[tuple[ChatMessage, ...], ChatMessage | None, int]:
-    """Drop oldest history turns until prelude + history fits inside budget.
+    """Drop oldest *complete turns* until the charged set fits inside budget.
 
-    Always preserves history[-1] (the just-saved user message). Returns:
-      (possibly_trimmed_history, elision_marker_or_None, elided_count)
+    A turn is a user message plus its follow-on assistant/tool messages.
+    Never pops a single message off a pair (that orphaned Kernel mends).
+    Always preserves the last turn. Fat older assistant bodies may be capped
+    (lean-tail); user words stay verbatim. Returns:
+      (possibly_trimmed_history, elision_marker_or_None, elided_turn_count)
 
-    If the most recent turn alone (plus prelude) already blows the budget,
-    that's a prompt-overflow condition the budgeter can't fix — we still
-    drop everything older and surface the overflow via context_usage so the
-    UI banner reflects it.
+    Default charge_prelude=False (Memory Grades PR5, fleet-wide): only history
+    tokens count against budget. Prelude still rides the wire; it is governed
+    by context_window fit (_fit_tool_loop_messages) and soft budgets in
+    context_usage, not by this trimmer.
+
+    charge_prelude=True restores the pre-PR5 behavior (prelude + history share
+    one envelope) for callers that explicitly need it.
+
+    If the most recent turn alone (and charged prelude, when enabled) already
+    blows the budget, we keep the newest turn, drop older history when
+    possible, and surface pressure via context_usage.
     """
-    if not history:
-        return history, None, 0
-    prelude_tokens = sum(_estimate_message_tokens(m) for m in prelude)
-    history_tokens = [_estimate_message_tokens(m) for m in history]
-    total = prelude_tokens + sum(history_tokens)
-    if total <= budget:
-        return history, None, 0
+    from soveryn.agents.lean_tail import reap_history
 
-    kept = list(history)
-    kept_tokens = list(history_tokens)
-    dropped = 0
-    while len(kept) > 1 and total > budget:
-        total -= kept_tokens.pop(0)
-        kept.pop(0)
-        dropped += 1
-    if dropped == 0:
-        return history, None, 0
-    marker = ChatMessage(
-        role="system",
-        content=f"[Context: {dropped} older turn(s) elided to fit token budget.]",
+    return reap_history(
+        prelude,
+        history,
+        budget,
+        charge_prelude=charge_prelude,
+        estimate_fn=_estimate_message_tokens,
     )
-    return tuple(kept), marker, dropped
 
 
 ContinuityTailFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | None], ...]], ...]
@@ -346,7 +440,8 @@ ContinuityTailFingerprint = tuple[tuple[str, str, int, tuple[tuple[str, str | No
 # coordination boards (new directive, status flip, archive) invalidates the
 # cache exactly the same way a new session tail does — the brief never goes
 # stale relative to the work actually in flight.
-ContinuityFingerprint = tuple[ContinuityTailFingerprint, str]
+# (tails_fp, active_focus_text, acttruth_act_truth_text)
+ContinuityFingerprint = tuple[ContinuityTailFingerprint, str, str]
 
 
 @dataclass(frozen=True)
@@ -438,23 +533,36 @@ class AgentLoop:
         max_tool_rounds: int = 4,
         system_prompt: str | None = None,
         lattice_store: LatticeStore | None = None,
+        kb_store=None,
         identity_spine_store: LatticeStore | None = None,
         recall_k: int = 0,
         recall_threshold: float = 0.70,
         embed_fn: EmbedFn = _default_embed,
         soul_text: str | None = "",
         souls_dir: Path | None = None,
+        skills_dir: Path | None = None,
         pinned_text: str = "",
         continuity_config: ContinuityConfig | None = None,
         coord_store: "CoordinationStore | None" = None,
         black_box: BlackBox | None = None,
         steering_rack: SteeringRack | None = None,
         verification_gate: "VerificationGate | None" = None,
+        approval_gate: "ApprovalBroker | None" = None,
+        server_override: "ModelServer | None" = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
         # bubbles up here, NEVER at turn-processing time.
-        self.server = route_for_agent(self.agent_name)
+        # server_override binds an explicit server and skips the agent-name
+        # route entirely: the delegation runner executes under a folded name
+        # (scotty) whose persona route no longer exists, but whose worker
+        # endpoint is declared in runtime. Non-personal worker lanes need a
+        # server, not a persona.
+        self.server = (
+            server_override
+            if server_override is not None
+            else route_for_agent(self.agent_name)
+        )
         self.conv_store = conv_store
         self.chat_fn = chat_fn
         self.stream_fn = stream_fn
@@ -494,10 +602,10 @@ class AgentLoop:
         if recall_k < 0:
             raise ValueError(f"recall_k must be >= 0 (got {recall_k})")
         if recall_k > 0:
-            if lattice_store is None:
+            if lattice_store is None and kb_store is None:
                 raise ValueError(
-                    "recall_k > 0 requires lattice_store; "
-                    "pass a LatticeStore instance or set recall_k=0"
+                    "recall_k > 0 requires lattice_store or kb_store; "
+                    "pass a store instance or set recall_k=0"
                 )
             if not (0.0 < recall_threshold <= 1.0):
                 raise ValueError(
@@ -505,6 +613,7 @@ class AgentLoop:
                     f"(got {recall_threshold})"
                 )
         self.lattice_store = lattice_store
+        self.kb_store = kb_store
         self.identity_spine_store = identity_spine_store
         self.recall_k = recall_k
         self.recall_threshold = recall_threshold
@@ -518,6 +627,11 @@ class AgentLoop:
             self.soul_text: str = get_soul(self.agent_name, souls_dir=souls_dir)
         else:
             self.soul_text = soul_text
+        # Skills are disk-first + hot-reload: the index is re-read from disk
+        # every turn (see _build_skills_index) so a freshly-learned skill is
+        # visible next turn without a restart. skills_dir=None falls back to
+        # the config default inside get_skill_index.
+        self.skills_dir = skills_dir
 
         # Pinned memory is Aetheria's relationship substrate (third identity
         # layer between persona and soul). Default empty = skip — Vett and
@@ -543,6 +657,11 @@ class AgentLoop:
             verification_gate is not None
             and verification_gate.applies_to(self.agent_name)
         )
+        # Deterministic approval gate (egress boundary). None → no gate; every
+        # egress tool call passes through unimpeded. When wired, the gate
+        # intercepts `optional_egress` tools at the tool-dispatch boundary,
+        # blocks until a human approves, and denies on timeout (fail-safe).
+        self.approval_gate = approval_gate
         # Cross-rail live thread (ActiveContextService | None). Optional so
         # every existing construction site and test keeps working unchanged.
         self.active_context = active_context
@@ -605,15 +724,45 @@ class AgentLoop:
             )
             return ""
 
+    def _acttruth_act_truth_brief(self) -> str:
+        """Episodic act-truth + soft lessons for this agent (ActTruth by SOVERYN).
+
+        Crew-wide: each agent sees quiet failures and recent tool outcomes —
+        not vibe memory. Repeat FAILs become LESSONS so they stop blind loops.
+        Best-effort; never raises.
+        """
+        try:
+            from soveryn.platform.acttruth.hooks import get_acttruth
+            from soveryn.platform.acttruth.lessons import lessons_brief
+
+            truth = get_acttruth().ledger.recall_brief(
+                self.agent_name, limit=6, window_hours=24.0, max_chars=900,
+            )
+            lessons = lessons_brief(self.agent_name)
+            if truth and lessons:
+                return f"{truth}\n\n{lessons}"
+            return truth or lessons
+        except Exception:
+            return ""
+
+    def _with_acttruth_brief(self, text: str) -> str:
+        block = self._acttruth_act_truth_brief()
+        if not block:
+            return text
+        return f"{text}\n\n{block}" if text else block
+
     def _build_continuity_brief(self, session_id: str) -> str:
         """Build or reuse the Cross-Surface Recent Activity Brief.
 
         Cache invalidation is keyed to the underlying cross-session activity,
         not the clock. Relative-time strings are rendered once and stay stable
         until a different session tail appears.
+
+        Continuum act-truth is folded in for every agent (including when
+        cross-surface continuity is disabled) so quiet failures stay visible.
         """
         if self.continuity_config is None or not self.continuity_config.enabled:
-            return ""
+            return self._with_acttruth_brief("")
         # Cross-session tails (multi-rail conversation continuity) stay
         # Aetheria-only. Active Focus (board awareness) also goes to any agent
         # wired with a coord_store — Vett, so she can see what's in flight and
@@ -623,7 +772,7 @@ class AgentLoop:
             # A peer with no coord_store still gets its own live thread —
             # otherwise "the whole team is whole" is false for exactly the
             # agent with the fewest other continuity sources (Scotty).
-            return self._render_active_context()
+            return self._with_acttruth_brief(self._render_active_context())
         try:
             session = self.conv_store.get_session(session_id)
             # Autonomous sessions ([heartbeat], [dream], [patrol]) are excluded
@@ -638,7 +787,7 @@ class AgentLoop:
                 and self.continuity_config.session_is_autonomous(session.title)
             )
             if autonomous:
-                return self._render_active_context()
+                return self._with_acttruth_brief(self._render_active_context())
             tails = ()
             if is_aetheria:
                 from soveryn.platform.continuity.store import recent_cross_session_tails
@@ -677,9 +826,11 @@ class AgentLoop:
                     dispatch_states=dispatch_states,
                     self_agent=self.agent_name,
                 )
+            acttruth_block = self._acttruth_act_truth_brief()
             fingerprint: ContinuityFingerprint = (
                 _continuity_fingerprint(tails),
                 active_focus,
+                acttruth_block,
             )
             cached = self.session_context_cache.continuity.get(session_id)
             if cached is not None and cached.fingerprint == fingerprint:
@@ -693,6 +844,8 @@ class AgentLoop:
             active_context = self._render_active_context()
             if active_context:
                 text = f"{text}\n\n{active_context}" if text else active_context
+            if acttruth_block:
+                text = f"{text}\n\n{acttruth_block}" if text else acttruth_block
             self.session_context_cache.continuity[session_id] = ContinuityCacheEntry(
                 fingerprint=fingerprint,
                 text=text,
@@ -703,7 +856,7 @@ class AgentLoop:
             logging.getLogger(__name__).exception(
                 "continuity brief build failed; serving without it"
             )
-            return ""
+            return self._with_acttruth_brief("")
 
     def _build_recall_context(self, session_id: str, user_message: str) -> str:
         """Build or reuse live recall across a coherent local thread."""
@@ -731,13 +884,39 @@ class AgentLoop:
             query_vector = self.embed_fn(user_message, prompt="query")
         except TypeError:
             query_vector = self.embed_fn(user_message)
-        ranked = self.lattice_store.find_nodes_by_embedding(
-            self.agent_name,
-            query_vector,
-            limit=self.recall_k,
-            threshold=self.recall_threshold,
-        )
-        text = assemble_ranked_recall(ranked)
+        parts: list[str] = []
+        if self.lattice_store is not None:
+            ranked = self.lattice_store.find_nodes_by_embedding(
+                self.agent_name,
+                query_vector,
+                limit=self.recall_k,
+                threshold=self.recall_threshold,
+            )
+            facts: tuple = ()
+            impl = getattr(type(self.lattice_store), "find_canonical_facts", None)
+            if callable(impl) and getattr(impl, "__name__", "") == "find_canonical_facts":
+                try:
+                    facts = impl(
+                        self.lattice_store, self.agent_name, user_message, limit=3,
+                    ) or ()
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "canonical fact rail failed; serving cosine recall only"
+                    )
+                    facts = ()
+            lattice_text = assemble_ranked_recall(ranked, fact_nodes=facts)
+            if lattice_text:
+                parts.append(lattice_text)
+        if self.kb_store is not None:
+            from soveryn.platform.kb.recall import format_kb_hits
+
+            hits = self.kb_store.search(query_vector, k=self.recall_k)
+            kb_text = format_kb_hits(
+                hits, threshold=self.recall_threshold, limit=self.recall_k,
+            )
+            if kb_text:
+                parts.append(kb_text)
+        text = "\n\n".join(parts)
         self.session_context_cache.recall[session_id] = RecallCacheEntry(
             text=text,
             query_text=user_message,
@@ -797,6 +976,36 @@ class AgentLoop:
             identity_nodes=_identity_spine_nodes(self.identity_spine_store, agent=self.agent_name),
         )
 
+    def _build_skills_index(self) -> str:
+        """Skills index is disk-first, re-read every turn (hot-reload).
+
+        Tiny (one line per skill) so the per-turn read is negligible. A
+        skill learned mid-session appears next turn with no restart. Empty
+        (no skills on disk yet) → "" so the prelude block is skipped entirely.
+        Labeled for the model; soft-capped so a fat index cannot bloat prelude.
+
+        Non-citizen lanes (delegation worker, folded names) have no skills by
+        definition — a SkillNameError degrades to "" here rather than killing
+        the loop. The strict gate lives in soveryn.agents.skills for direct
+        citizen calls; this is the worker-lane fail-soft.
+        """
+        try:
+            raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        except SkillNameError:
+            raw = ""  # worker lanes carry no citizen skills
+        if not raw:
+            return ""
+        # ~2k tokens soft budget for the index (design: citizen skill capture).
+        max_chars = 8000
+        if len(raw) > max_chars:
+            raw = raw[: max_chars - 1].rstrip() + "…"
+        return (
+            "[PROCEDURAL SKILLS — house craft for this citizen]\n"
+            "Index only. Call recall_skill with a name below to load the full how-to.\n"
+            f"{raw}\n"
+            "[/PROCEDURAL SKILLS]"
+        )
+
     def _tool_schemas(self) -> tuple[dict, ...]:
         """Return OpenAI-compatible tool schemas for this agent."""
 
@@ -813,6 +1022,72 @@ class AgentLoop:
                 },
             })
         return tuple(schemas)
+
+    def _history_budget_for(self, source: str) -> int | None:
+        """History-only token cap for this turn.
+
+        Voice keeps a tighter envelope so duplex first-audio isn't a 30s
+        prefill of a long Messages thread.
+        """
+        budget = self.history_token_budget
+        if (source or "").strip().lower() != "voice":
+            return budget
+        if budget is None:
+            return VOICE_HISTORY_TOKEN_BUDGET
+        return min(budget, VOICE_HISTORY_TOKEN_BUDGET)
+
+    def _tools_for_user_turn(self, user_message: str) -> tuple[dict, ...] | None:
+        """Tool schemas for this turn, or None when the turn should be tool-free.
+
+        Trivial social/ack messages (hey/ok/thanks) get no tools — Lightning
+        otherwise inventories the whole house on a greeting (2026-08-14).
+        """
+        if is_trivial_user_turn(user_message):
+            return None
+        return self._tool_schemas() or None
+
+    def _messages_for_tool_cap_synthesis(
+        self, messages: tuple[ChatMessage, ...]
+    ) -> tuple[ChatMessage, ...]:
+        """Append the force-final note and re-fit under the history budget."""
+        return self._fit(messages + (
+            ChatMessage(role="system", content=_TOOL_CAP_SYNTH_NOTE),
+        ))
+
+    @staticmethod
+    def _as_tool_cap_final(response: ChatResponse) -> ChatResponse:
+        """Normalize a force-final generation: drop tool_calls, mark the cap.
+
+        Content (if any) is preserved so the user still gets an answer after
+        the model burned the tool budget. Empty content stays empty so the
+        existing loud tool_round_limit / empty_generation guards fire.
+        """
+        return ChatResponse(
+            content=response.content or "",
+            finish_reason="tool_round_limit",
+            tool_calls=None,
+            usage=response.usage,
+            raw=response.raw,
+        )
+
+    def _synthesize_after_tool_cap(
+        self, messages: tuple[ChatMessage, ...]
+    ) -> ChatResponse:
+        """One no-tools generation after the tool budget is spent.
+
+        Used as a safety net when the model still requested tools at the cap
+        (or returned empty after the forced last round). Never re-offers tools.
+        """
+        request = ChatRequest(
+            messages=self._messages_for_tool_cap_synthesis(messages),
+            model=self.server.model_alias,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            tools=None,
+            tool_choice=None,
+            thinking_budget_tokens=self.thinking_budget_tokens,
+        )
+        return self._as_tool_cap_final(self._chat(request))
 
     def _chat(self, request: ChatRequest) -> ChatResponse:
         """Invoke the model, retrying ONLY the narrow, known-intermittent
@@ -886,6 +1161,8 @@ class AgentLoop:
         attachments: tuple[str, ...] | None = None,
         *,
         source: str = "direct",
+        skip_user_save: bool = False,
+        files: tuple | None = None,
     ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
 
@@ -904,6 +1181,9 @@ class AgentLoop:
         passes source="heartbeat" so pulse turns are distinguishable from
         real human turns in the UI. Threaded straight to save_turn — see
         ConversationStore.save_turn.
+
+        skip_user_save — Messages deferred path already persisted the user
+        turn so the composer can unblock. Do not write it twice.
 
         Raises:
           AgentLoopError — session does not exist OR session.agent != self.agent_name
@@ -937,11 +1217,15 @@ class AgentLoop:
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
 
+        from soveryn.platform.intake.turn_images import take_queued_tool_vision as _drop_stale_vision
+        _drop_stale_vision()
+
         # 1. Save user turn (constraint 6: stays saved if chat later fails).
         # Text-only by design — vision parts live in-flight, not in the DB.
-        self.conv_store.save_turn(
-            session_id, self.agent_name, "user", user_message, source=source,
-        )
+        if not skip_user_save:
+            self.conv_store.save_turn(
+                session_id, self.agent_name, "user", user_message, source=source,
+            )
 
         # 2. Load history (includes the just-saved user turn).
         history_turns = self.conv_store.load_history(session_id)
@@ -949,6 +1233,7 @@ class AgentLoop:
         continuity_brief = self._build_continuity_brief(session_id)
         recall_context = self._build_recall_context(session_id, user_message)
         identity_context = self._build_identity_context()
+        skills_index = self._build_skills_index()
 
         # 3. Build immutable tuple[ChatMessage, ...] (constraint 7).
         # System message is prepended at request build time — NOT persisted
@@ -976,15 +1261,21 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+        if skills_index:
+            prelude = prelude + (ChatMessage(role="system", content=skills_index),)
 
         elided_turns = 0
         if self.history_token_budget is not None:
             history_messages, marker, elided_turns = _apply_history_budget(
                 prelude, history_messages, self.history_token_budget,
+                charge_prelude=False,
             )
             if marker is not None:
                 prelude = prelude + (marker,)
         messages: tuple[ChatMessage, ...] = prelude + history_messages
+        # Snapshot for context_usage (after history trim; elision marker in prelude).
+        _usage_prelude = prelude
+        _usage_history = history_messages
 
         # Temporal splice — prepend "[Current temporal context: ...]\n\n" to
         # the current (last) user message's text. Lives on the user turn (NOT
@@ -1032,12 +1323,14 @@ class AgentLoop:
             if self.black_box is not None else None
         )
         messages = self._fit(messages)
+        # Fixed for the whole turn: trivial "hey"/"ok" never see a tool menu.
+        turn_tools = self._tools_for_user_turn(user_message)
         request = ChatRequest(
             messages=messages,
             model=self.server.model_alias,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            tools=self._tool_schemas() or None,
+            tools=turn_tools,
             thinking_budget_tokens=self.thinking_budget_tokens,
         )
         response = self._chat(request)
@@ -1058,13 +1351,34 @@ class AgentLoop:
         while True:
             while response.tool_calls and self.tool_registry is not None:
                 if tool_rounds >= self.max_tool_rounds:
-                    response = ChatResponse(
-                        content=response.content,
-                        finish_reason="tool_round_limit",
-                        tool_calls=response.tool_calls,
-                        usage=response.usage,
-                        raw=response.raw,
-                    )
+                    # Cap hit with the model still asking for tools. Do NOT
+                    # dispatch those calls — force one no-tools synthesis from
+                    # results already in `messages` so the user gets an answer
+                    # instead of tool_round_limit + empty content (Lightning
+                    # thrash, 2026-08-14).
+                    if tool_rounds > 0 and not (response.content or "").strip():
+                        try:
+                            response = self._synthesize_after_tool_cap(messages)
+                        except Exception:
+                            logging.getLogger(__name__).exception(
+                                "tool-cap synthesis failed for %s; surfacing limit",
+                                self.agent_name,
+                            )
+                            response = ChatResponse(
+                                content=response.content or "",
+                                finish_reason="tool_round_limit",
+                                tool_calls=response.tool_calls,
+                                usage=response.usage,
+                                raw=response.raw,
+                            )
+                    else:
+                        response = ChatResponse(
+                            content=response.content or "",
+                            finish_reason="tool_round_limit",
+                            tool_calls=response.tool_calls,
+                            usage=response.usage,
+                            raw=response.raw,
+                        )
                     break
                 # Record tool names for the verification ledger BEFORE dispatch.
                 for _tc in response.tool_calls:
@@ -1082,7 +1396,13 @@ class AgentLoop:
                     tool_calls=response.tool_calls,
                 ),)
                 result_messages = [
-                    self._tool_result_message(tool_call, session_id=session_id)
+                    self._tool_result_message(
+                        tool_call,
+                        session_id=session_id,
+                        source=source,
+                        attachments=attachments,
+                        files=files,
+                    )
                     for tool_call in response.tool_calls
                 ]
                 if recorder is not None:
@@ -1094,17 +1414,42 @@ class AgentLoop:
                         ],
                     )
                 messages = messages + tuple(result_messages)
+                from soveryn.platform.intake.turn_images import take_queued_tool_vision
+
+                extra_vision = take_queued_tool_vision()
+                if extra_vision and self.agent_name in VISION_CAPABLE_AGENTS:
+                    messages = _splice_images_onto_last_user(messages, extra_vision)
                 messages = self._fit(messages)
-                request = ChatRequest(
-                    messages=messages,
-                    model=self.server.model_alias,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    tools=self._tool_schemas() or None,
-                    thinking_budget_tokens=self.thinking_budget_tokens,
-                )
+                # Last allowed tool dispatch → next generation is force-final
+                # (no tools). Prevents burning the final slot on another tool
+                # chain that leaves content empty.
+                force_final = (tool_rounds + 1) >= self.max_tool_rounds
+                if force_final:
+                    request = ChatRequest(
+                        messages=self._messages_for_tool_cap_synthesis(messages),
+                        model=self.server.model_alias,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        tools=None,
+                        tool_choice=None,
+                        thinking_budget_tokens=self.thinking_budget_tokens,
+                    )
+                else:
+                    request = ChatRequest(
+                        messages=messages,
+                        model=self.server.model_alias,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        tools=turn_tools,
+                        thinking_budget_tokens=self.thinking_budget_tokens,
+                    )
                 response = self._chat(request)
                 tool_rounds += 1
+                if force_final:
+                    # No-tools generation already requested; strip any sticky
+                    # tool_calls and stop the tool loop.
+                    response = self._as_tool_cap_final(response)
+                    break
 
             # ── Verification gate at final-answer finalization (Vett-only,
             # fail-open). Only a GENUINE final answer is gated: a
@@ -1128,20 +1473,24 @@ class AgentLoop:
                     and decision.action == "hold"
                     and tool_rounds < self.max_tool_rounds
                 ):
-                    # HOLD: do not emit. Inject the corrective note and let the
-                    # loop continue for one forced-verify round. Bounded by
-                    # verify_budget (default 2) → no infinite loop.
+                    # HOLD: do not emit. Inject the corrective note and force
+                    # tool_choice=required on the next chat so the model cannot
+                    # keep narrating "I'll verify…" without a real tool call
+                    # (prompt-only holds were still failing 2026-08-14).
+                    # Trivial turns keep tools=None (gate also emits for them).
                     verify_budget -= 1
                     messages = messages + (ChatMessage(
                         role="system", content=decision.note,
                     ),)
                     messages = self._fit(messages)
+                    schemas = turn_tools
                     request = ChatRequest(
                         messages=messages,
                         model=self.server.model_alias,
                         temperature=self.temperature,
                         max_tokens=self.max_tokens,
-                        tools=self._tool_schemas() or None,
+                        tools=schemas,
+                        tool_choice="required" if schemas else None,
                         thinking_budget_tokens=self.thinking_budget_tokens,
                     )
                     response = self._chat(request)
@@ -1220,18 +1569,33 @@ class AgentLoop:
                 tool_calls=response.tool_calls,
                 usage=response.usage,
                 raw=response.raw,
-                context_usage=self._build_context_usage(response.usage, elided_turns),
+                context_usage=self._build_context_usage(
+                    response.usage,
+                    elided_turns,
+                    prelude=_usage_prelude,
+                    history=_usage_history,
+                ),
             )
         return response
 
     def _build_context_usage(
-        self, usage: dict | None, elided_turns: int,
+        self,
+        usage: dict | None,
+        elided_turns: int,
+        *,
+        prelude: tuple[ChatMessage, ...] | None = None,
+        history: tuple[ChatMessage, ...] | None = None,
     ) -> dict:
         """Build the context_usage payload returned alongside a ChatResponse.
 
         prompt_tokens comes from the model's reported usage when available;
         if the server didn't return usage (e.g. a fake_chat in tests), we
         fall back to 0 so the UI math is defined.
+
+        Memory Grades PR5: budget_tokens is HISTORY-ONLY. prelude_tokens /
+        history_tokens / total_input_tokens_est are estimated client-side so
+        the UI can warn on soft budgets without charging prelude against the
+        history envelope.
         """
         prompt_tokens = 0
         if isinstance(usage, dict):
@@ -1239,15 +1603,104 @@ class AgentLoop:
                 prompt_tokens = int(usage.get("prompt_tokens") or 0)
             except (TypeError, ValueError):
                 prompt_tokens = 0
+        prelude_est = (
+            sum(_estimate_message_tokens(m) for m in prelude) if prelude else 0
+        )
+        history_est = (
+            sum(_estimate_message_tokens(m) for m in history) if history else 0
+        )
         return {
             "prompt_tokens": prompt_tokens,
             "budget_tokens": self.history_token_budget,
             "elided_turns": elided_turns,
             "context_window": self.context_window,
+            "prelude_tokens": prelude_est,
+            "history_tokens": history_est,
+            "total_input_tokens_est": prelude_est + history_est,
+            "prelude_soft_budget": PRELUDE_SOFT_BUDGET_TOKENS,
+            "total_input_soft_budget": TOTAL_INPUT_SOFT_BUDGET_TOKENS,
         }
 
+    def _parse_tool_args(self, raw_args: object) -> dict:
+        if isinstance(raw_args, dict):
+            return dict(raw_args)
+        if isinstance(raw_args, str):
+            try:
+                parsed = json.loads(raw_args) if raw_args else {}
+            except (TypeError, json.JSONDecodeError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
+    def _approval_gate_request(
+        self,
+        tool_name: str,
+        raw_args: object,
+        *,
+        source: str = "direct",
+    ):
+        """Create a pending Approval Gate request, or None if not gated."""
+        if self.approval_gate is None or not tool_name:
+            return None
+        from soveryn.citizens.connectors import requires_approval
+
+        if not requires_approval(tool_name, source=source):
+            return None
+        from datetime import datetime as _dt
+
+        return self.approval_gate.request(
+            citizen=self.agent_name,
+            tool=tool_name,
+            args=self._parse_tool_args(raw_args),
+            now=_dt.now().isoformat(),
+        )
+
+    def _approval_denied_message(
+        self,
+        *,
+        tool_name: str,
+        approval_id: str,
+        state: str,
+        call_id: str,
+    ) -> ChatMessage:
+        result = {
+            "error": "ApprovalDenied",
+            "tool": tool_name,
+            "approval_id": approval_id,
+            "state": state,
+            "message": (
+                "This egress tool call was not approved. "
+                "It will not be sent. Re-plan without this call, "
+                "or inform the user it was denied."
+            ),
+        }
+        return ChatMessage(
+            role="tool",
+            content=dump_tool_result(result),
+            tool_call_id=call_id,
+        )
+
+    def _approval_gate_wait_denied(self, req, *, call_id: str) -> ChatMessage | None:
+        """Block on ``req``; return a deny tool message, or None if approved."""
+        terminal = self.approval_gate.wait(req.id)
+        if terminal.state == "approved":
+            return None
+        return self._approval_denied_message(
+            tool_name=req.tool,
+            approval_id=req.id,
+            state=terminal.state,
+            call_id=call_id,
+        )
+
     def _tool_result_message(
-        self, tool_call: dict, *, session_id: str | None = None,
+        self,
+        tool_call: dict,
+        *,
+        session_id: str | None = None,
+        source: str = "direct",
+        skip_approval_gate: bool = False,
+        attachments: tuple[str, ...] | None = None,
+        files: tuple | None = None,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1270,17 +1723,48 @@ class AgentLoop:
             result = self.steering_rack.synthetic_error(tool_name=tool_name)
             return ChatMessage(
                 role="tool",
-                content=json.dumps(result, sort_keys=True),
+                content=dump_tool_result(result),
                 tool_call_id=call_id,
             )
+
+        # ── Approval gate pre-dispatch check (sync path).
+        # Stream path yields ApprovalPendingEvent before wait(); see
+        # process_message_stream. Automations auto-pass read-only tools.
+        # When skip_approval_gate=True the caller already requested+waited.
+        if not skip_approval_gate:
+            gated = self._approval_gate_request(tool_name, raw_args, source=source)
+            if gated is not None:
+                denied = self._approval_gate_wait_denied(gated, call_id=call_id)
+                if denied is not None:
+                    return denied
 
         try:
             args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
         except (TypeError, json.JSONDecodeError) as exc:
             result = {"error": "ToolArgError", "message": str(exc)}
         else:
+            # Stamp originating Messages/chat session onto objective_assign so
+            # CoS relay delivers the brief into THIS DM, not a random [m] thread.
+            if (
+                tool_name == "objective_assign"
+                and session_id
+                and isinstance(args, dict)
+                and not str(args.get("dm_session_id") or "").strip()
+            ):
+                args = dict(args)
+                args["dm_session_id"] = session_id
             try:
-                result = self.tool_registry.invoke(self.agent_name, tool_name, args)
+                from soveryn.platform.intake.turn_files import turn_files_bound
+                from soveryn.platform.intake.turn_images import (
+                    pop_tool_vision,
+                    queue_tool_vision,
+                    turn_images_bound,
+                )
+
+                with turn_images_bound(attachments), turn_files_bound(files):
+                    result = self.tool_registry.invoke(
+                        self.agent_name, tool_name, args,
+                    )
             except ToolArgError as exc:
                 result = {"error": "ToolArgError", "message": str(exc)}
             except Exception as exc:  # noqa: BLE001 — handler failures must surface
@@ -1290,8 +1774,65 @@ class AgentLoop:
                 # crashes the whole turn. BaseException stays unhandled —
                 # SystemExit / KeyboardInterrupt propagate as intended.
                 result = {"error": type(exc).__name__, "message": str(exc)}
+            else:
+                result, vision_urls = pop_tool_vision(result)
+                if vision_urls and self.agent_name in VISION_CAPABLE_AGENTS:
+                    queue_tool_vision(vision_urls)
 
-        result_content = json.dumps(result, sort_keys=True)
+        # ActTruth soft lesson — if this failure continues a streak, tell the
+        # model in-band so same-turn retry loops can stop.
+        try:
+            from soveryn.platform.acttruth.lessons import maybe_lesson_for_tool_result
+
+            ok_flag = not (
+                isinstance(result, dict)
+                and (result.get("error") or result.get("ok") is False)
+            )
+            err = None
+            if isinstance(result, dict):
+                err = result.get("message") or result.get("error")
+                if result.get("error"):
+                    ok_flag = False
+            lesson = maybe_lesson_for_tool_result(
+                self.agent_name,
+                tool=tool_name,
+                ok=ok_flag,
+                error=str(err) if err else None,
+                result=result,
+            )
+            if lesson and isinstance(result, dict):
+                result = dict(result)
+                result["acttruth_lesson"] = lesson
+            elif lesson and not isinstance(result, dict):
+                result = {"result": result, "acttruth_lesson": lesson}
+            # Step 3: park a bug-triage candidate (deduped). Never auto-fixes.
+            if lesson:
+                try:
+                    from soveryn.platform.acttruth.triage import enqueue_if_lesson
+
+                    triage_row = enqueue_if_lesson(
+                        agent=self.agent_name,
+                        tool=tool_name,
+                        lesson_text=str(lesson),
+                        error=str(err) if err else None,
+                        result=result,
+                    )
+                    if triage_row and isinstance(result, dict):
+                        result = dict(result)
+                        result["acttruth_triage_id"] = triage_row.get("id")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        from soveryn.agents.lean_tail import maybe_spill_tool_content
+
+        result_content = maybe_spill_tool_content(
+            dump_tool_result(result),
+            tool_name=tool_name,
+            call_id=call_id,
+            session_id=session_id,
+        )
 
         # ── Steering rack post-dispatch observe.
         # observe() handles the watched-tool check internally; opaque tools
@@ -1318,6 +1859,7 @@ class AgentLoop:
         attachments: tuple[str, ...] | None = None,
         *,
         source: str = "direct",
+        files: tuple | None = None,
     ) -> "Iterator[AgentStreamEvent]":
         """Streaming variant. Yields TokenEvent per content delta, then either
         DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
@@ -1358,6 +1900,9 @@ class AgentLoop:
                 f"(agent {self.agent_name!r} has no vision model loaded)"
             )
 
+        from soveryn.platform.intake.turn_images import take_queued_tool_vision as _drop_stale_vision
+        _drop_stale_vision()
+
         # ── Save user turn FIRST (honest state if stream fails later).
         # Text-only by design — vision parts live in-flight, not in the DB.
         self.conv_store.save_turn(
@@ -1368,6 +1913,11 @@ class AgentLoop:
         continuity_brief = self._build_continuity_brief(session_id)
         recall_context = self._build_recall_context(session_id, user_message)
         identity_context = self._build_identity_context()
+        skills_index = self._build_skills_index()
+        # Voice greetings: drop recall + skills so "Hello?" isn't an 18k prefill.
+        if source == "voice" and is_trivial_user_turn(user_message):
+            recall_context = ""
+            skills_index = ""
 
         # ── Build messages
         history_messages = tuple(
@@ -1388,15 +1938,21 @@ class AgentLoop:
             prelude = prelude + (ChatMessage(role="system", content=identity_context),)
         if recall_context:
             prelude = prelude + (ChatMessage(role="system", content=recall_context),)
+        if skills_index:
+            prelude = prelude + (ChatMessage(role="system", content=skills_index),)
 
         elided_turns = 0
-        if self.history_token_budget is not None:
+        history_budget = self._history_budget_for(source)
+        if history_budget is not None:
             history_messages, marker, elided_turns = _apply_history_budget(
-                prelude, history_messages, self.history_token_budget,
+                prelude, history_messages, history_budget,
+                charge_prelude=False,
             )
             if marker is not None:
                 prelude = prelude + (marker,)
         messages = prelude + history_messages
+        _usage_prelude = prelude
+        _usage_history = history_messages
 
         # Temporal splice — see sync-path note. Lives on the current user
         # turn so the prelude stays byte-identical across turns.
@@ -1463,16 +2019,36 @@ class AgentLoop:
             self.verification_gate.forced_verify_budget
             if gate_active and self.verification_gate is not None else 0
         )
+        # After a gate HOLD, next stream request uses tool_choice=required.
+        force_tool_choice: str | None = None
+        # After the last allowed tool dispatch, next stream is no-tools final.
+        force_final_stream: bool = False
+        # Fixed for the whole turn: trivial "hey"/"ok" never see a tool menu.
+        turn_tools = self._tools_for_user_turn(user_message)
 
         while True:
+            this_force_final = force_final_stream
+            force_final_stream = False  # one-shot
+            if this_force_final:
+                schemas = None
+                stream_messages = self._messages_for_tool_cap_synthesis(messages)
+                stream_tool_choice = None
+            else:
+                schemas = turn_tools
+                stream_messages = messages
+                stream_tool_choice = (
+                    force_tool_choice if (force_tool_choice and schemas) else None
+                )
             request = ChatRequest(
-                messages=messages,
+                messages=stream_messages,
                 model=self.server.model_alias,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                tools=self._tool_schemas() or None,
+                tools=schemas,
+                tool_choice=stream_tool_choice,
                 thinking_budget_tokens=self.thinking_budget_tokens,
             )
+            force_tool_choice = None  # one-shot unless another hold sets it
 
             # ── Open the stream. PRE-stream errors propagate (route → JSON 5xx).
             chunk_iter = self.stream_fn(request, self.server, timeout=self.chat_timeout_seconds)
@@ -1555,13 +2131,25 @@ class AgentLoop:
             round_content = "".join(round_content_parts)
             round_tc_tuple = tuple(round_tool_calls) if round_tool_calls else None
 
+            # Force-final stream after the last tool dispatch: never re-dispatch
+            # tools even if the model still emits tool_calls (tests / sticky
+            # models). Content is the answer. Empty falls through to the
+            # tool_round_limit ErrorEvent below (same as pre-fix-final).
+            if this_force_final:
+                if gate_active and round_content:
+                    yield TokenEvent(delta=round_content)
+                    _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
+                    if _s.strip():
+                        yield TTSTokenEvent(text=_s)
+                final_content_parts.append(round_content)
+                final_finish_reason = "tool_round_limit"
+                break
+
             # If the model wants tools and we're within the round budget, dispatch.
             if round_tc_tuple and self.tool_registry is not None:
                 if tool_rounds >= self.max_tool_rounds:
-                    # Cap hit: keep whatever content we have for this round, mark
-                    # the finish reason for the caller, and break out to save+done.
-                    # Gate-active turns buffered this content — release it now so
-                    # the user isn't left with a DoneEvent but no token stream.
+                    # Cap hit without a prior force-final (max_tool_rounds=0
+                    # edge, or a race). Keep any partial content; mark limit.
                     if gate_active and round_content:
                         yield TokenEvent(delta=round_content)
                         _s = sanitize_for_tts(round_content, preserve_outer_whitespace=True)
@@ -1603,18 +2191,65 @@ class AgentLoop:
                     turn_tool_ledger.append(str(_fn.get("name") or ""))
 
                 # Invoke each tool, emit visibility events, append result messages.
+                # Approval Gate: request → ApprovalPendingEvent → wait → invoke
+                # (or deny tool_result). Yielding before wait lets /chat_stream
+                # show Allow/Deny while this thread blocks.
                 round_observations: list[dict] = []
                 for tool_call in round_tc_tuple:
                     function = tool_call.get("function") or {}
+                    call_id = str(tool_call.get("id") or "")
+                    tool_name = str(function.get("name") or "")
+                    raw_args = function.get("arguments") or ""
                     yield ToolCallEvent(
-                        call_id=str(tool_call.get("id") or ""),
-                        name=str(function.get("name") or ""),
-                        args=str(function.get("arguments") or ""),
+                        call_id=call_id,
+                        name=tool_name,
+                        args=str(raw_args),
                     )
-                    result_message = self._tool_result_message(tool_call, session_id=session_id)
+                    gated = self._approval_gate_request(
+                        tool_name, raw_args, source=source,
+                    )
+                    if gated is not None:
+                        yield ApprovalPendingEvent(
+                            approval_id=gated.id,
+                            citizen=gated.citizen,
+                            tool=gated.tool,
+                            args=dict(gated.args),
+                            call_id=call_id,
+                        )
+                        denied = self._approval_gate_wait_denied(
+                            gated, call_id=call_id,
+                        )
+                        if denied is not None:
+                            yield ToolResultEvent(
+                                call_id=call_id,
+                                name=tool_name,
+                                content=denied.content,
+                            )
+                            messages = messages + (denied,)
+                            if recorder is not None:
+                                round_observations.append(
+                                    _build_observation_entry(tool_call, denied)
+                                )
+                            continue
+                        result_message = self._tool_result_message(
+                            tool_call,
+                            session_id=session_id,
+                            source=source,
+                            skip_approval_gate=True,
+                            attachments=attachments,
+                            files=files,
+                        )
+                    else:
+                        result_message = self._tool_result_message(
+                            tool_call,
+                            session_id=session_id,
+                            source=source,
+                            attachments=attachments,
+                            files=files,
+                        )
                     yield ToolResultEvent(
-                        call_id=str(tool_call.get("id") or ""),
-                        name=str(function.get("name") or ""),
+                        call_id=call_id,
+                        name=tool_name,
                         content=result_message.content,
                     )
                     messages = messages + (result_message,)
@@ -1622,6 +2257,11 @@ class AgentLoop:
                         round_observations.append(
                             _build_observation_entry(tool_call, result_message)
                         )
+                from soveryn.platform.intake.turn_images import take_queued_tool_vision
+
+                extra_vision = take_queued_tool_vision()
+                if extra_vision and self.agent_name in VISION_CAPABLE_AGENTS:
+                    messages = _splice_images_onto_last_user(messages, extra_vision)
                 if recorder is not None and round_observations:
                     recorder.record_observation(
                         round_index=tool_rounds,
@@ -1629,6 +2269,9 @@ class AgentLoop:
                     )
 
                 tool_rounds += 1
+                # After the last allowed tool dispatch, next stream is force-final.
+                if tool_rounds >= self.max_tool_rounds:
+                    force_final_stream = True
                 # Re-enter the round loop for the model's next response.
                 continue
 
@@ -1667,8 +2310,13 @@ class AgentLoop:
                     tool_calls=round_tc_tuple,
                     usage=final_usage,
                     context_usage=(
-                        self._build_context_usage(final_usage, elided_turns)
-                        if self.history_token_budget is not None else None
+                        self._build_context_usage(
+                            final_usage,
+                            elided_turns,
+                            prelude=_usage_prelude,
+                            history=_usage_history,
+                        )
+                        if history_budget is not None else None
                     ),
                 )
                 return
@@ -1690,12 +2338,14 @@ class AgentLoop:
                     and tool_rounds < self.max_tool_rounds
                 ):
                     # HOLD: discard the buffered confab (never emitted), inject
-                    # the corrective note, continue for one forced-verify round.
+                    # the corrective note, continue for one forced-verify round
+                    # with tool_choice=required (API-level force, not just a note).
                     # Bounded by verify_budget → no infinite loop.
                     verify_budget -= 1
                     messages = messages + (ChatMessage(
                         role="system", content=decision.note,
                     ),)
+                    force_tool_choice = "required"
                     continue
                 if decision is not None and decision.action == "floor":
                     round_content = decision.answer or round_content
@@ -1771,8 +2421,13 @@ class AgentLoop:
             tool_calls=None,
             usage=final_usage,
             context_usage=(
-                self._build_context_usage(final_usage, elided_turns)
-                if self.history_token_budget is not None else None
+                self._build_context_usage(
+                    final_usage,
+                    elided_turns,
+                    prelude=_usage_prelude,
+                    history=_usage_history,
+                )
+                if history_budget is not None else None
             ),
         )
 

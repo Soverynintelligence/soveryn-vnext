@@ -4,106 +4,96 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Chat</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
+<link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
 <style>
+
   :root {
-    /* SOVERYN palette — anchored to the new logo (organic + electric
-       duality, bronze trunk as bridge). Background is warm dark earth,
-       not cool ink-navy. Agent identity:
-         Aetheria → tri-stop spectrum (sage → warm gray → electric blue)
-         Vett     → deep background blue (cosmic depth)
-         Scotty   → bronze (the structural trunk; forged executor) */
+    /* Lab console face (matches Command Center + mobile MC).
+       Pure black ground, gold instrument chrome. Agent discs keep identity
+       sheens; UI chrome no longer reverts to copper/sage. */
+    --ground: #000000;
+    --panel: #0a0a09;
+    --panel-2: #151412;
+    --line: #26241f;
+    --line-lit: #38352e;
+    --ink: #e9e5dc;
+    --ink-2: #9a9384;
+    --ink-3: #655f55;
+    --gold: #c6a664;
+    --gold-dim: #7a6740;
+    --ok: #6fb98a;
+    --down: #b4685c;
 
-    /* Brand tokens — sage + copper on carbon (2026-07-24 rebrand), per Aetheria's art direction
-       (2026-06-19). The interface should feel like a monument / piece of
-       high-end hardware, not a themed website: matte charcoal as a MATERIAL,
-       weathered brushed gold as machined metalwork (NOT bright/flashy),
-       solid obsidian slabs (no glassmorphism). Blue + status signals are the
-       ONLY things that glow — gold stays matte and structural. */
-    --sov-canvas:#0f1011;          /* matte charcoal-black material base */
-    --sov-sage-bright:#8fa07f;     /* gentle sage highlight (not flashy) */
-    --sov-sage-deep:#566149;       /* sage shadow / edge */
-    --copper-sheen:linear-gradient(115deg,#8C5A3C 0%,#c0824f 40%,#d69a68 49%,#b7794a 60%,#74492e 100%);
-    --sage-sheen:linear-gradient(115deg,#566149 0%,#74856a 40%,#8fa07f 49%,#6b7c62 60%,#414a38 100%);
-    --steel-sheen:linear-gradient(115deg,#404e59 0%,#5f7684 40%,#7d94a3 49%,#556a77 60%,#303b44 100%); /* brushed-metal streak */
-    --sov-olive:#74856a;           /* (retained) */
-    --sov-bronze:#8C5A3C;          /* aged Spartan-shield bronze (Jon's avatar / patina) */
-    --sov-maroon:#a3543a;          /* Scotty — engineering maroon (Star Trek red-shirt) */
-    --sov-maroon-bright:#c26a4c;   /* maroon highlight */
-    --maroon-sheen:linear-gradient(115deg,#6b3323 0%,#a3543a 40%,#c26a4c 49%,#8f4831 60%,#54271b 100%); /* engineering disc */
-    --sov-deep-blue:#404e59;       /* Vett */
-    --sov-electric-blue:#6b8290;   /* Aetheria phosphor — a GLOW signal */
-    --sov-sage:#74856a;            /* Aetheria gradient start */
-    --sov-gray:#9a988a;            /* Aetheria gradient middle */
-    --sov-amber:#c0824f;           /* soft accent */
-    --text:#E7E5DC;                /* high-contrast warm white — pops on obsidian */
-    --text-dim:rgba(243,239,229,0.60); /* secondary text, lifted out of muddy gray */
+    --sov-canvas: var(--ground);
+    --sov-sage-bright: var(--ok);
+    --sov-sage-deep: #3d6b4f;
+    --sov-olive: var(--ink-2);
+    --sov-bronze: var(--gold);
+    --sov-maroon: var(--down);
+    --sov-maroon-bright: #c47a6e;
+    --sov-deep-blue: #404e59;
+    --sov-electric-blue: #6b8290;
+    --sov-sage: var(--ok);
+    --sov-gray: var(--ink-2);
+    --sov-amber: var(--gold);
+    --text: var(--ink);
+    --text-dim: var(--ink-2);
 
-    /* Legacy aliases — old token names map into the new palette. */
-    --canvas:var(--sov-canvas);
-    --earth:#4e2d11;
-    --leaf:var(--sov-amber);
-    --slate:#2a4459;
-    --node:var(--sov-amber);        /* focus rings → copper */
-    --bronze:var(--sov-bronze);
-    --copper:var(--sov-amber);
+    /* Agent identity discs only (not page chrome) */
+    --copper-sheen: linear-gradient(115deg, #7a6740 0%, #c6a664 40%, #e0c98a 49%, #c6a664 60%, #5a4a2e 100%);
+    --sage-sheen: linear-gradient(115deg, #7a6740 0%, #c6a664 45%, #d4b577 55%, #7a6740 100%);
+    --steel-sheen: linear-gradient(115deg, #404e59 0%, #5f7684 40%, #7d94a3 49%, #556a77 60%, #303b44 100%);
+    --maroon-sheen: linear-gradient(115deg, #6b3323 0%, #a3543a 40%, #c26a4c 49%, #8f4831 60%, #54271b 100%);
 
-    /* Structure — solid obsidian slabs with a razor-thin gold hairline.
-       Glassmorphism killed: panels are near-opaque, blur minimal so the
-       grain material reads through the edges rather than a frosted blur. */
-    --glass-bg:rgba(16,16,19,0.92);          /* solid matte obsidian slab */
-    --glass-border:rgba(192,130,79,0.30);    /* 1px weathered-gold hairline */
-    --glass-blur:blur(3px) saturate(105%);
-    --r-lg:22px;
-    --r-md:14px;
-    --r-sm:10px;
-    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+    --canvas: var(--ground);
+    --earth: var(--panel-2);
+    --leaf: var(--gold);
+    --slate: var(--panel-2);
+    --node: var(--gold);
+    --bronze: var(--gold);
+    --copper: var(--gold);
+
+    --glass-bg: var(--panel);
+    --glass-border: var(--line);
+    --glass-blur: none;
+    --r-lg: 0;
+    --r-md: 3px;
+    --r-sm: 3px;
+    --font: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --mono: var(--font);
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
-  html,body { height:100%; background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; }
+  html,body { height:100%; background:var(--ground); color:var(--ink); font-family:var(--font); font-size:14px; }
 
-  /* Material, not wallpaper. Per Aetheria: the background should be a
-     textured charcoal grain that makes the screen feel like a physical
-     object — not a celestial picture sitting under the UI. A fine fractal-
-     noise grain over the obsidian base, with a faint gold breath at the top
-     edge for depth. Fixed + pointer-events:none so it never intercepts. */
-  body::before {
-    content:"";
-    position:fixed; inset:0;
-    background:#0f1011 url("/static/soveryn-mark.png") no-repeat center 54%;
-    /* sized by HEIGHT so it can never overflow the viewport and clip at the top */
-    background-size:auto min(58vh,520px);
-    opacity:0.42;
-    /* lift the copper/sage out of the carbon rather than just fading it up */
-    filter:brightness(1.18) saturate(1.15);
-    pointer-events:none;
-    z-index:0;
-  }
-  /* Soft vignette so the carved medallion sinks into the frame edges and the
-     UI panels read cleanly over it. */
-  body::after {
-    content:"";
-    position:fixed; inset:0;
-    background:radial-gradient(110% 85% at 50% 50%, transparent 55%, rgba(15,16,17,0.40) 100%);
-    pointer-events:none;
-    z-index:0;
-  }
+  /* No medallion wallpaper on the lab face — ruled gold grid comes from body.lab */
+  body::before, body::after { display: none !important; content: none !important; }
   aside, main { position:relative; z-index:1; }
   /* 100vh fallback + 100dvh override for browsers that support dynamic viewport
      height. dvh shrinks with the mobile URL bar so the composer never falls
      below the visible area. */
   body {
-    display:grid; grid-template-columns:280px 1fr 0;
-    grid-template-rows:100vh; height:100vh;
-    overflow:hidden;
-    transition:grid-template-columns 0.18s ease;
+    display:flex; flex-direction:column;
+    height:100vh; overflow:hidden;
   }
   @supports (height: 100dvh) {
-    body { grid-template-rows:100dvh; height:100dvh; }
+    body { height:100dvh; }
+  }
+  /* Shell under the shared lab plate: sidebar + main */
+  .chat-shell {
+    flex:1; min-height:0;
+    display:grid; grid-template-columns:280px 1fr;
+    overflow:hidden;
+    transition:grid-template-columns 0.18s ease;
   }
   /* Collapsed sidebar: the column goes to 0 and the sidebar's overflow
      hides its contents during the slide. The toggle in the chat-header
      stays visible because it lives in <main>, not in <aside>. */
-  body.sidebar-collapsed { grid-template-columns:0 1fr 0; }
+  body.sidebar-collapsed .chat-shell { grid-template-columns:0 1fr; }
   button { font-family:var(--font); color:var(--text); background:transparent; border:none; cursor:pointer; }
 
   /* Sidebar */
@@ -133,56 +123,76 @@
   .sidebar-toggle:hover { background:rgba(255,255,255,0.025); color:var(--text); }
   body.sidebar-collapsed .sidebar-toggle { transform:rotate(180deg); }
   .brand { display:flex; justify-content:space-between; align-items:center; padding:4px 6px 12px; }
-  /* Wordmark — brushed metal, like the SOVERYN lettering on the mark.
-     Copper since the 2026-07-24 rebrand; gold is now reserved for Aetheria. */
   .brand .wordmark {
     font-weight:600; letter-spacing:0.18em; font-size:13px;
-    background:var(--copper-sheen);
-    -webkit-background-clip:text; background-clip:text; color:transparent;
+    color: var(--gold);
   }
   .brand .home { color:var(--text-dim); font-size:11px; text-decoration:none; }
   .brand .home:hover { color:var(--text); }
 
-  /* The SOVERYN action — the boldest brand element on the page. Brushed
-     COPPER since the 2026-07-24 rebrand (was gold; gold is now Aetheria's
-     alone). Dark text on machined metal. */
-  .new-chat {
-    background:var(--copper-sheen);
-    border:1px solid var(--sov-bronze);
-    color:#17120a;
-    padding:10px 14px; border-radius:var(--r-md);
-    font-size:13px; font-weight:600;
-    text-align:left;
-    transition:filter 0.14s ease;
+  .new-chat,
+  body.lab .new-chat.act.primary,
+  body.lab [data-testid="new-chat"] {
+    background: rgba(198, 166, 100, 0.14) !important;
+    border: 1px solid var(--gold) !important;
+    color: var(--gold) !important;
+    padding: 10px 14px;
+    border-radius: 3px !important;
+    font-size: 0.68rem !important;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    font-family: var(--mono) !important;
+    transition: background 0.14s ease, color 0.14s ease;
   }
-  .new-chat:hover { filter:brightness(1.08); }
+  .new-chat:hover,
+  body.lab .new-chat.act.primary:hover {
+    background: rgba(198, 166, 100, 0.24) !important;
+    color: var(--ink) !important;
+    filter: none;
+  }
 
-  .agent-pills { display:flex; gap:6px; }
+  /* 5 agents no longer fit one row in the 280px sidebar — wrap 3+2 so
+     Eve (and anyone after kernel) isn't clipped by aside { overflow:hidden }. */
+  .agent-pills {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 0 12px;
+    box-sizing: border-box;
+  }
   .agent-pill {
-    flex:1; padding:8px 10px; border-radius:var(--r-sm);
-    background:rgba(255,255,255,0.015);
-    border:1px solid var(--glass-border);
-    font-size:11px; font-weight:500;
-    text-align:center;
-    color:rgba(236,243,244,0.7);
+    min-width: 0;
+    padding: 8px 6px; border-radius: var(--r-sm);
+    background: rgba(255,255,255,0.015);
+    border: 1px solid var(--glass-border);
+    font-size: 11px; font-weight: 500;
+    text-align: center;
+    color: rgba(236,243,244,0.7);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .agent-pill[aria-pressed="true"] {
-    background:rgba(154,152,138,0.14);
-    border-color:rgba(154,152,138,0.4);
-    color:var(--text);
+    background:rgba(198,166,100,0.12);
+    border-color:rgba(198,166,100,0.45);
+    color:var(--gold);
   }
-  /* Per-agent pressed border colors match each agent's signature hue. */
-  .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(154,152,138,0.55); }
-  .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(62,168,232,0.5); }
-  .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(156,53,67,0.6); }
+  .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(198,166,100,0.55); }
+  .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(107,130,144,0.55); color:#9eb4c2; }
+  .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(196,122,110,0.55); color:#c47a6e; }
+  .agent-pill[data-agent="kernel"][aria-pressed="true"]   { border-color:rgba(80,140,200,0.55); color:#8eb4d4; }
+  .agent-pill[data-agent="eve"][aria-pressed="true"]      { border-color:rgba(180,120,160,0.55); color:#c9a0b8; }
 
   .search input {
     width:100%; padding:8px 12px; border-radius:var(--r-sm);
-    background:rgba(255,255,255,0.015);
-    border:1px solid var(--glass-border);
-    color:var(--text); font-size:12px; outline:none;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--ink); font-size:12px; outline:none;
+    font-family: var(--mono);
   }
-  .search input:focus { border-color:rgba(192,130,79,0.55); }
+  .search input:focus { border-color:var(--gold-dim); }
 
   .history { flex:1; overflow-y:auto; padding-right:4px; }
   .history h4 { font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.12em; margin:14px 0 6px; padding:0 4px; }
@@ -195,8 +205,7 @@
   }
   .history a:hover { background:rgba(255,255,255,0.02); }
   .history a:hover .del-session { opacity:0.55; }
-  /* Active session — copper-flagged row (the active highlight Aetheria called for). */
-  .history a.active { background:rgba(192,130,79,0.12); border-left-color:var(--sov-amber); color:var(--text); }
+  .history a.active { background:rgba(198,166,100,0.10); border-left-color:var(--gold); color:var(--ink); }
   .history .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .history .label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .history .del-session {
@@ -253,21 +262,124 @@
     backdrop-filter:var(--glass-blur);
     -webkit-backdrop-filter:var(--glass-blur);
   }
-  /* Default disc = Aetheria's brushed gold (overridden by JS per agent).
-     Gold is her IDENTITY, not the brand — the 2026-07-24 rebrand moved the
-     brand to sage + copper and Jon reserved gold for her disc alone. */
   .chat-header .disc {
     width:32px; height:32px; border-radius:50%;
     background:var(--sage-sheen);
     flex-shrink:0;
-    box-shadow:inset 0 0 0 1px rgba(143,160,127,0.25);
+    box-shadow:inset 0 0 0 1px rgba(198,166,100,0.35);
+    position: relative;
+    overflow: visible;
   }
+  .chat-header .disc.sov-cit {
+    font-size: 0;
+    background: transparent !important;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0 !important;
+  }
+  .chat-header .disc.sov-cit svg { width: 100%; height: 100%; display: block; }
   .chat-header .meta { flex:1; }
   .chat-header .meta .title { font-size:14px; font-weight:500; }
   .chat-header .meta .sub { font-size:11px; color:rgba(236,243,244,0.5); margin-top:2px; }
-  .chat-header .actions { display:flex; gap:6px; }
-  .chat-header .actions button { color:rgba(236,243,244,0.55); padding:6px 8px; border-radius:8px; font-size:14px; }
-  .chat-header .actions button:hover { background:rgba(255,255,255,0.02); color:var(--text); }
+  .chat-header .actions {
+    display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+  }
+  .chat-header .actions button {
+    color:rgba(236,243,244,0.55); padding:6px 10px; border-radius:8px;
+    font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+    font-family:var(--mono, ui-monospace, monospace);
+    border:1px solid transparent; background:transparent; cursor:pointer;
+  }
+  .chat-header .actions button:hover { background:rgba(255,255,255,0.04); color:var(--text); border-color:rgba(255,255,255,0.06); }
+  body.lab .chat-header .actions button {
+    color: var(--ink-2, #9a9384); border-radius: 3px; font-size: 0.58rem;
+  }
+  body.lab .chat-header .actions button:hover {
+    color: var(--gold, #c6a664); border-color: var(--line-lit, #38352e);
+    background: var(--panel-2, #151412);
+  }
+  .chat-header .actions .call-btn {
+    margin-left: 4px;
+    border-color: rgba(198,166,100,0.35) !important;
+    color: var(--sov-amber, #c6a664) !important;
+  }
+  .more-wrap { position: relative; }
+  .more-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+    min-width: 180px; padding: 6px;
+    background: #16181a; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  body.lab .more-menu {
+    background: var(--panel, #0a0a09); border-color: var(--line, #26241f); border-radius: 3px;
+  }
+  .more-menu[hidden] { display: none !important; }
+  .more-menu button, .more-menu a {
+    display: block; width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; background: transparent; cursor: pointer;
+    color: var(--text, #e7e5dc); font-size: 12px; text-decoration: none;
+    font-family: var(--mono, ui-monospace, monospace); border-radius: 4px;
+  }
+  .more-menu button:hover, .more-menu a:hover { background: rgba(255,255,255,0.06); }
+  .more-menu button.danger:hover { color: #c47a6e; }
+
+  /* Simple inspector / export panels */
+  .chat-modal-backdrop {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(0,0,0,0.65);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .chat-modal-backdrop[hidden] { display: none !important; }
+  .chat-modal {
+    width: min(560px, 100%); max-height: min(80vh, 720px);
+    overflow: auto; padding: 18px 20px 16px;
+    background: #16181a; border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; color: var(--text, #e7e5dc);
+  }
+  body.lab .chat-modal {
+    background: var(--panel, #0a0a09); border-color: var(--line); border-radius: 3px;
+    font-family: var(--mono);
+  }
+  .chat-modal h3 {
+    margin: 0 0 10px; font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--sov-amber, #c6a664);
+  }
+  .chat-modal pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word;
+    font-size: 12px; line-height: 1.5; color: rgba(231,229,220,0.85);
+    max-height: 55vh; overflow: auto;
+  }
+  .chat-modal textarea[data-modal-edit] {
+    display: block; width: 100%; min-height: 42vh; max-height: 55vh;
+    margin: 0; padding: 10px 12px; box-sizing: border-box;
+    white-space: pre-wrap; word-break: break-word;
+    font-size: 12px; line-height: 1.5; font-family: inherit;
+    color: rgba(231,229,220,0.92);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(198,166,100,0.35); border-radius: 6px;
+    resize: vertical;
+  }
+  .chat-modal textarea[data-modal-edit]:focus {
+    outline: none; border-color: rgba(198,166,100,0.7);
+  }
+  .chat-modal .modal-source {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.4); margin: 0 0 8px;
+  }
+  .chat-modal .modal-actions {
+    display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap;
+  }
+  .chat-modal .modal-actions button {
+    padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.12); background: transparent;
+    color: var(--text); font-size: 12px;
+  }
+  .chat-modal .modal-actions button.primary {
+    border-color: rgba(198,166,100,0.45); color: var(--sov-amber, #c6a664);
+  }
+  .chat-modal .modal-actions button[hidden] { display: none !important; }
 
   /* Thread */
   .thread {
@@ -282,58 +394,150 @@
     font-size:14px; line-height:1.55;
     white-space:pre-wrap; word-wrap:break-word;
   }
-  /* User bubble: a gold-hairlined obsidian slab (gold message-bubble border). */
   .bubble.user {
     align-self:flex-end;
-    background:rgba(192,130,79,0.10);
-    border:1px solid rgba(192,130,79,0.34);
-    border-bottom-right-radius:4px;
+    background:rgba(198,166,100,0.10);
+    border:1px solid rgba(198,166,100,0.35);
+    border-bottom-right-radius:2px;
+    font-family: var(--sans);
   }
-  /* Aetheria's bubble — dropped to 0.40 alpha so the tree bg reads through
-     comparably to the user bubble (which is olive at 0.16). Sidebar/header/
-     composer panels stay at the original 0.68 — they're chrome, not content. */
-  /* Assistant bubble — a solid obsidian slab with a gold hairline. No
-     translucency (Aetheria: "heavy slabs of obsidian," not floating glass). */
   .bubble.assistant {
     align-self:flex-start;
-    background:rgba(18,18,21,0.96);
-    border:1px solid var(--glass-border);
-    border-bottom-left-radius:4px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-left:2px solid var(--gold-dim);
+    border-bottom-left-radius:2px;
+    color: var(--ink-2);
+    font-family: var(--sans);
   }
   .tool-strip {
     align-self:flex-start;
     max-width:78%;
-    font-family:"SF Mono","Menlo",monospace;
+    font-family:var(--mono);
     font-size:11px; line-height:1.5;
-    color:rgba(236,243,244,0.6);
-    background:rgba(255,255,255,0.0125);
-    border:1px solid rgba(255,255,255,0.03);
-    border-radius:6px;
+    color:var(--ink-2);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
     padding:6px 10px;
     margin-bottom:-2px;
     white-space:pre-wrap; word-wrap:break-word;
   }
-  /* Tool name in bronze — Scotty's color, signature of "agent used a tool." */
-  .tool-strip .tool-name { color:var(--sov-maroon-bright); }
+  .tool-strip .tool-name { color:var(--gold); }
   .tool-strip .tool-result {
-    color:rgba(236,243,244,0.5);
+    color:var(--ink-3);
     margin-top:3px;
     padding-top:3px;
-    border-top:1px dashed rgba(255,255,255,0.025);
+    border-top:1px dashed var(--line);
   }
+  .collab-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 8px 16px 0; max-width: 780px; width: 100%; margin: 0 auto;
+  }
+  .collab-chips[hidden] { display: none !important; }
+  .collab-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.08);
+    color: var(--ink); font-size: 12px; text-decoration: none;
+  }
+  .collab-chip:hover { background: rgba(111,185,138,0.14); }
+  .collab-av {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(111,185,138,0.35); color: #0c0b0a;
+    font-size: 11px; font-weight: 700;
+  }
+  /* In-thread: just the peer bot shape — tap opens Aetheria+peer group room */
+  a.messaged-peer {
+    align-self: flex-start;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    text-decoration: none; color: var(--ink);
+    padding: 4px 6px; margin: 4px 0 8px; border-radius: 16px;
+    max-width: 88px; border: 1px solid transparent;
+  }
+  a.messaged-peer:hover { opacity: 0.9; }
+  a.messaged-peer:focus-visible {
+    outline: none; border-color: rgba(111,185,138,0.5);
+  }
+  a.messaged-peer .mp-av {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; color: #0c0b0a;
+    background: linear-gradient(145deg, #7ec8e3, #3a7a9a);
+    box-shadow: 0 0 0 2px rgba(111,185,138,0.35);
+  }
+  a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer[data-state="working"] .mp-av {
+    animation: mp-work 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
+  }
+  a.messaged-peer[data-state="replied"] .mp-av {
+    box-shadow: 0 0 0 2px rgba(198,166,100,0.65);
+  }
+  @keyframes mp-work {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  a.messaged-peer .mp-name {
+    font-size: 11px; font-weight: 600; color: var(--ink-3, rgba(245,242,234,0.45));
+    text-align: center; line-height: 1.2;
+  }
+  a.messaged-peer .mp-status {
+    font-size: 10px; color: var(--ok, #6fb98a); text-align: center;
+  }
+  a.messaged-peer[data-state="replied"] .mp-status { color: var(--gold); }
   .tool-strip .tool-result.pending { font-style:italic; opacity:0.65; }
-  /* Live intent mark (mark_share): reads as a deliberate note, not a data tool. */
-  .tool-strip .tool-result.intent-mark { color:var(--sov-olive); opacity:0.95; font-style:italic; }
+  .tool-strip .tool-result.intent-mark { color:var(--ok); opacity:0.95; font-style:italic; }
+  .approval-card {
+    align-self:flex-start;
+    max-width:78%;
+    margin:4px 0 8px;
+    padding:10px 12px;
+    background:var(--panel);
+    border:1px solid var(--gold);
+    border-radius:3px;
+    font-family:var(--sans);
+    font-size:13px;
+    color:var(--ink);
+  }
+  .approval-card .ac-head {
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--gold); margin-bottom:6px;
+  }
+  .approval-card .ac-tool { font-family:var(--mono); font-size:12px; color:var(--ink-2); }
+  .approval-card .ac-args {
+    font-family:var(--mono); font-size:11px; color:var(--ink-3);
+    white-space:pre-wrap; word-break:break-word; margin:6px 0 10px;
+  }
+  .approval-card .ac-actions { display:flex; gap:8px; }
+  .approval-card .ac-actions button {
+    font-family:var(--sans); font-size:12px; padding:5px 12px;
+    border-radius:3px; border:1px solid var(--line); cursor:pointer;
+    background:var(--bg); color:var(--ink);
+  }
+  .approval-card .ac-actions button.ac-allow {
+    border-color:var(--ok); color:var(--ok);
+  }
+  .approval-card .ac-actions button.ac-deny {
+    border-color:var(--hot, #e07070); color:var(--hot, #e07070);
+  }
+  .approval-card .ac-actions button:disabled { opacity:0.5; cursor:default; }
+  .approval-card.ac-done { border-color:var(--line); opacity:0.85; }
+  .approval-card .ac-notice { margin-top:8px; font-size:12px; color:var(--ink-2); }
   .bubble .thinking-placeholder {
-    color:rgba(236,243,244,0.45);
+    color:var(--ink-3);
     font-style:italic;
     animation:pulse 1.6s ease-in-out infinite;
   }
   @keyframes pulse { 0%,100% { opacity:0.35 } 50% { opacity:0.85 } }
-  /* Live cursor — electric blue, the connective end of Aetheria's spectrum. */
   .bubble .cursor {
     display:inline-block; width:6px; height:14px;
-    background:var(--sov-electric-blue); vertical-align:middle; margin-left:2px;
+    background:var(--gold); vertical-align:middle; margin-left:2px;
     animation:blink 1s steps(2) infinite;
   }
   @keyframes blink { 50% { opacity:0 } }
@@ -346,31 +550,28 @@
   .composer {
     flex-shrink:0;
     margin:0 16px 16px;
-    /* Column flex so the attachments preview row stacks above the input row.
-       Inner alignment lives on .composer-row (which uses align-items:center). */
     display:flex; flex-direction:column; align-items:stretch; gap:0;
     padding:10px 14px;
-    background:var(--glass-bg);
-    backdrop-filter:var(--glass-blur);
-    -webkit-backdrop-filter:var(--glass-blur);
-    border:1px solid var(--glass-border);
-    border-radius:30px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:3px;
   }
   .composer input {
     flex:1; padding:8px 10px;
     background:transparent; border:none; outline:none;
-    color:var(--text); font-size:14px;
+    color:var(--ink); font-size:14px;
+    font-family: var(--mono);
   }
   .composer .stream-toggle {
-    font-size:11px; color:rgba(236,243,244,0.55);
-    padding:6px 10px; border-radius:14px;
-    background:rgba(255,255,255,0.02);
+    font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--gold); padding:6px 10px; border-radius:3px;
+    border:1px solid var(--line-lit);
+    background:transparent;
   }
-  /* Send button — brushed copper (the SOVERYN action). */
   .composer .send {
-    width:32px; height:32px; border-radius:50%;
-    background:var(--copper-sheen); color:#17120a;
-    border:1px solid var(--sov-sage-deep);
+    width:32px; height:32px; border-radius:3px;
+    background:rgba(198,166,100,0.16); color:var(--gold);
+    border:1px solid var(--gold-dim);
     display:flex; align-items:center; justify-content:center;
     font-weight:700;
   }
@@ -463,98 +664,54 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  /* ─── Voice call (in-page) ──────────────────────────────────────────────
-     Call button sits in .chat-header .actions next to persona/export/more.
-     Click → full-screen overlay with a pulsing per-agent orb + END CALL.
+  /* ─── Voice call (in-page) — entry is Chat → Menu → Voice ───────────────
      Backend route is /voice/session/<session_id>/offer; the WebRTC peer
      binds to the existing chat session so transcribed turns land in the
      same conversation history. */
-  .chat-header .actions .call-btn[hidden] { display: none; }
-  .chat-header .actions .call-btn {
-    font-size: 15px;
-    line-height: 1;
-  }
-  /* Subtle per-agent hover tint — keeps the action row uniform at rest. */
-  .chat-header .actions .call-btn[data-agent="aetheria"]:hover { color: var(--sov-amber); background: rgba(192,130,79,0.10); }
-  .chat-header .actions .call-btn[data-agent="vett"]:hover     { color: var(--sov-electric-blue); background: rgba(62,168,232,0.08); }
-  .chat-header .actions .call-btn[data-agent="scotty"]:hover   { color: var(--sov-maroon-bright); background: rgba(156,53,67,0.10); }
+  .chat-menu .call-btn[hidden] { display: none !important; }
 
   .voice-overlay {
     position: fixed; inset: 0;
-    background: rgba(5, 5, 5, 0.92);
-    backdrop-filter: blur(14px) saturate(120%);
-    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    background: rgba(0, 0, 0, 0.94);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
     display: none;
     flex-direction: column; align-items: center; justify-content: center;
     z-index: 100;
   }
   .voice-overlay.visible { display: flex; }
 
+  /* Mount host for the living orb (presence.js). */
   .voice-orb {
-    width: 280px; height: 280px;
-    border-radius: 50%;
-    /* Default = Aetheria's tri-stop spectrum. setAgentForVoice() rewrites
-       this per agent so the orb carries each agent's brand identity. */
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-sage) 0%,
-                  var(--sov-gray) 50%,
-                  var(--sov-electric-blue) 100%);
-    box-shadow: 0 0 90px rgba(148, 164, 85, 0.35);
-    transition: transform 200ms ease-out, box-shadow 300ms ease-out, opacity 200ms;
-  }
-  .voice-orb[data-agent="aetheria"] {
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-sage-bright) 0%,
-                  var(--sov-sage) 50%,
-                  var(--sov-sage-deep) 100%);
-    box-shadow: 0 0 90px rgba(116, 133, 106, 0.40);
-  }
-  .voice-orb[data-agent="vett"] {
-    background: radial-gradient(circle at center,
-                  #7d94a3 0%,
-                  var(--sov-deep-blue) 70%);
-    box-shadow: 0 0 90px rgba(107, 130, 144, 0.28);
-  }
-  .voice-orb[data-agent="scotty"] {
-    background: radial-gradient(circle at 35% 35%,
-                  var(--sov-maroon-bright) 0%,
-                  var(--sov-maroon) 60%,
-                  #54271b 100%);
-    box-shadow: 0 0 90px rgba(163, 84, 58, 0.35);
-  }
-  .voice-orb[data-state="idle"]        { transform: scale(0.95); opacity: 0.5; }
-  .voice-orb[data-state="listening"]   { transform: scale(1.0);  opacity: 0.85; animation: voice-pulse-listen 2.4s ease-in-out infinite; }
-  .voice-orb[data-state="hearing"]     { transform: scale(1.05); opacity: 1.0; }
-  .voice-orb[data-state="thinking"]    { transform: scale(1.0);  opacity: 0.9; animation: voice-pulse-think 1.2s ease-in-out infinite; }
-  .voice-orb[data-state="speaking"]    { opacity: 1.0; }
-  .voice-orb[data-state="interrupted"] { transform: scale(0.85); opacity: 0.6; transition: transform 100ms, opacity 100ms; }
-  @keyframes voice-pulse-listen {
-    0%, 100% { transform: scale(1.0); }
-    50%      { transform: scale(1.04); }
-  }
-  @keyframes voice-pulse-think {
-    0%, 100% { transform: scale(1.0); opacity: 0.85; }
-    50%      { transform: scale(1.02); opacity: 1.0; }
+    width: min(280px, 68vw);
+    height: min(280px, 68vw);
+    position: relative;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
   .voice-title {
     margin-top: 36px;
-    font-family: "SF Mono","Menlo",monospace;
+    font-family: var(--mono), "IBM Plex Mono", ui-monospace, monospace;
     font-size: 12px;
     letter-spacing: 0.3em;
     color: var(--text);
     text-transform: uppercase;
     opacity: 0.85;
   }
-  .voice-title[data-agent="aetheria"] { color: var(--sov-amber); }
-  .voice-title[data-agent="vett"]     { color: var(--sov-electric-blue); }
-  .voice-title[data-agent="scotty"]   { color: var(--sov-maroon-bright); }
+  .voice-title[data-agent="aetheria"] { color: var(--gold); }
+  .voice-title[data-agent="eve"]      { color: #9eb4c2; }
+  .voice-title[data-agent="kernel"]   { color: #c47a6e; }
+  .voice-title[data-agent="vett"]     { color: #9eb4c2; }
+  .voice-title[data-agent="scotty"]   { color: #c47a6e; }
   .voice-status {
-    margin-top: 8px;
-    font-family: "SF Mono","Menlo",monospace;
-    font-size: 10px;
-    letter-spacing: 0.25em;
-    color: rgba(236, 243, 244, 0.55);
+    margin-top: 10px;
+    font-family: var(--mono), "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--ink-2);
     text-transform: uppercase;
+    min-height: 1.2em;
   }
   .voice-error {
     position: absolute;
@@ -583,30 +740,197 @@
     text-transform: uppercase;
     transition: background 0.12s ease, border-color 0.12s ease;
   }
-  .voice-hangup[data-agent="aetheria"] { border-color: rgba(192,130,79,0.55); color: var(--sov-amber); }
-  .voice-hangup[data-agent="vett"]     { border-color: rgba(62,168,232,0.5);  color: var(--sov-electric-blue); }
-  .voice-hangup[data-agent="scotty"]   { border-color: rgba(156,53,67,0.55); color: var(--sov-maroon-bright); }
+  .voice-hangup[data-agent="aetheria"] { border-color: rgba(198,166,100,0.55); color: var(--gold); }
+  .voice-hangup[data-agent="eve"]      { border-color: rgba(107,130,144,0.5);  color: #9eb4c2; }
+  .voice-hangup[data-agent="kernel"]   { border-color: rgba(196,122,110,0.55); color: #c47a6e; }
+  .voice-hangup[data-agent="vett"]     { border-color: rgba(107,130,144,0.5);  color: #9eb4c2; }
+  .voice-hangup[data-agent="scotty"]   { border-color: rgba(196,122,110,0.55); color: #c47a6e; }
   .voice-hangup:hover { background: rgba(255,255,255,0.02); }
   .voice-hangup:active { background: rgba(255,255,255,0.04); }
   /* Pre-mounted hidden <audio> for iOS Safari — playback must begin inside
      the user gesture that starts the call; a pre-mounted element with
      playsinline lets ontrack assign srcObject without re-triggering policy. */
   .voice-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+
+  /* ── Lab console reconstruct ─────────────────────────────────────────── */
+  body.lab {
+    background: var(--ground) !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    background-image:
+      linear-gradient(rgba(198,166,100,.038) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(198,166,100,.038) 1px, transparent 1px) !important;
+    background-size: 64px 64px, 64px 64px !important;
+    background-attachment: fixed !important;
+  }
+  body.lab::before, body.lab::after { display:none !important; content:none !important; }
+
+  aside[data-testid="sidebar"] {
+    background: var(--panel) !important;
+    border-right: 1px solid var(--line) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding: 0 !important;
+    gap: 0 !important;
+  }
+  /* Shared .plate sits above .chat-shell — same chrome as CC / Citizens / Docs / Fleet */
+  body.lab > .plate {
+    flex-shrink: 0;
+    position: relative; /* not sticky inside chat viewport grid */
+  }
+
+  /* hide old brand block */
+  aside[data-testid="sidebar"] > .brand { display: none !important; }
+
+  /* Chat tools menu (persona / export / voice / …) */
+  .chat-menu-wrap { position: relative; }
+  .chat-menu-btn {
+    min-width: 72px;
+  }
+  .chat-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 50;
+    min-width: 200px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55);
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .chat-menu[hidden] { display: none !important; }
+  .chat-menu button, .chat-menu a {
+    display: block; width: 100%; text-align: left;
+    padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line);
+    background: transparent; cursor: pointer;
+    color: var(--ink); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; text-decoration: none;
+    font-family: var(--mono); border-radius: 0;
+  }
+  .chat-menu button:last-child, .chat-menu a:last-child { border-bottom: none; }
+  .chat-menu button:hover, .chat-menu a:hover {
+    background: var(--panel-2); color: var(--gold);
+  }
+  .chat-menu button.danger:hover { color: var(--down); }
+  .chat-menu button[hidden] { display: none !important; }
+  .chat-menu .menu-sep {
+    height: 1px; background: var(--line); margin: 2px 0; border: 0; padding: 0;
+  }
+
+  main[data-testid="main"] {
+    background: transparent !important;
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  [data-testid="chat-header"] {
+    background: var(--panel) !important;
+    border-bottom: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    padding: 10px 16px !important;
+  }
+  [data-testid="thread"] {
+    flex: 1; overflow: auto;
+    padding: 18px 22px !important;
+    background: transparent !important;
+  }
+  /* messages as lab log */
+  .msg.user, .message.user, [data-role="user"] {
+    align-self: flex-end;
+    background: var(--panel-2) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 3px !important;
+    font-family: var(--sans) !important;
+  }
+  .msg.assistant, .message.assistant, [data-role="assistant"] {
+    border-left: 2px solid var(--gold-dim) !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    font-family: var(--sans) !important;
+    color: var(--ink-2) !important;
+  }
+  [data-testid="composer"] {
+    background: var(--panel) !important;
+    border-top: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    padding: 12px 16px !important;
+  }
+  [data-testid="composer-input"], textarea {
+    background: transparent !important;
+    border: none !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    font-size: .85rem !important;
+  }
+  [data-testid="send"], [data-testid="stream-toggle"] {
+    border: 1px solid var(--line-lit) !important;
+    border-radius: 3px !important;
+    color: var(--gold) !important;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-size: .6rem !important;
+  }
+  .session-item, [data-session] {
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--line) !important;
+    font-family: var(--mono) !important;
+    font-size: .72rem !important;
+  }
+  .session-item:hover, .session-item.active {
+    background: var(--panel-2) !important;
+  }
+  .session-item.active {
+    box-shadow: inset 2px 0 0 var(--gold) !important;
+  }
+  .agent-picker, .agent-pill, [data-agent-pick] {
+    border-radius: 3px !important;
+    border-color: var(--line) !important;
+    font-family: var(--mono) !important;
+    font-size: .62rem !important;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  /* Lab zeros aside padding — keep the pill grid inset so edges don't clip. */
+  body.lab .agent-pills {
+    padding: 8px 12px 10px !important;
+  }
+  .wordmark {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    color: var(--ink) !important;
+  }
+  input, button, select, textarea { font-family: var(--mono) !important; }
+
 </style>
 </head>
-<body>
+<body class="lab" data-lab>
+
+<div class="plate">
+  <a class="id" href="/command-center">
+    <img src="/static/lab-seal.png" alt="" width="44" height="44">
+    <span><b>SOVERYN</b><i>Chat</i></span>
+  </a>
+  <nav>
+    <a href="/command-center">Command</a>
+    <a href="/fleet">Fleet</a>
+    <a href="/citizens" class="keep">Citizens</a>
+    <a href="/messages" class="keep">Messages</a>
+    <a href="/documents">Docs</a>
+    <a href="/charters" class="keep">Charters</a>
+  </nav>
+</div>
+
+<div class="chat-shell">
   <aside data-testid="sidebar">
     <div class="brand">
       <div class="wordmark">SOVERYN</div>
-      <a href="/" class="home" data-testid="mission-control-link">⌂ mission control</a>
+      <a href="/command-center" class="home" data-testid="mission-control-link">⌂ mission control</a>
     </div>
 
-    <button class="new-chat" data-testid="new-chat">+ New conversation</button>
+    <button class="new-chat act primary" data-testid="new-chat">+ New conversation</button>
 
     <div class="agent-pills" role="tablist" aria-label="Select agent">
       <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>
-      <button class="agent-pill" data-agent="vett"     role="tab" aria-pressed="false">vett</button>
-      <button class="agent-pill" data-agent="scotty"   role="tab" aria-pressed="false">scotty</button>
+      <button class="agent-pill" data-agent="kernel"   role="tab" aria-pressed="false">kernel</button>
+      <button class="agent-pill" data-agent="eve"      role="tab" aria-pressed="false">eve</button>
     </div>
 
     <div class="search"><input type="search" placeholder="Search chats" data-testid="search"></div>
@@ -642,13 +966,43 @@
         <div class="sub" data-session-meta>new session</div>
       </div>
       <div class="actions">
-        <button class="call-btn" data-testid="call-btn" data-agent="aetheria"
-                title="Voice call" aria-label="Voice call" hidden>&#9742;</button>
-        <button title="Persona inspector" aria-label="Persona">ⓘ</button>
-        <button title="Export" aria-label="Export">⤓</button>
-        <button title="More" aria-label="More">⋯</button>
+        <div class="chat-menu-wrap more-wrap">
+          <button type="button" class="chat-menu-btn" data-testid="more-btn"
+                  title="Chat menu" aria-label="Menu" aria-haspopup="true" aria-expanded="false">Menu</button>
+          <div class="chat-menu more-menu" data-testid="more-menu" hidden role="menu">
+            <button type="button" role="menuitem" data-testid="persona-btn" data-more="persona">Persona</button>
+            <button type="button" role="menuitem" data-testid="export-btn" data-more="export">Export</button>
+            <button type="button" role="menuitem" class="call-btn" data-testid="call-btn" data-more="voice"
+                    data-agent="aetheria" hidden>Voice</button>
+            <div class="menu-sep" role="separator"></div>
+            <button type="button" role="menuitem" data-more="copy-id">Copy session id</button>
+            <button type="button" role="menuitem" data-more="delete" class="danger">Delete session</button>
+            <div class="menu-sep" role="separator"></div>
+            <a href="/command-center" role="menuitem">Command</a>
+            <a href="/room?peer=vett" role="menuitem" data-room-link>Room with Vett</a>
+            <a href="/fleet" role="menuitem">Fleet</a>
+            <a href="/m/" role="menuitem">Mobile</a>
+          </div>
+        </div>
       </div>
     </header>
+
+    <div class="chat-modal-backdrop" data-testid="chat-modal" hidden>
+      <div class="chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-modal-title">
+        <h3 id="chat-modal-title" data-modal-title>Details</h3>
+        <div class="modal-source" data-modal-source hidden></div>
+        <pre data-modal-body></pre>
+        <textarea data-modal-edit hidden aria-label="Edit persona"></textarea>
+        <div class="modal-actions">
+          <button type="button" data-modal-edit-btn hidden>Edit</button>
+          <button type="button" data-modal-save class="primary" hidden>Save</button>
+          <button type="button" data-modal-cancel-edit hidden>Cancel</button>
+          <button type="button" data-modal-reset hidden>Reset default</button>
+          <button type="button" data-modal-copy>Copy</button>
+          <button type="button" data-modal-close>Close</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Voice call overlay — full-screen modal launched from the call button.
          Backend route: POST /voice/session/<session_id>/offer (binds to the
@@ -657,7 +1011,8 @@
     <div class="voice-overlay" data-testid="voice-overlay" role="dialog"
          aria-modal="true" aria-label="Voice call" aria-hidden="true">
       <div class="voice-orb" data-testid="voice-orb"
-           data-state="idle" data-agent="aetheria"></div>
+           data-state="idle" data-agent="aetheria"
+           role="img" aria-label="Living presence"></div>
       <div class="voice-title" data-testid="voice-title"
            data-agent="aetheria">aetheria &mdash; LIVE</div>
       <div class="voice-status" data-testid="voice-status">connecting&hellip;</div>
@@ -669,6 +1024,7 @@
     </div>
 
     <div class="context-banner" data-testid="context-banner" aria-live="polite" aria-atomic="true"></div>
+    <div class="collab-chips" data-testid="collab-chips" hidden aria-label="Agent collaborations"></div>
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
     <form class="composer" data-testid="composer" onsubmit="return false">
@@ -677,7 +1033,7 @@
         <button type="button" class="composer-attach-btn" data-testid="composer-attach"
                 title="Attach image" aria-label="Attach image">📎</button>
         <input type="file" data-testid="composer-file-input"
-               accept="image/jpeg,image/png,image/webp,image/gif"
+               accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
                multiple hidden>
         <input type="text" placeholder="Message…" data-testid="composer-input" aria-label="Message" autofocus>
         <button type="button" class="stream-toggle" data-testid="stream-toggle">stream ▾</button>
@@ -685,9 +1041,12 @@
       </div>
     </form>
   </main>
+</div><!-- /.chat-shell -->
+<script src="/static/voice/presence.js?v=alive5"></script>
+<script src="/static/citizen-icons.js?v=20260901bots3"></script>
 <script>
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
   // Full background-value per agent (applied directly on the agent disc).
   // Aetheria carries the brand olive — she's the central voice, so the
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
@@ -696,12 +1055,16 @@
     aetheria: "var(--sage-sheen)",                              /* primary voice → brushed SOVERYN gold */
     vett:     "var(--steel-sheen)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
+    kernel:   "var(--steel-sheen)",   /* build brain — cool steel */
+    eve:      "var(--maroon-sheen)",  /* marketing — warm rose/maroon cast */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
+    kernel:   "var(--sov-electric-blue)",
     aetheria: "var(--sov-sage)",
     vett:     "var(--sov-deep-blue)",
     scotty:   "var(--sov-maroon)",
+    eve:      "var(--sov-maroon)",
   };
 
   // ─── Attachments config ───────────────────────────────────────────────────
@@ -710,13 +1073,15 @@
   const ALLOWED_IMAGE_MIMES = new Set([
     "image/jpeg", "image/png", "image/webp", "image/gif",
   ]);
+  const ALLOWED_PDF_MIME = "application/pdf";
+  const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
   // Agents whose serving profile loads an mmproj image projector — gates the
   // composer 📎 attach button. Mirror of the backend source-of-truth set
   // (chat.html is a static file so it can't import the Python const); a
   // parity test fails if this drifts from the backend. (Named without the
   // v-word so the retired-agent hygiene test stays green.)
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty",
+    "aetheria", "vett", "scotty", "eve", "kernel",
   ]);
 
   // ─── State ─────────────────────────────────────────────────────────────────
@@ -728,7 +1093,156 @@
     abort: null,
     // pendingAttachments: array of { name, dataUrl } awaiting the next send.
     pendingAttachments: [],
+    // Approval Gate: ids already rendered as cards (SSE + poll dedupe).
+    shownApprovalIds: new Set(),
+    approvalPollTimer: null,
   };
+
+  function _redactApprovalArgs(args) {
+    if (!args || typeof args !== "object") return args;
+    const out = {};
+    const secret = /pass|token|secret|key|auth|credential/i;
+    for (const [k, v] of Object.entries(args)) {
+      out[k] = secret.test(k) ? "•••" : v;
+    }
+    return out;
+  }
+
+  function _fmtApprovalArgs(args) {
+    try {
+      let parsed = args;
+      if (typeof args === "string") {
+        try { parsed = JSON.parse(args); } catch (_) { return args.slice(0, 280); }
+      }
+      const s = JSON.stringify(_redactApprovalArgs(parsed));
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  function renderApprovalCard(payload) {
+    const id = payload && payload.approval_id;
+    if (!id || state.shownApprovalIds.has(id)) return;
+    state.shownApprovalIds.add(id);
+
+    const card = document.createElement("div");
+    card.className = "approval-card";
+    card.dataset.approvalId = id;
+    card.dataset.testid = "approval-card";
+
+    const head = document.createElement("div");
+    head.className = "ac-head";
+    head.textContent = "Needs your yes — Approval Gate";
+    card.appendChild(head);
+
+    const tool = document.createElement("div");
+    tool.className = "ac-tool";
+    tool.textContent = `${payload.citizen || state.agent || "?"} · ${payload.tool || "?"}`;
+    card.appendChild(tool);
+
+    const argsEl = document.createElement("div");
+    argsEl.className = "ac-args";
+    argsEl.textContent = _fmtApprovalArgs(payload.args);
+    card.appendChild(argsEl);
+
+    const actions = document.createElement("div");
+    actions.className = "ac-actions";
+    const allowBtn = document.createElement("button");
+    allowBtn.type = "button";
+    allowBtn.className = "ac-allow";
+    allowBtn.textContent = "Allow";
+    const denyBtn = document.createElement("button");
+    denyBtn.type = "button";
+    denyBtn.className = "ac-deny";
+    denyBtn.textContent = "Deny";
+    actions.appendChild(allowBtn);
+    actions.appendChild(denyBtn);
+    card.appendChild(actions);
+
+    const notice = document.createElement("div");
+    notice.className = "ac-notice";
+    notice.style.display = "none";
+    card.appendChild(notice);
+
+    const decide = async (approve) => {
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      const citizen = payload.citizen || state.agent;
+      try {
+        const r = await fetch(
+          `/api/citizens/${encodeURIComponent(citizen)}/approvals/${encodeURIComponent(id)}/decision`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approve, decided_by: "jon" }),
+          },
+        );
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          card.classList.add("ac-done");
+          notice.textContent = approve ? "Allowed — continuing…" : "Denied.";
+          notice.style.display = "";
+        } else {
+          notice.textContent = (body.error && body.error.message) || body.error || `Failed (${r.status})`;
+          notice.style.display = "";
+          allowBtn.disabled = false;
+          denyBtn.disabled = false;
+        }
+      } catch (e) {
+        notice.textContent = e.message || "Network error";
+        notice.style.display = "";
+        allowBtn.disabled = false;
+        denyBtn.disabled = false;
+      }
+    };
+    allowBtn.addEventListener("click", () => decide(true));
+    denyBtn.addEventListener("click", () => decide(false));
+
+    const callId = payload.call_id;
+    const strip = callId
+      ? elThread().querySelector(`.tool-strip[data-call-id="${cssEsc(callId)}"]`)
+      : null;
+    if (strip && strip.parentNode) {
+      strip.parentNode.insertBefore(card, strip.nextSibling);
+      const pendingLine = strip.querySelector(".tool-result.pending");
+      if (pendingLine) pendingLine.textContent = "waiting for your approval…";
+    } else {
+      elThread().appendChild(card);
+    }
+    elThread().scrollTop = elThread().scrollHeight;
+  }
+
+  function startApprovalPoll() {
+    stopApprovalPoll();
+    const tick = async () => {
+      if (!state.agent) return;
+      try {
+        const r = await fetch(`/api/citizens/${encodeURIComponent(state.agent)}/approvals`);
+        if (!r.ok) return;
+        const data = await r.json();
+        const items = (data && Array.isArray(data.approvals)) ? data.approvals : [];
+        for (const a of items) {
+          renderApprovalCard({
+            approval_id: a.id,
+            citizen: a.citizen,
+            tool: a.tool,
+            args: a.args,
+            call_id: null,
+          });
+        }
+      } catch (_) { /* poll is best-effort */ }
+    };
+    tick();
+    state.approvalPollTimer = setInterval(tick, 1200);
+  }
+
+  function stopApprovalPoll() {
+    if (state.approvalPollTimer) {
+      clearInterval(state.approvalPollTimer);
+      state.approvalPollTimer = null;
+    }
+  }
 
   const CONTEXT_BANNER_THRESHOLD = 0.85;
 
@@ -771,7 +1285,14 @@
   const expandedRails = new Set();  // survives re-renders; Conversations is implicitly always open
   function railFor(title) {
     const t = (title || "").trim();
-    if (!t.startsWith("[")) return "Conversations";
+    // Group rooms are not Aetheria 1:1 — keep them out of Conversations.
+    if (t.startsWith("[room:")) return "System";
+    if (!t.startsWith("[")) {
+      // One-shot test / collab shells (e.g. verify-ask-vett) clutter 1:1.
+      if (t.startsWith("verify-")) return "System";
+      if (t.startsWith("automation:")) return "System";
+      return "Conversations";
+    }
     if (t.startsWith("[m]")) return "Mobile";
     if (t.startsWith("[signal]")) return "Signal";
     if (t.startsWith("[heartbeat]")) return "Heartbeat";
@@ -850,9 +1371,14 @@
   function parseUrl() {
     const path = window.location.pathname;
     const m = path.match(/^\/chat\/([^/]+)$/);
-    if (m) return { sessionId: m[1], agent: null };
+    if (m) return { sessionId: m[1], agent: null, q: null };
     const sp = new URLSearchParams(window.location.search);
-    return { sessionId: null, agent: sp.get("agent") };
+    return {
+      sessionId: null,
+      agent: sp.get("agent"),
+      // Prefill from Command Center dispatch (?q=…) — do not auto-send.
+      q: sp.get("q"),
+    };
   }
 
   function pickInitialAgent(urlAgent) {
@@ -917,10 +1443,19 @@
     state.pendingAttachments.forEach((att, idx) => {
       const thumb = document.createElement("div");
       thumb.className = "composer-attachment-thumb";
-      const img = document.createElement("img");
-      img.src = att.dataUrl;
-      img.alt = att.name || "";
-      thumb.appendChild(img);
+      const isPdf = att.kind === "pdf" || (att.dataUrl || "").startsWith("data:application/pdf");
+      if (isPdf) {
+        const label = document.createElement("span");
+        label.textContent = "PDF";
+        label.title = att.name || "document.pdf";
+        label.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:600 10px/1 var(--mono,monospace);";
+        thumb.appendChild(label);
+      } else {
+        const img = document.createElement("img");
+        img.src = att.dataUrl;
+        img.alt = att.name || "";
+        thumb.appendChild(img);
+      }
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "remove-attachment";
@@ -940,6 +1475,119 @@
     renderAttachmentsRow();
   }
 
+  function roomHref(peer, roomSessionId) {
+    return "/room?peer=" + encodeURIComponent(peer)
+      + (roomSessionId ? "&session=" + encodeURIComponent(roomSessionId) : "")
+      + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
+  }
+
+  function appendMessagedPeer(peer, roomSessionId, peerState) {
+    const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    const st = peerState || "messaged";
+    const status = st === "working" ? "working…" : st === "replied" ? "replied · tap" : "in group";
+    const a = document.createElement("a");
+    a.className = "messaged-peer";
+    a.href = roomHref(peer, roomSessionId);
+    a.title = "Open group chat with " + name;
+    a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
+    a.dataset.peer = peer;
+    a.dataset.state = st;
+    a.innerHTML =
+      (typeof soverynCitizenIcon === "function"
+        ? soverynCitizenIcon(peer, { size: 52, className: "mp-av", letter: name.charAt(0), busy: st === "working", label: name })
+        : '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>') +
+      '<span class="mp-name">' + esc(name) + '</span>' +
+      '<span class="mp-status">' + esc(status) + '</span>';
+    elThread().appendChild(a);
+    elThread().scrollTop = elThread().scrollHeight;
+    return a;
+  }
+
+  function isActiveCollab(ev) {
+    // Ticket overlay is the only "working". Done/failed never linger.
+    if (!ev || !ev.peer) return false;
+    const st = (ev.state || "").toLowerCase();
+    const overlay = (ev.commission_state || "").toLowerCase();
+    if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
+    const ttlMs = 45 * 60 * 1000;
+    let age = Infinity;
+    if (ev.at) {
+      try { age = Date.now() - new Date(ev.at).getTime(); } catch (_) { age = Infinity; }
+    }
+    if (overlay === "queued" || overlay === "running") return age < ttlMs;
+    if (st === "working") return age < ttlMs;
+    return false;
+  }
+
+  function renderCollabChips(events) {
+    const row = document.querySelector("[data-testid='collab-chips']");
+    if (!row) return;
+    const list = (Array.isArray(events) ? events : []).filter(isActiveCollab);
+    const seen = new Set();
+    const chips = [];
+    for (const ev of list) {
+      const peer = ev.peer || "";
+      const room = ev.room_session_id || "";
+      if (!peer || seen.has(peer + room)) continue;
+      seen.add(peer + room);
+      chips.push(ev);
+    }
+    if (!chips.length) {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    row.hidden = false;
+    row.innerHTML = chips.map((ev) => {
+      const peer = (ev.peer || "peer").toLowerCase();
+      const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+      const letter = name.charAt(0);
+      const busy = (ev.state || "").toLowerCase() === "working";
+      const av = (typeof soverynCitizenIcon === "function")
+        ? soverynCitizenIcon(peer, { size: 22, className: "collab-av", letter: letter, busy: busy, label: name })
+        : `<span class="collab-av">${esc(letter)}</span>`;
+      return `<a class="collab-chip" href="${roomHref(peer, ev.room_session_id)}" title="Open group chat with ${esc(name)}">`
+        + av
+        + `<span>${esc(name)}</span></a>`;
+    }).join("");
+  }
+
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  async function fetchCollabs() {
+    if (!state.sessionId || state.agent !== "aetheria") return [];
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.collabs || [];
+    } catch (_) { return []; }
+  }
+
+  async function refreshCollabChips() {
+    if (!state.sessionId || state.agent !== "aetheria") {
+      renderCollabChips([]);
+      return [];
+    }
+    const list = await fetchCollabs();
+    renderCollabChips(list);
+    return list;
+  }
+
+  function setThinking(on) {
+    const disc = elAgentDisc();
+    if (!disc) return;
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint && state.agent) {
+      soverynCitizenIcon.paint(disc, state.agent, { label: state.agent, busy: !!on });
+    } else {
+      disc.classList.toggle("is-busy", !!on);
+      if (on) disc.setAttribute("data-busy", "1");
+      else disc.removeAttribute("data-busy");
+    }
+  }
+
   function setAgent(name) {
     state.agent = name;
     localStorage.setItem("soveryn.agent", name);
@@ -949,14 +1597,23 @@
     // directly — no wrapping. The pre-2026-06-04 wrapping forced every agent
     // through a bronze-trailing gradient, which doesn't serve the spectrum
     // treatment Aetheria needs.
-    elAgentDisc().style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
-    // Paperclip shows only for image-capable agents (those whose server
-    // loads an mmproj) — others have no projector and the backend would 400
-    // anyway. Hide the button to avoid the confusing UI.
+    const disc = elAgentDisc();
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+      soverynCitizenIcon.paint(disc, name, { label: name, busy: false });
+    } else {
+      disc.style.background = AGENT_COLORS[name] || "var(--sov-bronze)";
+    }
+    // Paperclip is always available: images need a vision-capable agent,
+    // PDFs use house intake (text splice) for any agent. Drop pending *images*
+    // when switching to a non-vision agent; keep PDFs.
     const attachBtn = elAttachBtn();
-    if (attachBtn) attachBtn.hidden = !ATTACH_CAPABLE_AGENTS.has(name);
-    // Switching to a non-image-capable agent? Drop any pending attachments.
-    if (!ATTACH_CAPABLE_AGENTS.has(name)) clearPendingAttachments();
+    if (attachBtn) attachBtn.hidden = false;
+    if (!ATTACH_CAPABLE_AGENTS.has(name)) {
+      state.pendingAttachments = state.pendingAttachments.filter(
+        (a) => a.kind === "pdf" || (a.dataUrl || "").startsWith("data:application/pdf")
+      );
+      renderAttachmentsRow();
+    }
     // Mirror the agent onto the call button + voice overlay so per-agent
     // hover tints + orb gradient pick up immediately on switch (idempotent
     // updates; voice gating is handled separately by updateCallButton).
@@ -964,6 +1621,7 @@
     if (callBtn) callBtn.dataset.agent = name;
     const orb = elVoiceOrb();
     if (orb) orb.dataset.agent = name;
+    if (voice.presence) voice.presence.setAgent(name);
     const vTitle = elVoiceTitle();
     if (vTitle) {
       vTitle.dataset.agent = name;
@@ -1129,6 +1787,7 @@
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
+    setThinking(true);
     let cleared = false;
     let finalContent = "";
 
@@ -1140,6 +1799,7 @@
     }
 
     state.abort = new AbortController();
+    startApprovalPoll();
     try {
       const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
       if (images.length > 0) body.attachments = images;
@@ -1170,6 +1830,8 @@
             appendBubbleText(respBubble, payload.delta);
             finalContent += payload.delta;
             elThread().scrollTop = elThread().scrollHeight;
+          } else if (payload.type === "approval_pending") {
+            renderApprovalCard(payload);
           } else if (payload.type === "tool_call") {
             // Insert a tool-activity strip right before the assistant bubble.
             const strip = document.createElement("div");
@@ -1216,6 +1878,11 @@
             // turn it into an inline <img>. Safe to call always — no-op
             // when no matching URL is present.
             enhanceBubbleWithImages(respBubble);
+            // After tools settle, rebuild so in-thread Messaged {peer} bot
+            // shapes (house_post → room) appear and link to the group chat.
+            if (state.agent === "aetheria" && state.sessionId) {
+              try { await loadHistory(state.sessionId); } catch (_) { /* best-effort */ }
+            }
           } else if (payload.type === "error") {
             setBubbleText(respBubble, `error · ${payload.code}: ${payload.message}`);
             return;
@@ -1229,6 +1896,20 @@
         setBubbleText(respBubble, `error · ${e.message}`);
       }
     } finally {
+      setThinking(false);
+      stopApprovalPoll();
+      // One last poll in case the stream ended before the card painted.
+      try {
+        const r = await fetch(`/api/citizens/${encodeURIComponent(state.agent)}/approvals`);
+        if (r.ok) {
+          const data = await r.json();
+          for (const a of (data.approvals || [])) {
+            renderApprovalCard({
+              approval_id: a.id, citizen: a.citizen, tool: a.tool, args: a.args, call_id: null,
+            });
+          }
+        }
+      } catch (_) { /* noop */ }
       state.abort = null;
     }
   }
@@ -1242,6 +1923,8 @@
     appendBubble("user", message, { images });
     clearPendingAttachments();
     const respBubble = appendBubble("assistant", "", { placeholder: true });
+    setThinking(true);
+    startApprovalPoll();
     try {
       await ensureSession();
       const body = { agent: state.agent, session_id: state.sessionId, message: wireMessage };
@@ -1258,9 +1941,15 @@
         setBubbleText(respBubble, data.content || "");
         updateContextUsage(data.context_usage);
         enhanceBubbleWithImages(respBubble);
+        if (state.agent === "aetheria" && state.sessionId) {
+          try { await loadHistory(state.sessionId); } catch (_) { /* best-effort */ }
+        }
       }
     } catch (e) {
       setBubbleText(respBubble, `error · ${e.message}`);
+    } finally {
+      setThinking(false);
+      stopApprovalPoll();
     }
   }
 
@@ -1273,13 +1962,64 @@
       // Clear the context banner — the new session's pressure state is
       // unknown until the next chat response arrives.
       updateContextUsage(null);
+      const collabs = await fetchCollabs();
+      const activeCollabs = (collabs || []).filter(isActiveCollab);
+      const activePeers = new Set(activeCollabs.map((ev) => (ev.peer || "").toLowerCase()));
+      const byPeer = {};
+      activeCollabs.forEach((ev) => {
+        if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
+      });
+      const peerState = {};
+      const shown = new Set();
+      const closedPeers = new Set();
+      for (const t of data.turns || []) {
+        if (t.role !== "system") continue;
+        const c = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+        if (c) closedPeers.add(c[1]);
+      }
+      activeCollabs.forEach((ev) => {
+        const p = (ev.peer || "").toLowerCase();
+        if (p) peerState[p] = "working";
+      });
+      for (const t of data.turns || []) {
+        if (t.role === "system") {
+          const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
+          if (m && !peerState[m[1]]) {
+            peerState[m[1]] = closedPeers.has(m[1]) ? "done" : "messaged";
+          }
+          const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+          if (r) peerState[r[1]] = closedPeers.has(r[1]) ? "done" : "replied";
+          const cl = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+          if (cl) peerState[cl[1]] = "done";
+        }
+      }
       for (const t of data.turns || []) {
         if (t.role === "user" || t.role === "assistant") {
           const b = appendBubble(t.role, t.content);
           if (t.role === "assistant") enhanceBubbleWithImages(b);
+        } else if (t.role === "system" && /⟦room:(messaged|replied):([a-z]+)⟧/.test(t.content || "")) {
+          const m = /⟦room:(?:messaged|replied):([a-z]+)⟧/.exec(t.content);
+          // 1:1 Aetheria chat: only show peer icon while collab is active.
+          if (m && !shown.has(m[1]) && activePeers.has(m[1])) {
+            shown.add(m[1]);
+            appendMessagedPeer(m[1], byPeer[m[1]] || null, peerState[m[1]]);
+          }
         }
       }
       elSessionMeta().textContent = `${(data.turns || []).length} messages`;
+      renderCollabChips(activeCollabs);
+      // Live-refresh while a peer is working so the icon flips to replied.
+      const waiting = Object.values(peerState).includes("working") && activePeers.size > 0;
+      if (waiting && state.agent === "aetheria" && sessionId) {
+        if (!state._peerPoll) {
+          state._peerPoll = setInterval(() => {
+            if (state.sessionId) loadHistory(state.sessionId);
+          }, 4000);
+        }
+      } else if (state._peerPoll) {
+        clearInterval(state._peerPoll);
+        state._peerPoll = null;
+      }
     } catch { /* noop */ }
   }
 
@@ -1289,14 +2029,34 @@
   // The server binds the WebRTC peer to the SAME session_id the chat is
   // already using, so transcribed voice turns flow into the conversation
   // history rendered above. On hangup we reload that history so any new
-  // turns appear without a full page reload. Lifted from the messenger PWA's
-  // app.js (Void-Gold styling stripped — desktop uses per-agent brand tints).
+  // turns appear without a full page reload.
+  //
+  // UX notes (2026-08-15):
+  //   - Status labels are human ("Listening…") not raw machine tokens.
+  //   - Amplitude is EMA-smoothed with enter/leave hysteresis so listen/hear
+  //     doesn't thrash on breath noise or brief pauses.
+  //   - Offer waits for ICE gather (capped) so the first hop is less laggy.
   const VOICE_STATE = {
-    IDLE: "idle", LISTENING: "listening", HEARING: "hearing",
-    THINKING: "thinking", SPEAKING: "speaking", INTERRUPTED: "interrupted",
+    IDLE: "idle", CONNECTING: "connecting", LISTENING: "listening",
+    HEARING: "hearing", THINKING: "thinking", SPEAKING: "speaking",
+    INTERRUPTED: "interrupted",
   };
-  const VOICE_THRESHOLD = 0.04;
-  const VOICE_SILENCE_MS = 800;
+  const VOICE_LABEL = {
+    idle: "Ready",
+    connecting: "Connecting…",
+    listening: "Listening…",
+    hearing: "Hearing you…",
+    thinking: "Thinking…",
+    speaking: "Speaking…",
+    interrupted: "You first…",
+  };
+  // Hysteresis: higher to enter "speaking", lower to leave (reduces thrash).
+  const VOICE_ENTER = 0.055;
+  const VOICE_LEAVE = 0.028;
+  const VOICE_SILENCE_MS = 1400;       // hold HEARING through short pauses
+  const VOICE_MIN_DWELL_MS = 280;      // min time in a state before flip
+  const VOICE_THINK_FALLBACK_MS = 8000;
+  const VOICE_EMA_ALPHA = 0.22;        // amplitude smoother
   const voice = {
     pc: null,
     micStream: null,
@@ -1306,15 +2066,57 @@
     state: VOICE_STATE.IDLE,
     raf: null,
     lastSpokenAt: 0,
+    stateChangedAt: 0,
+    outEma: 0,
+    inEma: 0,
+    userActive: false,
+    botActive: false,
+    presence: null,  // LivingPresence — living orb
     sessionAtStart: null,  // sessionId we called against, so post-hangup reload targets the right thread
   };
 
-  function voiceSetState(s) {
+  function voiceEnsurePresence() {
+    const orb = elVoiceOrb();
+    if (!orb || typeof LivingPresence === "undefined") return null;
+    // Reuse instance — destroy/remount was a big part of open lag + glitch.
+    if (!voice.presence) {
+      voice.presence = LivingPresence.mount(orb, { agent: state.agent || "aetheria" });
+    } else {
+      voice.presence.setAgent(state.agent || "aetheria");
+      voice.presence.start();
+    }
+    return voice.presence;
+  }
+
+  function voicePausePresence() {
+    // Keep DOM; just stop the rAF while overlay is closed.
+    if (voice.presence) {
+      try { voice.presence.stop(); } catch (e) { /* noop */ }
+      voice.presence.setState("idle");
+    }
+  }
+
+  function voiceSetState(s, force) {
+    if (!force && s === voice.state) return;
+    const now = performance.now();
+    // Don't thrash between listening/hearing/thinking on every frame.
+    if (!force && voice.state !== VOICE_STATE.IDLE && voice.state !== VOICE_STATE.CONNECTING) {
+      const elapsed = now - voice.stateChangedAt;
+      const sticky = (
+        (voice.state === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+        (voice.state === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING)
+      );
+      if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+    }
     voice.state = s;
+    voice.stateChangedAt = now;
     const orb = elVoiceOrb();
     const st = elVoiceStatus();
     if (orb) orb.dataset.state = s;
-    if (st) st.textContent = s;
+    if (st) st.textContent = VOICE_LABEL[s] || s;
+    if (voice.presence) voice.presence.setState(s);
   }
 
   function voiceShowError(msg) {
@@ -1336,39 +2138,72 @@
     return Math.sqrt(sum / data.length);
   }
 
+  function voiceGate(ema, wasActive) {
+    // Schmitt trigger: enter high, leave low — stops edge chatter.
+    if (wasActive) return ema > VOICE_LEAVE;
+    return ema > VOICE_ENTER;
+  }
+
   function voiceTick() {
     if (!voice.outAnalyser) return;
     const orb = elVoiceOrb();
     if (!orb) return;
-    const out = voiceAmp(voice.outAnalyser);
-    const inn = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    const outRaw = voiceAmp(voice.outAnalyser);
+    const innRaw = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    voice.outEma = voice.outEma + VOICE_EMA_ALPHA * (outRaw - voice.outEma);
+    voice.inEma  = voice.inEma  + VOICE_EMA_ALPHA * (innRaw - voice.inEma);
     const now = performance.now();
-    const userSpeaking = out > VOICE_THRESHOLD;
-    const botSpeaking  = inn > VOICE_THRESHOLD;
+    const userSpeaking = voiceGate(voice.outEma, voice.userActive);
+    const botSpeaking  = voiceGate(voice.inEma, voice.botActive);
+    voice.userActive = userSpeaking;
+    voice.botActive = botSpeaking;
+
+    // Drive the living presence every frame — breath + face from amplitude.
+    if (voice.presence) {
+      voice.presence.setLevels({ out: voice.outEma, inn: voice.inEma });
+    }
 
     if (botSpeaking && userSpeaking && voice.state === VOICE_STATE.SPEAKING) {
-      voiceSetState(VOICE_STATE.INTERRUPTED);
-      setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+      voiceSetState(VOICE_STATE.INTERRUPTED, true);
+      setTimeout(() => {
+        if (voice.pc) voiceSetState(VOICE_STATE.HEARING, true);
+      }, 220);
       voice.lastSpokenAt = now;
     } else if (botSpeaking) {
       voiceSetState(VOICE_STATE.SPEAKING);
-      const scale = 1.0 + Math.min(0.15, inn * 1.5);
-      orb.style.transform = `scale(${scale})`;
     } else if (userSpeaking) {
       voiceSetState(VOICE_STATE.HEARING);
       voice.lastSpokenAt = now;
-      orb.style.transform = "";
     } else {
       if (voice.state === VOICE_STATE.HEARING && now - voice.lastSpokenAt > VOICE_SILENCE_MS) {
         voiceSetState(VOICE_STATE.THINKING);
       } else if (voice.state === VOICE_STATE.SPEAKING) {
         voiceSetState(VOICE_STATE.LISTENING);
-        orb.style.transform = "";
-      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > 6000) {
+      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > VOICE_THINK_FALLBACK_MS) {
         voiceSetState(VOICE_STATE.LISTENING);
       }
     }
     voice.raf = requestAnimationFrame(voiceTick);
+  }
+
+  function waitForIceGathering(pc, timeoutMs = 1500) {
+    // Prefer a complete candidate set before signaling — early offers work
+    // but often stall the first audio path. Cap wait so slow STUN never hangs.
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => {
+        if (pc.iceGatheringState === "complete") finish();
+      };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      setTimeout(finish, timeoutMs);
+    });
   }
 
   function openVoiceOverlay() {
@@ -1376,6 +2211,9 @@
     if (!ov) return;
     ov.classList.add("visible");
     ov.setAttribute("aria-hidden", "false");
+    // Mount living presence immediately so connecting feels inhabited.
+    const p = voiceEnsurePresence();
+    if (p) p.setState("connecting");
   }
 
   function closeVoiceOverlay() {
@@ -1383,9 +2221,12 @@
     if (!ov) return;
     ov.classList.remove("visible");
     ov.setAttribute("aria-hidden", "true");
-    // Reset orb to idle so the next call starts from a clean visual state.
+    voicePausePresence();
     const orb = elVoiceOrb();
-    if (orb) { orb.dataset.state = "idle"; orb.style.transform = ""; }
+    if (orb) {
+      orb.dataset.state = "idle";
+      orb.style.transform = "";
+    }
   }
 
   async function startVoiceCall() {
@@ -1398,14 +2239,24 @@
       return;
     }
     voice.sessionAtStart = state.sessionId;
-    voiceSetState(VOICE_STATE.IDLE);
+    voice.outEma = 0;
+    voice.inEma = 0;
+    voice.userActive = false;
+    voice.botActive = false;
     openVoiceOverlay();
+    voiceSetState(VOICE_STATE.CONNECTING, true);
     const status = elVoiceStatus();
-    if (status) status.textContent = "connecting…";
+    if (status) status.textContent = "Microphone…";
 
     try {
       voice.micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // Prefer voice-optimized constraints when supported.
+          channelCount: 1,
+        },
         video: false,
       });
     } catch (e) {
@@ -1413,6 +2264,8 @@
       await endVoiceCall({ reloadHistory: false });
       return;
     }
+
+    if (status) status.textContent = "Connecting…";
 
     // AudioContext + mic playback init must happen INSIDE the user gesture
     // path (the click handler that called us). iOS Safari otherwise leaves
@@ -1423,7 +2276,8 @@
     }
     const outSrc = voice.audioCtx.createMediaStreamSource(voice.micStream);
     voice.outAnalyser = voice.audioCtx.createAnalyser();
-    voice.outAnalyser.fftSize = 256;
+    voice.outAnalyser.fftSize = 512;
+    voice.outAnalyser.smoothingTimeConstant = 0.65;
     outSrc.connect(voice.outAnalyser);
 
     voice.pc = new RTCPeerConnection({
@@ -1448,18 +2302,26 @@
         audioEl.srcObject = stream;
         audioEl.play().catch(() => {});
       }
-      voice.inAnalyser = voice.audioCtx.createAnalyser();
-      voice.inAnalyser.fftSize = 256;
-      voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      if (voice.audioCtx) {
+        voice.inAnalyser = voice.audioCtx.createAnalyser();
+        voice.inAnalyser.fftSize = 512;
+        voice.inAnalyser.smoothingTimeConstant = 0.65;
+        voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      }
     };
 
     try {
       const offer = await voice.pc.createOffer();
       await voice.pc.setLocalDescription(offer);
+      if (status) status.textContent = "Negotiating…";
+      // Wait for ICE candidates (capped) so the SDP isn't half-empty — reduces
+      // first-packet lag once the remote answers.
+      await waitForIceGathering(voice.pc, 600);
+      const local = voice.pc.localDescription || offer;
       const resp = await fetch(`/voice/session/${voice.sessionAtStart}/offer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sdp: offer.sdp, type: offer.type, agent: state.agent }),
+        body: JSON.stringify({ sdp: local.sdp, type: local.type, agent: state.agent }),
       });
       if (!resp.ok) {
         const txt = await resp.text();
@@ -1467,7 +2329,7 @@
       }
       const answer = await resp.json();
       await voice.pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
-      voiceSetState(VOICE_STATE.LISTENING);
+      voiceSetState(VOICE_STATE.LISTENING, true);
       voiceTick();
     } catch (e) {
       console.error("voice start failed:", e);
@@ -1489,6 +2351,10 @@
     if (voice.audioCtx) { try { await voice.audioCtx.close(); } catch (e) {} voice.audioCtx = null; }
     voice.outAnalyser = null;
     voice.inAnalyser = null;
+    voice.outEma = 0;
+    voice.inEma = 0;
+    voice.userActive = false;
+    voice.botActive = false;
     voice.state = VOICE_STATE.IDLE;
     closeVoiceOverlay();
     // Re-fetch the conversation so the voice turns the backend persisted
@@ -1538,8 +2404,8 @@
             alert(`Max ${MAX_ATTACHMENT_COUNT} attachments per message`);
             break;
           }
-          if (!ALLOWED_IMAGE_MIMES.has(file.type)) {
-            alert(`Not a supported image type: ${file.name} (${file.type || "unknown"})`);
+          if (!ALLOWED_ATTACH_MIMES.has(file.type)) {
+            alert(`Not a supported attachment: ${file.name} (${file.type || "unknown"}). Images or PDF.`);
             continue;
           }
           if (file.size > MAX_ATTACHMENT_BYTES) {
@@ -1553,7 +2419,8 @@
               r.onerror = () => reject(new Error("read failed"));
               r.readAsDataURL(file);
             });
-            state.pendingAttachments.push({ name: file.name, dataUrl });
+            const kind = file.type === ALLOWED_PDF_MIME ? "pdf" : "image";
+            state.pendingAttachments.push({ name: file.name, dataUrl, kind });
           } catch (e) {
             alert(`Failed to read ${file.name}: ${e.message}`);
           }
@@ -1591,6 +2458,295 @@
       window.history.replaceState({}, "", "/chat");
       elInput().focus();
     });
+
+    // ── Header actions: Persona / Export / More (were decorative until now) ──
+    let personaModal = null; // { agent, text, baked, source, editing }
+
+    function openChatModal(title, body, opts) {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (!backdrop) return;
+      opts = opts || {};
+      personaModal = opts.persona
+        ? {
+            agent: opts.agent,
+            text: body,
+            baked: opts.baked || body,
+            source: opts.source || "baked",
+            editing: false,
+          }
+        : null;
+      backdrop.querySelector("[data-modal-title]").textContent = title;
+      const pre = backdrop.querySelector("[data-modal-body]");
+      const ta = backdrop.querySelector("[data-modal-edit]");
+      const src = backdrop.querySelector("[data-modal-source]");
+      pre.textContent = body;
+      pre.hidden = false;
+      if (ta) { ta.hidden = true; ta.value = ""; }
+      if (src) {
+        if (personaModal) {
+          src.hidden = false;
+          src.textContent = personaModal.source === "override"
+            ? "edited · saved on disk"
+            : "default · committed";
+        } else {
+          src.hidden = true;
+          src.textContent = "";
+        }
+      }
+      setPersonaActionVisibility(false);
+      backdrop.hidden = false;
+    }
+    function setPersonaActionVisibility(editing) {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (!backdrop) return;
+      const show = !!personaModal;
+      const editBtn = backdrop.querySelector("[data-modal-edit-btn]");
+      const saveBtn = backdrop.querySelector("[data-modal-save]");
+      const cancelBtn = backdrop.querySelector("[data-modal-cancel-edit]");
+      const resetBtn = backdrop.querySelector("[data-modal-reset]");
+      if (editBtn) editBtn.hidden = !show || editing;
+      if (saveBtn) saveBtn.hidden = !show || !editing;
+      if (cancelBtn) cancelBtn.hidden = !show || !editing;
+      if (resetBtn) resetBtn.hidden = !show || editing || (personaModal && personaModal.source !== "override");
+    }
+    function closeChatModal() {
+      const backdrop = document.querySelector('[data-testid="chat-modal"]');
+      if (backdrop) backdrop.hidden = true;
+      personaModal = null;
+      setPersonaActionVisibility(false);
+    }
+    const modal = document.querySelector('[data-testid="chat-modal"]');
+    if (modal) {
+      modal.querySelector("[data-modal-close]")?.addEventListener("click", closeChatModal);
+      modal.addEventListener("click", (e) => { if (e.target === modal) closeChatModal(); });
+      modal.querySelector("[data-modal-copy]")?.addEventListener("click", async () => {
+        const ta = modal.querySelector("[data-modal-edit]");
+        const text = (ta && !ta.hidden) ? ta.value : (modal.querySelector("[data-modal-body]")?.textContent || "");
+        try { await navigator.clipboard.writeText(text); } catch (_) {}
+      });
+      modal.querySelector("[data-modal-edit-btn]")?.addEventListener("click", () => {
+        if (!personaModal) return;
+        const pre = modal.querySelector("[data-modal-body]");
+        const ta = modal.querySelector("[data-modal-edit]");
+        if (!ta) return;
+        ta.value = personaModal.text;
+        pre.hidden = true;
+        ta.hidden = false;
+        personaModal.editing = true;
+        setPersonaActionVisibility(true);
+        ta.focus();
+      });
+      modal.querySelector("[data-modal-cancel-edit]")?.addEventListener("click", () => {
+        if (!personaModal) return;
+        const pre = modal.querySelector("[data-modal-body]");
+        const ta = modal.querySelector("[data-modal-edit]");
+        if (ta) { ta.hidden = true; ta.value = ""; }
+        if (pre) { pre.hidden = false; pre.textContent = personaModal.text; }
+        personaModal.editing = false;
+        setPersonaActionVisibility(false);
+      });
+      modal.querySelector("[data-modal-save]")?.addEventListener("click", async () => {
+        if (!personaModal) return;
+        const ta = modal.querySelector("[data-modal-edit]");
+        const next = (ta && ta.value || "").trim();
+        if (!next) {
+          openChatModal("Persona", "Persona cannot be empty.");
+          return;
+        }
+        const saveBtn = modal.querySelector("[data-modal-save]");
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
+        try {
+          const r = await fetch(`/api/persona/${encodeURIComponent(personaModal.agent)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ persona: next }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+          }
+          openChatModal(
+            `Persona · ${data.agent || personaModal.agent}`,
+            (data.persona || next).trim(),
+            {
+              persona: true,
+              agent: data.agent || personaModal.agent,
+              source: data.source || "override",
+              baked: data.baked || personaModal.baked,
+            }
+          );
+        } catch (e) {
+          openChatModal("Persona", String(e && e.message || e));
+        } finally {
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save"; }
+        }
+      });
+      modal.querySelector("[data-modal-reset]")?.addEventListener("click", async () => {
+        if (!personaModal) return;
+        if (!confirm(`Reset ${personaModal.agent}'s persona to the committed default?`)) return;
+        try {
+          const r = await fetch(`/api/persona/${encodeURIComponent(personaModal.agent)}`, {
+            method: "DELETE",
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) {
+            throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+          }
+          openChatModal(
+            `Persona · ${data.agent || personaModal.agent}`,
+            (data.persona || "").trim() || "(empty persona)",
+            {
+              persona: true,
+              agent: data.agent || personaModal.agent,
+              source: "baked",
+              baked: data.baked || data.persona,
+            }
+          );
+        } catch (e) {
+          openChatModal("Persona", String(e && e.message || e));
+        }
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && modal && !modal.hidden) {
+          e.preventDefault();
+          if (personaModal && personaModal.editing) {
+            modal.querySelector("[data-modal-cancel-edit]")?.click();
+            return;
+          }
+          closeChatModal();
+        }
+      });
+    }
+
+    document.querySelector('[data-testid="persona-btn"]')?.addEventListener("click", async () => {
+      try {
+        const r = await fetch(`/api/persona/${encodeURIComponent(state.agent)}`);
+        if (!r.ok) {
+          openChatModal("Persona", `Could not load persona for ${state.agent} (HTTP ${r.status}).`);
+          return;
+        }
+        const data = await r.json();
+        openChatModal(
+          `Persona · ${data.agent || state.agent}`,
+          (data.persona || "").trim() || "(empty persona)",
+          {
+            persona: true,
+            agent: data.agent || state.agent,
+            source: data.source || "baked",
+            baked: data.baked || data.persona,
+          }
+        );
+      } catch (e) {
+        openChatModal("Persona", String(e && e.message || e));
+      }
+    });
+
+    document.querySelector('[data-testid="export-btn"]')?.addEventListener("click", async () => {
+      if (!state.sessionId) {
+        openChatModal("Export", "No session yet — send a message first, then export.");
+        return;
+      }
+      try {
+        const r = await fetch(`/sessions/${state.sessionId}/history`);
+        if (!r.ok) {
+          openChatModal("Export", `Could not load history (HTTP ${r.status}).`);
+          return;
+        }
+        const data = await r.json();
+        const turns = data.turns || data.history || data.messages || [];
+        const lines = [
+          `# SOVERYN chat · ${state.agent}`,
+          `session: ${state.sessionId}`,
+          `exported: ${new Date().toISOString()}`,
+          "",
+        ];
+        for (const t of turns) {
+          const role = (t.role || t.speaker || "?").toUpperCase();
+          const content = t.content || t.text || "";
+          if (!content) continue;
+          lines.push(`## ${role}`, content, "");
+        }
+        const md = lines.join("\n");
+        const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `soveryn-${state.agent}-${state.sessionId.slice(0, 8)}.md`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      } catch (e) {
+        openChatModal("Export", String(e && e.message || e));
+      }
+    });
+
+    const moreBtn = document.querySelector('[data-testid="more-btn"]');
+    const moreMenu = document.querySelector('[data-testid="more-menu"]');
+    function closeMoreMenu() {
+      if (moreMenu) moreMenu.hidden = true;
+      if (moreBtn) moreBtn.setAttribute("aria-expanded", "false");
+    }
+    if (moreBtn && moreMenu) {
+      moreBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = moreMenu.hidden;
+        moreMenu.hidden = !open;
+        moreBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      document.addEventListener("click", (e) => {
+        if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) {
+          closeMoreMenu();
+        }
+      });
+      moreMenu.addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-more]");
+        if (!btn) return;
+        const action = btn.getAttribute("data-more");
+        // Persona / Export / Voice keep their own button listeners — just close menu.
+        if (action === "persona" || action === "export") {
+          closeMoreMenu();
+          return; // let the button's own handler run
+        }
+        if (action === "voice") {
+          closeMoreMenu();
+          return; // call-btn listener starts the call
+        }
+        e.preventDefault();
+        closeMoreMenu();
+        if (action === "copy-id") {
+          if (!state.sessionId) {
+            openChatModal("Session", "No session id yet — send a message first.");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(state.sessionId);
+            openChatModal("Session", `Copied:\n${state.sessionId}`);
+          } catch (_) {
+            openChatModal("Session", state.sessionId);
+          }
+        } else if (action === "delete") {
+          if (!state.sessionId) {
+            openChatModal("Delete", "Nothing to delete — this is already a new session.");
+            return;
+          }
+          if (!confirm("Delete this session permanently?")) return;
+          try {
+            const r = await fetch(`/sessions/${state.sessionId}`, { method: "DELETE" });
+            if (!r.ok) {
+              openChatModal("Delete", `Delete failed (HTTP ${r.status}).`);
+              return;
+            }
+            state.sessionId = null;
+            elThread().innerHTML = "";
+            elSessionMeta().textContent = "new session";
+            window.history.replaceState({}, "", "/chat");
+            loadSessions();
+          } catch (err) {
+            openChatModal("Delete", String(err && err.message || err));
+          }
+        }
+      });
+    }
 
     document.querySelector('[data-testid="search"]').addEventListener("input", renderHistory);
 
@@ -1653,22 +2809,28 @@
   }
 
   // ─── Resume latest per-agent thread ─────────────────────────────────────────
-  // Default landing: open the most-recent HUMAN thread for the current agent
-  // instead of cold-starting a blank session — so she keeps the continuous
-  // thread ("holding the thread"), per-rail / per-agent. Rail + automated
-  // sessions (titles starting with "[" — [signal] [m] [heartbeat] [direct:…]
-  // [specialist…] [webhook] …) are skipped so we never land in another rail's
-  // session. PURELY NON-DESTRUCTIVE: only chooses which existing session to
-  // open; never creates or deletes. Falls back to lazy-mint (sessionId stays
-  // null) if the agent has no prior human thread.
+  // Default landing: open the most-recent HUMAN 1:1 thread for the agent.
+  // Skip group rooms ([room:…]), heartbeats, directs, automations. Prefer
+  // messenger DMs ([m] …) and plain human titles so Aetheria never opens as
+  // a permanent You+Aetheria+Vett group.
+  function isResumableDmSession(s) {
+    const t = ((s && s.title) || "").trim();
+    if (!t) return false;
+    if (t.startsWith("[room:")) return false;
+    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
+    if (t.startsWith("automation:")) return false;
+    if (t.startsWith("verify-")) return false; // one-shot test shells
+    if (t.startsWith("[m]")) return true; // phone/desktop messenger DM
+    if (t.startsWith("[")) return false;
+    return true;
+  }
+
   async function resumeLatestThread() {
     try {
       const r = await fetch(`/sessions?agent=${state.agent}&limit=100`);
       if (!r.ok) return;
       const data = await r.json();
-      const latest = (data.sessions || []).find(
-        s => !(s.title || "").trim().startsWith("[")
-      );
+      const latest = (data.sessions || []).find(isResumableDmSession);
       if (!latest) return;
       state.sessionId = latest.session_id;
       window.history.replaceState({}, "", `/chat/${latest.session_id}`);
@@ -1680,7 +2842,7 @@
   // ─── Boot ──────────────────────────────────────────────────────────────────
   function boot() {
     initSidebar();
-    const { sessionId, agent } = parseUrl();
+    const { sessionId, agent, q } = parseUrl();
     setAgent(pickInitialAgent(agent));
     state.sessionId = sessionId;
     elStreamToggle().textContent = state.stream ? "stream ▾" : "sync  ▾";
@@ -1688,6 +2850,16 @@
     loadSessions();
     if (sessionId) loadHistory(sessionId);
     else resumeLatestThread();
+    // Command Center dispatch deep-link: prefill composer, user hits send.
+    if (q && elInput()) {
+      elInput().value = q;
+      elInput().focus();
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("q");
+        window.history.replaceState({}, "", url.pathname + (url.search || "") + url.hash);
+      } catch (e) { /* ignore */ }
+    }
   }
   document.addEventListener("DOMContentLoaded", boot);
 })();

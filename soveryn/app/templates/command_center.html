@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Command Center</title>
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/lab-console.css">
 <style>
+
   :root {
     /* SOVERYN palette — mirrors chat.html. Anchored to the new logo
        (organic + electric duality, bronze trunk as bridge). */
@@ -44,10 +48,10 @@
     --glass-bg:rgba(16,16,19,0.92);
     --glass-border:rgba(192,130,79,0.30);
     --glass-blur:blur(3px) saturate(105%);
-    --r-lg:22px;
-    --r-md:14px;
-    --r-sm:10px;
-    --font:-apple-system,BlinkMacSystemFont,"SF Pro Display",Inter,sans-serif;
+    --r-lg:0;
+    --r-md:0;
+    --r-sm:3px;
+    --font:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
   html,body { background:var(--canvas); color:var(--text); font-family:var(--font); font-size:14px; min-height:100vh; }
@@ -153,7 +157,13 @@
   .hero .greeting-text h1 { font-size:34px; font-weight:500; letter-spacing:-0.01em; }
   .hero .greeting-text p { margin-top:8px; color:var(--text-dim); line-height:1.55; font-size:14px; max-width:600px; margin-left:auto; margin-right:auto; }
 
-  .agent-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .agent-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  @media (max-width: 1100px) {
+    .agent-row { grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width: 640px) {
+    .agent-row { grid-template-columns:1fr; }
+  }
   .agent-card {
     display:flex; align-items:center; gap:16px;
     padding:20px 22px;
@@ -211,10 +221,15 @@
   }
 
   /* Specialists + Comm bus row — twin panels side by side. */
-  .orch-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .orch-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
   .specialists-feed, .commbus-feed {
     display:flex; flex-direction:column; gap:10px;
     max-height:300px; overflow-y:auto; padding-right:4px;
+  }
+  /* Comm bus stays short so the orch-row lines up with panels above, not a tall stack. */
+  .commbus-feed {
+    max-height: 148px !important;
+    gap: 4px !important;
   }
 
   /* Active specialists — each item shows name, host agent, coord anchor,
@@ -265,45 +280,66 @@
   }
   .specialist-item .kill[disabled] { opacity:0.4; cursor:wait; }
 
-  /* Comm bus — direct_command (filled olive arrow) + direct_query (open
-     blue arrow) edges. Each item one row, compact. */
+  /* Comm bus — single compact line per hop so the row matches page density. */
   .commbus-item {
-    padding:8px 12px;
-    background:rgba(255,255,255,0.0125);
-    border-radius:6px;
-    display:flex; flex-direction:column; gap:4px;
-    font-size:12px;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 3px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    min-height: 0;
   }
   .commbus-item[data-empty] {
-    background:none; padding:8px 0;
-    color:rgba(236,243,244,0.35); font-style:italic;
+    background: none;
+    border: none;
+    padding: 4px 0;
+    color: rgba(236,243,244,0.35);
+    font-style: italic;
   }
   .commbus-item .head {
-    display:flex; gap:8px; align-items:baseline;
-    font-size:10px; text-transform:uppercase; letter-spacing:0.10em;
-    color:rgba(236,243,244,0.5);
+    display: flex;
+    gap: 5px;
+    align-items: baseline;
+    flex-shrink: 0;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(236,243,244,0.5);
   }
   .commbus-item .head .arrow {
-    font-family:ui-monospace,monospace; font-size:13px; line-height:1;
+    font-family: ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1;
   }
-  .commbus-item[data-rel="direct_command"] .head .arrow { color:var(--sov-amber); }
-  .commbus-item[data-rel="direct_query"]   .head .arrow { color:var(--sov-electric-blue); }
+  .commbus-item[data-rel="direct_command"] .head .arrow { color: var(--sov-amber); }
+  .commbus-item[data-rel="direct_query"]   .head .arrow { color: var(--sov-electric-blue); }
   .commbus-item .head .sender, .commbus-item .head .target {
-    font-weight:500; color:rgba(236,243,244,0.75);
+    font-weight: 500;
+    color: rgba(236,243,244,0.75);
   }
-  .commbus-item[data-sender="aetheria"] .head .sender { color:var(--sov-amber); }
-  .commbus-item[data-sender="vett"]     .head .sender { color:var(--sov-electric-blue); }
-  .commbus-item[data-sender="scotty"]   .head .sender { color:var(--sov-maroon); }
-  .commbus-item[data-target="aetheria"] .head .target { color:var(--sov-amber); }
-  .commbus-item[data-target="vett"]     .head .target { color:var(--sov-electric-blue); }
-  .commbus-item[data-target="scotty"]   .head .target { color:var(--sov-maroon); }
+  .commbus-item[data-sender="aetheria"] .head .sender { color: var(--sov-amber); }
+  .commbus-item[data-sender="vett"]     .head .sender { color: var(--sov-electric-blue); }
+  .commbus-item[data-sender="scotty"]   .head .sender { color: var(--sov-maroon); }
+  .commbus-item[data-target="aetheria"] .head .target { color: var(--sov-amber); }
+  .commbus-item[data-target="vett"]     .head .target { color: var(--sov-electric-blue); }
+  .commbus-item[data-target="scotty"]   .head .target { color: var(--sov-maroon); }
   .commbus-item .head .age {
-    margin-left:auto; font-variant-numeric:tabular-nums;
-    color:rgba(236,243,244,0.4);
+    font-variant-numeric: tabular-nums;
+    color: rgba(236,243,244,0.4);
+    margin-left: 2px;
   }
   .commbus-item .body {
-    color:rgba(236,243,244,0.78); line-height:1.4;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    flex: 1;
+    min-width: 0;
+    color: rgba(236,243,244,0.72);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Library writes feed — surfaces type='library' nodes from the lattice.
@@ -352,8 +388,152 @@
   .activity-item .who[data-agent="scotty"]   { color:var(--sov-maroon); }
   .activity-item .ts { color:rgba(236,243,244,0.4); font-size:11px; margin-left:6px; font-variant-numeric:tabular-nums; }
 
-  .sparkline { margin-top:16px; display:flex; gap:3px; align-items:flex-end; height:36px; }
-  .sparkline .bar { flex:1; background:var(--sov-amber); opacity:0.7; border-radius:2px 2px 0 0; min-height:2px; }
+  /* Lattice + cognition: full page width, same panel language */
+  section[data-testid="lattice-telemetry-panel"],
+  section[data-testid="cognition-panel"] {
+    width: 100% !important;
+    max-width: none !important;
+    display: block !important;
+    box-sizing: border-box !important;
+  }
+  section[data-testid="lattice-telemetry-panel"] > h3,
+  section[data-testid="cognition-panel"] > h3 {
+    font-size: 11px !important;
+    color: var(--ink-3) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    margin: 0 0 14px !important;
+  }
+  .telemetry {
+    margin-top: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    position: relative;
+    overflow: visible;
+    width: 100%;
+  }
+  .telemetry::before { display:none !important; content:none !important; }
+  @keyframes telemetry-scan {
+    0% { transform: translateX(-40%); opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { transform: translateX(40%); opacity: 0; }
+  }
+  .telemetry-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-title {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(125,148,163,0.95);
+    font-weight: 600;
+  }
+  .telemetry-live {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #3f9a5f;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .telemetry-live::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #3f9a5f;
+    box-shadow: 0 0 8px #3f9a5f;
+    animation: telemetry-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes telemetry-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+  .telemetry-sub {
+    font-size: 11px;
+    color: rgba(232,227,213,0.42);
+    margin: 0 0 10px;
+    line-height: 1.4;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .telemetry-metrics div {
+    border: 1px solid rgba(232,227,213,0.08);
+    background: rgba(0,0,0,0.28);
+    padding: 6px 8px;
+  }
+  .telemetry-metrics b {
+    display: block;
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+    font-weight: 600;
+    color: #e7e5dc;
+    text-shadow: 0 0 12px rgba(107,130,144,0.35);
+  }
+  .telemetry-metrics span {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.4);
+  }
+  .sparkline {
+    margin-top: 0;
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    height: 56px;
+    position: relative;
+    z-index: 1;
+    border-bottom: 1px solid rgba(107,130,144,0.35);
+    padding-bottom: 0;
+  }
+  .sparkline .bar {
+    flex: 1;
+    background: linear-gradient(180deg, #9eb4c2 0%, #5f7684 55%, #404e59 100%);
+    opacity: 0.9;
+    border-radius: 1px 1px 0 0;
+    min-height: 2px;
+    box-shadow: 0 0 6px rgba(107,130,144,0.25);
+    transition: filter 0.15s, opacity 0.15s;
+    cursor: default;
+  }
+  .sparkline .bar:hover,
+  .sparkline .bar.is-today {
+    filter: brightness(1.25);
+    opacity: 1;
+    box-shadow: 0 0 10px rgba(125,148,163,0.55);
+  }
+  .sparkline .bar.is-today {
+    background: linear-gradient(180deg, #d4a827 0%, #c0824f 60%, #8c5a3c 100%);
+  }
+  .telemetry-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: rgba(232,227,213,0.35);
+    font-variant-numeric: tabular-nums;
+    position: relative;
+    z-index: 1;
+  }
 
   .gpu-bars { display:flex; flex-direction:column; gap:10px; }
   .gpu-bar { font-size:11px; color:rgba(236,243,244,0.7); }
@@ -363,6 +543,21 @@
   .gpu-bar .fill { height:100%; background:linear-gradient(90deg,#3dba6f,#d4a827,#c0392b); }
 
   .spark-tile { font-size:11px; color:rgba(236,243,244,0.7); }
+  .acttruth-tile { font-size:11px; color:rgba(236,243,244,0.72); }
+  .acttruth-tile .agent-row {
+    display:flex; justify-content:space-between; gap:8px;
+    padding:5px 0; border-bottom:1px solid rgba(94,225,160,0.12);
+  }
+  .acttruth-tile .agent-row:last-child { border-bottom:0; }
+  .acttruth-tile .name { color:#5ee1a0; font-weight:600; letter-spacing:0.02em; }
+  .acttruth-tile .budget { font-variant-numeric:tabular-nums; color:rgba(236,243,244,0.9); }
+  .acttruth-tile .budget.exhausted { color:#e07a6a; }
+  .acttruth-tile .fail {
+    margin-top:2px; color:rgba(224,122,106,0.95); font-size:10px; line-height:1.35;
+  }
+  .acttruth-tile .ok-note {
+    margin-top:2px; color:rgba(143,173,154,0.9); font-size:10px; line-height:1.35;
+  }
   .spark-tile .link { display:inline-block; padding:2px 7px; border-radius:3px;
     font-weight:600; letter-spacing:0.04em; font-size:10px; margin-bottom:8px; }
   .spark-tile .link.fabric { background:rgba(61,186,111,0.15); color:#3dba6f; }
@@ -411,7 +606,22 @@
   .daemon-card[data-status="active"]::after, .daemon-card[data-status="stale"]::after { content:""; }
 
   /* ─── Boards panel ──────────────────────────────────────────────────────── */
-  .boards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .boards {
+    display:grid;
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:10px;
+    min-width:0;
+    max-width:100%;
+  }
+  [data-testid="boards-panel"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  .board-col {
+    min-width: 0;
+    overflow: hidden;
+  }
   .board-col h4 {
     font-size:10px; text-transform:uppercase; letter-spacing:0.14em;
     color:rgba(232,227,213,0.5);
@@ -488,6 +698,10 @@
   .board-item-lesson {
     margin-top:6px; padding-top:6px;
     display:flex; flex-direction:column; gap:4px;
+  }
+  /* class display:flex would otherwise override the HTML hidden attribute */
+  .board-item-lesson[hidden] {
+    display: none !important;
   }
   .board-item-lesson textarea {
     background:rgba(0,0,0,0.2);
@@ -591,6 +805,61 @@
   .ares-counts { font-size:11px; color:rgba(232,227,213,0.6); margin-bottom:8px; }
   .ares-counts .sev-emergency { color:#ef4444; }
   .ares-counts .sev-critical  { color:#f59e0b; }
+  .ares-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 10px;
+    align-items: center;
+  }
+  .ares-clear-btn {
+    font-family: var(--font, inherit) !important;
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255,107,107,0.35) !important;
+    background: rgba(255,107,107,0.08) !important;
+    color: #f0c4c4 !important;
+    cursor: pointer;
+  }
+  .ares-clear-btn:hover {
+    background: rgba(255,107,107,0.16) !important;
+  }
+  .ares-clear-btn.warn {
+    border-color: rgba(240,193,74,0.4) !important;
+    background: rgba(240,193,74,0.08) !important;
+    color: #f0d9a0 !important;
+  }
+  .ares-clear-btn:disabled {
+    opacity: 0.45;
+    cursor: wait;
+  }
+  .ares-finding-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .ares-finding-row .ares-dismiss {
+    flex-shrink: 0;
+    font-size: 10px !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+    border: 1px solid rgba(198,166,100,0.28) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: rgba(232,227,213,0.7) !important;
+    cursor: pointer;
+  }
+  .ares-finding-row .ares-dismiss:hover {
+    border-color: rgba(198,166,100,0.5) !important;
+    color: #e9e5dc !important;
+  }
+  .ares-status-note {
+    font-size: 11px;
+    color: rgba(232,227,213,0.45);
+    margin-top: 4px;
+    min-height: 1.2em;
+  }
   .ares-finding {
     display:flex; align-items:flex-start; gap:8px; padding:7px 10px;
     background:rgba(255,255,255,0.0125); border:1px solid rgba(255,255,255,0.02);
@@ -969,7 +1238,7 @@
     to   { transform:translateX(420%); }
   }
 
-  /* Sparks — A is live hardware, B is an empty bay (an invitation, not an apology). */
+  /* Sparks — A is vLLM API, B is the TP=2 worker. */
   .rig-sparks { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .spark-hw {
     font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
@@ -1006,56 +1275,2259 @@
   @media (prefers-reduced-motion: reduce) {
     .rig-spine[data-state="live"] .line::after { animation:none; display:none; }
   }
+
+  /* ── Lab face (skin only — original structure preserved) ──────────────── */
+  body.lab,
+  body[data-lab] {
+    background: var(--ground) !important;
+    color: var(--ink) !important;
+    font-family: var(--mono) !important;
+    background-image:
+      linear-gradient(rgba(198,166,100,.038) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(198,166,100,.038) 1px, transparent 1px) !important;
+    background-size: 64px 64px, 64px 64px !important;
+    background-attachment: fixed !important;
+  }
+  body.lab::before,
+  body.lab::after,
+  body[data-lab]::before,
+  body[data-lab]::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 0 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Hide old top header; plate is the nameplate */
+  header.top { display: none !important; }
+
+  .panel,
+  .agent-card,
+  .daemon-card,
+  section.panel {
+    background: var(--panel) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .agent-row,
+  .daemon-row {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+    gap: 0 !important;
+    border: 1px solid var(--line);
+    border-top: none;
+  }
+  .agent-card,
+  .daemon-card {
+    border: none !important;
+    border-right: 1px solid var(--line) !important;
+    transform: none !important;
+    padding: 18px 20px !important;
+  }
+  .agent-card:last-child,
+  .daemon-card:last-child { border-right: none !important; }
+  .agent-card:hover,
+  .daemon-card:hover {
+    background: var(--panel-2) !important;
+    transform: none !important;
+  }
+  .agent-card .name,
+  .daemon-card .name {
+    letter-spacing: 0.1em;
+    text-transform: lowercase;
+    font-size: 0.85rem;
+  }
+  .agent-card .role,
+  .daemon-card .meta {
+    color: var(--ink-3) !important;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .greeting,
+  section[data-testid="greeting"] {
+    border: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    background: var(--panel) !important;
+    padding: 24px 22px !important;
+  }
+  .greeting h1,
+  [data-greeting-heading] {
+    font-size: clamp(1.15rem, 2.4vw, 1.5rem) !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em !important;
+    color: var(--ink) !important;
+  }
+  .greeting p,
+  [data-greeting-body] {
+    font-family: var(--sans) !important;
+    color: var(--ink-2) !important;
+  }
+
+  h3,
+  .library-header h3,
+  .activity h3,
+  .system h3 {
+    font-size: 0.66rem !important;
+    letter-spacing: 0.22em !important;
+    color: var(--ink-2) !important;
+    text-transform: uppercase !important;
+  }
+
+  .bottom-row,
+  .orch-row,
+  .pulse-row,
+  .cognition-approvals-row {
+    gap: 0 !important;
+    border: 1px solid var(--line);
+    border-top: none;
+  }
+  .bottom-row > .panel,
+  .orch-row > .panel,
+  .pulse-row > .panel,
+  .cognition-approvals-row > .panel,
+  .cognition-approvals-row > section {
+    border: none !important;
+    border-right: 1px solid var(--line) !important;
+  }
+
+  input, textarea, select, button {
+    font-family: var(--mono) !important;
+    border-radius: 3px !important;
+  }
+  .board-item-action,
+  button.board-item-action {
+    border: 1px solid var(--line-lit) !important;
+    color: var(--gold) !important;
+    background: transparent !important;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.6rem !important;
+  }
+
+  /* plate sits above .page content */
+  .plate {
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* panels stack with ruled seams */
+  .page > section.panel,
+  .page > .panel,
+  .page > .agent-row,
+  .page > .daemon-row,
+  .page > .bottom-row,
+  .page > .orch-row,
+  .page > .pulse-row,
+  .page > .cognition-approvals-row,
+  .page > section[data-testid] {
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  a { color: var(--gold); }
+  a:hover { color: var(--ink); }
+
+  /* ── Dense command center (2026-08-15) — less scroll, more at a glance ── */
+  .page {
+    max-width: 1400px !important;
+    padding: 12px 20px 40px !important;
+    gap: 10px !important;
+  }
+  /* Plate already carries nav + status; the second brand header is pure height. */
+  header.top { display: none !important; }
+
+  /* High-tech HUD chrome */
+  .plate {
+    border-bottom: 1px solid rgba(107,130,144,0.35) !important;
+    box-shadow: 0 1px 0 rgba(192,130,79,0.12);
+  }
+  .plate .status-pill {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 10px;
+  }
+  .panel, section.panel, .agent-card, .daemon-card {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+  .panel > h3:first-child,
+  section.panel > h3:first-child {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel > h3:first-child::before,
+  section.panel > h3:first-child::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    background: #6b8290;
+    box-shadow: 0 0 8px rgba(107,130,144,0.7);
+    flex-shrink: 0;
+  }
+  .agent-card .name,
+  .daemon-card .name {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 11px;
+  }
+  .system-stats {
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .system-stats span {
+    color: #9eb4c2;
+    text-shadow: 0 0 10px rgba(107,130,144,0.35);
+  }
+
+  section.panel.greeting,
+  section[data-testid="greeting"] {
+    padding: 12px 16px !important;
+  }
+  section.panel.greeting h1,
+  [data-greeting-heading] {
+    font-size: 1.15rem !important;
+    margin: 0 0 4px !important;
+  }
+  section.panel.greeting p,
+  [data-greeting-body] {
+    font-size: 13px !important;
+    margin: 0 !important;
+    opacity: 0.75;
+  }
+
+  .agent-row {
+    gap: 8px !important;
+  }
+  .agent-card .body { padding: 10px 12px !important; }
+  .daemon-row {
+    gap: 8px !important;
+  }
+  .daemon-card { padding: 8px 10px !important; }
+
+  /* Two-column strips for mid-page work.
+     minmax(0,1fr) is required — plain 1fr still mins to content width, so
+     public-agent cards were blowing past the right edge of the page. */
+  .cc-grid-2 {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 10px !important;
+    align-items: start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .cc-grid-2 > .panel,
+  .cc-grid-2 > section {
+    margin: 0 !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+  @media (max-width: 960px) {
+    .cc-grid-2 { grid-template-columns: minmax(0, 1fr) !important; }
+  }
+
+  /* Foldable deep panels — default closed to cut scroll */
+  details.cc-fold {
+    border: 1px solid var(--line, rgba(192,130,79,0.22));
+    background: rgba(12,12,14,0.55);
+  }
+  details.cc-fold > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 10px 14px;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    user-select: none;
+  }
+  details.cc-fold > summary::-webkit-details-marker { display: none; }
+  details.cc-fold > summary::after {
+    content: "+";
+    font-family: var(--mono, monospace);
+    color: var(--gold, #c0824f);
+    font-size: 14px;
+  }
+  details.cc-fold[open] > summary::after { content: "−"; }
+  details.cc-fold > summary .cc-fold-hint {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: rgba(232,227,213,0.4);
+    font-weight: 400;
+  }
+  details.cc-fold > .cc-fold-body {
+    padding: 0 12px 12px;
+    border-top: 1px solid rgba(232,227,213,0.08);
+  }
+  /* When folded, the original panel chrome is flattened */
+  details.cc-fold .panel,
+  details.cc-fold section.panel {
+    border: none !important;
+    background: transparent !important;
+    padding: 10px 0 0 !important;
+    box-shadow: none !important;
+  }
+  details.cc-fold .panel > h3:first-child {
+    display: none; /* summary already names the section */
+  }
+
+  /* Boards — full-width narrow strip */
+  .boards-strip {
+    padding: 12px 16px !important;
+  }
+  .boards-strip-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .boards-strip-head h3 {
+    font-size: 11px !important;
+    color: rgba(232,227,213,0.45) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    margin: 0 !important;
+  }
+  .boards-strip .boards {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+    min-width: 0;
+  }
+  .boards-strip .board-col [data-board-list] {
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .boards-strip .empty {
+    font-size: 11px;
+    opacity: 0.45;
+    padding: 4px 0;
+  }
+
+  /* Public agents + intake — four equal columns */
+  .public-agents-strip {
+    padding: 12px 16px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-testid="public-agents-panel"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-public-agents],
+  [data-public-agents] .cc-pa-grid,
+  [data-public-agents] .cc-pa-crm {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  [data-public-agents] .cc-pa-banner {
+    font-size: 11px;
+    margin-bottom: 8px;
+    color: rgba(232,227,213,0.5);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-public-agents] .cc-pa-banner.hot { color: #3f9a5f; }
+  [data-public-agents] .cc-pa-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    align-items: stretch;
+  }
+  @media (max-width: 1100px) {
+    [data-public-agents] .cc-pa-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (max-width: 640px) {
+    [data-public-agents] .cc-pa-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .boards-strip .boards {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+  }
+  [data-public-agents] .cc-pa-card {
+    border: 1px solid rgba(232,227,213,0.1);
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.2);
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  [data-public-agents] .cc-pa-card > div:first-child {
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-status {
+    flex-shrink: 0;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: rgba(232,227,213,0.55);
+  }
+  [data-public-agents] .cc-pa-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  [data-public-agents] .cc-pa-model { opacity: 0.35; }
+  [data-public-agents] .cc-pa-foot a {
+    color: var(--sov-amber, #c6a664);
+    text-decoration: none;
+  }
+  [data-public-agents] .cc-pa-card h4 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    color: #ece3d5;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-public-agents] .cc-pa-meta {
+    font-size: 10px;
+    color: rgba(232,227,213,0.45);
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-public-agents] .cc-pa-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-stats > div {
+    min-width: 0;
+    overflow: hidden;
+  }
+  [data-public-agents] .cc-pa-stats b {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ece3d5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  [data-public-agents] .cc-pa-stats span {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.45;
+  }
+  [data-public-agents] .cc-pa-line {
+    font-size: 11px;
+    line-height: 1.35;
+    color: rgba(236,243,244,0.72);
+    padding: 4px 0;
+    border-top: 1px solid rgba(232,227,213,0.07);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  [data-public-agents] .cc-pa-asks-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(232,227,213,0.38);
+    margin: 6px 0 2px;
+  }
+  [data-public-agents] .cc-pa-asks {
+    max-height: 130px;
+    overflow-y: auto;
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-foot {
+    margin-top: 8px;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Cross-agent live ask feed (PondWright + Seneca + Atticus) */
+  [data-public-agents] .cc-pa-live {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(198,166,100,0.16);
+    border-radius: 12px;
+    background: rgba(0,0,0,0.35);
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live .cc-pa-banner {
+    margin-bottom: 6px;
+  }
+  [data-public-agents] .cc-pa-live-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  [data-public-agents] .cc-pa-live-row {
+    display: grid;
+    grid-template-columns: 88px 56px minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 3px 0;
+    border-top: 1px solid rgba(232,227,213,0.06);
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live-row:first-child { border-top: none; }
+  [data-public-agents] .cc-pa-live-who {
+    color: var(--cc-phosphor, #c6a664);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  [data-public-agents] .cc-pa-live-when {
+    color: rgba(232,227,213,0.4);
+    font-variant-numeric: tabular-nums;
+  }
+  [data-public-agents] .cc-pa-live-q {
+    color: rgba(236,243,244,0.78);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  [data-public-agents] .cc-pa-live-q em {
+    font-style: normal;
+    color: #6fb98a;
+    opacity: 0.9;
+  }
+  @media (max-width: 720px) {
+    [data-public-agents] .cc-pa-live-row {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    [data-public-agents] .cc-pa-live-when { display: none; }
+  }
+
+  /* Cap tall feeds so one panel cannot force a marathon scroll */
+  .mem-feed,
+  .library-feed,
+  .activity-feed,
+  .cognition-feed,
+  .steward-feed,
+  .scotty-approvals-feed,
+  .specialists-feed {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  /* commbus max-height set above (~148px) — keep it shorter than siblings */
+  .rig { padding: 12px 14px !important; }
+  .bottom-row, .orch-row, .cognition-approvals-row {
+    gap: 10px !important;
+  }
+
+  /* Automations v0 — catalog + dry-run (never live Signal) */
+  .auto-panel { padding: 12px 14px !important; }
+  .auto-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .auto-head h3 {
+    font-size: 11px; color: rgba(232,227,213,0.45);
+    text-transform: uppercase; letter-spacing: 0.12em; margin: 0;
+  }
+  .auto-badge {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: #c0824f; border: 1px solid rgba(192,130,79,0.35);
+    padding: 2px 7px; border-radius: 3px;
+  }
+  .auto-meta {
+    font-size: 11px; color: rgba(232,227,213,0.45); margin-left: auto;
+  }
+  .auto-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 340px; overflow-y: auto;
+  }
+  .auto-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 12px;
+    align-items: center;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 6px;
+  }
+  .auto-row[data-enabled="false"] { opacity: 0.45; }
+  .auto-title {
+    font-size: 13px; color: rgba(232,227,213,0.9); font-weight: 500;
+  }
+  .auto-sub {
+    font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-top: 2px;
+  }
+  .auto-sub .ag { color: #8fae8f; }
+  .auto-sub .cat { color: #c0824f; }
+  .auto-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .auto-chans { display: flex; gap: 4px; }
+  .auto-chan {
+    border: 1px solid rgba(232,227,213,0.18) !important;
+    background: rgba(0,0,0,0.2) !important;
+    color: rgba(232,227,213,0.55) !important;
+    font-size: 9px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 5px 8px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-chan.is-on {
+    border-color: rgba(192,130,79,0.65) !important;
+    background: rgba(192,130,79,0.16) !important;
+    color: #f3e7db !important;
+  }
+  .auto-chan:disabled { opacity: 0.45; cursor: wait; }
+  .auto-run-btn {
+    border: 1px solid rgba(192,130,79,0.4) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #e7e5dc !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-run-btn:hover { border-color: rgba(192,130,79,0.75) !important; }
+  .auto-run-btn:disabled { opacity: 0.45; cursor: wait; }
+  @media (max-width: 720px) {
+    .auto-row { grid-template-columns: 1fr; }
+    .auto-actions { justify-content: flex-start; }
+  }
+  .auto-preview {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(232,227,213,0.08);
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: rgba(232,227,213,0.78);
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .auto-preview[hidden] { display: none; }
+  .auto-preview .ph {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 6px;
+  }
+  .auto-empty { font-size: 11px; color: rgba(232,227,213,0.4); padding: 10px; }
+  .auto-inbox {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 260px; overflow-y: auto;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(232,227,213,0.08);
+  }
+  .auto-inbox-item {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-left: 3px solid rgba(192,130,79,0.45);
+    border-radius: 6px;
+    font-size: 12px; color: rgba(232,227,213,0.82);
+  }
+  .auto-inbox-item .ih {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .auto-inbox-item .ih .ag { color: #8fae8f; }
+  .auto-inbox-item .ih .st { color: #c0824f; }
+  .auto-inbox-item details summary {
+    cursor: pointer; color: rgba(232,227,213,0.7); font-size: 12px;
+  }
+  .auto-inbox-item .ibody {
+    margin-top: 8px; white-space: pre-wrap; font-size: 12px;
+    color: rgba(232,227,213,0.78); max-height: 160px; overflow-y: auto;
+  }
+  .auto-triage {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 200px; overflow-y: auto;
+    margin-bottom: 14px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(232,227,213,0.08);
+  }
+  .auto-triage-label {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 2px;
+  }
+  .auto-triage-item {
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.0125);
+    border: 1px solid rgba(255,255,255,0.03);
+    border-left: 3px solid rgba(180,80,80,0.55);
+    border-radius: 6px;
+    font-size: 12px; color: rgba(232,227,213,0.82);
+  }
+  .auto-triage-item .ih {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline;
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .auto-triage-item .ih .ag { color: #8fae8f; }
+  .auto-triage-item .ih .ct { color: #e08a8a; }
+  .auto-live-btn {
+    border: 1px solid rgba(94,225,160,0.35) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #9ee0b8 !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-live-btn:hover { border-color: rgba(94,225,160,0.7) !important; }
+  .auto-routine-btn {
+    border: 1px solid rgba(143,174,143,0.4) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #b8c9b8 !important;
+    font-size: 10px !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .auto-routine-btn:hover { border-color: rgba(143,174,143,0.75) !important; }
+  .auto-routine-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .auto-live-btn:disabled { opacity: 0.45; cursor: wait; }
+
+  /* Ops console — brain switch + test runner */
+  .ops-panel {
+    padding: 12px 14px !important;
+  }
+  .ops-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .ops-grid { grid-template-columns: 1fr; }
+  }
+  .ops-block h4 {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(125,148,163,0.95);
+    margin: 0 0 8px;
+  }
+  .ops-brain-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ops-brain-btn {
+    border: 1px solid rgba(192,130,79,0.35) !important;
+    background: rgba(0,0,0,0.25) !important;
+    color: #e7e5dc !important;
+    font-size: 11px !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 12px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .ops-brain-btn:hover { border-color: rgba(192,130,79,0.7) !important; }
+  .ops-brain-btn.is-active {
+    background: rgba(192,130,79,0.18) !important;
+    border-color: #c0824f !important;
+    color: #f3e7db !important;
+    box-shadow: 0 0 12px rgba(192,130,79,0.25);
+  }
+  .ops-brain-btn:disabled {
+    opacity: 0.45;
+    cursor: wait;
+  }
+  .ops-meta {
+    font-size: 11px;
+    color: rgba(232,227,213,0.5);
+    line-height: 1.45;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .ops-test-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .ops-test-btn {
+    border: 1px solid rgba(107,130,144,0.4) !important;
+    background: rgba(0,0,0,0.28) !important;
+    color: #cfd8de !important;
+    font-size: 11px !important;
+    padding: 7px 10px !important;
+    border-radius: 3px !important;
+    cursor: pointer;
+  }
+  .ops-test-btn:hover { border-color: #7d94a3 !important; color: #fff !important; }
+  .ops-test-btn:disabled { opacity: 0.45; cursor: wait; }
+  .ops-status {
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(232,227,213,0.65);
+    min-height: 1.2em;
+  }
+  .ops-status.ok { color: #3f9a5f; }
+  .ops-status.fail { color: #c0392b; }
+  .ops-status.run { color: #d4a827; }
+  .ops-log {
+    margin-top: 8px;
+    max-height: 120px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.35;
+    color: rgba(207,216,222,0.85);
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(107,130,144,0.25);
+    padding: 8px;
+    white-space: pre-wrap;
+    display: none;
+  }
+  .ops-log.show { display: block; }
+
+
+  /* ════════════════════════════════════════════════════════════════════════
+     Command Center 2050 — operator HUD on pure black (not blue HUD chrome)
+     ════════════════════════════════════════════════════════════════════════ */
+  body.lab[data-testid="command-center"],
+  body.lab.cc-2050 {
+    overflow-x: hidden !important;
+    /* Pure black canvas — lab ground. Accents warm (gold/sage), not cyan. */
+    --cc-void: #000000;
+    --cc-panel: #0a0a09;
+    --cc-panel-solid: #0a0a09;
+    --cc-line: rgba(198, 166, 100, 0.14);
+    --cc-line-hot: rgba(198, 166, 100, 0.32);
+    --cc-glow: rgba(198, 166, 100, 0.10);
+    --cc-phosphor: #c6a664;          /* gold signal, not cyan */
+    --cc-mint: #6fb98a;
+    --cc-warn: #d4a827;
+    --cc-hot: #c26a5c;
+    --cc-amber: #c6a664;
+    --cc-text: #e9e5dc;
+    --cc-dim: rgba(233, 229, 220, 0.58);
+    --cc-mute: rgba(233, 229, 220, 0.34);
+    --cc-radius: 16px;
+    --cc-radius-sm: 10px;
+    --font: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: #000000 !important;
+    background-image: none !important;
+    color: var(--cc-text);
+    font-family: var(--font) !important;
+    letter-spacing: 0.01em;
+  }
+  /* Kill lab-console gold grid on this page — pure black only. */
+  body.lab.cc-2050 {
+    background-image: none !important;
+  }
+  body.lab.cc-2050::before {
+    opacity: 0.18 !important;
+    filter: brightness(1.05) saturate(0.9) !important;
+    background-color: #000000 !important;
+    background-size: auto min(42vh, 380px) !important;
+  }
+  body.lab.cc-2050::after {
+    background: radial-gradient(100% 80% at 50% 40%, transparent 35%, rgba(0,0,0,0.55) 100%) !important;
+  }
+  html:has(body.lab.cc-2050) {
+    background: #000000 !important;
+  }
+
+  body.lab.cc-2050 .page {
+    max-width: 1180px !important;
+    padding: 16px 22px 56px !important;
+    gap: 14px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  body.lab.cc-2050 .cc-operator-zone,
+  body.lab.cc-2050 .cc-grid-2,
+  body.lab.cc-2050 .cognition-approvals-row,
+  body.lab.cc-2050 .pulse-row,
+  body.lab.cc-2050 .orch-row,
+  body.lab.cc-2050 .bottom-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  body.lab .cognition-approvals-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  /* Soft panels — no hard 0-radius lab slabs */
+  body.lab.cc-2050 .panel,
+  body.lab.cc-2050 section.panel,
+  body.lab.cc-2050 .agent-card,
+  body.lab.cc-2050 .daemon-card {
+    background: var(--cc-panel) !important;
+    backdrop-filter: blur(18px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(120%) !important;
+    border: 1px solid var(--cc-line) !important;
+    border-radius: var(--cc-radius) !important;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.02) inset,
+      0 12px 40px rgba(0,0,0,0.35) !important;
+  }
+  body.lab.cc-2050 .page > section.panel,
+  body.lab.cc-2050 .page > .panel,
+  body.lab.cc-2050 .page > .agent-row,
+  body.lab.cc-2050 .page > .daemon-row,
+  body.lab.cc-2050 .page > .bottom-row,
+  body.lab.cc-2050 .page > .orch-row,
+  body.lab.cc-2050 .page > .pulse-row,
+  body.lab.cc-2050 .page > .cognition-approvals-row,
+  body.lab.cc-2050 .page > section[data-testid] {
+    border-radius: var(--cc-radius) !important;
+    margin: 0 !important;
+  }
+  body.lab.cc-2050 .bottom-row,
+  body.lab.cc-2050 .orch-row,
+  body.lab.cc-2050 .pulse-row,
+  body.lab.cc-2050 .cognition-approvals-row {
+    border: none !important;
+    gap: 12px !important;
+  }
+  body.lab.cc-2050 .bottom-row > .panel,
+  body.lab.cc-2050 .orch-row > .panel,
+  body.lab.cc-2050 .pulse-row > .panel,
+  body.lab.cc-2050 .cognition-approvals-row > .panel,
+  body.lab.cc-2050 .cognition-approvals-row > section {
+    border: 1px solid var(--cc-line) !important;
+    border-right: 1px solid var(--cc-line) !important;
+  }
+
+  body.lab.cc-2050 h3,
+  body.lab.cc-2050 .library-header h3,
+  body.lab.cc-2050 .activity h3,
+  body.lab.cc-2050 .system h3 {
+    font-family: var(--font) !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.16em !important;
+    font-weight: 500 !important;
+    color: var(--cc-mute) !important;
+  }
+  body.lab.cc-2050 .panel > h3:first-child::before,
+  body.lab.cc-2050 section.panel > h3:first-child::before {
+    background: var(--cc-phosphor) !important;
+    box-shadow: 0 0 10px rgba(198,166,100,0.65) !important;
+    border-radius: 50% !important;
+    width: 5px !important;
+    height: 5px !important;
+  }
+
+  /* Plate — slim floating bar */
+  body.lab.cc-2050 .plate {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 16px !important;
+    border: 1px solid var(--cc-line) !important;
+    border-radius: 999px !important;
+    background: rgba(0, 0, 0, 0.88) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    border-bottom: 1px solid var(--cc-line) !important;
+  }
+  body.lab.cc-2050 .plate .id {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font);
+  }
+  body.lab.cc-2050 .plate .id img {
+    width: 28px; height: 28px;
+    filter: drop-shadow(0 0 8px rgba(198,166,100,0.25));
+  }
+  body.lab.cc-2050 .plate .id b {
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    font-size: 11px;
+    color: var(--cc-text);
+  }
+  body.lab.cc-2050 .plate .id i {
+    font-style: normal;
+    font-size: 11px;
+    color: var(--cc-dim);
+    letter-spacing: 0.06em;
+    margin-left: 6px;
+  }
+  body.lab.cc-2050 .plate nav {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  body.lab.cc-2050 .plate nav a {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    letter-spacing: 0.02em !important;
+    text-transform: none !important;
+    color: var(--cc-dim) !important;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  body.lab.cc-2050 .plate nav a:hover {
+    color: var(--cc-text) !important;
+    background: rgba(198,166,100,0.08);
+    border-color: var(--cc-line);
+  }
+  body.lab.cc-2050 .plate .status-pill {
+    border-radius: 999px !important;
+    border: 1px solid var(--cc-line) !important;
+    background: rgba(0,0,0,0.35) !important;
+    font-family: var(--mono) !important;
+    font-size: 10px !important;
+    color: var(--cc-dim) !important;
+  }
+  body.lab.cc-2050 .plate .status-pill .dot {
+    background: var(--cc-mint) !important;
+    box-shadow: 0 0 10px rgba(111,185,138,0.7) !important;
+  }
+  body.lab.cc-2050 .plate .status-pill[data-needs="hot"] .dot {
+    background: var(--cc-hot) !important;
+    box-shadow: 0 0 10px rgba(255,107,107,0.7) !important;
+  }
+
+  /* Needs-you strip */
+  .needs-you {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--cc-radius);
+    border: 1px solid var(--cc-line);
+    background: #000000;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  }
+  .needs-you[data-state="clear"] {
+    border-color: rgba(111,185,138,0.22);
+    background: #000000;
+  }
+  .needs-you[data-state="hot"] {
+    border-color: rgba(255,107,107,0.35);
+    box-shadow: 0 0 24px rgba(255,107,107,0.08), 0 8px 28px rgba(0,0,0,0.3);
+  }
+  .needs-you .ny-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+    margin-right: 4px;
+  }
+  .needs-you .ny-clear {
+    font-size: 13px;
+    color: var(--cc-mint);
+    font-weight: 500;
+  }
+  .needs-you .ny-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--cc-line-hot);
+    background: rgba(198,166,100,0.06);
+    color: var(--cc-text);
+    font-size: 12px;
+    font-family: var(--font);
+    text-decoration: none;
+    transition: transform .12s, background .12s, border-color .12s;
+    cursor: pointer;
+  }
+  .needs-you .ny-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(198,166,100,0.12);
+    border-color: rgba(198,166,100,0.45);
+  }
+  .needs-you .ny-chip .n {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cc-phosphor);
+    min-width: 1.2em;
+    text-align: center;
+  }
+  .needs-you .ny-chip[data-tone="hot"] {
+    border-color: rgba(255,107,107,0.4);
+    background: rgba(255,107,107,0.08);
+  }
+  .needs-you .ny-chip[data-tone="hot"] .n { color: var(--cc-hot); }
+  .needs-you .ny-chip[data-tone="warn"] {
+    border-color: rgba(240,193,74,0.4);
+    background: rgba(240,193,74,0.08);
+  }
+  .needs-you .ny-chip[data-tone="warn"] .n { color: var(--cc-warn); }
+  .needs-you .ny-chip[data-tone="ok"] {
+    border-color: rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.07);
+  }
+  .needs-you .ny-chip[data-tone="ok"] .n { color: var(--cc-mint); }
+  /* Dismiss (mark reviewed) — CRM new-leads chip only */
+  .needs-you .ny-chip .ny-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    margin-left: 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    line-height: 1;
+    color: rgba(232,227,213,0.55);
+    cursor: pointer;
+  }
+  .needs-you .ny-chip .ny-x:hover {
+    background: rgba(240,193,74,0.25);
+    color: var(--text);
+  }
+
+  /* Active now — activity, not urgency (mint/quiet vs Needs-you gold/hot) */
+  .active-now {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(111,185,138,0.22);
+    background: rgba(111,185,138,0.05);
+  }
+  .active-now[data-state="clear"],
+  .active-now[data-state="loading"] {
+    display: none;
+  }
+  .active-now .an-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+    margin-right: 4px;
+  }
+  .active-now .an-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.08);
+    color: var(--cc-text);
+    font-size: 12px;
+    font-family: var(--font);
+    text-decoration: none;
+    transition: transform .12s, background .12s;
+  }
+  .active-now .an-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(111,185,138,0.14);
+  }
+  .active-now .an-chip .k {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--cc-mint);
+  }
+
+  /* Briefing greeting */
+  body.lab.cc-2050 .greeting,
+  body.lab.cc-2050 section[data-testid="greeting"] {
+    padding: 18px 20px !important;
+    position: relative;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 .greeting::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--cc-phosphor), transparent 80%);
+    opacity: 0.85;
+  }
+  body.lab.cc-2050 .greeting h1,
+  body.lab.cc-2050 [data-greeting-heading] {
+    font-family: var(--font) !important;
+    font-size: 1.55rem !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--cc-text) !important;
+    margin: 0 0 6px !important;
+  }
+  body.lab.cc-2050 .greeting p,
+  body.lab.cc-2050 [data-greeting-body] {
+    font-family: var(--font) !important;
+    font-size: 13.5px !important;
+    line-height: 1.55 !important;
+    color: var(--cc-dim) !important;
+    max-width: 62ch;
+    margin: 0 !important;
+  }
+  .brief-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .brief-list li {
+    font-size: 12.5px;
+    color: var(--cc-dim);
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    line-height: 1.4;
+  }
+  .brief-list li::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--cc-phosphor);
+    box-shadow: 0 0 8px rgba(198,166,100,0.5);
+    flex-shrink: 0;
+    transform: translateY(-1px);
+  }
+  .brief-list li[data-tone="hot"]::before { background: var(--cc-hot); box-shadow: 0 0 8px rgba(255,107,107,0.5); }
+  .brief-list li[data-tone="warn"]::before { background: var(--cc-warn); box-shadow: 0 0 8px rgba(240,193,74,0.45); }
+  .brief-list li[data-tone="ok"]::before { background: var(--cc-mint); box-shadow: 0 0 8px rgba(111,185,138,0.45); }
+  .brief-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .brief-act {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: var(--font) !important;
+    text-decoration: none;
+    border: 1px solid var(--cc-line);
+    color: var(--cc-text) !important;
+    background: rgba(255,255,255,0.03);
+    transition: background .15s, border-color .15s, transform .12s;
+  }
+  .brief-act:hover {
+    background: rgba(198,166,100,0.1);
+    border-color: rgba(198,166,100,0.35);
+    transform: translateY(-1px);
+  }
+  .brief-act.primary {
+    background: linear-gradient(135deg, rgba(198,166,100,0.2), rgba(111,185,138,0.12));
+    border-color: rgba(198,166,100,0.4);
+    color: #f3efe6 !important;
+  }
+  .brief-act.ghost { color: var(--cc-dim) !important; }
+
+  /* Agent cards — action tiles (Aetheria / Vett / Scotty / Kernel) */
+  body.lab.cc-2050 .agent-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  @media (max-width: 1100px) {
+    body.lab.cc-2050 .agent-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+  }
+  body.lab.cc-2050 .agent-card {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 16px 16px 14px !important;
+    text-decoration: none !important;
+    position: relative;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 .agent-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    opacity: 0.75;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="aetheria"]::before {
+    background: linear-gradient(90deg, #c6a664, #6fb98a);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="vett"]::before {
+    background: linear-gradient(90deg, #6b8cae, #c6a664);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="scotty"]::before {
+    background: linear-gradient(90deg, #c26a4c, #e8a86a);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"]::before {
+    background: linear-gradient(90deg, #7eb8d4, #c6a664);
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="warm"] {
+    border-color: rgba(111,185,138,0.4) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="loading"] {
+    border-color: rgba(198,166,100,0.45) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="missing"],
+  body.lab.cc-2050 .agent-card[data-agent="kernel"][data-kernel-state="router_down"] {
+    border-color: rgba(255,107,107,0.4) !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"] .agent-act[data-kernel-warm] {
+    cursor: pointer;
+    border: 1px solid rgba(126,184,212,0.4) !important;
+    background: rgba(126,184,212,0.1) !important;
+    color: #d7eaf5 !important;
+  }
+  body.lab.cc-2050 .agent-card[data-agent="kernel"] .agent-act[data-kernel-warm]:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }
+  /* Spark hard-brain strip (Lightning / Qwen 3.8 / Qwen 3.6) */
+  .hard-brain-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 14px;
+    padding: 12px 14px;
+    border-radius: var(--cc-radius-sm, 12px);
+    border: 1px solid var(--cc-line);
+    background: rgba(0,0,0,0.4);
+  }
+  .hard-brain-strip .hb-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 160px;
+    flex: 1 1 180px;
+  }
+  .hard-brain-strip .hb-kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+  }
+  .hard-brain-strip .hb-active {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--cc-text);
+  }
+  .hard-brain-strip .hb-note {
+    font-size: 11px;
+    color: var(--cc-dim);
+  }
+  .hard-brain-strip .hb-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .hard-brain-strip .hb-btn {
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--cc-line);
+    background: rgba(0,0,0,0.35);
+    color: var(--cc-dim);
+    cursor: pointer;
+  }
+  .hard-brain-strip .hb-btn:hover {
+    border-color: var(--cc-line-hot);
+    color: var(--cc-text);
+  }
+  .hard-brain-strip .hb-btn.is-active {
+    border-color: rgba(126,184,212,0.5);
+    background: rgba(126,184,212,0.12);
+    color: #e8f4fb;
+  }
+  .hard-brain-strip .hb-btn:disabled { opacity: 0.5; cursor: wait; }
+  .hard-brain-strip .hb-status {
+    width: 100%;
+    font-size: 11px;
+    color: var(--cc-mute);
+    min-height: 1em;
+  }
+  .hard-brain-strip .hb-status.run { color: var(--cc-warn, #f0c14a); }
+  .hard-brain-strip .hb-status.ok { color: var(--cc-mint); }
+  .hard-brain-strip .hb-status.fail { color: var(--cc-hot); }
+  body.lab.cc-2050 .agent-card:hover {
+    transform: translateY(-2px) !important;
+    border-color: var(--cc-line-hot) !important;
+  }
+  body.lab.cc-2050 .agent-card .name {
+    font-family: var(--font) !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    color: var(--cc-text) !important;
+  }
+  body.lab.cc-2050 .agent-card .role {
+    font-size: 11px !important;
+    color: var(--cc-mute) !important;
+    margin-top: 2px !important;
+  }
+  body.lab.cc-2050 .agent-card .state {
+    font-size: 12px !important;
+    color: var(--cc-dim) !important;
+    margin-top: 8px !important;
+    font-variant-numeric: tabular-nums;
+  }
+  .agent-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  button.agent-act {
+    font: inherit;
+    cursor: pointer;
+  }
+  .agent-act {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+    padding: 7px 6px;
+    border-radius: 0;
+    font-size: 11px;
+    font-family: var(--font) !important;
+    border: 1px solid var(--cc-line);
+    color: var(--cc-dim) !important;
+    background: rgba(0,0,0,0.25);
+    transition: background .12s, color .12s, border-color .12s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .agent-act:hover {
+    color: var(--cc-text) !important;
+    border-color: var(--cc-line-hot);
+    background: rgba(198,166,100,0.08);
+  }
+  .agent-act.primary {
+    color: #f3efe6 !important;
+    border-color: rgba(198,166,100,0.35);
+    background: rgba(198,166,100,0.12);
+  }
+  /* Kernel overflow menu — keeps card inside the grid cell */
+  .agent-more {
+    position: relative;
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+  .agent-more > summary {
+    list-style: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .agent-more > summary::-webkit-details-marker { display: none; }
+  .agent-more-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 8;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border: 1px solid var(--cc-line);
+    background: #0a0a0a;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+  }
+  .agent-more-menu .agent-act {
+    flex: none;
+    width: 100%;
+  }
+
+  body.lab.cc-2050 .daemon-row {
+    gap: 10px !important;
+  }
+  body.lab.cc-2050 .daemon-card {
+    padding: 12px 14px !important;
+    border-radius: var(--cc-radius-sm) !important;
+  }
+  body.lab.cc-2050 .daemon-card .name {
+    font-family: var(--font) !important;
+    letter-spacing: 0.04em !important;
+    text-transform: none !important;
+    font-size: 12px !important;
+  }
+
+  /* Folds */
+  body.lab.cc-2050 details.cc-fold {
+    border: 1px solid var(--cc-line) !important;
+    border-radius: var(--cc-radius) !important;
+    background: rgba(0,0,0,0.55) !important;
+    overflow: hidden;
+  }
+  body.lab.cc-2050 details.cc-fold > summary {
+    font-family: var(--font) !important;
+    letter-spacing: 0.1em !important;
+    color: var(--cc-dim) !important;
+    padding: 12px 16px !important;
+  }
+  body.lab.cc-2050 details.cc-fold > summary::after {
+    color: var(--cc-phosphor) !important;
+  }
+
+  /* Zone labels */
+  .cc-zone {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 2px -4px;
+  }
+  .cc-zone span {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--cc-mute);
+  }
+  .cc-zone::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--cc-line), transparent);
+  }
+
+  /* Mini dispatch */
+  .dispatch-box {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--cc-line);
+  }
+  .dispatch-box form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .dispatch-box select,
+  .dispatch-box input[type="text"] {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--cc-line) !important;
+    background: rgba(0,0,0,0.35) !important;
+    color: var(--cc-text) !important;
+    padding: 8px 12px !important;
+  }
+  .dispatch-box select { min-width: 120px; }
+  .dispatch-box input[type="text"] { flex: 1; min-width: 180px; }
+  .dispatch-box button {
+    font-family: var(--font) !important;
+    font-size: 12px !important;
+    padding: 8px 14px !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(198,166,100,0.35) !important;
+    background: rgba(198,166,100,0.12) !important;
+    color: #f3efe6 !important;
+    cursor: pointer;
+  }
+  .dispatch-box button:hover { background: rgba(198,166,100,0.2) !important; }
+  .dispatch-box .dispatch-err {
+    width: 100%;
+    font-size: 11px;
+    color: var(--cc-hot);
+    min-height: 1em;
+  }
+
+  body.lab.cc-2050 .ops-brain-btn,
+  body.lab.cc-2050 .ops-test-btn,
+  body.lab.cc-2050 .board-item-action,
+  body.lab.cc-2050 button.board-item-action {
+    border-radius: 8px !important;
+    font-family: var(--font) !important;
+    text-transform: none !important;
+    letter-spacing: 0.03em !important;
+  }
+  body.lab.cc-2050 input,
+  body.lab.cc-2050 textarea,
+  body.lab.cc-2050 select {
+    font-family: var(--font) !important;
+    border-radius: 8px !important;
+  }
+  body.lab.cc-2050 a { color: var(--cc-phosphor); }
+  body.lab.cc-2050 a:hover { color: #e0c98a; }
+
+  /* Approvals elevated */
+  body.lab.cc-2050 .cognition-approvals-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  @media (max-width: 960px) {
+    body.lab.cc-2050 .agent-row { grid-template-columns: 1fr !important; }
+    body.lab.cc-2050 .cognition-approvals-row { grid-template-columns: 1fr; }
+    body.lab.cc-2050 .plate { border-radius: 16px !important; flex-wrap: wrap; }
+  }
+
+  /* ActTruth badge — top-right of each crew agent card (square, not pill) */
+  .agent-card .acttruth-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 0;
+    border: 1px solid rgba(94, 225, 160, 0.35);
+    background: rgba(94, 225, 160, 0.1);
+    color: #5ee1a0;
+    font-size: 10px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    line-height: 1.2;
+  }
+  .agent-card .acttruth-badge:hover {
+    background: rgba(94, 225, 160, 0.18);
+    border-color: rgba(94, 225, 160, 0.55);
+  }
+  .agent-card .acttruth-badge[data-exhausted="1"] {
+    color: #e07a6a;
+    border-color: rgba(224, 122, 106, 0.45);
+    background: rgba(224, 122, 106, 0.1);
+  }
+  .agent-card .acttruth-badge .pip {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #5ee1a0;
+  }
+  .agent-card .acttruth-badge[data-fail="1"] .pip {
+    background: #e07a6a;
+    box-shadow: 0 0 6px rgba(224, 122, 106, 0.7);
+  }
+  .agent-card .acttruth-badge .lbl { opacity: 0.75; font-weight: 500; }
+
+  /* ActTruth drawer (opened from badge) */
+  .acttruth-drawer {
+    position: fixed; inset: 0; z-index: 80;
+    display: none; align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,0.55);
+    padding: 16px;
+  }
+  .acttruth-drawer[open] { display: flex; }
+  .acttruth-drawer .sheet {
+    width: min(520px, 100%);
+    max-height: min(70vh, 640px);
+    overflow: auto;
+    background: #0a120e;
+    border: 1px solid rgba(94, 225, 160, 0.28);
+    border-radius: 14px 14px 10px 10px;
+    padding: 16px 16px 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+  .acttruth-drawer .sheet-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 12px; margin-bottom: 12px;
+  }
+  .acttruth-drawer .sheet-head h2 {
+    margin: 0; font-size: 14px; color: #5ee1a0; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .acttruth-drawer .sheet-head a { color: #5ee1a0; font-size: 11px; }
+  .acttruth-drawer .sheet-head button {
+    background: transparent; border: 0; color: rgba(236,243,244,0.6);
+    cursor: pointer; font-size: 18px; line-height: 1;
+  }
+
+
+
+  /* ── Full tidy: Citizens-matched square chrome (no cc-2050 soft HUD) ── */
+  body.lab .plate {
+    border-radius: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid var(--line) !important;
+    background: rgba(0,0,0,0.92) !important;
+    padding: 0 !important;
+  }
+  body.lab .plate .status-pill {
+    border-radius: 0 !important;
+    color: rgba(232, 227, 213, 0.55) !important;
+  }
+  body.lab .plate .status-pill .dot {
+    background: var(--cc-mint, #6fb98a) !important;
+    box-shadow: 0 0 8px rgba(111, 185, 138, 0.55) !important;
+  }
+  /* Real action items only — pill text + dot go hot, not muted gray */
+  body.lab .plate .status-pill[data-needs="hot"] {
+    color: var(--cc-text, #e9e5dc) !important;
+  }
+  body.lab .plate .status-pill[data-needs="hot"] .dot {
+    background: var(--cc-hot, #c26a5c) !important;
+    box-shadow: 0 0 10px rgba(194, 106, 92, 0.7) !important;
+  }
+  body.lab .panel,
+  body.lab section.panel,
+  body.lab .agent-card,
+  body.lab .daemon-card,
+  body.lab .needs-you,
+  body.lab .hard-brain-strip,
+  body.lab .acttruth-drawer .sheet,
+  body.lab .agent-card .acttruth-badge {
+    border-radius: 0 !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* AT badge is position:absolute — cards are the containing block.
+     Column layout + wrapping actions keep Kernel’s buttons inside the cell. */
+  body.lab .agent-card {
+    position: relative !important;
+    overflow: visible !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    min-width: 0 !important;
+  }
+  body.lab .agent-card > .body,
+  body.lab .agent-card > .agent-actions {
+    max-width: 100%;
+    min-width: 0;
+  }
+  body.lab .agent-card .acttruth-badge {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 5 !important;
+  }
+  body.lab .page {
+    max-width: 1280px !important;
+    padding: 0 0 48px !important;
+    gap: 0 !important;
+  }
+
+
+  /* Calm chapters — People open; Gates/Work/Memory as labeled folds */
+  details.cc-chapter {
+    border: 1px solid var(--line);
+    border-top: none;
+    background: var(--panel);
+  }
+  details.cc-chapter > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 18px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    background: var(--panel);
+    border-bottom: 1px solid transparent;
+  }
+  details.cc-chapter[open] > summary {
+    border-bottom: 1px solid var(--line);
+    color: var(--gold);
+  }
+  details.cc-chapter > summary::-webkit-details-marker { display: none; }
+  details.cc-chapter > summary::before {
+    content: "▸ ";
+    color: var(--ink-3);
+  }
+  details.cc-chapter[open] > summary::before { content: "▾ "; color: var(--gold); }
+  details.cc-chapter .cc-fold-body {
+    padding: 0;
+  }
+  /* Hard hide — some dense-HUD CSS was letting closed fold bodies paint */
+  details.cc-chapter:not([open]) > .cc-fold-body,
+  details.cc-fold:not([open]) > .cc-fold-body {
+    display: none !important;
+  }
+  details.cc-chapter .cc-fold-body > .panel,
+  details.cc-chapter .cc-fold-body > section.panel,
+  details.cc-chapter .cc-fold-body > .cognition-approvals-row,
+  details.cc-chapter .cc-fold-body > .orch-row,
+  details.cc-chapter .cc-fold-body > .pulse-row,
+  details.cc-chapter .cc-fold-body > .daemon-row,
+  details.cc-chapter .cc-fold-body > details.cc-fold {
+    border-left: none !important;
+    border-right: none !important;
+  }
+
+  /* ═══ Easy mode (default) — Grok-Bot-simple front door ═══ */
+  /* legacy cc-advanced rule removed 2026-09-22: the advanced folds are re-homed
+   inside the labeled Advanced drawer, so nothing is deleted from the DOM. */
+  body.cc-easy .acttruth-badge { display: none !important; }
+  body.cc-easy .dispatch-box { display: none !important; }
+  body.cc-easy .agent-more,
+  body.cc-easy [data-kernel-warm] { display: none !important; }
+  body.cc-easy .brief-list { display: none !important; }
+  body.cc-easy .brief-act[data-easy-hide] { display: none !important; }
+  body.cc-easy nav a.cc-nav-advanced { display: none !important; }
+  body.cc-easy .plate .id i { letter-spacing: 0.08em; }
+  body.cc-easy .agent-card .role {
+    font-size: 12px !important;
+    color: rgba(232,227,213,0.72) !important;
+    text-transform: none !important;
+    letter-spacing: 0.02em !important;
+  }
+  body.cc-easy .agent-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+  @media (max-width: 1100px) {
+    body.cc-easy .agent-row { grid-template-columns: repeat(3, 1fr) !important; }
+  }
+  @media (max-width: 720px) {
+    body.cc-easy .agent-row { grid-template-columns: 1fr 1fr !important; }
+  }
+  .easy-results {
+    margin: 8px 0 4px;
+    padding: 14px 16px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+  }
+  body:not(.cc-easy) .easy-results { display: none !important; }
+  .easy-results .er-head {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .easy-results .er-head h3 {
+    margin: 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: rgba(232,227,213,0.5); font-weight: 500;
+  }
+  .easy-results .er-head .er-hint {
+    font-size: 12px; color: rgba(232,227,213,0.4); margin-left: auto;
+  }
+  .easy-results .er-list { display: flex; flex-direction: column; gap: 8px; }
+  .easy-results .er-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-left: 3px solid rgba(192,130,79,0.5);
+    background: rgba(0,0,0,0.18);
+    font-size: 13px; color: rgba(232,227,213,0.88);
+  }
+  .easy-results .er-item .er-meta {
+    font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(232,227,213,0.42); margin-bottom: 4px;
+  }
+  .easy-results .er-empty {
+    font-size: 13px; color: rgba(232,227,213,0.45); padding: 6px 0;
+  }
+  .cc-mode-toggle {
+    border: 1px solid rgba(232,227,213,0.22);
+    background: rgba(0,0,0,0.25);
+    color: rgba(232,227,213,0.75);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 6px 10px; border-radius: 4px; cursor: pointer;
+  }
+  .cc-mode-toggle:hover { border-color: rgba(192,130,79,0.55); color: #f3e7db; }
+  body:not(.cc-easy) .cc-mode-toggle { border-color: rgba(94,225,160,0.35); color: #9ee0b8; }
+
+
+/* advanced drawer (2026-09-22 redesign) */
+details.cc-drawer{border:1px dashed rgba(107,118,132,.4);border-radius:12px;margin:26px 0}
+details.cc-drawer>summary{cursor:pointer;list-style:none;font-size:11.5px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--txt3);font-weight:600;padding:14px 18px}
+details.cc-drawer>summary::-webkit-details-marker{display:none}
+details.cc-drawer>summary::after{content:" +";color:var(--gold)}
+details.cc-drawer[open]>summary::after{content:" −"}
+
+/* Soft desk in black.
+   The white desk reads because the page is a mid gray and every control
+   is either pushed out (light edge + dark edge) or pressed in.
+   Same trick here: the field is #222a33, not pure black, or the edges vanish. */
+body.lab.sd{
+  background:#222a33 !important;
+  color:#d5dbe3 !important;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif !important;
+  min-height:100vh;
+}
+body.lab.sd .page{
+  max-width:1040px !important;
+  gap:18px !important;
+  padding:32px clamp(16px,4vw,48px) 64px !important;
+}
+body.lab.sd .plate{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  padding:0 0 8px !important;
+  margin:0 0 18px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:22px !important;
+  flex-wrap:wrap !important;
+  position:static !important;
+  top:auto !important;
+  z-index:auto !important;
+  height:auto !important;
+  overflow:visible !important;
+}
+body.lab.sd .plate nav{
+  display:flex !important;
+  align-items:center !important;
+  gap:16px !important;
+}
+body.lab.sd .plate > div{gap:16px !important}
+body.lab.sd .plate .id{
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  border-radius:18px !important;
+  padding:8px 14px !important;
+  box-shadow:4px 4px 8px #12181f,-4px -4px 8px #323c48 !important;
+}
+body.lab.sd .plate .id img{width:32px !important;height:32px !important}
+body.lab.sd .plate .id b{color:#e7edf3;letter-spacing:.4px}
+body.lab.sd .plate .id i{color:#8b97a6}
+body.lab.sd .plate nav a{
+  color:#9aa6b4 !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a);
+  border:0 !important;
+  border-radius:12px;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  line-height:1.2 !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48;
+}
+body.lab.sd .plate nav a.active{
+  color:#e7edf3 !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48;
+  background:linear-gradient(145deg,#1c242d,#2a333e);
+}
+body.lab.sd .status-pill{
+  color:#b7c0cb !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48 !important;
+}
+body.lab.sd .cc-mode-toggle{
+  color:#d3a24a !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48 !important;
+}
+body.lab.sd .brief-actions{gap:14px !important}
+body.lab.sd .sd-h{
+  font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8b97a6;
+  font-weight:700;margin:22px 2px 12px;
+}
+body.lab.sd .needs-you,
+body.lab.sd .active-now,
+body.lab.sd .greeting,
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card,
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  background:linear-gradient(145deg,#2e3742,#1b222b) !important;
+  border:0 !important;
+  border-radius:28px !important;
+  box-shadow:9px 9px 18px #12181f,-9px -9px 18px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results{
+  background:transparent !important;
+  box-shadow:none !important;
+  border:0 !important;
+  padding:0 !important;
+}
+body.lab.sd .agent-row,
+body.lab.sd .daemon-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:22px;
+  background:transparent !important;box-shadow:none !important;border:0 !important;
+}
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card{padding:22px 18px !important}
+body.lab.sd .agent-card .name{
+  font-family:Georgia,serif !important;font-size:20px !important;font-weight:600 !important;
+  letter-spacing:.3px !important;text-transform:none !important;color:#e7edf3 !important;
+}
+body.lab.sd .agent-card .role,
+body.lab.sd .agent-card .state,
+body.lab.sd .daemon-card .meta{color:#8b97a6 !important;text-transform:none !important;letter-spacing:0 !important}
+body.lab.sd .greeting h1{font-family:Georgia,serif;font-size:28px;font-weight:600;color:#e7edf3}
+body.lab.sd .greeting p{color:#8b97a6}
+body.lab.sd .ny-label,body.lab.sd .an-label{display:none}
+body.lab.sd .ny-clear{color:#8b97a6;font-size:15px}
+body.lab.sd .brief-act,
+body.lab.sd .agent-act{
+  border:0 !important;
+  border-radius:14px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  color:#d5dbe3 !important;
+  box-shadow:5px 5px 10px #12181f,-4px -4px 10px #323c48 !important;
+}
+body.lab.sd .brief-act.primary,
+body.lab.sd .agent-act.primary{
+  color:#ffb199 !important;
+  box-shadow:inset 4px 4px 8px #12181f,inset -4px -4px 8px #323c48 !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+}
+body.lab.sd .easy-results .er-item{
+  border:0 !important;
+  border-left:0 !important;
+  border-radius:16px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results .er-head h3,
+body.lab.sd .easy-results .er-hint{color:#8b97a6 !important}
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  margin:16px 0 !important;
+  overflow:hidden !important;
+  border-radius:28px !important;
+}
+body.lab.sd details.cc-fold>summary,
+body.lab.sd details.cc-drawer>summary{
+  color:#8b97a6;letter-spacing:2px;
+  background:transparent !important;
+  border-radius:28px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:16px !important;
+  padding:14px 18px !important;
+}
+body.lab.sd details.cc-chapter>summary::before{content:none !important}
+body.lab.sd details.cc-fold>summary .cc-fold-hint{margin-left:auto;margin-right:4px}
+body.lab.sd details.cc-fold>summary::after{position:static !important;flex:none}
+body.lab.sd.cc-easy .acttruth-badge{display:none !important}
+body.lab.sd .agent-card .acttruth-badge{
+  position:static !important;
+  align-self:flex-start;
+  margin:0 0 10px;
+  border-radius:12px !important;
+}
+body.lab.sd .agent-card .agent-actions{position:static !important;margin-top:14px}
+body.lab.sd details.cc-fold .panel,
+body.lab.sd details.cc-fold section.panel,
+body.lab.sd details.cc-fold .scotty-approvals,
+body.lab.sd details.cc-drawer .panel,
+body.lab.sd details.cc-drawer section.panel{
+  border:0 !important;
+  border-radius:18px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  padding:14px 16px !important;
+}
+@media(max-width:800px){
+  body.lab.sd .agent-row,body.lab.sd .daemon-row{grid-template-columns:1fr}
+}
 </style>
 </head>
-<body data-testid="command-center">
+<body class="lab cc-easy sd" data-lab data-testid="command-center" data-cc-mode="easy">
   <div class="page">
-
-    <header class="top">
-      <!-- Logo lives in the ambient page background; header carries the
-           typographic identity (wordmark + tagline) only. -->
-      <div class="brand-text">
-        <div class="wordmark">SOVERYN</div>
-        <div class="tagline">LEARN<span class="dot">·</span>ADAPT<span class="dot">·</span>REMEMBER</div>
+    <div class="plate">
+      <a class="id" href="/messages">
+        <img src="/static/lab-seal.png" alt="" width="44" height="44">
+        <span><b>SOVERYN</b><i data-cc-subtitle>Ops desk</i></span>
+      </a>
+      <nav>
+        <a href="/messages" class="keep">Messages</a>
+        <a href="/citizens" class="cc-nav-advanced keep">Staff</a>
+        <a href="/command-center" class="active">Desk</a>
+        <a href="/fleet" class="cc-nav-advanced">Fleet</a>
+        <a href="/documents" class="cc-nav-advanced">Docs</a>
+        <a href="/charters" class="cc-nav-advanced">Charters</a>
+  </nav>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button type="button" class="cc-mode-toggle" data-cc-mode-toggle title="Show or hide house ops">Advanced</button>
+        <div class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>all quiet</span></div>
       </div>
-      <nav class="nav-links">
-        <a href="/chat">Chat</a>
-        <a href="/m">Messages</a>
-        <a href="/documents">Documents</a>
-      </nav>
-      <div class="status-pill"><span class="dot"></span><span data-status-text>all systems quiet</span></div>
-    </header>
+    </div>
 
+    <!-- Operator zone: today, needs you, citizens, estate -->
+    <div class="cc-operator-zone">
+
+    <h2 class="sd-h">Today</h2>
     <section class="panel greeting" data-testid="greeting">
-      <h1 data-greeting-heading>Morning, Jon.</h1>
-      <p data-greeting-body>Loading recent activity…</p>
+      <h1 data-greeting-heading>…</h1>
+      <p data-greeting-body>Loading your team…</p>
+      <ul class="brief-list" data-brief-list hidden></ul>
+      <div class="brief-actions">
+        <a class="brief-act primary" href="/messages">Messages</a>
+        <a class="brief-act" href="/messages/aetheria">Message Aetheria</a>
+        <a class="brief-act" href="/messages/eve">Message Eve</a>
+        <a class="brief-act" href="/messages/kernel">Message Kernel</a>
+        <a class="brief-act" href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
+        <a class="brief-act" href="https://estimator.pondwright.com/" target="_blank" rel="noopener">Quote</a>
+        <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
+        <a class="brief-act" data-easy-hide href="#approvals-anchor" data-open-chapter="chapter-gates">Review queue</a>
+      </div>
+      <div class="dispatch-box" data-testid="dispatch-box">
+        <form data-dispatch-form>
+          <select data-dispatch-target aria-label="Dispatch to">
+            <option value="msg:aetheria">Aetheria · Messages</option>
+            <option value="msg:eve">Eve · Messages</option>
+            <option value="msg:kernel">Kernel · Messages</option>
+            <option value="board:Signal">Board · Signal</option>
+            <option value="board:Blueprint">Board · Blueprint</option>
+            <option value="board:Friction">Board · Friction</option>
+          </select>
+          <input type="text" data-dispatch-text placeholder="Dispatch a note or open Messages with a prompt…" aria-label="Dispatch message" maxlength="500" required>
+          <button type="submit">Send</button>
+          <div class="dispatch-err" data-dispatch-err></div>
+        </form>
+      </div>
+    </section>
+    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
+      <div class="er-head">
+        <h3>Results</h3>
+        <span class="er-hint">from your team · automations</span>
+      </div>
+      <div class="er-list" data-easy-results-list>
+        <div class="er-empty">Loading results…</div>
+      </div>
     </section>
 
-    <section class="agent-row" data-testid="agent-row">
-      <a href="/chat?agent=aetheria" class="agent-card" data-agent="aetheria" aria-label="Open chat with Aetheria">
-        <div class="body">
-          <div class="name">aetheria</div>
-          <div class="role">primary · cathedral</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-      </a>
-      <a href="/chat?agent=vett" class="agent-card" data-agent="vett" aria-label="Open chat with Vett">
-        <div class="body">
-          <div class="name">vett</div>
-          <div class="role">verifier</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-      </a>
-      <a href="/chat?agent=scotty" class="agent-card" data-agent="scotty" aria-label="Open chat with Scotty">
-        <div class="body">
-          <div class="name">scotty</div>
-          <div class="role">executor</div>
-          <div class="state" data-agent-state>—</div>
-        </div>
-      </a>
+    <h2 class="sd-h">Needs you</h2>
+    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
+      <span class="ny-label">Needs you</span>
+      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
+      <div data-needs-chips style="display:contents"></div>
+    </section>
+    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
+      <span class="an-label">Active now</span>
+      <div data-active-chips style="display:contents"></div>
     </section>
 
-    <!-- Daemon status strip — autonomous fleet at a glance. -->
+    <h2 class="sd-h">Citizens</h2>
+    <section class="agent-row" data-testid="agent-row" aria-label="Your team">
+      <div class="agent-card" data-agent="aetheria" aria-label="Aetheria — runs the house">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="aetheria" title="ActTruth — click for crew ledger" aria-label="ActTruth for Aetheria">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
+        <div class="body">
+          <div class="name">Aetheria</div>
+          <div class="role">Runs the house</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/messages/aetheria">Talk</a>
+          <a class="agent-act" href="/voice">Voice</a>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="kernel" data-testid="kernel-card" data-kernel-state="cold" aria-label="Kernel — builds and fixes code">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="kernel" title="ActTruth — click for crew ledger" aria-label="ActTruth for Kernel">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
+        <div class="body">
+          <div class="name">Kernel</div>
+          <div class="role">Builds &amp; fixes code</div>
+          <div class="state" data-kernel-state-text>checking…</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/messages/kernel">Talk</a>
+          <button type="button" class="agent-act" data-kernel-copy-opencode title="Copy soveryn-opencode (GLM on Sparks)">OpenCode</button>
+          <button type="button" class="agent-act" data-kernel-warm>Warm</button>
+          <details class="agent-more">
+            <summary class="agent-act" title="Build / Aider">More</summary>
+            <div class="agent-more-menu" role="menu">
+              <a class="agent-act" href="/build" role="menuitem">Build (HITL)</a>
+              <button type="button" class="agent-act" data-kernel-copy-aider role="menuitem" title="Copy soveryn-aider --kernel">Copy Aider</button>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="agent-card" data-agent="eve" aria-label="Eve — marketing and posts">
+        <button type="button" class="acttruth-badge" data-acttruth-badge="eve" title="ActTruth — click for crew ledger" aria-label="ActTruth for Eve">
+          <span class="pip" aria-hidden="true"></span>
+          <span class="lbl">AT</span>
+          <span data-at-budget>—</span>
+        </button>
+        <div class="body">
+          <div class="name">Eve</div>
+          <div class="role">Research + ship</div>
+          <div class="state" data-agent-state>—</div>
+        </div>
+        <div class="agent-actions">
+          <a class="agent-act primary" href="/messages/eve">Talk</a>
+          <a class="agent-act" href="/charters">Charters</a>
+        </div>
+      </div>
+    </section>
+
+    <h2 class="sd-h">Estate</h2>
     <section class="daemon-row" data-testid="daemon-strip">
       <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
         <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
@@ -1071,14 +3543,600 @@
       </div>
     </section>
 
-    <!-- Coordination Boards panel — live state of the work surface. -->
-    <section class="panel" data-testid="boards-panel">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
-        <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin:0;">Boards</h3>
+    </div><!-- /.cc-operator-zone -->
+
+
+    
+    <!-- ═══ 2. Gates ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
+      <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
+      <div class="cc-fold-body">
+    <section class="panel auto-panel" data-testid="automations-panel">
+      <div class="auto-head">
+        <h3>Automations — daily briefs land here</h3>
+        <span class="auto-badge">CC inbox · Signal not armed</span>
+        <span class="auto-meta" data-auto-meta>loading…</span>
+      </div>
+      <div class="auto-inbox" data-auto-inbox aria-live="polite" aria-label="Automation inbox">
+        <div class="auto-empty">loading inbox…</div>
+      </div>
+      <div class="auto-triage" data-auto-triage aria-live="polite" aria-label="ActTruth triage">
+        <div class="auto-empty">loading triage…</div>
+      </div>
+      <div class="auto-list" data-auto-list aria-live="polite" aria-label="Automation catalog">
+        <div class="auto-empty">loading catalog…</div>
+      </div>
+      <div class="auto-preview" data-auto-preview hidden>
+        <div class="ph">Run preview</div>
+        <div data-auto-preview-body></div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var list = document.querySelector('[data-auto-list]');
+      var inbox = document.querySelector('[data-auto-inbox]');
+      var triage = document.querySelector('[data-auto-triage]');
+      var meta = document.querySelector('[data-auto-meta]');
+      var preview = document.querySelector('[data-auto-preview]');
+      var previewBody = document.querySelector('[data-auto-preview-body]');
+      if(!list) return;
+      var CHAN_LABELS = {command_center:'CC', signal:'Signal'};
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function rel(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso); if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60)+'m ago';
+        if(sec < 86400) return Math.floor(sec/3600)+'h ago';
+        return Math.floor(sec/86400)+'d ago';
+      }
+      function channelsOf(a){
+        if(a && Array.isArray(a.channels) && a.channels.length) return a.channels.slice();
+        if(a && a.delivery_effective && Array.isArray(a.delivery_effective.channels))
+          return a.delivery_effective.channels.slice();
+        return ['command_center'];
+      }
+      function chanButtons(a){
+        var on = channelsOf(a);
+        var avail = (a && a.available_channels) || ['command_center','signal'];
+        return '<div class="auto-chans" data-auto-chans="'+esc(a.id)+'">'
+          + avail.map(function(ch){
+              var active = on.indexOf(ch) >= 0;
+              return '<button type="button" class="auto-chan'+(active?' is-on':'')+'"'
+                + ' data-auto-chan="'+esc(ch)+'" data-auto-id="'+esc(a.id)+'"'
+                + ' aria-pressed="'+(active?'true':'false')+'">'
+                + esc(CHAN_LABELS[ch] || ch)
+                + '</button>';
+            }).join('')
+          + '</div>';
+      }
+      function paintInbox(d){
+        if(!inbox) return;
+        var items = (d && d.inbox) || [];
+        if(!items.length){
+          inbox.innerHTML = '<div class="auto-empty">inbox empty — scheduler or Run now lands here.</div>';
+          return;
+        }
+        inbox.innerHTML = items.slice(0, 12).map(function(it){
+          var head = (it.content || it.signal_preview || '').replace(/\s+/g,' ').slice(0, 110);
+          var body = it.content || it.signal_preview || '(no content)';
+          return '<div class="auto-inbox-item">'
+            + '<div class="ih"><span>'+esc(rel(it.fired_at))+'</span>'
+            + '<span class="ag">'+esc(it.agent||'—')+'</span>'
+            + '<span class="st">'+esc(it.status||'—')+'</span>'
+            + '<span>'+esc(it.source||'')+'</span></div>'
+            + '<details><summary>'+esc(it.title||it.automation_id||'run')
+            + (head ? ' — '+esc(head)+(head.length>=110?'…':'') : '')
+            + '</summary><div class="ibody">'+esc(body)+'</div></details>'
+            + '</div>';
+        }).join('');
+      }
+      function paintTriage(d){
+        if(!triage) return;
+        var items = (d && d.triage) || [];
+        if(!items.length){
+          triage.innerHTML = '<div class="auto-triage-label">ActTruth triage</div>'
+            + '<div class="auto-empty">no open lessons — FAIL streaks land here for durable fix.</div>';
+          return;
+        }
+        triage.innerHTML = '<div class="auto-triage-label">ActTruth triage · '
+          + items.length + ' open</div>'
+          + items.slice(0, 8).map(function(it){
+            var head = (it.summary || it.lesson || '').replace(/\s+/g,' ').slice(0, 100);
+            return '<div class="auto-triage-item">'
+              + '<div class="ih"><span>'+esc(rel(it.created_at))+'</span>'
+              + '<span class="ag">'+esc(it.agent||'—')+'</span>'
+              + '<span class="ct">'+esc(it.correction_type||'—')+'</span>'
+              + '<span>→ '+esc(it.owner||'vett')+'</span>'
+              + '<span>'+esc(it.tool||'')+' · '+esc(String(it.streak||'')+'×')+'</span></div>'
+              + '<div>'+esc(it.error_class||'')+(head ? ' — '+esc(head)+(head.length>=100?'…':'') : '')
+              + '</div></div>';
+          }).join('');
+      }
+      function paint(d){
+        var items = (d && d.automations) || [];
+        if(meta){
+          meta.textContent = (d && d.count != null ? d.count : items.length)
+            + ' · CC inbox · Signal not armed';
+        }
+        if(!items.length){
+          list.innerHTML = '<div class="auto-empty">no automations in catalog.</div>';
+          return;
+        }
+        list.innerHTML = items.map(function(a){
+          var en = a.enabled !== false;
+          return '<div class="auto-row" data-id="'+esc(a.id)+'" data-enabled="'+(en?'true':'false')+'">'
+            + '<div>'
+            + '<div class="auto-title">'+esc(a.title||a.id)+'</div>'
+            + '<div class="auto-sub">'
+            + '<span class="cat">'+esc(a.category||'—')+'</span> · '
+            + '<span class="ag">'+esc(a.agent||'—')+'</span> · '
+            + esc(a.cron||'')
+            + (en ? '' : ' · disabled')
+            + '</div></div>'
+            + '<div class="auto-actions">'
+            + chanButtons(a)
+            + '<button type="button" class="auto-routine-btn" data-auto-routine="'+esc(a.id)+'"'
+            + (a.has_routine ? '' : ' disabled title="no routine doc"')
+            + '>Routine</button>'
+            + '<button type="button" class="auto-run-btn" data-auto-run="'+esc(a.id)+'"'
+            + (en ? '' : ' disabled')
+            + '>Dry-run</button>'
+            + '<button type="button" class="auto-live-btn" data-auto-live="'+esc(a.id)+'"'
+            + (en ? '' : ' disabled')
+            + '>Run now</button>'
+            + '</div></div>';
+        }).join('');
+        list.querySelectorAll('[data-auto-run]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            runDry(btn.getAttribute('data-auto-run'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-live]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            runLive(btn.getAttribute('data-auto-live'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-routine]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            showRoutine(btn.getAttribute('data-auto-routine'), btn);
+          });
+        });
+        list.querySelectorAll('[data-auto-chan]').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            toggleChan(btn);
+          });
+        });
+      }
+      function rowChannels(row){
+        return Array.prototype.map.call(
+          row.querySelectorAll('.auto-chan.is-on'),
+          function(b){ return b.getAttribute('data-auto-chan'); }
+        );
+      }
+      function toggleChan(btn){
+        var id = btn.getAttribute('data-auto-id');
+        var row = btn.closest('.auto-row');
+        if(!id || !row) return;
+        var ch = btn.getAttribute('data-auto-chan');
+        var on = btn.classList.contains('is-on');
+        var next = rowChannels(row).slice();
+        if(on){
+          if(next.length <= 1) return; // keep at least one
+          next = next.filter(function(c){ return c !== ch; });
+        } else {
+          next.push(ch);
+        }
+        row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = true; });
+        fetch('/api/automations/'+encodeURIComponent(id)+'/channels', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({channels: next}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = false; });
+            if(!x.ok || !x.j || !x.j.ok) return;
+            var saved = x.j.channels || next;
+            row.querySelectorAll('.auto-chan').forEach(function(b){
+              var active = saved.indexOf(b.getAttribute('data-auto-chan')) >= 0;
+              b.classList.toggle('is-on', active);
+              b.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+          })
+          .catch(function(){
+            row.querySelectorAll('.auto-chan').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function showPreview(result){
+        if(!preview || !previewBody) return;
+        preview.hidden = false;
+        var del = (result && result.delivery) || {};
+        var chans = (result && result.channels)
+          || del.channels
+          || (del.channel ? [del.channel] : []);
+        var body = (result && result.content)
+          || (del.preview)
+          || (result && result.prompt)
+          || '(no content)';
+        var lines = [
+          (result && result.title ? result.title : result && result.id) || '—',
+          'status: ' + ((result && result.status) || '—')
+            + ' · agent: ' + ((result && result.agent) || '—')
+            + ' · dry_run: ' + !!(result && result.dry_run),
+          'channels → ' + (chans.length ? chans.join(' + ') : '?')
+            + ' / ' + (del.target||'jon'),
+          '',
+          body,
+        ];
+        previewBody.textContent = lines.join('\n');
+      }
+      function showRoutine(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/routine')
+          .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Routine'; }
+            if(!preview || !previewBody) return;
+            preview.hidden = false;
+            if(!x.ok || !x.j || !x.j.ok){
+              previewBody.textContent = (x.j && x.j.message) || 'routine unavailable';
+              return;
+            }
+            previewBody.textContent = [
+              (x.j.id || id) + ' · routine (' + (x.j.source || '?') + ')',
+              '',
+              x.j.markdown || '(empty)',
+            ].join('\n');
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Routine'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'routine request failed';
+            }
+          });
+      }
+      function runDry(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/run', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({live:false}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Dry-run'; }
+            if(x.j && x.j.result) showPreview(x.j.result);
+            else if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = (x.j && x.j.message) || 'dry-run failed';
+            }
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Dry-run'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'dry-run request failed';
+            }
+          });
+      }
+      function runLive(id, btn){
+        if(!id) return;
+        if(btn){ btn.disabled = true; btn.textContent = '…'; }
+        fetch('/api/automations/'+encodeURIComponent(id)+'/run', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({live:true, source:'manual'}),
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(btn){ btn.disabled = false; btn.textContent = 'Run now'; }
+            if(x.j && x.j.result) showPreview(x.j.result);
+            loadInbox();
+          })
+          .catch(function(){
+            if(btn){ btn.disabled = false; btn.textContent = 'Run now'; }
+            if(previewBody){
+              preview.hidden = false;
+              previewBody.textContent = 'live run failed';
+            }
+          });
+      }
+      function loadInbox(){
+        if(!inbox) return;
+        fetch('/api/automations/inbox?limit=20').then(function(r){ return r.json(); }).then(paintInbox)
+          .catch(function(){
+            inbox.innerHTML = '<div class="auto-empty">inbox unavailable</div>';
+          });
+      }
+      function loadTriage(){
+        if(!triage) return;
+        fetch('/api/system/acttruth/triage?limit=20').then(function(r){ return r.json(); }).then(paintTriage)
+          .catch(function(){
+            triage.innerHTML = '<div class="auto-empty">triage unavailable</div>';
+          });
+      }
+      function load(){
+        fetch('/api/automations').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){
+            list.innerHTML = '<div class="auto-empty">automations API unavailable</div>';
+            if(meta) meta.textContent = 'offline';
+          });
+        loadInbox();
+        loadTriage();
+      }
+      load();
+      setInterval(loadInbox, 30000);
+      setInterval(loadTriage, 30000);
+    })();
+    </script>
+      </div>
+    </details>
+
+    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
+      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
+      <div class="cc-fold-body">
+<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
+      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
+        <div class="empty">Nothing staged.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
+      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
+        <div class="empty">No proposals awaiting review.</div>
+      </div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
+      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
+        <div class="empty">Nothing at the gate.</div>
+      </div>
+    </section>
+    </div>
+
+    
+      </div>
+    </details>
+
+    <!-- ═══ 3. Work ═══ -->
+<details class="cc-drawer" data-testid="advanced-drawer">
+  <summary>Advanced — configuration, memory, legacy surfaces</summary>
+    <details class="cc-fold" data-testid="ops-fold">
+      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
+      <div class="cc-fold-body">
+<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
+    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
+      <div class="hb-label">
+        <span class="hb-kicker">Spark hard brain</span>
+        <span class="hb-active" data-hard-brain-active>…</span>
+        <span class="hb-note" data-hard-brain-note></span>
+      </div>
+      <div class="hb-buttons" data-hard-brain-buttons></div>
+      <div class="hb-status" data-hard-brain-status></div>
+    </section>
+
+    <section class="panel ops-panel" data-testid="ops-panel">
+      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
+      <div class="ops-grid">
+        <div class="ops-block">
+          <h4>Run tests</h4>
+          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
+          <div class="ops-test-row" data-ops-test-buttons></div>
+          <div class="ops-status" data-ops-test-status></div>
+          <pre class="ops-log" data-ops-test-log></pre>
+        </div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var hardActive = document.querySelector('[data-hard-brain-active]');
+      var hardNote = document.querySelector('[data-hard-brain-note]');
+      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
+      var hardStatus = document.querySelector('[data-hard-brain-status]');
+      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
+      var brainMeta = null;
+      var brainStatus = hardStatus;
+      var brainLog = null;
+      var testBtns = document.querySelector('[data-ops-test-buttons]');
+      var testStatus = document.querySelector('[data-ops-test-status]');
+      var testLog = document.querySelector('[data-ops-test-log]');
+      if(!brainBtns && !testBtns) return;
+      var brainPoll = null, testPoll = null;
+
+      function setStatus(el, cls, text){
+        if(!el) return;
+        el.className = 'ops-status' + (cls ? ' '+cls : '');
+        el.textContent = text || '';
+      }
+      function setLog(el, text){
+        if(!el) return;
+        if(text && String(text).trim()){
+          el.textContent = text;
+          el.classList.add('show');
+        } else {
+          el.textContent = '';
+          el.classList.remove('show');
+        }
+      }
+      function paintBrain(d){
+        var cur = d.brain || '?';
+        var hname = d.house_name || cur;
+        if(hardActive){
+          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
+        }
+        if(hardNote){
+          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
+        }
+        if(hardBtns){
+          hardBtns.innerHTML = (d.brains||[]).map(function(b){
+            var active = b.id === cur ? ' is-active' : '';
+            var label = b.house_name || b.id;
+            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
+          }).join('');
+          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
+            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
+          });
+        }
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          if(hardStatus){
+            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+            hardStatus.textContent = d.job.message || st;
+          }
+          if(st==='running'||st==='starting') startBrainPoll();
+        }
+      }
+      function switchBrain(id){
+        if(!id) return;
+        var label = id;
+        var btn = document.querySelector('[data-brain="'+id+'"]');
+        if(btn) label = btn.textContent || id;
+        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
+        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
+        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
+        setLog(brainLog, '');
+        fetch('/api/ops/brain', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({brain:id})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
+              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
+              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
+            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
+            startBrainPoll();
+          })
+          .catch(function(e){
+            setStatus(brainStatus, 'fail', String(e));
+            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
+            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startBrainPoll(){
+        if(brainPoll) return;
+        brainPoll = setInterval(function(){
+          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
+            setLog(brainLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(brainStatus, cls, j.message || st);
+            if(hardStatus){
+              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+              hardStatus.textContent = j.message || st;
+            }
+            if(st==='ok' || st==='failed'){
+              clearInterval(brainPoll); brainPoll = null;
+              loadBrain();
+            }
+          }).catch(function(){ /* app may be restarting */ });
+        }, 4000);
+      }
+      function loadBrain(){
+        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
+          .catch(function(){
+            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
+            if(hardActive) hardActive.textContent = 'unavailable';
+          });
+      }
+
+      function paintSuites(d){
+        testBtns.innerHTML = (d.suites||[]).map(function(s){
+          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
+        }).join('');
+        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
+          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
+        });
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          setStatus(testStatus, cls, d.job.message || st);
+          setLog(testLog, d.log_tail || d.job.summary || '');
+          if(st==='running'||st==='starting') startTestPoll();
+        }
+      }
+      function runTests(suite){
+        if(!suite) return;
+        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(testStatus, 'run', 'Starting '+suite+'…');
+        setLog(testLog, '');
+        fetch('/api/ops/tests', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({suite:suite})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
+            startTestPoll();
+          })
+          .catch(function(e){
+            setStatus(testStatus, 'fail', String(e));
+            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startTestPoll(){
+        if(testPoll) return;
+        testPoll = setInterval(function(){
+          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
+            setLog(testLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(testStatus, cls, j.message || st);
+            if(st==='ok' || st==='failed'){
+              clearInterval(testPoll); testPoll = null;
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            }
+          }).catch(function(){});
+        }, 2000);
+      }
+      function loadTests(){
+        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
+          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
+      }
+
+      loadBrain();
+      loadTests();
+    })();
+    </script>
+      </div>
+    </details>
+
+    <!-- Automations — scheduler + CC inbox; Signal preview only -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-work">
+      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
+      <div class="cc-fold-body">
+<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
+    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
+      <div class="boards-strip-head">
+        <h3>Boards</h3>
         <span style="flex:1;"></span>
         <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
       </div>
-      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:14px;">
+      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
         <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
           <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
             <option value="Signal">Signal</option>
@@ -1112,11 +4170,167 @@
       </div>
     </section>
 
-    <!-- Heartbeat panel — Aetheria's pulse rendered as rhythm, not chat.
-         Added 2026-06-15 closing the Coordination Blackout arc: every tick
-         lands here regardless of [SURFACE]/[NO_OP] decision. The amber
-         "→ chat" indicator marks pulses Aetheria chose to surface into
-         her primary chat thread. -->
+    <!-- Public agents + web intake: four equal columns across the width -->
+    <section class="panel public-agents-strip" data-testid="public-agents-panel">
+      <div class="boards-strip-head">
+        <h3>Public agents &amp; web intake</h3>
+        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
+          chat · waitlist · CRM — tracked here, not only email
+        </span>
+      </div>
+      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var el = document.querySelector('[data-public-agents]');
+      if(!el) return;
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function relTime(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso);
+        if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+        return Math.floor(sec/86400) + 'd ago';
+      }
+      function card(a){
+        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        // Same live-ask stream PondWright has — Seneca/Atticus already publish
+        // recent visitor previews on /summary (polled every 20s).
+        var rec = (a.recent||[]).slice(0,5).map(function(r){
+          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'…')
+            + (r.captured ? ' · lead' : '')
+            + '</div>';
+        }).join('');
+        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
+        return '<div class="cc-pa-card">'
+          + '<div class="cc-pa-head">'
+          + '<h4>'+esc(a.name)+'</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
+          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
+          + '</div>'
+          + '<div class="cc-pa-asks-label">Recent asks</div>'
+          + '<div class="cc-pa-asks">'+rec+'</div>'
+          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
+          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
+          + '</div></div>';
+      }
+      function liveAsksStrip(agents){
+        // Cross-agent feed — same previews, newest first, so you scan all
+        // public desks the way you scan PondWright CRM lines.
+        var rows = [];
+        (agents||[]).forEach(function(a){
+          (a.recent||[]).forEach(function(r){
+            rows.push({
+              agent: a.name || a.id,
+              id: a.id,
+              ts: r.ts || '',
+              preview: r.preview || '',
+              captured: !!r.captured,
+            });
+          });
+        });
+        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
+        rows = rows.slice(0, 10);
+        if(!rows.length){
+          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
+        }
+        var body = rows.map(function(r){
+          return '<div class="cc-pa-live-row">'
+            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
+            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
+            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
+            + (r.captured ? ' <em>· lead</em>' : '')
+            + '</span></div>';
+        }).join('');
+        return '<div class="cc-pa-live">'
+          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
+          + '<div class="cc-pa-live-list">'+body+'</div>'
+          + '</div>';
+      }
+      function intakeCard(d){
+        var intake = (d && d.intake) || {};
+        var crm = (d && d.crm) || {};
+        var wl = (d && d.waitlist) || {};
+        var ok = !!intake.ok;
+        var pending = intake.pending || 0;
+        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
+        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
+        var lines = (intake.recent || []).slice(0, 4).map(function(r){
+          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
+          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
+            + esc(r.who || '—')
+            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
+            + '</div>';
+        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
+        return '<div class="cc-pa-card cc-pa-intake">'
+          + '<div class="cc-pa-head">'
+          + '<h4>Web intake</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
+          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
+          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
+          + '</div>'
+          + lines
+          + '<div class="cc-pa-foot">'
+          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
+          + ' <span class="cc-pa-model">·</span> '
+          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
+          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
+          + '</div></div>';
+      }
+      function paint(d){
+        var agents = (d && d.agents) || [];
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
+        var banner = (d.talking && d.talking.length)
+          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
+          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
+        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
+        el.innerHTML = banner
+          + liveAsksStrip(agents)
+          + '<div class="cc-pa-grid">'
+          + agents.map(card).join('')
+          + intakeCard(d)
+          + '</div>';
+      }
+      function load(){
+        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
+      }
+      load(); setInterval(load, 20000);
+    })();
+    </script>
+
+
+    
+      </div>
+    </details>
+
+<!-- Ops folded — power tools, not the default face -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
+      <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
+      <div class="cc-fold-body">
+<!-- Heartbeat + Ares stay in Pulse. The status strip is on the first screen. -->
     <div class="pulse-row">
     <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
@@ -1124,103 +4338,58 @@
         <div class="empty">no pulses yet.</div>
       </div>
     </section>
-    <section class="panel ares-panel" data-testid="ares-panel">
+    <section class="panel ares-panel" data-testid="ares-panel" id="ares-anchor" style="scroll-margin-top:24px">
       <h3>Ares — host findings</h3>
       <div class="ares-counts" data-ares-counts></div>
+      <div class="ares-toolbar" data-ares-toolbar hidden>
+        <button type="button" class="ares-clear-btn" data-ares-clear="hot"
+                title="Dismiss all emergency + critical findings (localhost)">Clear emergencies &amp; critical</button>
+        <button type="button" class="ares-clear-btn warn" data-ares-clear="warning"
+                title="Dismiss all warning-level findings">Clear warnings</button>
+        <button type="button" class="ares-clear-btn" data-ares-clear="all"
+                title="Dismiss every active finding">Clear all</button>
+      </div>
+      <div class="ares-status-note" data-ares-note></div>
       <div class="ares-feed" data-ares-feed aria-live="polite" aria-label="Active Ares findings"></div>
     </section>
     </div>
 
-    <!-- Steward — Funding Board panel.
-         Grant obligation list (upcoming + overdue + applied/pending, sorted by due_date).
-         Data from /api/steward/board. Dot colors: amber=near (<30d), red=overdue,
-         blue=applied/pending (submitted application, awaiting decision — NOT overdue),
-         neutral=far. Each item has a status control that POSTs /api/steward/status to
-         mark applied/pending or clear back to auto. config-absent state renders when
-         grants.json not yet seeded. -->
-    <section class="panel" data-testid="steward-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
-      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
-        <div class="empty">loading…</div>
+    
+      </div>
+    </details>
+
+    <!-- ═══ 4. Memory ═══ -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-memory">
+      <summary>Memory &amp; lattice <span class="cc-fold-hint">cognition · bus · writes</span></summary>
+      <div class="cc-fold-body">
+<!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
+         Specialists shows active ephemeral DSL specialists she's spawned,
+         each with a kill switch (Jon's authoritative override per her
+         spec); comm bus shows recent direct_command / direct_query edges
+         so the conversation between agents is visible in real time. -->
+    <section class="orch-row">
+      <div class="panel specialists" data-testid="specialists-panel">
+        <h3>Spawned under Aetheria</h3>
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-3);margin:-6px 0 10px;">
+          ephemeral · full roster on <a href="/citizens">citizens →</a>
+        </div>
+        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Specialists spawned under Aetheria">
+          <div class="specialist-item" data-empty>none active.</div>
+        </div>
+      </div>
+      <div class="panel commbus" data-testid="commbus-panel">
+        <h3>Comm bus</h3>
+        <div class="commbus-feed" data-commbus-feed aria-live="polite" aria-label="Recent direct messages between agents">
+          <div class="commbus-item" data-empty>no recent traffic.</div>
+        </div>
       </div>
     </section>
 
-    <!-- Pondwright — Carolina Water Gardens Intelligence. Read-only glance over the isolation
-         wall: counts only (no names, no chat content), fetched cross-origin from the Spark's
-         public /summary. The lead data itself never enters the lattice. -->
-    <section class="panel" data-testid="pondwright-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Pondwright — Carolina Water Gardens</h3>
-      <div class="pw-cc" data-pw-summary aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    <script>
-    (function(){
-      var el = document.querySelector('[data-pw-summary]');
-      if(!el) return;
-      function stat(v,l){ return '<div><div style="font-size:22px;font-weight:600;color:#ece3d5;">'+v+'</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:rgba(232,227,213,0.4);">'+l+'</div></div>'; }
-      function paint(d){
-        var dot = d.enabled ? '#3f9a5f' : '#d4a827';
-        el.innerHTML =
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">'
-          + stat(d.conversations_today, 'chats today')
-          + stat(d.leads_captured, 'leads captured')
-          + stat(d.conversations_total, 'chats total')
-          + stat(d.last_activity ? d.last_activity.slice(11,16) : '—', 'last activity')
-          + '</div><div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(232,227,213,0.55);">'
-          + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
-          + (d.enabled ? 'live' : 'paused')
-          + ' · <a href="https://crm.pondwright.com/conversations" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">view conversations →</a></div>';
-      }
-      function load(){ fetch('https://chat.pondwright.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">Pondwright offline</div>'; }); }
-      load(); setInterval(load, 30000);
-    })();
-    </script>
-
-    <!-- Seneca — the public voice of SOVERYN. Same read-only glance as Pondwright:
-         counts only, fetched cross-origin from the agent's public /summary. Seneca is
-         AIRGAPPED from the real fleet, so this is a window, not a data merge — nothing
-         a visitor types ever enters the lattice.
-         Added 2026-07-28: the endpoint was built for this panel and the panel was never
-         wired, so 25 public conversations had accumulated with nobody watching. -->
-    <section class="panel" data-testid="seneca-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Seneca — public agent</h3>
-      <div class="pw-cc" data-seneca-summary aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    <script>
-    (function(){
-      var el = document.querySelector('[data-seneca-summary]');
-      if(!el) return;
-      function stat(v,l){ return '<div><div style="font-size:22px;font-weight:600;color:#ece3d5;">'+v+'</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(232,227,213,0.45);margin-top:2px;">'+l+'</div></div>'; }
-      function paint(d){
-        var dot = d.enabled ? '#3f9a5f' : '#d4a827';
-        // Days since last activity — a public agent nobody reaches is the failure
-        // mode worth seeing at a glance, not the one you discover a month later.
-        var stale = '';
-        if(d.last_activity){
-          var days = Math.floor((Date.now() - new Date(d.last_activity).getTime())/86400000);
-          if(days >= 1) stale = ' · <span style="color:#d4a827;">quiet ' + days + 'd</span>';
-        }
-        el.innerHTML =
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;">'
-          + stat(d.conversations_today, 'chats today')
-          + stat(d.leads_captured, 'leads captured')
-          + stat(d.conversations_total, 'chats total')
-          + stat(d.last_activity ? d.last_activity.slice(5,10) : '—', 'last activity')
-          + '</div><div style="margin-top:14px;display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(232,227,213,0.55);">'
-          + '<span style="width:7px;height:7px;border-radius:50%;background:'+dot+';display:inline-block;"></span>'
-          + (d.enabled ? 'live' : 'paused') + stale
-          + ' · <a href="https://soverynintelligence.com" target="_blank" rel="noopener" style="color:var(--sov-amber,#c0824f);text-decoration:none;">open site</a></div>';
-      }
-      function load(){ fetch('https://ask.soverynintelligence.com/summary').then(function(r){return r.json();}).then(paint).catch(function(){ el.innerHTML='<div class="empty">unreachable</div>'; }); }
-      load(); setInterval(load, 30000);
-    })();
-    </script>
-
-
-    <!-- Memory — the read path into the lattice. Jon, 2026-07-30: "i should be
-         able to see all memory." Everything else here is aggregate; this reads
-         the actual nodes. Private is EXCLUDED by default and the hidden count is
-         stated on screen, because 88% of the lattice is private and showing 12%
-         of it unlabelled would misrepresent what you are looking at. -->
+    
+<!-- Memory folded by default -->
+    <details class="cc-fold" data-testid="memory-fold">
+      <summary>Memory <span class="cc-fold-hint">browse the lattice</span></summary>
+      <div class="cc-fold-body">
     <section class="panel" data-testid="memory-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Memory</h3>
       <div class="mem-controls">
@@ -1293,14 +4462,32 @@
       loadFacets(); load();
     })();
     </script>
+      </div><!-- /.cc-fold-body memory -->
+    </details>
 
-    <!-- Cognition + Scotty Approvals — twin-column row.
-         Left: Aetheria's Sense-of-Us note + recent reflections (read-only, Phase 4.2).
-         Right: Scotty proposals awaiting Jon's Approve/Reject (Task 6).
-         Data: /api/cognition/* and /api/delegation/pending. -->
-    <div class="cognition-approvals-row">
+    <section class="panel" data-testid="lattice-telemetry-panel">
+      <h3>Lattice write rate · 14d</h3>
+      <div class="telemetry" data-testid="lattice-telemetry" aria-label="Lattice memory write rate over 14 days">
+      <div class="telemetry-head">
+        <span class="telemetry-sub" style="margin:0">Nodes written per day · amber = today</span>
+        <div class="telemetry-live">live</div>
+      </div>
+      <div class="telemetry-metrics">
+        <div><b data-telemetry-today>—</b><span>today</span></div>
+        <div><b data-telemetry-peak>—</b><span>peak day</span></div>
+        <div><b data-telemetry-total>—</b><span>14d total</span></div>
+      </div>
+      <div class="sparkline" data-sparkline role="img" aria-label="Bar chart of lattice writes per day for the last 14 days"></div>
+      <div class="telemetry-axis">
+        <span data-telemetry-start>—</span>
+        <span>writes / day</span>
+        <span data-telemetry-end>—</span>
+      </div>
+    </div>
+    </section>
+
     <section class="panel" data-testid="cognition-panel" data-cognition-panel>
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Cognition</h3>
+      <h3>Cognition</h3>
       <div style="font-size:10px; color:rgba(232,227,213,0.35); text-transform:uppercase; letter-spacing:0.10em; margin-bottom:6px;">Sense of us</div>
       <div class="cognition-note" data-cognition-note data-empty
            aria-label="Aetheria's current Sense-of-Us note">
@@ -1311,75 +4498,11 @@
         <div class="cognition-item" data-empty>no reflections yet.</div>
       </div>
     </section>
-    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
-      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
-        <div class="empty">Nothing staged.</div>
-      </div>
-    </section>
 
-    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
-      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
-        <div class="empty">No proposals awaiting review.</div>
-      </div>
-    </section>
-    </div>
-
-    <section class="bottom-row">
-      <div class="panel activity" data-testid="activity-feed">
-        <h3>Recent activity</h3>
-        <div class="activity-feed" data-feed aria-live="polite" aria-label="Recent activity">
-          <div class="activity-item" data-empty>nothing to report yet.</div>
-        </div>
-        <div class="sparkline" data-sparkline aria-label="memory writes per day, last 14 days"></div>
-      </div>
-
-      <div class="panel system" data-testid="system-panel">
-        <h3>System</h3>
-        <div class="gpu-bars" data-testid="gpu-bars" aria-live="polite" aria-label="GPU statistics">
-          <div class="gpu-bar" data-empty>GPU stats loading…</div>
-        </div>
-        <h3 style="margin-top:18px">Spark</h3>
-        <div class="spark-tile" data-testid="spark-tile" aria-live="polite" aria-label="DGX Spark status">
-          <div style="opacity:0.5">Spark loading…</div>
-        </div>
-        <div class="system-stats" data-stats>
-          <div>memory nodes <span data-stat="nodes">—</span></div>
-          <div>sessions <span data-stat="sessions">—</span></div>
-          <div>last backup <span data-stat="backup">—</span></div>
-          <div>boards <span data-stat="boards">—</span></div>
-        </div>
-        <div class="attention" data-attention aria-live="polite">
-          <div class="empty">nothing needs attention.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
-         Specialists shows active ephemeral DSL specialists she's spawned,
-         each with a kill switch (Jon's authoritative override per her
-         spec); comm bus shows recent direct_command / direct_query edges
-         so the conversation between agents is visible in real time. -->
-    <section class="orch-row">
-      <div class="panel specialists" data-testid="specialists-panel">
-        <h3>Active specialists</h3>
-        <div class="specialists-feed" data-specialists-feed aria-live="polite" aria-label="Active specialists">
-          <div class="specialist-item" data-empty>none active.</div>
-        </div>
-      </div>
-      <div class="panel commbus" data-testid="commbus-panel">
-        <h3>Comm bus</h3>
-        <div class="commbus-feed" data-commbus-feed aria-live="polite" aria-label="Recent direct messages between agents">
-          <div class="commbus-item" data-empty>no recent traffic.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Library writes — what the agents are committing to the library layer.
-         Surfaces type='library' nodes only (deliberate synthesis writes, not
-         the document-chunk bootstrap). Polled at the same cadence as the
-         rest of mission control. -->
+    <!-- Library writes — folded by default -->
+    <details class="cc-fold" data-testid="library-fold">
+      <summary>Library writes <span class="cc-fold-hint">deliberate synthesis</span></summary>
+      <div class="cc-fold-body">
     <section class="panel library-writes" data-testid="library-writes">
       <div class="library-header">
         <h3>Library writes</h3>
@@ -1387,8 +4510,8 @@
           <select data-library-agent-filter aria-label="Filter by agent">
             <option value="">All agents</option>
             <option value="aetheria">Aetheria</option>
-            <option value="vett">Vett</option>
-            <option value="scotty">Scotty</option>
+            <option value="eve">Eve</option>
+            <option value="kernel">Kernel</option>
           </select>
           <input type="text" data-library-tag-filter placeholder="tag contains…"
                  aria-label="Filter by tag substring" size="14">
@@ -1398,53 +4521,35 @@
         <div class="library-item" data-empty>nothing in the library yet.</div>
       </div>
     </section>
-
-    <!-- THE RIG — the sovereign compute as a HEADROOM map. The tower's three
-         GPUs come from /api/system/rig (which, unlike /api/system/gpu, can say
-         WHAT occupies each card). Spark A comes from /api/system/spark and is
-         never drawn alive unless path === "fabric". Spark B doesn't exist yet:
-         a dashed empty bay, no fake status. The memory rails are inverted —
-         free VRAM is the lit part. See the .rig CSS block. -->
-    <section class="panel rig" data-testid="rig" aria-label="The rig — live GPU headroom">
-      <div class="rig-head">
-        <h3>The Rig</h3>
-        <div class="rig-totals" data-rig-totals>reading the rig…</div>
       </div>
-
-      <div class="rig-bay tower">
-        <div class="bay-label">SOVERYN Tower</div>
-        <div class="rig-cards" data-rig-gpus>
-          <div class="rig-note">reading the rig…</div>
-        </div>
-      </div>
-
-      <div class="rig-spine" data-rig-spine data-state="dead">
-        <span class="line"></span>
-        <span class="copy" data-rig-spine-copy>checking the fabric…</span>
-        <span class="line"></span>
-      </div>
-
-      <div class="rig-sparks">
-        <div class="rig-bay spark" data-testid="rig-spark-a">
-          <div class="bay-label">DGX Spark A</div>
-          <div data-rig-spark-a>
-            <div class="rig-note">reading the Spark…</div>
-          </div>
-        </div>
-        <div class="rig-bay empty-bay" data-testid="rig-spark-b">
-          <div class="bay-label">Spark B</div>
-          <div class="bay-empty">
-            <div class="eb-title">Empty bay</div>
-            <div class="eb-sub">awaiting hardware</div>
-          </div>
-        </div>
+    </details>
+<!-- Steward folded by default (deep / infrequent) -->
+    <details class="cc-fold" data-testid="steward-fold">
+      <summary>Steward — Funding Board <span class="cc-fold-hint" data-steward-hint></span></summary>
+      <div class="cc-fold-body">
+    <section class="panel" data-testid="steward-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Steward — Funding Board</h3>
+      <div class="steward-feed" data-steward-feed aria-live="polite" aria-label="Grant obligations">
+        <div class="empty">loading…</div>
       </div>
     </section>
+      </div>
+    </details>
+
+    
+      </div>
+    </details>
+  </details>
+
+    <!-- ═══ Pulse (folded) ═══ -->
+
+
 
   </div>
 <script>
+
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty"];
+  const ACTIVE_AGENTS = ["aetheria","kernel","eve"];
 
   // ─── Fetch helpers ─────────────────────────────────────────────────────────
   const fetchJson = async (url) => {
@@ -1455,7 +4560,144 @@
     } catch { return null; }
   };
 
-  // ─── Greeting (client builds it from /sessions + /api/memory/activity) ────
+  // Relative time helper (shared by greeting / agents / needs-you)
+  function relAgo(iso) {
+    if (!iso) return null;
+    const t = Date.parse(iso);
+    if (!t) return null;
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 60) return "just now";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
+
+  // ─── Needs-you strip (operator priority) ──────────────────────────────────
+  async function renderNeedsYou() {
+    const root = document.querySelector("[data-testid='needs-you']");
+    const chipsEl = document.querySelector("[data-needs-chips]");
+    const clearEl = document.querySelector("[data-needs-clear]");
+    const pill = document.querySelector("[data-status-pill]") || document.querySelector(".plate .status-pill");
+    if (!root || !chipsEl) return;
+
+    const [pending, staged, gatePending, coord, publicA, ares, daemons] = await Promise.all([
+      fetchJson("/api/delegation/pending"),
+      fetchJson("/api/x/staged"),
+      fetchJson("/api/approvals/pending"),
+      fetchJson("/api/coord/summary"),
+      fetchJson("/api/system/public_agents"),
+      fetchJson("/api/ares/findings?limit=1"),
+      fetchJson("/api/system/daemons"),
+    ]);
+
+    // Needs-you = action only (you must decide / fix). Soft glance items
+    // (public talking, signals, blueprints, waitlist) stay in the briefing.
+    const chips = [];
+    const scottyN = Array.isArray(pending) ? pending.length : 0;
+    const xN = Array.isArray(staged) ? staged.length : 0;
+    const gateN = (gatePending && typeof gatePending.count === "number")
+      ? gatePending.count
+      : (Array.isArray(gatePending && gatePending.approvals) ? gatePending.approvals.length : 0);
+    if (gateN > 0) chips.push({ n: gateN, label: "Gate approvals", href: "#approvals-anchor", tone: "hot" });
+    if (scottyN > 0) chips.push({ n: scottyN, label: "Scotty proposals", href: "#approvals-anchor", tone: "hot" });
+    if (xN > 0) chips.push({ n: xN, label: "X posts staged", href: "#approvals-anchor", tone: "hot" });
+
+    const frOpen = (coord && coord.friction && coord.friction.open) || 0;
+    const sigOpen = (coord && coord.signal && coord.signal.open) || 0;
+    const bpOpen = (coord && coord.blueprint && ((coord.blueprint.open || 0) + (coord.blueprint.refining || 0) + (coord.blueprint.ready || 0))) || 0;
+    if (frOpen > 0) chips.push({ n: frOpen, label: "Friction open", href: "#boards-anchor", tone: "warn" });
+
+    const talking = (publicA && publicA.talking) || [];
+    const intake = publicA && publicA.intake;
+    const crmNew = (intake && intake.crm_new) || (publicA && publicA.crm && publicA.crm.leads_new) || 0;
+    const wlToday = (intake && intake.waitlist_today) || 0;
+    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn", dismiss: true });
+
+    const crit = ares && ares.counts && ((ares.counts.emergency || 0) + (ares.counts.critical || 0));
+    if (crit > 0) chips.push({ n: crit, label: "Ares critical", href: "#ares-anchor", tone: "hot", scroll: "[data-testid='ares-panel']" });
+
+    if (daemons) {
+      for (const key of ["heartbeat", "patrol", "ares"]) {
+        const d = daemons[key];
+        if (d && (d.status === "stale" || d.status === "error" || d.error)) {
+          chips.push({ n: "!", label: `${key} ${d.status || "issue"}`, href: "#", tone: "warn", scroll: "[data-testid='daemon-strip']" });
+        }
+      }
+    }
+
+    // Cache for greeting briefing (includes soft glance fields)
+    window.__ccNeeds = { chips, scottyN, xN, gateN, frOpen, sigOpen, bpOpen, talking, crmNew, wlToday, crit, coord, publicA, daemons };
+
+    if (!chips.length) {
+      root.setAttribute("data-state", "clear");
+      chipsEl.innerHTML = "";
+      if (clearEl) clearEl.style.display = "";
+      if (pill) {
+        pill.removeAttribute("data-needs");
+        const st = pill.querySelector("[data-status-text]");
+        if (st) st.textContent = "all systems quiet";
+      }
+      return;
+    }
+
+    root.setAttribute("data-state", "hot");
+    if (clearEl) clearEl.style.display = "none";
+    if (chips.some((c) => (c.href || "").includes("approvals"))) {
+      const gates = document.querySelector('[data-testid="chapter-gates"]');
+      if (gates) gates.open = true;
+    }
+    chipsEl.innerHTML = chips.map((c) => {
+      const n = (typeof c.n === "number") ? c.n : c.n;
+      const href = c.href || "#";
+      const scroll = c.scroll ? ` data-scroll="${c.scroll}"` : "";
+      const x = c.dismiss ? `<span class="ny-x" role="button" tabindex="0" aria-label="Clear ${c.label}" title="Mark reviewed (clears until new leads arrive)">&times;</span>` : "";
+      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span>${x}</a>`;
+    }).join("");
+    const openChapter = (id) => {
+      const ch = document.querySelector(`[data-testid="${id}"]`);
+      if (ch && ch.tagName === "DETAILS") ch.open = true;
+    };
+    chipsEl.querySelectorAll(".ny-x").forEach((x) => {
+      const clear = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        try {
+          await fetch("/api/system/crm/ack", { method: "POST" });
+        } catch (e) { /* endpoint down: chip stays, nothing breaks */ }
+        renderNeedsYou();
+      };
+      x.addEventListener("click", clear);
+      x.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") clear(ev); });
+    });
+    chipsEl.querySelectorAll("a.ny-chip").forEach((a) => {
+      a.addEventListener("click", (ev) => {
+        const href = a.getAttribute("href") || "";
+        if (href.includes("approvals") || (a.getAttribute("data-scroll") || "").includes("ares") || href.includes("boards")) {
+          if (href.includes("approvals")) openChapter("chapter-gates");
+          if (href.includes("boards")) openChapter("chapter-work");
+          if ((a.getAttribute("data-scroll") || "").includes("ares")) openChapter("chapter-pulse");
+        }
+        const sel = a.getAttribute("data-scroll");
+        if (sel) {
+          const el = document.querySelector(sel);
+          if (el) {
+            ev.preventDefault();
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+      });
+    });
+    document.querySelectorAll("[data-open-chapter]").forEach((a) => {
+      a.addEventListener("click", () => openChapter(a.getAttribute("data-open-chapter")));
+    });
+    if (pill) {
+      pill.setAttribute("data-needs", "hot");
+      const st = pill.querySelector("[data-status-text]");
+      if (st) st.textContent = `${chips.length} need${chips.length === 1 ? "s" : ""} you`;
+    }
+  }
+
+  // ─── Greeting briefing ────────────────────────────────────────────────────
   async function renderGreeting() {
     const hour = new Date().getHours();
     let heading = "Late, Jon.";
@@ -1463,24 +4705,141 @@
     else if (hour < 12) heading = "Morning, Jon.";
     else if (hour < 17) heading = "Afternoon, Jon.";
     else if (hour < 22) heading = "Evening, Jon.";
-    document.querySelector("[data-greeting-heading]").textContent = heading;
+    const hEl = document.querySelector("[data-greeting-heading]");
+    if (hEl) hEl.textContent = heading;
 
     const activity = await fetchJson("/api/memory/activity?days=1");
     const sessions = await fetchJson("/sessions?limit=10");
-    const parts = [];
-    const today = activity && activity.buckets && activity.buckets[activity.buckets.length-1];
+    const needs = window.__ccNeeds || {};
+
+    const bodyParts = [];
+    if (needs.scottyN || needs.xN) {
+      const bits = [];
+      if (needs.scottyN) bits.push(`${needs.scottyN} proposal${needs.scottyN === 1 ? "" : "s"}`);
+      if (needs.xN) bits.push(`${needs.xN} staged post${needs.xN === 1 ? "" : "s"}`);
+      bodyParts.push(`You have ${bits.join(" and ")} waiting.`);
+    } else {
+      bodyParts.push(document.body.classList.contains("cc-easy")
+        ? "Your team is ready — pick someone below."
+        : "Nothing is gated on you right now.");
+    }
+
+    const brief = [];
+    if (needs.scottyN > 0) brief.push({ t: `${needs.scottyN} Scotty proposal${needs.scottyN === 1 ? "" : "s"} need a decision.`, tone: "hot" });
+    if (needs.xN > 0) brief.push({ t: `${needs.xN} X post${needs.xN === 1 ? "" : "s"} staged for your word.`, tone: "hot" });
+    if (needs.frOpen > 0) brief.push({ t: `${needs.frOpen} open friction item${needs.frOpen === 1 ? "" : "s"} on the board.`, tone: "warn" });
+    if (needs.talking && needs.talking.length) brief.push({ t: `Public agents talking: ${needs.talking.join(", ")}.`, tone: "ok" });
+    if (needs.crmNew > 0) brief.push({ t: `${needs.crmNew} new CRM lead${needs.crmNew === 1 ? "" : "s"} in the pipeline.`, tone: "warn" });
+    if (needs.wlToday > 0) brief.push({ t: `${needs.wlToday} History’s Ledger waitlist signup${needs.wlToday === 1 ? "" : "s"} today.`, tone: "ok" });
+    if (needs.crit > 0) brief.push({ t: `Ares has ${needs.crit} critical/emergency finding${needs.crit === 1 ? "" : "s"}.`, tone: "hot" });
+
+    const today = activity && activity.buckets && activity.buckets[activity.buckets.length - 1];
     if (today && today.count > 0) {
-      for (const [agent, n] of Object.entries(today.by_agent || {})) {
-        const noun = n === 1 ? "note" : "notes";
-        parts.push(`${agent[0].toUpperCase() + agent.slice(1)} wrote ${n} ${noun}.`);
-      }
+      const agents = Object.entries(today.by_agent || {})
+        .map(([a, n]) => `${a[0].toUpperCase() + a.slice(1)} ${n}`)
+        .join(", ");
+      brief.push({ t: `Lattice today: ${today.count} write${today.count === 1 ? "" : "s"}${agents ? ` (${agents})` : ""}.`, tone: "ok" });
     }
     if (sessions && sessions.sessions && sessions.sessions.length) {
-      const n = sessions.sessions.length;
-      parts.push(`${n} recent session${n === 1 ? "" : "s"}.`);
+      const last = sessions.sessions[0];
+      const ago = relAgo(last.updated_at);
+      brief.push({ t: `Last session: ${last.agent || "agent"}${ago ? ` · ${ago}` : ""}.`, tone: "" });
+      if (!document.body.classList.contains("cc-easy")) {
+        bodyParts.push(`${sessions.sessions.length} recent session${sessions.sessions.length === 1 ? "" : "s"} on the tower.`);
+      }
+    } else if (!brief.length) {
+      bodyParts.push("It's been quiet since you were last here.");
     }
-    document.querySelector("[data-greeting-body]").textContent =
-      parts.length ? parts.join(" ") : "It's been quiet since you were last here.";
+
+    const bEl = document.querySelector("[data-greeting-body]");
+    if (bEl) bEl.textContent = bodyParts.join(" ");
+
+    const list = document.querySelector("[data-brief-list]");
+    if (list) {
+      if (!brief.length || document.body.classList.contains("cc-easy")) {
+        list.hidden = true;
+        list.innerHTML = "";
+      } else {
+        list.hidden = false;
+        list.innerHTML = brief.slice(0, 5).map((b) =>
+          `<li${b.tone ? ` data-tone="${b.tone}"` : ""}>${b.t}</li>`
+        ).join("");
+      }
+    }
+  }
+
+  // ─── Easy Results (automations inbox, front door) ─────────────────────────
+  async function renderEasyResults() {
+    const list = document.querySelector("[data-easy-results-list]");
+    if (!list || !document.body.classList.contains("cc-easy")) return;
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+    const rel = (iso) => {
+      if (!iso) return "—";
+      const t = Date.parse(iso); if (!t) return esc(iso);
+      const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+      if (sec < 90) return "just now";
+      if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+      if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+      return Math.floor(sec / 86400) + "d ago";
+    };
+    try {
+      const d = await fetchJson("/api/automations/inbox?limit=8");
+      const items = (d && d.inbox) || [];
+      if (!items.length) {
+        list.innerHTML = '<div class="er-empty">No results yet — your team will land work here.</div>';
+        return;
+      }
+      list.innerHTML = items.slice(0, 6).map((it) => {
+        const head = (it.content || it.error || "").replace(/\s+/g, " ").slice(0, 140);
+        return '<div class="er-item">'
+          + '<div class="er-meta">' + esc(rel(it.fired_at)) + " · " + esc(it.agent || "—")
+          + " · " + esc(it.status || "—") + "</div>"
+          + "<div><strong>" + esc(it.title || it.automation_id || "run") + "</strong>"
+          + (head ? " — " + esc(head) + (head.length >= 140 ? "…" : "") : "")
+          + "</div></div>";
+      }).join("");
+    } catch (_) {
+      list.innerHTML = '<div class="er-empty">Results unavailable.</div>';
+    }
+  }
+
+  function applyCcMode(mode) {
+    const easy = mode !== "advanced";
+    document.body.classList.toggle("cc-easy", easy);
+    document.body.setAttribute("data-cc-mode", easy ? "easy" : "advanced");
+    const sub = document.querySelector("[data-cc-subtitle]");
+    if (sub) sub.textContent = easy ? "Your team" : "Command Center";
+    const btn = document.querySelector("[data-cc-mode-toggle]");
+    if (btn) btn.textContent = easy ? "Advanced" : "Simple";
+    try { localStorage.setItem("soveryn-cc-mode", easy ? "easy" : "advanced"); } catch (_) {}
+    if (easy) renderEasyResults();
+    try { renderGreeting(); } catch (_) {}
+  }
+
+  // ─── Active now (running commissions + recent interactive chat) ───────────
+  async function renderActiveNow() {
+    const root = document.querySelector("[data-testid='active-now']");
+    const chipsEl = document.querySelector("[data-active-chips]");
+    if (!root || !chipsEl) return;
+    const data = await fetchJson("/api/active-now");
+    const items = (data && Array.isArray(data.active)) ? data.active : [];
+    if (!items.length) {
+      root.setAttribute("data-state", "clear");
+      chipsEl.innerHTML = "";
+      return;
+    }
+    root.setAttribute("data-state", "live");
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    chipsEl.innerHTML = items.map((a) => {
+      const href = `/messages/${encodeURIComponent(a.citizen || "")}`;
+      const kind = esc(a.kind || "work");
+      const name = esc(((a.label || "").split(" · ")[0]) || a.citizen || "someone");
+      return `<a class="an-chip" href="${href}" title="${esc(a.label || "")}"><span class="k">${kind}</span><span>${name}</span></a>`;
+    }).join("");
   }
 
   // ─── Agent cards (state from /sessions per agent) ─────────────────────────
@@ -1490,14 +4849,62 @@
       const recent = data && data.sessions && data.sessions[0];
       const el = document.querySelector(`.agent-card[data-agent="${agent}"] [data-agent-state]`);
       if (!el) continue;
-      el.textContent = recent ? `last active ${new Date(recent.updated_at).toLocaleString()}` : "idle";
+      if (!recent) {
+        el.textContent = "Quiet — no recent session";
+        continue;
+      }
+      const ago = relAgo(recent.updated_at) || "recently";
+      el.textContent = `Last talk ${ago}`;
     }
+  }
+
+  // ─── Dispatch box (chat deep-link or board create) ────────────────────────
+  function wireDispatch() {
+    const form = document.querySelector("[data-dispatch-form]");
+    if (!form || form.dataset.wired) return;
+    form.dataset.wired = "1";
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const target = (form.querySelector("[data-dispatch-target]") || {}).value || "";
+      const text = ((form.querySelector("[data-dispatch-text]") || {}).value || "").trim();
+      const err = form.querySelector("[data-dispatch-err]");
+      if (err) err.textContent = "";
+      if (!text) return;
+      if (target.startsWith("msg:") || target.startsWith("chat:")) {
+        const agent = target.slice(target.indexOf(":") + 1);
+        const q = encodeURIComponent(text);
+        window.location.href = `/messages/${encodeURIComponent(agent)}?q=${q}`;
+        return;
+      }
+      if (target.startsWith("board:")) {
+        const board = target.slice(6);
+        try {
+          const res = await fetch("/api/coord", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ board, content: text, notify: true }),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (err) err.textContent = body.error || body.message || `Failed (${res.status})`;
+            return;
+          }
+          form.querySelector("[data-dispatch-text]").value = "";
+          if (err) err.textContent = "";
+          if (typeof renderBoards === "function") renderBoards();
+          renderNeedsYou();
+        } catch (e) {
+          if (err) err.textContent = String(e);
+        }
+      }
+    });
   }
 
   // ─── GPU bars ─────────────────────────────────────────────────────────────
   async function renderGpu() {
     const data = await fetchJson("/api/system/gpu");
     const container = document.querySelector('[data-testid="gpu-bars"]');
+    if (!container) return;
     if (!data || !data.available) {
       container.innerHTML = `<div class="gpu-bar" style="opacity:0.5">${(data && data.message) || "GPU stats unavailable"}</div>`;
       return;
@@ -1511,6 +4918,111 @@
           <div class="track"><div class="fill" style="width:${g.util_pct}%"></div></div>
         </div>
       `);
+    }
+  }
+
+  // ─── ActTruth badges on agent cards + clickable crew drawer ───────────────
+  let _acttruthCache = null;
+
+  function renderActTruthDrawer(d, focusAgent) {
+    const body = document.querySelector("[data-acttruth-drawer-body]");
+    if (!body) return;
+    if (!d || !d.available) {
+      body.innerHTML = `<div style="opacity:0.6">${htmlEscape((d && d.message) || "ActTruth unavailable")}</div>`;
+      return;
+    }
+    const agents = d.agents || {};
+    const order = focusAgent
+      ? [focusAgent, ...Object.keys(agents).filter((n) => n !== focusAgent)]
+      : Object.keys(agents);
+    body.innerHTML = order.map((name) => {
+      const block = agents[name] || {};
+      const b = block.budget || {};
+      const used = b.used != null ? b.used : "—";
+      const limit = b.limit != null ? b.limit : "—";
+      const allowed = b.allowed !== false;
+      const events = (block.recent || []).slice(0, 4);
+      const evHtml = events.length
+        ? events.map((ev) => {
+            const mark = ev.ok === false ? "FAIL" : "ok";
+            const head = htmlEscape(String(ev.summary || ev.kind || "").slice(0, 100));
+            const color = ev.ok === false ? "#e07a6a" : "rgba(143,173,154,0.95)";
+            return `<div style="font-size:11px;color:${color};margin:3px 0;line-height:1.35">${mark}: ${head}</div>`;
+          }).join("")
+        : `<div style="font-size:11px;opacity:0.5">no recent acts</div>`;
+      return `<div class="agent-row" style="display:block;padding:10px 0;border-bottom:1px solid rgba(94,225,160,0.12)">
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <span class="name">${htmlEscape(name)}</span>
+          <span class="budget ${allowed ? "" : "exhausted"}">${used}/${limit}</span>
+        </div>
+        ${evHtml}
+      </div>`;
+    }).join("");
+  }
+
+  function openActTruthDrawer(focusAgent) {
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (!drawer) return;
+    drawer.setAttribute("open", "");
+    renderActTruthDrawer(_acttruthCache, focusAgent || null);
+  }
+
+  function closeActTruthDrawer() {
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer) drawer.removeAttribute("open");
+  }
+
+  function wireActTruthBadges() {
+    document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+      if (btn.dataset.wired) return;
+      btn.dataset.wired = "1";
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openActTruthDrawer(btn.getAttribute("data-acttruth-badge"));
+      });
+    });
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer && !drawer.dataset.wired) {
+      drawer.dataset.wired = "1";
+      drawer.addEventListener("click", (e) => {
+        if (e.target === drawer) closeActTruthDrawer();
+      });
+      const x = drawer.querySelector("[data-acttruth-close]");
+      if (x) x.addEventListener("click", closeActTruthDrawer);
+    }
+  }
+
+  async function refreshActTruth() {
+    wireActTruthBadges();
+    const d = await fetchJson("/api/system/acttruth");
+    _acttruthCache = d;
+    if (!d || !d.available) {
+      document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+        const slot = btn.querySelector("[data-at-budget]");
+        if (slot) slot.textContent = "—";
+      });
+      return;
+    }
+    const agents = d.agents || {};
+    document.querySelectorAll("[data-acttruth-badge]").forEach((btn) => {
+      const name = btn.getAttribute("data-acttruth-badge");
+      const block = agents[name] || {};
+      const b = block.budget || {};
+      const used = b.used != null ? b.used : "—";
+      const limit = b.limit != null ? b.limit : "—";
+      const slot = btn.querySelector("[data-at-budget]");
+      if (slot) slot.textContent = `${used}/${limit}`;
+      btn.dataset.exhausted = b.allowed === false ? "1" : "0";
+      const recent = (block.recent || [])[0];
+      btn.dataset.fail = recent && recent.ok === false ? "1" : "0";
+      if (recent) {
+        btn.title = `ActTruth ${name}: ${recent.ok === false ? "FAIL" : "ok"} — ${String(recent.summary || "").slice(0, 80)}`;
+      }
+    });
+    const drawer = document.querySelector("[data-acttruth-drawer]");
+    if (drawer && drawer.hasAttribute("open")) {
+      renderActTruthDrawer(d, null);
     }
   }
 
@@ -1625,8 +5137,8 @@
       </div>`;
   }
 
-  function renderSparkBay(d) {
-    const el = document.querySelector("[data-rig-spark-a]");
+  function renderSparkBay(d, selector, workerLabel) {
+    const el = document.querySelector(selector || "[data-rig-spark-a]");
     if (!el) return;
     if (!d || !d.available) {
       el.innerHTML = `<div class="rig-dead">unreachable</div>
@@ -1657,8 +5169,11 @@
     const kv = v.kv_cache_pct == null ? null : (v.kv_cache_pct * 100).toFixed(0);
     const vllmLine = v.up
       ? `<span class="res-chip"><span class="caret">›</span>${htmlEscape(v.model || "vllm")}<span class="mem">${
-          running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}</span></span>`
-      : `<span class="res-unknown">vllm down</span>`;
+          workerLabel
+            ? htmlEscape(workerLabel)
+            : `${running} req${waiting ? ` · ${waiting} queued` : ""}${kv == null ? "" : ` · kv ${kv}%`}`
+        }</span></span>`
+      : `<span class="res-unknown">${workerLabel ? "worker down" : "vllm down"}</span>`;
 
     el.innerHTML = `
       <div class="spark-hw">${htmlEscape(hw)}</div>
@@ -1724,38 +5239,69 @@
         `${gpuCount || "—"} GPU${gpuCount === 1 ? "" : "s"}`,
         `${totalMib ? Math.round(gbFromMib(totalMib)) : "—"} GB VRAM`,
       ];
-      if (spark && spark.available) bits.push("1 Spark");
+      const sparkCount = (spark && spark.available ? 1 : 0) + (spark && spark.b && spark.b.available ? 1 : 0);
+      if (sparkCount) bits.push(`${sparkCount} Spark${sparkCount === 1 ? "" : "s"}`);
       totalsEl.innerHTML = `${htmlEscape(bits.join(" · "))} · <span class="fabric-state" data-state="${
         fabricState}">${htmlEscape(fabricShort)}</span>`;
     }
 
-    renderSparkBay(spark);
+    renderSparkBay(spark, "[data-rig-spark-a]");
+    renderSparkBay(spark && spark.b, "[data-rig-spark-b]", "tp worker");
   }
 
-  // ─── Sparkline (14d memory writes) ────────────────────────────────────────
+  // ─── Lattice write telemetry (14d) ───────────────────────────────────────
+  // Explicit HUD for memory-node writes. Not GPU, not public chat — how busy
+  // the lattice was each day (agents + daemons committing knowledge).
   async function renderSparkline() {
     const data = await fetchJson("/api/memory/activity?days=14");
     const container = document.querySelector("[data-sparkline]");
-    if (!container || !data) return;
-    const max = Math.max(1, ...data.buckets.map(b => b.count));
-    container.innerHTML = data.buckets.map(b => {
-      const h = Math.round((b.count / max) * 100);
-      return `<div class="bar" style="height:${h}%" title="${b.date}: ${b.count}"></div>`;
+    if (!container || !data || !data.buckets || !data.buckets.length) return;
+    const buckets = data.buckets;
+    const counts = buckets.map(b => b.count || 0);
+    const max = Math.max(1, ...counts);
+    const total = counts.reduce((a, b) => a + b, 0);
+    const today = buckets[buckets.length - 1];
+    const peak = Math.max(...counts);
+    const set = (sel, v) => {
+      const el = document.querySelector(sel);
+      if (el) el.textContent = v;
+    };
+    set("[data-telemetry-today]", String(today ? today.count : 0));
+    set("[data-telemetry-peak]", String(peak));
+    set("[data-telemetry-total]", String(total));
+    set("[data-telemetry-start]", buckets[0].date ? buckets[0].date.slice(5) : "—");
+    set("[data-telemetry-end]", today && today.date ? today.date.slice(5) : "—");
+
+    container.innerHTML = buckets.map((b, i) => {
+      const h = Math.max(3, Math.round((b.count / max) * 100));
+      const isToday = i === buckets.length - 1;
+      const label = `${b.date}: ${b.count} lattice write${b.count === 1 ? "" : "s"}`;
+      return `<div class="bar${isToday ? " is-today" : ""}" style="height:${h}%"
+                   title="${label}" role="presentation"></div>`;
     }).join("");
   }
 
-  // ─── Activity feed ────────────────────────────────────────────────────────
+  // ─── Session traffic (agent chats on this tower) ─────────────────────────
   async function renderFeed() {
     const sessions = await fetchJson("/sessions?limit=6");
     const container = document.querySelector("[data-feed]");
     if (!container || !sessions || !sessions.sessions || !sessions.sessions.length) return;
-    container.innerHTML = sessions.sessions.map(s => `
+    container.innerHTML = sessions.sessions.map(s => {
+      const when = new Date(s.updated_at);
+      const rel = (() => {
+        const sec = Math.max(0, Math.floor((Date.now() - when.getTime()) / 1000));
+        if (sec < 90) return "just now";
+        if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+        if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+        return when.toLocaleDateString();
+      })();
+      return `
       <div class="activity-item">
         <span class="who" data-agent="${s.agent}">${s.agent}</span>
         ${s.title ? `· ${s.title}` : "· (untitled session)"}
-        <span class="ts">${new Date(s.updated_at).toLocaleString()}</span>
-      </div>
-    `).join("");
+        <span class="ts">${rel}</span>
+      </div>`;
+    }).join("");
   }
 
   // ─── System stats ─────────────────────────────────────────────────────────
@@ -1787,7 +5333,9 @@
   function describeHeartbeat(d) {
     if (d.status === "unknown") return "no heartbeat ticks recorded.";
     const age = formatRelativeAge(d.age_seconds);
-    if (!d.eligible) return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    if (d.skip_reason || !d.eligible) {
+      return `<strong>${age}</strong>, skipped (${d.skip_reason || "?"})${d.dry_run ? " · dry-run" : ""}`;
+    }
     // Same correction as the feed: no tool call is not silence. The tile has no
     // note to check, so infer from response_length — she wrote something or she didn't.
     const action = d.action_taken
@@ -2126,7 +5674,7 @@
     const container = document.querySelector("[data-specialists-feed]");
     if (!container || !data) return;
     if (!data.active || data.active.length === 0) {
-      container.innerHTML = `<div class="specialist-item" data-empty>none active.</div>`;
+      container.innerHTML = `<div class="specialist-item" data-empty>none active — see <a href="/citizens">Citizens</a>.</div>`;
       return;
     }
     const escapeHtml = (s) => String(s)
@@ -2164,6 +5712,12 @@
   // surface into her primary chat thread via the [SURFACE] marker
   // (2026-06-15 Coordination Blackout arc close).
   function describeHeartbeatPulse(p) {
+    // Unchanged / backoff / quiet skips can still be eligible=true with an
+    // echoed prior note — never label those "reflected" (Sandbox failure-sit
+    // spam, 2026-08-19).
+    if (p.skip_reason) {
+      return `skipped (${p.skip_reason})${p.dry_run ? " · dry-run" : ""}`;
+    }
     if (!p.eligible) {
       return `skipped (${p.skip_reason || "?"})${p.dry_run ? " · dry-run" : ""}`;
     }
@@ -2215,7 +5769,7 @@
           <span class="when">${htmlEscape(when)}</span>
           <span class="state">${describeHeartbeatPulse(p)}</span>
           ${surfaceBadge}
-          ${p.note ? `<details class="pulse-note">
+          ${(!p.skip_reason && p.note) ? `<details class="pulse-note">
             <summary>${htmlEscape(p.note.replace(/\s+/g, " ").slice(0, 92))}${p.note.length > 92 ? "…" : ""}</summary>
             <div class="pulse-note-body">${htmlEscape(p.note)}</div>
           </details>` : ""}
@@ -2232,26 +5786,107 @@
     return parts.join(" · ");
   }
 
+  async function clearAresFindings({ keys, severities, reason }) {
+    const note = document.querySelector("[data-ares-note]");
+    const toolbar = document.querySelector("[data-ares-toolbar]");
+    if (toolbar) toolbar.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    if (note) note.textContent = "Clearing…";
+    try {
+      const res = await fetch("/api/ares/findings/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys, severities, reason: reason || "human_clear" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body.ok === false) {
+        if (note) note.textContent = body.error || body.message || `Clear failed (${res.status})`;
+        return;
+      }
+      const n = body.count || 0;
+      if (note) {
+        note.textContent = n
+          ? `Cleared ${n} finding${n === 1 ? "" : "s"}. Reappears only if Ares re-detects it as new.`
+          : "Nothing matched.";
+      }
+      await renderAres();
+      if (typeof renderNeedsYou === "function") await renderNeedsYou();
+      if (typeof renderGreeting === "function") await renderGreeting();
+    } catch (e) {
+      if (note) note.textContent = String(e);
+    } finally {
+      if (toolbar) toolbar.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function wireAresClear() {
+    const toolbar = document.querySelector("[data-ares-toolbar]");
+    if (!toolbar || toolbar.dataset.wired) return;
+    toolbar.dataset.wired = "1";
+    toolbar.querySelectorAll("[data-ares-clear]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.getAttribute("data-ares-clear");
+        let severities = null;
+        let label = "findings";
+        if (mode === "hot") {
+          severities = ["emergency", "critical"];
+          label = "all emergency + critical findings";
+        } else if (mode === "warning") {
+          severities = ["warning"];
+          label = "all warnings";
+        } else if (mode === "all") {
+          severities = ["emergency", "critical", "warning"];
+          label = "ALL active findings";
+        }
+        if (!severities) return;
+        if (!confirm(`Clear ${label}?\n\nThis marks them cleared in the Ares bus (you, not the agent).\nThey return only if Ares re-detects them as new.`)) return;
+        clearAresFindings({ severities, reason: `human_clear:${mode}` });
+      });
+    });
+  }
+
   async function renderAres() {
     const data = await fetchJson("/api/ares/findings");
     const feed = document.querySelector("[data-ares-feed]");
     const counts = document.querySelector("[data-ares-counts]");
+    const toolbar = document.querySelector("[data-ares-toolbar]");
     if (!feed) return;
+    wireAresClear();
     const d = data || { findings: [], counts: { emergency: 0, critical: 0, warning: 0 } };
     if (counts) counts.innerHTML = severityLabel(d.counts || {});
+    const total = (d.findings && d.findings.length) || 0;
+    if (toolbar) toolbar.hidden = total === 0;
     if (!d.findings || d.findings.length === 0) {
       feed.innerHTML = '<div class="empty">All clear — no active findings.</div>';
       return;
     }
-    feed.innerHTML = d.findings.map(f => `
-      <div class="ares-finding" data-sev="${f.severity}">
-        <div><span class="ftype">${f.finding_type}</span><br><span class="ev">${(f.evidence || "").replace(/</g, "&lt;")}</span></div>
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    feed.innerHTML = d.findings.map((f) => `
+      <div class="ares-finding" data-sev="${esc(f.severity)}" data-key="${esc(f.key)}">
+        <div class="ares-finding-row">
+          <div>
+            <span class="ftype">${esc(f.finding_type)}</span>
+            <span style="opacity:.4;font-size:10px;margin-left:6px">${esc(f.severity)}</span>
+            <br><span class="ev">${esc(f.evidence || "")}</span>
+          </div>
+          <button type="button" class="ares-dismiss" data-ares-dismiss="${esc(f.key)}" title="Clear this finding">Clear</button>
+        </div>
       </div>`).join("");
+    feed.querySelectorAll("[data-ares-dismiss]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-ares-dismiss");
+        if (!key) return;
+        if (!confirm(`Clear this finding?\n\n${key}`)) return;
+        clearAresFindings({ keys: [key], reason: "human_clear:one" });
+      });
+    });
   }
 
   // ─── Comm bus (recent DAC traffic) ───────────────────────────────────────
   async function renderCommBus() {
-    const data = await fetchJson("/api/memory/dac_edges?limit=10");
+    // Few rows + one-line layout so Comm bus height matches the denser page.
+    const data = await fetchJson("/api/memory/dac_edges?limit=6");
     const container = document.querySelector("[data-commbus-feed]");
     if (!container || !data) return;
     if (!data.edges || data.edges.length === 0) {
@@ -2266,21 +5901,23 @@
       if (m < 1440) return `${Math.round(m / 60)}h`;
       return `${Math.round(m / 1440)}d`;
     };
-    container.innerHTML = data.edges.map(e => {
-      // Arrow glyph: command = filled, query = open
+    container.innerHTML = data.edges.slice(0, 6).map(e => {
       const arrow = e.relationship === "direct_command" ? "→" : "?";
+      let head = String(e.message_head || "").replace(/\s+/g, " ").trim();
+      if (head.length > 72) head = head.slice(0, 69) + "…";
       return `
         <div class="commbus-item"
              data-rel="${escapeHtml(e.relationship)}"
              data-sender="${escapeHtml(e.sender)}"
-             data-target="${escapeHtml(e.target)}">
+             data-target="${escapeHtml(e.target)}"
+             title="${escapeHtml(e.message_head || "")}">
           <div class="head">
             <span class="sender">${escapeHtml(e.sender)}</span>
             <span class="arrow">${arrow}</span>
             <span class="target">${escapeHtml(e.target)}</span>
-            <span class="age">${formatAge(e.age_minutes)} ago</span>
+            <span class="age">${formatAge(e.age_minutes)}</span>
           </div>
-          <div class="body">${escapeHtml(e.message_head)}</div>
+          <div class="body">${escapeHtml(head)}</div>
         </div>
       `;
     }).join("");
@@ -2404,6 +6041,88 @@
     };
     wire(".xp-approve", "approve");
     wire(".xp-reject", "reject", { reason: "dropped from the command center" });
+  }
+
+  function _redactApprovalArgs(args) {
+    if (!args || typeof args !== "object") return args;
+    const out = {};
+    const secret = /pass|token|secret|key|auth|credential/i;
+    for (const [k, v] of Object.entries(args)) {
+      out[k] = secret.test(k) ? "•••" : v;
+    }
+    return out;
+  }
+
+  function _fmtApprovalArgs(args) {
+    try {
+      const s = JSON.stringify(_redactApprovalArgs(args), null, 0);
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  async function renderGateApprovals() {
+    const feed = document.querySelector("[data-gate-approvals-feed]");
+    if (!feed) return;
+    const data = await fetchJson("/api/approvals/pending");
+    const items = (data && Array.isArray(data.approvals)) ? data.approvals : [];
+    if (items.length === 0) {
+      feed.innerHTML = '<div class="empty">Nothing at the gate.</div>';
+      return;
+    }
+    const esc = (s) => String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    feed.innerHTML = items.map(a => `
+      <div class="scotty-proposal" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">
+        <div class="sp-objective">${esc(a.citizen)} · <code>${esc(a.tool)}</code></div>
+        <div class="sp-summary" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:12px;">${esc(_fmtApprovalArgs(a.args))}</div>
+        <div class="sp-tests">requested ${esc(a.requested_at).slice(0, 19).replace("T", " ")}</div>
+        <div class="sp-actions">
+          <button class="gate-approve" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">Allow</button>
+          <button class="gate-deny" data-approval-id="${esc(a.id)}" data-citizen="${esc(a.citizen)}">Deny</button>
+        </div>
+        <div class="sp-notice" style="display:none"></div>
+      </div>`).join("");
+
+    const wire = (sel, approve) => {
+      feed.querySelectorAll(sel).forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.dataset.approvalId;
+          const citizen = btn.dataset.citizen;
+          const card = feed.querySelector(`.scotty-proposal[data-approval-id="${id}"]`);
+          const notice = card && card.querySelector(".sp-notice");
+          btn.disabled = true;
+          try {
+            const res = await fetch(`/api/citizens/${encodeURIComponent(citizen)}/approvals/${encodeURIComponent(id)}/decision`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ approve, decided_by: "jon" }),
+            });
+            const payload = await res.json().catch(() => ({}));
+            if (res.ok) {
+              if (notice) {
+                notice.textContent = approve ? "Allowed." : "Denied.";
+                notice.style.display = "";
+              }
+              setTimeout(() => { renderGateApprovals(); renderNeedsYou(); }, 800);
+            } else {
+              if (notice) {
+                notice.textContent = (payload.error && payload.error.message) || payload.error || `Failed (${res.status}).`;
+                notice.style.display = "";
+              }
+              btn.disabled = false;
+            }
+          } catch (_) {
+            if (notice) { notice.textContent = "Network error."; notice.style.display = ""; }
+            btn.disabled = false;
+          }
+        });
+      });
+    };
+    wire(".gate-approve", true);
+    wire(".gate-deny", false);
   }
 
   async function renderScottyApprovals() {
@@ -2588,12 +6307,100 @@
     });
   }
 
+  // ─── Kernel — GLM-5.3-Flash TP=2 on Sparks :8001 ───
+  let _kernelAiderCmd = "soveryn-aider --kernel";
+  let _kernelOpenCodeCmd = "soveryn-opencode";
+  let _kernelWarmPoll = null;
+
+  async function refreshKernel() {
+    const card = document.querySelector('[data-testid="kernel-card"]');
+    if (!card) return;
+    const stateEl = card.querySelector("[data-kernel-state-text]");
+    const warmBtn = card.querySelector("[data-kernel-warm]");
+    const d = await fetchJson("/api/system/bench_flash");
+    if (!d) {
+      card.setAttribute("data-kernel-state", "router_down");
+      if (stateEl) stateEl.textContent = "status unavailable";
+      return;
+    }
+    const st = d.state || "cold";
+    card.setAttribute("data-kernel-state", st);
+    if (d.soveryn_opencode) _kernelOpenCodeCmd = d.soveryn_opencode;
+    if (d.soveryn_aider_flash) _kernelAiderCmd = d.soveryn_aider_flash;
+    else if (d.aider_cmd) _kernelAiderCmd = d.aider_cmd;
+    const parts = [];
+    if (st === "warm") parts.push("warm · OpenCode ready");
+    else if (st === "loading") parts.push("loading… (can take minutes)");
+    else if (st === "cold") parts.push("cold · on NVMe");
+    else if (st === "missing") parts.push("weights missing");
+    else if (st === "router_down") parts.push("router down");
+    else parts.push(st);
+    if (d.model_status && st !== "loading") parts.push(d.model_status);
+    if (d.warm_job && d.warm_job.status === "error" && d.warm_job.error) {
+      parts.push(String(d.warm_job.error).slice(0, 80));
+    }
+    if (stateEl) stateEl.textContent = parts.join(" · ");
+    if (warmBtn) {
+      warmBtn.disabled = (st === "loading" || st === "warm" || st === "missing");
+      warmBtn.textContent = st === "warm" ? "Warm" : (st === "loading" ? "…" : "Warm");
+    }
+    if (st !== "loading" && _kernelWarmPoll) {
+      clearInterval(_kernelWarmPoll);
+      _kernelWarmPoll = null;
+    }
+  }
+
+  function wireKernelCard() {
+    const card = document.querySelector('[data-testid="kernel-card"]');
+    if (!card || card.dataset.wired === "1") return;
+    card.dataset.wired = "1";
+    const warmBtn = card.querySelector("[data-kernel-warm]");
+    const copyOpen = card.querySelector("[data-kernel-copy-opencode]");
+    const copyAider = card.querySelector("[data-kernel-copy-aider]");
+    if (warmBtn) {
+      warmBtn.addEventListener("click", async () => {
+        warmBtn.disabled = true;
+        warmBtn.textContent = "…";
+        try {
+          await fetch("/api/system/bench_flash/warm", { method: "POST" });
+        } catch (_) { /* status poll will surface */ }
+        await refreshKernel();
+        if (!_kernelWarmPoll) {
+          _kernelWarmPoll = setInterval(refreshKernel, 4000);
+        }
+      });
+    }
+    const wireCopy = (btn, getCmd, label) => {
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        const cmd = typeof getCmd === "function" ? getCmd() : getCmd;
+        try {
+          await navigator.clipboard.writeText(cmd);
+          const prev = btn.textContent;
+          btn.textContent = "Copied";
+          setTimeout(() => { btn.textContent = prev || label; }, 1400);
+        } catch (_) {
+          window.prompt("Copy " + label + " command:", cmd);
+        }
+      });
+    };
+    wireCopy(copyOpen, () => _kernelOpenCodeCmd, "OpenCode");
+    wireCopy(copyAider, () => _kernelAiderCmd, "Aider");
+  }
+
   // ─── Boot + polling ───────────────────────────────────────────────────────
-  function refreshAll() {
-    renderGreeting();
+  async function refreshAll() {
+    // Needs-you first so greeting can use the cached operator state.
+    await renderNeedsYou();
+    await renderActiveNow();
+    await renderGreeting();
     renderAgentStates();
+    refreshKernel();
+    renderEasyResults();
+    // Advanced house panels — still refresh so toggling Advanced is live.
     renderGpu();
     refreshSpark();
+    refreshActTruth();
     refreshRig();
     renderSparkline();
     renderFeed();
@@ -2604,12 +6411,26 @@
     renderAres();
     renderSteward();
     renderCognition();
-    renderScottyApprovals(); renderXApprovals();
+    renderScottyApprovals();
+    renderXApprovals();
+    renderGateApprovals();
     renderLibraryWrites();
     renderSpecialists();
     renderCommBus();
   }
   document.addEventListener("DOMContentLoaded", () => {
+    // Easy / Advanced front door (default: easy)
+    let saved = "easy";
+    try { saved = localStorage.getItem("soveryn-cc-mode") || "easy"; } catch (_) {}
+    applyCcMode(saved);
+    const modeBtn = document.querySelector("[data-cc-mode-toggle]");
+    if (modeBtn) {
+      modeBtn.addEventListener("click", () => {
+        const next = document.body.classList.contains("cc-easy") ? "advanced" : "easy";
+        applyCcMode(next);
+      });
+    }
+
     // Library filter inputs trigger an immediate refresh on change so the
     // panel updates without waiting for the next 10s tick.
     const agentSel = document.querySelector("[data-library-agent-filter]");
@@ -2623,10 +6444,29 @@
       });
     }
     wireBoardCreate();
+    wireDispatch();
+    wireActTruthBadges();
+    wireKernelCard();
     refreshAll();
     setInterval(refreshAll, 10000);  // poll every 10s
   });
 })();
 </script>
+    </div><!-- /.page -->
+<div class="acttruth-drawer" data-acttruth-drawer aria-label="ActTruth crew ledger">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-head">
+        <div>
+          <h2>ActTruth</h2>
+          <a href="https://acttruth.com" target="_blank" rel="noopener">acttruth.com</a>
+        </div>
+        <button type="button" data-acttruth-close aria-label="Close">×</button>
+      </div>
+      <div class="acttruth-tile" data-acttruth-drawer-body>
+        <div style="opacity:0.5">Loading…</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
+

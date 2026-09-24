@@ -139,13 +139,17 @@ def api_heartbeat_recent():
     notes = _notes_by_pulse()
 
     for r in rows:
+        # Unchanged skips used to echo the prior standing note into thoughts.jsonl;
+        # never surface that echo as a fresh reflection (CC Sandbox spam).
+        skip = r["skip_reason"]
+        note = None if skip else notes.get(r["id"])
         pulses.append({
-            "note": notes.get(r["id"]),          # what she actually wrote, if anything
+            "note": note,
             "id": r["id"],
             "triggered_at": r["triggered_at"],
             "completed_at": r["completed_at"],
             "eligible": bool(r["eligible"]),
-            "skip_reason": r["skip_reason"],
+            "skip_reason": skip,
             "surfaced_to_chat": bool(r["surfaced_to_chat"]),
             "action_taken": (
                 None if r["action_taken"] is None else bool(r["action_taken"])

@@ -34,7 +34,8 @@ from pathlib import Path
 # Port → host. Anything not listed is assumed local, so a standalone
 # llama-server on an arbitrary port works without editing this file — the
 # original hardcoded map broke the moment a 144 GB model needed its own port.
-HOSTS = {8000: "10.10.10.2"}          # the Spark, over the CX-7 link
+HOSTS = {8000: "10.10.10.2",           # the Spark, over the CX-7 link
+         8001: "10.10.10.2"}          # Spark, second slot (bake-off models)
 
 
 def endpoint(port: int) -> str:

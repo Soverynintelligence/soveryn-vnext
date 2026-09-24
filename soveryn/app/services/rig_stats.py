@@ -170,6 +170,16 @@ def _resolve_pid_name(pid: int) -> str | None:
     return _read_cmdline_alias(pid) or _read_cgroup_unit(pid) or _read_comm(pid)
 
 
+def _house_resident_name(name: str, gpu_name: str) -> str:
+    """Quadro Qwen 3.8 is still launched as `--alias kernel` (legacy preset).
+
+    Kernel the citizen lives on Spark GLM. Do not pin that name to a Quadro.
+    """
+    if name.lower() == "kernel" and "quadro" in gpu_name.lower():
+        return "qwen38"
+    return name
+
+
 # --- probe + cache ----------------------------------------------------------
 
 def _run_smi(query_flag: str, fields: str) -> subprocess.CompletedProcess:
@@ -208,6 +218,7 @@ def _probe() -> RigStatsResult:
     gpu_rows = _parse_gpu_list(gpu_proc.stdout)
     app_rows = _parse_compute_apps(apps_raw)
 
+    gpu_name_by_uuid = {row["uuid"]: row["name"] for row in gpu_rows}
     residents_by_uuid: dict[str, list[Resident]] = {row["uuid"]: [] for row in gpu_rows}
     for pid, mem_mib, uuid in app_rows:
         if uuid not in residents_by_uuid:
@@ -215,6 +226,7 @@ def _probe() -> RigStatsResult:
         name = _resolve_pid_name(pid)
         if name is None:
             continue  # pid vanished between the two nvidia-smi calls — skip, don't crash
+        name = _house_resident_name(name, gpu_name_by_uuid.get(uuid, ""))
         residents_by_uuid[uuid].append(Resident(name=name, mem_mib=mem_mib))
 
     gpus = [

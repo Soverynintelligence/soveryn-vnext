@@ -46,6 +46,10 @@ def _default_souls_dir(root: Path) -> Path:
     return _memory_dir(root) / "souls"
 
 
+def _default_skills_dir(root: Path) -> Path:
+    return _memory_dir(root) / "skills"
+
+
 def _default_pinned_memory_path(root: Path) -> Path:
     return _memory_dir(root) / "pinned_memory.md"
 
@@ -77,6 +81,7 @@ def _default_voice_root(root: Path) -> Path:
 DEFAULT_LATTICE_DB = _default_lattice_db(DEFAULT_DATA_ROOT)
 DEFAULT_CONVERSATIONS_DB = _default_conversations_db(DEFAULT_DATA_ROOT)
 DEFAULT_SOULS_DIR = _default_souls_dir(DEFAULT_DATA_ROOT)
+DEFAULT_SKILLS_DIR = _default_skills_dir(DEFAULT_DATA_ROOT)
 DEFAULT_PINNED_MEMORY_PATH = _default_pinned_memory_path(DEFAULT_DATA_ROOT)
 DEFAULT_RECALL_LATTICE_DB = _default_recall_lattice_db(DEFAULT_DATA_ROOT)
 DEFAULT_SALIENCE_DB = _default_salience_db(DEFAULT_DATA_ROOT)
@@ -96,6 +101,7 @@ class EnvConfig:
     lattice_db: Path
     conversations_db: Path
     souls_dir: Path
+    skills_dir: Path
     pinned_memory_path: Path
     recall_lattice_db: Path
     data_root: Path
@@ -169,7 +175,9 @@ def load_env_config(env: dict[str, str] | None = None) -> EnvConfig:
         conversations_db=_parse_path("SOVERYN_CONVERSATIONS_DB", env.get("SOVERYN_CONVERSATIONS_DB"),
                                      default=_default_conversations_db(data_root)),
         souls_dir=_parse_path("SOVERYN_SOULS_DIR", env.get("SOVERYN_SOULS_DIR"),
-                              default=_default_souls_dir(data_root)),
+                               default=_default_souls_dir(data_root)),
+        skills_dir=_parse_path("SOVERYN_SKILLS_DIR", env.get("SOVERYN_SKILLS_DIR"),
+                               default=_default_skills_dir(data_root)),
         pinned_memory_path=_parse_path(
             "SOVERYN_PINNED_MEMORY_PATH", env.get("SOVERYN_PINNED_MEMORY_PATH"),
             default=_default_pinned_memory_path(data_root)),

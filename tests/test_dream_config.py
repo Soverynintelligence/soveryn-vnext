@@ -11,7 +11,7 @@ def test_from_env_uses_defaults_when_unset():
     assert cfg.activity_backoff_seconds == 1800
     assert cfg.nodes_per_run == 300
     assert cfg.max_internal_iterations == 3
-    assert cfg.cognition_url == "http://127.0.0.1:8089"
+    assert cfg.cognition_url == "http://127.0.0.1:8091"
     assert cfg.cognition_timeout_seconds == 120
 
 

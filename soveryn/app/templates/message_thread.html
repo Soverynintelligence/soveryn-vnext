@@ -1,0 +1,2165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Messages · SOVERYN</title>
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SOVERYN">
+<link rel="manifest" href="/static/messages/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
+<link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
+<style>
+  :root {
+    --bg: #000; --panel: #0c0b0a; --line: rgba(255,255,255,0.08);
+    --ink: #f5f2ea; --mute: rgba(245,242,234,0.45); --gold: #c6a664; --mint: #6fb98a;
+    --bubble-them: #1c1a17; --bubble-me: #2a2418;
+    /* Same face as Desk / Staff (lab-console) — one house */
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header.top {
+    position: sticky; top: 0; z-index: 3;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top));
+    background: rgba(0,0,0,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .back {
+    color: var(--gold); text-decoration: none; font-size: 17px;
+    padding: 6px 4px; flex-shrink: 0;
+  }
+  .avatar.sov-cit {
+    font-size: 0 !important;
+    background: transparent !important;
+    color: transparent !important;
+    padding: 0;
+    overflow: visible;
+    position: relative;
+    border-radius: 0 !important;
+  }
+  .avatar.sov-cit svg { width: 100%; height: 100%; display: block; }
+  .avatar {
+
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: #0c0b0a;
+    background: linear-gradient(145deg, var(--gold), #8a7038);
+  }
+  .avatar[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  .avatar[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .avatar[data-agent="t_critic"] { background: linear-gradient(145deg, #d4a574, #6b4a2e); }
+  .avatar[data-agent="t_scout"] { background: linear-gradient(145deg, #8eb8d4, #3a5a70); }
+  .who { flex: 1; min-width: 0; }
+  .who .name { font-weight: 600; font-size: 17px; }
+  .who .sub { font-size: 12px; color: var(--mute); }
+  .top-actions a {
+    color: var(--mute); text-decoration: none; font-size: 13px; padding: 6px;
+  }
+
+  .collab-chips {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line);
+  }
+  .collab-chips[hidden] { display: none !important; }
+  .collab-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 12px 8px 8px; border-radius: 999px;
+    border: 1px solid rgba(111,185,138,0.35);
+    background: rgba(111,185,138,0.1);
+    color: var(--ink); font-size: 13px; text-decoration: none;
+  }
+  .collab-av {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(111,185,138,0.4); color: #0c0b0a; font-weight: 700; font-size: 12px;
+  }
+
+  .thread {
+    flex: 1; overflow-y: auto; padding: 12px 12px 8px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .bubble {
+    max-width: 78%; padding: 10px 14px; border-radius: 18px;
+    font-size: 16px; line-height: 1.4; word-break: break-word;
+  }
+  .bubble.them {
+    align-self: flex-start;
+    background: var(--bubble-them); border-bottom-left-radius: 4px;
+  }
+  .bubble.them.heartbeat {
+    border: 1px solid rgba(198,166,100,0.28);
+  }
+  .bubble.them.heartbeat::before {
+    content: "Reflection";
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--mute);
+    margin-bottom: 4px;
+  }
+  .bubble.me {
+    align-self: flex-end; white-space: pre-wrap;
+    background: var(--bubble-me); border: 1px solid rgba(198,166,100,0.25);
+    border-bottom-right-radius: 4px;
+  }
+  .bubble.sys {
+    align-self: center; max-width: 90%;
+    background: transparent; color: var(--mute); font-size: 13px;
+    text-align: center; padding: 6px 10px; white-space: pre-wrap;
+  }
+  .bubble.them .md-body > *:first-child { margin-top: 0; }
+  .bubble.them .md-body > *:last-child { margin-bottom: 0; }
+  .bubble.them .md-body p { margin: 0.45em 0; }
+  .bubble.them .md-body h1,
+  .bubble.them .md-body h2,
+  .bubble.them .md-body h3,
+  .bubble.them .md-body h4 {
+    font-size: 1.05em; font-weight: 700; margin: 0.65em 0 0.3em; letter-spacing: -0.01em;
+  }
+  .bubble.them .md-body ul, .bubble.them .md-body ol {
+    margin: 0.4em 0; padding-left: 1.25em;
+  }
+  .bubble.them .md-body li { margin: 0.15em 0; }
+  .bubble.them .md-body code {
+    font-family: var(--mono);
+    font-size: 0.88em; background: rgba(255,255,255,0.06);
+    padding: 0.1em 0.35em; border-radius: 4px;
+  }
+  .bubble.them .md-body pre {
+    margin: 0.5em 0; padding: 10px 12px; overflow-x: auto;
+    background: rgba(0,0,0,0.35); border-radius: 10px; font-size: 0.86em;
+  }
+  .bubble.them .md-body pre code { background: none; padding: 0; }
+  .bubble.them .md-body a { color: var(--gold); }
+  .bubble.them .md-body blockquote {
+    margin: 0.45em 0; padding-left: 10px; border-left: 2px solid rgba(198,166,100,0.4);
+    color: var(--mute);
+  }
+  /* In-thread peer: bot shape — tap opens group (working pulse = functional signal) */
+  a.messaged-peer {
+    align-self: flex-start;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    text-decoration: none; color: var(--ink);
+    padding: 4px 6px; border-radius: 16px;
+    max-width: 96px; border: 1px solid transparent;
+  }
+  a.messaged-peer:active { opacity: 0.85; }
+  a.messaged-peer:focus-visible {
+    outline: none; border-color: rgba(111,185,138,0.5);
+  }
+  a.messaged-peer .mp-av {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 20px; color: #0c0b0a;
+    background: linear-gradient(145deg, #7ec8e3, #3a7a9a);
+    box-shadow: 0 0 0 2px rgba(111,185,138,0.35);
+  }
+  a.messaged-peer .mp-av.sov-cit {
+    background: #0a0908 !important;
+    overflow: visible;
+  }
+  a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
+  a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
+  a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer[data-state="working"] .mp-av {
+    animation: mp-work 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
+  }
+  a.messaged-peer[data-state="replied"] .mp-av {
+    box-shadow: 0 0 0 2px rgba(198,166,100,0.65);
+  }
+  @keyframes mp-work {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  a.messaged-peer .mp-name {
+    font-size: 11px; font-weight: 600; color: var(--mute);
+    text-align: center; line-height: 1.2;
+  }
+  a.messaged-peer .mp-status {
+    font-size: 10px; color: var(--mint, #6fb98a); text-align: center; line-height: 1.2;
+  }
+  a.messaged-peer[data-state="replied"] .mp-status { color: var(--gold); }
+  a.messaged-peer[data-state="gate"] .mp-av {
+    box-shadow: 0 0 0 3px rgba(198,166,100,0.8);
+    animation: mp-work 1.1s ease-in-out infinite;
+  }
+  a.messaged-peer[data-state="gate"] .mp-status { color: var(--gold); }
+  .day {
+    align-self: center; font-size: 12px; color: var(--mute); padding: 8px 0 4px;
+  }
+
+  /* Approval Gate — needs your yes (was invisible on messenger; caused silent hangs) */
+  .approval-card {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 4px 0 8px;
+    padding: 10px 12px;
+    background: #141210;
+    border: 1px solid var(--gold);
+    border-radius: 14px;
+    font-size: 14px;
+  }
+  .approval-card .ac-head {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 6px; font-weight: 600;
+  }
+  .approval-card .ac-tool { font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+  .approval-card .ac-args {
+    font-size: 12px; color: var(--mute); white-space: pre-wrap; word-break: break-word;
+    margin: 0 0 10px;
+  }
+  .approval-card .ac-actions { display: flex; gap: 8px; }
+  .approval-card .ac-actions button {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 999px;
+    border: 1px solid var(--line); cursor: pointer; background: #0c0b0a; color: var(--ink);
+  }
+  .approval-card .ac-actions button.ac-allow {
+    border-color: var(--mint); color: var(--mint);
+  }
+  .approval-card .ac-actions button.ac-deny {
+    border-color: #e07070; color: #e07070;
+  }
+  .approval-card .ac-actions button:disabled { opacity: 0.45; }
+  .approval-card.ac-done { border-color: var(--line); opacity: 0.85; }
+  .approval-card .ac-notice { margin-top: 8px; font-size: 12px; color: var(--mute); }
+
+  /* Marketing draft card — compose_post result visible in-thread (Grok-bot feel) */
+  .draft-card {
+    align-self: flex-start;
+    max-width: 88%;
+    margin: 4px 0 8px;
+    padding: 10px 12px;
+    background: #12141a;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    font-size: 14px;
+  }
+  .draft-card .dc-head {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--mint, #6fb98a); margin-bottom: 6px; font-weight: 600;
+  }
+  .draft-card .dc-caption {
+    white-space: pre-wrap; word-break: break-word; color: var(--ink);
+    margin: 0 0 8px; line-height: 1.35;
+  }
+  .draft-card .dc-meta { font-size: 12px; color: var(--mute); }
+
+  .composer {
+    position: sticky; bottom: 0; z-index: 4;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line); background: rgba(0,0,0,0.95);
+  }
+  .composer-row {
+    display: flex; gap: 8px; align-items: flex-end; width: 100%;
+  }
+  .composer-row input[type="text"] {
+    flex: 1; font: inherit; font-size: 16px; padding: 10px 14px;
+    border-radius: 20px; border: 1px solid var(--line);
+    background: #141210; color: var(--ink); outline: none;
+  }
+  .composer button[data-send] {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: var(--gold); color: #0c0b0a; font-size: 18px; font-weight: 700;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .composer button[data-send]:disabled { opacity: 0.4; }
+  .composer-attachments-row {
+    display: flex; gap: 8px; padding: 0 2px 2px; flex-wrap: wrap;
+  }
+  .composer-attachments-row[hidden] { display: none; }
+  .composer-attachment-thumb {
+    position: relative; width: 64px; height: 64px;
+    border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--line); background: #141210;
+  }
+  .composer-attachment-thumb img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .composer-attachment-thumb .remove-attachment {
+    position: absolute; top: 3px; right: 3px;
+    width: 20px; height: 20px; line-height: 16px;
+    border: 0; background: rgba(0, 0, 0, 0.75); color: white;
+    border-radius: 50%; cursor: pointer; font-size: 14px; padding: 0;
+  }
+  .composer-attach-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: transparent; color: var(--ink); opacity: 0.55;
+    font-size: 20px; cursor: pointer; flex-shrink: 0; line-height: 1;
+    padding: 0;
+  }
+  .composer-attach-btn:hover { opacity: 1; }
+  .composer-attach-btn[hidden] { display: none; }
+  .composer-mic-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: transparent; color: var(--ink); opacity: 0.55;
+    font-size: 18px; cursor: pointer; flex-shrink: 0; line-height: 1;
+    padding: 0;
+  }
+  .composer-mic-btn:hover { opacity: 1; }
+  .composer-mic-btn[hidden] { display: none; }
+  .composer-mic-btn.is-live, .composer-mic-btn.is-recording {
+    opacity: 1; color: var(--gold);
+  }
+  .voice-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.94);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .voice-overlay.visible { display: flex; }
+  .voice-orb {
+    width: min(280px, 68vw);
+    height: min(280px, 68vw);
+    position: relative;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .voice-title {
+    margin-top: 36px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.3em;
+    color: var(--gold);
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+  .voice-status {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--mute);
+    text-transform: uppercase;
+    min-height: 1.2em;
+  }
+  .voice-error {
+    position: absolute;
+    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    color: #d49696;
+    font-family: var(--mono);
+    font-size: 11px;
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .voice-error.visible { opacity: 1; }
+  .voice-hangup {
+    position: absolute;
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
+    border: 1px solid rgba(198,166,100,0.55);
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.25em;
+    padding: 14px 32px;
+    border-radius: 32px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .voice-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+  .bubble-images {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px;
+  }
+  .bubble-images img {
+    max-width: 220px; max-height: 220px; border-radius: 10px;
+    display: block; object-fit: cover;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .assistant-image {
+    display: block; margin: 8px 0;
+    max-width: 100%; max-height: 480px; border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  [data-push-banner] {
+    margin: 0; padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    background: #12100e;
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    justify-content: space-between;
+  }
+  [data-push-banner][hidden] { display: none !important; }
+  [data-push-banner][data-tone="on"] { background: rgba(111,185,138,0.08); }
+  [data-push-banner] .push-copy {
+    flex: 1; min-width: 0; font-size: 13px; line-height: 1.35; color: var(--ink);
+  }
+  [data-push-banner] .push-copy strong { color: var(--gold); font-weight: 600; }
+  [data-push-banner][data-tone="on"] .push-copy strong { color: var(--mint); }
+  [data-push-banner] .push-note { color: var(--mute); font-size: 12px; }
+  [data-push-banner] .push-allow {
+    flex-shrink: 0; font: inherit; font-size: 14px; font-weight: 600;
+    padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--gold); background: var(--gold); color: #0c0b0a;
+  }
+  [data-push-banner] .push-allow:disabled { opacity: 0.5; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <a class="back" href="/messages" aria-label="Back">‹</a>
+    <div class="avatar" data-agent-av title="Change shape">A</div>
+    <div class="who">
+      <div class="name" data-agent-name>Aetheria</div>
+      <div class="sub" data-agent-sub></div>
+    </div>
+    <div class="top-actions"></div>
+  </header>
+
+  <div data-push-banner role="region" aria-label="House alerts" data-tone="ask">
+    <div class="push-copy">
+      <strong>House alerts</strong> — Gate / needs-you.<br>
+      <span class="push-note">Home Screen app → tap Allow house alerts.</span>
+    </div>
+    <button type="button" data-push-allow class="push-allow">Allow house alerts</button>
+  </div>
+  <div class="collab-chips" data-collab-chips hidden></div>
+  <div class="thread" data-thread role="log" aria-live="polite"></div>
+
+  <form class="composer" data-composer onsubmit="return false">
+    <div class="composer-attachments-row" data-composer-attachments hidden></div>
+    <div class="composer-row">
+      <button type="button" class="composer-attach-btn" data-attach
+              title="Attach photo or PDF" aria-label="Attach photo or PDF">📎</button>
+      <button type="button" class="composer-mic-btn" data-mic
+              title="Voice" aria-label="Voice">🎤</button>
+      <input type="file" data-file-input
+             accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+             multiple hidden>
+      <input type="text" data-input placeholder="Message" aria-label="Message" autocomplete="off">
+      <button type="button" data-send aria-label="Send">↑</button>
+    </div>
+  </form>
+
+    <div class="voice-overlay" data-voice-overlay role="dialog"
+         aria-modal="true" aria-label="Voice call" aria-hidden="true">
+      <div class="voice-orb" data-voice-orb data-state="idle" data-agent=""
+           role="img" aria-label="Living presence"></div>
+      <div class="voice-title" data-voice-title data-agent="">LIVE</div>
+      <div class="voice-status" data-voice-status>connecting&hellip;</div>
+      <div class="voice-error" data-voice-error></div>
+      <button class="voice-hangup" data-voice-hangup type="button">END CALL</button>
+      <audio class="voice-audio" data-voice-audio playsinline autoplay></audio>
+    </div>
+
+<script src="/messages-push-client.js?v=20260825c" defer></script>
+<script src="/static/citizen-icons.js?v=20260901bots3"></script>
+<script src="/static/voice/presence.js?v=alive5"></script>
+<script>
+(function () {
+  // Fleet freeze: Vett/Scotty parked as Messages peers (engine room only).
+  const CONTACTS = {
+    aetheria: { name: "Aetheria", letter: "A", sub: "Runs the house" },
+    eve: { name: "Eve", letter: "E", sub: "Shows up online" },
+    kernel: { name: "Kernel", letter: "K", sub: "Builds with you" },
+    t_critic: { name: "Critic", letter: "C", sub: "Overnight review · inbox" },
+    t_scout: { name: "Scout", letter: "Sc", sub: "Overnight scan · inbox" },
+    // Deep-link labels if an old URL is opened — not listed on the home screen.
+    vett: { name: "Vett", letter: "V", sub: "Folded into Eve" },
+    scotty: { name: "Scotty", letter: "S", sub: "Folded into Kernel" },
+    grok: { name: "Grok", letter: "G", sub: "Pulled · Grok Bots on the desk" },
+  };
+  // Teammates overnight inboxes — read-only (no chat_stream agent).
+  const INBOX_ONLY = { t_critic: true, t_scout: true };
+
+  // Attachments — mirror of soveryn.platform.vision_types (static HTML).
+  // Paperclip is on every Messages seat (PDFs splice for any agent).
+  // ATTACH_CAPABLE_AGENTS gates *images* only — same set as chat.html.
+  const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
+  const MAX_ATTACHMENT_COUNT = 4;
+  const ALLOWED_IMAGE_MIMES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+  ]);
+  const ALLOWED_PDF_MIME = "application/pdf";
+  const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
+  const ATTACH_CAPABLE_AGENTS = new Set([
+    "aetheria", "vett", "scotty", "eve", "kernel",
+  ]);
+  const ATT_CACHE_PREFIX = "soveryn.msg.att.";
+
+  const params = new URLSearchParams(location.search);
+  const pathAgent = (location.pathname.split("/").pop() || "").toLowerCase();
+  const agent = (params.get("agent") || pathAgent || "aetheria").toLowerCase();
+  const contact = CONTACTS[agent] || { name: agent, letter: "?", sub: "" };
+  const inboxOnly = !!INBOX_ONLY[agent];
+
+  const state = {
+    agent, sessionId: params.get("session") || null, sending: false,
+    turnCount: 0, userTurnCount: 0, waitingPeers: false, pollTimer: null,
+    gatePollTimer: null, peerGate: {}, bootDone: false,
+    gateFailStreak: 0,
+    pendingAttachments: [],
+    attByUserIdx: {},
+    // Server owns the turn after send — keep polling if the phone sleeps.
+    deferred: false,
+    awaitingServer: false,
+    awaitBaseline: 0,
+  };
+  // iOS suspends fetch on background; we never AbortController.abort() on hide.
+  const CAN_BEACON = typeof navigator !== "undefined"
+    && typeof navigator.sendBeacon === "function";
+  void CAN_BEACON; // available if we need a tiny keepalive ping later
+
+  const $ = (s) => document.querySelector(s);
+  const thread = () => $("[data-thread]");
+  const chips = () => $("[data-collab-chips]");
+
+  document.title = contact.name + " · Messages";
+  if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+    soverynCitizenIcon.paint($("[data-agent-av]"), agent, { letter: contact.letter, label: contact.name });
+    $("[data-agent-av]").setAttribute("data-pick-shape", agent);
+  } else {
+    $("[data-agent-av]").dataset.agent = agent;
+    $("[data-agent-av]").textContent = contact.letter;
+  }
+  function setHeaderBusy(on) {
+    const el = $("[data-agent-av]");
+    if (!el) return;
+    if (window.soverynCitizenIcon && soverynCitizenIcon.paint) {
+      soverynCitizenIcon.paint(el, agent, { letter: contact.letter, label: contact.name, busy: !!on });
+    } else {
+      el.classList.toggle("is-busy", !!on);
+      if (on) el.setAttribute("data-busy", "1");
+      else el.removeAttribute("data-busy");
+    }
+  }
+
+  $("[data-agent-name]").textContent = contact.name;
+  $("[data-agent-sub]").textContent = contact.sub;
+
+  if (inboxOnly) {
+    const form = $("[data-composer]");
+    if (form) {
+      form.innerHTML =
+        '<div style="flex:1;font-size:13px;color:var(--mute);padding:8px 4px;line-height:1.4">' +
+        "Overnight inbox — findings land here.<br>" +
+        '<a href="#" data-act-aetheria style="color:var(--gold)">Ask Aetheria to act →</a>' +
+        "</div>";
+      const link = form.querySelector("[data-act-aetheria]");
+      if (link) {
+        link.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const raw = (thread()?.innerText || "").trim().slice(0, 900);
+          const who = agent === "t_scout" ? "scout" : "critic";
+          const q = encodeURIComponent(
+            "Act on the latest " + who + " overnight brief. " +
+            "Use read_overnight_brief(who=" + who + "), then house_post_send " +
+            "commissions (kernel=code, vett=verify, scotty=repair, eve=marketing). " +
+            "Thread excerpt for context:\n\n" +
+            (raw || "(no brief text visible — trust read_overnight_brief)")
+          );
+          location.href = "/messages/aetheria?q=" + q;
+        });
+      }
+    }
+  }
+
+  // Prefill from CC dispatch (?q=...) — Messages is the front door.
+  const prefill = (params.get("q") || "").trim();
+  if (!inboxOnly && prefill && $("[data-input]")) {
+    $("[data-input]").value = prefill;
+    $("[data-input]").focus();
+  }
+
+  function esc(s) {
+    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  // Lightweight markdown for assistant bubbles (Grok-bots readable on phone).
+  function renderMarkdown(md) {
+    let s = String(md || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    s = s.replace(/```[\s\S]*?```/g, (m) => {
+      const inner = m.slice(3, -3).replace(/^\w*\n/, "");
+      return "<pre><code>" + inner + "</code></pre>";
+    });
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
+    s = s.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
+    s = s.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+    s = s.replace(/^&gt;\s+(.*)$/gm, "<blockquote>$1</blockquote>");
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/\*(.+?)\*/g, "<em>$1</em>");
+    s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^[-*]\s+/, "") + "</li>").join("");
+      return "<ul>" + items + "</ul>";
+    });
+    s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, (m) => {
+      const items = m.trim().split("\n").map((l) =>
+        "<li>" + l.replace(/^\d+\.\s+/, "") + "</li>").join("");
+      return "<ol>" + items + "</ol>";
+    });
+    s = s.replace(/\n{2,}/g, "</p><p>");
+    s = "<p>" + s + "</p>";
+    s = s.replace(/<p>\s*<\/p>/g, "");
+    s = s.replace(/<p>(<(?:h[1-6]|ul|ol|pre|blockquote)[\s\S]*?<\/(?:h[1-6]|ul|ol|pre|blockquote)>)<\/p>/g, "$1");
+    s = s.replace(
+      /(\/aetheria\/img\/[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g,
+      '<img class="assistant-image" src="$1" alt="">'
+    );
+    return s;
+  }
+
+  function enhanceComfyImages(root) {
+    if (!root) return;
+    const re = /\/aetheria\/img\/[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif)/;
+    root.querySelectorAll("a[href]").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      if (!re.test(href)) return;
+      const img = document.createElement("img");
+      img.src = href;
+      img.className = "assistant-image";
+      img.alt = "";
+      a.replaceWith(img);
+    });
+  }
+
+  const COMFY_CACHE_PREFIX = "soveryn.msg.comfy.";
+  const _COMFY_URL_RE = /\/aetheria\/img\/([A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g;
+  const _COMFY_PATH_RE = /(?:~\/)?ComfyUI\/output\/([A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif))/g;
+  const _COMFY_NAME_RE = /\b((?:eve|aetheria)_[A-Za-z0-9_\-]{1,120}\.(?:png|jpg|jpeg|webp|gif))\b/gi;
+  const _COMFY_HASH_RE = /(?:^|[\s(])#(\d{1,2})\b/g;
+
+  function comfyChatUrl(filename) {
+    const name = String(filename || "").split(/[/\\]/).pop() || "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9_\-]{0,127}\.(?:png|jpg|jpeg|webp|gif)$/.test(name)) return null;
+    return "/aetheria/img/" + name;
+  }
+
+  function extractComfyUrls(text) {
+    const out = [];
+    const seen = new Set();
+    const add = (name) => {
+      const u = comfyChatUrl(name);
+      if (!u || seen.has(u)) return;
+      seen.add(u);
+      out.push(u);
+    };
+    const t = String(text || "");
+    let m;
+    _COMFY_URL_RE.lastIndex = 0;
+    while ((m = _COMFY_URL_RE.exec(t)) !== null) add(m[1]);
+    _COMFY_PATH_RE.lastIndex = 0;
+    while ((m = _COMFY_PATH_RE.exec(t)) !== null) add(m[1]);
+    _COMFY_NAME_RE.lastIndex = 0;
+    while ((m = _COMFY_NAME_RE.exec(t)) !== null) add(m[1]);
+    const stillTurn = /eve_\d{3,}|aetheria_\d{3,}|\.png\b|comfyui|generate_image|\bstills\b|honest eyes|generated (?:those|them|the (?:pic|face|still))/i.test(t);
+    if (stillTurn) {
+      _COMFY_HASH_RE.lastIndex = 0;
+      while ((m = _COMFY_HASH_RE.exec(t)) !== null) {
+        const n = parseInt(m[1], 10);
+        if (n >= 1 && n <= 20) add("eve_" + String(n).padStart(5, "0") + "_.png");
+      }
+    }
+    return out;
+  }
+
+  function attachComfyImages(el, urls) {
+    if (!el || !urls || !urls.length) return;
+    const have = new Set();
+    el.querySelectorAll("img").forEach((img) => {
+      const src = img.getAttribute("src") || "";
+      have.add(src);
+      try { have.add(new URL(src, location.origin).pathname); } catch (_) {}
+    });
+    const fresh = [];
+    urls.forEach((url) => {
+      if (!url || typeof url !== "string") return;
+      const mapped = url.startsWith("/aetheria/img/") ? url : comfyChatUrl(url);
+      if (!mapped || have.has(mapped)) return;
+      have.add(mapped);
+      fresh.push(mapped);
+    });
+    if (!fresh.length) return;
+    const md = el.querySelector(":scope > .md-body");
+    fresh.forEach((url) => {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      img.className = "assistant-image";
+      if (md) el.insertBefore(img, md);
+      else el.appendChild(img);
+    });
+  }
+
+  function persistComfyUrls(urls) {
+    if (!state.sessionId || !urls || !urls.length) return;
+    try {
+      const key = COMFY_CACHE_PREFIX + state.sessionId;
+      const prev = JSON.parse(sessionStorage.getItem(key) || "[]");
+      const merged = [];
+      const seen = new Set();
+      (Array.isArray(prev) ? prev : []).concat(urls).forEach((u) => {
+        const mapped = (typeof u === "string" && u.startsWith("/aetheria/img/")) ? u : comfyChatUrl(u);
+        if (!mapped || seen.has(mapped)) return;
+        seen.add(mapped);
+        merged.push(mapped);
+      });
+      sessionStorage.setItem(key, JSON.stringify(merged));
+    } catch (_) { /* quota */ }
+  }
+
+  function mergeStashedComfy() {
+    if (!state.sessionId) return;
+    let stashed = [];
+    try {
+      stashed = JSON.parse(sessionStorage.getItem(COMFY_CACHE_PREFIX + state.sessionId) || "[]");
+    } catch (_) { return; }
+    if (!Array.isArray(stashed) || !stashed.length) return;
+    const already = new Set();
+    const bubbles = Array.from(thread().querySelectorAll(".bubble.them"));
+    bubbles.forEach((el) => {
+      el.querySelectorAll("img").forEach((img) => {
+        const src = img.getAttribute("src") || "";
+        already.add(src);
+        try { already.add(new URL(src, location.origin).pathname); } catch (_) {}
+      });
+    });
+    const missing = stashed.filter((u) => typeof u === "string" && !already.has(u));
+    if (!missing.length) return;
+    // Re-home orphans to the bubble that actually talks about them. Never
+    // dump them onto the newest reply — a stash entry with no matching turn
+    // stays unattached rather than migrating forward every re-render.
+    const STILL_TURN_RE = /eve_\d{3,}|aetheria_\d{3,}|\.png\b|comfyui|generate_image|\bstills\b|honest eyes|generated (?:those|them|the (?:pic|face|still))/i;
+    const base = (u) => String(u).split("/").pop();
+    const stillBubbles = bubbles.filter((el) => STILL_TURN_RE.test(el.textContent || ""));
+    let heuristicIdx = 0;
+    missing.forEach((u) => {
+      const name = base(u);
+      const stem = name.replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
+      const num = (stem.match(/(\d{3,})/) || [])[1];
+      let target = null;
+      if (name) target = bubbles.find((el) => (el.textContent || "").includes(name)) || null;
+      if (!target && num) {
+        const hashRe = new RegExp("#" + parseInt(num, 10) + "\\b");
+        target = bubbles.find((el) => hashRe.test(el.textContent || "")) || null;
+      }
+      if (!target && stillBubbles.length) {
+        // No filename in the text — assign orphans to still-turn bubbles in
+        // chronological order (images were generated in stash order).
+        target = stillBubbles[Math.min(heuristicIdx, stillBubbles.length - 1)];
+        heuristicIdx += 1;
+      }
+      if (target) attachComfyImages(target, [u]);
+    });
+  }
+
+  function urlsFromGenerateImage(tr) {
+    const urls = [];
+    const seen = new Set();
+    const add = (u) => {
+      const mapped = comfyChatUrl(u) || (typeof u === "string" && u.startsWith("/aetheria/img/") ? u : null);
+      if (!mapped || seen.has(mapped)) return;
+      seen.add(mapped);
+      urls.push(mapped);
+    };
+    if (!tr || typeof tr !== "object") return urls;
+    if (Array.isArray(tr.urls)) tr.urls.forEach(add);
+    if (Array.isArray(tr.images)) tr.images.forEach(add);
+    return urls;
+  }
+
+  function appendBubble(kind, text, opts) {
+    opts = opts || {};
+    const b = document.createElement("div");
+    b.className = "bubble " + kind;
+    if (kind === "them" && opts.source === "heartbeat") b.classList.add("heartbeat");
+    const images = opts.images || [];
+    if (images.length) {
+      const imgRow = document.createElement("div");
+      imgRow.className = "bubble-images";
+      images.forEach((url) => {
+        if (!url || typeof url !== "string") return;
+        if (url.startsWith("data:application/pdf")) {
+          const label = document.createElement("span");
+          label.textContent = "PDF";
+          label.style.cssText = "display:flex;align-items:center;justify-content:center;min-width:64px;min-height:64px;font:600 11px/1 var(--mono);color:var(--mute);";
+          imgRow.appendChild(label);
+        } else {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = "";
+          imgRow.appendChild(img);
+        }
+      });
+      b.appendChild(imgRow);
+    }
+    const hideText = images.length && (!text || text === "(image)");
+    if (!hideText && text) {
+      if (kind === "them") {
+        const body = document.createElement("div");
+        body.className = "md-body";
+        body.innerHTML = renderMarkdown(text);
+        enhanceComfyImages(body);
+        b.appendChild(body);
+        attachComfyImages(b, extractComfyUrls(text));
+      } else {
+        const txt = document.createElement("div");
+        txt.textContent = text;
+        b.appendChild(txt);
+      }
+    }
+    thread().appendChild(b);
+    thread().scrollTop = thread().scrollHeight;
+    return b;
+  }
+
+  let _attSession = null;
+  function bindAttCache(sessionId) {
+    if (sessionId === _attSession) return;
+    _attSession = sessionId || null;
+    state.attByUserIdx = {};
+    if (!sessionId) return;
+    try {
+      const raw = sessionStorage.getItem(ATT_CACHE_PREFIX + sessionId);
+      if (raw) state.attByUserIdx = JSON.parse(raw) || {};
+    } catch (_) {}
+  }
+
+  function persistAttCache(sessionId) {
+    if (!sessionId) return;
+    try {
+      sessionStorage.setItem(ATT_CACHE_PREFIX + sessionId, JSON.stringify(state.attByUserIdx));
+    } catch (_) { /* quota — thumbs still live in this page */ }
+  }
+
+  function imagesForUserTurn(idx) {
+    const hit = state.attByUserIdx[String(idx)];
+    return Array.isArray(hit) ? hit : [];
+  }
+
+  function rememberTurnImages(idx, images) {
+    if (!images || !images.length) return;
+    state.attByUserIdx[String(idx)] = images;
+    persistAttCache(state.sessionId);
+  }
+
+  function renderAttachmentsRow() {
+    const row = $("[data-composer-attachments]");
+    if (!row) return;
+    if (state.pendingAttachments.length === 0) {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    row.hidden = false;
+    row.innerHTML = "";
+    state.pendingAttachments.forEach((att, idx) => {
+      const thumb = document.createElement("div");
+      thumb.className = "composer-attachment-thumb";
+      const isPdf = att.kind === "pdf" || (att.dataUrl || "").startsWith("data:application/pdf");
+      if (isPdf) {
+        const label = document.createElement("span");
+        label.textContent = "PDF";
+        label.title = att.name || "document.pdf";
+        label.style.cssText = "display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:600 10px/1 var(--mono);";
+        thumb.appendChild(label);
+      } else {
+        const img = document.createElement("img");
+        img.src = att.dataUrl;
+        img.alt = att.name || "";
+        thumb.appendChild(img);
+      }
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-attachment";
+      removeBtn.textContent = "×";
+      removeBtn.setAttribute("aria-label", "Remove " + (att.name || "attachment"));
+      removeBtn.addEventListener("click", () => {
+        state.pendingAttachments.splice(idx, 1);
+        renderAttachmentsRow();
+      });
+      thumb.appendChild(removeBtn);
+      row.appendChild(thumb);
+    });
+  }
+
+  function clearPendingAttachments() {
+    state.pendingAttachments = [];
+    renderAttachmentsRow();
+  }
+
+  function setBubbleText(el, text, asMarkdown) {
+    if (!el) return;
+    // Never el.textContent = … — that wipes generate_image <img> siblings.
+    let body = el.querySelector(":scope > .md-body");
+    if (!body) {
+      body = document.createElement("div");
+      body.className = "md-body";
+      el.appendChild(body);
+    }
+    if (asMarkdown) {
+      body.innerHTML = renderMarkdown(text);
+      enhanceComfyImages(body);
+    } else {
+      body.textContent = text;
+    }
+    attachComfyImages(el, extractComfyUrls(text));
+  }
+
+  // Keep composer above the iOS keyboard when visualViewport shrinks.
+  function bindKeyboardInset() {
+    const vv = window.visualViewport;
+    const composer = document.querySelector(".composer");
+    if (!vv || !composer) return;
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      composer.style.paddingBottom = "max(8px, calc(env(safe-area-inset-bottom) + " + inset + "px))";
+      thread().style.paddingBottom = inset ? (inset + 8) + "px" : "";
+    };
+    vv.addEventListener("resize", sync);
+    vv.addEventListener("scroll", sync);
+    sync();
+  }
+
+  function roomHref(peer, roomSessionId) {
+    return "/room?peer=" + encodeURIComponent(peer)
+      + (roomSessionId ? "&session=" + encodeURIComponent(roomSessionId) : "")
+      + (state.sessionId ? "&from=" + encodeURIComponent(state.sessionId) : "");
+  }
+
+  function appendMessagedPeer(peer, roomSessionId, peerState) {
+    const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+    let st = peerState || "messaged";
+    if (state.peerGate[peer] && st !== "replied") st = "gate";
+    const status =
+      st === "gate" ? "needs Gate" :
+      st === "working" ? "working…" :
+      st === "replied" ? "replied · tap" : "in group";
+    const a = document.createElement("a");
+    a.className = "messaged-peer";
+    a.dataset.state = st;
+    a.dataset.peer = peer;
+    a.href = roomHref(peer, roomSessionId);
+    a.title = st === "gate"
+      ? name + " is waiting on Approval Gate — Allow below"
+      : "Open group chat with " + name;
+    a.setAttribute("aria-label", "Open group chat with " + name + " (" + status + ")");
+    a.innerHTML =
+      (typeof soverynCitizenIcon === 'function'
+        ? soverynCitizenIcon(peer, { size: 36, className: 'mp-av', letter: name.charAt(0), busy: st === 'working' || st === 'gate', label: name })
+        : '<span class="mp-av" data-agent="' + esc(peer) + '">' + esc(name.charAt(0)) + '</span>') +
+      '<span class="mp-name">' + esc(name) + '</span>' +
+      '<span class="mp-status">' + esc(status) + '</span>';
+    thread().appendChild(a);
+    thread().scrollTop = thread().scrollHeight;
+    return a;
+  }
+
+  function fmtApprovalArgs(args, toolName) {
+    try {
+      let parsed = args;
+      if (typeof args === "string") {
+        try { parsed = JSON.parse(args); } catch (_) { return String(args).slice(0, 280); }
+      }
+      // compose_post: show caption + platform for phone Allow (not raw JSON)
+      if ((toolName === "compose_post" || parsed.content) && parsed && typeof parsed === "object") {
+        const plat = (parsed.platform || "post").toString().toUpperCase();
+        const cap = (parsed.content || "").toString().trim();
+        const img = parsed.image_path
+          ? "\nImage: " + String(parsed.image_path).split("/").pop()
+          : "";
+        const body = (cap.length > 500 ? cap.slice(0, 497) + "…" : cap) + img;
+        return plat + " draft — Allow sends to Signal\n\n" + body;
+      }
+      const s = JSON.stringify(parsed);
+      return s.length > 280 ? s.slice(0, 277) + "…" : s;
+    } catch (_) {
+      return String(args || "");
+    }
+  }
+
+  function renderApprovalCard(payload) {
+    const id = payload && (payload.approval_id || payload.id);
+    if (!id) return;
+    // Dedupe by DOM, not a permanent Set — renderTurns() wipes the thread and
+    // must be allowed to recreate pending Gate cards (Allow vanishing hang).
+    const existing = thread().querySelector(
+      '.approval-card[data-approval-id="' + CSS.escape(String(id)) + '"]'
+    );
+    if (existing) return;
+    const citizen = (payload.citizen || state.agent || "?").toLowerCase();
+    if (citizen && citizen !== "aetheria") state.peerGate[citizen] = true;
+
+    const card = document.createElement("div");
+    card.className = "approval-card";
+    card.dataset.approvalId = id;
+
+    const head = document.createElement("div");
+    head.className = "ac-head";
+    head.textContent = payload.tool === "compose_post"
+      ? "Allow to send draft to Signal"
+      : "Needs your yes — Approval Gate";
+    card.appendChild(head);
+
+    const tool = document.createElement("div");
+    tool.className = "ac-tool";
+    const who = (CONTACTS[citizen] || { name: citizen }).name;
+    tool.textContent = who + " · " + (payload.tool || "?");
+    card.appendChild(tool);
+
+    const argsEl = document.createElement("div");
+    argsEl.className = "ac-args";
+    argsEl.textContent = fmtApprovalArgs(payload.args, payload.tool);
+    card.appendChild(argsEl);
+
+    const actions = document.createElement("div");
+    actions.className = "ac-actions";
+    const allowBtn = document.createElement("button");
+    allowBtn.type = "button";
+    allowBtn.className = "ac-allow";
+    allowBtn.textContent = "Allow";
+    const denyBtn = document.createElement("button");
+    denyBtn.type = "button";
+    denyBtn.className = "ac-deny";
+    denyBtn.textContent = "Deny";
+    actions.appendChild(allowBtn);
+    actions.appendChild(denyBtn);
+    card.appendChild(actions);
+
+    const notice = document.createElement("div");
+    notice.className = "ac-notice";
+    notice.style.display = "none";
+    card.appendChild(notice);
+
+    const decide = async (approve) => {
+      allowBtn.disabled = true;
+      denyBtn.disabled = true;
+      try {
+        const r = await fetch(
+          "/api/citizens/" + encodeURIComponent(citizen) + "/approvals/" + encodeURIComponent(id) + "/decision",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approve: approve, decided_by: "jon" }),
+          }
+        );
+        const body = await r.json().catch(() => ({}));
+        if (r.ok) {
+          card.classList.add("ac-done");
+          notice.textContent = approve ? "Allowed — continuing…" : "Denied.";
+          notice.style.display = "";
+          if (approve) delete state.peerGate[citizen];
+          $("[data-agent-sub]").textContent = approve
+            ? who + " unblocked — working…"
+            : who + " denied · Gate";
+        } else {
+          notice.textContent = (body.error && body.error.message) || ("Failed (" + r.status + ")");
+          notice.style.display = "";
+          allowBtn.disabled = false;
+          denyBtn.disabled = false;
+        }
+      } catch (e) {
+        notice.textContent = e.message || "Network error";
+        notice.style.display = "";
+        allowBtn.disabled = false;
+        denyBtn.disabled = false;
+      }
+    };
+    allowBtn.addEventListener("click", () => decide(true));
+    denyBtn.addEventListener("click", () => decide(false));
+
+    thread().appendChild(card);
+    thread().scrollTop = thread().scrollHeight;
+    $("[data-agent-sub]").textContent = who + " needs Gate — Allow below";
+  }
+
+  async function pollApprovals() {
+    try {
+      const r = await fetch("/api/approvals/pending");
+      if (!r.ok) {
+        state.gateFailStreak = (state.gateFailStreak || 0) + 1;
+        if (state.gateFailStreak >= 3) {
+          $("[data-agent-sub]").textContent = "Gate unreachable — retrying…";
+        }
+        return;
+      }
+      state.gateFailStreak = 0;
+      const data = await r.json();
+      const items = (data && data.approvals) || [];
+      const gatePeers = {};
+      for (const a of items) {
+        const c = (a.citizen || "").toLowerCase();
+        if (c && c !== "aetheria") gatePeers[c] = true;
+        renderApprovalCard({
+          approval_id: a.id,
+          citizen: a.citizen,
+          tool: a.tool,
+          args: a.args,
+        });
+      }
+      state.peerGate = gatePeers;
+      document.querySelectorAll("a.messaged-peer[data-peer]").forEach((el) => {
+        const peer = el.dataset.peer;
+        if (!peer) return;
+        if (gatePeers[peer] && el.dataset.state !== "replied") {
+          el.dataset.state = "gate";
+          const st = el.querySelector(".mp-status");
+          if (st) st.textContent = "needs Gate";
+          el.title = (CONTACTS[peer] || { name: peer }).name + " is waiting on Approval Gate — Allow below";
+        }
+      });
+      // Back off when nothing pending and no peer Gate — keep phone quiet.
+      if (!items.length && !Object.keys(gatePeers).length && !state.waitingPeers) {
+        stopGatePoll();
+      }
+    } catch (_) {
+      state.gateFailStreak = (state.gateFailStreak || 0) + 1;
+      if (state.gateFailStreak >= 3) {
+        $("[data-agent-sub]").textContent = "Gate unreachable — retrying…";
+      }
+    }
+  }
+
+  function startGatePoll() {
+    if (state.gatePollTimer) return;
+    pollApprovals();
+    state.gatePollTimer = setInterval(pollApprovals, 1500);
+  }
+
+  function stopGatePoll() {
+    if (state.gatePollTimer) {
+      clearInterval(state.gatePollTimer);
+      state.gatePollTimer = null;
+    }
+  }
+
+  function renderTurns(turns, collabIndex) {
+    thread().innerHTML = "";
+    const active = (collabIndex || []).filter(isActiveCollab);
+    const activePeers = new Set(active.map((ev) => (ev.peer || "").toLowerCase()));
+    const byPeer = {};
+    active.forEach((ev) => {
+      if (ev.peer && ev.room_session_id) byPeer[ev.peer] = ev.room_session_id;
+    });
+    const peerState = {};
+    const closedPeers = new Set();
+    (turns || []).forEach((t) => {
+      if (t.role !== "system") return;
+      const c = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+      if (c) closedPeers.add(c[1]);
+    });
+    active.forEach((ev) => {
+      const p = (ev.peer || "").toLowerCase();
+      if (p) peerState[p] = "working";
+    });
+    (turns || []).forEach((t) => {
+      if (t.role !== "system") return;
+      const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
+      if (m && !peerState[m[1]]) {
+        peerState[m[1]] = closedPeers.has(m[1]) ? "done" : "messaged";
+      }
+      const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+      if (r) peerState[r[1]] = closedPeers.has(r[1]) ? "done" : "replied";
+      const cl = /⟦room:closed:([a-z]+)⟧/.exec(t.content || "");
+      if (cl) peerState[cl[1]] = "done";
+    });
+    const shown = new Set();
+    let waiting = false;
+    let userIdx = 0;
+    (turns || []).forEach((t) => {
+      if (t.role === "user") {
+        appendBubble("me", t.content, { images: imagesForUserTurn(userIdx) });
+        userIdx += 1;
+      }
+      else if (t.role === "assistant") {
+        const b = appendBubble("them", t.content, { source: t.source });
+        if (Array.isArray(t.images) && t.images.length) attachComfyImages(b, t.images);
+      }
+
+      else if (t.role === "system") {
+        const m = /⟦room:messaged:([a-z]+)⟧/.exec(t.content || "");
+        const r = /⟦room:replied:([a-z]+)⟧/.exec(t.content || "");
+        const peer = (m && m[1]) || (r && r[1]);
+        if (peer) {
+          // Only show peer icon while collab is active — keep 1:1 otherwise.
+          if (!shown.has(peer) && activePeers.has(peer)) {
+            shown.add(peer);
+            appendMessagedPeer(peer, byPeer[peer] || null, peerState[peer]);
+            if (peerState[peer] === "working") waiting = true;
+          }
+        } else {
+          const body = (t.content || "").replace(/⟦room:messaged:[a-z]+⟧\s*/, "").replace(/⟦room:replied:[a-z]+⟧\s*/, "");
+          if (body.trim()) appendBubble("sys", body);
+        }
+      }
+    });
+    state.turnCount = (turns || []).length;
+    state.userTurnCount = userIdx;
+    state.waitingPeers = waiting;
+    if (Object.keys(state.peerGate || {}).length) {
+      const g = Object.keys(state.peerGate)[0];
+      $("[data-agent-sub]").textContent = (CONTACTS[g] || { name: g }).name + " needs Gate — Allow below";
+      startPoll();
+      startGatePoll();
+    } else if (waiting) {
+      $("[data-agent-sub]").textContent = "peer working — tap their shape for the group";
+      startPoll();
+      startGatePoll();
+    } else if (Object.values(peerState).includes("replied")) {
+      $("[data-agent-sub]").textContent = "peer replied — tap shape to read in group";
+      stopPoll();
+    } else if (state.deferred || state.awaitingServer) {
+      const turnsArr = turns || [];
+      const last = turnsArr[turnsArr.length - 1];
+      const ack = "This thread stays yours";
+      const isAck = !!(last && last.role === "assistant" && last.content
+        && String(last.content).indexOf(ack) !== -1);
+      // History grew past pre-send baseline and ends on a real assistant reply.
+      const done = turnsArr.length > (state.awaitBaseline || 0)
+        && last && last.role === "assistant" && !isAck;
+      if (done) {
+        state.deferred = false;
+        state.awaitingServer = false;
+        $("[data-agent-sub]").textContent = contact.sub;
+        stopPoll();
+        setHeaderBusy(false);
+      } else {
+        $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      }
+    } else {
+      // iOS may kill the page mid turn. Producer still finishes server-side;
+      // re-open must resume polling when history ends on a fresh user turn.
+      const turnsArr = turns || [];
+      const last = turnsArr[turnsArr.length - 1];
+      let recovered = false;
+      if (!state.sending && last && last.role === "user" && last.timestamp) {
+        const ageMs = Date.now() - Date.parse(last.timestamp);
+        if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 15 * 60 * 1000) {
+          state.awaitingServer = true;
+          state.awaitBaseline = Math.max(0, turnsArr.length - 1);
+          $("[data-agent-sub]").textContent = "working in the background";
+          setHeaderBusy(true);
+          startPoll();
+          recovered = true;
+        }
+      }
+      if (!recovered) {
+        $("[data-agent-sub]").textContent = contact.sub;
+        stopPoll();
+      }
+    }
+    // History rebuild wiped Gate cards — re-pull pending so Allow returns.
+    if (agent === "aetheria" || agent === "eve" || Object.keys(state.peerGate || {}).length) {
+      pollApprovals();
+    }
+  }
+
+  function startPoll() {
+    if (state.pollTimer) return;
+    if (agent !== "aetheria" && !state.deferred && !state.awaitingServer) return;
+    state.pollTimer = setInterval(async () => {
+      if (!state.sessionId || state.sending) return;
+      try {
+        const h = await fetch("/sessions/" + encodeURIComponent(state.sessionId) + "/history");
+        if (!h.ok) return;
+        const hd = await h.json();
+        const turns = hd.turns || [];
+        if (turns.length !== state.turnCount) {
+          const c = await collabs();
+          renderTurns(turns, c);
+          renderChips(c);
+        }
+      } catch (_) {}
+    }, 3000);
+  }
+
+  function stopPoll() {
+    if (state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+  }
+
+  function renderChips(events) {
+    const row = chips();
+    const list = (Array.isArray(events) ? events : []).filter(isActiveCollab);
+    if (!list.length || agent !== "aetheria") {
+      row.hidden = true;
+      row.innerHTML = "";
+      return;
+    }
+    const seen = new Set();
+    const html = [];
+    for (const ev of list) {
+      const peer = (ev.peer || "").toLowerCase();
+      if (!peer || seen.has(peer)) continue;
+      seen.add(peer);
+      const name = peer.charAt(0).toUpperCase() + peer.slice(1);
+      html.push(
+        '<a class="collab-chip" href="' + roomHref(peer, ev.room_session_id) + '">' +
+          (typeof soverynCitizenIcon === 'function'
+            ? soverynCitizenIcon(peer, { size: 28, className: 'collab-av', letter: name.charAt(0), label: name })
+            : '<span class="collab-av">' + esc(name.charAt(0)) + '</span>') +
+          '<span>' + esc(name) + '</span></a>'
+      );
+    }
+    row.hidden = !html.length;
+    row.innerHTML = html.join("");
+  }
+
+  async function refreshChips() {
+    if (!state.sessionId || agent !== "aetheria") {
+      renderChips([]);
+      return;
+    }
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return;
+      const d = await r.json();
+      renderChips(d.collabs || []);
+    } catch (_) {}
+  }
+
+  async function ensureSession() {
+    if (state.sessionId) return state.sessionId;
+    const r = await fetch("/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent: state.agent }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.session_id) {
+      const msg = (d.error && d.error.message) || ("Could not start chat (" + r.status + ")");
+      throw new Error(msg);
+    }
+    state.sessionId = d.session_id;
+    bindAttCache(state.sessionId);
+    const u = new URL(location.href);
+    u.searchParams.set("session", state.sessionId);
+    history.replaceState({}, "", u);
+    return state.sessionId;
+  }
+
+  function showLoadError(detail) {
+    thread().innerHTML = "";
+    appendBubble(
+      "sys",
+      "Couldn't load this thread" + (detail ? " — " + detail : "") +
+        ". Go back and try again."
+    );
+  }
+
+  function showEmptyThread() {
+    thread().innerHTML = "";
+    if (inboxOnly) {
+      appendBubble(
+        "sys",
+        "Overnight inbox — Critic/Scout findings land here.\nNothing yet for this contact."
+      );
+    } else {
+      appendBubble("sys", "Say hello to start the thread.");
+    }
+  }
+
+  function clearSessionFromUrl() {
+    state.sessionId = null;
+    const u = new URL(location.href);
+    u.searchParams.delete("session");
+    history.replaceState({}, "", u);
+  }
+
+  async function applyHistory(sessionId) {
+    const r = await fetch("/sessions/" + encodeURIComponent(sessionId) + "/history");
+    if (!r.ok) {
+      // Dead/missing session — drop it so send can mint a fresh one.
+      if (r.status === 404) {
+        clearSessionFromUrl();
+        return null;
+      }
+      const body = await r.json().catch(() => ({}));
+      const detail = (body.error && body.error.message) || ("HTTP " + r.status);
+      showLoadError(detail);
+      return false;
+    }
+    const d = await r.json();
+    // Wrong contact in ?session=… — drop and let caller resume the right DM.
+    if (d.agent && String(d.agent).toLowerCase() !== agent) {
+      clearSessionFromUrl();
+      return null;
+    }
+    bindAttCache(sessionId);
+    const c = await collabs();
+    renderTurns(d.turns || [], c);
+    mergeStashedComfy();
+    renderChips(c);
+    if (inboxOnly && !(d.turns || []).length) {
+      appendBubble("sys", "Overnight inbox — waiting for the next Critic/Scout brief.");
+    }
+    return true;
+  }
+
+  async function collabs() {
+    if (!state.sessionId || agent !== "aetheria") return [];
+    try {
+      const r = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(state.sessionId));
+      if (!r.ok) return [];
+      const d = await r.json();
+      return d.collabs || [];
+    } catch (_) { return []; }
+  }
+
+  function isRoomSession(s) {
+    // Group rooms are aetheria sessions titled [room:aetheria+peer].
+    // Individual Aetheria chat must never auto-open those.
+    const t = ((s && s.title) || "").trim();
+    return t.startsWith("[room:");
+  }
+
+  function isResumableDmSession(s) {
+    if (!s || !s.session_id) return false;
+    const t = ((s && s.title) || "").trim();
+    // Untitled sessions (just minted) are real DMs — resume them.
+    if (!t) return true;
+    if (isRoomSession(s)) return false;
+    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
+    if (t.startsWith("automation:")) return false;
+    if (t.startsWith("verify-")) return false;
+    if (t.startsWith("[m]")) return true;
+    if (t.startsWith("[")) return false;
+    return true;
+  }
+
+  function isActiveCollab(ev) {
+    if (!ev || !ev.peer) return false;
+    const st = (ev.state || "").toLowerCase();
+    const overlay = (ev.commission_state || "").toLowerCase();
+    if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
+    const ttlMs = 45 * 60 * 1000;
+    let age = Infinity;
+    if (ev.at) {
+      try { age = Date.now() - new Date(ev.at).getTime(); } catch (_) { age = Infinity; }
+    }
+    if (overlay === "queued" || overlay === "running") return age < ttlMs;
+    if (st === "working") return age < ttlMs;
+    return false;
+  }
+
+  async function findLatestDmSession() {
+    const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=30");
+    if (!r.ok) return null;
+    const d = await r.json();
+    const list = d.sessions || [];
+    // Overnight Teammates inboxes: always resume newest session (no chat filters).
+    if (inboxOnly) return list[0] || null;
+    return list.find(isResumableDmSession) || null;
+  }
+
+  async function loadLatestOrHistory() {
+    try {
+      if (state.sessionId) {
+        // If URL pointed at a room session, bounce to /room — keep DM individual.
+        try {
+          const metaR = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=50");
+          if (metaR.ok) {
+            const meta = await metaR.json();
+            const hit = (meta.sessions || []).find((s) => s.session_id === state.sessionId);
+            if (hit && isRoomSession(hit)) {
+              const peer = (/\[room:[^=]+\+([a-z]+)\]/i.exec(hit.title || "") || [])[1] || "vett";
+              location.replace("/room?peer=" + encodeURIComponent(peer)
+                + "&session=" + encodeURIComponent(state.sessionId));
+              return;
+            }
+          }
+        } catch (_) {}
+        const ok = await applyHistory(state.sessionId);
+        if (ok === true) return;
+        if (ok === false) return; // hard error already shown
+        // ok === null → wrong agent; fall through to latest DM
+      }
+      const s = await findLatestDmSession();
+      if (s && s.session_id) {
+        state.sessionId = s.session_id;
+        const u = new URL(location.href);
+        u.searchParams.set("session", state.sessionId);
+        history.replaceState({}, "", u);
+        const ok = await applyHistory(state.sessionId);
+        if (ok === true) return;
+        if (ok === false) return;
+      }
+      showEmptyThread();
+    } catch (e) {
+      showLoadError(e.message || "network error");
+    }
+  }
+
+  async function send() {
+    if (inboxOnly) return;
+    if (!state.bootDone) return; // wait for initial history so we don't race a new session
+    const input = $("[data-input]");
+    const msg = (input.value || "").trim();
+    const canSee = ATTACH_CAPABLE_AGENTS.has(agent);
+    const pending = canSee
+      ? state.pendingAttachments.slice()
+      : state.pendingAttachments.filter(
+          (a) => a.kind === "pdf" || (a.dataUrl || "").startsWith("data:application/pdf")
+        );
+    const attachUrls = pending.map((a) => a.dataUrl);
+    if ((!msg && attachUrls.length === 0) || state.sending) return;
+    // Wire payload synthesizes "(image)" so the server's non-empty check
+    // passes; the bubble shows the pic and any real text (same as chat.html).
+    const wireMessage = msg || "(image)";
+    state.sending = true;
+    state.awaitingServer = true;
+    state.deferred = false;
+    state.awaitBaseline = state.turnCount;
+    setHeaderBusy(true);
+    $("[data-send]").disabled = true;
+    input.value = "";
+    appendBubble("me", msg, { images: attachUrls });
+    clearPendingAttachments();
+    const them = appendBubble("them", "…");
+    try {
+      await ensureSession();
+      rememberTurnImages(state.userTurnCount, attachUrls);
+      const body = {
+        agent: state.agent,
+        session_id: state.sessionId,
+        message: wireMessage,
+        source: "messages",
+      };
+      if (attachUrls.length > 0) body.attachments = attachUrls;
+      // No AbortController / signal — backgrounding must not cancel Eve.
+      // Server finishes the turn even if this fetch is killed by iOS.
+      const r = await fetch("/chat_stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        const detail = (errBody.error && errBody.error.message) || ("HTTP " + r.status);
+        them.textContent = "error · " + detail;
+        return;
+      }
+      if (!r.body) {
+        them.textContent = "error · empty response from house";
+        return;
+      }
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "", text = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop();
+        for (const part of parts) {
+          const line = part.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          let payload;
+          try {
+            payload = JSON.parse(line.slice(6));
+          } catch (_) {
+            continue;
+          }
+          if (payload.type === "token" && payload.delta) {
+            text += payload.delta;
+            // Stream plain text; render markdown once the turn finishes.
+            setBubbleText(them, text, false);
+            thread().scrollTop = thread().scrollHeight;
+          } else if (payload.type === "approval_pending") {
+            renderApprovalCard(payload);
+            startGatePoll();
+          } else if (payload.type === "tool_call") {
+            appendBubble("sys", "→ " + (payload.name || "tool") + (payload.name === "house_post_send" ? " (messaging peer…)" : "…"));
+          } else if (payload.type === "tool_result") {
+            try {
+              const tr = JSON.parse(payload.content || "{}");
+              if (payload.name === "generate_image") {
+                const genUrls = urlsFromGenerateImage(tr);
+                attachComfyImages(them, genUrls);
+                persistComfyUrls(genUrls);
+                thread().scrollTop = thread().scrollHeight;
+              }
+              if (tr && tr.commissioned && (tr.to_id || tr.target)) {
+                appendBubble("sys", "Commissioned " + (tr.to_id || tr.target) + " — tap their shape for the group");
+                startGatePoll();
+              }
+              // Eve compose_post — show the draft in this thread (messenger-first)
+              if ((payload.name === "compose_post" || tr.drafted) && tr.caption) {
+                const card = document.createElement("div");
+                card.className = "draft-card";
+                const plat = (tr.platform || "post").toString().toUpperCase();
+                const via = tr.delivered_via ? (" · via " + tr.delivered_via) : "";
+                const img = tr.image_path
+                  ? ("<div class=\"dc-meta\">Image: " + esc(String(tr.image_path).split("/").pop()) + "</div>")
+                  : "";
+                const note = tr.thread_note
+                  ? ("<div class=\"dc-meta\">" + esc(tr.thread_note) + "</div>")
+                  : (tr.error
+                    ? ("<div class=\"dc-meta\">Signal: " + esc(tr.message || tr.error) + " — draft still here</div>")
+                    : "");
+                card.innerHTML =
+                  "<div class=\"dc-head\">Draft · " + esc(plat) + via + "</div>" +
+                  "<div class=\"dc-caption\">" + esc(tr.caption) + "</div>" +
+                  img + note;
+                thread().appendChild(card);
+                thread().scrollTop = thread().scrollHeight;
+              }
+            } catch (_) {}
+          } else if (payload.type === "done") {
+            if (payload.deferred) {
+              state.deferred = true;
+            } else if (!text && payload.content) {
+              // Eve verification gate buffers tokens; Done may be the first text.
+              text = String(payload.content);
+              setBubbleText(them, text, false);
+            }
+            // tool_round_limit / tool_round_limit_hit must NEVER render as success.
+            const fr = String(payload.finish_reason || "");
+            if (fr === "tool_round_limit" || fr === "tool_round_limit_hit") {
+              const note = "⚠ stopped · tool_round_limit (not success)";
+              text = text ? (text + "\n\n" + note) : note;
+              setBubbleText(them, text, false);
+              them.classList.add("fail-limit");
+            }
+          } else if (payload.type === "error") {
+            them.textContent = "error · " + (payload.message || payload.code);
+          }
+        }
+      }
+      if (!text) them.textContent = "(no reply)";
+      else setBubbleText(them, text, true);
+      if (state.deferred) {
+        startPoll();
+      } else if (text) {
+        state.awaitingServer = false;
+        await applyHistory(state.sessionId);
+      } else if (state.awaitingServer) {
+        // Stream ended without tokens (or was cut) — poll for server-owned reply.
+        them.textContent = "working in the background…";
+        startPoll();
+      } else {
+        state.awaitingServer = false;
+        await applyHistory(state.sessionId);
+      }
+    } catch (e) {
+      // iOS kills fetch on pagehide/sleep — treat as server-owned turn.
+      const msg = String((e && e.message) || e || "");
+      const soft = /abort|AbortError|network|Failed to fetch|Load failed|The network connection was lost|cancelled|canceled/i.test(msg)
+        || (e && e.name === "AbortError");
+      if (soft || state.awaitingServer) {
+        them.textContent = "working in the background — reopen anytime";
+        state.awaitingServer = true;
+        setHeaderBusy(true);
+        $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      } else {
+        them.textContent = "error · " + msg;
+        state.awaitingServer = false;
+      }
+    } finally {
+      state.sending = false;
+      if (!state.awaitingServer && !state.deferred) setHeaderBusy(false);
+      $("[data-send]").disabled = false;
+      if (input && document.visibilityState === "visible") input.focus();
+    }
+  }
+
+  // Never cancel in-flight /chat_stream when the phone sleeps or apps switch.
+  document.addEventListener("pagehide", () => {
+    /* intentional no-op: do not abort fetch; server owns the turn */
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (!(state.deferred || state.awaitingServer) || !state.sessionId) return;
+    applyHistory(state.sessionId).catch(() => {});
+  });
+
+  const _sendBtn = $("[data-send]");
+  const _inp = $("[data-input]");
+  const _attachBtn = $("[data-attach]");
+  const _fileInput = $("[data-file-input]");
+  if (_sendBtn && !inboxOnly) _sendBtn.disabled = true;
+  if (_sendBtn) _sendBtn.addEventListener("click", send);
+  if (_inp) {
+    _inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); send(); }
+    });
+  }
+  // Paperclip on every chat seat (Aetheria / Eve / Kernel / Grok / deep-links).
+  // Overnight inboxes replace the composer, so they never see it.
+  if (_attachBtn && _fileInput && !inboxOnly) {
+    _attachBtn.addEventListener("click", () => _fileInput.click());
+    _fileInput.addEventListener("change", async (evt) => {
+      const files = Array.from(evt.target.files || []);
+      for (const file of files) {
+        if (state.pendingAttachments.length >= MAX_ATTACHMENT_COUNT) {
+          alert("Max " + MAX_ATTACHMENT_COUNT + " attachments per message");
+          break;
+        }
+        if (!ALLOWED_ATTACH_MIMES.has(file.type)) {
+          alert("Not a supported attachment: " + file.name + " (" + (file.type || "unknown") + "). Images or PDF.");
+          continue;
+        }
+        const kind = file.type === ALLOWED_PDF_MIME ? "pdf" : "image";
+        if (kind === "image" && !ATTACH_CAPABLE_AGENTS.has(agent)) {
+          alert(contact.name + " can take PDFs, not pictures.");
+          continue;
+        }
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          alert(file.name + " exceeds 16MB");
+          continue;
+        }
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => reject(new Error("read failed"));
+            r.readAsDataURL(file);
+          });
+          state.pendingAttachments.push({ name: file.name, dataUrl, kind });
+        } catch (e) {
+          alert("Failed to read " + file.name + ": " + e.message);
+        }
+      }
+      renderAttachmentsRow();
+      _fileInput.value = "";
+    });
+  }
+
+  // Clear unread dot on Messages list — this contact is open.
+  try {
+    const SEEN_KEY = "soveryn_messages_seen_v1";
+    const seen = JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {};
+    seen[agent] = new Date().toISOString();
+    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+  } catch (_) {}
+
+  // ─── Voice / mic (Parakeet STT + F5/Kokoro duplex) ──
+  // Agents listed in /voice/agents (Aetheria, Eve, Kernel) start the same
+  // WebRTC call as /chat Menu → Voice. Everyone else: hold-to-stop
+  // dictation via POST /voice/transcribe → Parakeet :8087.
+  const elVoiceOverlay = () => $("[data-voice-overlay]");
+  const elVoiceOrb     = () => $("[data-voice-orb]");
+  const elVoiceTitle   = () => $("[data-voice-title]");
+  const elVoiceStatus  = () => $("[data-voice-status]");
+  const elVoiceError   = () => $("[data-voice-error]");
+  const elVoiceHangup  = () => $("[data-voice-hangup]");
+  const elVoiceAudio   = () => $("[data-voice-audio]");
+  const elMicBtn       = () => $("[data-mic]");
+
+  let _voiceAgentsCache = null;
+  async function fetchVoiceAgents() {
+    if (_voiceAgentsCache !== null) return _voiceAgentsCache;
+    try {
+      const r = await fetch("/voice/agents");
+      if (!r.ok) { _voiceAgentsCache = []; return _voiceAgentsCache; }
+      const data = await r.json();
+      _voiceAgentsCache = data.agents || [];
+    } catch (e) {
+      _voiceAgentsCache = [];
+    }
+    return _voiceAgentsCache;
+  }
+
+  const VOICE_STATE = {
+    IDLE: "idle", CONNECTING: "connecting", LISTENING: "listening",
+    HEARING: "hearing", THINKING: "thinking", SPEAKING: "speaking",
+    INTERRUPTED: "interrupted",
+  };
+  const VOICE_LABEL = {
+    idle: "Ready", connecting: "Connecting…", listening: "Listening…",
+    hearing: "Hearing you…", thinking: "Thinking…", speaking: "Speaking…",
+    interrupted: "You first…",
+  };
+  const VOICE_ENTER = 0.055;
+  const VOICE_LEAVE = 0.028;
+  const VOICE_SILENCE_MS = 1400;
+  const VOICE_MIN_DWELL_MS = 280;
+  const VOICE_THINK_FALLBACK_MS = 8000;
+  const VOICE_EMA_ALPHA = 0.22;
+  const voice = {
+    pc: null, micStream: null, audioCtx: null,
+    outAnalyser: null, inAnalyser: null,
+    state: VOICE_STATE.IDLE, raf: null,
+    lastSpokenAt: 0, stateChangedAt: 0,
+    outEma: 0, inEma: 0, userActive: false, botActive: false,
+    presence: null, sessionAtStart: null,
+  };
+  const dictate = { rec: null, stream: null, chunks: [] };
+
+  function voiceEnsurePresence() {
+    const orb = elVoiceOrb();
+    if (!orb || typeof LivingPresence === "undefined") return null;
+    if (!voice.presence) {
+      voice.presence = LivingPresence.mount(orb, { agent: agent || "aetheria" });
+    } else {
+      voice.presence.setAgent(agent || "aetheria");
+      voice.presence.start();
+    }
+    return voice.presence;
+  }
+  function voicePausePresence() {
+    if (voice.presence) {
+      try { voice.presence.stop(); } catch (e) {}
+      voice.presence.setState("idle");
+    }
+  }
+  function voiceSetState(s, force) {
+    if (!force && s === voice.state) return;
+    const now = performance.now();
+    if (!force && voice.state !== VOICE_STATE.IDLE && voice.state !== VOICE_STATE.CONNECTING) {
+      const elapsed = now - voice.stateChangedAt;
+      const sticky = (
+        (voice.state === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+        (voice.state === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+        (voice.state === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING)
+      );
+      if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+    }
+    voice.state = s;
+    voice.stateChangedAt = now;
+    const orb = elVoiceOrb();
+    const st = elVoiceStatus();
+    if (orb) orb.dataset.state = s;
+    if (st) st.textContent = VOICE_LABEL[s] || s;
+    if (voice.presence) voice.presence.setState(s);
+  }
+  function voiceShowError(msg) {
+    const e = elVoiceError();
+    if (!e) return;
+    e.textContent = msg;
+    e.classList.add("visible");
+    setTimeout(() => e.classList.remove("visible"), 5000);
+  }
+  function voiceAmp(an) {
+    const data = new Uint8Array(an.frequencyBinCount);
+    an.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / data.length);
+  }
+  function voiceGate(ema, wasActive) {
+    if (wasActive) return ema > VOICE_LEAVE;
+    return ema > VOICE_ENTER;
+  }
+  function voiceTick() {
+    if (!voice.outAnalyser) return;
+    const orb = elVoiceOrb();
+    if (!orb) return;
+    const outRaw = voiceAmp(voice.outAnalyser);
+    const innRaw = voice.inAnalyser ? voiceAmp(voice.inAnalyser) : 0;
+    voice.outEma = voice.outEma + VOICE_EMA_ALPHA * (outRaw - voice.outEma);
+    voice.inEma  = voice.inEma  + VOICE_EMA_ALPHA * (innRaw - voice.inEma);
+    const now = performance.now();
+    const userSpeaking = voiceGate(voice.outEma, voice.userActive);
+    const botSpeaking  = voiceGate(voice.inEma, voice.botActive);
+    voice.userActive = userSpeaking;
+    voice.botActive = botSpeaking;
+    if (voice.presence) voice.presence.setLevels({ out: voice.outEma, inn: voice.inEma });
+    if (botSpeaking && userSpeaking && voice.state === VOICE_STATE.SPEAKING) {
+      voiceSetState(VOICE_STATE.INTERRUPTED, true);
+      setTimeout(() => { if (voice.pc) voiceSetState(VOICE_STATE.HEARING, true); }, 220);
+      voice.lastSpokenAt = now;
+    } else if (botSpeaking) {
+      voiceSetState(VOICE_STATE.SPEAKING);
+    } else if (userSpeaking) {
+      voiceSetState(VOICE_STATE.HEARING);
+      voice.lastSpokenAt = now;
+    } else {
+      if (voice.state === VOICE_STATE.HEARING && now - voice.lastSpokenAt > VOICE_SILENCE_MS) {
+        voiceSetState(VOICE_STATE.THINKING);
+      } else if (voice.state === VOICE_STATE.SPEAKING) {
+        voiceSetState(VOICE_STATE.LISTENING);
+      } else if (voice.state === VOICE_STATE.THINKING && now - voice.lastSpokenAt > VOICE_THINK_FALLBACK_MS) {
+        voiceSetState(VOICE_STATE.LISTENING);
+      }
+    }
+    voice.raf = requestAnimationFrame(voiceTick);
+  }
+  function waitForIceGathering(pc, timeoutMs) {
+    if (pc.iceGatheringState === "complete") return Promise.resolve();
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        pc.removeEventListener("icegatheringstatechange", onChange);
+        resolve();
+      };
+      const onChange = () => { if (pc.iceGatheringState === "complete") finish(); };
+      pc.addEventListener("icegatheringstatechange", onChange);
+      setTimeout(finish, timeoutMs || 600);
+    });
+  }
+  function openVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    const title = elVoiceTitle();
+    const orb = elVoiceOrb();
+    if (title) {
+      title.dataset.agent = agent;
+      title.textContent = (contact.name || agent) + " — LIVE";
+    }
+    if (orb) orb.dataset.agent = agent;
+    ov.classList.add("visible");
+    ov.setAttribute("aria-hidden", "false");
+    const pr = voiceEnsurePresence();
+    if (pr) pr.setState("connecting");
+  }
+  function closeVoiceOverlay() {
+    const ov = elVoiceOverlay();
+    if (!ov) return;
+    ov.classList.remove("visible");
+    ov.setAttribute("aria-hidden", "true");
+    voicePausePresence();
+    const orb = elVoiceOrb();
+    if (orb) { orb.dataset.state = "idle"; orb.style.transform = ""; }
+    const mic = elMicBtn();
+    if (mic) mic.classList.remove("is-live");
+  }
+  async function startVoiceCall() {
+    try {
+      await ensureSession();
+    } catch (e) {
+      voiceShowError("session error: " + e.message);
+      return;
+    }
+    voice.sessionAtStart = state.sessionId;
+    voice.outEma = 0; voice.inEma = 0;
+    voice.userActive = false; voice.botActive = false;
+    const mic = elMicBtn();
+    if (mic) mic.classList.add("is-live");
+    openVoiceOverlay();
+    voiceSetState(VOICE_STATE.CONNECTING, true);
+    const status = elVoiceStatus();
+    if (status) status.textContent = "Microphone…";
+    try {
+      voice.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true, noiseSuppression: true,
+          autoGainControl: true, channelCount: 1,
+        },
+        video: false,
+      });
+    } catch (e) {
+      voiceShowError("microphone access denied");
+      await endVoiceCall({ reloadHistory: false });
+      return;
+    }
+    if (status) status.textContent = "Connecting…";
+    voice.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (voice.audioCtx.state === "suspended") {
+      try { await voice.audioCtx.resume(); } catch (e) {}
+    }
+    const outSrc = voice.audioCtx.createMediaStreamSource(voice.micStream);
+    voice.outAnalyser = voice.audioCtx.createAnalyser();
+    voice.outAnalyser.fftSize = 512;
+    voice.outAnalyser.smoothingTimeConstant = 0.65;
+    outSrc.connect(voice.outAnalyser);
+    voice.pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    const audioTransceiver = voice.pc.addTransceiver("audio", { direction: "sendrecv" });
+    const micTrack = voice.micStream.getAudioTracks()[0];
+    if (micTrack) await audioTransceiver.sender.replaceTrack(micTrack);
+    voice.pc.addTransceiver("video", { direction: "sendrecv" });
+    voice.pc.ontrack = (ev) => {
+      if (ev.track.kind !== "audio") return;
+      const stream = new MediaStream([ev.track]);
+      const audioEl = elVoiceAudio();
+      if (audioEl) {
+        audioEl.srcObject = stream;
+        audioEl.play().catch(() => {});
+      }
+      if (voice.audioCtx) {
+        voice.inAnalyser = voice.audioCtx.createAnalyser();
+        voice.inAnalyser.fftSize = 512;
+        voice.inAnalyser.smoothingTimeConstant = 0.65;
+        voice.audioCtx.createMediaStreamSource(stream).connect(voice.inAnalyser);
+      }
+    };
+    try {
+      const offer = await voice.pc.createOffer();
+      await voice.pc.setLocalDescription(offer);
+      if (status) status.textContent = "Negotiating…";
+      await waitForIceGathering(voice.pc, 600);
+      const local = voice.pc.localDescription || offer;
+      const resp = await fetch("/voice/session/" + voice.sessionAtStart + "/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: local.sdp, type: local.type, agent: state.agent }),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error("signaling failed (" + resp.status + "): " + txt);
+      }
+      const answer = await resp.json();
+      await voice.pc.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
+      voiceSetState(VOICE_STATE.LISTENING, true);
+      voiceTick();
+    } catch (e) {
+      console.error("voice start failed:", e);
+      voiceShowError(e.message || "voice connection failed");
+      await endVoiceCall({ reloadHistory: false });
+    }
+  }
+  async function endVoiceCall(opts) {
+    opts = opts || {};
+    const reloadHistory = opts.reloadHistory !== false;
+    if (voice.raf) { cancelAnimationFrame(voice.raf); voice.raf = null; }
+    if (voice.pc) { try { voice.pc.close(); } catch (e) {} voice.pc = null; }
+    if (voice.micStream) {
+      for (const t of voice.micStream.getTracks()) t.stop();
+      voice.micStream = null;
+    }
+    const audioEl = elVoiceAudio();
+    if (audioEl) { try { audioEl.srcObject = null; } catch (e) {} }
+    if (voice.audioCtx) { try { await voice.audioCtx.close(); } catch (e) {} voice.audioCtx = null; }
+    voice.outAnalyser = null; voice.inAnalyser = null;
+    voice.outEma = 0; voice.inEma = 0;
+    voice.userActive = false; voice.botActive = false;
+    voice.state = VOICE_STATE.IDLE;
+    closeVoiceOverlay();
+    if (reloadHistory && voice.sessionAtStart && voice.sessionAtStart === state.sessionId) {
+      try { await applyHistory(state.sessionId); } catch (e) {}
+    }
+    voice.sessionAtStart = null;
+  }
+
+  function pickRecorderMime() {
+    const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+    for (let i = 0; i < types.length; i++) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+    }
+    return "";
+  }
+  async function toggleDictation() {
+    const mic = elMicBtn();
+    if (dictate.rec && dictate.rec.state === "recording") {
+      try { dictate.rec.stop(); } catch (e) {}
+      return;
+    }
+    try {
+      dictate.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+        video: false,
+      });
+    } catch (e) {
+      alert("Microphone access denied");
+      return;
+    }
+    const mime = pickRecorderMime();
+    dictate.chunks = [];
+    dictate.rec = mime ? new MediaRecorder(dictate.stream, { mimeType: mime }) : new MediaRecorder(dictate.stream);
+    dictate.rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) dictate.chunks.push(ev.data); };
+    dictate.rec.onstop = async () => {
+      if (dictate.stream) {
+        for (const t of dictate.stream.getTracks()) t.stop();
+        dictate.stream = null;
+      }
+      if (mic) mic.classList.remove("is-recording");
+      const blob = new Blob(dictate.chunks, { type: dictate.rec.mimeType || "application/octet-stream" });
+      dictate.rec = null;
+      if (!blob.size) return;
+      try {
+        const r = await fetch("/voice/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": blob.type || "application/octet-stream" },
+          body: blob,
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alert((d.error || ("STT HTTP " + r.status)));
+          return;
+        }
+        const said = (d.text || "").trim();
+        if (!said) { alert("Heard nothing — try again"); return; }
+        const inp = $("[data-input]");
+        if (inp) {
+          inp.value = inp.value ? (inp.value.replace(/\s+$/, "") + " " + said) : said;
+          inp.focus();
+        }
+      } catch (e) {
+        alert("STT failed: " + (e.message || e));
+      }
+    };
+    if (mic) mic.classList.add("is-recording");
+    dictate.rec.start();
+  }
+
+  (function bindMic() {
+    const mic = elMicBtn();
+    if (!mic || inboxOnly) {
+      if (mic) mic.hidden = true;
+      return;
+    }
+    mic.dataset.mode = "dictate";
+    mic.title = "Speak to type";
+    const orbEl = elVoiceOrb();
+    const titleEl = elVoiceTitle();
+    if (orbEl) orbEl.dataset.agent = agent || "aetheria";
+    if (titleEl) titleEl.dataset.agent = agent || "aetheria";
+    fetchVoiceAgents().then((agents) => {
+      if (agents.indexOf(agent) >= 0) {
+        mic.dataset.mode = "call";
+        mic.title = "Voice call";
+      }
+    });
+    mic.addEventListener("click", () => {
+      if (mic.dataset.mode === "call") startVoiceCall();
+      else toggleDictation();
+    });
+    const hang = elVoiceHangup();
+    if (hang) hang.addEventListener("click", () => { endVoiceCall(); });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && voice.pc) {
+        e.preventDefault();
+        endVoiceCall();
+      }
+    });
+  })();
+
+  bindKeyboardInset();
+  loadLatestOrHistory()
+    .then(() => {
+      state.bootDone = true;
+      if (_sendBtn && !inboxOnly) _sendBtn.disabled = false;
+      if (state.waitingPeers) startPoll();
+      // Eve compose_post is Gate-approved; Aetheria too for other egress.
+      if (agent === "aetheria" || agent === "eve") startGatePoll();
+    })
+    .catch((e) => {
+      state.bootDone = true;
+      if (_sendBtn && !inboxOnly) _sendBtn.disabled = false;
+      showLoadError(e.message || "network error");
+    });
+  if (_inp) _inp.focus();
+})();
+</script>
+</body>
+</html>

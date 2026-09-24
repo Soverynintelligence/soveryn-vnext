@@ -118,6 +118,16 @@ def build_deliberate_share_tool(
                  envelope.triggered_by, envelope.why, envelope.stance,
                  envelope.created_at),
             )
+        # House Web Push (Messages PWA) — Signal remains a separate Aetheria rail.
+        try:
+            from soveryn.platform.webpush.notify import notify_share
+
+            notify_share(
+                agent=owner_agent,
+                preview=(args.get("content") or args.get("context_hint") or "")[:140],
+            )
+        except Exception:
+            pass
         return {"ok": True, "intent_id": intent_id, "mark_node_id": mark_node_id}
 
     return ToolSpec(

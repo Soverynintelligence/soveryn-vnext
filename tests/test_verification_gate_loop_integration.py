@@ -3,9 +3,9 @@
 Uses a scripted fake chat + a fake system_probe tool, no network, no shell.
 
 Covered:
-  - A Vett hardware-question turn with NO tools → gate holds the confab, forces
+  - A Eve hardware-question turn with NO tools → gate holds the confab, forces
     a system_probe round → grounded answer; the confab never reaches the user.
-  - A non-Vett turn is unaffected (identical to the pre-gate path).
+  - A non-Eve turn is unaffected (identical to the pre-gate path).
   - Budget exhaustion → the honest floor.
   - Fail-open: a detector that raises never crashes the turn.
   - Streaming path: the confab is buffered and discarded on a hold.
@@ -52,8 +52,8 @@ def _tool_call(call_id, name, args_obj):
     }
 
 
-def _probe_registry(owner="vett"):
-    registry = ToolRegistry(active_agents=("vett", "aetheria"), audit_hook=None)
+def _probe_registry(owner="eve"):
+    registry = ToolRegistry(active_agents=("eve", "aetheria"), audit_hook=None)
     registry.register(ToolSpec(
         name="system_probe",
         owner=owner,
@@ -69,8 +69,8 @@ def _probe_registry(owner="vett"):
     return registry
 
 
-def test_vett_confab_is_held_and_forced_to_verify(conv_store):
-    """The whole point: Vett drafts a confident hardware confab with zero tools;
+def test_eve_confab_is_held_and_forced_to_verify(conv_store):
+    """The whole point: Eve drafts a confident hardware confab with zero tools;
     the gate holds it, injects the corrective, she calls system_probe, then
     answers from the probe. The confab never becomes the saved/returned answer."""
     fake = _ScriptedChat([
@@ -85,35 +85,42 @@ def test_vett_confab_is_held_and_forced_to_verify(conv_store):
         # Round 3: grounded answer from the probe.
         ChatResponse(content=GROUNDED, finish_reason="stop", tool_calls=None, usage={}, raw={}),
     ])
-    gate = VerificationGate()  # Vett-only, budget 2
-    sid = conv_store.new_session("vett")
+    gate = VerificationGate()  # Eve-only, budget 2
+    sid = conv_store.new_session("eve")
     loop = AgentLoop(
-        "vett", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
+        "eve", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
         verification_gate=gate, soul_text="",
     )
     response = loop.process_message(sid, "will this RoCE cluster work on my rig?")
 
     assert response.content == GROUNDED
     assert response.content != CONFAB
-    # A corrective system note was injected before round 2.
+    # A corrective system note was injected before round 2, and tool_choice
+    # was forced so the model cannot keep narrating without a tool call.
     round2_msgs = fake.calls[1].messages
     assert any(
-        m.role == "system" and "verifying" in (m.content or "").lower()
+        m.role == "system"
+        and (
+            "tool" in (m.content or "").lower()
+            or "verify" in (m.content or "").lower()
+            or "NOW" in (m.content or "")
+        )
         for m in round2_msgs
     ), "corrective note should be injected"
+    assert fake.calls[1].tool_choice == "required"
     # The confab was never persisted as an assistant turn.
     history = conv_store.load_history(sid)
     assert all(CONFAB not in (t.content or "") for t in history)
     assert any(GROUNDED in (t.content or "") for t in history)
 
 
-def test_non_vett_turn_is_unaffected(conv_store):
-    """Aetheria drafts the same confab; the gate is owner-scoped to Vett, so
+def test_non_owner_turn_is_unaffected(conv_store):
+    """Aetheria drafts the same confab; the gate is owner-scoped to Eve, so
     the answer is emitted verbatim — no hold, no extra chat round."""
     fake = _ScriptedChat([
         ChatResponse(content=CONFAB, finish_reason="stop", tool_calls=None, usage={}, raw={}),
     ])
-    gate = VerificationGate()  # default owner set = {vett}
+    gate = VerificationGate()  # default owner set = {eve}
     sid = conv_store.new_session("aetheria")
     loop = AgentLoop(
         "aetheria", conv_store, chat_fn=fake, tool_registry=_probe_registry("aetheria"),
@@ -125,7 +132,7 @@ def test_non_vett_turn_is_unaffected(conv_store):
 
 
 def test_budget_exhaustion_yields_honest_floor(conv_store):
-    """If Vett keeps confabulating through the whole budget, the gate downgrades
+    """If Eve keeps confabulating through the whole budget, the gate downgrades
     to the honest floor rather than emitting the guess."""
     # budget=2 → two holds, then floor. Provide 3 confab responses.
     fake = _ScriptedChat([
@@ -134,9 +141,9 @@ def test_budget_exhaustion_yields_honest_floor(conv_store):
         ChatResponse(content=CONFAB, finish_reason="stop", tool_calls=None, usage={}, raw={}),
     ])
     gate = VerificationGate(forced_verify_budget=2)
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("eve")
     loop = AgentLoop(
-        "vett", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
+        "eve", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
         verification_gate=gate, soul_text="",
     )
     response = loop.process_message(sid, "specs?")
@@ -156,15 +163,53 @@ def test_gate_fails_open_on_detector_exception(conv_store):
         ChatResponse(content=CONFAB, finish_reason="stop", tool_calls=None, usage={}, raw={}),
     ])
     gate = VerificationGate(detector=Exploding())
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("eve")
     loop = AgentLoop(
-        "vett", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
+        "eve", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
         verification_gate=gate, soul_text="",
     )
     response = loop.process_message(sid, "specs?")
     # Fail-open: emitted normally despite the detector blowing up.
     assert response.content == CONFAB
     assert len(fake.calls) == 1
+
+
+def test_intent_without_tool_forces_required_tool_choice(conv_store):
+    """'Let me pull the current info' with no tool_calls → hold + tool_choice=required."""
+    theater = "Let me pull the current info on that and I'll get back to you."
+    fake = _ScriptedChat([
+        ChatResponse(content=theater, finish_reason="stop", tool_calls=None, usage={}, raw={}),
+        ChatResponse(
+            content="", finish_reason="tool_calls",
+            tool_calls=(_tool_call("c1", "web_search", {"query": "current info"}),),
+            usage={}, raw={},
+        ),
+        ChatResponse(content=GROUNDED, finish_reason="stop", tool_calls=None, usage={}, raw={}),
+    ])
+    # web_search must be registered so VERIFY_TOOLS can count it
+    registry = ToolRegistry(active_agents=("eve",), audit_hook=None)
+    registry.register(ToolSpec(
+        name="web_search",
+        owner="eve",
+        schema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        handler=lambda args: {"results": []},
+        description="search",
+    ))
+    gate = VerificationGate()
+    sid = conv_store.new_session("eve")
+    loop = AgentLoop(
+        "eve", conv_store, chat_fn=fake, tool_registry=registry,
+        verification_gate=gate, soul_text="",
+    )
+    response = loop.process_message(sid, "what's the latest on that?")
+    assert response.content == GROUNDED
+    assert fake.calls[1].tool_choice == "required"
+    assert theater not in (response.content or "")
 
 
 def test_verified_turn_is_not_held(conv_store):
@@ -179,9 +224,9 @@ def test_verified_turn_is_not_held(conv_store):
         ChatResponse(content=CONFAB, finish_reason="stop", tool_calls=None, usage={}, raw={}),
     ])
     gate = VerificationGate()
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("eve")
     loop = AgentLoop(
-        "vett", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
+        "eve", conv_store, chat_fn=fake, tool_registry=_probe_registry(),
         verification_gate=gate, soul_text="",
     )
     response = loop.process_message(sid, "specs?")
@@ -234,9 +279,9 @@ def test_streaming_confab_is_buffered_and_never_emitted_on_hold(conv_store):
         _content_round(GROUNDED),                                 # emitted
     ])
     gate = VerificationGate()
-    sid = conv_store.new_session("vett")
+    sid = conv_store.new_session("eve")
     loop = AgentLoop(
-        "vett", conv_store, stream_fn=stream, tool_registry=_probe_registry(),
+        "eve", conv_store, stream_fn=stream, tool_registry=_probe_registry(),
         verification_gate=gate, soul_text="",
     )
     events = list(loop.process_message_stream(sid, "will it work on my rig?"))
@@ -247,8 +292,8 @@ def test_streaming_confab_is_buffered_and_never_emitted_on_hold(conv_store):
     assert done.content == GROUNDED
 
 
-def test_streaming_non_vett_streams_live(conv_store):
-    """Non-Vett streaming is unchanged: tokens stream live, confab included."""
+def test_streaming_non_owner_streams_live(conv_store):
+    """Non-Eve streaming is unchanged: tokens stream live, confab included."""
     stream = _ScriptedStream([_content_round(CONFAB)])
     gate = VerificationGate()
     sid = conv_store.new_session("aetheria")

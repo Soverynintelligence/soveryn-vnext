@@ -1,0 +1,15 @@
+[Unit]
+Description=Cloudflare tunnel for PondWright public hosts (run on tower when Spark offline)
+After=network-online.target pondwright-ssh-forwards.service
+Wants=network-online.target pondwright-ssh-forwards.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate \
+  --config /home/jon-deoliveira/.cloudflared-pondwright/config.yml \
+  run 85970537-f4aa-40cf-b616-c5f185e2ae81
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

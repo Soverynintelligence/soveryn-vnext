@@ -90,11 +90,12 @@ def build_write_library_node_tool(
                 "content": {
                     "type": "string",
                     "description": (
-                        "The verified fact / reference material to persist. Library "
-                        "entries are permanent reference material visible to every "
+                        "The verified fact / reference material to persist (≤800 chars). "
+                        "Library entries are permanent reference material visible to every "
                         "agent — use this for things you've verified and would want "
                         "your future self (and the rest of the fleet) to be able to "
-                        "look up. NOT for unverified leads (those go to Signal board)."
+                        "look up. NOT for unverified leads (those go to Signal board). "
+                        "Oversized content is refused; rewrite shorter."
                     ),
                 },
                 "tags": {

@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JUMPGATE · TRAVEL</title>
+<style>
+  :root {
+    --blue: #3d8bff;
+    --ice: #7fc4ff;
+    --white: #f4f8ff;
+    --violet: #8a5cff;
+    --hud: 0 0 8px rgba(61,139,255,.45);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, system-ui, monospace;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #space { position: fixed; inset: 0; display: block; }
+  body.mode-systems { cursor: crosshair; }
+  body.mode-tunnel { cursor: crosshair; }
+  body.mode-transit { cursor: wait; }
+
+  .bar { position: fixed; left: 0; right: 0; height: 6vh; background: #000; z-index: 6; pointer-events: none; }
+  .bar.top { top: 0; }
+  .bar.bottom { bottom: 0; }
+  #vignette {
+    position: fixed; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse 72% 62% at 50% 50%, transparent 46%, rgba(0,0,0,.62) 100%);
+  }
+  .hud {
+    position: fixed; z-index: 7; color: var(--ice); text-shadow: var(--hud);
+    font-size: 11px; letter-spacing: .08em; line-height: 1.75;
+    pointer-events: none; white-space: pre;
+  }
+  .hud b { color: var(--white); font-weight: 600; }
+  .hud .dim { color: rgba(127,196,255,.55); }
+  #hud-tl { top: calc(6vh + 14px); left: 18px; }
+  #hud-tr { top: calc(6vh + 14px); right: 18px; text-align: right; }
+  #hud-bl { bottom: calc(6vh + 14px); left: 18px; }
+  #hud-br { bottom: calc(6vh + 14px); right: 18px; text-align: right; }
+
+  #title {
+    position: fixed; top: calc(6vh + 16px); left: 50%; transform: translateX(-50%);
+    z-index: 7; font-weight: 100; font-size: clamp(16px, 2.6vw, 26px);
+    letter-spacing: .5em; text-indent: .5em; text-transform: uppercase;
+    color: var(--white); text-shadow: 0 0 14px rgba(61,139,255,.5);
+    pointer-events: none; white-space: nowrap;
+  }
+  #prompt {
+    position: fixed; top: calc(6vh + 58px); left: 50%; transform: translateX(-50%);
+    z-index: 7; font-size: 10px; letter-spacing: .34em; text-transform: uppercase;
+    color: rgba(127,196,255,.66); text-shadow: var(--hud);
+    transition: opacity .8s ease; pointer-events: none; text-align: center;
+  }
+  #prompt.gone { opacity: 0; }
+
+  #readout {
+    position: fixed; bottom: calc(6vh + 24px); left: 50%; transform: translateX(-50%);
+    z-index: 7; text-align: center; pointer-events: none; width: min(520px, 80vw);
+  }
+  #num {
+    font-weight: 100; font-size: clamp(40px, 6.6vw, 68px); line-height: 1;
+    color: var(--white); letter-spacing: .04em;
+    text-shadow: 0 0 18px rgba(61,139,255,.55);
+  }
+  #num .c { font-size: .32em; color: var(--ice); letter-spacing: .2em; }
+  #bar {
+    margin: 12px auto 8px; width: 100%; height: 3px;
+    background: rgba(61,139,255,.16); border-radius: 2px; overflow: hidden;
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 2px;
+    background: linear-gradient(90deg, #3d8bff 0%, #7fc4ff 62%, #8a5cff 88%, #f4f8ff 100%);
+    box-shadow: 0 0 10px rgba(61,139,255,.7);
+    transition: width .12s linear;
+  }
+  #stage { font-size: 10px; letter-spacing: .42em; text-transform: uppercase; color: var(--ice); text-shadow: var(--hud); }
+
+  #targettag {
+    position: fixed; z-index: 7; left: 50%; bottom: calc(6vh + 150px);
+    transform: translateX(-50%); font-size: 11px; letter-spacing: .22em;
+    text-transform: uppercase; color: #fff; text-shadow: 0 0 12px rgba(138,92,255,.7);
+    pointer-events: none; opacity: 0; transition: opacity .25s ease; text-align: center;
+  }
+  #targettag.on { opacity: 1; }
+
+  #back {
+    position: fixed; z-index: 8; top: calc(6vh + 14px); left: 50%;
+    transform: translateX(-50%) translateY(46px);
+    font: inherit; font-size: 10px; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--ice); background: rgba(4,8,16,.8); border: 1px solid rgba(127,196,255,.3);
+    padding: 7px 14px; cursor: pointer; opacity: 0; pointer-events: none;
+    transition: opacity .5s ease;
+  }
+  #back.on { opacity: 1; pointer-events: auto; }
+  #back:hover { color: #fff; border-color: var(--ice); }
+
+  @media (max-width: 640px) {
+    .hud { font-size: 9px; line-height: 1.6; }
+    #hud-br, #hud-bl { display: none; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="space"></canvas>
+  <div id="vignette"></div>
+  <div class="bar top"></div>
+  <div class="bar bottom"></div>
+
+  <div id="title">Jumpgate</div>
+  <div id="prompt">click a star to jump &middot; hold burn to cross the threshold</div>
+
+  <div class="hud" id="hud-tl"></div>
+  <div class="hud" id="hud-tr"></div>
+  <div class="hud" id="hud-bl"></div>
+  <div class="hud" id="hud-br"></div>
+
+  <div id="targettag"></div>
+  <button id="back">return to earth</button>
+
+  <div id="readout">
+    <div id="num">0.00<span class="c"> c</span></div>
+    <div id="bar"><div id="fill"></div></div>
+    <div id="stage">docked &middot; earth orbit</div>
+  </div>
+<script>
+window.addEventListener('error',function(e){document.title='ERR: '+e.message+' @'+(e.lineno||0);});
+
+
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("space");
+  const ctx = canvas.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let W = 0, H = 0, CX = 0, CY = 0, dpr = 1;
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    CX = W / 2; CY = H / 2;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    buildGalaxies();
+  }
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const TAU = Math.PI * 2;
+
+  // ── destinations ────────────────────────────────────
+  // Every system is a galaxy. Earth is home port; the rest are jump targets.
+  const GALAXIES = [
+    { name: "SOL",        sub: "EARTH · HOME PORT",   tint: [120, 190, 255], home: true },
+    { name: "ANDROMEDA",  sub: "M31 · SPIRAL",         tint: [255, 190, 140] },
+    { name: "TRIANGULUM", sub: "M33 · OUTER ARM",      tint: [170, 220, 255] },
+    { name: "SOMBRERO",   sub: "M104 · LENTICULAR",    tint: [255, 225, 150] },
+    { name: "WHEELOM",    sub: "M51 · INTERACTING",    tint: [200, 160, 255] },
+    { name: "PINWHEEL",   sub: "M101 · FLOCCULENT",    tint: [150, 255, 230] },
+    { name: "CENTAURUS A",sub: "NGC5128 · RADIO",      tint: [255, 150, 150] },
+    { name: "CIGAR",      sub: "M82 · STARBURST",      tint: [255, 200, 220] },
+    { name: "BLACKEYE",   sub: "M64 · DUST RING",      tint: [160, 190, 255] },
+    { name: "SOUTH PIN",  sub: "NGC2997 · POLAR",      tint: [255, 170, 110] },
+    { name: "VERDANT",    sub: "UGC11046 · EXOTIC",    tint: [150, 255, 170] },
+    { name: "HOLLOW CROWN", sub: "ARP233 · DISTORTED", tint: [210, 150, 255] },
+  ].map((g, i) => {
+    const a = (i / 12) * TAU + rand(-0.22, 0.22);
+    const r = rand(0.20, 0.44);
+    return Object.assign({}, g, { id: i, ang: a, rad: r, sx: 0, sy: 0, sr: 0, ly: g.home ? 0 : 420 + i * 237, tw: rand(0, TAU) });
+  });
+  const HOME = GALAXIES[0];
+
+  // Field stars behind the map (cosmetic depth, never clickable).
+  let field = [];
+  function seedField() {
+    const n = Math.round(Math.min(500, (W * H) / 4200));
+    field = [];
+    for (let i = 0; i < n; i++) {
+      field.push({ x: Math.random(), y: Math.random(), b: rand(0.12, 0.7), w: rand(0.5, 1.4), tw: rand(0, TAU) });
+    }
+  }
+
+  // ── state machine ───────────────────────────────────
+  let mode = "SYSTEMS";
+  let speed = 0, target = 0, held = false;
+  let destination = null;
+  let transitT = 0, arriveT = 0, earthSpin = 0, clock = 0;
+  let flash = 0, distanceLy = 0, fps = 60;
+  let hover = null;
+
+  const els = {
+    tl: document.getElementById("hud-tl"),
+    tr: document.getElementById("hud-tr"),
+    bl: document.getElementById("hud-bl"),
+    br: document.getElementById("hud-br"),
+    num: document.getElementById("num"),
+    fill: document.getElementById("fill"),
+    stage: document.getElementById("stage"),
+    title: document.getElementById("title"),
+    prompt: document.getElementById("prompt"),
+    tag: document.getElementById("targettag"),
+    back: document.getElementById("back"),
+  };
+
+  function setMode(m) {
+    mode = m;
+    document.body.className = "mode-" + m.toLowerCase();
+    els.back.classList.toggle("on", m !== "SYSTEMS");
+    if (m === "SYSTEMS") {
+      destination = null; hover = null;
+      els.tag.classList.remove("on");
+      els.title.textContent = "Jumpgate";
+      els.prompt.classList.remove("gone");
+      els.prompt.textContent = "click a star to jump · hold burn to cross the threshold";
+      speed = 0; target = 0; held = false;
+    }
+  }
+
+  function buildGalaxies() {
+    const base = Math.min(W, H);
+    for (const g of GALAXIES) {
+      g.sx = CX + Math.cos(g.ang) * g.rad * base;
+      g.sy = CY + Math.sin(g.ang) * g.rad * base * 0.86;
+      g.sr = Math.max(6, base * 0.016);
+    }
+    seedField();
+  }
+
+  // ── tunnel field (TRANSIT / ARRIVAL) ──────────────────────
+  const FOCAL = 420, Z_NEAR = 30, Z_FAR = 3000, RING_COUNT = 14, RING_R = 620;
+  const COL = { blue: [61,139,255], ice: [127,196,255], white: [244,248,255], violet: [138,92,255] };
+  let stars = [], rings = [];
+  function starBudget() { return Math.max(350, Math.min(1400, Math.round((W * H) / 1500))); }
+  function resetStar(s, far) {
+    const spread = Math.max(W, H) * 1.1;
+    s.x = rand(-spread, spread); s.y = rand(-spread, spread);
+    s.z = far ? rand(Z_NEAR, Z_FAR) : Z_FAR;
+    const r = Math.random();
+    const t = destination ? destination.tint : COL.ice;
+    s.c = r < 0.14 ? COL.violet : r < 0.5 ? t : COL.white;
+  }
+  function seedStars() {
+    const n = starBudget(); stars = [];
+    for (let i = 0; i < n; i++) { const s = {}; resetStar(s, true); stars.push(s); }
+  }
+  function seedRings() {
+    rings = [];
+    const sp = (Z_FAR - Z_NEAR) / RING_COUNT;
+    for (let i = 0; i < RING_COUNT; i++) rings.push({ z: Z_NEAR + sp * (i + 0.5), a: rand(0, Math.PI) });
+  }
+  const proj = (x, y, z) => { const k = FOCAL / z; return [CX + x * k, CY + y * k, k]; };
+
+  // Earth (home port)
+  function drawEarth(cx, cy, r, spin) {
+    // ocean + land + terminator
+    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.1, cx, cy, r);
+    g.addColorStop(0, "#7fd0ff");
+    g.addColorStop(0.55, "#1f6fd0");
+    g.addColorStop(1, "#04121f");
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip();
+    ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    // continents: drifting bands keyed to spin
+    ctx.globalCompositeOperation = "lighter";
+    for (let b = 0; b < 5; b++) {
+      const ph = spin * 0.35 + b * 1.7;
+      const bx = cx + Math.cos(ph) * r * 0.55;
+      const by = cy + Math.sin(ph * 0.7 + b) * r * 0.55;
+      const br = r * (0.16 + 0.1 * ((b % 3) + 1) / 3);
+      const cg = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      cg.addColorStop(0, "rgba(90,200,130,0.75)");
+      cg.addColorStop(1, "rgba(30,110,80,0)");
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.ellipse(bx, by, br, br * 0.62, ph, 0, TAU); ctx.fill();
+    }
+    // clouds
+    for (let c = 0; c < 4; c++) {
+      const ph = -spin * 0.5 + c * 2.3;
+      const bx = cx + Math.cos(ph) * r * 0.6, by = cy + Math.sin(ph * 1.3) * r * 0.5;
+      const cg = ctx.createRadialGradient(bx, by, 0, bx, by, r * 0.24);
+      cg.addColorStop(0, "rgba(255,255,255,0.5)");
+      cg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(bx, by, r * 0.24, 0, TAU); ctx.fill();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    // night side shadow (terminator)
+    const sg = ctx.createLinearGradient(cx + r * 0.1, cy - r, cx + r * 1.2, cy + r);
+    sg.addColorStop(0, "rgba(0,0,0,0)");
+    sg.addColorStop(0.5, "rgba(0,0,0,0.55)");
+    sg.addColorStop(1, "rgba(0,0,0,0.92)");
+    ctx.fillStyle = sg; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.restore();
+    // atmosphere rim
+    ctx.strokeStyle = "rgba(127,196,255,0.55)"; ctx.lineWidth = Math.max(1, r * 0.03);
+    ctx.shadowColor = "rgba(127,196,255,0.9)"; ctx.shadowBlur = r * 0.5;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // ── galaxy node (a star you can click) ───────────────────
+  function drawGalaxy(g, hot, isHome) {
+    const [r, gc, b] = g.tint;
+    const t = clock + g.tw;
+    const pulse = 0.85 + 0.15 * Math.sin(t * 2.2);
+    const rad = g.sr * (hot ? 1.55 : 1) * pulse;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    // spiral dust halo
+    const halo = ctx.createRadialGradient(g.sx, g.sy, 0, g.sx, g.sy, rad * 4.2);
+    halo.addColorStop(0, `rgba(${r},${gc},${b},${hot ? 0.55 : 0.3})`);
+    halo.addColorStop(0.35, `rgba(${r},${gc},${b},0.1)`);
+    halo.addColorStop(1, `rgba(${r},${gc},${b},0)`);
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.ellipse(g.sx, g.sy, rad * 4.2, rad * 3.1, g.ang, 0, TAU); ctx.fill();
+    // arms
+    ctx.lineCap = "round";
+    for (let arm = 0; arm < 2; arm++) {
+      ctx.beginPath();
+      for (let k = 0; k <= 26; k++) {
+        const u = k / 26;
+        const th = g.ang + arm * Math.PI + u * 3.4 + t * 0.12;
+        const rr = rad * 0.25 + u * rad * 2.6;
+        const px = g.sx + Math.cos(th) * rr;
+        const py = g.sy + Math.sin(th) * rr * 0.6;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = `rgba(${r},${gc},${b},${(hot ? 0.7 : 0.4) * (1)})`;
+      ctx.lineWidth = Math.max(0.7, rad * 0.16);
+      ctx.stroke();
+    }
+    // nucleus
+    ctx.fillStyle = `rgba(255,255,255,${hot ? 1 : 0.85})`;
+    ctx.shadowColor = `rgba(${r},${gc},${b},0.95)`; ctx.shadowBlur = rad * (hot ? 3.2 : 1.8);
+    ctx.beginPath(); ctx.arc(g.sx, g.sy, rad * 0.42, 0, TAU); ctx.fill();
+    ctx.shadowBlur = 0;
+    // diffraction spikes
+    ctx.strokeStyle = `rgba(${r},${gc},${b},${hot ? 0.65 : 0.35})`;
+    ctx.lineWidth = 1;
+    const sp = rad * (hot ? 4 : 2.8);
+    ctx.beginPath();
+    ctx.moveTo(g.sx - sp, g.sy); ctx.lineTo(g.sx + sp, g.sy);
+    ctx.moveTo(g.sx, g.sy - sp); ctx.lineTo(g.sx, g.sy + sp);
+    ctx.stroke();
+    ctx.restore();
+
+    // label
+    ctx.font = `${hot ? 600 : 400} ${Math.max(9, Math.round(rad * 0.62))}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = hot ? "#fff" : "rgba(191,233,255,0.78)";
+    ctx.shadowColor = "rgba(61,139,255,0.6)"; ctx.shadowBlur = hot ? 10 : 4;
+    ctx.fillText(g.name, g.sx, g.sy + rad * 3.4);
+    if (hot || isHome) {
+      ctx.font = `400 ${Math.max(8, Math.round(rad * 0.5))}px ui-monospace, Menlo, Consolas, monospace`;
+      ctx.fillStyle = "rgba(127,196,255,0.7)";
+      ctx.fillText(g.sub, g.sx, g.sy + rad * 4.6);
+    }
+    ctx.shadowBlur = 0;
+
+    if (hot) {
+      ctx.strokeStyle = "rgba(244,248,255,0.9)";
+      ctx.lineWidth = 1;
+      const brk = rad * 2.2;
+      for (const [sx, sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]) {
+        ctx.beginPath();
+        ctx.moveTo(g.sx + sx * brk, g.sy + sy * brk * 0.7 - sx * 0);
+        ctx.lineTo(g.sx + sx * brk - sx * brk * 0.4, g.sy + sy * brk * 0.7);
+        ctx.moveTo(g.sx + sx * brk, g.sy + sy * brk * 0.7);
+        ctx.lineTo(g.sx + sx * brk, g.sy + sy * brk * 0.7 - sy * brk * 0.4);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // ── starfield behind the map ────────────────────────
+  function drawField(dt) {
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of field) {
+      s.tw += dt * 1.6;
+      const a = s.b * (0.65 + 0.35 * Math.sin(s.tw));
+      ctx.fillStyle = `rgba(220,238,255,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.w, 0, TAU); ctx.fill();
+    }
+  }
+
+  // ── tunnel ──────────────────────────────────────────
+  function drawTunnel(dt, spd) {
+    const fadeA = 0.5 - 0.38 * spd;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = `rgba(0,0,0,${fadeA.toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+    const shake = reduce || spd < 0.75 ? 0 : 6 * Math.pow((spd - 0.75) / 0.25, 2);
+    ctx.save();
+    if (shake > 0.05) ctx.translate((Math.random() - 0.5) * 2 * shake, (Math.random() - 0.5) * 2 * shake);
+    ctx.globalCompositeOperation = "lighter";
+
+    const tint = destination ? destination.tint : COL.ice;
+    const glowR = 40 + 340 * spd * spd;
+    const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, glowR);
+    g.addColorStop(0, `rgba(244,248,255,${(0.10 + 0.75 * spd * spd).toFixed(3)})`);
+    g.addColorStop(0.35, `rgba(${tint[0]},${tint[1]},${tint[2]},${(0.06 + 0.38 * spd * spd).toFixed(3)})`);
+    g.addColorStop(1, "rgba(61,139,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(CX - glowR, CY - glowR, glowR * 2, glowR * 2);
+
+    const zShift = (40 + 2960 * spd * spd) * dt;
+    const spin = (0.12 + 1.4 * spd * spd) * dt;
+    ctx.lineCap = "round";
+    for (let i = 0; i < rings.length; i++) {
+      const ring = rings[i];
+      ring.z -= zShift; ring.a += spin;
+      if (ring.z < Z_NEAR + 10) ring.z += (Z_FAR - Z_NEAR);
+      const depth = ring.z / Z_FAR;
+      const verts = [];
+      for (let v = 0; v < 8; v++) {
+        const ang = ring.a + (v / 8) * TAU;
+        verts.push(proj(Math.cos(ang) * RING_R, Math.sin(ang) * RING_R, ring.z));
+      }
+      const alpha = 0.5 * (1 - depth) + 0.06;
+      ctx.strokeStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${alpha.toFixed(3)})`;
+      ctx.lineWidth = Math.max(0.6, 2.2 * (1 - depth));
+      ctx.shadowColor = `rgba(${tint[0]},${tint[1]},${tint[2]},0.8)`;
+      ctx.shadowBlur = 10 * (1 - depth);
+      ctx.beginPath();
+      for (let v = 0; v <= 8; v++) { const p = verts[v % 8]; if (v === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]); }
+      ctx.stroke();
+      if (i % 2 === 0 && i + 1 < rings.length) {
+        const nxt = rings[i + 1];
+        ctx.strokeStyle = `rgba(138,92,255,${(alpha * 0.65).toFixed(3)})`;
+        ctx.lineWidth = 1; ctx.shadowColor = "rgba(138,92,255,0.7)"; ctx.shadowBlur = 6 * (1 - depth);
+        ctx.beginPath();
+        for (let v = 0; v < 8; v += 2) {
+          const angA = ring.a + (v / 8) * TAU, angB = nxt.a + (v / 8) * TAU;
+          const p1 = proj(Math.cos(angA) * RING_R, Math.sin(angA) * RING_R, ring.z);
+          const p2 = proj(Math.cos(angB) * RING_R, Math.sin(angB) * RING_R, nxt.z);
+          ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]);
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur = 0;
+
+    const zSpeed = 40 + 2960 * spd * spd;
+    const tail = 20 + 980 * spd * spd;
+    const chroma = spd > 0.75 ? (spd - 0.75) / 0.25 : 0;
+    for (const s of stars) {
+      s.z -= zSpeed * dt;
+      if (s.z <= Z_NEAR) { resetStar(s, false); continue; }
+      const [x1, y1] = proj(s.x, s.y, s.z);
+      if (x1 < -80 || x1 > W + 80 || y1 < -80 || y1 > H + 80) { resetStar(s, false); continue; }
+      const [x0, y0] = proj(s.x, s.y, s.z + tail);
+      const depth = 1 - s.z / Z_FAR;
+      const a = 0.25 + 0.75 * depth;
+      const [r, gc, b] = s.c;
+      const streak = (ox, tint2) => {
+        ctx.strokeStyle = tint2 ? tint2(a) : `rgba(${r},${gc},${b},${a.toFixed(3)})`;
+        ctx.lineWidth = 0.8 + 1.8 * depth;
+        ctx.beginPath(); ctx.moveTo(x0 + ox, y0); ctx.lineTo(x1 + ox, y1); ctx.stroke();
+      };
+      streak(0, null);
+      if (chroma > 0) {
+        const sep = 6 * chroma * depth;
+        streak(-sep, (al) => `rgba(255,64,64,${(al * 0.55).toFixed(3)})`);
+        streak(sep, (al) => `rgba(64,140,255,${(al * 0.55).toFixed(3)})`);
+      }
+    }
+    ctx.restore();
+
+    if (flash > 0.004) {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = `rgba(244,248,255,${flash.toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+      flash *= Math.exp(-6 * dt);
+    }
+  }
+
+  // ── jump / arrival ────────────────────────────────────
+  function jumpTo(g) {
+    if (!g || g.home) return;
+    destination = g;
+    hover = null;
+    setMode("TRANSIT");
+    speed = 0; target = 1; held = true;
+    transitT = 0; distanceLy = 0;
+    seedStars(); seedRings();
+    els.title.textContent = "transit · " + g.name;
+    els.tag.textContent = "target " + g.name + " · " + g.sub;
+    els.tag.classList.add("on");
+  }
+  function arrive() {
+    held = false; target = 0;
+    setMode("ARRIVAL");
+    arriveT = 0; flash = Math.max(flash, 0.6);
+    els.title.textContent = destination.name;
+  }
+  function returnHome() {
+    destination = null; hover = null;
+    setMode("SYSTEMS");
+  }
+
+  function hitTest(mx, my) {
+    let best = null, bd = Infinity;
+    for (const g of GALAXIES) {
+      if (g.home) continue;
+      const dx = (mx - g.sx) / (g.sr * 3.2);
+      const dy = (my - g.sy) / (g.sr * 2.6);
+      const d = dx * dx + dy * dy;
+      if (d < 1 && d < bd) { bd = d; best = g; }
+    }
+    return best;
+  }
+
+  // ── input ────────────────────────────────────────────
+  let px = 0, py = 0, downAt = null;
+  canvas.addEventListener("pointermove", (e) => {
+    px = e.clientX; py = e.clientY;
+    if (mode === "SYSTEMS") hover = hitTest(px, py);
+  });
+  canvas.addEventListener("pointerdown", (e) => {
+    px = e.clientX; py = e.clientY; downAt = { x: px, y: py, t: performance.now(), mode, moved: false };
+    if (mode === "SYSTEMS") {
+      const g = hitTest(px, py);
+      if (g) { jumpTo(g); downAt = null; e.preventDefault(); return; }
+    }
+    held = true; target = 1;
+    e.preventDefault();
+  });
+  addEventListener("pointerup", (e) => {
+    if (downAt && downAt.mode === "SYSTEMS" && !downAt.moved && downAt.t) {
+      // tap that was not on a node: nothing special, just release throttle
+    }
+    held = false; target = 0; downAt = null;
+  });
+  addEventListener("pointermove", (e) => {
+    if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 14) downAt.moved = true;
+  });
+  addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !e.repeat) { e.preventDefault(); held = true; target = 1; }
+    if (e.code === "Escape" || e.key === "b" || e.key === "Backspace") { e.preventDefault(); returnHome(); }
+  });
+  addEventListener("keyup", (e) => { if (e.code === "Space") { held = false; target = 0; } });
+  els.back.addEventListener("click", (e) => { e.stopPropagation(); returnHome(); });
+  els.back.addEventListener("pointerdown", (e) => e.stopPropagation());
+  addEventListener("resize", resize);
+
+  // ── HUD ──────────────────────────────────────────────
+  function fmtTime(s) {
+    const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+  function stageOf(sp) {
+    if (mode === "SYSTEMS") return destination ? "orbit " + destination.name : "docked · earth orbit";
+    if (mode === "ARRIVAL") return "arrival · settling";
+    if (sp >= 0.93) return "threshold";
+    if (sp >= 0.75) return "hyperspace";
+    if (sp >= 0.25) return "warp entry";
+    return "sublight";
+  }
+  function driveState(sp) {
+    if (mode === "SYSTEMS") return "IDLE";
+    if (mode === "ARRIVAL") return "ARRIVE";
+    if (sp >= 0.97) return "MAX";
+    if (held && target > sp) return "BURN";
+    return "COAST";
+  }
+  function drawHud(sp) {
+    const homeName = "EARTH";
+    els.tl.innerHTML =
+      `<span class="dim">ORIGIN</span>  <b>${homeName}</b>\n` +
+      `<span class="dim">GATE</span>    <b>K-7 \u00b7 SOVERYN RELAY</b>\n` +
+      `<span class="dim">MODE</span>    <b>${mode}</b>`;
+    els.tr.innerHTML =
+      `<span class="dim">DRIVE</span>   <b>${driveState(sp)}</b>\n` +
+      `<span class="dim">FRAME</span>   <b>${fps.toFixed(0)}</b> fps\n` +
+      `<span class="dim">NODES</span>   <b>${GALAXIES.length - 1}</b> jumpable`;
+    els.bl.innerHTML =
+      `<span class="dim">ORIGIN</span>  <b>${(destination ? "SOL" : homeName)}</b> → <b>${destination ? destination.name : "--"}</b>\n` +
+      `<span class="dim">DIST</span>    <b>${(destination ? destination.ly : 0).toFixed(0)}</b> ly\n` +
+      `<span class="dim">CLOCK</span>   <b>${fmtTime(clock)}</b>`;
+    els.br.innerHTML =
+      `<span class="dim">HOVER</span>   <b>${hover ? hover.name : "none"}</b>\n` +
+      `<span class="dim">HOLD</span>    <b>${held ? "burn" : "idle"}</b>`;
+    const c = sp * 9.99;
+    els.num.innerHTML = `${c.toFixed(2)}<span class="c"> c</span>`;
+    els.fill.style.width = (sp * 100).toFixed(1) + "%";
+    els.stage.textContent = stageOf(sp);
+  }
+
+  // ── scene pass ────────────────────────────────────────
+  function drawSystems(dt) {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    drawField(dt);
+    // home planet: Earth, dead centre
+    const base = Math.min(W, H);
+    const r = base * 0.085;
+    // faint link lines from Earth to each jumpable node
+    ctx.globalCompositeOperation = "source-over";
+    ctx.setLineDash([2, 7]);
+    for (const g of GALAXIES) {
+      if (g.home) continue;
+      const hot = hover && hover.id === g.id;
+      ctx.strokeStyle = hot ? "rgba(244,248,255,0.5)" : "rgba(127,196,255,0.12)";
+      ctx.lineWidth = hot ? 1.2 : 1;
+      ctx.beginPath(); ctx.moveTo(CX, CY); ctx.lineTo(g.sx, g.sy); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalCompositeOperation = "lighter";
+    drawEarth(CX, CY, r, earthSpin);
+    // home label
+    ctx.font = `400 ${Math.max(9, Math.round(base * 0.012))}px ui-monospace, Menlo, Consolas, monospace`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(244,248,255,0.9)";
+    ctx.fillText("EARTH", CX, CY + r * 1.7);
+    ctx.fillStyle = "rgba(127,196,255,0.6)";
+    ctx.fillText("SOL · HOME PORT", CX, CY + r * 1.7 + base * 0.018);
+    for (const g of GALAXIES) {
+      if (g.home) continue;
+      drawGalaxy(g, hover && hover.id === g.id, false);
+    }
+  }
+
+  // ── loop ────────────────────────────────────────────────
+  let last = performance.now();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    let dt = (now - last) / 1000; last = now;
+    if (dt > 0.1) dt = 0.1;
+    if (dt <= 0) return;
+    fps += (1 / dt - fps) * 0.06;
+    clock += dt; earthSpin += dt * (reduce ? 0.12 : 0.5);
+
+    let sp = speed;
+    if (mode === "TRANSIT") {
+      const k = target > speed ? 1.8 : 0.9;
+      speed += (target - speed) * (1 - Math.exp(-k * dt));
+      if (speed < 0.0005) speed = 0;
+      transitT += dt;
+      distanceLy += speed * speed * dt * 420;
+      const need = destination ? destination.ly : 2e6;
+      if (distanceLy >= need) { distanceLy = need; arrive(); }
+      sp = speed;
+      drawTunnel(dt, sp);
+    } else if (mode === "ARRIVAL") {
+      const k = target > speed ? 1.8 : 0.9;
+      speed += (target - speed) * (1 - Math.exp(-k * dt));
+      arriveT += dt;
+      sp = speed;
+      drawTunnel(dt, sp);
+      // destination resolves in the middle of the screen as tunnel decays
+      const settle = Math.min(1, arriveT / 1.8);
+      const g = destination;
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = `rgba(0,0,0,${(0.5 - 0.38 * sp).toFixed(3)})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = "lighter";
+      drawField(dt);
+      // Earth recedes to a corner while the new galaxy swells at centre
+      const base = Math.min(W, H);
+      const er = base * 0.085 * (1 - settle) * 0.8;
+      if (er > 1.5) {
+        const ex = CX + (W * 0.42 - CX) * settle;
+        const ey = CY + (H * 0.86 - CY) * settle;
+        drawEarth(ex, ey, er, earthSpin);
+        if (settle < 0.6) {
+          ctx.font = `400 ${Math.max(8, Math.round(base * 0.011))}px ui-monospace, Menlo, Consolas, monospace`;
+          ctx.textAlign = "center";
+          ctx.fillStyle = `rgba(127,196,255,${(0.6 * (1 - settle / 0.6)).toFixed(3)})`;
+          ctx.fillText("EARTH · DEPARTED", ex, ey + er * 1.9);
+        }
+      }
+      const gg = { ...g, sx: CX, sy: CY, sr: Math.max(10, base * 0.05 * settle), tw: g.tw };
+      drawGalaxy(gg, settle > 0.35, false);
+      if (settle > 0.55) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.font = `400 ${Math.max(9, Math.round(base * 0.012))}px ui-monospace, Menlo, Consolas, monospace`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = "rgba(244,248,255,0.8)";
+        ctx.fillText("HOLD BURN TO LEAP AGAIN", CX, H * 0.5 + base * 0.14);
+      }
+      // long-press burn in arrival = leap straight on to another sky
+      if (held) target = 1;
+      if (flash > 0.004) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = `rgba(244,248,255,${flash.toFixed(3)})`;
+        ctx.fillRect(0, 0, W, H);
+        flash *= Math.exp(-6 * dt);
+      }
+    } else {
+      drawSystems(dt);
+    }
+    drawHud(sp);
+    if (window.__JG_HOOK__) window.__JG_HOOK__();
+  }
+
+  resize();
+  seedStars(); seedRings();
+if (window.__JG_TEST__) {
+    window.__JG_HOOK__ = () => {
+      if (!window.JG) window.JG = {};
+      window.JG.jumpTo = jumpTo;
+      window.JG.returnHome = returnHome;
+      window.JG.GALAXIES = GALAXIES;
+      window.JG.mode = () => mode;
+      window.JG.dest = () => destination;
+    };
+  }
+  requestAnimationFrame((t) => { last = t; requestAnimationFrame(frame); });
+})();
+
+</script>
+</body>
+</html>

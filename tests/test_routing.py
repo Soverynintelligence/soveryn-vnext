@@ -14,16 +14,11 @@ def test_aetheria_routes_to_aetheria_primary():
     assert server.model_alias == "aetheria"
 
 
-def test_vett_routes_to_shared_server():
-    server = route_for_agent("vett")
-    assert server.name == "vett_scotty_shared"
-    assert server.model_alias == "laguna"  # Spark; see runtime.py
-
-
-def test_scotty_routes_to_shared_server():
-    server = route_for_agent("scotty")
-    assert server.name == "vett_scotty_shared"
-    assert server.model_alias == "laguna"  # Spark; see runtime.py
+def test_folded_vett_and_scotty_have_no_chat_route():
+    with pytest.raises(RoutingError, match="No route"):
+        route_for_agent("vett")
+    with pytest.raises(RoutingError, match="No route"):
+        route_for_agent("scotty")
 
 
 def test_name_is_lowercased_and_stripped():

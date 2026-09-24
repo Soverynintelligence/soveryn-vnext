@@ -58,6 +58,8 @@ class MedicDecision:
 
 TARGETS: dict[str, MedicTarget] = {
     "vnext":      MedicTarget("vnext", "soveryn-vnext.service", 300.0, escalation_priority=True),
+    # embeddings: helper Quadro soveryn-embeddings.service (:8096). Spark
+    # soveryn-embed stays disabled — GLM owns that UMA.
     "embeddings": MedicTarget("embeddings", "soveryn-embeddings.service", 300.0, escalation_priority=False),
     "heartbeat":  MedicTarget("heartbeat", "soveryn-heartbeat.service", 600.0, escalation_priority=False),
     "dream":      MedicTarget("dream", "soveryn-dream.service", 300.0, escalation_priority=False),
@@ -94,6 +96,23 @@ def decide(
     """
     decisions: list[MedicDecision] = []
     for key in sorted(unhealthy_keys):
+        # Keys probed but not in TARGETS — no local unit. Page once, then latch
+        # (same as TARGET skip_escalated). Without the latch, a parked remote
+        # (Spark embed) Signal-spammed every 60s timer tick.
+        if key not in targets:
+            st = state.get(key, _blank_state())
+            if st["escalated"]:
+                decisions.append(MedicDecision(
+                    key, "remote", "skip_escalated",
+                    "already escalated; awaiting recovery",
+                ))
+            else:
+                decisions.append(MedicDecision(
+                    key, "remote", "escalate",
+                    "unhealthy remote surface (no tower unit)",
+                    priority=False,
+                ))
+            continue
         target = targets[key]
         if key == "vnext" and not router_healthy:
             decisions.append(MedicDecision(key, target.unit, "skip_router_down",
@@ -119,7 +138,8 @@ def decide(
 
 
 # ── probe classification (pure) ─────────────────────────────────────────────
-_HTTP_PORTS = {"vnext": 5001, "embeddings": 8096, "router": 8090}
+_HTTP_PORTS = {"vnext": 5001, "router": 8090}
+_HTTP_URLS: dict[str, str] = {"embeddings": "http://127.0.0.1:8096/health"}
 _UNIT_KEYS = ("dream", "x-feed", "parakeet", "vett-patrol", "representation")
 
 
@@ -150,6 +170,14 @@ def probe_unhealthy(
 def _http_ok(port: int, timeout: float = 2.0) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except (urllib.error.URLError, OSError):
+        return False
+
+
+def _http_url_ok(url: str, timeout: float = 3.0) -> bool:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
             return 200 <= resp.status < 300
     except (urllib.error.URLError, OSError):
         return False
@@ -194,6 +222,7 @@ def _comfyui_on_her_card() -> bool:
 def _probe() -> tuple[set[str], bool]:
     now = time.time()
     http_ok = {k: _http_ok(p) for k, p in _HTTP_PORTS.items()}
+    http_ok.update({k: _http_url_ok(u) for k, u in _HTTP_URLS.items()})
     unit_active = {k: _unit_is_active(TARGETS[k].unit) for k in _UNIT_KEYS}
     return probe_unhealthy(
         http_ok=http_ok,

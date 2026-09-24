@@ -11,6 +11,7 @@ loop completes (in the daemon, not here).
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ def chat_completion(
     """POST to OpenAI-compat /v1/chat/completions. Return the content string."""
     payload = {
         "messages": messages,
-        "model": "dream",  # served-model alias on the cognition surface
+        "model": os.environ.get("SOVERYN_DREAM_COGNITION_MODEL", "cognition"),
         "temperature": 0.7,
         "max_tokens": 2048,
     }

@@ -223,3 +223,28 @@ def test_network_allowlist_from_env_trims_blank_process_names():
 def test_expected_services_from_env_override_loopback_ports():
     services = ExpectedServices.from_env({"ARES_NET_EXPECTED_LOOPBACK": "5001, 8090, 53"})
     assert services.loopback_ports == frozenset({53, 5001, 8090})
+
+
+def test_rfc1918_bind_is_lan_not_public_emergency():
+    """Regression 2026-09-23: the tower's own 10.10.10.1:8091 spark-link bind
+    fell through tailnet matching into the bare non-loopback rule and sat as a
+    permanent EMERGENCY 'public listener'. A specific RFC1918 bind is
+    LAN-only — WARNING, not a page. 0.0.0.0 stays EMERGENCY."""
+    allow = NetworkAllowList.from_env({})
+    findings = collect_listeners(
+        "LISTEN 0 128 10.10.10.1:8091 0.0.0.0:* users:((\"python3\",pid=1))\n"
+        "LISTEN 0 128 0.0.0.0:5055 0.0.0.0:* users:((\"python\",pid=2))\n"
+        "LISTEN 0 128 192.168.86.27:9999 0.0.0.0:* users:((\"python\",pid=3))\n",
+        allow_list=allow,
+    )
+    by_type = {f.finding_type: f for f in findings}
+    lan = [f for f in findings if f.finding_type == "network.lan_listener_unallowlisted"]
+    assert {f.severity for f in lan} == {Severity.WARNING}, str(findings)
+    assert {f.evidence["bind_address"] for f in lan} == {
+        "10.10.10.1", "192.168.86.27",
+    }
+    assert "network.public_listener_unallowlisted" in by_type, (
+        "the 0.0.0.0 bind must stay EMERGENCY — all-interfaces binds are the "
+        "real exposure; downgrading them would self-defang the lane"
+    )
+    assert by_type["network.public_listener_unallowlisted"].severity == Severity.EMERGENCY

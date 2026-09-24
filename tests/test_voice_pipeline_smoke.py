@@ -64,10 +64,10 @@ class _FakeAgentLoop:
 
     def __init__(self, events=None):
         self.events = events or []
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, dict]] = []
 
     def process_message_stream(self, session_id, user_message, **kwargs):
-        self.calls.append((session_id, user_message))
+        self.calls.append((session_id, user_message, dict(kwargs)))
         for e in self.events:
             yield e
 
@@ -123,17 +123,22 @@ def test_build_pipeline_constructs_all_processors():
     type_names = [type(p).__name__ for p in processors]
 
     assert "VADProcessor" in type_names
+    assert "TurnController" in type_names  # PR4a barge-in emitter
     assert "ParakeetSTTService" in type_names
-    assert "AgentLoopBridge" in type_names
+    assert "AgentAdapterBridge" in type_names
     assert "ProviderBackedTTSService" in type_names
+    assert "FirstAudioMetricsProbe" in type_names
 
     vad_idx = type_names.index("VADProcessor")
+    tc_idx = type_names.index("TurnController")
     stt_idx = type_names.index("ParakeetSTTService")
-    bridge_idx = type_names.index("AgentLoopBridge")
+    bridge_idx = type_names.index("AgentAdapterBridge")
     tts_idx = type_names.index("ProviderBackedTTSService")
-    assert vad_idx < stt_idx < bridge_idx < tts_idx
+    probe_idx = type_names.index("FirstAudioMetricsProbe")
+    # Order: VAD → TurnController → STT → bridge → TTS → probe
+    assert vad_idx < tc_idx < stt_idx < bridge_idx < tts_idx < probe_idx
 
-    # Bridge holds the agent_loop + session_id passed at construction
+    # Bridge holds the adapter wrapping agent_loop + session_id
     bridge = processors[bridge_idx]
     assert bridge._agent_loop is agent_loop
     assert bridge._session_id == "session-1"
@@ -156,6 +161,100 @@ def test_build_pipeline_passes_parakeet_url_through_to_stt_service():
     pipeline, _ = asyncio.run(_build())
     stt = next(p for p in pipeline._processors if isinstance(p, ParakeetSTTService))
     assert stt.transcribe_url == "http://10.0.0.5:9999/transcribe"
+
+
+def test_pipeline_params_omit_allow_interruptions():
+    """Pipecat 1.3.0 dropped allow_interruptions; must not pass the dead kwarg."""
+    import inspect
+    from pipecat.pipeline.worker import PipelineParams
+
+    sig = inspect.signature(PipelineParams)
+    # Field absent from constructor / model
+    assert "allow_interruptions" not in sig.parameters
+    # Building with only enable_metrics must succeed
+    p = PipelineParams(enable_metrics=True)
+    assert p is not None
+
+
+def test_build_pipeline_uses_duplex_vad_and_first_audio_probe():
+    """Factory applies DuplexConfig and inserts FirstAudioMetricsProbe."""
+    from soveryn.platform.voice.duplex_config import DuplexConfig
+
+    async def _build():
+        connection = SmallWebRTCConnection()
+        duplex = DuplexConfig(
+            barge_in=False,
+            confidence=0.3,
+            start_secs=0.1,
+            stop_secs=0.3,
+            metrics_enabled=False,
+        )
+        return build_aetheria_voice_pipeline(
+            agent_loop=_FakeAgentLoop(),
+            agent_name="aetheria",
+            voice_id="vid",
+            parakeet_url="http://127.0.0.1:8087",
+            elevenlabs_api_key="key",
+            session_id="s1",
+            webrtc_connection=connection,
+            duplex=duplex,
+        )
+
+    pipeline, worker = asyncio.run(_build())
+    assert isinstance(pipeline, Pipeline)
+    assert isinstance(worker, PipelineWorker)
+    names = [type(p).__name__ for p in pipeline._processors]
+    assert "FirstAudioMetricsProbe" in names
+    assert "AgentAdapterBridge" in names
+
+
+def test_house_metrics_do_not_clobber_pipecat_frame_metrics():
+    """PR1 regression: TurnMetricsTracker must not overwrite FrameProcessor._metrics.
+
+    Pipecat setup() calls self._metrics.setup(task_manager). Storing our
+    house tracker on that attribute kills the voice pipeline on start
+    with AttributeError — Aetheria connects but never speaks.
+    """
+    from pipecat.processors.metrics.frame_processor_metrics import (
+        FrameProcessorMetrics,
+    )
+
+    from soveryn.platform.voice.metrics import TurnMetricsTracker
+    from soveryn.platform.voice.pipeline import (
+        AgentAdapterBridge,
+        FirstAudioMetricsProbe,
+        ParakeetSTTService,
+    )
+
+    house = TurnMetricsTracker(agent="aetheria", session_id="s", enabled=False)
+
+    probe = FirstAudioMetricsProbe(metrics=house)
+    assert isinstance(probe._metrics, FrameProcessorMetrics)
+    assert probe._turn_metrics is house
+
+    stt = ParakeetSTTService(metrics=house)
+    assert isinstance(stt._metrics, FrameProcessorMetrics)
+    assert stt._turn_metrics is house
+
+    class _Adapter:
+        agent_id = "aetheria"
+        voice_id = "aetheria"
+        supports_streaming = True
+
+        async def start_turn(self, **kwargs):
+            if False:  # pragma: no cover
+                yield None
+            return
+
+        async def on_cancelled(self, **kwargs):
+            pass
+
+        async def on_session_end(self, **kwargs):
+            pass
+
+    bridge = AgentAdapterBridge(adapter=_Adapter(), session_id="s", metrics=house)
+    assert isinstance(bridge._metrics, FrameProcessorMetrics)
+    assert bridge._turn_metrics is house
 
 
 def test_build_pipeline_wires_voice_id_into_tts_service():
@@ -326,8 +425,11 @@ def test_agent_loop_bridge_emits_llm_text_frames_for_each_tts_token_event():
 
     captured, agent_loop = asyncio.run(_run())
 
-    # AgentLoop was called with the transcribed user utterance
-    assert agent_loop.calls == [("sid-1", "user utterance")]
+    # AgentLoop was called with the transcribed user utterance + source=voice
+    assert len(agent_loop.calls) == 1
+    assert agent_loop.calls[0][0] == "sid-1"
+    assert agent_loop.calls[0][1] == "user utterance"
+    assert agent_loop.calls[0][2].get("source") == "voice"
 
     # Captured: response wrapper Start, one aggregated LLMTextFrame, response End.
     # Sentence aggregation flushes "hello" + " world" + "." as one frame.
@@ -415,20 +517,21 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     can drop pending audio cleanly. Mimics the real interruption path where
     process_frame -> _cancel_inflight cancels the task.
 
-    Sentence aggregation note (fa68d05): the bridge only flushes a frame at
-    sentence boundaries (or when the buffer hits 40 chars).  The pre-cancel
-    chunk must end with a sentence terminator so it flushes BEFORE cancellation;
-    otherwise it stays buffered and the wait loop never fires."""
+    Sentence aggregation (current contract): the bridge HOLDS tokens until
+    the 320-char safety mark or stream end — the early first-sentence flush
+    caused the gap users hated. So a short pre-cancel sentence stays
+    buffered: this asserts the hold AND the clean cancel."""
 
     async def _run():
-        # Slow generator: emits one complete sentence, then blocks until
-        # externally signalled cancelled. We cancel the task partway through
-        # and assert the End frame still fires from the finally block.
+        # Slow generator: emits one short sentence (stays buffered), then
+        # blocks until externally signalled cancelled. We cancel the task
+        # partway through and assert the End frame still fires from the
+        # finally block.
         cancel_signal = {"cancel": False}
 
         class _SlowAgentLoop:
             def process_message_stream(self, session_id, user_message, **kwargs):
-                # "first." ends with "." → flushes immediately under sentence aggregation
+                # "first." is 6 chars — far under the 320-char hold mark.
                 yield TTSTokenEvent(text="first.")
                 # Spin until the test signals cancel
                 deadline = time.monotonic() + 5.0
@@ -445,12 +548,11 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
         # Spawn the turn as a task so we can cancel it externally.
         turn_task = asyncio.create_task(bridge._run_turn("hi"))
 
-        # Wait for the first chunk to land.
-        deadline = time.monotonic() + 2.0
+        # Hold contract: no text frame may flush before the safety mark or
+        # stream end. Wait out a window and confirm silence.
+        deadline = time.monotonic() + 0.5
         while time.monotonic() < deadline:
             await asyncio.sleep(0.005)
-            if any(isinstance(f, LLMTextFrame) for f, _ in captured):
-                break
 
         # Cancel the task (mimics what _cancel_inflight does)
         turn_task.cancel()
@@ -468,8 +570,8 @@ def test_agent_loop_bridge_cancels_on_interruption_frame():
     starts = [f for f, _ in captured if isinstance(f, LLMFullResponseStartFrame)]
     ends = [f for f, _ in captured if isinstance(f, LLMFullResponseEndFrame)]
 
-    # Got the first sentence before cancellation (flushed at "." boundary)
-    assert any(f.text == "first." for f in text_frames)
+    # Held: the short sentence never flushed before cancellation.
+    assert not any(f.text == "first." for f in text_frames)
     # Never got the second chunk (the cancellation interrupted the wait)
     assert not any(f.text == "never" for f in text_frames)
     # Start + End wrappers both fired (End emitted in the finally block)

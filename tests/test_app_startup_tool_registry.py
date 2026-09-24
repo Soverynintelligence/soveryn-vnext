@@ -11,9 +11,9 @@ from soveryn.memory.lattice import LatticeStore
 def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
-    (souls_dir / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
-    (souls_dir / "vett.md").write_text("# Vett\n", encoding="utf-8")
-    (souls_dir / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    # Cover every ACTIVE_AGENTS citizen — Kernel/Eve souls are required at loop boot.
+    for name in ("aetheria", "vett", "scotty", "kernel", "eve"):
+        (souls_dir / f"{name}.md").write_text(f"# {name.title()}\n", encoding="utf-8")
     return souls_dir
 
 
@@ -74,6 +74,12 @@ def test_startup_creates_tool_registry_for_aetheria(
     aetheria_loop = app.extensions["soveryn"]["agent_loops"]["aetheria"]
     schemas = aetheria_loop._tool_schemas()
     names = {schema["function"]["name"] for schema in schemas}
+    # Slice A: every citizen gets owner-scoped recall_skill
+    for agent, loop in app.extensions["soveryn"]["agent_loops"].items():
+        if loop.tool_registry is None:
+            continue  # Grok tools live in the Build CLI, not AgentLoop
+        agent_names = {s["function"]["name"] for s in loop._tool_schemas()}
+        assert "recall_skill" in agent_names, f"{agent} missing recall_skill"
     # Aetheria's lattice read tools (Track 2)
     assert {
         "search_lattice_by_embedding",
@@ -169,17 +175,22 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     assert isinstance(app.extensions["soveryn"]["document_store"], DocumentStore)
     # Context window + history budget are fleet-wide: every loop trims
     # transcript to fit the 32K server window before send.
-    for agent in ("aetheria", "vett", "scotty"):
-        assert loops[agent].context_window == 32_768, agent
-        assert loops[agent].history_token_budget == 8_000, agent
+    #
+    # 8_000 -> 6_000 in Memory Grades PR5 (2026-08-11), and the NUMBER moved
+    # because the MEANING did: history_token_budget became history-only
+    # (charge_prelude=False). Charging Aetheria's prelude — soul, pinned,
+    # continuity, spine, recall — against the same envelope was starving the
+    # chat history it was supposed to protect. A smaller history-only budget
+    # leaves her more room to talk, not less.
+    assert loops["aetheria"].context_window == 32_768
+    assert loops["aetheria"].history_token_budget == 6_000
+    assert loops["kernel"].context_window == 32_768
+    assert loops["eve"].context_window == 32_768 or loops["eve"].context_window == 65536
     # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
     assert loops["aetheria"].thinking_budget_tokens == 0
-    # 2026-07-11: Vett also raised to 8192 — document-length tool calls
-    # (create_document with a full markdown paper) were truncated mid-JSON at
-    # the 2048 default. Scotty stays at the default. See startup.py:750.
-    assert loops["vett"].max_tokens == 8192
-    assert loops["scotty"].max_tokens != 8192
+    assert "vett" not in loops
+    assert "scotty" not in loops
 
 
 def test_other_agents_do_not_get_aetheria_lattice_tools(
@@ -280,9 +291,9 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
         "list_grants",
         "grant_submit",
     }
+    registry = app.extensions["soveryn"]["tool_registry"]
     for agent in ("vett", "scotty"):
-        loop = app.extensions["soveryn"]["agent_loops"][agent]
-        names = {schema["function"]["name"] for schema in loop._tool_schemas()}
+        names = {t.name for t in registry.iter_tools_for_agent(agent)}
         assert names.isdisjoint(aetheria_lattice_tools), \
             f"{agent} sees Aetheria-only tools: {names & aetheria_lattice_tools}"
         assert names.isdisjoint(sandbox_tools), \
@@ -332,3 +343,42 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
                 f"vett missing steward tools: {steward_tools - names}"
         assert names.isdisjoint(dream_tools), \
             f"{agent} sees dream tools (should not): {names & dream_tools}"
+
+
+def test_kernel_has_house_web_tools(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice,
+) -> None:
+    _configure_startup_env(
+        monkeypatch,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice=recall_lattice,
+    )
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    loop = app.extensions["soveryn"]["agent_loops"]["kernel"]
+    names = {schema["function"]["name"] for schema in loop._tool_schemas()}
+    assert {"web_search", "fetch_url", "run_aider", "run_opencode", "kernel_child", "kernel_run"} <= names
+
+
+def test_cron_notepad_registered_for_automation_agents(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice,
+) -> None:
+    _configure_startup_env(
+        monkeypatch,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice=recall_lattice,
+    )
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    registry = app.extensions["soveryn"]["tool_registry"]
+    for agent in ("aetheria", "eve", "kernel"):
+        names = {spec.name for spec in registry.iter_tools_for_agent(agent)}
+        assert "cron_notepad" in names, f"{agent} missing cron_notepad"

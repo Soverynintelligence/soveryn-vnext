@@ -1,0 +1,1193 @@
+"""Tool registration for house document intake."""
+
+from __future__ import annotations
+
+import base64
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
+
+from soveryn.platform.intake.compose import compose_overlay
+from soveryn.platform.intake.draw import (
+    draw_rectangle,
+    draw_text_on_image,
+    make_solid_canvas,
+    parse_hex_color,
+)
+from soveryn.platform.intake.pdf import extract_pdf_path
+from soveryn.platform.intake.qr import decode_qr_bytes, encode_qr_png
+from soveryn.platform.intake.turn_images import current_turn_images
+from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
+from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
+
+# Paths agents may read for intake (house-local only).
+_DEFAULT_ALLOWED_ROOTS: tuple[Path, ...] = (
+    Path.home() / "soveryn_vnext" / "data",
+    Path.home() / "soveryn_citizens",
+    Path.home() / "historys-ledger",
+    Path.home() / "historysledger-site",
+    Path.home() / "Downloads",
+)
+
+
+def _resolve_allowed(path: Path, allowed_roots: tuple[Path, ...]) -> Path:
+    resolved = path.expanduser().resolve()
+    for root in allowed_roots:
+        try:
+            root_r = root.expanduser().resolve()
+        except OSError:
+            continue
+        try:
+            resolved.relative_to(root_r)
+            return resolved
+        except ValueError:
+            continue
+    raise ToolArgError(
+        f"path {path} is outside allowed intake roots "
+        f"(house data, citizens desks, History's Ledger, Downloads)"
+    )
+
+
+def build_intake_extract_pdf_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+) -> ToolSpec:
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw = args.get("path", "")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ToolArgError("path must be a non-empty string")
+        resolved = _resolve_allowed(Path(raw.strip()), roots)
+        if resolved.suffix.lower() != ".pdf":
+            raise ToolArgError("intake_extract_pdf only accepts .pdf files in v0")
+        result = extract_pdf_path(resolved)
+        return result.as_dict()
+
+    return ToolSpec(
+        name="intake_extract_pdf",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to a PDF on the house disk "
+                        "(data/, citizens desks, History's Ledger, or Downloads). "
+                        "Returns extracted text + page map. status=failed|partial "
+                        "with an explicit gap when there is no text layer — "
+                        "never invent page content."
+                    ),
+                },
+            },
+            "required": ["path"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Extract text from a held PDF (text layer only in v0). "
+            "Use when Jon attaches or points at a PDF. If status is failed "
+            "(scan/encrypted/empty), report the gap — do not invent quotations."
+        ),
+    )
+
+
+def register_intake_tools(
+    registry: ToolRegistry,
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+) -> None:
+    """Register intake tools for one agent."""
+    registry.register(
+        build_intake_extract_pdf_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+
+
+_CURRENT_IMAGE = "current"
+
+
+def _decode_data_url(url: str) -> bytes:
+    if not url.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
+        raise ToolArgError(
+            "image must be \"current\" or a data:image/{jpeg,png,webp,gif} URL"
+        )
+    comma = url.find(",")
+    if comma < 0:
+        raise ToolArgError("image data URL is missing payload")
+    try:
+        return base64.b64decode(url[comma + 1 :], validate=False)
+    except Exception as exc:  # noqa: BLE001 — surface as a tool miss, not a crash
+        raise ToolArgError(f"image data URL is not valid base64: {exc}") from exc
+
+
+def _miss(*, miss: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "payloads": [],
+        "symbology": None,
+        "miss": miss,
+    }
+
+
+def _decode_urls(urls: tuple[str, ...]) -> dict[str, Any]:
+    """Decode every in-flight / supplied data URL. Never invent a payload."""
+    if not urls:
+        return _miss(miss="no_in_flight_image")
+    payloads: list[str] = []
+    saw_unreadable = False
+    saw_locator = False
+    for url in urls:
+        result = decode_qr_bytes(_decode_data_url(url))
+        payloads.extend(result.payloads)
+        if result.miss == "unreadable":
+            saw_unreadable = True
+        if result.symbology == "QR" or result.ok:
+            saw_locator = True
+    if payloads:
+        return {
+            "ok": True,
+            "payloads": payloads,
+            "symbology": "QR",
+            "miss": None,
+        }
+    if saw_unreadable or saw_locator:
+        return _miss(miss="unreadable")
+    return _miss(miss="no_code_found")
+
+
+def build_decode_qr_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+) -> ToolSpec:
+    """QR-decode desk tool. Path on disk, data URL, or this turn's photo."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_path = args.get("path", "")
+        raw_image = args.get("image", "")
+        path_s = raw_path.strip() if isinstance(raw_path, str) else ""
+        image_s = raw_image.strip() if isinstance(raw_image, str) else ""
+
+        if raw_path is not None and not isinstance(raw_path, str):
+            raise ToolArgError("path must be a string")
+        if raw_image is not None and not isinstance(raw_image, str):
+            raise ToolArgError("image must be a string")
+
+        if path_s:
+            resolved = _resolve_allowed(Path(path_s), roots)
+            if not resolved.is_file():
+                raise ToolArgError(f"path {path_s} is not a regular file")
+            return decode_qr_bytes(resolved.read_bytes()).as_dict()
+
+        if image_s and image_s.lower() != _CURRENT_IMAGE:
+            return _decode_urls((image_s,))
+
+        # image="current" or both omitted — this turn's in-flight attachments.
+        return _decode_urls(current_turn_images())
+
+    return ToolSpec(
+        name="decode_qr",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to an image on the house disk "
+                        "(data/, citizens desks, History's Ledger, or Downloads)."
+                    ),
+                },
+                "image": {
+                    "type": "string",
+                    "description": (
+                        "Pass \"current\" to decode the photo Jon just sent "
+                        "on this Messages turn (in-flight; not saved to the DB). "
+                        "Or a data:image/{jpeg,png,webp,gif} URL. "
+                        "Never guess a QR payload from pixels — call this tool."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Decode a QR code from a photo Jon just sent (image=\"current\") "
+            "or from a house-disk path. Returns ok, payloads, symbology, and "
+            "an explicit miss (no_code_found / unreadable / no_in_flight_image). "
+            "Never invent a URL."
+        ),
+    )
+
+
+# Match soveryn.platform.web.fetch.ALLOWED_SCHEMES. make_qr encodes only —
+# it must never fetch the URL. SSRF does not apply to encode-only.
+_QR_URL_SCHEMES = frozenset({"http", "https"})
+
+
+def _default_media_root() -> Path:
+    try:
+        from soveryn.config.loader import DEFAULT_DATA_ROOT
+
+        return Path(DEFAULT_DATA_ROOT) / "media"
+    except Exception:
+        return Path.home() / "soveryn_vnext" / "data" / "media"
+
+
+def _require_http_url(raw: Any) -> str:
+    """House URL rule (fetch scheme whitelist) without fetching."""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ToolArgError("url must be a non-empty http(s) URL")
+    url = raw.strip()
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in _QR_URL_SCHEMES:
+        raise ToolArgError(
+            f"scheme {parsed.scheme!r} not allowed (only http/https)"
+        )
+    if not parsed.hostname:
+        raise ToolArgError("url has no hostname")
+    return url
+
+
+def _as_int(name: str, raw: Any, *, required: bool = True) -> int | None:
+    if raw is None:
+        if required:
+            raise ToolArgError(f"{name} is required")
+        return None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ToolArgError(f"{name} must be an integer")
+    if int(raw) != raw:
+        raise ToolArgError(f"{name} must be an integer")
+    return int(raw)
+
+
+def _safe_stem(raw: str, *, fallback: str) -> str:
+    import re
+
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", raw).strip("-._")
+    return (cleaned[:48] or fallback)
+
+
+def _alloc_png_path(media_root: Path, subdir: str, stem: str) -> Path:
+    import uuid
+
+    dest_dir = media_root.expanduser().resolve() / subdir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    return (dest_dir / f"{stem}_{uuid.uuid4().hex[:8]}.png").resolve()
+
+
+def _write_png(media_root: Path, subdir: str, stem: str, data: bytes) -> Path:
+    dest = _alloc_png_path(media_root, subdir, stem)
+    dest.write_bytes(data)
+    return dest
+
+
+def build_make_qr_tool(
+    *,
+    owner_agent: str,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """URL → scannable PNG under data/media/qr/. Encodes only — never fetches."""
+    root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        url = _require_http_url(args.get("url"))
+        from urllib.parse import urlparse
+
+        stem = _safe_stem(urlparse(url).hostname or "qr", fallback="qr")
+        try:
+            png = encode_qr_png(url)
+        except Exception as exc:  # noqa: BLE001 — miss, don't crash the loop
+            return {
+                "ok": False,
+                "path": None,
+                "url": url,
+                "miss": "encode_failed",
+                "message": str(exc),
+            }
+        dest = _write_png(root, "qr", stem, png)
+        return {
+            "ok": True,
+            "path": str(dest),
+            "url": url,
+            "miss": None,
+        }
+
+    return ToolSpec(
+        name="make_qr",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": (
+                        "http(s) URL to encode. The tool writes a scannable PNG "
+                        "under data/media/qr/ and returns the absolute path. "
+                        "It does not fetch the URL."
+                    ),
+                },
+            },
+            "required": ["url"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Encode an http(s) URL as a scannable QR PNG under data/media/qr/. "
+            "Use this instead of HTML with a placeholder src. Returns the "
+            "absolute path. Does not fetch the URL."
+        ),
+    )
+
+
+def build_compose_image_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Paste an overlay onto a base/template PNG at (x, y)."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_base = args.get("base") or args.get("template") or ""
+        raw_overlay = args.get("overlay") or ""
+        if not isinstance(raw_base, str) or not raw_base.strip():
+            raise ToolArgError("base must be a non-empty path")
+        if not isinstance(raw_overlay, str) or not raw_overlay.strip():
+            raise ToolArgError("overlay must be a non-empty path")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        width = _as_int("width", args.get("width"), required=False)
+        height = _as_int("height", args.get("height"), required=False)
+        clip = args.get("clip", False)
+        if clip is not None and not isinstance(clip, bool):
+            raise ToolArgError("clip must be a boolean")
+
+        base = _resolve_allowed(Path(raw_base.strip()), roots)
+        overlay = _resolve_allowed(Path(raw_overlay.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "card")
+        result = compose_overlay(
+            base,
+            overlay,
+            x=int(x),
+            y=int(y),
+            width=width,
+            height=height,
+            clip=bool(clip),
+            dest=dest,
+        )
+        return result.as_dict()
+
+    return ToolSpec(
+        name="compose_image",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "base": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to the template / base PNG (data/media, "
+                        "citizens desks, History's Ledger, or Downloads)."
+                    ),
+                },
+                "overlay": {
+                    "type": "string",
+                    "description": "Absolute path to the overlay image (QR, photo).",
+                },
+                "x": {
+                    "type": "integer",
+                    "description": "Left pixel of the overlay on the base.",
+                },
+                "y": {
+                    "type": "integer",
+                    "description": "Top pixel of the overlay on the base.",
+                },
+                "width": {
+                    "type": "integer",
+                    "description": "Optional overlay width in pixels (keeps file aspect if omitted with height).",
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Optional overlay height in pixels.",
+                },
+                "clip": {
+                    "type": "boolean",
+                    "description": (
+                        "If false (default), refuse when the overlay would "
+                        "extend past the base (miss=would_clip). If true, "
+                        "PIL clips the overlay to the base."
+                    ),
+                },
+            },
+            "required": ["base", "overlay", "x", "y"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Local compositor: drop an overlay (QR, photo) onto a template at "
+            "x,y and export a PNG under data/media/composed/. Not Canva. "
+            "Returns the absolute path. miss=file_not_found / would_clip "
+            "unless clip=true."
+        ),
+    )
+
+_CANVAS_EDGE_MIN = 1
+_CANVAS_EDGE_MAX = 4096
+_FONT_KINDS = frozenset({"serif", "sans", "serif_italic"})
+_ALIGN_KINDS = frozenset({"left", "center", "right"})
+
+
+def _hex_color(name: str, raw: Any) -> tuple[int, int, int]:
+    if not isinstance(raw, str):
+        raise ToolArgError(f"{name} must be a #RGB or #RRGGBB hex color")
+    try:
+        return parse_hex_color(raw)
+    except ValueError:
+        raise ToolArgError(f"{name} must be a #RGB or #RRGGBB hex color") from None
+
+
+def _optional_hex(name: str, raw: Any) -> tuple[int, int, int] | None:
+    if raw is None or raw == "":
+        return None
+    return _hex_color(name, raw)
+
+
+def _canvas_edge(name: str, raw: Any) -> int:
+    value = _as_int(name, raw)
+    if value is None or value < _CANVAS_EDGE_MIN or value > _CANVAS_EDGE_MAX:
+        raise ToolArgError(
+            f"{name} must be an integer from {_CANVAS_EDGE_MIN} to {_CANVAS_EDGE_MAX}"
+        )
+    return value
+
+
+def _positive_int(name: str, raw: Any) -> int:
+    value = _as_int(name, raw)
+    if value is None or value < 1:
+        raise ToolArgError(f"{name} must be a positive integer")
+    return value
+
+
+def build_make_canvas_tool(
+    *,
+    owner_agent: str,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Solid RGB PNG under data/media/canvas/. Hex fill is an argument."""
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        width = _canvas_edge("width", args.get("width"))
+        height = _canvas_edge("height", args.get("height"))
+        fill = _hex_color("fill", args.get("fill"))
+        raw_name = args.get("name")
+        if raw_name is None or raw_name == "":
+            stem = "canvas"
+        elif isinstance(raw_name, str):
+            stem = _safe_stem(raw_name, fallback="canvas")
+        else:
+            raise ToolArgError("name must be a string")
+        dest = _alloc_png_path(out_root, "canvas", stem)
+        return make_solid_canvas(dest, width=width, height=height, fill=fill).as_dict()
+
+    return ToolSpec(
+        name="make_canvas",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "width": {
+                    "type": "integer",
+                    "description": "Canvas width in pixels (1..4096).",
+                },
+                "height": {
+                    "type": "integer",
+                    "description": "Canvas height in pixels (1..4096).",
+                },
+                "fill": {
+                    "type": "string",
+                    "description": (
+                        "Solid fill as #RGB or #RRGGBB (e.g. \"#071A2C\"). "
+                        "Not a color name."
+                    ),
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Optional filename stem under data/media/canvas/.",
+                },
+            },
+            "required": ["width", "height", "fill"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Create a solid RGB PNG under data/media/canvas/. Use this for a "
+            "branded field instead of SVG/HTML. Returns ok, path, width, height."
+        ),
+    )
+
+
+def build_draw_rect_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Draw a rectangle onto an existing PNG; write a new composed PNG."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_path = args.get("path", "")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ToolArgError("path must be a non-empty string")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        width = _positive_int("width", args.get("width"))
+        height = _positive_int("height", args.get("height"))
+        fill = _optional_hex("fill", args.get("fill"))
+        outline = _optional_hex("outline", args.get("outline"))
+        if fill is None and outline is None:
+            raise ToolArgError("at least one of fill or outline is required")
+        raw_stroke = args.get("stroke")
+        if outline is not None:
+            stroke = 1 if raw_stroke is None else _positive_int("stroke", raw_stroke)
+        else:
+            stroke = 1
+        raw_radius = args.get("radius")
+        if raw_radius is None:
+            radius = 0
+        else:
+            radius = _as_int("radius", raw_radius)
+            if radius is None or radius < 0:
+                raise ToolArgError("radius must be an integer >= 0")
+
+        src = _resolve_allowed(Path(raw_path.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "rect")
+        return draw_rectangle(
+            src,
+            dest,
+            x=int(x),
+            y=int(y),
+            width=width,
+            height=height,
+            fill=fill,
+            outline=outline,
+            stroke=stroke,
+            radius=int(radius),
+        ).as_dict()
+
+    return ToolSpec(
+        name="draw_rect",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to an existing PNG under allowed roots. "
+                        "The input is not overwritten."
+                    ),
+                },
+                "x": {"type": "integer", "description": "Left pixel of the rectangle."},
+                "y": {"type": "integer", "description": "Top pixel of the rectangle."},
+                "width": {"type": "integer", "description": "Rectangle width in pixels."},
+                "height": {"type": "integer", "description": "Rectangle height in pixels."},
+                "fill": {
+                    "type": "string",
+                    "description": "Optional fill as #RGB or #RRGGBB.",
+                },
+                "outline": {
+                    "type": "string",
+                    "description": "Optional stroke color as #RGB or #RRGGBB.",
+                },
+                "stroke": {
+                    "type": "integer",
+                    "description": "Outline width in pixels (default 1 if outline is set).",
+                },
+                "radius": {
+                    "type": "integer",
+                    "description": "Corner radius; 0 is sharp (default).",
+                },
+            },
+            "required": ["path", "x", "y", "width", "height"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Draw a rectangle (gold frame, white plate; rounded if radius > 0) "
+            "onto an existing PNG and write a new file under data/media/composed/. "
+            "At least one of fill or outline is required. miss=file_not_found / "
+            "unreadable / would_clip (fully outside; overhang is clipped)."
+        ),
+    )
+
+
+def build_draw_text_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> ToolSpec:
+    """Draw type onto an existing PNG; write a new composed PNG."""
+    roots = allowed_roots if allowed_roots is not None else _DEFAULT_ALLOWED_ROOTS
+    out_root = media_root if media_root is not None else _default_media_root()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_path = args.get("path", "")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ToolArgError("path must be a non-empty string")
+        raw_text = args.get("text")
+        if not isinstance(raw_text, str) or not raw_text.strip():
+            raise ToolArgError("text must be a non-empty string")
+        x = _as_int("x", args.get("x"))
+        y = _as_int("y", args.get("y"))
+        if x is None or y is None:
+            raise ToolArgError("x and y are required")
+        size = _positive_int("size", args.get("size"))
+        color = _hex_color("color", args.get("color"))
+        raw_font = args.get("font") or "serif"
+        if not isinstance(raw_font, str) or raw_font not in _FONT_KINDS:
+            raise ToolArgError("font must be serif, sans, or serif_italic")
+        raw_align = args.get("align") or "left"
+        if not isinstance(raw_align, str) or raw_align not in _ALIGN_KINDS:
+            raise ToolArgError("align must be left, center, or right")
+        raw_max = args.get("max_width")
+        max_width = (
+            None if raw_max is None else _positive_int("max_width", raw_max)
+        )
+
+        src = _resolve_allowed(Path(raw_path.strip()), roots)
+        dest = _alloc_png_path(out_root, "composed", "text")
+        return draw_text_on_image(
+            src,
+            dest,
+            text=raw_text,
+            x=int(x),
+            y=int(y),
+            size=size,
+            color=color,
+            font_kind=raw_font,
+            align=raw_align,
+            max_width=max_width,
+        ).as_dict()
+
+    return ToolSpec(
+        name="draw_text",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute path to an existing PNG under allowed roots. "
+                        "The input is not overwritten."
+                    ),
+                },
+                "text": {"type": "string", "description": "Non-empty string to draw."},
+                "x": {
+                    "type": "integer",
+                    "description": "Horizontal anchor (left / center / right of the text box).",
+                },
+                "y": {
+                    "type": "integer",
+                    "description": "Top of the text box (not the baseline).",
+                },
+                "size": {"type": "integer", "description": "Type size in points."},
+                "color": {
+                    "type": "string",
+                    "description": "Type color as #RGB or #RRGGBB.",
+                },
+                "font": {
+                    "type": "string",
+                    "enum": ["serif", "sans", "serif_italic"],
+                    "description": "serif (default), sans, or serif_italic.",
+                },
+                "align": {
+                    "type": "string",
+                    "enum": ["left", "center", "right"],
+                    "description": "Horizontal anchor at x. Default left.",
+                },
+                "max_width": {
+                    "type": "integer",
+                    "description": "Optional wrap width in pixels.",
+                },
+            },
+            "required": ["path", "text", "x", "y", "size", "color"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Draw type (serif / sans / serif_italic, hex color, left/center/right) "
+            "onto an existing PNG and write a new file under data/media/composed/. "
+            "x,y is the top of the text box. miss=file_not_found / unreadable."
+        ),
+    )
+
+
+def _default_cwg_ig_root() -> Path:
+    return Path.home() / "Desktop" / "CWG-Instagram"
+
+
+def build_look_at_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    default_root: Path | None = None,
+) -> ToolSpec:
+    """Put house-disk photos on the current vision turn. Eve desk only."""
+    roots = allowed_roots if allowed_roots is not None else (
+        _default_cwg_ig_root(),
+        Path.home() / "soveryn_vnext" / "data",
+        Path.home() / "Downloads",
+    )
+    default = (default_root or _default_cwg_ig_root()).expanduser()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        from soveryn.platform.intake.look import (
+            MAX_FILES,
+            collect_photo_paths,
+            encode_for_vision,
+            find_side_dir,
+        )
+
+        raw_root = args.get("root") or ""
+        if raw_root is not None and not isinstance(raw_root, str):
+            raise ToolArgError("root must be a string")
+        root = (
+            Path(raw_root.strip())
+            if isinstance(raw_root, str) and raw_root.strip()
+            else default
+        )
+        resolved_root = _resolve_allowed(root, roots)
+
+        raw_path = args.get("path") or ""
+        if raw_path is not None and not isinstance(raw_path, str):
+            raise ToolArgError("path must be a string")
+        side = args.get("side") or ""
+        if side is not None and not isinstance(side, str):
+            raise ToolArgError("side must be a string")
+        side_s = side.strip().lower() if isinstance(side, str) else ""
+        if side_s and side_s not in {"before", "after"}:
+            raise ToolArgError("side must be \"before\" or \"after\"")
+
+        if isinstance(raw_path, str) and raw_path.strip():
+            target = _resolve_allowed(Path(raw_path.strip()), roots)
+        elif side_s:
+            found = find_side_dir(resolved_root, side_s)
+            if found is None:
+                return {
+                    "ok": False,
+                    "miss": "no_images",
+                    "files": [],
+                    "count": 0,
+                    "hint": (
+                        f"no folder whose name contains {side_s!r} under "
+                        f"{resolved_root}"
+                    ),
+                }
+            target = _resolve_allowed(found, roots)
+        else:
+            target = resolved_root
+
+        pick = args.get("pick") or ""
+        if pick is not None and not isinstance(pick, str):
+            raise ToolArgError("pick must be a string")
+        max_n = args.get("max", MAX_FILES)
+        max_n = MAX_FILES if max_n is None else _as_int("max", max_n)
+        if max_n is None or max_n < 1 or max_n > MAX_FILES:
+            raise ToolArgError(f"max must be an integer from 1 to {MAX_FILES}")
+
+        paths = collect_photo_paths(
+            target,
+            pick=pick.strip() if isinstance(pick, str) and pick.strip() else None,
+            max_files=int(max_n),
+        )
+        if not paths:
+            return {
+                "ok": False,
+                "miss": "no_images",
+                "files": [],
+                "count": 0,
+                "path": str(target),
+            }
+
+        files: list[dict[str, Any]] = []
+        vision: list[str] = []
+        for p in paths:
+            try:
+                vision.append(encode_for_vision(p))
+            except Exception as exc:  # noqa: BLE001 — skip unreadables
+                files.append({
+                    "name": p.name,
+                    "path": str(p),
+                    "miss": type(exc).__name__,
+                })
+                continue
+            files.append({"name": p.name, "path": str(p)})
+        if not vision:
+            return {
+                "ok": False,
+                "miss": "unreadable",
+                "files": files,
+                "count": 0,
+                "path": str(target),
+            }
+        return {
+            "ok": True,
+            "path": str(target),
+            "files": files,
+            "count": len(vision),
+            "hint": (
+                "Photos are on this turn as images. Name what is in each "
+                "frame, then make_collage with pick_before/pick_after. "
+                "Do not guess from filenames."
+            ),
+            "_vision": vision,
+        }
+
+    return ToolSpec(
+        name="look_at",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "side": {
+                    "type": "string",
+                    "description": (
+                        "\"before\" or \"after\" — opens the matching folder "
+                        "under CWG-Instagram (handles trailing spaces in "
+                        "the folder name)."
+                    ),
+                },
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Absolute file or folder to look at. Optional if "
+                        "side is set. Default is ~/Desktop/CWG-Instagram."
+                    ),
+                },
+                "pick": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments "
+                        "(IMG_6061, 6062, …), in order."
+                    ),
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Max photos this look (1–8, default 8).",
+                },
+                "root": {
+                    "type": "string",
+                    "description": (
+                        "Parent of before/after folders. Default "
+                        "~/Desktop/CWG-Instagram."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Look at photos on disk so you can see the frames (not just "
+            "filenames). Use this before make_collage: look_at side=before, "
+            "then side=after, then pick IMG numbers from what you saw. "
+            "Writes nothing. Caps at 8 thumbnails per call."
+        ),
+    )
+
+
+def build_make_collage_tool(
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    default_root: Path | None = None,
+) -> ToolSpec:
+    """CWG Instagram before/after collage. Eve desk only."""
+    roots = allowed_roots if allowed_roots is not None else (
+        _default_cwg_ig_root(),
+        Path.home() / "soveryn_vnext" / "data",
+        Path.home() / "Downloads",
+    )
+    default = (default_root or _default_cwg_ig_root()).expanduser()
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_root = args.get("root") or ""
+        if raw_root is not None and not isinstance(raw_root, str):
+            raise ToolArgError("root must be a string")
+        root = Path(raw_root.strip()) if isinstance(raw_root, str) and raw_root.strip() else default
+        resolved = _resolve_allowed(root, roots)
+        title = args.get("title") or "Pond Clean-Out"
+        if not isinstance(title, str) or not title.strip():
+            raise ToolArgError("title must be a non-empty string")
+        max_n = args.get("max", 4)
+        max_n = 4 if max_n is None else _as_int("max", max_n)
+        if max_n is None or max_n < 1 or max_n > 8:
+            raise ToolArgError("max must be an integer from 1 to 8")
+        pick_b = args.get("pick_before") or args.get("pick_b")
+        pick_a = args.get("pick_after") or args.get("pick_a")
+        if pick_b is not None and not isinstance(pick_b, str):
+            raise ToolArgError("pick_before must be a string")
+        if pick_a is not None and not isinstance(pick_a, str):
+            raise ToolArgError("pick_after must be a string")
+        from soveryn.platform.intake.collage import build_before_after_collage
+
+        return build_before_after_collage(
+            resolved,
+            title=title.strip(),
+            max_per_side=int(max_n),
+            pick_before=pick_b.strip() if isinstance(pick_b, str) and pick_b.strip() else None,
+            pick_after=pick_a.strip() if isinstance(pick_a, str) and pick_a.strip() else None,
+        ).as_dict()
+
+    return ToolSpec(
+        name="make_collage",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": (
+                        "Headline under CAROLINA WATER GARDENS "
+                        "(default Pond Clean-Out)."
+                    ),
+                },
+                "max": {
+                    "type": "integer",
+                    "description": "Max photos per BEFORE/AFTER column (1–8, default 4).",
+                },
+                "pick_before": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments to pick "
+                        "from *before* folders, in order."
+                    ),
+                },
+                "pick_after": {
+                    "type": "string",
+                    "description": (
+                        "Optional comma-separated filename fragments to pick "
+                        "from *after* folders, in order."
+                    ),
+                },
+                "root": {
+                    "type": "string",
+                    "description": (
+                        "Folder that contains *before* / *after* subfolders. "
+                        "Default ~/Desktop/CWG-Instagram."
+                    ),
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Build a Carolina Water Gardens Instagram before/after collage "
+            "(1080×1350 PNG) from *before* and *after* photo folders. "
+            "Writes under CWG-Instagram/collages/. Not compose_image. "
+            "Use for pond clean-out posts. miss=no_images if those folders "
+            "are empty. If you have not seen the photos, call look_at "
+            "first — do not guess IMG numbers from filenames."
+        ),
+    )
+
+
+def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> ToolSpec:
+    """Eve files a Downloads/Desktop item into a named house bucket."""
+
+    def handler(args: Mapping[str, Any]) -> Any:
+        from soveryn.platform.intake.file_away import BUCKETS, file_away
+        from soveryn.platform.intake.turn_files import parse_current_index, pick_current
+
+        src = args.get("path") or args.get("src") or ""
+        dest = args.get("dest") or args.get("bucket") or ""
+        if not isinstance(src, str) or not src.strip():
+            raise ToolArgError("path must be a non-empty string")
+        if not isinstance(dest, str) or not dest.strip():
+            raise ToolArgError(
+                "dest must be models, cwg_ig, cwg_evidence, "
+                "cwg_insurance, cwg_licenses, cwg_vehicles, "
+                "cwg_contracts, soveryn_evidence, soveryn_licenses, "
+                "soveryn_insurance, soveryn_contracts, pictures, or installers"
+            )
+        dest_key = dest.strip()
+        src_s = src.strip()
+        if parse_current_index(src_s) is not None:
+            hit = pick_current(src_s)
+            if hit is None:
+                return {
+                    "ok": False,
+                    "miss": "no_current_file",
+                    "hint": (
+                        "No in-flight PDF on this turn. Attach the file in "
+                        "chat and file_away path=current (current:2 for the "
+                        "second). Do not look for attachment-1.pdf on disk."
+                    ),
+                }
+            bucks = buckets if buckets is not None else BUCKETS
+            key = dest_key.lower().replace("-", "_")
+            if key not in bucks:
+                return {
+                    "ok": False,
+                    "miss": "unknown_dest",
+                    "buckets": sorted(bucks),
+                }
+            dest_dir = bucks[key].expanduser()
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            safe = Path(hit.name).name or "attachment.pdf"
+            if safe in {".", ".."} or "/" in safe:
+                safe = "attachment.pdf"
+            target = dest_dir / safe
+            if target.exists():
+                return {
+                    "ok": False,
+                    "miss": "already_there",
+                    "dest": str(target),
+                }
+            target.write_bytes(hit.data)
+            return {
+                "ok": True,
+                "src": "current",
+                "dest": str(target),
+                "bucket": key,
+                "name": safe,
+            }
+        kwargs = {}
+        if buckets is not None:
+            kwargs["buckets"] = buckets
+        return file_away(src_s, dest_key, **kwargs)
+
+    return ToolSpec(
+        name="file_away",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "File under ~/Downloads or ~/Desktop, or "
+                        "'current' / 'current:2' for a PDF Jon just attached "
+                        "in this chat turn (not a disk filename)."
+                    ),
+                },
+                "dest": {
+                    "type": "string",
+                    "description": (
+                        "Bucket: models (.gguf → /mnt/soveryn_models/GGUF), "
+                        "cwg_ig (pond photos → Desktop/CWG-Instagram), "
+                        "cwg_evidence (CWG paid receipt image/PDF), "
+                        "cwg_insurance (COI / insurance certificates — not bills), "
+                        "cwg_licenses (licenses / EIN), "
+                        "cwg_vehicles (title / registration), "
+                        "cwg_contracts (vendor contracts — not customer quotes), "
+                        "soveryn_evidence (SOVERYN receipt), "
+                        "soveryn_licenses (SOVERYN LLC / EIN), "
+                        "soveryn_insurance (SOVERYN COI, not bills), "
+                        "soveryn_contracts, "
+                        "pictures (iCloud dumps), "
+                        "installers (.deb/.AppImage). "
+                        "Paid receipts still need ledger_ingest after filing."
+                    ),
+                },
+            },
+            "required": ["path", "dest"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Move one Downloads/Desktop item, or an in-flight chat PDF "
+            "(path=current / current:2), into a house bucket. Chat PDFs "
+            "are not saved as attachment-1.pdf — use current. "
+            "GGUF → dest=models. Pond shots → cwg_ig. Paid receipts → "
+            "cwg_evidence or soveryn_evidence then ledger_ingest. "
+            "COI / insurance certificates → cwg_insurance (not ledger). "
+            "Licenses/EIN → cwg_licenses. Vehicle title/reg → cwg_vehicles. "
+            "Vendor contracts → cwg_contracts. "
+            "Does not delete. Does not overwrite. Not a free mv."
+        ),
+    )
+
+
+def register_qr_tools(
+    registry: ToolRegistry,
+    *,
+    owner_agent: str,
+    allowed_roots: tuple[Path, ...] | None = None,
+    media_root: Path | None = None,
+) -> None:
+    """Register Eve's QR/canvas/type desk tools. Default owner is Eve."""
+    registry.register(
+        build_decode_qr_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_make_qr_tool(
+            owner_agent=owner_agent,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_compose_image_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_make_canvas_tool(
+            owner_agent=owner_agent,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_draw_rect_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_draw_text_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+            media_root=media_root,
+        )
+    )
+    registry.register(
+        build_look_at_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_make_collage_tool(
+            owner_agent=owner_agent,
+            allowed_roots=allowed_roots,
+        )
+    )
+    registry.register(
+        build_file_away_tool(owner_agent=owner_agent)
+    )

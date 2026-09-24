@@ -12,7 +12,7 @@ from typing import Any
 
 from jsonschema import ValidationError, validate
 
-from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.config.runtime import ACTIVE_AGENTS, MESSAGES_PARKED, RETIRED
 
 ToolHandler = Callable[[Mapping[str, Any]], Any]
 AuditHook = Callable[["ToolAuditEvent"], None]
@@ -65,13 +65,22 @@ class ToolRegistry:
         audit_hook: AuditHook | None = None,
     ) -> None:
         self._active_agents = frozenset(active_agents)
-        self._audit_hook = telemetry_audit_hook if audit_hook is None else audit_hook
+        # Default: Continuum ledger + telemetry — quiet tool failures become
+        # visible truth events (timeouts / soft errors), not silence.
+        if audit_hook is None:
+            from soveryn.platform.acttruth.hooks import acttruth_and_telemetry_audit_hook
+
+            self._audit_hook = acttruth_and_telemetry_audit_hook
+        else:
+            self._audit_hook = audit_hook
         self._tools: dict[tuple[str, str], ToolSpec] = {}
 
     def register(self, spec: ToolSpec) -> None:
         owner = _normalize(spec.owner)
         name = _normalize(spec.name)
-        if owner not in self._active_agents:
+        if owner in RETIRED:
+            raise ToolRegistryError(f"Tool owner {owner!r} is retired")
+        if owner not in self._active_agents and owner not in MESSAGES_PARKED:
             raise ToolRegistryError(f"Tool owner {owner!r} is not an active agent")
         key = (owner, name)
         if key in self._tools:

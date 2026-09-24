@@ -57,9 +57,8 @@ def test_load_env_config_respects_cross_surface_per_session_cap_env():
 def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
-    (souls_dir / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
-    (souls_dir / "vett.md").write_text("# Vett\n", encoding="utf-8")
-    (souls_dir / "scotty.md").write_text("# Scotty\n", encoding="utf-8")
+    for name in ("aetheria", "kernel", "eve"):
+        (souls_dir / f"{name}.md").write_text(f"# {name}\n", encoding="utf-8")
     return souls_dir
 
 
@@ -127,29 +126,7 @@ def test_aetheria_agent_loop_gets_continuity_config(
     assert cfg.per_session_cap == 275
 
 
-def test_vett_agent_loop_gets_continuity_config_and_coord_store(
-    tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path,
-):
-    """Vett now gets an ENABLED continuity_config + a coord_store so her Active
-    Focus block renders (board awareness + her send/receive state). The first
-    gate in _build_continuity_brief returns "" without an enabled config — this
-    is the production-path regression that the loop unit tests missed (they
-    injected the config directly). Cross-session tails stay Aetheria-only; that
-    behavioral split is verified in test_continuity_loop_integration."""
-    _configure_env(
-        monkeypatch,
-        fake_souls_dir=fake_souls_dir,
-        fake_pinned=fake_pinned,
-        recall_lattice_path=recall_lattice_path,
-    )
-    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
-    vett = app.extensions["soveryn"]["agent_loops"]["vett"]
-    assert vett.continuity_config is not None
-    assert vett.continuity_config.enabled is True
-    assert vett.coord_store is not None
-
-
-def test_scotty_agent_loop_does_not_get_continuity_config(
+def test_folded_vett_and_scotty_have_no_agent_loop(
     tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path,
 ):
     _configure_env(
@@ -159,5 +136,6 @@ def test_scotty_agent_loop_does_not_get_continuity_config(
         recall_lattice_path=recall_lattice_path,
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
-    scotty = app.extensions["soveryn"]["agent_loops"]["scotty"]
-    assert scotty.continuity_config is None
+    loops = app.extensions["soveryn"]["agent_loops"]
+    assert "vett" not in loops
+    assert "scotty" not in loops

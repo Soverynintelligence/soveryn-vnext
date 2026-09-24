@@ -101,11 +101,56 @@ def test_provider_exception_does_not_leak_internals(app, client):
     assert b"RuntimeError" not in r.data
 
 
-def test_mutating_methods_are_not_exposed(client):
-    """Providers are mounted GET-only; a phone must not POST fleet actions."""
+def test_get_providers_reject_mutations(client):
+    """GET providers stay GET-only; a phone must not invent write paths."""
     for method in ("post", "put", "delete", "patch"):
         r = getattr(client, method)(
             "/m/api/system/gpu",
             headers={"Authorization": "Bearer good-secret"},
         )
         assert r.status_code == 405, f"{method.upper()} should not be allowed"
+
+
+def test_post_providers_require_auth(app, client):
+    """Ops POSTs are allowed only for paired devices."""
+    mobile_api.register_mobile_api(
+        app,
+        messenger_store=_FakeStore(),
+        providers={},
+        post_providers={"ops/brain": lambda body: {"ok": True, "brain": body.get("brain")}},
+    )
+    r = client.post("/m/api/ops/brain", json={"brain": "lightning"})
+    assert r.status_code == 401
+
+
+def test_post_providers_accept_paired_device(app, client):
+    """Paired phone can hit the deliberate ops POST allowlist."""
+    mobile_api.register_mobile_api(
+        app,
+        messenger_store=_FakeStore(),
+        providers={},
+        post_providers={"ops/brain": lambda body: {"ok": True, "brain": body.get("brain")}},
+    )
+    r = client.post(
+        "/m/api/ops/brain",
+        headers={"Authorization": "Bearer good-secret"},
+        json={"brain": "lightning"},
+    )
+    assert r.status_code == 200
+    assert r.get_json() == {"ok": True, "brain": "lightning"}
+
+
+def test_post_provider_can_return_status_tuple(app, client):
+    mobile_api.register_mobile_api(
+        app,
+        messenger_store=_FakeStore(),
+        providers={},
+        post_providers={"ops/tests": lambda body: ({"error": "busy"}, 409)},
+    )
+    r = client.post(
+        "/m/api/ops/tests",
+        headers={"Authorization": "Bearer good-secret"},
+        json={"suite": "smoke"},
+    )
+    assert r.status_code == 409
+    assert r.get_json()["error"] == "busy"
