@@ -113,6 +113,14 @@ def _register_system(ctx: PackContext, owner: str) -> None:
         from soveryn.platform.diag_view_tool import build_house_diag_tool
 
         ctx.registry.register(build_house_diag_tool(owner_agent=owner))
+    # house_look (2026-09-24): Kernel's real eyes — screen frames (eyes
+    # buffer) + on-demand webcam with PTZ. Jon's terms in the module header:
+    # look only when working with him or asked, receipts per look, cam
+    # recenters after every capture. Kernel only for now.
+    if owner == "kernel":
+        from soveryn.platform.house_look_tool import build_house_look_tool
+
+        ctx.registry.register(build_house_look_tool(owner_agent=owner))
     _ok(ctx, owner, "system")
 
 
