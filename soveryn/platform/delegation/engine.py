@@ -33,6 +33,12 @@ logger = logging.getLogger(__name__)
 # what stops retention from filling the disk.
 FAILED_WORKTREE_RETENTION = 5
 
+#: in_review worktrees older than this are expired (dir removed, branch kept —
+#: merge at approve-time needs only the branch ref). Audit hole #4: a task that
+#: reached in_review and sat unapproved kept its worktree indefinitely; 213 MB
+#: of .worktrees including August-era dirs proved the leak.
+IN_REVIEW_WORKTREE_MAX_AGE_DAYS = 7
+
 
 # ─── Default commit implementation ───────────────────────────────────────────
 
@@ -160,6 +166,7 @@ def execute_task(
                 "worktree) → failed without running Scotty", task_id,
             )
             _prune_failed_worktrees(remove_worktree, store, repo_root)
+            _expire_in_review_worktrees(store, remove_worktree, repo_root)
             return
 
         # 3. Run Scotty's bounded loop
@@ -209,6 +216,7 @@ def execute_task(
             # made the 8/8 empty-diff failures undiagnosable for 6 weeks.
             # Bounded retention keeps disk from growing without limit.
             _prune_failed_worktrees(remove_worktree, store, repo_root)
+            _expire_in_review_worktrees(store, remove_worktree, repo_root)
 
     except Exception:
         logger.exception("engine: unhandled exception for task %s", task_id)
@@ -236,6 +244,7 @@ def execute_task(
         # Worktree RETAINED on exception too — see the red-path note above.
         if wt_path is not None and branch is not None:
             _prune_failed_worktrees(remove_worktree, store, repo_root)
+            _expire_in_review_worktrees(store, remove_worktree, repo_root)
 
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -289,3 +298,53 @@ def _prune_failed_worktrees(
             "engine: pruned aged failed worktree %s (task %s) beyond retention=%d",
             wt, task.id, FAILED_WORKTREE_RETENTION,
         )
+
+
+def _expire_in_review_worktrees(
+    store: DelegationStore,
+    remove_worktree_fn: Callable[[str | Path, str, str], None],
+    repo_root: str,
+    *,
+    now: float | None = None,
+    max_age_days: int = IN_REVIEW_WORKTREE_MAX_AGE_DAYS,
+) -> int:
+    """Remove on-disk worktrees of in_review tasks older than max_age_days.
+
+    The branch and the stored diff survive — approve-time merge needs only the
+    branch ref, and the diff is the reviewable record. A task still genuinely
+    pending review is NOT touched (status unchanged); this is disk hygiene,
+    not a review timeout. Best-effort throughout. (Audit hole #4, 2026-09-24.)
+    """
+    import time as _time
+    from datetime import datetime
+
+    now = now if now is not None else _time.time()
+    try:
+        pending = store.list_tasks(status="in_review")
+    except Exception:
+        logger.exception("engine: could not list in_review tasks for worktree expiry")
+        return 0
+
+    expired = 0
+    for task in pending:
+        wt = getattr(task, "worktree_path", None)
+        branch = getattr(task, "branch", None)
+        if not wt or not branch or not Path(wt).exists():
+            continue
+        try:
+            updated = datetime.fromisoformat(task.updated_at).timestamp()
+        except (ValueError, TypeError):
+            continue
+        if now - updated < max_age_days * 86400:
+            continue
+        _cleanup(remove_worktree_fn, repo_root, wt, branch)
+        try:
+            store.clear_worktree(task.id)
+            expired += 1
+            logger.info(
+                "engine: expired in_review worktree %s (task %s, >%dd) — branch %s retained",
+                wt, task.id, max_age_days, branch,
+            )
+        except Exception:
+            logger.exception("engine: could not clear worktree path for task %s", task.id)
+    return expired
