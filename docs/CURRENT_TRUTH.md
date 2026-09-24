@@ -5,7 +5,8 @@
 > Last rotated: 2026-09-22  
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
-> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
+> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
+> <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 > <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -217,3 +218,9 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 | `teammates` | `feat/phase-0` · overnight + Messages bridge (`6f9ae24`) |
 
 Notes in `docs/notes/` are **not** authority. **This file is.**
+
+---
+
+<!-- integrity footer (2026-09-24 docs-hygiene pass 5b38f0b6/bf465b6d, landed by Kernel) -->
+<!-- Expected sections: §0 House spine, §1 What is live, §2 Incomplete/blocked, §3 Brands, §4 Kill list, §5 Git/ops. -->
+<!-- Last full-rotation checksum: sha256:0268cfe90913… (file as it stood 2026-09-22, 19,272 B, §0–§5) — re-derive with `git show HEAD:docs/CURRENT_TRUTH.md | sha256sum`. Rotation date: 2026-09-22. -->
