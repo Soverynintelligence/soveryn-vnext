@@ -163,3 +163,6 @@ config/soveryn-cli/auth.json
 *.bak
 *.bak-*
 docs/runtime-config/*.bak-*
+
+# runtime logs (audit 2026-09-24: 66 MB untracked, dirtied every git status)
+logs/
