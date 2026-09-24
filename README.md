@@ -21,7 +21,7 @@ See **CURRENT_TRUTH** for live vs incomplete, [kill list](docs/CURRENT_TRUTH.md#
 
 ## Public surfaces
 
-Public surfaces: see docs/CURRENT_TRUTH.md §1.
+Public surfaces: see [CURRENT_TRUTH §1 — What is live](docs/CURRENT_TRUTH.md#1-what-is-live).
 
 ## Layout
 

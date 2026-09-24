@@ -40,6 +40,21 @@ export SOVERYN_CLI_DIR="$KERNEL_CFG"
 export PI_CODING_AGENT_DIR="$KERNEL_CFG"
 export KERNEL_LATTICE="${KERNEL_LATTICE:-1}"
 export KERNEL_MEMORY="${KERNEL_MEMORY:-1}"
+
+# Octen (Pi HTTP tools in config/pi/extensions/octen.ts). Prefer env already set;
+# else pull ONLY OCTEN_API_KEY from gitignored $REPO/.env — never echo the value.
+if [[ -z "${OCTEN_API_KEY:-}" && -f "$REPO/.env" ]]; then
+  _octen_line="$(grep -E '^[[:space:]]*OCTEN_API_KEY=' "$REPO/.env" | tail -n1 || true)"
+  if [[ -n "${_octen_line}" ]]; then
+    _octen_val="${_octen_line#OCTEN_API_KEY=}"
+    _octen_val="${_octen_val#$'\r'}"
+    if [[ "${_octen_val}" == \"*\" ]]; then _octen_val="${_octen_val:1:-1}"; fi
+    if [[ "${_octen_val}" == \'*\' ]]; then _octen_val="${_octen_val:1:-1}"; fi
+    export OCTEN_API_KEY="${_octen_val}"
+    unset _octen_val
+  fi
+  unset _octen_line
+fi
 export SOVERYN_PROFILES_PATH="${SOVERYN_PROFILES_PATH:-$REPO/config/soveryn-cli/profiles.json}"
 export SOVERYN_CLI_PROFILE_FILE="${SOVERYN_CLI_PROFILE_FILE:-$HOME/.soveryn/kernel_brain}"
 

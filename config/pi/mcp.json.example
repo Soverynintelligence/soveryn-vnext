@@ -1,0 +1,10 @@
+{
+  "_comment": "Pi 0.74 has no native MCP. This file is inert until a Pi MCP adapter extension is installed. Prefer config/pi/extensions/octen.ts (HTTP tools) + OCTEN_API_KEY.",
+  "mcpServers": {
+    "octen": {
+      "command": "/home/jon-deoliveira/soveryn_vnext/config/pi/bin/octen-mcp-stdio",
+      "args": [],
+      "env": {}
+    }
+  }
+}
