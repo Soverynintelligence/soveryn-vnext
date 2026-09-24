@@ -35,7 +35,7 @@ from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
-from soveryn.agents.skills import get_skill_index
+from soveryn.agents.skills import SkillNameError, get_skill_index
 from soveryn.agents.souls import get_soul
 from soveryn.agents.turn_scope import is_trivial_user_turn
 
@@ -983,8 +983,16 @@ class AgentLoop:
         skill learned mid-session appears next turn with no restart. Empty
         (no skills on disk yet) → "" so the prelude block is skipped entirely.
         Labeled for the model; soft-capped so a fat index cannot bloat prelude.
+
+        Non-citizen lanes (delegation worker, folded names) have no skills by
+        definition — a SkillNameError degrades to "" here rather than killing
+        the loop. The strict gate lives in soveryn.agents.skills for direct
+        citizen calls; this is the worker-lane fail-soft.
         """
-        raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        try:
+            raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        except SkillNameError:
+            raw = ""  # worker lanes carry no citizen skills
         if not raw:
             return ""
         # ~2k tokens soft budget for the index (design: citizen skill capture).

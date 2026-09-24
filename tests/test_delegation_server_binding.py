@@ -38,3 +38,14 @@ def test_delegation_server_resolves_and_declares_role():
     server = _delegation_server()
     assert server.host and server.port
     assert server.model_alias, "executor must know its alias"
+
+
+def test_worker_lane_has_no_citizen_skills(tmp_path):
+    """Skills are citizen craft; the worker lane degrades to empty, not a crash."""
+    conv = ConversationStore(tmp_path / "conv.db")
+    loop = AgentLoop(
+        "scotty", conv,
+        server_override=_delegation_server(),
+        soul_text="", system_prompt="",
+    )
+    assert loop._build_skills_index() == ""
