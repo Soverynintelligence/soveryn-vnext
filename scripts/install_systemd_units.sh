@@ -19,6 +19,8 @@ UNITS=(
   soveryn.target
   soveryn-cognition-instance.service
   soveryn-eyes.service
+  soveryn-night-fixer.service
+  soveryn-night-fixer.timer
 )
 
 MODE="${1:-}"

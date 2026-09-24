@@ -1,0 +1,12 @@
+[Unit]
+Description=SOVERYN night fixer — known-failing tests become dispatched tasks (worker + acceptance gate; merges stay gated)
+After=soveryn-vnext.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python /home/jon-deoliveira/soveryn_vnext/scripts/night_fixer.py
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=soveryn.target

@@ -1,0 +1,9 @@
+[Unit]
+Description=SOVERYN night fixer — nightly at 03:30 ET (after Critic 02:00, librarian 03:00)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=soveryn.target
