@@ -48,6 +48,11 @@ def prune() -> None:
                 day.rmdir()  # empties only
             except OSError:
                 pass
+        elif day.is_file() and day.name.startswith("fresh-"):
+            # look.sh --fresh writes root-level frames; without this they
+            # accumulate forever (prune only walked dated dirs).
+            if day.stat().st_mtime < cutoff:
+                day.unlink(missing_ok=True)
 
 def main() -> None:
     EYES.mkdir(parents=True, exist_ok=True, mode=0o700)
