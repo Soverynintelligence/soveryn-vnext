@@ -24,6 +24,8 @@ HER_GPU_UUID = os.environ.get(
 )
 
 DELEGATION_DB = Path.home() / "soveryn_vnext" / "data" / "delegation.db"
+EYES_ALIVE = Path.home() / "soveryn_eyes" / ".alive"
+EYES_STALE_SECONDS = 900  # 15 min: eyesd ticks every 5s, so 900s means dead or blind
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,39 @@ def collect_foreign_procs(
             key=f"{gpu_uuid}:{name}",
         ))
     return findings
+
+
+def collect_eyes_stale(
+    alive_path: Path = EYES_ALIVE,
+    *,
+    now: float,
+    stale_seconds: int = EYES_STALE_SECONDS,
+) -> list[AresFinding]:
+    """Screen presence watchdog (2026-09-24 audit hole #2).
+
+    eyesd touches soveryn_eyes/.alive on every successful grab. The marker
+    going stale means the daemon died OR the display broke — either way the
+    house is blind while everyone trusts a frozen latest.png. WARNING: the
+    screen is presence, not safety-critical; but silent blindness is how the
+    house stops noticing things.
+    """
+    try:
+        age = now - alive_path.stat().st_mtime
+    except FileNotFoundError:
+        return [AresFinding(
+            "eyes.stale",
+            Severity.WARNING,
+            {"reason": "no liveness marker", "path": str(alive_path)},
+            key="eyes",
+        )]
+    if age > stale_seconds:
+        return [AresFinding(
+            "eyes.stale",
+            Severity.WARNING,
+            {"age_seconds": round(age), "path": str(alive_path)},
+            key="eyes",
+        )]
+    return []
 
 
 def collect_delegation_stuck(
@@ -212,5 +247,6 @@ def collect_vitals_live() -> list[AresFinding]:
     findings: list[AresFinding] = []
     findings += _safe(_read_gpu_headroom_rows, collect_gpu_headroom)
     findings += _safe(_read_compute_apps, collect_foreign_procs)
+    findings += _safe(lambda: None, lambda _: collect_eyes_stale(now=now))
     findings += _safe(_read_executing_tasks, lambda tasks: collect_delegation_stuck(tasks, now=now))
     return findings

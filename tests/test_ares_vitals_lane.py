@@ -100,3 +100,31 @@ def test_vitals_lane_is_registered_in_default_collectors():
     assert vitals.collect_vitals_live in collectors
     # And it honors the zero-arg collector contract.
     assert callable(vitals.collect_vitals_live)
+
+
+def test_eyes_stale_fires_on_dead_or_blind_watchdog(tmp_path, monkeypatch):
+    """Audit hole #2 (2026-09-24): eyesd failed silently if the display broke —
+    the house went blind while trusting a frozen latest.png. The .alive marker
+    goes stale when the daemon dies or the display breaks; Ares must page."""
+    from soveryn.agents.ares.lanes.vitals import collect_eyes_stale
+    import time as _t
+
+    now = _t.time()
+
+    fresh = tmp_path / "alive-fresh"
+    fresh.touch()
+    assert collect_eyes_stale(fresh, now=now) == []
+
+    old = tmp_path / "alive-old"
+    old.touch()
+    import os
+    os.utime(old, (now - 3600, now - 3600))
+    findings = collect_eyes_stale(old, now=now)
+    assert len(findings) == 1
+    assert findings[0].finding_type == "eyes.stale"
+    assert findings[0].severity == Severity.WARNING
+    assert findings[0].evidence["age_seconds"] > 900
+
+    missing = tmp_path / "alive-missing"
+    findings = collect_eyes_stale(missing, now=now)
+    assert findings and findings[0].finding_type == "eyes.stale"

@@ -64,6 +64,11 @@ def main() -> None:
         tmp = EYES / ".grab.png"
         try:
             if grab(tmp):
+                # Liveness marker: touched on every SUCCESSFUL grab, not on
+                # change. An idle screen stays fresh; a broken display goes
+                # stale and Ares (eyes.stale) pages Jon instead of everyone
+                # trusting a frozen latest.png. (2026-09-24 audit hole #2.)
+                (EYES / ".alive").touch()
                 fp = fingerprint(tmp)
                 if prev is None or _delta(prev, fp) >= DIFF_THRESHOLD:
                     import shutil
