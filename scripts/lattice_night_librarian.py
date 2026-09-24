@@ -119,6 +119,20 @@ def main() -> int:
 
     print(f"done ok={ok} fail={fail} wall={time.perf_counter()-t0:.1f}s")
     con.close()
+
+    # Housekeeping ride-along (2026-09-24): black-box receipt retention.
+    # The timer already runs nightly; a second sweep here costs one import.
+    # Best-effort — a retention failure must not fail the embedding pass.
+    try:
+        from soveryn.platform.blackbox_retention import prune_blackbox
+
+        removed = prune_blackbox(keep=200)
+        total = sum(removed.values())
+        if total:
+            print(f"black_box retention: {total} receipts pruned")
+    except Exception:
+        print("black_box retention skipped (error)", file=sys.stderr)
+
     return 0 if fail == 0 else 2
 
 
