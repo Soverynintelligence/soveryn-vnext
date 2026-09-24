@@ -18,6 +18,7 @@ UNITS=(
   soveryn-ares.service
   soveryn.target
   soveryn-cognition-instance.service
+  soveryn-eyes.service
 )
 
 MODE="${1:-}"
