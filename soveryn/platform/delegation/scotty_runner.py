@@ -274,7 +274,10 @@ def scotty_run(
                             f"Your work is judged ONLY by this command. Run it "
                             f"yourself before you report. If the test file it "
                             f"names does not exist, CREATE it as part of the "
-                            f"task — you cannot pass a test that isn't there.\n\n"
+                            f"task — you cannot pass a test that isn't there. "
+                            f"Before reporting, run `python -m py_compile` on "
+                            f"every file you created or edited — a file that "
+                            f"does not parse is not done.\n\n"
                             if acceptance else ""
                         )
                         + ground_truth_block(objective, scope, acceptance, worktree)
