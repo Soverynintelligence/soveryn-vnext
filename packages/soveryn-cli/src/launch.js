@@ -133,6 +133,8 @@ function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, pa
     PI_TELEMETRY: '0',
     PI_SKIP_VERSION_CHECK: '1',
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'local',
+    KERNEL_LATTICE: process.env.KERNEL_LATTICE || '1',
+    KERNEL_MEMORY: process.env.KERNEL_MEMORY || '1',
   };
 
   const piArgs = [];

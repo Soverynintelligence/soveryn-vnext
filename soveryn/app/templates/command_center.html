@@ -3199,9 +3199,199 @@ details.cc-drawer>summary{cursor:pointer;list-style:none;font-size:11.5px;letter
 details.cc-drawer>summary::-webkit-details-marker{display:none}
 details.cc-drawer>summary::after{content:" +";color:var(--gold)}
 details.cc-drawer[open]>summary::after{content:" −"}
+
+/* Soft desk in black.
+   The white desk reads because the page is a mid gray and every control
+   is either pushed out (light edge + dark edge) or pressed in.
+   Same trick here: the field is #222a33, not pure black, or the edges vanish. */
+body.lab.sd{
+  background:#222a33 !important;
+  color:#d5dbe3 !important;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif !important;
+  min-height:100vh;
+}
+body.lab.sd .page{
+  max-width:1040px !important;
+  gap:18px !important;
+  padding:32px clamp(16px,4vw,48px) 64px !important;
+}
+body.lab.sd .plate{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  padding:0 0 8px !important;
+  margin:0 0 18px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:22px !important;
+  flex-wrap:wrap !important;
+  position:static !important;
+  top:auto !important;
+  z-index:auto !important;
+  height:auto !important;
+  overflow:visible !important;
+}
+body.lab.sd .plate nav{
+  display:flex !important;
+  align-items:center !important;
+  gap:16px !important;
+}
+body.lab.sd .plate > div{gap:16px !important}
+body.lab.sd .plate .id{
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  border-radius:18px !important;
+  padding:8px 14px !important;
+  box-shadow:4px 4px 8px #12181f,-4px -4px 8px #323c48 !important;
+}
+body.lab.sd .plate .id img{width:32px !important;height:32px !important}
+body.lab.sd .plate .id b{color:#e7edf3;letter-spacing:.4px}
+body.lab.sd .plate .id i{color:#8b97a6}
+body.lab.sd .plate nav a{
+  color:#9aa6b4 !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a);
+  border:0 !important;
+  border-radius:12px;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  line-height:1.2 !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48;
+}
+body.lab.sd .plate nav a.active{
+  color:#e7edf3 !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48;
+  background:linear-gradient(145deg,#1c242d,#2a333e);
+}
+body.lab.sd .status-pill{
+  color:#b7c0cb !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48 !important;
+}
+body.lab.sd .cc-mode-toggle{
+  color:#d3a24a !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48 !important;
+}
+body.lab.sd .brief-actions{gap:14px !important}
+body.lab.sd .sd-h{
+  font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8b97a6;
+  font-weight:700;margin:22px 2px 12px;
+}
+body.lab.sd .needs-you,
+body.lab.sd .active-now,
+body.lab.sd .greeting,
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card,
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  background:linear-gradient(145deg,#2e3742,#1b222b) !important;
+  border:0 !important;
+  border-radius:28px !important;
+  box-shadow:9px 9px 18px #12181f,-9px -9px 18px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results{
+  background:transparent !important;
+  box-shadow:none !important;
+  border:0 !important;
+  padding:0 !important;
+}
+body.lab.sd .agent-row,
+body.lab.sd .daemon-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:22px;
+  background:transparent !important;box-shadow:none !important;border:0 !important;
+}
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card{padding:22px 18px !important}
+body.lab.sd .agent-card .name{
+  font-family:Georgia,serif !important;font-size:20px !important;font-weight:600 !important;
+  letter-spacing:.3px !important;text-transform:none !important;color:#e7edf3 !important;
+}
+body.lab.sd .agent-card .role,
+body.lab.sd .agent-card .state,
+body.lab.sd .daemon-card .meta{color:#8b97a6 !important;text-transform:none !important;letter-spacing:0 !important}
+body.lab.sd .greeting h1{font-family:Georgia,serif;font-size:28px;font-weight:600;color:#e7edf3}
+body.lab.sd .greeting p{color:#8b97a6}
+body.lab.sd .ny-label,body.lab.sd .an-label{display:none}
+body.lab.sd .ny-clear{color:#8b97a6;font-size:15px}
+body.lab.sd .brief-act,
+body.lab.sd .agent-act{
+  border:0 !important;
+  border-radius:14px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  color:#d5dbe3 !important;
+  box-shadow:5px 5px 10px #12181f,-4px -4px 10px #323c48 !important;
+}
+body.lab.sd .brief-act.primary,
+body.lab.sd .agent-act.primary{
+  color:#ffb199 !important;
+  box-shadow:inset 4px 4px 8px #12181f,inset -4px -4px 8px #323c48 !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+}
+body.lab.sd .easy-results .er-item{
+  border:0 !important;
+  border-left:0 !important;
+  border-radius:16px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results .er-head h3,
+body.lab.sd .easy-results .er-hint{color:#8b97a6 !important}
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  margin:16px 0 !important;
+  overflow:hidden !important;
+  border-radius:28px !important;
+}
+body.lab.sd details.cc-fold>summary,
+body.lab.sd details.cc-drawer>summary{
+  color:#8b97a6;letter-spacing:2px;
+  background:transparent !important;
+  border-radius:28px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:16px !important;
+  padding:14px 18px !important;
+}
+body.lab.sd details.cc-chapter>summary::before{content:none !important}
+body.lab.sd details.cc-fold>summary .cc-fold-hint{margin-left:auto;margin-right:4px}
+body.lab.sd details.cc-fold>summary::after{position:static !important;flex:none}
+body.lab.sd.cc-easy .acttruth-badge{display:none !important}
+body.lab.sd .agent-card .acttruth-badge{
+  position:static !important;
+  align-self:flex-start;
+  margin:0 0 10px;
+  border-radius:12px !important;
+}
+body.lab.sd .agent-card .agent-actions{position:static !important;margin-top:14px}
+body.lab.sd details.cc-fold .panel,
+body.lab.sd details.cc-fold section.panel,
+body.lab.sd details.cc-fold .scotty-approvals,
+body.lab.sd details.cc-drawer .panel,
+body.lab.sd details.cc-drawer section.panel{
+  border:0 !important;
+  border-radius:18px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  padding:14px 16px !important;
+}
+@media(max-width:800px){
+  body.lab.sd .agent-row,body.lab.sd .daemon-row{grid-template-columns:1fr}
+}
 </style>
 </head>
-<body class="lab cc-easy" data-lab data-testid="command-center" data-cc-mode="easy">
+<body class="lab cc-easy sd" data-lab data-testid="command-center" data-cc-mode="easy">
   <div class="page">
     <div class="plate">
       <a class="id" href="/messages">
@@ -3222,20 +3412,10 @@ details.cc-drawer[open]>summary::after{content:" −"}
       </div>
     </div>
 
-    <!-- ═══ Operator zone: needs-you + briefing + agents + approvals ═══ -->
+    <!-- Operator zone: today, needs you, citizens, estate -->
     <div class="cc-operator-zone">
 
-    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
-      <span class="ny-label">Needs you</span>
-      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
-      <div data-needs-chips style="display:contents"></div>
-    </section>
-
-    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
-      <span class="an-label">Active now</span>
-      <div data-active-chips style="display:contents"></div>
-    </section>
-
+    <h2 class="sd-h">Today</h2>
     <section class="panel greeting" data-testid="greeting">
       <h1 data-greeting-heading>…</h1>
       <p data-greeting-body>Loading your team…</p>
@@ -3266,7 +3446,28 @@ details.cc-drawer[open]>summary::after{content:" −"}
         </form>
       </div>
     </section>
+    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
+      <div class="er-head">
+        <h3>Results</h3>
+        <span class="er-hint">from your team · automations</span>
+      </div>
+      <div class="er-list" data-easy-results-list>
+        <div class="er-empty">Loading results…</div>
+      </div>
+    </section>
 
+    <h2 class="sd-h">Needs you</h2>
+    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
+      <span class="ny-label">Needs you</span>
+      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
+      <div data-needs-chips style="display:contents"></div>
+    </section>
+    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
+      <span class="an-label">Active now</span>
+      <div data-active-chips style="display:contents"></div>
+    </section>
+
+    <h2 class="sd-h">Citizens</h2>
     <section class="agent-row" data-testid="agent-row" aria-label="Your team">
       <div class="agent-card" data-agent="aetheria" aria-label="Aetheria — runs the house">
         <button type="button" class="acttruth-badge" data-acttruth-badge="aetheria" title="ActTruth — click for crew ledger" aria-label="ActTruth for Aetheria">
@@ -3326,13 +3527,19 @@ details.cc-drawer[open]>summary::after{content:" −"}
       </div>
     </section>
 
-    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
-      <div class="er-head">
-        <h3>Results</h3>
-        <span class="er-hint">from your team · automations</span>
+    <h2 class="sd-h">Estate</h2>
+    <section class="daemon-row" data-testid="daemon-strip">
+      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
       </div>
-      <div class="er-list" data-easy-results-list>
-        <div class="er-empty">Loading results…</div>
+      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="ares" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
       </div>
     </section>
 
@@ -3341,7 +3548,7 @@ details.cc-drawer[open]>summary::after{content:" −"}
 
     
     <!-- ═══ 2. Gates ═══ -->
-    <details class="cc-fold cc-chapter" open data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
+    <details class="cc-fold cc-chapter" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
       <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
       <div class="cc-fold-body">
     <section class="panel auto-panel" data-testid="automations-panel">
@@ -4123,24 +4330,7 @@ details.cc-drawer[open]>summary::after{content:" −"}
     <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
       <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
       <div class="cc-fold-body">
-<!-- Daemon status strip — autonomous fleet at a glance. -->
-    <section class="daemon-row" data-testid="daemon-strip">
-      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-      <div class="daemon-card" data-daemon="ares" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
-      </div>
-    </section>
-
-    
-<!-- Heartbeat + Ares -->
+<!-- Heartbeat + Ares stay in Pulse. The status strip is on the first screen. -->
     <div class="pulse-row">
     <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>

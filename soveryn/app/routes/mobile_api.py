@@ -10,7 +10,8 @@ makes a web page feel like a web page instead of an app.
 
 The messenger already solved this — `/m/*` carries a paired-device bearer secret
 and the gate lets it through untouched because the app enforces its own auth
-(`public_gate._self_authed_path`). Mounting the app's API under `/m/api/`
+(`public_gate._self_authed_path`). Pairing mint (`/m/pair` exactly) is the
+exception: the gate keeps that behind its password. Mounting the app's API under `/m/api/`
 inherits that for free:
 
   - no change to public_gate, so nothing new is exposed by configuration

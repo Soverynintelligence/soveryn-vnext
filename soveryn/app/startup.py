@@ -37,6 +37,7 @@ def _kernel_lattice_enabled() -> bool:
 from flask import Flask, g, jsonify, request
 
 from soveryn import __version__
+from soveryn.edge import is_operator_local
 from soveryn.agents.loop import AgentLoop, _default_embed
 from soveryn.config.loader import EnvConfig, load_env_config
 from soveryn.config.runtime import ACTIVE_AGENTS, AGENT_TO_SERVER, MODEL_SERVERS
@@ -1577,6 +1578,14 @@ def _register_error_handlers(app: Flask) -> None:
         # have to grep the log for a 500 that just happened. If the guard
         # is OFF (multi-machine future), redact to type+message.
         require_localhost = app.config.get("SOVERYN_REQUIRE_LOCALHOST", True)
+        # The gate dials from loopback and sets the edge mark. A traceback
+        # on that path would ship source to the public internet.
+        try:
+            expose_internals = require_localhost and is_operator_local(
+                request.remote_addr, request.headers
+            )
+        except Exception:
+            expose_internals = False
         body = {
             "error": {
                 "code": "internal_error",
@@ -1585,7 +1594,7 @@ def _register_error_handlers(app: Flask) -> None:
                 "exception_class": exc_class,
             }
         }
-        if require_localhost:
+        if expose_internals:
             tb_str = "".join(traceback.format_exception(type(e), e, e.__traceback__))
             # Cap traceback so a runaway recursion doesn't explode the body
             if len(tb_str) > 8000:

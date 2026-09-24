@@ -1,7 +1,9 @@
 """Flask blueprint for SOVERYN Messenger routes.
 
-All routes mounted under /m/*. Auth-gated except /m/pair and /m/pair/<code>;
-admin routes (/m/pair, /m/devices) refuse non-localhost requests.
+All routes mounted under /m/*. Auth-gated except /m/pair and /m/pair/<code>.
+Minting a pairing code (/m/pair) refuses anything that is not a direct
+loopback connection. The public gate's edge mark counts as remote, because
+that proxy dials us from 127.0.0.1.
 """
 from __future__ import annotations
 import json
@@ -27,14 +29,12 @@ from soveryn.app.messenger.threads import (
     create_thread, get_thread, list_threads, set_thread_muted,
     touch_thread, ThreadError,
 )
+from soveryn.edge import is_operator_local
 from soveryn.memory.conversation_store import ConversationStore
 
 
-_LOCALHOST_ADDRS = {"127.0.0.1", "::1"}
-
-
 def _is_localhost() -> bool:
-    return request.remote_addr in _LOCALHOST_ADDRS
+    return is_operator_local(request.remote_addr, request.headers)
 
 
 def _require_localhost(fn):

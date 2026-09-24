@@ -22,10 +22,16 @@ import hmac
 import os
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 import requests
-from flask import Flask, Response, request, stream_with_context
+from flask import Flask, Response, redirect, request, stream_with_context
+
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+from soveryn.edge import EDGE_HEADER, EDGE_PUBLIC  # noqa: E402
 
 # House access log (CF real IP / country) — shared with TGTHRmess + PondWright proxy.
 sys.path.insert(0, str(Path.home() / "access-logs"))
@@ -97,12 +103,18 @@ def _authorized() -> bool:
 
 def _self_authed_path(path: str) -> bool:
     """The /m/* messenger surface authenticates itself — device bearer secret
-    (threads/messages/send), single-use pairing codes (/m/pair/<code>), and a
-    localhost-only mint (/m/pair). Its `Authorization: Bearer <secret>` collides
-    with THIS gate's HTTP Basic auth (one Authorization header, two claimants),
-    so a phone can never satisfy both — threads 401 and the PWA loops on sign-in.
-    Let /m/* through the gate untouched; the app enforces its own auth. Everything
-    else still requires the gate password."""
+    (threads/messages/send) and single-use pairing claims (/m/pair/<code>).
+    Its `Authorization: Bearer <secret>` collides with THIS gate's HTTP Basic
+    auth (one Authorization header, two claimants), so a phone can never
+    satisfy both. Let those paths through; the app enforces its own auth.
+
+    Minting a code (GET/POST /m/pair exactly) is not in that set. The app's
+    localhost check cannot see past this proxy, so the mint stays behind the
+    gate password here, and the app still refuses it when this proxy's edge
+    mark is present. Everything else still requires the gate password."""
+    normalized = path.rstrip("/")
+    if normalized == "m/pair":
+        return False
     return path == "m" or path.startswith("m/")
 
 
@@ -115,6 +127,59 @@ def _who() -> str:
     if a and a.username:
         return f"basic:{a.username}"
     return "-"
+
+
+def _safe_next(raw: str | None) -> str:
+    """Only same-site paths. A bad value would send the phone off the house."""
+    path = (raw or "").strip()
+    if not path.startswith("/") or path.startswith("//") or path.startswith("/\\"):
+        return "/messages"
+    if path.startswith("/gate-login"):
+        return "/messages"
+    return path
+
+
+def _login_page(nxt: str, *, wrong: bool = False) -> str:
+    note = "<p>That name or password is wrong.</p>" if wrong else ""
+    safe = urllib.parse.quote(nxt, safe="")
+    return f"""<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOVERYN</title>
+</head><body>
+<h1>SOVERYN</h1>
+<p>Sign in to open Messages on this phone.</p>
+{note}
+<form method="post" action="/gate-login">
+  <input type="hidden" name="next" value="{safe}">
+  <p><label>Name<br><input name="username" autocapitalize="none" autocomplete="username"></label></p>
+  <p><label>Password<br><input name="password" type="password" autocomplete="current-password"></label></p>
+  <button type="submit">Sign in</button>
+</form>
+</body></html>
+"""
+
+
+def _wants_login_page() -> bool:
+    """A browser navigation should get a form. iOS will not show the system
+    password sheet for a bare 401, so the phone was staring at one sentence."""
+    if request.method != "GET":
+        return False
+    accept = request.headers.get("Accept") or ""
+    return "text/html" in accept
+
+
+def _unauthorized():
+    if _wants_login_page():
+        nxt = request.full_path if request.query_string else request.path
+        if nxt.endswith("?"):
+            nxt = nxt[:-1]
+        return redirect("/gate-login?next=" + urllib.parse.quote(_safe_next(nxt), safe="/?=&"))
+    return Response(
+        "Authentication required.", 401,
+        {"WWW-Authenticate": 'Basic realm="SOVERYN"'},
+    )
 
 
 def _attach_remember_cookie(resp: Response) -> Response:
@@ -135,19 +200,44 @@ if house_accesslog is not None:
     house_accesslog.install_flask(app, site="soveryn-gate", who_fn=_who)
 
 
+@app.route("/gate-login", methods=["GET", "POST"])
+def gate_login():
+    """Page sign-in for the phone. The system basic-auth sheet does not appear
+    on the home-screen app, so this form sets the same remember-me cookie."""
+    nxt = _safe_next(request.values.get("next"))
+    if request.method == "POST":
+        user = request.form.get("username") or ""
+        password = request.form.get("password") or ""
+        if (
+            USER and PASS
+            and hmac.compare_digest(user, USER)
+            and hmac.compare_digest(password, PASS)
+        ):
+            resp = redirect(nxt)
+            return _attach_remember_cookie(resp)
+        return Response(_login_page(nxt, wrong=True), 401, mimetype="text/html")
+    if _authorized():
+        return redirect(nxt)
+    return Response(_login_page(nxt), 200, mimetype="text/html")
+
+
 @app.route("/", defaults={"path": ""},
            methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
 @app.route("/<path:path>",
            methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
 def proxy(path):
     if not _self_authed_path(path) and not _authorized():
-        return Response(
-            "Authentication required.", 401,
-            {"WWW-Authenticate": 'Basic realm="SOVERYN"'},
-        )
+        return _unauthorized()
 
     url = f"{UPSTREAM}/{path}"
-    fwd_headers = {k: v for k, v in request.headers if k.lower() not in _HOP}
+    # Drop any client copy, then mark the request as public-edge. The app
+    # treats that mark as "not the operator at the keyboard" even though
+    # this proxy's socket is loopback.
+    fwd_headers = {
+        k: v for k, v in request.headers
+        if k.lower() not in _HOP and k.lower() != EDGE_HEADER.lower()
+    }
+    fwd_headers[EDGE_HEADER] = EDGE_PUBLIC
     # Real client for the app (Funnel / CF / plain).
     if house_accesslog is not None:
         ip = house_accesslog.client_ip(request.headers, request.remote_addr)
