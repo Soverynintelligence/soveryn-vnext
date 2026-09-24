@@ -12,6 +12,13 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
 Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin ARES_NET_LOOPBACK_ALLOWLIST=5001,8090,8087,47017,39477,53,631
+# Public-bind allowlist (2026-09-24, Jon-confirmed live services): the
+# pondwright cloudflared tunnel targets 10.10.10.1 (not 127.0.0.1), so the
+# 0.0.0.0 binds on 5055 (shepherd) and 5065 (tgthrmess) are load-bearing for
+# shepherdfcc.com / tgthrmess.com. 5075 is the teammates phone console —
+# reached from Jon's phone over LAN by design. Hardening backlog (staged
+# change, not morning work): repoint tunnel config at 127.0.0.1 and rebind.
+Environment=ARES_NET_PUBLIC_ALLOWLIST=22:sshd,5055:python,5065:python3,5075:teammates
 ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:5001/health --name vnext --max-wait 60
 ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.agents.ares
 Restart=no
