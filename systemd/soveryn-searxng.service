@@ -2,7 +2,7 @@
 # Self-hosted privacy-respecting search backend for Aetheria + Vett web tools.
 # Bound to 127.0.0.1:8095 only — no external exposure.
 #
-# Settings: %h/soveryn_vnext/config/searxng/settings.yml
+# LIVE settings: %h/.config/soveryn/searxng/ (container-owned, chowns itself to uid 977 — never run git ops against it). Templates: repo config/searxng/ — copy edits to the live dir and restart.
 # Secret:   %h/.config/soveryn/searxng.env  (SEARXNG_SECRET_KEY) — not in git
 
 [Unit]
@@ -15,7 +15,7 @@ EnvironmentFile=-%h/.config/soveryn/searxng.env
 ExecStartPre=-/usr/bin/docker rm -f soveryn-searxng
 ExecStart=/usr/bin/docker run --rm --name soveryn-searxng \
   -p 127.0.0.1:8095:8080 \
-  -v %h/soveryn_vnext/config/searxng:/etc/searxng \
+  -v %h/.config/soveryn/searxng:/etc/searxng \
   -e BASE_URL=http://127.0.0.1:8095/ \
   -e INSTANCE_NAME=soveryn-searxng \
   -e SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY} \

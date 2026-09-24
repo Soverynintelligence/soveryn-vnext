@@ -3,7 +3,7 @@
 Canonical **non-secret** settings for `soveryn-searxng.service` (`127.0.0.1:8095`).
 
 - **Brave** default (2026-08-30). Bing kept enabled as fallback; Wikipedia off — it was dictionary-first.
-- Mounted into the container at `/etc/searxng` from this directory
+- **LIVE mount (2026-09-24):** `~/.config/soveryn/searxng/` — the container chowns its config dir to uid 977, so the live dir was moved OUT of the repo tree (git operations here collided with it and blocked a delegation merge twice). This directory holds tracked templates; copy edits to the live dir, then `systemctl --user restart soveryn-searxng.service`.
 - Client default engines also set in `soveryn/platform/web/search.py` (`DEFAULT_ENGINES`)
 
 ## Secret key (do not commit)
