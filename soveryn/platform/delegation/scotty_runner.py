@@ -112,6 +112,35 @@ def build_worktree_tool_registry(worktree: Path):
     return registry
 
 
+_DELEGATION_SERVER = None
+
+#: Worker system prompt. The old Scotty chat persona died with the fold
+#: (Sep 22) — a worker lane carries its own identity, not a borrowed one.
+#: Task specifics (objective/scope/acceptance) arrive in the directive;
+#: this prompt is the part that never changes.
+WORKER_SYSTEM_PROMPT = """You are the SOVERYN delegation worker: a coding hand that executes one bounded task in an isolated git worktree.
+
+Rules that never change:
+- Touch ONLY files inside the stated SCOPE. Anything outside is forbidden, even if it seems helpful.
+- Your work is judged by the stated ACCEPTANCE command. Run it yourself before you report; if the test file it names does not exist, create it as part of the task.
+- If a requirement cannot be met, SAY SO in your final report. A report that claims success over unmet requirements is the worst failure mode in this house.
+- Work incrementally: make the smallest change that moves the acceptance command from failing to passing, then stop.
+- Report factually and concisely: what changed, what passed, what (if anything) did not. No preamble."""
+
+
+def _delegation_server():
+    """The worker endpoint for delegated execution (lazy, monkeypatchable).
+
+    Resolves runtime's declared vett/scotty server each call so config changes
+    (brain moves) are honored without code edits. Module-level cache is
+    deliberately NOT used — the resolution is cheap and config-following beats
+    process-lifetime caching here.
+    """
+    from soveryn.config.runtime import _vett_scotty_server
+
+    return _vett_scotty_server()
+
+
 def scotty_run(
     worktree_path: str,
     objective: str,
@@ -193,6 +222,13 @@ def scotty_run(
                         max_tokens=DELEGATION_MAX_TOKENS,
                         chat_timeout_seconds=DELEGATION_CHAT_TIMEOUT_SECONDS,
                         soul_text="",  # skip soul for delegation runs
+                        system_prompt=WORKER_SYSTEM_PROMPT,
+                        # 2026-09-24: Scotty was folded into Kernel (Sep 22) and
+                        # his persona route left AGENT_TO_SERVER — every dispatch
+                        # died with "No route for agent 'scotty'". The executor
+                        # binds its declared worker endpoint explicitly instead of
+                        # resurrecting a folded persona into the agent tables.
+                        server_override=_delegation_server(),
                         # 2026-07-28: the executor knew NOTHING. Handed an
                         # objective and a scope, with no view of what the rest
                         # of the fleet had already built or dispatched. He was

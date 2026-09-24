@@ -548,11 +548,21 @@ class AgentLoop:
         steering_rack: SteeringRack | None = None,
         verification_gate: "VerificationGate | None" = None,
         approval_gate: "ApprovalBroker | None" = None,
+        server_override: "ModelServer | None" = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
         # bubbles up here, NEVER at turn-processing time.
-        self.server = route_for_agent(self.agent_name)
+        # server_override binds an explicit server and skips the agent-name
+        # route entirely: the delegation runner executes under a folded name
+        # (scotty) whose persona route no longer exists, but whose worker
+        # endpoint is declared in runtime. Non-personal worker lanes need a
+        # server, not a persona.
+        self.server = (
+            server_override
+            if server_override is not None
+            else route_for_agent(self.agent_name)
+        )
         self.conv_store = conv_store
         self.chat_fn = chat_fn
         self.stream_fn = stream_fn
