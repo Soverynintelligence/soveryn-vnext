@@ -1,16 +1,15 @@
-Last reviewed: 2026-09-17 by Kernel
+# SOVERYN vNext
+
+Last reviewed: 2026-09-22 by Kernel
+Who: see CURRENT_TRUTH §0
+Staleness owner: Kernel — re-verifies this README against the tree and CURRENT_TRUTH on each docs pass; Jon arbitrates disputes.
 Staleness rule: re-verify against CURRENT_TRUTH per-row dates before relying on this file; update this line on each review.
-Roster facts verified against CURRENT_TRUTH on 2026-09-17 — re-verify via the CURRENT_TRUTH staleness grep before relying on this file.
 
 > **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
-
-# SOVERYN vNext
 
 ## What is SOVERYN
 
 - **What:** a fully local multi-agent AI house and SOVERYN Intelligence LLC (North Carolina). Not a crypto token, DAO, or chain.
-Who: see CURRENT_TRUTH §0
-Staleness owner: Kernel — re-verifies this README against the tree and CURRENT_TRUTH on each docs pass; Jon arbitrates disputes.
 - **Where:** Jon-owned hardware — tower + dual DGX Sparks. Models stay local.
 - **What's live:** Messages is the house front door. Runtime facts: [`docs/CURRENT_TRUTH.md`](docs/CURRENT_TRUTH.md).
 
