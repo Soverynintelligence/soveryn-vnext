@@ -94,3 +94,20 @@ def test_bad_action_rejected():
     with pytest.raises(ToolArgError):
         house_look("browse_archive")  # no buffer paging, by design
     assert set(ACTIONS) == {"screen_latest", "screen_fresh", "cam"}
+
+
+def test_screen_only_desk_cannot_touch_cam():
+    """Aetheria/Eve get the eyes buffer, never the PTZ webcam."""
+    from soveryn.platform.house_look_tool import build_house_look_tool
+
+    tool = build_house_look_tool(
+        owner_agent="aetheria",
+        allowed_actions=("screen_latest", "screen_fresh"),
+    )
+    assert tool.schema["properties"]["action"]["enum"] == [
+        "screen_latest", "screen_fresh",
+    ]
+    with pytest.raises(ToolArgError):
+        tool.handler({"action": "cam"})
+    with pytest.raises(ValueError):
+        build_house_look_tool(owner_agent="eve", allowed_actions=("cam",))

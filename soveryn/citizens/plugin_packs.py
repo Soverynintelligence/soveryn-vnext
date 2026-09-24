@@ -113,14 +113,23 @@ def _register_system(ctx: PackContext, owner: str) -> None:
         from soveryn.platform.diag_view_tool import build_house_diag_tool
 
         ctx.registry.register(build_house_diag_tool(owner_agent=owner))
-    # house_look (2026-09-24): Kernel's real eyes — screen frames (eyes
-    # buffer) + on-demand webcam with PTZ. Jon's terms in the module header:
-    # look only when working with him or asked, receipts per look, cam
-    # recenters after every capture. Kernel only for now.
+    # house_look (2026-09-24): real eyes — screen frames (eyes buffer) +
+    # on-demand PTZ webcam. Kernel gets all three actions; Aetheria + Eve
+    # get screen-only (their brains carry mmproj, so frames land as pixels
+    # on their turns). Cam is enforced Kernel-only in the builder.
     if owner == "kernel":
         from soveryn.platform.house_look_tool import build_house_look_tool
 
         ctx.registry.register(build_house_look_tool(owner_agent=owner))
+    if owner in ("aetheria", "eve"):
+        from soveryn.platform.house_look_tool import build_house_look_tool
+
+        ctx.registry.register(
+            build_house_look_tool(
+                owner_agent=owner,
+                allowed_actions=("screen_latest", "screen_fresh"),
+            )
+        )
     _ok(ctx, owner, "system")
 
 

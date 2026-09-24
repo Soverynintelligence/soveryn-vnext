@@ -175,15 +175,35 @@ def house_look(action: str, *, pan: int = 0, tilt: int = 0) -> dict[str, Any]:
     }
 
 
-def build_house_look_tool(*, owner_agent: str) -> ToolSpec:
+def build_house_look_tool(
+    *,
+    owner_agent: str,
+    allowed_actions: tuple[str, ...] | None = None,
+) -> ToolSpec:
+    """allowed_actions scopes the desk: Kernel gets all three (screen + cam);
+    screen-only seats (Aetheria, Eve) pass ('screen_latest', 'screen_fresh').
+    The webcam stays Kernel-only — one desk holding the PTZ, no contention."""
+    actions = tuple(allowed_actions) if allowed_actions else ACTIONS
+    if not set(actions) <= set(ACTIONS):
+        raise ValueError(f"unknown actions: {set(actions) - set(ACTIONS)}")
+    if "cam" in actions and owner_agent != "kernel":
+        raise ValueError(
+            "house_look cam is Kernel-only — the PTZ webcam has one desk"
+        )
+
     def handler(args: Mapping[str, Any]) -> Any:
         action = str(args.get("action") or "").strip().lower()
+        if action not in actions:
+            raise ToolArgError(
+                f"action must be one of: {', '.join(actions)} "
+                f"(cam is Kernel-only)"
+            )
         try:
             return house_look(
                 action,
                 pan=_validated_deg(args.get("pan"), *PAN_RANGE_DEG, "pan"),
                 tilt=_validated_deg(args.get("tilt"), *TILT_RANGE_DEG, "tilt"),
-            )
+            ) if action == "cam" else house_look(action)
         except ToolArgError:
             raise
         except subprocess.TimeoutExpired:
@@ -193,6 +213,7 @@ def build_house_look_tool(*, owner_agent: str) -> ToolSpec:
         except Exception as exc:  # noqa: BLE001 — never crash the wire
             return {"ok": False, "error": str(exc)[:300]}
 
+    schema_actions = list(actions)
     return ToolSpec(
         name="house_look",
         owner=owner_agent,
@@ -201,7 +222,7 @@ def build_house_look_tool(*, owner_agent: str) -> ToolSpec:
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": list(ACTIONS),
+                    "enum": schema_actions,
                     "description": (
                         "screen_latest = most recent change-captured screen "
                         "frame; screen_fresh = grab a new one now; cam = "
