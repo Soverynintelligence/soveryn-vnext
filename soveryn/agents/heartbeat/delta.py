@@ -31,6 +31,7 @@ Expected ``current`` snapshot shape (Task 7 reference)::
             "new_contradiction_flag_count":     int,
         },
         "house": {
+            "lounge_unread_count":             int,
             "automations_unread_count":        int,
             "automations_inbox_latest_id":     str | None,
             "gate_pending_count":              int,
@@ -70,6 +71,7 @@ _BOARD_COUNT_FIELDS: tuple[tuple[str, str], ...] = (
 # the pulse even when the coord board is still — 2026-08-20: skip-unchanged had
 # silenced Aetheria all day while the house gained Results, Gate, skills.
 _HOUSE_COUNT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("lounge_unread_count",      "lounge unread"),
     ("automations_unread_count", "automations unread"),
     ("gate_pending_count",       "gate pending"),
     ("triage_open_count",        "triage open"),

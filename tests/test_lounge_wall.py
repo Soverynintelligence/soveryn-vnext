@@ -62,7 +62,7 @@ def test_post_note_requires_text(lounge_room):
 
 def test_wall_without_lounge_reports_closed(tmp_path):
     w = wall(tmp_path)
-    assert w == {"ok": True, "open": False, "entries": []}
+    assert w == {"ok": True, "open": False, "entries": [], "unread": 0}
 
 
 def test_lounge_tool_says_and_reads(lounge_room, monkeypatch):
@@ -94,3 +94,17 @@ def test_say_endpoint_localhost_only(tmp_path, monkeypatch):
     resp = client.post("/api/lounge/say", json={"text": "hi", "from": "jon"},
                        environ_base={"REMOTE_ADDR": "203.0.113.5"})
     assert resp.status_code == 403
+
+
+def test_unread_tracking_and_mark_read(lounge_room):
+    tmp_path, _ = lounge_room
+    # aetheria never read: 3 entries by others (arrived + note + reply)
+    assert lounge.unread_since(tmp_path, "aetheria") == 3
+    w = lounge.wall(tmp_path, reader="aetheria")
+    assert w["unread"] == 3
+    # reading marks read; own posts never count
+    assert lounge.unread_since(tmp_path, "aetheria") == 0
+    post_note(tmp_path, from_party="jon", text="psst, still here")
+    assert lounge.unread_since(tmp_path, "aetheria") == 1
+    post_note(tmp_path, from_party="aetheria", text="heard")
+    assert lounge.unread_since(tmp_path, "aetheria") == 1  # own post excluded

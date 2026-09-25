@@ -54,7 +54,7 @@ def post_note(data_root: Path | str, *, from_party: str, text: str) -> dict[str,
     if room is None:
         raise ValueError("lounge room missing")
     room.setdefault("events", []).append({
-        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "at": datetime.now(timezone.utc).isoformat(),
         "type": "wall_note",
         "from": from_party,
         "text": text[:2000],
@@ -69,14 +69,64 @@ def _save(data_root: Path | str, room: dict[str, Any]) -> None:
     _save_room(Path(data_root), room)
 
 
-def wall(data_root: Path | str, *, limit: int = 50) -> dict[str, Any]:
-    """The lounge wall, chronological, chat-shaped. Missing lounge → open: false."""
+def _reads_path(data_root: Path | str) -> Path:
+    return Path(data_root) / "lounge" / "reads.json"
+
+
+def mark_read(data_root: Path | str, party: str, *, at: str | None = None) -> None:
+    """Record a party's last-read moment (wall entries newer are unread)."""
+    path = _reads_path(data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    reads: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            reads = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            reads = {}
+    reads[party] = at or datetime.now(timezone.utc).isoformat()
+    path.write_text(json.dumps(reads, indent=1), encoding="utf-8")
+
+
+def unread_since(data_root: Path | str, party: str) -> int:
+    """Wall entries newer than the party's last read, by others only."""
+    party = party.lower()
+    path = _reads_path(data_root)
+    last = ""
+    if path.is_file():
+        try:
+            last = json.loads(path.read_text(encoding="utf-8")).get(party) or ""
+        except (json.JSONDecodeError, OSError):
+            last = ""
     sid = lounge_session_id(data_root)
     if not sid:
-        return {"ok": True, "open": False, "entries": []}
+        return 0
     room = load_room(data_root, sid)
     if room is None:
-        return {"ok": True, "open": False, "entries": []}
+        return 0
+    count = 0
+    for ev in room.get("events") or []:
+        if ev.get("type") not in _WALL_TYPES:
+            continue
+        who = ev.get("from") or ev.get("peer") or ""
+        if who == party:
+            continue  # your own posts are never unread for you
+        if (ev.get("at") or "") > last:
+            count += 1
+    return count
+
+
+def wall(data_root: Path | str, *, limit: int = 50, reader: str | None = None) -> dict[str, Any]:
+    """The lounge wall, chronological, chat-shaped. Missing lounge → open: false.
+
+    reader: when given, the response carries that party's unread count and
+    their marker advances — reading IS marking read.
+    """
+    sid = lounge_session_id(data_root)
+    if not sid:
+        return {"ok": True, "open": False, "entries": [], "unread": 0}
+    room = load_room(data_root, sid)
+    if room is None:
+        return {"ok": True, "open": False, "entries": [], "unread": 0}
     entries = []
     for ev in room.get("events") or []:
         kind = ev.get("type")
@@ -100,8 +150,12 @@ def wall(data_root: Path | str, *, limit: int = 50) -> dict[str, Any]:
                 "at": ev.get("at"), "who": ev.get("peer"),
                 "text": "pulled up a chair", "kind": "arrived",
             })
+    unread = unread_since(data_root, reader) if reader else 0
+    if reader:
+        mark_read(data_root, reader)
     return {
         "ok": True,
         "open": True,
         "entries": entries[-max(1, min(int(limit), MAX_WALL)):],
+        "unread": unread,
     }

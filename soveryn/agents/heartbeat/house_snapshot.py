@@ -26,7 +26,8 @@ def gather_house_snapshot(
     Shape::
 
         {
-            "automations_unread_count": int,
+            "lounge_unread_count":             int,
+            "automations_unread_count":        int,
             "automations_inbox_latest_id": str | None,
             "gate_pending_count": int,
             "triage_open_count": int,
@@ -36,6 +37,7 @@ def gather_house_snapshot(
     """
     root = Path(data_root) if data_root is not None else None
     return {
+        "lounge_unread_count": _lounge_unread(root),
         "automations_unread_count": _automations_unread(root),
         "automations_inbox_latest_id": _automations_latest_id(root),
         "gate_pending_count": _gate_pending(root),
@@ -126,4 +128,19 @@ def _active_now_count(
         return int(out.get("count") or 0)
     except Exception:
         logger.debug("house snapshot: active_now failed", exc_info=True)
+        return 0
+
+
+def _lounge_unread(root: Path | None) -> int:
+    """Unread Lounge-wall notes for Aetheria (the heartbeat's citizen).
+
+    Best-effort: the lounge being down must never break the heartbeat.
+    (2026-09-25 — the Lounge needs to reach the watchers too.)
+    """
+    try:
+        from soveryn.rooms.lounge import unread_since
+
+        base = root if root is not None else Path.home() / "soveryn_vnext" / "data"
+        return unread_since(base, "aetheria")
+    except Exception:  # noqa: BLE001
         return 0

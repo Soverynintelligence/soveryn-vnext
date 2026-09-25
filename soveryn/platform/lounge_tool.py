@@ -25,7 +25,8 @@ def build_lounge_tool(*, owner_agent: str) -> ToolSpec:
 
         data_root = DEFAULT_DATA_ROOT
         if action == "wall":
-            return {"ok": True, **wall(data_root, limit=int(args.get("limit") or 30))}
+            view = wall(data_root, limit=int(args.get("limit") or 30), reader=owner)
+            return {"ok": True, **view}
         if action == "say":
             text = args.get("text")
             if not isinstance(text, str) or not text.strip():
@@ -51,6 +52,7 @@ def build_lounge_tool(*, owner_agent: str) -> ToolSpec:
                 },
                 "text": {"type": "string", "description": "say: the note"},
                 "limit": {"type": "integer", "description": "wall: entries (default 30)"},
+                "note": {"type": "string", "description": "wall: your unread count comes back; reading marks read"},
             },
             "additionalProperties": False,
         },

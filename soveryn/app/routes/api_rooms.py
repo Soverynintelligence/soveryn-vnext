@@ -208,7 +208,8 @@ def api_lounge_wall():
     """The Lounge wall — chat-shaped, chronological. Open in a browser or panel."""
     from soveryn.rooms.lounge import wall as lounge_wall
 
-    return jsonify(lounge_wall(_data_root(), limit=int(request.args.get("limit") or 50))), 200
+    reader = (request.args.get("reader") or "").strip().lower() or None
+    return jsonify(lounge_wall(_data_root(), limit=int(request.args.get("limit") or 50), reader=reader)), 200
 
 
 @bp.post("/api/lounge/say")
