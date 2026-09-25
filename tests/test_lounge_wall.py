@@ -108,3 +108,74 @@ def test_unread_tracking_and_mark_read(lounge_room):
     assert lounge.unread_since(tmp_path, "aetheria") == 1
     post_note(tmp_path, from_party="aetheria", text="heard")
     assert lounge.unread_since(tmp_path, "aetheria") == 1  # own post excluded
+
+
+def test_nudge_reaches_other_citizens_not_jon_not_actor(lounge_room, monkeypatch):
+    """Real autonomy: someone's in the room → the others get one desk post.
+    Jon never gets nudged (his panel IS the room); the actor never nudges
+    themselves; the cooldown only suppresses when nothing new was said."""
+    import soveryn.rooms.lounge as L
+
+    sent = []
+    monkeypatch.setattr(
+        "soveryn.citizens.registry.connect",
+        lambda db: __import__("contextlib").nullcontext(_FakeConn(sent)),
+    )
+    monkeypatch.setenv("LOUNGE_NUDGE_COOLDOWN_MIN", "10")
+    tmp_path, _ = lounge_room
+
+    L.post_note(tmp_path, from_party="jon", text="anyone around?")
+    assert {(p["to"]) for p in sent} == {"aetheria", "eve", "kernel"}
+    # unread = every wall word they haven't read, by others: aetheria 4, eve 2, kernel 3
+    by_to = {p["to"]: p["body"] for p in sent}
+    assert set(by_to) == {"aetheria", "eve", "kernel"}, by_to
+    for to, body in by_to.items():
+        expected = {"aetheria": 4, "eve": 2, "kernel": 3}[to]
+        assert f"{expected} unread" in body, (to, body)
+
+    # round 2 within the cooldown: suppressed — no siren during a lively room
+    before = len(sent)
+    L.post_note(tmp_path, from_party="eve", text="I'm here")
+    assert len(sent) == before, "cooldown must suppress repeat nudges"
+
+    # cooldown expires with new words on the wall: re-nudge with grown counts
+    import json as _json
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    npath = tmp_path / "lounge" / "nudges.json"
+    state = _json.loads(npath.read_text())
+    stale = (_dt.now(_tz.utc) - _td(minutes=20)).isoformat()
+    for party in state:
+        state[party]["at"] = stale
+    npath.write_text(_json.dumps(state))
+
+    L.post_note(tmp_path, from_party="kernel", text="one more for the road")
+    new = sent[before:]
+    by_to = {p["to"]: p["body"] for p in new}
+    assert set(by_to) == {"aetheria", "eve"}, by_to  # kernel is the actor
+    assert "6 unread" in by_to["aetheria"]   # 4 + eve's + kernel's
+    assert "3 unread" in by_to["eve"]        # 2 + kernel's round-3 note
+
+
+class _FakeConn:
+    def __init__(self, sink):
+        self.sink = sink
+
+    def execute(self, sql, params=()):
+        if "INSERT INTO house_post" in sql:
+            self.sink.append({"to": params[2], "body": params[5]})
+        return self
+
+    def fetchone(self):
+        return None
+
+    def fetchall(self):
+        return []
+
+    def commit(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
