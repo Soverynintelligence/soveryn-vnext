@@ -3379,12 +3379,104 @@ body.lab.sd details.cc-fold .panel,
 body.lab.sd details.cc-fold section.panel,
 body.lab.sd details.cc-fold .scotty-approvals,
 body.lab.sd details.cc-drawer .panel,
-body.lab.sd details.cc-drawer section.panel{
+body.lab.sd details.cc-drawer section.panel,
+body.lab.sd .hard-brain-strip,
+body.lab.sd .dispatch-box{
   border:0 !important;
-  border-radius:18px !important;
+  border-radius:22px !important;
   background:linear-gradient(145deg,#1a212a,#2a333e) !important;
   box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
-  padding:14px 16px !important;
+  padding:16px 18px !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .cc-fold-body h3,
+body.lab.sd .cc-fold-body h4,
+body.lab.sd .auto-head h3,
+body.lab.sd .boards-strip-head h3{
+  color:#e7edf3 !important;
+  letter-spacing:.04em !important;
+  text-transform:none !important;
+  font-family:Georgia,serif !important;
+  font-size:18px !important;
+  font-weight:600 !important;
+}
+body.lab.sd .auto-meta,
+body.lab.sd .auto-sub,
+body.lab.sd .cc-fold-body .empty,
+body.lab.sd .auto-empty{color:#8b97a6 !important}
+body.lab.sd .auto-badge{
+  border:0 !important;
+  border-radius:12px !important;
+  color:#d3a24a !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48 !important;
+  padding:6px 10px !important;
+}
+body.lab.sd .auto-row,
+body.lab.sd .auto-inbox-item,
+body.lab.sd .auto-triage-item,
+body.lab.sd .scotty-proposal,
+body.lab.sd .board-col,
+body.lab.sd .auto-preview{
+  border:0 !important;
+  border-left:0 !important;
+  border-radius:16px !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  box-shadow:inset 5px 5px 10px #12181f,inset -5px -5px 10px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .cc-fold-body button,
+body.lab.sd .cc-drawer button,
+body.lab.sd .dispatch-box button,
+body.lab.sd .hb-btn,
+body.lab.sd .auto-chan,
+body.lab.sd .auto-run-btn,
+body.lab.sd .auto-routine-btn,
+body.lab.sd .auto-live-btn,
+body.lab.sd .board-item-action,
+body.lab.sd .sp-approve,
+body.lab.sd .sp-reject{
+  border:0 !important;
+  border-radius:12px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  color:#d5dbe3 !important;
+  box-shadow:4px 4px 8px #12181f,-3px -3px 8px #323c48 !important;
+  padding:7px 12px !important;
+}
+body.lab.sd .auto-chan.is-on,
+body.lab.sd .hb-btn.is-active,
+body.lab.sd .board-item-action.active,
+body.lab.sd .sp-approve{
+  color:#ffb199 !important;
+  box-shadow:inset 3px 3px 7px #12181f,inset -3px -3px 7px #323c48 !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+}
+body.lab.sd .cc-fold-body input,
+body.lab.sd .cc-fold-body select,
+body.lab.sd .cc-fold-body textarea,
+body.lab.sd .cc-drawer input,
+body.lab.sd .cc-drawer select,
+body.lab.sd .cc-drawer textarea,
+body.lab.sd .dispatch-box input,
+body.lab.sd .dispatch-box select{
+  border:0 !important;
+  border-radius:12px !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  color:#e7edf3 !important;
+  box-shadow:inset 3px 3px 7px #12181f,inset -3px -3px 7px #323c48 !important;
+}
+body.lab.sd .cc-fold-body table,
+body.lab.sd .cc-drawer table{border:0 !important;color:#d5dbe3}
+body.lab.sd .cc-fold-body th,
+body.lab.sd .cc-fold-body td,
+body.lab.sd .cc-drawer th,
+body.lab.sd .cc-drawer td{border-color:transparent !important}
+body.lab.sd .sp-diff,
+body.lab.sd .cc-fold-body pre{
+  border:0 !important;
+  border-radius:12px !important;
+  background:#161d26 !important;
+  color:#d5dbe3 !important;
 }
 @media(max-width:800px){
   body.lab.sd .agent-row,body.lab.sd .daemon-row{grid-template-columns:1fr}
@@ -3882,6 +3974,54 @@ body.lab.sd details.cc-drawer section.panel{
       <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
       <div class="cc-fold-body">
 <div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+    <section class="panel lounge-panel" data-testid="lounge-panel" aria-label="The Lounge — team chat, no agenda">
+      <div class="auto-head">
+        <h3>The Lounge</h3>
+        <span class="auto-badge">no agenda · nobody closes anything</span>
+      </div>
+      <div class="auto-inbox" data-lounge-wall aria-live="polite" aria-label="Lounge wall">
+        <div class="auto-empty">loading the lounge…</div>
+      </div>
+      <div style="display:flex; gap:8px; padding:8px 12px 12px;">
+        <input data-lounge-say placeholder="Say something on the wall…" style="flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); color:inherit; border-radius:6px; padding:8px 10px; font:inherit;">
+        <button data-lounge-send style="border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.08); color:inherit; border-radius:6px; padding:8px 14px; cursor:pointer; font:inherit;">Say it</button>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var wallEl = document.querySelector('[data-lounge-wall]');
+      var sayEl = document.querySelector('[data-lounge-say]');
+      var sendBtn = document.querySelector('[data-lounge-send]');
+      function esc(s){ var d=document.createElement('div'); d.textContent=(s==null?'':String(s)); return d.innerHTML; }
+      function paintWall(d){
+        if(!wallEl) return;
+        if(!d.open){ wallEl.innerHTML = '<div class="auto-empty">lounge closed</div>'; return; }
+        if(!d.entries.length){ wallEl.innerHTML = '<div class="auto-empty">quiet in here. say something.</div>'; return; }
+        wallEl.innerHTML = d.entries.map(function(e){
+          var t = (e.at||'').replace('T',' ').slice(5,16);
+          return '<div style="padding:6px 12px; border-bottom:1px solid rgba(255,255,255,0.06);">'
+            + '<b>'+esc(e.who)+'</b> <span style="opacity:0.5; font-size:0.8em;">'+esc(t)+'</span>'
+            + '<div style="white-space:pre-wrap;">'+esc(e.text)+'</div></div>';
+        }).join('');
+        wallEl.scrollTop = wallEl.scrollHeight;
+      }
+      function loadWall(){
+        fetch('/api/lounge').then(function(r){ return r.json(); }).then(paintWall)
+          .catch(function(){ if(wallEl) wallEl.innerHTML = '<div class="auto-empty">lounge unavailable</div>'; });
+      }
+      function say(){
+        if(!sayEl || !sayEl.value.trim()) return;
+        fetch('/api/lounge/say', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({from:'jon', text: sayEl.value.trim()})
+        }).then(function(r){ return r.json(); }).then(function(){ sayEl.value=''; loadWall(); });
+      }
+      if(sendBtn) sendBtn.addEventListener('click', say);
+      if(sayEl) sayEl.addEventListener('keydown', function(ev){ if(ev.key==='Enter') say(); });
+      loadWall();
+      setInterval(loadWall, 30000);
+    })();
+    </script>
     <section class="panel scotty-approvals" data-testid="x-approvals-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
       <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">

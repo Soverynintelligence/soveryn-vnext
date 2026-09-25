@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, request
 
 from soveryn.rooms.store import (
     DEFAULT_PEER,
@@ -170,7 +170,8 @@ def api_rooms_ask_peer(session_id: str):
         return jsonify({"error": {"code": "ask_failed", "message": str(exc)}}), 400
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": {"code": "ask_failed", "message": str(exc)}}), 500
-    _record_lounge_encounter(session_id, (body.get("from_id") or "jon"), peer, brief.strip())
+    resolved = (result.get("event") or {}).get("peer") or peer
+    _record_lounge_encounter(session_id, (body.get("from_id") or "jon"), resolved, brief.strip())
     return jsonify(result), 200
 
 
@@ -200,6 +201,39 @@ def _record_lounge_encounter(session_id: str, from_id: str, peer: str | None, br
         )
     except Exception:  # noqa: BLE001
         pass
+
+
+@bp.get("/api/lounge")
+def api_lounge_wall():
+    """The Lounge wall — chat-shaped, chronological. Open in a browser or panel."""
+    from soveryn.rooms.lounge import wall as lounge_wall
+
+    return jsonify(lounge_wall(_data_root(), limit=int(request.args.get("limit") or 50))), 200
+
+
+@bp.post("/api/lounge/say")
+def api_lounge_say():
+    """Post a wall note. localhost only — the wall is the house's own room.
+    Jon types here directly; citizens post through the lounge tool."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        abort(403, description="lounge say requires localhost")
+    body = request.get_json(silent=True) or {}
+    text = body.get("text")
+    from_party = (body.get("from") or "jon").strip().lower()
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({"error": {"code": "missing_field", "message": "text required"}}), 400
+    from soveryn.platform.relational.store import VALID_PARTIES
+    if from_party not in VALID_PARTIES:
+        return jsonify({"error": {"code": "bad_party", "message": f"from must be one of {sorted(VALID_PARTIES)}"}}), 400
+    try:
+        from soveryn.rooms.lounge import post_note, wall as lounge_wall
+
+        post_note(_data_root(), from_party=from_party, text=text)
+    except ValueError as exc:
+        return jsonify({"error": {"code": "say_failed", "message": str(exc)}}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": {"code": "say_failed", "message": str(exc)}}), 500
+    return jsonify({"ok": True, "wall": lounge_wall(_data_root())["entries"]}), 200
 
 
 @bp.get("/api/rooms/collabs")

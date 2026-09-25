@@ -138,6 +138,10 @@ def _register_system(ctx: PackContext, owner: str) -> None:
 
         for _spec in build_relational_tools(owner_agent=owner):
             ctx.registry.register(_spec)
+    if owner in ("aetheria", "eve", "kernel"):
+        from soveryn.platform.lounge_tool import build_lounge_tool
+
+        ctx.registry.register(build_lounge_tool(owner_agent=owner))
     _ok(ctx, owner, "system")
 
 
