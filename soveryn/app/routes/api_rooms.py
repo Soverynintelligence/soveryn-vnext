@@ -170,7 +170,36 @@ def api_rooms_ask_peer(session_id: str):
         return jsonify({"error": {"code": "ask_failed", "message": str(exc)}}), 400
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": {"code": "ask_failed", "message": str(exc)}}), 500
+    _record_lounge_encounter(session_id, (body.get("from_id") or "jon"), peer, brief.strip())
     return jsonify(result), 200
+
+
+def _record_lounge_encounter(session_id: str, from_id: str, peer: str | None, brief: str) -> None:
+    """Lounge conversations become between-memories (2026-09-24).
+
+    The Lounge is where the team hangs out with no agenda; the relational
+    store is where those moments are kept. Encounters recorded here are the
+    automatic half — citizens can add depth via record_encounter/leave_gift.
+    Best-effort: a memory failure must never break a conversation.
+    """
+    try:
+        import json as _json
+
+        pointer = Path(_data_root()) / "rooms" / "lounge.json"
+        if not pointer.is_file():
+            return
+        if session_id != _json.loads(pointer.read_text()).get("session_id"):
+            return
+        if not peer or peer == from_id:
+            return
+        from soveryn.platform.relational.store import RelationalStore
+
+        RelationalStore().record_encounter(
+            a=from_id, b=peer, kind="encounter",
+            note=brief[:160], recorded_by=from_id,
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 @bp.get("/api/rooms/collabs")

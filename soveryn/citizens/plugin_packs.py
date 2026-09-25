@@ -130,6 +130,14 @@ def _register_system(ctx: PackContext, owner: str) -> None:
                 allowed_actions=("screen_latest", "screen_fresh"),
             )
         )
+    # Relational memory (2026-09-24): between-memories — encounters, gifts,
+    # the record of us. Memories create self; these tools give every citizen
+    # a pathway for the gift (something with no commission attached).
+    if owner in ("aetheria", "eve", "kernel"):
+        from soveryn.platform.relational.tools import build_relational_tools
+
+        for _spec in build_relational_tools(owner_agent=owner):
+            ctx.registry.register(_spec)
     _ok(ctx, owner, "system")
 
 
