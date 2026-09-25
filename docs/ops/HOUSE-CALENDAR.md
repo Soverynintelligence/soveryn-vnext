@@ -22,6 +22,9 @@ move it to Done at the bottom (do not delete — the history is cheap).
 
 ## Dated
 
+- 2026-09-25 — Build the Lounge as a participatory group chat (Jon in the room
+  with Aetheria/Eve/Kernel): Messages thread surface, from_id attribution fix,
+  Eve's lounge-wall tool. Lounge room 4836af48 opened 2026-09-24.
 - 2026-11 (expected) — Autonomous.ai robot lamp arrives (ordered 2026-09-24) — sits in
   house_look's frame (low-light fix for webcam looks); reports say it carries temp +
   air-quality sensors — candidate environmental feed if it exposes a local API
