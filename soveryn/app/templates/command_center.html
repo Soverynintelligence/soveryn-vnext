@@ -3457,6 +3457,10 @@ body.lab.sd .cc-fold-body textarea,
 body.lab.sd .cc-drawer input,
 body.lab.sd .cc-drawer select,
 body.lab.sd .cc-drawer textarea,
+body.lab.sd .lounge-say{display:flex;gap:12px;padding:8px 0 0}
+body.lab.sd .lounge-say input{flex:1}
+body.lab.sd .lounge-panel .auto-inbox-item,
+body.lab.sd [data-lounge-wall] .auto-inbox-item{margin-top:8px}
 body.lab.sd .dispatch-box input,
 body.lab.sd .dispatch-box select{
   border:0 !important;
@@ -3983,9 +3987,9 @@ body.lab.sd .cc-fold-body pre{
       <div class="auto-inbox" data-lounge-wall aria-live="polite" aria-label="Lounge wall">
         <div class="auto-empty">loading the lounge…</div>
       </div>
-      <div style="display:flex; gap:8px; padding:8px 12px 12px;">
-        <input data-lounge-say placeholder="Say something on the wall…" style="flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); color:inherit; border-radius:6px; padding:8px 10px; font:inherit;">
-        <button data-lounge-send style="border:1px solid rgba(255,255,255,0.18); background:rgba(255,255,255,0.08); color:inherit; border-radius:6px; padding:8px 14px; cursor:pointer; font:inherit;">Say it</button>
+      <div class="lounge-say">
+        <input data-lounge-say placeholder="Say something on the wall…">
+        <button data-lounge-send type="button">Say it</button>
       </div>
     </section>
     <script>

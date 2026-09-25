@@ -1,4 +1,4 @@
-Roster authority: README §What is SOVERYN — Vett/Scotty rows are design-only until re-promoted.
+Roster authority: docs/CURRENT_TRUTH.md §0 (House spine) — live roster lives there; Vett/Scotty are folded, not live identities.
 
 # Citizen email identity (ours — not AgentMail)
 

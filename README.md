@@ -31,6 +31,8 @@ soveryn/
 ├── app/           # Flask app and route surface
 ├── backup/        # code backup daemon
 ├── docs/          # truth, notes, runbooks, archive
+│   ├── notes/    # dated notes (not authority)
+│   └── archive/  # archived truth snapshots
 ├── config/        # runtime/config loading
 ├── inference/     # compatibility shims to platform.inference
 ├── memory/        # conversation store + lattice compatibility shim
