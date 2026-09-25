@@ -25,6 +25,7 @@ COMMAND_CENTER_TEMPLATE = Path(__file__).parent.parent / "templates" / "command_
 CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
 FLEET_TEMPLATE = Path(__file__).parent.parent / "templates" / "fleet.html"
 CHARTERS_TEMPLATE = Path(__file__).parent.parent / "templates" / "charters.html"
+LOUNGE_TEMPLATE = Path(__file__).parent.parent / "templates" / "lounge.html"
 
 # Phone / handheld — not tablets (iPad) so desk-sized glass still gets CC.
 _PHONE_UA_RE = re.compile(
@@ -93,7 +94,7 @@ def _serve_html(path: Path, *, missing_label: str):
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
     # Phone Safari / home-screen bookmarks love stale HTML; Messages must be fresh.
-    if path.name in ("messages.html", "message_thread.html", "room.html"):
+    if path.name in ("messages.html", "message_thread.html", "room.html", "command_center.html"):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         resp.headers["Pragma"] = "no-cache"
     return resp
@@ -165,6 +166,12 @@ def fleet_page():
 def charters_board():
     """Imported botdirectory job charters — review only, never live."""
     return _serve_html(CHARTERS_TEMPLATE, missing_label="Charters board")
+
+
+@bp.get("/lounge")
+def lounge_page():
+    """The Lounge — the team's room with no agenda. Jon participates directly."""
+    return _serve_html(LOUNGE_TEMPLATE, missing_label="Lounge")
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"
