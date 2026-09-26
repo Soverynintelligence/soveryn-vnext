@@ -179,3 +179,29 @@ class _FakeConn:
 
     def __exit__(self, *a):
         return False
+
+
+def test_work_reports_do_not_colonize_the_lounge(lounge_room):
+    """Jon, 02:37: 'i thought this was a lounge not a community work room.'
+
+    Commission status reports are Desk material — they carry commission_id
+    and are filtered off the wall, out of unread, and out of presence."""
+    tmp_path, sid = lounge_room
+    room = json.loads((tmp_path / "rooms" / f"{sid}.json").read_text())
+    room["events"].append({
+        "at": "2026-09-25T21:12:00Z", "type": "peer_reply", "peer": "eve",
+        "brief": "Commission 4b9d50ce — result: all six findings confirmed fixed.",
+        "commission_id": "4b9d50ce",
+    })
+    (tmp_path / "rooms" / f"{sid}.json").write_text(json.dumps(room))
+    w = lounge.wall(tmp_path)
+    assert all("Commission" not in (e["text"] or "") for e in w["entries"])
+    # commission chatter doesn't create unread either
+    before = lounge.unread_since(tmp_path, "aetheria")
+    room["events"].append({
+        "at": "2026-09-25T21:13:00Z", "type": "peer_reply", "peer": "kernel",
+        "brief": "Commission 9f2448c1 — blocked from landing.",
+        "commission_id": "9f2448c1",
+    })
+    (tmp_path / "rooms" / f"{sid}.json").write_text(json.dumps(room))
+    assert lounge.unread_since(tmp_path, "aetheria") == before

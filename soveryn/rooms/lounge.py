@@ -110,7 +110,7 @@ def unread_since(data_root: Path | str, party: str) -> int:
         return 0
     count = 0
     for ev in room.get("events") or []:
-        if ev.get("type") not in _WALL_TYPES:
+        if ev.get("type") not in _WALL_TYPES or not _is_chat_event(ev):
             continue
         who = ev.get("from") or ev.get("from_id") or ev.get("peer") or ""
         if who == party:
@@ -118,6 +118,19 @@ def unread_since(data_root: Path | str, party: str) -> int:
         if (ev.get("at") or "") > last:
             count += 1
     return count
+
+
+
+def _is_chat_event(ev: dict[str, Any]) -> bool:
+    """Lounge chatter vs work plumbing.
+
+    Events tied to a commission are Desk material (status reports, results,
+    blocked notes) — the Lounge is the room with no agenda. Jon, 2026-09-26:
+    "i thought this was a lounge not a community work room". Status text that
+    merely MENTIONS a commission still reads as chat (a person talking about
+    their day); a report whose event carries the commission id is plumbing.
+    """
+    return not ev.get("commission_id")
 
 
 def wall(data_root: Path | str, *, limit: int = 50, reader: str | None = None) -> dict[str, Any]:
@@ -134,6 +147,8 @@ def wall(data_root: Path | str, *, limit: int = 50, reader: str | None = None) -
         return {"ok": True, "open": False, "entries": [], "unread": 0}
     entries = []
     for ev in room.get("events") or []:
+        if not _is_chat_event(ev):
+            continue
         kind = ev.get("type")
         if kind == "wall_note":
             entries.append({
@@ -193,7 +208,7 @@ def presence(data_root: Path | str, *, window_minutes: int = PRESENCE_WINDOW_MIN
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=window_minutes)).isoformat()
     present: dict[str, str] = {}
     for ev in room.get("events") or []:
-        if ev.get("type") not in _WALL_TYPES:
+        if ev.get("type") not in _WALL_TYPES or not _is_chat_event(ev):
             continue
         who = ev.get("from") or ev.get("from_id") or ev.get("peer") or ""
         at = ev.get("at") or ""
