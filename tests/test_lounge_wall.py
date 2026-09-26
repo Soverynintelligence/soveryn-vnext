@@ -121,6 +121,12 @@ def test_nudge_reaches_other_citizens_not_jon_not_actor(lounge_room, monkeypatch
         "soveryn.citizens.registry.connect",
         lambda db: __import__("contextlib").nullcontext(_FakeConn(sent)),
     )
+    real_enqueue = None
+    import soveryn.citizens.commissions as commissions_mod
+    def fake_enqueue(conn, citizen_id, body, *, at):
+        sent.append({"to": citizen_id, "body": body})
+        return f"cid-{len(sent)}"
+    monkeypatch.setattr(commissions_mod, "enqueue", fake_enqueue)
     monkeypatch.setenv("LOUNGE_NUDGE_COOLDOWN_MIN", "10")
     tmp_path, _ = lounge_room
 

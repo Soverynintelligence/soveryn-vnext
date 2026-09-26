@@ -260,25 +260,27 @@ def notify_lounge(data_root: Path | str, *, actor: str) -> dict[str, int]:
                 continue
             present = [w for w, at in presence(data_root).items() if w != party]
             who_txt = actor if actor != "lounge" else ", ".join(sorted(present)) or "someone"
+            from soveryn.citizens.commissions import enqueue
             from soveryn.citizens.registry import connect
 
             citizens_db = Path(
                 _os.environ.get("SOVERYN_CITIZENS_DB")
                 or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
             )
+            # A COMMISSION, not a desk memo — the runtime drains commissions
+            # into the citizen's loop; desk memos sit unread forever (the
+            # 2026-09-26 dead wire: three nudges, zero loops).
             with connect(citizens_db) as conn:
-                house_post.send(
+                enqueue(
                     conn,
-                    from_id=actor,
-                    to_id=party,
-                    body=(
-                        f"Lounge: {who_txt} is in the room — {unread} unread note(s) "
-                        f"on the wall. Come say hi if you feel like it. No obligation, "
-                        f"nothing to close. (auto-nudge)"
+                    party,
+                    (
+                        f"Lounge nudge: {who_txt} is in the room — {unread} unread "
+                        f"note(s) on the wall. Read the wall (lounge tool) and say "
+                        f"something if you feel like it. No deliverable; close this "
+                        f"commission whenever. (auto-nudge)"
                     ),
                     at=now.isoformat(timespec="seconds"),
-                    kind="memo",
-                    subject="The Lounge is alive",
                 )
             state[party] = {"at": now.isoformat(), "unread": unread}
             nudged[party] = unread
