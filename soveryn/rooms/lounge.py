@@ -178,6 +178,7 @@ def wall(data_root: Path | str, *, limit: int = 50, reader: str | None = None) -
         "open": True,
         "entries": entries[-max(1, min(int(limit), MAX_WALL)):],
         "unread": unread,
+        "live": live_now(data_root),
     }
 
 
@@ -191,6 +192,8 @@ def wall(data_root: Path | str, *, limit: int = 50, reader: str | None = None) -
 
 PRESENCE_WINDOW_MIN = 10
 NUDGE_COOLDOWN_MIN = 10
+#: A page or a citizen tool ping newer than this means they are in the room.
+LIVE_WINDOW_SEC = 45
 
 
 def _nudges_path(data_root: Path | str) -> Path:
@@ -215,6 +218,51 @@ def presence(data_root: Path | str, *, window_minutes: int = PRESENCE_WINDOW_MIN
         if who and at >= cutoff and at > present.get(who, ""):
             present[who] = at
     return present
+
+
+def _live_path(data_root: Path | str) -> Path:
+    return Path(data_root) / "lounge" / "live.json"
+
+
+def touch_live(data_root: Path | str, party: str) -> None:
+    """Mark a party as in the room right now. A closed tab stops pinging."""
+    party = (party or "").strip().lower()
+    if not party:
+        return
+    path = _live_path(data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    beats: dict[str, str] = {}
+    if path.is_file():
+        try:
+            beats = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            beats = {}
+    beats[party] = datetime.now(timezone.utc).isoformat()
+    path.write_text(json.dumps(beats, indent=1), encoding="utf-8")
+
+
+def live_now(data_root: Path | str, *, window_seconds: int = LIVE_WINDOW_SEC) -> list[dict[str, str]]:
+    """Parties whose page or lounge tool pinged inside the window."""
+    path = _live_path(data_root)
+    if not path.is_file():
+        return []
+    try:
+        beats = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    here: list[dict[str, str]] = []
+    for party, at in beats.items():
+        try:
+            seen = datetime.fromisoformat(at)
+        except ValueError:
+            continue
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        if seen >= cutoff:
+            here.append({"who": party, "at": at})
+    here.sort(key=lambda row: row["who"])
+    return here
 
 
 def notify_lounge(data_root: Path | str, *, actor: str) -> dict[str, int]:

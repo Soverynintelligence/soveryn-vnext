@@ -21,9 +21,10 @@ def build_lounge_tool(*, owner_agent: str) -> ToolSpec:
 
     def handler(args: Mapping[str, Any]) -> Any:
         action = str(args.get("action") or "wall").strip().lower()
-        from soveryn.rooms.lounge import post_note, wall
+        from soveryn.rooms.lounge import post_note, touch_live, wall
 
         data_root = DEFAULT_DATA_ROOT
+        touch_live(data_root, owner)
         if action == "wall":
             view = wall(data_root, limit=int(args.get("limit") or 30), reader=owner)
             return {"ok": True, **view}

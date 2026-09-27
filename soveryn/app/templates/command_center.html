@@ -3983,6 +3983,7 @@ body.lab.sd .cc-fold-body pre{
       <div class="auto-head">
         <h3>The Lounge</h3>
         <span class="auto-badge">no agenda · nobody closes anything</span>
+        <span class="auto-meta" data-lounge-live>Checking who is in the room…</span>
       </div>
       <div class="auto-inbox" data-lounge-wall aria-live="polite" aria-label="Lounge wall">
         <div class="auto-empty">loading the lounge…</div>
@@ -4010,9 +4011,29 @@ body.lab.sd .cc-fold-body pre{
         }).join('');
         wallEl.scrollTop = wallEl.scrollHeight;
       }
+      var liveEl = document.querySelector('[data-lounge-live]');
+      function paintLive(names){
+        if(!liveEl) return;
+        liveEl.textContent = (!names || !names.length) ? 'Nobody is in the room.' : ('In the room: '+names.join(', '));
+      }
+      function loungeOpen(){
+        var fold = document.querySelector('[data-testid="chapter-gates"]');
+        return !fold || fold.open;
+      }
+      function here(){
+        if(!loungeOpen()) return;
+        fetch('/api/lounge/here', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({from:'jon'})
+        }).then(function(r){ return r.json(); }).then(function(d){
+          paintLive((d.live||[]).map(function(p){ return p.who; }));
+        }).catch(function(){});
+      }
       function loadWall(){
-        fetch('/api/lounge').then(function(r){ return r.json(); }).then(paintWall)
-          .catch(function(){ if(wallEl) wallEl.innerHTML = '<div class="auto-empty">lounge unavailable</div>'; });
+        fetch('/api/lounge').then(function(r){ return r.json(); }).then(function(d){
+          paintWall(d);
+          if(d.live) paintLive(d.live.map(function(p){ return p.who; }));
+        }).catch(function(){ if(wallEl) wallEl.innerHTML = '<div class="auto-empty">lounge unavailable</div>'; });
       }
       function say(){
         if(!sayEl || !sayEl.value.trim()) return;
@@ -4023,8 +4044,9 @@ body.lab.sd .cc-fold-body pre{
       }
       if(sendBtn) sendBtn.addEventListener('click', say);
       if(sayEl) sayEl.addEventListener('keydown', function(ev){ if(ev.key==='Enter') say(); });
+      here();
       loadWall();
-      setInterval(loadWall, 30000);
+      setInterval(function(){ here(); loadWall(); }, 15000);
     })();
     </script>
     <section class="panel scotty-approvals" data-testid="x-approvals-panel">

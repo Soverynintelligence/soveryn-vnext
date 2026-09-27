@@ -96,6 +96,15 @@ def test_say_endpoint_localhost_only(tmp_path, monkeypatch):
     assert resp.status_code == 403
 
 
+def test_live_is_a_heartbeat_not_a_recent_post(lounge_room):
+    tmp_path, _ = lounge_room
+    post_note(tmp_path, from_party="eve", text="still on the wall from earlier")
+    assert lounge.live_now(tmp_path) == []
+    lounge.touch_live(tmp_path, "aetheria")
+    lounge.touch_live(tmp_path, "jon")
+    assert [row["who"] for row in lounge.live_now(tmp_path)] == ["aetheria", "jon"]
+
+
 def test_unread_tracking_and_mark_read(lounge_room):
     tmp_path, _ = lounge_room
     # aetheria never read: 3 entries by others (arrived + note + reply)

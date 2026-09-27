@@ -237,6 +237,22 @@ def api_lounge_say():
     return jsonify({"ok": True, "wall": lounge_wall(_data_root())["entries"]}), 200
 
 
+@bp.post("/api/lounge/here")
+def api_lounge_here():
+    """Heartbeat from an open Lounge page. Stops when the tab closes."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        abort(403, description="lounge presence requires localhost")
+    body = request.get_json(silent=True) or {}
+    party = (body.get("from") or "jon").strip().lower()
+    from soveryn.platform.relational.store import VALID_PARTIES
+    if party not in VALID_PARTIES:
+        return jsonify({"error": {"code": "bad_party", "message": f"from must be one of {sorted(VALID_PARTIES)}"}}), 400
+    from soveryn.rooms.lounge import live_now, touch_live
+
+    touch_live(_data_root(), party)
+    return jsonify({"ok": True, "live": live_now(_data_root())}), 200
+
+
 @bp.get("/api/rooms/collabs")
 def api_rooms_collabs():
     """Collab chips for a 1:1 DM session (?dm_session_id=)."""

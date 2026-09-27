@@ -166,3 +166,6 @@ docs/runtime-config/*.bak-*
 
 # runtime logs (audit 2026-09-24: 66 MB untracked, dirtied every git status)
 logs/
+
+# lounge runtime state (reads/nudges/live markers)
+data/lounge/
