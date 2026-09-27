@@ -7,9 +7,11 @@ Harness-side tool surface for Pi 0.74.2. Packs select `--tools` and `--extension
 
 | Pack | Pi tools | Extensions | When |
 |---|---|---|---|
-| `standard` | default built-ins (`read,bash,edit,write`) | `harness-controls` | default |
-| `minimal` | `bash,edit` | `harness-controls` | `--minimal` / tiny fixes |
-| `web` | `read,bash,edit,write,web-api-probe,html-module-host,open-html` | `harness-controls` + `web-pack` | cathedral / canvas / HTML |
+| `standard` | default built-ins (`read,bash,edit,write`) + lattice tools | `harness-controls` + `kernel-lattice` | default |
+| `minimal` | `bash,edit` + lattice tools | `harness-controls` + `kernel-lattice` | `--minimal` / tiny fixes |
+| `web` | `read,bash,edit,write,web-api-probe,html-module-host,open-html` + lattice tools | `harness-controls` + `kernel-lattice` + `web-pack` | cathedral / canvas / HTML |
+
+Lattice tools (`remember_fact`, `memory_search`, `memory_get`) are appended to every `--tools` allowlist by `presets.js`, and `kernel-lattice.ts` injects the `[HOUSE LATTICE]` memory block (lessons first) on every turn. Kernel loads the same file via `config/pi/extensions/`.
 
 `--pack` and `--preset` are aliases. Env: `SOVERYN_PACK=web`.
 

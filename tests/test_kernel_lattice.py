@@ -144,3 +144,115 @@ def test_flag_on_kernel_gets_recall_and_tool(
     names = {t.name for t in app.extensions["soveryn"]["tool_registry"].iter_tools_for_agent("kernel")}
     assert "remember_fact" in names
     assert RECALL_CAP == 3000
+
+
+# --- Recall budgeting: lessons pinned ahead of recency (2026-09-27) ---------
+
+import argparse  # noqa: E402
+
+from soveryn.platform.lattice import kernel_memory as km  # noqa: E402
+
+
+def _teach(lattice, attic, content, topic):
+    out = remember_fact(
+        content, entity=topic, lattice_store=lattice, attic_store=attic, agent="kernel"
+    )
+    assert out["ok"] is True, out
+    return out
+
+
+def _recall(monkeypatch, lattice, attic, **kw):
+    monkeypatch.setattr(km, "_stores", lambda: (lattice, attic))
+    ns = argparse.Namespace(query="", cap=kw.get("cap", RECALL_CAP), lesson_budget=kw.get("lesson_budget"))
+    return km.cmd_recall(ns)
+
+
+def test_recall_keeps_old_lessons_under_flood_of_recent_facts(tmp_path, monkeypatch):
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    _teach(lattice, attic, "Never force-push main; open a branch.", "kernel.lesson.git-push")
+    _teach(lattice, attic, "Wrap Chrome in timeout 20s.", "kernel.gotcha.chrome-timeout")
+    for i in range(20):  # 20 newer facts x ~330 chars would evict the lessons by recency
+        _teach(lattice, attic, f"recent fact {i:02d} " + "r" * 310, f"kernel.misc.fact-{i:02d}")
+
+    out = _recall(monkeypatch, lattice, attic)
+    text = out["text"]
+    assert out["ok"] is True
+    assert len(text) <= RECALL_CAP
+    assert text.startswith("[HOUSE LATTICE]\n" + km.LESSON_HEADER)
+    assert "[kernel.lesson.git-push] Never force-push main" in text
+    assert "[kernel.gotcha.chrome-timeout] Wrap Chrome" in text
+    assert out["lessons"] == 2
+    # rest of the budget is filled with the NEWEST non-lesson facts
+    assert km.RECENT_HEADER in text
+    assert "recent fact 19" in text
+    assert "recent fact 00" not in text
+
+
+def test_recall_lesson_section_respects_budget(tmp_path, monkeypatch):
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    for i in range(10):
+        _teach(lattice, attic, f"lesson {i:02d} " + "l" * 300, f"kernel.lesson.rule-{i:02d}")
+    for i in range(5):
+        _teach(lattice, attic, f"recent {i} " + "f" * 200, f"kernel.misc.r{i}")
+
+    out = _recall(monkeypatch, lattice, attic)
+    text = out["text"]
+    lines = text.splitlines()
+    start = lines.index(km.LESSON_HEADER)
+    end = lines.index(km.RECENT_HEADER)
+    lesson_block = "\n".join(lines[start:end])
+    assert len(lesson_block) <= km.LESSON_BUDGET
+    assert 1 <= out["lessons"] < 10
+    assert "lesson 09" in text  # newest lesson wins the reserved space
+    assert "recent 4" in text  # recent facts still get the remaining budget
+    assert len(text) <= RECALL_CAP
+
+
+def test_recall_without_lessons_keeps_flat_shape(tmp_path, monkeypatch):
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    _teach(lattice, attic, "Live CRM is pondwright-cwg-ops", "kernel.crm.ops")
+    out = _recall(monkeypatch, lattice, attic)
+    assert out["text"] == "[HOUSE LATTICE]\n- Live CRM is pondwright-cwg-ops"
+    assert out["lessons"] == 0
+
+
+def test_recall_shows_only_newest_lesson_after_supersede(tmp_path, monkeypatch):
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    a = _teach(lattice, attic, "Use grep | head on Chrome logs.", "kernel.lesson.chrome-logs")
+    b = _teach(lattice, attic, "Never grep | head Chrome logs; use timeout 20s.", "kernel.lesson.chrome-logs")
+    assert b["superseded_id"] == a["lattice_id"]
+    text = _recall(monkeypatch, lattice, attic)["text"]
+    assert "use timeout 20s" in text
+    assert "Use grep | head on Chrome logs." not in text
+
+
+def test_search_finds_topics_by_prefix(tmp_path, monkeypatch):
+    lattice = LatticeStore(tmp_path / "lattice.db")
+    attic = AtticStore(tmp_path / "attic.db")
+    _teach(lattice, attic, "Never force-push main.", "kernel.lesson.git-push")
+    _teach(lattice, attic, "Live CRM is pondwright-cwg-ops", "kernel.crm.ops")
+    monkeypatch.setattr(km, "_stores", lambda: (lattice, attic))
+    out = km.cmd_search(argparse.Namespace(query="kernel.lesson", limit=8))
+    assert out["ok"] is True
+    topics = [f["topic"] for f in out["facts"]]
+    assert topics == ["kernel.lesson.git-push"]
+
+
+def test_budgeted_recall_caps_and_empty():
+    assert km.format_budgeted_recall([], []) == ""
+
+    class _T:
+        def __init__(self, i, topic, content):
+            self.id, self.tags, self.content = f"n{i}", [f"entity:{topic}"], content
+
+    lessons = [_T(i, f"kernel.lesson.t{i}", "x" * 390) for i in range(6)]
+    recent = [_T(100 + i, f"kernel.misc.m{i}", "y" * 390) for i in range(12)]
+    text = km.format_budgeted_recall(lessons, recent, cap=3000, lesson_budget=1200)
+    assert len(text) <= 3000
+    assert text.count("[kernel.lesson.") == 2  # 2 x ~415 chars fit in 1200 with header
+    small = km.format_budgeted_recall(lessons, recent, cap=500, lesson_budget=1200)
+    assert len(small) <= 500

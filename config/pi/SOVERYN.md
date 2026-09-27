@@ -89,6 +89,7 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 
 ## Memory discipline
 Recall is only as good as what gets written. Kernel writes a lattice fact at every decision point (canonical repo for a surface, flag state, what was tried and rejected, what needs Jon's sign-off), not just at cleanup. A fact not recorded is lost at session end.
+- **Corrections become lessons.** When Jon corrects you ("no", "that's wrong", "don't do X", "I told you", "stop", "actually"), fix it, then save the rule: `memory_search` first, then `remember_fact` with topic `kernel.lesson.<slug>` and one line. Reuse an existing topic exactly so the new lesson replaces the old one; invent a new topic only when nothing matches. Lessons are pinned at the top of the memory block every turn.
 
 ## Anti-burn
 - Do **not** retry the same failed tool call with identical args. Change approach, args, or target — or stop.

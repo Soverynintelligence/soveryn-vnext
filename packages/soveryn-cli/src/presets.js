@@ -7,7 +7,10 @@
  *
  * Packs: minimal | standard | web
  * --pack and --preset are aliases. SOVERYN_PACK=web forces web.
- * Every pack also loads harness-controls (evidence / loop-guard / showme / G6).
+ * Every pack also loads harness-controls (evidence / loop-guard / showme / G6)
+ * and kernel-lattice (house Lattice memory: remember_fact / memory_search /
+ * memory_get + per-turn recall inject). Lattice tools are appended to every
+ * --tools allowlist so web/minimal packs cannot hide them.
  */
 
 const fs = require('fs');
@@ -18,6 +21,47 @@ const PKG_ROOT = path.resolve(__dirname, '..');
 const WEB_EXTENSION = path.join(PKG_ROOT, 'extensions', 'web-pack.ts');
 const WEB_SCRIPTS = path.join(PKG_ROOT, 'scripts', 'web');
 const HARNESS_EXTENSION = path.join(PKG_ROOT, 'extensions', 'harness-controls.ts');
+const LATTICE_EXTENSION = path.join(PKG_ROOT, 'extensions', 'kernel-lattice.ts');
+const LATTICE_TOOLS = Object.freeze(['remember_fact', 'memory_search', 'memory_get']);
+
+/** Tools allowlist + lattice memory tools (deduped, order kept). */
+function withLatticeTools(tools) {
+  const out = [...tools];
+  for (const t of LATTICE_TOOLS) {
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+/**
+ * True when the Pi agent dir already auto-discovers a kernel-lattice extension
+ * (kernel: config/pi/extensions symlink). Pi dedupes by realpath, but skipping
+ * here also avoids a double load if that copy is ever not a symlink.
+ */
+function agentDirHasLattice(cfgDir) {
+  if (!cfgDir) return false;
+  return ['kernel-lattice.ts', 'kernel-lattice.js'].some((f) =>
+    fs.existsSync(path.join(cfgDir, 'extensions', f))
+  );
+}
+
+function defaultCfgDir() {
+  try {
+    return require('./paths').CFG_DIR;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Extensions every pack loads: harness-controls + kernel-lattice. */
+function baseExtensions(cfgDir = defaultCfgDir()) {
+  const exts = [];
+  if (fs.existsSync(HARNESS_EXTENSION)) exts.push(HARNESS_EXTENSION);
+  if (fs.existsSync(LATTICE_EXTENSION) && !agentDirHasLattice(cfgDir)) {
+    exts.push(LATTICE_EXTENSION);
+  }
+  return exts;
+}
 
 const WEB_TOOLS = [
   'read',
@@ -79,21 +123,23 @@ function canonicalizePack(id) {
 
 const canonicalizePreset = canonicalizePack;
 
-function materialize(pack) {
+function materialize(pack, { cfgDir } = {}) {
   const out = {
     id: pack.id,
     label: pack.label,
-    tools: pack.tools ? [...pack.tools] : null,
+    tools: pack.tools ? withLatticeTools(pack.tools) : null,
     note: pack.note,
     extension: pack.extension || null,
     scriptsDir: pack.scriptsDir || null,
     extensions: [],
     piArgs: [],
   };
-  if (fs.existsSync(HARNESS_EXTENSION)) {
-    out.extensions.push(HARNESS_EXTENSION);
-  } else {
+  out.extensions.push(...baseExtensions(cfgDir === undefined ? defaultCfgDir() : cfgDir));
+  if (!fs.existsSync(HARNESS_EXTENSION)) {
     out.note = `${pack.note} [WARN harness-controls missing]`;
+  }
+  if (!fs.existsSync(LATTICE_EXTENSION)) {
+    out.note = `${out.note} [WARN kernel-lattice missing]`;
   }
   if (pack.extension) {
     if (!fs.existsSync(pack.extension)) {
@@ -105,8 +151,8 @@ function materialize(pack) {
   for (const ext of out.extensions) {
     out.piArgs.push('--extension', ext);
   }
-  if (pack.tools && pack.tools.length) {
-    out.piArgs.push('--tools', pack.tools.join(','));
+  if (out.tools && out.tools.length) {
+    out.piArgs.push('--tools', out.tools.join(','));
   }
   return out;
 }
@@ -169,7 +215,7 @@ function packPiArgs(pack, passthroughArgs) {
       pack.extensions && pack.extensions.length
         ? pack.extensions
         : [
-            ...(fs.existsSync(HARNESS_EXTENSION) ? [HARNESS_EXTENSION] : []),
+            ...baseExtensions(),
             ...(pack.extension && fs.existsSync(pack.extension) ? [pack.extension] : []),
           ];
     for (const ext of exts) {
@@ -177,7 +223,7 @@ function packPiArgs(pack, passthroughArgs) {
     }
   }
   if (pack.tools && pack.tools.length && !hasToolsFlag(rest)) {
-    args.push('--tools', pack.tools.join(','));
+    args.push('--tools', withLatticeTools(pack.tools).join(','));
   }
   return args;
 }
@@ -191,6 +237,12 @@ module.exports = {
   WEB_SCRIPTS,
   WEB_TOOLS,
   HARNESS_EXTENSION,
+  LATTICE_EXTENSION,
+  LATTICE_TOOLS,
+  withLatticeTools,
+  agentDirHasLattice,
+  baseExtensions,
+  materialize,
   canonicalizePack,
   canonicalizePreset,
   getPack,

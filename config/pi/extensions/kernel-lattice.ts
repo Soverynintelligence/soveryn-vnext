@@ -1,1 +1,1 @@
-/home/jon-deoliveira/ablit-bake/jit-exp/overlay/extensions/kernel-lattice.ts
+../../../packages/soveryn-cli/extensions/kernel-lattice.ts
