@@ -70,6 +70,10 @@ to identify the reverter; if a job did it, gate it.**
   land via direct write. Lane status unchanged from the 09-22/09-23 record.
 - kernel CLI currently broken: `/home/jon-deoliveira/bin/kernel` line 13 execs
   `soveryn-pi`, which is not on PATH (exit 127). Needs a fix in a TTY session.
+  **Resolved 2026-09-27 (Kernel):** `~/bin/soveryn-pi` → `scripts/soveryn-pi` exists
+  and `kernel status` runs READY (GLM live, flash parked). All three items of this
+  pass verified present on disk and in git (README anchor in 2b71a8f) — the
+  09-27 correction dispatch was stale.
 
 ---
 *Note path correction: this note was first written to `/home/jon-deoliveira/docs/notes/`
