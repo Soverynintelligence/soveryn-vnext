@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> Last rotated: 2026-09-22  
+> Last rotated: 2026-09-27  
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
 > Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Row-date check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` should be 0 — any | row without a parseable 2026 date silently breaks the staleness grep. Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
@@ -23,7 +23,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | **Tower / desk** | Command Center (`/command-center`), Staff (`/citizens`), Fleet | Ops HUD — evidence & commissions; not the daily ask door. | 2026-09-22 |
 | **House staff** | Citizens in `soveryn_vnext` | Execute work (commissions, Eve posts, Kernel builds). | 2026-09-22 |
 | **Outside eye** | Teammates (`~/teammates`) | Critic/Scout overnight — **observe & brief**; do **not** become a second phone app. Briefs → Messages (`t_critic` / `t_scout`). | 2026-09-22 |
-| **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG | Customer/brand surface. | 2026-09-22 |
+| **Public internet** | soverynintelligence.com, Seneca, PondWright/CWG, cathedral.soverynintelligence.com | Customer/brand surface. | 2026-09-27 |
 | **In-house tower ports** | Atticus `:8500`, TGTHRmess | **Not** confirmed public-internet products — tower ports per §1 Public Spark. Atticus is the History's Ledger fact-guard (halts when the page isn't held). Messie is Qwen3.5-9B Q6 on `:5066` (TGTHR helper), not the Quadros 27B public slot (public slot: unassigned as of 2026-09-15; no live check performed this pass). Unit: `~/.config/systemd/user/tgthrmess-messie.service` (tracked copy `~/tgthr-entries/systemd/tgthrmess-messie.service`). | 2026-09-15 |
 
 - 2026-09-09: superseded snapshot 2026-05-23 moved to docs/archive/ — this file is the only live truth.
@@ -88,6 +88,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Surface | Status |
 |---------|--------|
 | Flask vNext | **Live** |
+| Cathedral (`/cathedral`) | **Live** 2026-09-27 (Kernel) — WebGL galaxy of the live lattice (nodes/edges/suns/landmarks from `lattice_vnext.db`, per request, 30s poll diff on page). Public face `soveryn-cathedral-public.service` on `:18810` via pondwright tunnel → `cathedral.soverynintelligence.com` (ingress added 2026-09-27; **CNAME pending Jon, CF dashboard** → `85970537-f4aa-40cf-b616-c5f185e2ae81.cfargotunnel.com`). Public view strips memory text at the API — stars real, words stay home. Private view on :5001 unchanged. |
 | Agents | **Messages:** Aetheria, Kernel, Eve (+ Critic/Scout inboxes). Vett/Scotty/Grok **not** house chat agents. |
 | Heartbeat / dream / automations | **Live** |
 | Cognition surface (Gemma 4 26B-A4B Q5, CPU-only `:8089`, alias `dream`) | **Live** 2026-09-13 (Kernel — restarted; was silently down since ~Aug 30, starved `soveryn-representation.service` into a 4.8k-restart loop) |
