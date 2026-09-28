@@ -2,7 +2,7 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> Last rotated: 2026-09-27  
+> Last rotated: 2026-09-28
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
 > Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Row-date check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` should be 0 — any | row without a parseable 2026 date silently breaks the staleness grep. Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
@@ -13,7 +13,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 ---
 
 ## 0. House spine (locked 2026-08-24)
-*As of 2026-09-15; per-row dates are the source of truth.*
+*As of 2026-09-28; per-row dates are the source of truth.*
 
 **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
 
@@ -31,7 +31,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 *These three are the surfaces the README public-surface table has actually fetched; README lists only fetched surfaces.*
 
 ### 0a. Fleet freeze — frontier few (locked 2026-08-27)
-*Last observed: 2026-08-27.*
+*Last observed: 2026-09-28.*
 *How to verify: `nvidia-smi` shows ≤1 frontier model per card; `systemctl --user list-units 'soveryn*'` (and the `:PORT` listeners in §1) list the live agent services.*
 
 **Constraint:** you cannot run six frontier minds and six personas on this iron. One card → one frontier mind. Extra agents only for **different tools** or a **different clock** — never another wig on the same weights.
@@ -39,7 +39,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 | Messages contact | Role | Brain |
 |------------------|------|--------|
 | **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
-| **Kernel** | Local build | **Flash-Next `:8888` NVFP4 TP=1 active** (2026-09-17, house standard — Kernel coding brain; GLM `:8001` parked). |
+| **Kernel** | Local build | **GLM-5.3-Flash EXL3 TP=2 across both DGX Sparks — `:8001` active** (2026-09-28, live Kernel coding brain; Flash-Next `:8888` parked). |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
 
@@ -48,7 +48,7 @@ Per-row verification dates — model swaps are the most common silent drift; do 
 | Row (model/endpoint) | Last verified |
 |----------------------|---------------|
 | Aetheria — Blackwell `:8090` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 Brains |
-| Kernel — Flash-Next `:8888` NVFP4 TP=1 (GLM `:8001` parked) | 2026-09-17 (Kernel — coding brain live on Flash-Next per house standard; aider/opencode runs confirm `:8888` serving) |
+| Kernel — GLM-5.3-Flash EXL3 TP=2 across both DGX Sparks `:8001` (Flash-Next `:8888` parked) | 2026-09-28 (live Kernel coding brain; MiaAI recipe `GLM-5.3-Flash-EXL3-2x-DGX-Sparks` commit `943912c`, `MAX_MODEL_LEN=1000000`, `SPEC_METHOD=none`, `GLM53_DRAFT_KV_COMPACT=0`) |
 | Eve — Quadros `:8091` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 |
 | TGTHR helper Messie — `:5066` Qwen3.5-9B Q6 | 2026-09-09 (Kernel — re-checked vs §0 public-products note; in-house TGTHR helper, not the Quadros 27B public slot) |
 | Critic / Scout — Teammates inbox | 2026-09-07 (§0b brief contract) |
@@ -82,7 +82,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ---
 
 ## 1. What is live
-*Last observed: 2026-09-01.*
+*Last observed: 2026-09-28.*
 
 ### House (soveryn_vnext) — tower `:5001`
 | Surface | Status |
@@ -140,9 +140,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Lane | Where |
 |------|--------|
 | Aetheria | Blackwell `:8090` — alone |
-| Kernel | **GLM-5.3-Flash EXL3 TP=2 `:8001` — LIVE 2026-09-22 (observed serving; spark2 116/121 GiB resident). Took over from Flash-Next ~2026-09-13. `~/.soveryn/kernel_brain` = `glm`.** |
+| Kernel | **GLM-5.3-Flash EXL3 TP=2 `:8001` — LIVE 2026-09-28 (across both DGX Sparks; live Kernel brain). MiaAI recipe `GLM-5.3-Flash-EXL3-2x-DGX-Sparks` commit `943912c`, `MAX_MODEL_LEN=1000000`, `SPEC_METHOD=none`, `GLM53_DRAFT_KV_COMPACT=0`. `~/.soveryn/kernel_brain` = `glm`.** |
 | Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
-| Flash-Next `:8888` | **PARKED 2026-09-22 (observed: endpoint down).** NVFP4 TP=1, spark2. Tunnel unit `soveryn-spark2-flashnext-8888.service` still running (forward only, backend down). Re-park per lab. **Gotcha (two-week leak, fixed 2026-09-22):** overnight jobs launched aider against this parked endpoint; `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and probes before start |
+| Flash-Next `:8888` | **PARKED/stopped 2026-09-28.** NVFP4 TP=1, spark2. Tunnel unit `soveryn-spark2-flashnext-8888.service` still running (forward only, backend down). Re-park per lab. **Gotcha (two-week leak, fixed 2026-09-22):** overnight jobs launched aider against this parked endpoint; `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and probes before start |
 | Second Spark | **LIVE — serving the GLM TP=2 half** (not parked; `:8001` spans both Sparks) |
 | House overnight rule | Overnight agents hand findings to Kernel as instructions; they never launch harnesses against unprobed endpoints (SOVERYN.md, 2026-09-22) |
 

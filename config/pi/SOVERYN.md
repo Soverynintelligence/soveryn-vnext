@@ -7,7 +7,7 @@ Citizens: Aetheria (soul), Kernel (build), Eve (research + ship). Runtime facts:
 Pi auto-loads this via `AGENTS.md` → `SOVERYN.md` (symlink). `SYSTEM.md` stays the short Kernel voice/prompt.
 
 ## Defaults
-- **Brain:** active profile is whatever `~/.soveryn/kernel_brain` says — `kernel status` is truth (2026-09-13: GLM-5.3-Flash EXL3 TP=2 @ `http://10.10.10.2:8001/v1`, owner-unparked). Flash-Next `:8888` parked. Aetheria @ `:8090`. Do not trust prose in docs over `kernel status`.
+- **Brain:** active profile is whatever `~/.soveryn/kernel_brain` says — `kernel status` is truth (2026-09-28: GLM-5.3-Flash EXL3 TP=2 @ `http://10.10.10.2:8001/v1`, live Kernel brain). Flash-Next `:8888` parked. Aetheria @ `:8090`. Do not trust prose in docs over `kernel status`.
 - **Thinking:** **off** unless Jon asks (`kernel --high` / thinking on). Flash-Next is on/off, not GLM low/high/max.
 - **Online by default.** No `--offline` / `PI_OFFLINE` unless Jon opts in. Stay on house endpoints; nothing leaves the machine unless `models.json` baseUrl changes.
 - **Compaction:** on (256k ctx). Output cap **16k including thinking**. Do not draft full files in the thinking channel. After a compaction summary: re-read only the files you still need — do not compact-chase or re-walk the whole tree.
@@ -21,7 +21,7 @@ Profiles SSOT: `config/soveryn-cli/profiles.json` (symlinked at `config/pi/profi
 kernel status                 # active brain + health
 kernel use flash              # Flash-Next :8888
 kernel use aetheria           # Aetheria :8090  (alias: --qwen)
-kernel use glm                # REFUSES while parked — never silent flash
+kernel use glm                # live Kernel brain at :8001
 kernel model                  # interactive picker
 kernel --flash | --aetheria | --qwen | --profile NAME
 kernel --preset minimal|standard | --minimal | --standard
@@ -82,7 +82,7 @@ Lab RE-PARK: stop GLM `./stop.sh` on spark1 → start Flash-Next on spark2 → `
 - Visual definition of done: approved mockup -> rebuild -> screenshot at halfway -> Jon's eyes before ship.
 - Stop rule (goal-level): two failed attempts at the same GOAL = revert to last good and restart from the approved design. Counting commands instead of goals is how the 2026-09-22 reskin churned through three patches of one failure.
 
-## Overnight handoff (the aider rule)## Overnight handoff (the aider rule)
+## Overnight handoff (the aider rule)
 - Overnight agents (Aetheria, Critic, Scout, any scheduled seat) hand findings to **Kernel as instructions** — they do not launch aider/harnesses themselves. Kernel runs them with verify gates.
 - Any harness launch MUST probe the model endpoint first. `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and refuses to start (exit 2) if the active model is not actually serving. Never hardcode an endpoint.
 - Reason this rule exists: two weeks (2026-09-06 to 09-19) of overnight aider runs spinning ~46% of a core against the parked Flash-Next endpoint, every night, after GLM took over the Sparks. Dead CPU, hot office, zero work done.
