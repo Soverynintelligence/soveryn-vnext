@@ -169,10 +169,12 @@ function init(DATA) {
 
   // ── landmarks: named lights you fly past ──
   const landmarkStars = [];
+  const placedLandmarks = new Set();
   for (const lm of (DATA.landmarks || [])) {
     if (!lm.node) continue;
     const i = DATA.nodes.findIndex(n => n.id === lm.node);
     if (i < 0) continue;
+    placedLandmarks.add(lm.node);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute([pos[i*3], pos[i*3+1], pos[i*3+2]], 3));
     const m = new THREE.PointsMaterial({ size: 26, map: sprite, color: 0xfff2cf,
@@ -243,7 +245,9 @@ function init(DATA) {
     }
     const n = DATA.nodes[idx];
     card.querySelector('.who').textContent = `${n.agent} · ${n.at} · ${n.type}`;
-    card.querySelector('.text').textContent = n.text + extra;
+    card.querySelector('.text').textContent = window.CATHEDRAL_PUBLIC
+      ? 'This moment stays home. The star is real; the words stay in the house.'
+      : n.text + extra;
     card.style.display = 'block';
   });
 
@@ -337,6 +341,94 @@ function init(DATA) {
     camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
+
+  // ── live lattice: the galaxy breathes with the house ──
+  const starBirths = [], edgeBirths = [];
+  const hudEl = document.getElementById('hud');
+  const HUD_DEFAULT = window.CATHEDRAL_PUBLIC
+    ? 'drag · orbit &nbsp; scroll · travel &nbsp; every star is a real memory · the words stay in the house'
+    : hudEl.innerHTML;
+  if (window.CATHEDRAL_PUBLIC) hudEl.innerHTML = HUD_DEFAULT;
+  function placeNode(n, i) {
+    const t = Math.min(1, Math.max(0, (Date.parse(n.at) - tMin) / Math.max(1, tMax - tMin)));
+    const ang = t * Math.PI * 7.5 + hash(i) * 0.9;
+    const rad = 90 + Math.pow(t, 0.72) * 2600 + (hash(i+7) - 0.5) * 260;
+    let y = (hash(i+13) - 0.5) * (170 + t * 260) + Math.sin(ang * 2) * 42;
+    let x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+    if (sunPos[n.agent]) {
+      const k = 0.24;
+      x = x*(1-k) + sunPos[n.agent][0]*k*hash(i+3);
+      y = y*(1-k) + sunPos[n.agent][1]*k*hash(i+5) + sunPos[n.agent][1]*0.14;
+      z = z*(1-k) + sunPos[n.agent][2]*k*hash(i+11);
+    }
+    const c = AGENT_COLORS[n.agent] || defaultC;
+    const pulse = 0.75 + n.salience * 0.6;
+    return { p:[x,y,z], c:[c[0]*pulse, c[1]*pulse, c[2]*pulse], s: 2.2 + n.salience*7 + (n.agent==='jon' ? 4 : 0) };
+  }
+  function absorb(fresh) {
+    const stars0 = DATA.nodes.length;
+    if (!fresh.nodes.length && !fresh.edges.length && !fresh.landmarks.length) return 0;
+    for (const n of fresh.nodes) {
+      const i = DATA.nodes.length;
+      const d = placeNode(n, i);
+      memIdxById[n.id] = i;
+      DATA.nodes.push(n);
+      pos.push(d.p[0], d.p[1], d.p[2]);
+      col.push(0, 0, 0);
+      siz.push(d.s);
+      starBirths.push({ i, t0: clock.elapsedTime, c: d.c });
+    }
+    if (fresh.nodes.length) {
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('sizeA', new THREE.Float32BufferAttribute(siz, 1));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    }
+    let edgeCount = 0;
+    for (const e of fresh.edges) {
+      const [a, b, strength] = e;
+      if (a >= DATA.nodes.length || b >= DATA.nodes.length) continue;
+      epos.push(pos[a*3], pos[a*3+1], pos[a*3+2], pos[b*3], pos[b*3+1], pos[b*3+2]);
+      const v = 0.05 + strength * 0.11;
+      ecol.push(0, 0, 0, 0, 0, 0);
+      edgeBirths.push({ v: (epos.length/3) - 2, t0: clock.elapsedTime, s: v });
+      DATA.edges.push(e);
+      edgeCount++;
+    }
+    if (edgeCount) {
+      egeo.setAttribute('position', new THREE.Float32BufferAttribute(epos, 3));
+      egeo.setAttribute('color', new THREE.Float32BufferAttribute(ecol, 3));
+    }
+    for (const lm of fresh.landmarks) {
+      if (!lm.node || placedLandmarks.has(lm.node)) continue;
+      const i = memIdxById[lm.node];
+      if (i === undefined || i >= DATA.nodes.length) continue;
+      placedLandmarks.add(lm.node);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([pos[i*3], pos[i*3+1], pos[i*3+2]], 3));
+      const m = new THREE.PointsMaterial({ size: 26, map: sprite, color: 0xfff2cf,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+      const s = new THREE.Points(g, m);
+      s.userData = { label: lm.label, text: lm.text, idx: i };
+      scene.add(s);
+      landmarkStars.push(s);
+    }
+    return stars0 === DATA.nodes.length ? edgeCount : DATA.nodes.length - stars0 + edgeCount;
+  }
+  setInterval(() => {
+    fetch('/api/cathedral/data').then(r => r.json()).then(fresh => {
+      const knownEdges = new Set(DATA.edges.map(e => e[0] + ':' + e[1]));
+      const n = absorb({
+        nodes: (fresh.nodes || []).filter(x => memIdxById[x.id] === undefined),
+        edges: (fresh.edges || []).filter(e => !knownEdges.has(e[0] + ':' + e[1])),
+        landmarks: (fresh.landmarks || []).filter(l => l.node && !placedLandmarks.has(l.node)),
+      });
+      if (n > 0) {
+        hudEl.textContent = `+${n} new moment${n === 1 ? '' : 's'} woven in`;
+        hudEl.style.opacity = '0.9';
+        setTimeout(() => { hudEl.innerHTML = HUD_DEFAULT; hudEl.style.opacity = ''; }, 12000);
+      }
+    }).catch(() => {});
+  }, 30000);
 }
 </script>
 </body>

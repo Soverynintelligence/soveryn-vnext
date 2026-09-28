@@ -41,6 +41,13 @@ _SUN_COLORS = {
 def cathedral_data():
     if not _LATTICE_DB.is_file():
         return jsonify({"ok": False, "error": "lattice db missing"}), 503
+    return jsonify(build_cathedral_data())
+
+
+def build_cathedral_data() -> dict:
+    """Live lattice snapshot. Public surfaces MUST redact text before serving."""
+    if not _LATTICE_DB.is_file():
+        return {"ok": False, "error": "lattice db missing"}
 
     conn = sqlite3.connect(f"file:{_LATTICE_DB}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
@@ -100,7 +107,7 @@ def cathedral_data():
         if ts > newest:
             newest = ts
 
-    return jsonify({
+    return {
         "ok": True,
         "nodes": [
             {
@@ -123,4 +130,4 @@ def cathedral_data():
             "oldest": oldest[:10],
             "newest": newest[:10],
         },
-    })
+    }
