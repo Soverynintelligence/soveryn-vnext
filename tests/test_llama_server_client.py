@@ -26,6 +26,7 @@ from soveryn.inference.llama_server_client import (
 # re-export underscored names through the shim, so import from canonical.
 from soveryn.platform.inference.llama_server_client import (
     _wire_message,
+    cap_prompt_images,
     visible_assistant_text,
 )
 
@@ -705,6 +706,21 @@ def test_prepare_wire_messages_aetheria_seam_4_separate_at_agent_loop_folds_to_1
 # ChatMessage.content widened to str | list[dict] for OpenAI vision parts
 # (Signal Image Vision Pipeline — Task SI-T1).
 # ─────────────────────────────────────────────────────────────────────────────
+
+def test_cap_prompt_images_keeps_the_newest_four():
+    """A fifth picture used to 400 the whole turn. Keep the latest four."""
+    parts = [{"type": "text", "text": "look"}]
+    for i in range(6):
+        parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{i}"}})
+    out = cap_prompt_images((ChatMessage(role="user", content=parts),))
+    images = [
+        p["image_url"]["url"]
+        for p in out[0].content
+        if isinstance(p, dict) and p.get("type") == "image_url"
+    ]
+    assert images == [f"data:image/jpeg;base64,{i}" for i in range(2, 6)]
+    assert "2 earlier picture" in out[0].content[0]["text"]
+
 
 def test_wire_message_passes_list_content_through_unchanged():
     """OpenAI vision parts list is passed to JSON as-is."""

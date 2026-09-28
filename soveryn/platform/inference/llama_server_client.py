@@ -215,6 +215,65 @@ def _content_as_str(c: str | list[dict]) -> str:
     )
 
 
+# vLLM and the Grok image API both refuse a prompt with more pictures than
+# this. Past the cap the call dies with
+# "At most N image(s) may be provided in one prompt" instead of an answer.
+MAX_IMAGES_PER_PROMPT = 4
+
+
+def cap_prompt_images(
+    messages: tuple["ChatMessage", ...],
+    limit: int = MAX_IMAGES_PER_PROMPT,
+) -> tuple["ChatMessage", ...]:
+    """Keep the newest `limit` pictures on the wire. Older ones become a note."""
+    locs: list[tuple[int, int]] = []
+    for i, message in enumerate(messages):
+        if not isinstance(message.content, list):
+            continue
+        for j, part in enumerate(message.content):
+            if isinstance(part, dict) and part.get("type") == "image_url":
+                locs.append((i, j))
+    if len(locs) <= limit:
+        return messages
+    drop = set(locs[:-limit])
+    dropped = len(drop)
+    note = (
+        f"[{dropped} earlier picture(s) left out of this turn. "
+        f"A turn can look at {limit} pictures.]"
+    )
+    noted = False
+    out: list[ChatMessage] = []
+    for i, message in enumerate(messages):
+        if not isinstance(message.content, list):
+            out.append(message)
+            continue
+        parts: list[dict] = []
+        lost = False
+        for j, part in enumerate(message.content):
+            if (i, j) in drop:
+                lost = True
+                continue
+            parts.append(part)
+        if lost and not noted:
+            if parts and isinstance(parts[0], dict) and parts[0].get("type") == "text":
+                parts[0] = {
+                    **parts[0],
+                    "text": note + "\n\n" + str(parts[0].get("text") or ""),
+                }
+            else:
+                parts.insert(0, {"type": "text", "text": note})
+            noted = True
+        out.append(
+            ChatMessage(
+                role=message.role,
+                content=parts,
+                tool_call_id=message.tool_call_id,
+                tool_calls=message.tool_calls,
+            )
+        )
+    return tuple(out)
+
+
 def prepare_wire_messages(
     messages: tuple["ChatMessage", ...],
     server: ModelServer,
@@ -303,7 +362,9 @@ def chat(
     timeout: float = DEFAULT_CHAT_TIMEOUT_SECONDS,
 ) -> ChatResponse:
     """Send a non-streaming chat completion. Caller picks the server (via routing)."""
-    wire_messages = prepare_wire_messages(request.messages, server)
+    wire_messages = prepare_wire_messages(
+        cap_prompt_images(request.messages), server
+    )
     payload: dict[str, Any] = {
         "model": request.model,
         "messages": [_wire_message(m) for m in wire_messages],
@@ -397,7 +458,9 @@ def chat_stream(
     Raises LlamaServerError / LlamaServerTimeout on network failure OR if a
     chunk that looks terminal (contains finish_reason or [DONE]) is malformed.
     """
-    wire_messages = prepare_wire_messages(request.messages, server)
+    wire_messages = prepare_wire_messages(
+        cap_prompt_images(request.messages), server
+    )
     payload: dict[str, Any] = {
         "model": request.model,
         "messages": [_wire_message(m) for m in wire_messages],

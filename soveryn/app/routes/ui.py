@@ -26,6 +26,7 @@ CITIZENS_TEMPLATE = Path(__file__).parent.parent / "templates" / "citizens.html"
 FLEET_TEMPLATE = Path(__file__).parent.parent / "templates" / "fleet.html"
 CHARTERS_TEMPLATE = Path(__file__).parent.parent / "templates" / "charters.html"
 LOUNGE_TEMPLATE = Path(__file__).parent.parent / "templates" / "lounge.html"
+CATHEDRAL_TEMPLATE = Path(__file__).parent.parent / "templates" / "cathedral.html"
 
 # Phone / handheld — not tablets (iPad) so desk-sized glass still gets CC.
 _PHONE_UA_RE = re.compile(
@@ -172,6 +173,12 @@ def charters_board():
 def lounge_page():
     """The Lounge — the team's room with no agenda. Jon participates directly."""
     return _serve_html(LOUNGE_TEMPLATE, missing_label="Lounge")
+
+
+@bp.get("/cathedral")
+def cathedral_page():
+    """The Cathedral — the house's memory as a galaxy. Live from the lattice."""
+    return _serve_html(CATHEDRAL_TEMPLATE, missing_label="Cathedral")
 
 
 CHAT_TEMPLATE = Path(__file__).parent.parent / "templates" / "chat.html"

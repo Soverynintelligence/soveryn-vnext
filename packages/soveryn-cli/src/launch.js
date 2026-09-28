@@ -14,6 +14,7 @@ const {
 const { getPrintTimeoutMs } = require('./policy/limits');
 const { printSplash, bannerLine } = require('./chrome');
 const { resolvePack, packPiArgs, hasToolsFlag } = require('./presets');
+const { ensurePiImageCap } = require('./cap-pi-images');
 
 function findPi() {
   if (process.env.PI_BIN && fs.existsSync(process.env.PI_BIN)) {
@@ -180,6 +181,10 @@ function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, pa
     ? ['ignore', 'inherit', 'inherit']
     : 'inherit';
 
+  const cap = ensurePiImageCap(piBin);
+  if (!cap.ok) {
+    console.error(`${CMD}: WARN — image cap not applied (${cap.reason})`);
+  }
   const { spawn } = require('child_process');
   const child = spawn(piBin, piArgs, {
     env,

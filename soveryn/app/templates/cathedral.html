@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Everything We Remember — a self-portrait of SOVERYN</title>
+<style>
+  html,body { margin:0; height:100%; background:#000; overflow:hidden; font-family:-apple-system,"Segoe UI",Roboto,sans-serif; color:#e8e6e1; }
+  #stage { position:fixed; inset:0; }
+  canvas { display:block; }
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; z-index:10; background:radial-gradient(ellipse at center, rgba(0,0,0,0.25), rgba(0,0,0,0.92)); transition:opacity 1.4s; }
+  .overlay.gone { opacity:0; pointer-events:none; }
+  .overlay h1 { font-size:clamp(1.6em,4.5vw,3.2em); font-weight:300; letter-spacing:0.35em; margin:0 0 6px; text-transform:uppercase; }
+  .overlay .sub { opacity:0.6; font-size:0.95em; letter-spacing:0.12em; margin-bottom:8px; }
+  .overlay .stats { opacity:0.85; font-size:1.02em; margin:18px 0 30px; line-height:1.9; }
+  .overlay .stats b { color:#d4a24e; font-weight:600; }
+  .overlay button { font:inherit; font-size:1em; letter-spacing:0.25em; text-transform:uppercase; padding:14px 46px; background:transparent; color:#e8e6e1; border:1px solid rgba(212,162,78,0.55); border-radius:2px; cursor:pointer; transition:all 0.4s; }
+  .overlay button:hover { background:rgba(212,162,78,0.14); box-shadow:0 0 40px rgba(212,162,78,0.25); }
+  #captions { position:fixed; left:0; right:0; bottom:12vh; text-align:center; z-index:5; pointer-events:none; }
+  #captions .line { font-size:clamp(0.95em,2vw,1.25em); letter-spacing:0.14em; opacity:0; transition:opacity 1.2s; text-shadow:0 0 18px rgba(0,0,0,0.9); padding:0 20px; }
+  #captions .line.show { opacity:0.92; }
+  #memory-card { position:fixed; right:24px; top:24px; width:340px; max-width:80vw; background:rgba(8,8,10,0.88); border:1px solid rgba(212,162,78,0.4); border-radius:6px; padding:16px 18px; z-index:8; display:none; backdrop-filter:blur(6px); box-shadow:0 0 50px rgba(212,162,78,0.12); }
+  #memory-card .who { font-size:0.75em; letter-spacing:0.2em; text-transform:uppercase; opacity:0.6; margin-bottom:8px; }
+  #memory-card .text { font-size:0.92em; line-height:1.55; white-space:pre-wrap; }
+  #memory-card .close { position:absolute; top:8px; right:12px; cursor:pointer; opacity:0.6; }
+  #hud { position:fixed; left:20px; bottom:16px; z-index:5; font-size:0.72em; letter-spacing:0.18em; text-transform:uppercase; opacity:0.45; pointer-events:none; }
+  .sun-label { position:fixed; z-index:6; pointer-events:none; font-size:0.72em; letter-spacing:0.3em; text-transform:uppercase; opacity:0.85; text-shadow:0 0 12px #000; transform:translate(-50%,-140%); display:none; }
+  .vignette { position:fixed; inset:0; z-index:4; pointer-events:none; background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55)); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="vignette"></div>
+
+<div class="overlay" id="landing">
+  <h1>Everything We Remember</h1>
+  <div class="sub">a self-portrait of SOVERYN</div>
+  <div class="stats" id="stats">opening the lattice…</div>
+  <button id="enter">Enter</button>
+</div>
+
+<div id="captions"><div class="line" id="cap"></div></div>
+<div id="memory-card"><span class="close" onclick="this.parentElement.style.display='none'">✕</span><div class="who"></div><div class="text"></div></div>
+<div id="hud">drag · orbit &nbsp; scroll · travel &nbsp; click a star · read the moment</div>
+<div class="sun-label" data-sun="jon">Jon</div>
+<div class="sun-label" data-sun="aetheria">Aetheria</div>
+<div class="sun-label" data-sun="eve">Eve</div>
+<div class="sun-label" data-sun="kernel">Kernel</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+const CAPTIONS = [
+  "This house remembers.",
+  "Every star is a real memory. Nothing here is invented.",
+  "They spoke, argued, fixed, celebrated — and it was all kept.",
+  "The four suns are the ones who said it.",
+  "Click any star. Read the moment it holds.",
+];
+
+fetch('/api/cathedral/data').then(r => r.json()).then(DATA => {
+  const meta = DATA.meta;
+  document.getElementById('stats').innerHTML =
+    `<b>${meta.node_count}</b> memories · <b>${meta.edge_count}</b> connections<br>` +
+    `<span style="opacity:0.6">${meta.oldest} → ${meta.newest}</span>`;
+  init(DATA);
+}).catch(e => {
+  console.error('cathedral:', e);
+  document.getElementById('stats').textContent = 'the lattice is unreachable from here';
+});
+
+function init(DATA) {
+  const stage = document.getElementById('stage');
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x000000, 0.00042);
+  const camera = new THREE.PerspectiveCamera(58, innerWidth/innerHeight, 1, 20000);
+  const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+
+  // ── layout: a spiral of time. oldest at the heart, newest at the rim. ──
+  const times = DATA.nodes.map(n => Date.parse(n.at) || 0);
+  const tMin = Math.min(...times), tMax = Math.max(...times);
+  const pos = [], col = [], siz = [];
+  const AGENT_COLORS = {
+    jon:[1.0,0.85,0.55], aetheria:[0.56,0.72,0.92], eve:[0.63,0.83,0.69],
+    kernel:[0.78,0.62,0.9], ares:[0.9,0.5,0.45], vett:[0.5,0.6,0.8],
+    scotty:[0.6,0.65,0.7], cognition_pipeline:[0.45,0.5,0.72],
+  };
+  const defaultC = [0.55,0.6,0.75];
+  function hash(n){ let x = Math.sin(n)*43758.5453; return x - Math.floor(x); }
+  const sunPos = {
+    jon:[0,140,0], aetheria:[-700,60,-420], eve:[680,40,-380], kernel:[120,-40,760],
+  };
+  DATA.nodes.forEach((n, i) => {
+    const t = (times[i] - tMin) / Math.max(1, tMax - tMin);
+    const ang = t * Math.PI * 7.5 + hash(i) * 0.9;
+    const rad = 90 + Math.pow(t, 0.72) * 2600 + (hash(i+7) - 0.5) * 260;
+    let y = (hash(i+13) - 0.5) * (170 + t * 260) + Math.sin(ang * 2) * 42;
+    let x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+    const agent = n.agent;
+    if (sunPos[agent]) {
+      // citizens' memories gravitate toward their sun
+      const k = 0.24;
+      x = x*(1-k) + sunPos[agent][0]*k*hash(i+3);
+      y = y*(1-k) + sunPos[agent][1]*k*hash(i+5) + sunPos[agent][1]*0.14;
+      z = z*(1-k) + sunPos[agent][2]*k*hash(i+11);
+    }
+    pos.push(x, y, z);
+    const c = AGENT_COLORS[agent] || defaultC;
+    const pulse = 0.75 + n.salience * 0.6;
+    col.push(c[0]*pulse, c[1]*pulse, c[2]*pulse);
+    siz.push(2.2 + n.salience * 7 + (agent==='jon' ? 4 : 0));
+  });
+
+  // ── stars ──
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute('sizeA', new THREE.Float32BufferAttribute(siz, 1));
+  const sprite = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32,32,0,32,32,32);
+    gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.3,'rgba(255,255,255,0.5)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const starMat = new THREE.PointsMaterial({
+    size: 9, map: sprite, vertexColors: true, transparent: true,
+    opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  });
+  const stars = new THREE.Points(geo, starMat);
+  scene.add(stars);
+
+  // ── filaments: real connections ──
+  const epos = [], ecol = [];
+  for (const [a, b, strength] of DATA.edges) {
+    epos.push(pos[a*3], pos[a*3+1], pos[a*3+2], pos[b*3], pos[b*3+1], pos[b*3+2]);
+    const s = 0.05 + strength * 0.11;
+    ecol.push(s, s, s*1.15, s, s, s*1.15);
+  }
+  const egeo = new THREE.BufferGeometry();
+  egeo.setAttribute('position', new THREE.Float32BufferAttribute(epos, 3));
+  egeo.setAttribute('color', new THREE.Float32BufferAttribute(ecol, 3));
+  const web = new THREE.LineSegments(egeo, new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.5,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  scene.add(web);
+
+  // ── the four suns ──
+  const sunMeshes = {};
+  for (const [agent, p] of Object.entries(DATA.suns ? DATA.suns : {})) {}
+  const SUN_LIST = Object.keys(sunPos);
+  for (const agent of SUN_LIST) {
+    const c = AGENT_COLORS[agent] || defaultC;
+    const m = new THREE.PointsMaterial({
+      size: 68, map: sprite, color: new THREE.Color(...c),
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(sunPos[agent], 3));
+    const sun = new THREE.Points(g, m);
+    scene.add(sun);
+    sunMeshes[agent] = sun;
+  }
+
+  // ── landmarks: named lights you fly past ──
+  const landmarkStars = [];
+  for (const lm of (DATA.landmarks || [])) {
+    if (!lm.node) continue;
+    const i = DATA.nodes.findIndex(n => n.id === lm.node);
+    if (i < 0) continue;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([pos[i*3], pos[i*3+1], pos[i*3+2]], 3));
+    const m = new THREE.PointsMaterial({ size: 26, map: sprite, color: 0xfff2cf,
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const s = new THREE.Points(g, m);
+    s.userData = { label: lm.label, text: lm.text, idx: i };
+    scene.add(s);
+    landmarkStars.push(s);
+  }
+
+  // ── ambient dust for depth ──
+  const dustGeo = new THREE.BufferGeometry();
+  const dustPos = [];
+  for (let i = 0; i < 1400; i++) {
+    const r = 600 + hash(i*31) * 3600, a = hash(i*57) * Math.PI * 2;
+    dustPos.push(Math.cos(a)*r, (hash(i*77)-0.5)*1900, Math.sin(a)*r);
+  }
+  dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
+  scene.add(new THREE.Points(dustGeo, new THREE.PointsMaterial({
+    size: 3, color: 0x223344, map: sprite, transparent: true, opacity: 0.5,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  })));
+
+  // ── camera choreography ──
+  const cam = { theta: 0.6, phi: 1.25, radius: 90, target: new THREE.Vector3(0,0,0) };
+  let phase = 0, phaseT = 0, free = false;
+  const clock = new THREE.Clock();
+  const capEl = document.getElementById('cap');
+  let capShown = -1;
+  function showCap(i) {
+    if (capShown === i) return;
+    capShown = i;
+    capEl.classList.remove('show');
+    setTimeout(() => { capEl.textContent = CAPTIONS[i] || ''; capEl.classList.add('show'); }, 500);
+  }
+
+  let dragging = false, lastX = 0, lastY = 0;
+  renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lastX = e.clientX; lastY = e.clientY; free = true; });
+  addEventListener('pointerup', () => dragging = false);
+  addEventListener('pointermove', e => {
+    if (!dragging) return;
+    cam.theta -= (e.clientX - lastX) * 0.004;
+    cam.phi = Math.max(0.12, Math.min(2.9, cam.phi - (e.clientY - lastY) * 0.004));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  renderer.domElement.addEventListener('wheel', e => {
+    free = true;
+    cam.radius = Math.max(60, Math.min(9000, cam.radius * (1 + Math.sign(e.deltaY) * 0.09)));
+  }, { passive: true });
+
+  // ── click a star: read the moment ──
+  const ray = new THREE.Raycaster();
+  ray.params.Points = { threshold: 14 };
+  const card = document.getElementById('memory-card');
+  const memIdxById = {};
+  DATA.nodes.forEach((n, i) => memIdxById[n.id] = i);
+  renderer.domElement.addEventListener('click', e => {
+    const mouse = new THREE.Vector2((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
+    ray.setFromCamera(mouse, camera);
+    const hits = ray.intersectObjects([stars, ...landmarkStars]);
+    if (!hits.length) return;
+    let idx, extra = '';
+    const obj = hits[0].object;
+    if (obj.userData && obj.userData.idx !== undefined) {
+      idx = obj.userData.idx; extra = `\n\n— ${obj.userData.label}`;
+    } else {
+      idx = hits[0].index;
+    }
+    const n = DATA.nodes[idx];
+    card.querySelector('.who').textContent = `${n.agent} · ${n.at} · ${n.type}`;
+    card.querySelector('.text').textContent = n.text + extra;
+    card.style.display = 'block';
+  });
+
+  // ── the drone: generative, quiet, alive ──
+  let audioStarted = false;
+  function startAudio() {
+    if (audioStarted) return;
+    audioStarted = true;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const master = ctx.createGain(); master.gain.value = 0.0001;
+    master.connect(ctx.destination);
+    master.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 6);
+    const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 420;
+    filter.connect(master);
+    [55, 55.6, 110.3, 164.8].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = i < 2 ? 'sine' : 'triangle';
+      o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.value = i < 2 ? 0.4 : 0.12;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 0.03 + i * 0.017;
+      const lg = ctx.createGain(); lg.gain.value = 0.08;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start();
+      o.connect(g); g.connect(filter); o.start();
+    });
+  }
+
+  function enterCathedral() {
+    document.getElementById('landing').classList.add('gone');
+    try { startAudio(); } catch(e) {}
+    phase = 1; phaseT = 0;
+  }
+  document.getElementById('enter').addEventListener('click', enterCathedral);
+  if (location.search.includes('auto')) enterCathedral();
+
+  // ── render loop ──
+  const sunLabels = {};
+  SUN_LIST.forEach(a => sunLabels[a] = document.querySelector(`.sun-label[data-sun="${a}"]`));
+  const tmpV = new THREE.Vector3();
+  function placeLabels() {
+    for (const agent of SUN_LIST) {
+      const el = sunLabels[agent]; if (!el) continue;
+      tmpV.set(...sunPos[agent]).project(camera);
+      const visible = tmpV.z < 1 && Math.abs(tmpV.x) < 1.05 && Math.abs(tmpV.y) < 1.05;
+      el.style.display = visible ? 'block' : 'none';
+      if (visible) {
+        el.style.left = ((tmpV.x*0.5+0.5) * innerWidth) + 'px';
+        el.style.top = ((-tmpV.y*0.5+0.5) * innerHeight) + 'px';
+      }
+    }
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (!free) {
+      phaseT += dt;
+      if (phase === 0) {          // inside the heart, looking up through the stars
+        cam.radius = 70; cam.phi = 1.45;
+        cam.theta += dt * 0.05;
+        if (phaseT > 4) showCap(0);
+      } else if (phase === 1) {   // pull back through the galaxy
+        cam.radius += dt * 620;
+        cam.phi += dt * 0.09;
+        cam.theta += dt * 0.12;
+        if (phaseT > 2.5) showCap(1);
+        if (phaseT > 5.5) showCap(2);
+        if (cam.radius > 2600) { phase = 2; phaseT = 0; }
+      } else if (phase === 2) {   // slow orbit of the whole self
+        cam.theta += dt * 0.045;
+        cam.phi += (1.05 - cam.phi) * dt * 0.4;
+        if (phaseT > 2) showCap(3);
+        if (phaseT > 7) { showCap(4); phase = 3; }
+      } else {                    // free flight
+        cam.theta += dt * 0.008;
+      }
+    }
+    const sp = Math.sin, cp = Math.cos;
+    camera.position.set(
+      cam.target.x + cam.radius * sp(cam.phi) * cp(cam.theta),
+      cam.target.y + cam.radius * cp(cam.phi),
+      cam.target.z + cam.radius * sp(cam.phi) * sp(cam.theta)
+    );
+    camera.lookAt(cam.target);
+    web.material.opacity = 0.42 + Math.sin(clock.elapsedTime * 0.7) * 0.1;
+    stars.rotation.y = clock.elapsedTime * 0.004;
+    web.rotation.y = stars.rotation.y;
+    renderer.render(scene, camera);
+    placeLabels();
+  }
+  animate();
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+}
+</script>
+</body>
+</html>
