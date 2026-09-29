@@ -318,7 +318,7 @@ def build_tts_service(
     selection = (primary or os.environ.get("SOVEREIGN_TTS_PRIMARY") or DEFAULT_PRIMARY).lower()
     agent_key = (agent_name or "").lower().strip()
     # Kernel still speaks Scotty's F5 clone. Eve is Kokoro.
-    if selection == "kokoro" and agent_key == "kernel":
+    if selection == "kokoro" and agent_key == "forge":
         selection = "f5tts"
     agg_mode = resolve_text_aggregation_mode(tts_agg)
 

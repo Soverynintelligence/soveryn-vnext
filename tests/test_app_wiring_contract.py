@@ -149,22 +149,22 @@ def test_vett_has_signature_tools(app):
     assert "request_direction" not in names
 
 
-def test_kernel_and_eve_request_direction(app):
-    kernel = _tool_names(_loops(app)["kernel"], "kernel")
+def test_forge_and_eve_request_direction(app):
+    kernel = _tool_names(_loops(app)["forge"], "forge")
     eve = _tool_names(_loops(app)["eve"], "eve")
     assert "request_direction" in kernel
     assert "request_direction" in eve
 
 
-def test_eve_has_generate_image_kernel_does_not(app):
+def test_eve_has_generate_image_forge_does_not(app):
     eve = _tool_names(_loops(app)["eve"], "eve")
     assert "generate_image" in eve
     registry = _ext(app)["tool_registry"]
-    kernel = {t.name for t in registry.iter_tools_for_agent("kernel")}
+    kernel = {t.name for t in registry.iter_tools_for_agent("forge")}
     assert "generate_image" not in kernel
 
 
-def test_eve_has_decode_qr_kernel_does_not(app):
+def test_eve_has_decode_qr_forge_does_not(app):
     """Desk tools are Eve-only. Vett is merged into Eve; Scotty is off chat.
 
     Negative checks use the shared registry so this test does not require

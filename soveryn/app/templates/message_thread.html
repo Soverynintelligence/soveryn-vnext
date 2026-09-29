@@ -60,7 +60,7 @@
   .avatar[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
   .avatar[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
   .avatar[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
-  .avatar[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  .avatar[data-agent="forge"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
   .avatar[data-agent="t_critic"] { background: linear-gradient(145deg, #d4a574, #6b4a2e); }
   .avatar[data-agent="t_scout"] { background: linear-gradient(145deg, #8eb8d4, #3a5a70); }
   .who { flex: 1; min-width: 0; }
@@ -176,7 +176,7 @@
   a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
   a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
-  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer .mp-av[data-agent="forge"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
   a.messaged-peer[data-state="working"] .mp-av {
     animation: mp-work 1.4s ease-in-out infinite;
     box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
@@ -474,7 +474,7 @@
   const CONTACTS = {
     aetheria: { name: "Aetheria", letter: "A", sub: "Runs the house" },
     eve: { name: "Eve", letter: "E", sub: "Shows up online" },
-    kernel: { name: "Kernel", letter: "K", sub: "Builds with you" },
+    forge: { name: "Forge", letter: "F", sub: "Builds with you" },
     t_critic: { name: "Critic", letter: "C", sub: "Overnight review · inbox" },
     t_scout: { name: "Scout", letter: "Sc", sub: "Overnight scan · inbox" },
     // Deep-link labels if an old URL is opened — not listed on the home screen.
@@ -496,7 +496,7 @@
   const ALLOWED_PDF_MIME = "application/pdf";
   const ALLOWED_ATTACH_MIMES = new Set([...ALLOWED_IMAGE_MIMES, ALLOWED_PDF_MIME]);
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty", "eve", "kernel",
+    "aetheria", "vett", "scotty", "eve", "forge",
   ]);
   const ATT_CACHE_PREFIX = "soveryn.msg.att.";
 
@@ -567,7 +567,7 @@
           const q = encodeURIComponent(
             "Act on the latest " + who + " overnight brief. " +
             "Use read_overnight_brief(who=" + who + "), then house_post_send " +
-            "commissions (kernel=code, vett=verify, scotty=repair, eve=marketing). " +
+            "commissions (forge=code, vett=verify, scotty=repair, eve=marketing). " +
             "Thread excerpt for context:\n\n" +
             (raw || "(no brief text visible — trust read_overnight_brief)")
           );

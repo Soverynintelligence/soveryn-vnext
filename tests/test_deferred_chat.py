@@ -25,7 +25,7 @@ def test_kernel_chat_stream_is_live_not_deferred(tmp_path, monkeypatch):
     import json
 
     conv = ConversationStore(tmp_path / "conv.db")
-    sid = conv.new_session("kernel", title="k")
+    sid = conv.new_session("forge", title="k")
     stream_calls = []
 
     def stream_fn(request, server, timeout=120.0):
@@ -49,7 +49,7 @@ def test_kernel_chat_stream_is_live_not_deferred(tmp_path, monkeypatch):
     }
     db = tmp_path / "citizens.db"
     with connect(db) as conn:
-        register(conn, Citizen(id="kernel", display_name="Kernel"))
+        register(conn, Citizen(id="forge", display_name="Forge"))
         register(conn, Citizen(id="aetheria", display_name="Aetheria"))
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["TESTING"] = True
@@ -59,7 +59,7 @@ def test_kernel_chat_stream_is_live_not_deferred(tmp_path, monkeypatch):
     client = app.test_client()
     resp = client.post(
         "/chat_stream",
-        data=json.dumps({"agent": "kernel", "session_id": sid, "message": "hi"}),
+        data=json.dumps({"agent": "forge", "session_id": sid, "message": "hi"}),
         content_type="application/json",
     )
     assert resp.status_code == 200
@@ -83,7 +83,7 @@ def test_try_defer_skips_kernel_and_aetheria(tmp_path):
 
     conv = ConversationStore(tmp_path / "conv.db")
     sid_a = conv.new_session("aetheria", title="a")
-    sid_k = conv.new_session("kernel", title="k")
+    sid_k = conv.new_session("forge", title="k")
     fake_chat = lambda req, server, timeout=60: ChatResponse(
         content="x", finish_reason="stop", tool_calls=None, usage=None, raw={}
     )
@@ -91,12 +91,12 @@ def test_try_defer_skips_kernel_and_aetheria(tmp_path):
     db = tmp_path / "citizens.db"
     with connect(db) as conn:
         register(conn, Citizen(id="aetheria", display_name="Aetheria"))
-        register(conn, Citizen(id="kernel", display_name="Kernel"))
+        register(conn, Citizen(id="forge", display_name="Forge"))
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["DEFER_CHAT"] = True
     app.config["CITIZENS_DB"] = str(db)
     with app.app_context():
-        for sid, agent in ((sid_a, "aetheria"), (sid_k, "kernel")):
+        for sid, agent in ((sid_a, "aetheria"), (sid_k, "forge")):
             assert try_defer_chat(
                 agent=agent,
                 session_id=sid,
@@ -111,10 +111,10 @@ def test_skip_user_save_does_not_duplicate(tmp_path):
     from soveryn.inference.llama_server_client import ChatResponse
 
     conv = ConversationStore(tmp_path / "conv.db")
-    sid = conv.new_session("kernel", title="k")
-    conv.save_turn(sid, "kernel", "user", "hello", source="deferred")
+    sid = conv.new_session("forge", title="k")
+    conv.save_turn(sid, "forge", "user", "hello", source="deferred")
     loop = AgentLoop(
-        "kernel",
+        "forge",
         conv,
         chat_fn=lambda req, server, timeout=60: ChatResponse(
             content="ok", finish_reason="stop", tool_calls=None, usage=None, raw={}

@@ -38,12 +38,14 @@ EDIT_FILE_MAX_BYTES = 256 * 1024     # 256 KB — post-edit content size cap
 OLD_STRING_MIN_LEN = 1                # at least one char; uniqueness check does the rest
 
 
-def build_edit_file_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT) -> ToolSpec:
+def build_edit_file_tool(*, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT, base: Path | None = None) -> ToolSpec:
     """Bounded write via unique old_string → new_string substitution.
 
     ``root`` bounds every path: writes resolve under it and paths escaping it are
     rejected. Defaults to the live repo; delegated execution passes the task
     worktree so Scotty's edits land in isolation, never the live tree.
+    ``base`` anchors bare relative paths (default: root) — same fence/anchor
+    split as the fs tools; forge registers root=$HOME, base=repo.
     """
 
     def handler(args: Mapping[str, Any]) -> Any:

@@ -202,15 +202,17 @@ def build_house_look_tool(
     owner_agent: str,
     allowed_actions: tuple[str, ...] | None = None,
 ) -> ToolSpec:
-    """allowed_actions scopes the desk: Kernel gets all three (screen + cam);
+    """allowed_actions scopes the desk: Forge gets all three (screen + cam);
     screen-only seats (Aetheria, Eve) pass ('screen_latest', 'screen_fresh').
-    The webcam stays Kernel-only — one desk holding the PTZ, no contention."""
+    The webcam stays single-desk — one PTZ holder, no contention.
+    (2026-09-29: the "kernel" seat was renamed Forge; the cam grant moved
+    with the seat.)"""
     actions = tuple(allowed_actions) if allowed_actions else ACTIONS
     if not set(actions) <= set(ACTIONS):
         raise ValueError(f"unknown actions: {set(actions) - set(ACTIONS)}")
-    if "cam" in actions and owner_agent != "kernel":
+    if "cam" in actions and owner_agent != "forge":
         raise ValueError(
-            "house_look cam is Kernel-only — the PTZ webcam has one desk"
+            "house_look cam is Forge-only — the PTZ webcam has one desk"
         )
 
     def handler(args: Mapping[str, Any]) -> Any:
@@ -218,7 +220,7 @@ def build_house_look_tool(
         if action not in actions:
             raise ToolArgError(
                 f"action must be one of: {', '.join(actions)} "
-                f"(cam is Kernel-only)"
+                f"(cam is Forge-only)"
             )
         try:
             return house_look(

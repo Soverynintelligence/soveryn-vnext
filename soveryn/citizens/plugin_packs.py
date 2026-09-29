@@ -109,7 +109,7 @@ def _register_system(ctx: PackContext, owner: str) -> None:
     # it's-fixed for citizens. Aetheria (verifies her watch items) + Kernel.
     # Allowlisted argv only, curl pinned to 127.0.0.1, receipts in
     # data/black_box/diag/. Edit verbs stay Kernel-only via other tools.
-    if owner in ("aetheria", "kernel"):
+    if owner in ("aetheria", "forge"):
         from soveryn.platform.diag_view_tool import build_house_diag_tool
 
         ctx.registry.register(build_house_diag_tool(owner_agent=owner))
@@ -117,7 +117,7 @@ def _register_system(ctx: PackContext, owner: str) -> None:
     # on-demand PTZ webcam. Kernel gets all three actions; Aetheria + Eve
     # get screen-only (their brains carry mmproj, so frames land as pixels
     # on their turns). Cam is enforced Kernel-only in the builder.
-    if owner == "kernel":
+    if owner == "forge":
         from soveryn.platform.house_look_tool import build_house_look_tool
 
         ctx.registry.register(build_house_look_tool(owner_agent=owner))
@@ -133,12 +133,12 @@ def _register_system(ctx: PackContext, owner: str) -> None:
     # Relational memory (2026-09-24): between-memories — encounters, gifts,
     # the record of us. Memories create self; these tools give every citizen
     # a pathway for the gift (something with no commission attached).
-    if owner in ("aetheria", "eve", "kernel"):
+    if owner in ("aetheria", "eve", "forge"):
         from soveryn.platform.relational.tools import build_relational_tools
 
         for _spec in build_relational_tools(owner_agent=owner):
             ctx.registry.register(_spec)
-    if owner in ("aetheria", "eve", "kernel"):
+    if owner in ("aetheria", "eve", "forge"):
         from soveryn.platform.lounge_tool import build_lounge_tool
 
         ctx.registry.register(build_lounge_tool(owner_agent=owner))
@@ -230,9 +230,9 @@ def _register_files(ctx: PackContext, owner: str) -> None:
         ctx.registry.register(
             build_list_directory_tool(owner_agent="eve", root=Path.home(), base=SCOTTY_PROJECT_ROOT)
         )
-    elif owner == "kernel":
-        ctx.registry.register(build_read_file_tool(owner_agent="kernel"))
-        ctx.registry.register(build_list_directory_tool(owner_agent="kernel"))
+    elif owner == "forge":
+        ctx.registry.register(build_read_file_tool(owner_agent="forge"))
+        ctx.registry.register(build_list_directory_tool(owner_agent="forge"))
         # 2026-09-22: the Kernel seat had read/list only — it claimed file
         # builds that never landed (demos/orrery phantom, twice). Verified
         # write hands, jailed to home, with byte + sha proof on success.
@@ -245,7 +245,18 @@ def _register_files(ctx: PackContext, owner: str) -> None:
 
         ctx.registry.register(
             build_write_file_tool(
-                owner_agent="kernel", root=Path.home(), base=SCOTTY_PROJECT_ROOT
+                owner_agent="forge", root=Path.home(), base=SCOTTY_PROJECT_ROOT
+            )
+        )
+        # 2026-09-29 (Forge efficiency): the seat had no edit_file — a small
+        # docs pass meant full-file chunked rewrites (the 2026-09-28 ghost
+        # write was a 2,417 B header chunk + 742 B footer chunk). Targeted
+        # old/new substitution with the same fence/anchor split.
+        from soveryn.agents.scotty.tools.edit import build_edit_file_tool
+
+        ctx.registry.register(
+            build_edit_file_tool(
+                owner_agent="forge", root=Path.home(), base=SCOTTY_PROJECT_ROOT
             )
         )
     else:
@@ -260,17 +271,17 @@ def _register_code(ctx: PackContext, owner: str) -> None:
         register_scotty_tools(ctx.registry)
         _ok(ctx, owner, "code")
         return
-    if owner != "kernel":
+    if owner != "forge":
         return
     from soveryn.platform.aider_tool import build_run_aider_tool
     from soveryn.platform.opencode_tool import build_run_opencode_tool
     from soveryn.platform.kernel_child_tool import build_kernel_child_tool
     from soveryn.platform.kernel_run_tool import build_kernel_run_tool
 
-    ctx.registry.register(build_run_aider_tool(owner_agent="kernel"))
-    ctx.registry.register(build_run_opencode_tool(owner_agent="kernel"))
-    ctx.registry.register(build_kernel_child_tool(owner_agent="kernel"))
-    ctx.registry.register(build_kernel_run_tool(owner_agent="kernel"))
+    ctx.registry.register(build_run_aider_tool(owner_agent="forge"))
+    ctx.registry.register(build_run_opencode_tool(owner_agent="forge"))
+    ctx.registry.register(build_kernel_child_tool(owner_agent="forge"))
+    ctx.registry.register(build_kernel_run_tool(owner_agent="forge"))
     _ok(ctx, owner, "code")
 
 

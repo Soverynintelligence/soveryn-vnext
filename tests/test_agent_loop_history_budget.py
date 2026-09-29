@@ -280,20 +280,20 @@ def test_process_message_elides_when_history_exceeds_budget(conv_store):
         f"elision marker missing from system messages: {system_contents}"
 
 
-def test_process_message_history_only_budget_works_for_kernel(conv_store):
+def test_process_message_history_only_budget_works_for_forge(conv_store):
     """PR5 acceptance (d): same history-only semantics for a non-Aetheria agent."""
     chat = _CapturingChat()
     loop = AgentLoop(
-        "kernel", conv_store, chat_fn=chat,
+        "forge", conv_store, chat_fn=chat,
         history_token_budget=6_000, context_window=32_768,
         soul_text="kernel soul " * 200,  # non-empty prelude
     )
-    sid = conv_store.new_session("kernel")
+    sid = conv_store.new_session("forge")
     # History that fits comfortably in 6000 tokens — must not elide.
     for i in range(3):
-        conv_store.save_turn(sid, "kernel", "user", f"short user {i}")
-        conv_store.save_turn(sid, "kernel", "assistant", f"short asst {i}")
-    response = loop.process_message(sid, "hello kernel")
+        conv_store.save_turn(sid, "forge", "user", f"short user {i}")
+        conv_store.save_turn(sid, "forge", "assistant", f"short asst {i}")
+    response = loop.process_message(sid, "hello forge")
     assert response.context_usage is not None
     assert response.context_usage["budget_tokens"] == 6_000
     assert response.context_usage["elided_turns"] == 0

@@ -75,10 +75,10 @@ def test_message_thread_renders_comfy_stills_in_bubbles():
     assert "t.images" in html
 
 
-def test_vision_capable_agents_include_kernel_glm_native_vision():
+def test_vision_capable_agents_include_forge_glm_native_vision():
     """GLM-5.3-Flash is natively multimodal (vLLM image_url) — no llama mmproj."""
     assert VISION_CAPABLE_AGENTS == frozenset(
-        {"aetheria", "vett", "scotty", "eve", "kernel"}
+        {"aetheria", "vett", "scotty", "eve", "forge"}
     )
     for name in ("grok", "pondwright", "seneca", "atticus", "cognition"):
         assert name not in VISION_CAPABLE_AGENTS

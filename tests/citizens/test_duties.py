@@ -15,7 +15,7 @@ def db(tmp_path):
             ("vett", "V.E.T.T."),
             ("scotty", "Scotty"),
             ("eve", "Eve"),
-            ("kernel", "Kernel"),
+            ("forge", "Forge"),
         ):
             register(conn, Citizen(id=cid, display_name=name))
         yield conn

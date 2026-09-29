@@ -105,17 +105,17 @@ class TestFailureIsNeverFatal:
 class TestEveryAgentIsWhole:
     """A peer with no coord_store still carries its own thread."""
 
-    def test_kernel_gets_its_thread_without_a_coord_store(self, tmp_path):
+    def test_forge_gets_its_thread_without_a_coord_store(self, tmp_path):
         store = ActiveContextStore(tmp_path / "team.db")
-        kernel_ctx = ActiveContextService(store, agent="kernel")
+        forge_ctx = ActiveContextService(store, agent="forge")
         conv = ConversationStore(tmp_path / "conv.db")
         loop = AgentLoop(
-            "kernel", conv,
+            "forge", conv,
             continuity_config=ContinuityConfig(enabled=True),
-            active_context=kernel_ctx,
+            active_context=forge_ctx,
         )
-        sid = conv.new_session("kernel", title="a kernel session")
-        kernel_ctx.record_thought(rail="chat", note="the acceptance contract is fixed")
+        sid = conv.new_session("forge", title="a forge session")
+        forge_ctx.record_thought(rail="chat", note="the acceptance contract is fixed")
 
         brief = loop._build_continuity_brief(sid)
         assert BLOCK_HEADER in brief
@@ -123,7 +123,7 @@ class TestEveryAgentIsWhole:
 
     def test_a_peer_without_the_service_still_gets_nothing(self, tmp_path):
         conv = ConversationStore(tmp_path / "conv.db")
-        loop = AgentLoop("kernel", conv,
+        loop = AgentLoop("forge", conv,
                          continuity_config=ContinuityConfig(enabled=True))
-        sid = conv.new_session("kernel", title="a kernel session")
+        sid = conv.new_session("forge", title="a forge session")
         assert loop._build_continuity_brief(sid) == ""

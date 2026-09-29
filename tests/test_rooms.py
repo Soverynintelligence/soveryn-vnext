@@ -33,7 +33,7 @@ def room_app(tmp_path: Path, fake_chat, monkeypatch):
         for cid, name in (
             ("aetheria", "Aetheria"),
             ("eve", "Eve"),
-            ("kernel", "Kernel"),
+            ("forge", "Forge"),
             ("grok", "Grok"),
             ("jon", "Jon"),
         ):
@@ -136,7 +136,7 @@ def test_message_thread_page_ok(room_app):
     assert b"data-send" in r.data
 
 
-@pytest.mark.parametrize("agent", ["aetheria", "eve", "kernel"])
+@pytest.mark.parametrize("agent", ["aetheria", "eve", "forge"])
 def test_message_thread_has_attach_control(room_app, agent):
     """Every Messages chat seat gets the paperclip — images still gated
     server-side; PDFs splice for any agent."""
@@ -310,18 +310,18 @@ def test_cos_relays_peer_result_into_jon_dm(room_app):
 
 
 def test_add_peer_grows_shared_group(room_app):
-    """Same DM should grow one multi-peer room (Kernel then Eve), not two rooms."""
+    """Same DM should grow one multi-peer room (Forge then Eve), not two rooms."""
     from soveryn.rooms.store import open_room, room_peers
 
     app, conv, tmp_path = room_app
     data_root = tmp_path / "data"
     data_root.mkdir(parents=True, exist_ok=True)
     dm = conv.new_session("aetheria", title="dm-multi")
-    r1 = open_room(conv, data_root=data_root, peer="kernel", dm_session_id=dm)
-    assert room_peers(r1) == ["kernel"]
+    r1 = open_room(conv, data_root=data_root, peer="forge", dm_session_id=dm)
+    assert room_peers(r1) == ["forge"]
     r2 = open_room(conv, data_root=data_root, peer="eve", dm_session_id=dm)
     assert r2["session_id"] == r1["session_id"]
-    assert set(room_peers(r2)) == {"kernel", "eve"}
+    assert set(room_peers(r2)) == {"forge", "eve"}
     hist = conv.load_history(r1["session_id"])
     assert any("Added Eve" in t.content for t in hist if t.role == "system")
 

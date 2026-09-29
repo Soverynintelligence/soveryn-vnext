@@ -21,7 +21,7 @@ _OPEN = frozenset({"active", "ready_for_verify", "blocked"})
 STANDING: tuple[dict[str, Any], ...] = (
     {
         "desk": "soveryn",
-        "owner_id": "kernel",
+        "owner_id": "forge",
         "title": "Standing · house improvement queue",
         "brief": (
             "Standing SOVERYN improvement objective. Review recent house reality "

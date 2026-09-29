@@ -182,7 +182,7 @@
   .agent-pill[data-agent="aetheria"][aria-pressed="true"] { border-color:rgba(198,166,100,0.55); }
   .agent-pill[data-agent="vett"][aria-pressed="true"]     { border-color:rgba(107,130,144,0.55); color:#9eb4c2; }
   .agent-pill[data-agent="scotty"][aria-pressed="true"]   { border-color:rgba(196,122,110,0.55); color:#c47a6e; }
-  .agent-pill[data-agent="kernel"][aria-pressed="true"]   { border-color:rgba(80,140,200,0.55); color:#8eb4d4; }
+  .agent-pill[data-agent="forge"][aria-pressed="true"]   { border-color:rgba(80,140,200,0.55); color:#8eb4d4; }
   .agent-pill[data-agent="eve"][aria-pressed="true"]      { border-color:rgba(180,120,160,0.55); color:#c9a0b8; }
 
   .search input {
@@ -471,7 +471,7 @@
   a.messaged-peer .mp-av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
   a.messaged-peer .mp-av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   a.messaged-peer .mp-av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
-  a.messaged-peer .mp-av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
+  a.messaged-peer .mp-av[data-agent="forge"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
   a.messaged-peer[data-state="working"] .mp-av {
     animation: mp-work 1.4s ease-in-out infinite;
     box-shadow: 0 0 0 3px rgba(111,185,138,0.55);
@@ -701,7 +701,7 @@
   }
   .voice-title[data-agent="aetheria"] { color: var(--gold); }
   .voice-title[data-agent="eve"]      { color: #9eb4c2; }
-  .voice-title[data-agent="kernel"]   { color: #c47a6e; }
+  .voice-title[data-agent="forge"]   { color: #c47a6e; }
   .voice-title[data-agent="vett"]     { color: #9eb4c2; }
   .voice-title[data-agent="scotty"]   { color: #c47a6e; }
   .voice-status {
@@ -742,7 +742,7 @@
   }
   .voice-hangup[data-agent="aetheria"] { border-color: rgba(198,166,100,0.55); color: var(--gold); }
   .voice-hangup[data-agent="eve"]      { border-color: rgba(107,130,144,0.5);  color: #9eb4c2; }
-  .voice-hangup[data-agent="kernel"]   { border-color: rgba(196,122,110,0.55); color: #c47a6e; }
+  .voice-hangup[data-agent="forge"]   { border-color: rgba(196,122,110,0.55); color: #c47a6e; }
   .voice-hangup[data-agent="vett"]     { border-color: rgba(107,130,144,0.5);  color: #9eb4c2; }
   .voice-hangup[data-agent="scotty"]   { border-color: rgba(196,122,110,0.55); color: #c47a6e; }
   .voice-hangup:hover { background: rgba(255,255,255,0.02); }
@@ -931,7 +931,7 @@
 
     <div class="agent-pills" role="tablist" aria-label="Select agent">
       <button class="agent-pill" data-agent="aetheria" role="tab" aria-pressed="true">aetheria</button>
-      <button class="agent-pill" data-agent="kernel"   role="tab" aria-pressed="false">kernel</button>
+      <button class="agent-pill" data-agent="forge"   role="tab" aria-pressed="false">forge</button>
       <button class="agent-pill" data-agent="eve"      role="tab" aria-pressed="false">eve</button>
     </div>
 
@@ -1048,7 +1048,7 @@
 <script src="/static/citizen-icons.js?v=20260901bots3"></script>
 <script>
 (() => {
-  const ACTIVE_AGENTS = ["aetheria","vett","scotty","kernel","eve"];
+  const ACTIVE_AGENTS = ["aetheria","vett","scotty","forge","eve"];
   // Full background-value per agent (applied directly on the agent disc).
   // Aetheria carries the brand olive — she's the central voice, so the
   // SOVERYN brand color belongs to her. Two-stop gradients give each disc
@@ -1057,12 +1057,12 @@
     aetheria: "var(--sage-sheen)",                              /* primary voice → brushed SOVERYN gold */
     vett:     "var(--steel-sheen)",
     scotty:   "var(--maroon-sheen)",  /* engineering maroon (Star Trek red-shirt) */
-    kernel:   "var(--steel-sheen)",   /* build brain — cool steel */
+    forge:    "var(--steel-sheen)",   /* build lane citizen — cool steel */
     eve:      "var(--maroon-sheen)",  /* marketing — warm rose/maroon cast */
   };
   // Single-color variant for tiny 6px dots where a gradient muddies.
   const AGENT_DOT_COLORS = {
-    kernel:   "var(--sov-electric-blue)",
+    forge:    "var(--sov-electric-blue)",
     aetheria: "var(--sov-sage)",
     vett:     "var(--sov-deep-blue)",
     scotty:   "var(--sov-maroon)",
@@ -1083,7 +1083,7 @@
   // parity test fails if this drifts from the backend. (Named without the
   // v-word so the retired-agent hygiene test stays green.)
   const ATTACH_CAPABLE_AGENTS = new Set([
-    "aetheria", "vett", "scotty", "eve", "kernel",
+    "aetheria", "vett", "scotty", "eve", "forge",
   ]);
 
   // ─── State ─────────────────────────────────────────────────────────────────

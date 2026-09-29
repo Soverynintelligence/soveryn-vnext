@@ -39,6 +39,7 @@ def fake_souls_dir(tmp_path):
     d.mkdir()
     (d / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
     (d / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    (d / "forge.md").write_text("# Forge\n", encoding="utf-8")
     (d / "eve.md").write_text("# Eve\n", encoding="utf-8")
     return d
 

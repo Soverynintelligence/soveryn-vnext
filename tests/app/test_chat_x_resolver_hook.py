@@ -200,12 +200,12 @@ def test_chat_eve_affirm_publishes_her_slot(app_state):
 def test_chat_non_aetheria_agent_hook_is_noop(app_state):
     # Stage a post for aetheria (agent-slot keyed) — a "yes" from kernel's
     # session must NOT resolve it; the hook only applies to aetheria/eve.
-    sid = _new_session(app_state["client"], "kernel")
+    sid = _new_session(app_state["client"], "forge")
     app_state["staged"].stage(agent="aetheria", text="draft post", reply_to=None,
                                now="2026-07-11T10:00:00")
 
     resp = _post(app_state["client"], "/chat",
-                 {"agent": "kernel", "session_id": sid, "message": "yes"})
+                 {"agent": "forge", "session_id": sid, "message": "yes"})
 
     assert resp.status_code == 200
     payload = json.loads(resp.data)

@@ -18,14 +18,14 @@ def test_register_active_agent_succeeds():
 
 def test_register_all_three_active_agents():
     reg = AgentRegistry()
-    for name in ("aetheria", "kernel", "eve"):
+    for name in ("aetheria", "forge", "eve"):
         reg.register(name, make_dummy_agent(name))
-    assert set(reg.names()) == {"aetheria", "kernel", "eve"}
+    assert set(reg.names()) == {"aetheria", "forge", "eve"}
     assert len(reg) == 3
 
 
 @pytest.mark.parametrize("name", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_register_retired_agent_raises(name):

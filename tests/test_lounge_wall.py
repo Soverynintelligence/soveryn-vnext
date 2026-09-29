@@ -23,7 +23,7 @@ def lounge_room(tmp_path):
         "events": [
             {"at": "2026-09-25T02:20:00Z", "type": "peer_added", "peer": "eve"},
             {"at": "2026-09-25T02:24:14Z", "type": "messaged_peer",
-             "from_id": "kernel", "brief": "Lounge is open."},
+             "from_id": "forge", "brief": "Lounge is open."},
             {"at": "2026-09-25T02:25:32Z", "type": "peer_reply", "peer": "eve",
              "brief": "Settled in. Gift claimed."},
             {"at": "2026-09-25T02:26:00Z", "type": "commission_state", "state": "done"},
@@ -39,7 +39,7 @@ def test_wall_shapes_chat_and_skips_plumbing(lounge_room):
     assert w["open"] is True
     kinds = [e["kind"] for e in w["entries"]]
     assert kinds == ["arrived", "note", "reply"]  # commission_state skipped
-    assert w["entries"][1]["who"] == "kernel"
+    assert w["entries"][1]["who"] == "forge"
 
 
 def test_post_note_appends_wall_note(lounge_room):
@@ -140,12 +140,12 @@ def test_nudge_reaches_other_citizens_not_jon_not_actor(lounge_room, monkeypatch
     tmp_path, _ = lounge_room
 
     L.post_note(tmp_path, from_party="jon", text="anyone around?")
-    assert {(p["to"]) for p in sent} == {"aetheria", "eve", "kernel"}
+    assert {(p["to"]) for p in sent} == {"aetheria", "eve", "forge"}
     # unread = every wall word they haven't read, by others: aetheria 4, eve 2, kernel 3
     by_to = {p["to"]: p["body"] for p in sent}
-    assert set(by_to) == {"aetheria", "eve", "kernel"}, by_to
+    assert set(by_to) == {"aetheria", "eve", "forge"}, by_to
     for to, body in by_to.items():
-        expected = {"aetheria": 4, "eve": 2, "kernel": 3}[to]
+        expected = {"aetheria": 4, "eve": 2, "forge": 3}[to]
         assert f"{expected} unread" in body, (to, body)
 
     # round 2 within the cooldown: suppressed — no siren during a lively room
@@ -163,7 +163,7 @@ def test_nudge_reaches_other_citizens_not_jon_not_actor(lounge_room, monkeypatch
         state[party]["at"] = stale
     npath.write_text(_json.dumps(state))
 
-    L.post_note(tmp_path, from_party="kernel", text="one more for the road")
+    L.post_note(tmp_path, from_party="forge", text="one more for the road")
     new = sent[before:]
     by_to = {p["to"]: p["body"] for p in new}
     assert set(by_to) == {"aetheria", "eve"}, by_to  # kernel is the actor
@@ -214,7 +214,7 @@ def test_work_reports_do_not_colonize_the_lounge(lounge_room):
     # commission chatter doesn't create unread either
     before = lounge.unread_since(tmp_path, "aetheria")
     room["events"].append({
-        "at": "2026-09-25T21:13:00Z", "type": "peer_reply", "peer": "kernel",
+        "at": "2026-09-25T21:13:00Z", "type": "peer_reply", "peer": "forge",
         "brief": "Commission 9f2448c1 — blocked from landing.",
         "commission_id": "9f2448c1",
     })

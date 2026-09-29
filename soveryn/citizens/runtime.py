@@ -181,7 +181,7 @@ def _close_collab_ticket(
 ) -> None:
     if conv_store is None or not data_root:
         return
-    if citizen_id not in ("kernel", "eve"):
+    if citizen_id not in ("forge", "eve"):
         return
     try:
         from soveryn.rooms.store import close_collab_for_commission

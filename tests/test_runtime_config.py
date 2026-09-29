@@ -4,11 +4,11 @@ import pytest
 from soveryn.config import runtime
 
 
-def test_active_agents_includes_crew_kernel_and_eve():
+def test_active_agents_includes_crew_forge_and_eve():
     """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
     Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
     assert set(runtime.ACTIVE_AGENTS) == {
-        "aetheria", "kernel", "eve",
+        "aetheria", "forge", "eve",
     }
     assert "grok" not in runtime.ACTIVE_AGENTS
     assert "vett" not in runtime.ACTIVE_AGENTS
@@ -24,7 +24,7 @@ def test_grok_is_not_a_house_agent():
 def test_messages_contacts_fleet_freeze():
     """Phone door is frontier few; Vett/Scotty/Grok parked as Messages peers."""
     assert runtime.MESSAGES_CONTACTS == (
-        "aetheria", "kernel", "eve",
+        "aetheria", "forge", "eve",
     )
     assert runtime.MESSAGES_PARKED == frozenset({"vett", "scotty"})
     assert runtime.DEFERRED_CHAT_AGENTS == frozenset()
@@ -37,10 +37,10 @@ def test_messages_contacts_fleet_freeze():
     assert "grok" not in runtime.ACTIVE_AGENTS
 
 
-def test_commission_peers_are_eve_and_kernel_only():
+def test_commission_peers_are_eve_and_forge_only():
     from soveryn.rooms.store import DEFAULT_PEER, PEERS
 
-    assert PEERS == frozenset({"eve", "kernel"})
+    assert PEERS == frozenset({"eve", "forge"})
     assert DEFAULT_PEER == "eve"
     assert PEERS.isdisjoint(runtime.COMMISSION_BLOCKED)
 
@@ -48,7 +48,7 @@ def test_commission_peers_are_eve_and_kernel_only():
 def test_retired_includes_known_retired_agents():
     """Spec §10 Bucket C: these names must be blocked."""
     must_be_retired = {
-        "scout", "vision", "tinker", "forge",
+        "scout", "vision", "tinker", "tinker",
         "ares_llm", "aetheria_public",
         "telegram", "chromadb",
     }
@@ -220,7 +220,7 @@ def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
     assert aetheria.mmproj_path == expected
     assert kernel.mmproj_path is None
     assert "eve" in VISION_CAPABLE_AGENTS
-    assert "kernel" in VISION_CAPABLE_AGENTS
+    assert "forge" in VISION_CAPABLE_AGENTS
     assert eve.port == 8091
     assert eve.model_alias == "bench-flash"
 
@@ -249,7 +249,7 @@ def test_eve_stays_on_flash_when_kernel_on_qwen38(tmp_path, monkeypatch):
     assert runtime._KERNEL_BRAIN_PROFILES["qwen38"]["alias"] == "qwen38-27b"
     assert runtime._KERNEL_BRAIN_PROFILES["flash"]["alias"] == "bench-flash"
     assert runtime.AGENT_TO_SERVER["eve"] == "eve_flash"
-    assert runtime.AGENT_TO_SERVER["kernel"] == "kernel_build"
+    assert runtime.AGENT_TO_SERVER["forge"] == "kernel_build"  # forge borrows the Kernel brain
 
 
 def test_cognition_is_cognition_not_aetheria_public():

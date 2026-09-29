@@ -30,7 +30,7 @@ from soveryn.rooms.store import (
 def env(tmp_path: Path):
     db = tmp_path / "citizens.db"
     work = tmp_path / "desks"
-    for cid in ("aetheria", "eve", "kernel"):
+    for cid in ("aetheria", "eve", "forge"):
         desk = work / cid
         for d in DESK_DIRS:
             (desk / d).mkdir(parents=True, exist_ok=True)
@@ -38,7 +38,7 @@ def env(tmp_path: Path):
         for cid, name in (
             ("aetheria", "Aetheria"),
             ("eve", "Eve"),
-            ("kernel", "Kernel"),
+            ("forge", "Forge"),
         ):
             register(
                 conn,
@@ -61,7 +61,7 @@ def _open_kernel(env, cid="cid-k1"):
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="kernel",
+        to_id="forge",
         body="Docs pass.",
         dm_session_id=dm,
         commission_id=cid,
@@ -99,7 +99,7 @@ def test_close_collab_writes_done_and_closed_marker(env):
     conv, data_root, db = env
     dm, ev = _open_kernel(env)
     with connect(db) as conn:
-        commissions.enqueue(conn, "kernel", "Docs pass.", at="2026-08-31T12:00:00Z")
+        commissions.enqueue(conn, "forge", "Docs pass.", at="2026-08-31T12:00:00Z")
         # Use the chip's id as a real ticket so overlay could match; closer
         # does not require the row — sidecar + DM line are the product.
     closed = close_collab_for_commission(
@@ -117,7 +117,7 @@ def test_close_collab_writes_done_and_closed_marker(env):
     ]
     assert "done" in states
     assert "working" not in states
-    marker = CLOSED_MARKER.format(peer="kernel")
+    marker = CLOSED_MARKER.format(peer="forge")
     dm_hist = conv.load_history(dm)
     assert any(marker in (t.content or "") and "done" in (t.content or "") for t in dm_hist)
     # Idempotent
@@ -139,7 +139,7 @@ def test_close_collab_fail_path(env):
         e for e in room["events"] if e.get("commission_id") == "cid-fail"
     )
     assert hit["state"] == "failed"
-    marker = CLOSED_MARKER.format(peer="kernel")
+    marker = CLOSED_MARKER.format(peer="forge")
     assert any(
         marker in (t.content or "") and "failed" in (t.content or "")
         for t in conv.load_history(dm)
@@ -151,16 +151,16 @@ def test_runtime_complete_closes_without_collabs_get(env):
     dm = conv.new_session("aetheria", title="[m] Aetheria")
     with connect(db) as conn:
         cid = commissions.enqueue(
-            conn, "kernel", "Fix the dump.", at="2026-08-31T12:00:00Z"
+            conn, "forge", "Fix the dump.", at="2026-08-31T12:00:00Z"
         )
         claimed = commissions.claim(
-            conn, "kernel", worker="test", at="2026-08-31T12:00:01Z"
+            conn, "forge", worker="test", at="2026-08-31T12:00:01Z"
         )
     record_house_post_collab(
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="kernel",
+        to_id="forge",
         body="Fix the dump.",
         dm_session_id=dm,
         commission_id=cid,
@@ -177,8 +177,8 @@ def test_runtime_complete_closes_without_collabs_get(env):
         conv_store=conv,
         data_root=data_root,
     )
-    assert find_open_collab(data_root, dm_session_id=dm, peer="kernel") is None
-    marker = CLOSED_MARKER.format(peer="kernel")
+    assert find_open_collab(data_root, dm_session_id=dm, peer="forge") is None
+    marker = CLOSED_MARKER.format(peer="forge")
     assert any(marker in (t.content or "") for t in conv.load_history(dm))
     sidecar = json.loads(
         next(rooms_root(data_root).glob("*.json")).read_text(encoding="utf-8")
@@ -196,20 +196,20 @@ def test_second_open_reuses_live_commission(env):
     dm = conv.new_session("aetheria", title="dm")
     with connect(db) as conn:
         cid = commissions.enqueue(
-            conn, "kernel", "First ask.", at="2026-08-31T12:00:00Z"
+            conn, "forge", "First ask.", at="2026-08-31T12:00:00Z"
         )
-        commissions.claim(conn, "kernel", worker="w", at="2026-08-31T12:00:01Z")
+        commissions.claim(conn, "forge", worker="w", at="2026-08-31T12:00:01Z")
     record_house_post_collab(
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="kernel",
+        to_id="forge",
         body="First ask.",
         dm_session_id=dm,
         commission_id=cid,
     )
     hit = find_open_collab(
-        data_root, dm_session_id=dm, peer="kernel", citizens_db=db
+        data_root, dm_session_id=dm, peer="forge", citizens_db=db
     )
     assert hit is not None
     assert hit["commission_id"] == cid
@@ -225,14 +225,14 @@ def test_cos_relay_dedupes_same_source(env):
         conv,
         data_root=data_root,
         from_id="aetheria",
-        to_id="kernel",
+        to_id="forge",
         body="Docs.",
         dm_session_id=dm,
         commission_id=cid,
     )
     a = _enqueue_cos_summary(
         db,
-        peer="kernel",
+        peer="forge",
         source_commission_id=cid,
         task="Docs.",
         result_text="ok",
@@ -242,7 +242,7 @@ def test_cos_relay_dedupes_same_source(env):
     )
     b = _enqueue_cos_summary(
         db,
-        peer="kernel",
+        peer="forge",
         source_commission_id=cid,
         task="Docs.",
         result_text="ok again",
@@ -286,8 +286,8 @@ def test_overlay_ttl_expires_working_chip(env):
 
 
 def test_collab_is_active_never_keeps_terminal():
-    done = {"peer": "kernel", "state": "done", "at": "2026-08-31T18:00:00Z"}
-    failed = {"peer": "kernel", "state": "failed", "at": "2026-08-31T18:00:00Z"}
+    done = {"peer": "forge", "state": "done", "at": "2026-08-31T18:00:00Z"}
+    failed = {"peer": "forge", "state": "failed", "at": "2026-08-31T18:00:00Z"}
     now = datetime(2026, 8, 31, 18, 10, tzinfo=timezone.utc)
     assert not collab_is_active(done, now=now)
     assert not collab_is_active(failed, now=now)
@@ -301,7 +301,7 @@ def test_read_collab_tool_returns_transcript(env):
     tool = build_read_collab_tool(
         conv_store=conv, data_root=data_root, citizens_db=db
     )
-    out = tool.handler({"peer": "kernel", "commission_id": "cid-read"})
+    out = tool.handler({"peer": "forge", "commission_id": "cid-read"})
     assert out["ok"] is True
     assert out["state"] == "working"
     assert out["commission_id"] == "cid-read"

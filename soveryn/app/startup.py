@@ -217,7 +217,7 @@ def create_app(
                 build_search_by_embedding_tool,
                 build_search_by_keywords_tool,
             )
-            for _agent in ("vett", "scotty", "kernel", "eve"):
+            for _agent in ("vett", "scotty", "forge", "eve"):
                 tool_registry.register(build_search_by_embedding_tool(
                     store=recall_lattice, embed_fn=_default_embed,
                     owner_agent=_agent,
@@ -239,10 +239,10 @@ def create_app(
             from soveryn.agents.aetheria.tools.recent import build_recent_tool
 
             tool_registry.register(build_get_node_tool(
-                store=recall_lattice, owner_agent="kernel",
+                store=recall_lattice, owner_agent="forge",
             ))
             tool_registry.register(build_recent_tool(
-                store=recall_lattice, owner_agent="kernel",
+                store=recall_lattice, owner_agent="forge",
             ))
 
         # Personal-file browser — bounded read access to Jon's content
@@ -311,7 +311,7 @@ def create_app(
                 _teach_attic = AtticStore()
                 _teach_agents = ["aetheria", "eve"]
                 if _kernel_lattice_enabled():
-                    _teach_agents.append("kernel")
+                    _teach_agents.append("forge")
                 for _teach_agent in _teach_agents:
                     tool_registry.register(
                         build_remember_fact_tool(
@@ -519,7 +519,7 @@ def create_app(
             # Peers' upward channel — same tool builder, different owner per
             # agent. Aetheria is the recipient of NEEDS_DIRECTION events via
             # the webhook router, not a sender, so she does NOT get this tool.
-            for peer in ("kernel", "eve"):
+            for peer in ("forge", "eve"):
                 tool_registry.register(
                     build_request_direction_tool(
                         store=coord_store,
@@ -536,7 +536,7 @@ def create_app(
         tool_registry.register(build_kernel_child_tool(owner_agent="aetheria"))
         from soveryn.automations.notepad_tool import build_cron_notepad_tool
 
-        for _notepad_owner in ("aetheria", "eve", "kernel"):
+        for _notepad_owner in ("aetheria", "eve", "forge"):
             tool_registry.register(build_cron_notepad_tool(owner_agent=_notepad_owner))
 
         # Library layer tools — shared write surface for verified reference
@@ -850,7 +850,7 @@ def create_app(
         # botdirectory.ai — browse public bot charters + import to local disk
         # for review. NEVER auto-schedules. Eve (marketing) + Kernel (build).
         from soveryn.platform.botdirectory.tools import register_botdirectory_tools
-        for _bd_owner in ("eve", "kernel"):
+        for _bd_owner in ("eve", "forge"):
             register_botdirectory_tools(
                 tool_registry,
                 owner_agent=_bd_owner,
@@ -1048,7 +1048,7 @@ def create_app(
                 # to Jon as a timeout). Bumped to 16 (~7-10 sources). Coupled
                 # with the dispatch_timeout_seconds bump to 1200s above — raising
                 # rounds without the wall-clock just moves the wall.
-                kwargs["max_tool_rounds"] = 16
+                kwargs["max_tool_rounds"] = 24
                 # Vett gets the Active Focus block too (2026-06-19): board
                 # awareness so she researches against what's actually in flight,
                 # plus delivery state of her own messages up to Aetheria
@@ -1092,12 +1092,12 @@ def create_app(
                 # and covers document-length tool calls; her 65536 n_ctx has
                 # ample room for it.
                 kwargs["max_tokens"] = 8192
-            elif name == "kernel":
-                # Kernel on GLM TP=2 (Spark :8001, 32k) or Quadros Qwen (65k).
+            elif name == "forge":
+                # Forge on the Kernel brain: GLM TP=2 (Spark :8001, 32k) or Quadros Qwen (65k).
                 # 600s covers a slow prefill; n_ctx clamp below sets max_tokens
                 # so prompt+completion actually fit the live window.
                 kwargs["chat_timeout_seconds"] = 600.0
-                kwargs["max_tool_rounds"] = 16
+                kwargs["max_tool_rounds"] = 24
                 kwargs["max_tokens"] = 8192
                 if recall_lattice is not None and _kernel_lattice_enabled():
                     kwargs["lattice_store"] = recall_lattice

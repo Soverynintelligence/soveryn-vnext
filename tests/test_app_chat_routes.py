@@ -291,7 +291,7 @@ def test_chat_409_when_session_belongs_to_other_agent(app_state):
 
 
 @pytest.mark.parametrize("retired", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_chat_rejects_retired_agents(app_state, retired):

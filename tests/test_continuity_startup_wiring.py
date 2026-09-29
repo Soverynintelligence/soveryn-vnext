@@ -57,7 +57,7 @@ def test_load_env_config_respects_cross_surface_per_session_cap_env():
 def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
-    for name in ("aetheria", "kernel", "eve"):
+    for name in ("aetheria", "forge", "eve"):
         (souls_dir / f"{name}.md").write_text(f"# {name}\n", encoding="utf-8")
     return souls_dir
 

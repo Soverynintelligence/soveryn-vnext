@@ -233,7 +233,7 @@ FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
         "social", "signal", "files", "documents", "house_post", "email",
         "web", "git", "pondwright", "system", "x",
     ),
-    "kernel": (
+    "forge": (
         "files", "documents", "system", "house_post", "code", "git", "email",
         "web",
     ),

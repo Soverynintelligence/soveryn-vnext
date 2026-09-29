@@ -21,7 +21,7 @@ from pathlib import Path
 #: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
 #: file writes stay via Aider / HITL, not free exec tools.
 ACTIVE_AGENTS: tuple[str, ...] = (
-    "aetheria", "kernel", "eve",
+    "aetheria", "forge", "eve",
 )
 
 #: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
@@ -30,7 +30,7 @@ ACTIVE_AGENTS: tuple[str, ...] = (
 #: Grok is desktop Grok Bots, not a house chat agent.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # house closer — Blackwell alone (GPU move is a later cut)
-    "kernel",    # local build lane — GLM-5.3-Flash TP=2 Sparks :8001
+    "forge",     # local build lane (citizen; NOT Kernel the build brain) — GLM TP=2 :8001
     "eve",       # ship posts (Canva / Signal) — Quadro Qwen 3.8
 )
 
@@ -58,7 +58,9 @@ RETIRED: frozenset[str] = frozenset({
     "scout",
     "vision",
     "tinker",
-    "forge",            # never existed, spec §10
+    # "forge" un-retired 2026-09-29 (Jon): now the citizen formerly named
+    # "kernel" — the desk-clerk seat. Kernel the name belongs to the real
+    # build brain (Pi harness), not to any Messages citizen.
     "ares_llm",         # the old in-process Ares agent (daemon stays)
     "aetheria_public",  # spec §10 — never went live in production
     "telegram",         # channel name retired in favor of signal
@@ -356,7 +358,7 @@ MODEL_SERVERS: tuple[ModelServer, ...] = (
 #: Per-agent routing: agent name → MODEL_SERVERS.name
 AGENT_TO_SERVER: dict[str, str] = {
     "aetheria": "aetheria_primary",
-    "kernel":   "kernel_build",
+    "forge":    "kernel_build",
     "eve":      "eve_flash",
 }
 

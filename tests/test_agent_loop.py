@@ -82,7 +82,7 @@ def test_construction_normalizes_name_case(conv_store):
 
 
 @pytest.mark.parametrize("name", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_construction_rejects_retired_agents(conv_store, name):
@@ -123,10 +123,10 @@ def test_missing_session_raises_before_chat(conv_store):
 
 def test_session_for_other_agent_raises_before_chat(conv_store):
     """A Kernel session can't be used by an Aetheria loop."""
-    kernel_session = conv_store.new_session("kernel")
+    kernel_session = conv_store.new_session("forge")
     fake = _CapturingChat()
     aetheria_loop = AgentLoop("aetheria", conv_store, chat_fn=fake)
-    with pytest.raises(AgentLoopError, match="belongs to agent 'kernel'"):
+    with pytest.raises(AgentLoopError, match="belongs to agent 'forge'"):
         aetheria_loop.process_message(kernel_session, "hi")
     assert fake.calls == []
     # No user turn snuck into the wrong session
@@ -281,9 +281,9 @@ def test_default_system_prompt_loads_persona_for_agent(conv_store):
     assert loop.system_prompt == AETHERIA_PERSONA
 
 
-def test_default_system_prompt_loads_kernel_persona(conv_store):
-    loop = AgentLoop("kernel", conv_store, chat_fn=_CapturingChat())
-    assert loop.system_prompt == get_persona("kernel")
+def test_default_system_prompt_loads_forge_persona(conv_store):
+    loop = AgentLoop("forge", conv_store, chat_fn=_CapturingChat())
+    assert loop.system_prompt == get_persona("forge")
 
 
 def test_custom_system_prompt_overrides_default(conv_store):
@@ -441,7 +441,7 @@ def test_retired_agent_persona_lookup_fails_at_construction(conv_store):
     construction already rejects retired names via routing, so this is
     really a defense-in-depth assertion that personas mirror the registry."""
     from soveryn.agents.personas import PersonaError, get_persona
-    for retired in ["scout", "vision", "tinker", "forge"]:
+    for retired in ["scout", "vision", "tinker", "tinker"]:
         with pytest.raises(PersonaError):
             get_persona(retired)
 
@@ -823,11 +823,11 @@ def test_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
     """
     capturing = _CapturingChat()
     loop = AgentLoop(
-        "kernel", conv_store,
+        "forge", conv_store,
         chat_fn=capturing,
         soul_text="KERNEL_SOUL_TOKEN",
     )
-    sid = conv_store.new_session("kernel")
+    sid = conv_store.new_session("forge")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
@@ -907,12 +907,12 @@ def test_pinned_and_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
     """
     capturing = _CapturingChat()
     loop = AgentLoop(
-        "kernel", conv_store,
+        "forge", conv_store,
         chat_fn=capturing,
         soul_text="KERNEL_SOUL",
         pinned_text="KERNEL_PINNED",
     )
-    sid = conv_store.new_session("kernel")
+    sid = conv_store.new_session("forge")
     loop.process_message(sid, "hi")
     request = capturing.calls[0]["request"]
     system_msgs = [m for m in request.messages if m.role == "system"]
@@ -1012,8 +1012,8 @@ def test_process_message_attachments_on_non_vision_agent_raises_before_save(conv
 def test_process_message_attachments_on_kernel_splices(conv_store):
     """GLM-5.3-Flash is natively multimodal — Kernel splices image_url."""
     fake = _CapturingChat()
-    loop = AgentLoop("kernel", conv_store, chat_fn=fake)
-    sid = conv_store.new_session("kernel")
+    loop = AgentLoop("forge", conv_store, chat_fn=fake)
+    sid = conv_store.new_session("forge")
     img = "data:image/jpeg;base64,AAAA"
     loop.process_message(sid, "what's this?", attachments=(img,))
     sent_user = fake.calls[0]["request"].messages[-1]

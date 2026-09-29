@@ -28,7 +28,7 @@ def test_name_is_lowercased_and_stripped():
 # ─── Boundary 7 — unknown/retired must fail BEFORE any network I/O ───────────
 
 @pytest.mark.parametrize("name", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_retired_agents_raise_routing_error(name):

@@ -64,10 +64,10 @@ def test_stream_missing_session_raises_before_save(conv_store):
 
 
 def test_stream_session_belongs_to_other_agent_raises_before_save(conv_store):
-    sid = conv_store.new_session("kernel")
+    sid = conv_store.new_session("forge")
     stream = _CapturingStream()
     loop = AgentLoop("aetheria", conv_store, stream_fn=stream)
-    with pytest.raises(AgentLoopError, match="belongs to agent 'kernel'"):
+    with pytest.raises(AgentLoopError, match="belongs to agent 'forge'"):
         list(loop.process_message_stream(sid, "hi"))
     assert stream.calls == []
     assert conv_store.load_history(sid) == ()
@@ -281,7 +281,7 @@ def test_stream_soul_text_added_as_second_system_message(conv_store):
     assert system_msgs[1].content == "STREAM_SOUL_TOKEN"
 
 
-def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_kernel(conv_store):
+def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_forge(conv_store):
     """Streaming path mirrors sync: AgentLoop keeps semantic layers separate;
     transport adapter `prepare_wire_messages` handles wire folding."""
     captured_requests = []
@@ -292,11 +292,11 @@ def test_stream_persona_and_soul_kept_separate_at_agent_loop_for_kernel(conv_sto
         yield DoneEvent(content="ok", finish_reason="stop", tool_calls=None, usage=None)
 
     loop = AgentLoop(
-        "kernel", conv_store,
+        "forge", conv_store,
         stream_fn=stream,
         soul_text="STREAM_KERNEL_SOUL",
     )
-    sid = conv_store.new_session("kernel")
+    sid = conv_store.new_session("forge")
     list(loop.process_message_stream(sid, "hi"))
     system_msgs = [m for m in captured_requests[0].messages if m.role == "system"]
     assert len(system_msgs) == 2, (
@@ -389,11 +389,11 @@ def test_stream_attachments_on_non_vision_agent_raises_before_save(conv_store):
     assert stream.calls == []
 
 
-def test_stream_attachments_on_kernel_splices(conv_store):
-    """GLM-5.3-Flash is natively multimodal — Kernel stream splices image_url."""
+def test_stream_attachments_on_forge_splices(conv_store):
+    """GLM-5.3-Flash is natively multimodal — Forge stream splices image_url."""
     stream = _CapturingStream(chunks=_chunks(("ok", "stop")))
-    loop = AgentLoop("kernel", conv_store, stream_fn=stream)
-    sid = conv_store.new_session("kernel")
+    loop = AgentLoop("forge", conv_store, stream_fn=stream)
+    sid = conv_store.new_session("forge")
     img = "data:image/jpeg;base64,AAAA"
     list(loop.process_message_stream(sid, "what's this?", attachments=(img,)))
     sent_user = stream.calls[0]["request"].messages[-1]

@@ -19,7 +19,7 @@ def db(tmp_path: Path):
             ("vett", "V.E.T.T."),
             ("scotty", "Scotty"),
             ("eve", "Eve"),
-            ("kernel", "Kernel"),
+            ("forge", "Forge"),
         ):
             register(
                 conn,
@@ -36,7 +36,7 @@ def test_ensure_standing_creates_soveryn_only(db):
     created = ensure_standing_objectives(db)
     assert len(created) == 1
     assert created[0]["desk"] == "soveryn"
-    assert created[0]["owner_id"] == "kernel"
+    assert created[0]["owner_id"] == "forge"
     # Idempotent
     assert ensure_standing_objectives(db) == []
     open_s = objectives_mod.list_objectives(db, desk="soveryn", state="active")
@@ -50,7 +50,7 @@ def test_build_vs_research_commission_body():
         {
             "id": "00000000-0000-0000-0000-000000000001",
             "desk": "soveryn",
-            "owner_id": "kernel",
+            "owner_id": "forge",
             "title": "t",
             "brief": "b",
             "success_criteria": "s",

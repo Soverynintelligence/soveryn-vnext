@@ -12,7 +12,7 @@ def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
     souls_dir.mkdir()
     # Cover every ACTIVE_AGENTS citizen — Kernel/Eve souls are required at loop boot.
-    for name in ("aetheria", "vett", "scotty", "kernel", "eve"):
+    for name in ("aetheria", "vett", "scotty", "forge", "eve"):
         (souls_dir / f"{name}.md").write_text(f"# {name.title()}\n", encoding="utf-8")
     return souls_dir
 
@@ -184,7 +184,7 @@ def test_aetheria_has_interactive_rail_caps_others_do_not(
     # leaves her more room to talk, not less.
     assert loops["aetheria"].context_window == 32_768
     assert loops["aetheria"].history_token_budget == 6_000
-    assert loops["kernel"].context_window == 32_768
+    assert loops["forge"].context_window == 32_768
     assert loops["eve"].context_window == 32_768 or loops["eve"].context_window == 65536
     # Aetheria's interactive generation caps.
     assert loops["aetheria"].max_tokens == 8192
@@ -345,7 +345,7 @@ def test_other_agents_do_not_get_aetheria_lattice_tools(
             f"{agent} sees dream tools (should not): {names & dream_tools}"
 
 
-def test_kernel_has_house_web_tools(
+def test_forge_has_house_web_tools(
     tmp_path,
     monkeypatch,
     fake_souls_dir,
@@ -359,7 +359,7 @@ def test_kernel_has_house_web_tools(
         recall_lattice=recall_lattice,
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
-    loop = app.extensions["soveryn"]["agent_loops"]["kernel"]
+    loop = app.extensions["soveryn"]["agent_loops"]["forge"]
     names = {schema["function"]["name"] for schema in loop._tool_schemas()}
     assert {"web_search", "fetch_url", "run_aider", "run_opencode", "kernel_child", "kernel_run"} <= names
 
@@ -379,6 +379,6 @@ def test_cron_notepad_registered_for_automation_agents(
     )
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     registry = app.extensions["soveryn"]["tool_registry"]
-    for agent in ("aetheria", "eve", "kernel"):
+    for agent in ("aetheria", "eve", "forge"):
         names = {spec.name for spec in registry.iter_tools_for_agent(agent)}
         assert "cron_notepad" in names, f"{agent} missing cron_notepad"

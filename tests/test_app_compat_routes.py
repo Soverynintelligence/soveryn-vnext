@@ -78,7 +78,7 @@ def test_api_models_omits_folded_vett_and_scotty(app_state):
 
 def test_api_models_excludes_retired_agents(app_state):
     payload = json.loads(app_state.get("/api/models").data)
-    for retired in ("scout", "vision", "tinker", "forge", "aetheria_public"):
+    for retired in ("scout", "vision", "tinker", "tinker", "aetheria_public"):
         assert retired not in payload
 
 
@@ -107,8 +107,8 @@ def test_api_persona_each_active_agent_round_trips(app_state):
         payload = json.loads(resp.data)
         assert payload["agent"] == name
         assert payload["persona"]
-        if name == "kernel":
-            assert payload["source"] in ("baked", "tower")
+        if name == "forge":
+            assert payload["source"] == "baked"
         else:
             assert payload["persona"] == PERSONAS[name]
             assert payload["source"] == "baked"
@@ -144,7 +144,7 @@ def test_api_persona_put_rejects_empty(app_state):
 
 
 @pytest.mark.parametrize("retired", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_api_persona_retired_agent_400(app_state, retired):

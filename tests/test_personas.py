@@ -5,7 +5,7 @@ import pytest
 from soveryn.agents.personas import (
     AETHERIA_PERSONA,
     EVE_PERSONA,
-    KERNEL_PERSONA,
+    FORGE_PERSONA,
     PERSONAS,
     PersonaError,
     SCOTTY_PERSONA,
@@ -23,7 +23,7 @@ def no_persona_overrides(tmp_path, monkeypatch):
 
 def test_personas_cover_all_active_agents():
     assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
-        "aetheria", "kernel", "eve",
+        "aetheria", "forge", "eve",
     }
 
 
@@ -44,38 +44,33 @@ def test_get_persona_rejects_folded_vett_and_scotty(no_persona_overrides):
         get_persona("scotty")
 
 
-def test_get_persona_kernel_uses_tower_opencode_prompt(no_persona_overrides):
-    from soveryn.agents.personas import (
-        KERNEL_MESSAGES_LANE,
-        KERNEL_TOWER_PROMPT,
-        persona_source,
-        read_kernel_tower_prompt,
-    )
-
-    tower = read_kernel_tower_prompt()
-    assert tower is not None
-    assert KERNEL_TOWER_PROMPT.is_file()
-    text = get_persona("kernel")
-    assert text.startswith(tower)
-    assert KERNEL_MESSAGES_LANE in text
-    assert "How about a nice game of chess?" in text
-    assert "This door (Messages)" in text
-    assert persona_source("kernel") == "tower"
-
-
-def test_get_persona_kernel_falls_back_when_tower_missing(
-    no_persona_overrides, tmp_path, monkeypatch
-):
-    monkeypatch.setenv(
-        "SOVERYN_KERNEL_OPENCODE_PROMPT", str(tmp_path / "missing-kernel.md")
-    )
+def test_get_persona_forge_is_baked_and_not_kernel(no_persona_overrides):
+    """The 2026-09-29 identity split: the citizen is Forge, never the tower
+    prompt, never the build brain's name. The old behavior — the citizen
+    wearing config/opencode/agents/kernel.md — was the identity theft."""
     from soveryn.agents import personas as personas_mod
-    assert get_persona("kernel") == KERNEL_PERSONA
-    assert personas_mod.persona_source("kernel") == "baked"
+
+    text = get_persona("forge")
+    assert text.startswith("You are Forge")
+    assert "NOT Kernel" in text or "not Kernel" in text
+    assert "This door (Messages)" in text
+    assert personas_mod.persona_source("forge") == "baked"
+    # The tower prompt must not leak into the citizen persona.
+    from soveryn.agents.personas import read_kernel_tower_prompt
+    tower = read_kernel_tower_prompt()
+    if tower is not None:
+        assert not text.startswith(tower)
 
 
-def test_kernel_chess_is_unparked_wargames_line(no_persona_overrides):
-    text = get_persona("kernel")
+def test_get_persona_kernel_is_not_a_citizen(no_persona_overrides):
+    """'kernel' is the build brain (Pi harness), not a Messages citizen —
+    asking for its persona is a PersonaError, same as retired names."""
+    with pytest.raises(PersonaError):
+        get_persona("kernel")
+
+
+def test_forge_chess_is_unparked_wargames_line(no_persona_overrides):
+    text = get_persona("forge")
     assert "How about a nice game of chess?" in text
     assert "Unparked" in text
 
@@ -118,7 +113,7 @@ def test_get_persona_normalizes_case_and_whitespace(no_persona_overrides):
 
 
 @pytest.mark.parametrize("retired", [
-    "scout", "vision", "tinker", "forge",
+    "scout", "vision", "tinker",
     "ares_llm", "aetheria_public", "telegram", "chromadb",
 ])
 def test_get_persona_rejects_retired(retired):

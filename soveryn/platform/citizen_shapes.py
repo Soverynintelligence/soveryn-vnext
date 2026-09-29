@@ -44,7 +44,7 @@ SHAPE_LABELS: dict[str, str] = {
 }
 DEFAULTS: dict[str, str] = {
     "aetheria": "round",
-    "kernel": "squircle",
+    "forge": "squircle",
     "eve": "pill",
     "t_critic": "diamond",
     "t_scout": "bean",

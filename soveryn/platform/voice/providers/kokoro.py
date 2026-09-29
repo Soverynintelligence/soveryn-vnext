@@ -43,7 +43,7 @@ BLACKWELL_GPU_UUID = "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 AGENT_TO_VOICE = {
     "aetheria": "af_heart",
     "eve": "af_bella",
-    "kernel": "af_heart",
+    "forge": "af_heart",
     # Folded names still resolve if something old asks.
     "vett": "af_bella",
     "scotty": "af_heart",

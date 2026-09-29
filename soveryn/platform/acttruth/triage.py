@@ -51,7 +51,7 @@ def suggest_owner(agent: str, error_class: str, correction_type: str) -> str:
     if correction_type == "ops":
         return "aetheria"
     # skill / default triage
-    if agent in ("scotty", "kernel"):
+    if agent in ("scotty", "forge"):
         return "scotty"
     return "vett"
 

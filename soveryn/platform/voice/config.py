@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 DEFAULT_VOICE_ROOT_NAME = "voice"  # under data_root
 
-VOICE_ENABLED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "kernel")
+VOICE_ENABLED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "forge")
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ class VoiceConfig:
         voice_id = {
             "aetheria": self.aetheria_voice_id,
             "eve": self.eve_voice_id,
-            "kernel": self.kernel_voice_id,
+            "forge": self.kernel_voice_id,
         }[agent_name]
         return AgentVoiceCharacter(
             agent_name=agent_name,

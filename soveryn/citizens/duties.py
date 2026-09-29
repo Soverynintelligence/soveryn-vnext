@@ -42,8 +42,8 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     ("eve:marketing", "eve", "marketing",
      "Research + ship — dig, CWG/SOVERYN/ActTruth (IG Gate / Signal / house X)",
      "cron:0 11 * * 1,4"),
-    ("kernel:chat", "kernel", "chat", "Chat", None),
-    ("kernel:commission_worker", "kernel", "commission_worker",
+    ("forge:chat", "forge", "chat", "Chat", None),
+    ("forge:commission_worker", "forge", "commission_worker",
      "Commission runtime — build / code assignments", "continuous"),
 )
 

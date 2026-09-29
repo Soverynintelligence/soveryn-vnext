@@ -22,7 +22,7 @@ def test_resolve_kokoro_voice_maps_aetheria():
 
 def test_resolve_kokoro_voice_maps_folded_roster():
     assert resolve_kokoro_voice("eve") == "af_bella"
-    assert resolve_kokoro_voice("kernel") == "af_heart"
+    assert resolve_kokoro_voice("forge") == "af_heart"
 
 
 def test_resolve_kokoro_voice_passthrough_stem():
@@ -88,12 +88,12 @@ def test_build_tts_service_eve_uses_kokoro_when_primary_kokoro(monkeypatch):
 def test_build_tts_service_kernel_uses_f5_clone_when_primary_kokoro(monkeypatch):
     monkeypatch.setenv("SOVEREIGN_TTS_PRIMARY", "kokoro")
     service = build_tts_service(
-        agent_name="kernel",
+        agent_name="forge",
         elevenlabs_voice_id=None,
         elevenlabs_api_key=None,
     )
     assert service.provider_name == "f5tts"
-    assert service.voice_id == "kernel"
+    assert service.voice_id == "forge"
 
 
 def test_unknown_primary_mentions_kokoro():

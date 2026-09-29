@@ -42,6 +42,7 @@ def fake_souls_dir(tmp_path):
     d.mkdir()
     (d / "aetheria.md").write_text("# Aetheria\n", encoding="utf-8")
     (d / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
+    (d / "forge.md").write_text("# Forge\n", encoding="utf-8")
     (d / "eve.md").write_text("# Eve\n", encoding="utf-8")
     return d
 
@@ -121,9 +122,9 @@ def test_flag_off_kernel_has_no_recall(
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(seeded_recall_lattice))
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
-    kernel = app.extensions["soveryn"]["agent_loops"]["kernel"]
+    kernel = app.extensions["soveryn"]["agent_loops"]["forge"]
     assert kernel.recall_k == 0
-    names = {t.name for t in app.extensions["soveryn"]["tool_registry"].iter_tools_for_agent("kernel")}
+    names = {t.name for t in app.extensions["soveryn"]["tool_registry"].iter_tools_for_agent("forge")}
     assert "remember_fact" not in names
 
 
@@ -138,10 +139,10 @@ def test_flag_on_kernel_gets_recall_and_tool(
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(seeded_recall_lattice))
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
-    kernel = app.extensions["soveryn"]["agent_loops"]["kernel"]
+    kernel = app.extensions["soveryn"]["agent_loops"]["forge"]
     assert kernel.recall_k == 5
     assert kernel.lattice_store is not None
-    names = {t.name for t in app.extensions["soveryn"]["tool_registry"].iter_tools_for_agent("kernel")}
+    names = {t.name for t in app.extensions["soveryn"]["tool_registry"].iter_tools_for_agent("forge")}
     assert "remember_fact" in names
     assert RECALL_CAP == 3000
 

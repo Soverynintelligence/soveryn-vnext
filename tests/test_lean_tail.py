@@ -149,11 +149,11 @@ def test_loop_spills_fat_tool_result_into_next_call(tmp_path, monkeypatch):
     monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
     store = ConversationStore(tmp_path / "conv.db")
     fat = "Y" * (SPILL_TRIGGER_CHARS + 500)
-    registry = ToolRegistry(active_agents=("kernel",), audit_hook=None)
+    registry = ToolRegistry(active_agents=("forge",), audit_hook=None)
     registry.register(
         ToolSpec(
             name="dummy",
-            owner="kernel",
+            owner="forge",
             schema={"type": "object", "properties": {}, "additionalProperties": False},
             handler=lambda args: {"blob": fat},
             description="dummy",
@@ -161,7 +161,7 @@ def test_loop_spills_fat_tool_result_into_next_call(tmp_path, monkeypatch):
     )
     chat = _ToolThenAnswer()
     loop = AgentLoop(
-        "kernel",
+        "forge",
         store,
         chat_fn=chat,
         tool_registry=registry,
@@ -170,7 +170,7 @@ def test_loop_spills_fat_tool_result_into_next_call(tmp_path, monkeypatch):
         context_window=32_768,
         soul_text="",
     )
-    sid = store.new_session("kernel")
+    sid = store.new_session("forge")
     loop.process_message(sid, "read the blob")
     assert len(chat.calls) >= 2
     tool_msgs = [m for m in chat.calls[1].messages if m.role == "tool"]

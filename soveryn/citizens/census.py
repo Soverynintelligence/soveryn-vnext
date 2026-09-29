@@ -128,11 +128,11 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
     ),
     (
         Citizen(
-            id="kernel",
+            id="forge",
             display_name="Kernel",
-            soul_path="data/memory/souls/kernel.md",
+            soul_path="data/memory/souls/forge.md",
             model_server="kernel_build",
-            workspace_path=str(DEFAULT_WORKSPACES / "kernel"),
+            workspace_path=str(DEFAULT_WORKSPACES / "forge"),
             notes=(
                 "Build / code desk. Qwen3.8-Flash-Next NVFP4 TP=1 spark2 "
                 f"(:8888 / {_alias_of('kernel_build')}, house ctx 131072). "

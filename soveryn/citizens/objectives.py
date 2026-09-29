@@ -245,6 +245,6 @@ def commission_body_for(objective: dict[str, Any]) -> str:
     """Pick research-wave vs build body from owner."""
     owner = (objective.get("owner_id") or "").strip().lower()
     # Kernel (and legacy Scotty) = build body. Eve owns research+ship digs.
-    if owner in ("kernel", "scotty"):
+    if owner in ("forge", "scotty"):
         return build_commission_body(objective)
     return research_commission_body(objective)

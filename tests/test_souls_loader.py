@@ -42,7 +42,8 @@ def test_get_soul_origin_reads_origin_file(souls_dir):
 
 def test_get_soul_origin_missing_returns_empty(souls_dir):
     (souls_dir / "kernel.md").write_text("# Kernel\n", encoding="utf-8")
-    assert get_soul_origin("kernel", souls_dir=souls_dir) == ""
+    (souls_dir / "forge.md").write_text("# Forge\n", encoding="utf-8")
+    assert get_soul_origin("forge", souls_dir=souls_dir) == ""
 
 
 def test_get_soul_rejects_folded_vett_and_scotty(souls_dir):

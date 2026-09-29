@@ -67,5 +67,5 @@ ACCEPT_ATTRIBUTE_VALUE: str = ",".join(
 # 'Vision' agent name) — the mirror is guarded by
 # tests/test_vision_types_parity.py and tests/test_vision_types_html_parity.py.
 VISION_CAPABLE_AGENTS: frozenset[str] = frozenset(
-    {"aetheria", "vett", "scotty", "eve", "kernel"}
+    {"aetheria", "vett", "scotty", "eve", "forge"}
 )

@@ -39,7 +39,7 @@ def test_chat_agent_query_redirects_into_that_thread(client):
 def test_folded_agents_are_not_messages_contacts(client):
     body = client.get("/messages", follow_redirects=True).data.decode("utf-8")
     assert 'id: "aetheria"' in body
-    assert 'id: "kernel"' in body
+    assert 'id: "forge"' in body
     assert 'id: "eve"' in body
     assert 'id: "vett"' not in body
     assert 'id: "scotty"' not in body
