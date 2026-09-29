@@ -5,7 +5,7 @@
 > Last rotated: 2026-09-28
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
-> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Row-date check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` should be 0 — any | row without a parseable 2026 date silently breaks the staleness grep. Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer.
+> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Row-date check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` should be 0 — any | row without a parseable 2026 date silently breaks the staleness grep. Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer. Escalation rule: two consecutive missed Monday re-observes → affected rows marked `STALE-UNVERIFIED` in the table itself. Integrity check: `grep -c '^END-OF-TRUTH' docs/CURRENT_TRUTH.md` must equal **1** (zero = truncated file; two or more = marker leaked into body).
 > <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -38,7 +38,7 @@ If runtime behavior changes, **update this file first**, then code/notes.
 
 | Messages contact | Role | Brain |
 |------------------|------|--------|
-| **Aetheria** | Soul / face / judgment | Blackwell alone — Qwen 3.8-27B |
+| **Aetheria** | Soul / face / judgment | Quadro CUDA1 `:8091` — Qwen 3.8-27B (seat swap 2026-09-29) |
 | **Kernel** | Local build | **GLM-5.3-Flash EXL3 TP=2 across both DGX Sparks — `:8001` active** (2026-09-28, live Kernel coding brain; Flash-Next `:8888` parked). |
 | **Eve** | Research + ship (Vett folded in) | Quadros Qwen 3.8 — Canva / Signal / CWG IG |
 | **Critic / Scout** | Overnight only | Teammates → inbox (not chat peers) |
@@ -47,9 +47,9 @@ Per-row verification dates — model swaps are the most common silent drift; do 
 
 | Row (model/endpoint) | Last verified |
 |----------------------|---------------|
-| Aetheria — Blackwell `:8090` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 Brains |
+| Aetheria — Quadros CUDA1 `:8091` Qwen 3.8-27B (seat swap 2026-09-29, was Blackwell) | 2026-09-29 (Kernel — live check) |
 | Kernel — GLM-5.3-Flash EXL3 TP=2 across both DGX Sparks `:8001` (Flash-Next `:8888` parked) | 2026-09-28 (live Kernel coding brain; MiaAI recipe `GLM-5.3-Flash-EXL3-2x-DGX-Sparks` commit `943912c`, `MAX_MODEL_LEN=1000000`, `SPEC_METHOD=none`, `GLM53_DRAFT_KV_COMPACT=0`) |
-| Eve — Quadros `:8091` Qwen 3.8-27B | 2026-08-27 (section freeze); re-confirmed 2026-09-01 per §1 |
+| Eve — Blackwell `:8090` Qwen 3.8-27B (seat swap 2026-09-29, was Quadros) | 2026-09-29 (Kernel — live check) |
 | TGTHR helper Messie — `:5066` Qwen3.5-9B Q6 | 2026-09-09 (Kernel — re-checked vs §0 public-products note; in-house TGTHR helper, not the Quadros 27B public slot) |
 | Critic / Scout — Teammates inbox | 2026-09-07 (§0b brief contract) |
 
@@ -139,9 +139,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ### Brains
 | Lane | Where |
 |------|--------|
-| Aetheria | Blackwell `:8090` — alone |
+| Aetheria | Quadros `:8091` CUDA1 — since 2026-09-29 |
 | Kernel | **GLM-5.3-Flash EXL3 TP=2 `:8001` — LIVE 2026-09-28 (across both DGX Sparks; live Kernel brain). MiaAI recipe `GLM-5.3-Flash-EXL3-2x-DGX-Sparks` commit `943912c`, `MAX_MODEL_LEN=1000000`, `SPEC_METHOD=none`, `GLM53_DRAFT_KV_COMPACT=0`. `~/.soveryn/kernel_brain` = `glm`.** |
-| Eve + public Qwen | Quadros `:8091` Qwen 3.8-27B |
+| Eve + public Qwen | Blackwell `:8090` Qwen 3.8-27B (swap 2026-09-29) |
 | Flash-Next `:8888` | **PARKED/stopped 2026-09-28.** NVFP4 TP=1, spark2. Tunnel unit `soveryn-spark2-flashnext-8888.service` still running (forward only, backend down). Re-park per lab. **Gotcha (two-week leak, fixed 2026-09-22):** overnight jobs launched aider against this parked endpoint; `soveryn-aider --kernel` now reads `~/.soveryn/kernel_brain` and probes before start |
 | Second Spark | **LIVE — serving the GLM TP=2 half** (not parked; `:8001` spans both Sparks) |
 | House overnight rule | Overnight agents hand findings to Kernel as instructions; they never launch harnesses against unprobed endpoints (SOVERYN.md, 2026-09-22) |
@@ -225,3 +225,4 @@ Notes in `docs/notes/` are **not** authority. **This file is.**
 <!-- integrity footer (2026-09-24 docs-hygiene pass 5b38f0b6/bf465b6d, landed by Kernel) -->
 <!-- Expected sections: §0 House spine, §1 What is live, §2 Incomplete/blocked, §3 Brands, §4 Kill list, §5 Git/ops. -->
 <!-- Last full-rotation checksum: sha256:0268cfe90913… (file as it stood 2026-09-22, 19,272 B, §0–§5) — re-derive with `git show HEAD:docs/CURRENT_TRUTH.md | sha256sum`. Rotation date: 2026-09-22. -->
+END-OF-TRUTH §5
