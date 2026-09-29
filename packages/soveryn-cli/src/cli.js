@@ -34,6 +34,7 @@ const {
   runSelfTest,
 } = require('./policy/gates');
 const { cmdPark, cmdUnpark } = require('./park');
+const { cmdDesk } = require('./desk');
 const {
   listSessions,
   latestSession,
@@ -120,6 +121,7 @@ Usage:
   soveryn status              Active profile, health, pi version
   soveryn resume [id]         Reload last (or named) session transcript
   soveryn sessions            List recent sessions (soveryn-cli + kernel dirs)
+  soveryn desk                Kernel briefing pane: calendar, open loops, truth staleness
   soveryn doctor              Status + config paths + policy gates
   soveryn doctor --gates      Policy gate status only (native controls)
   soveryn doctor --json       Machine-readable status+health+drift+gates (exit 1 on problems)
@@ -768,6 +770,13 @@ async function main(argv) {
         process.exit(1);
       }
       await cmdUnpark(cmdArgs[0], cmdArgs.slice(1));
+      return;
+    }
+    if (cmd === 'desk') {
+      await cmdDesk(cmdArgs, {
+        profiles: require('./profiles'),
+        health: require('./health'),
+      });
       return;
     }
     if (cmd === 'code') {
