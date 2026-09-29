@@ -27,7 +27,7 @@ LIST_DIRECTORY_MAX_ENTRIES = 200
 
 
 def build_read_file_tool(
-    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT, base: Path | None = None
 ) -> ToolSpec:
     """Bounded file read. Returns up to READ_FILE_MAX_BYTES of text.
 
@@ -41,7 +41,7 @@ def build_read_file_tool(
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, base=base, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
@@ -129,7 +129,7 @@ def build_read_file_tool(
 
 
 def build_list_directory_tool(
-    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT
+    *, owner_agent: str, root: Path = SCOTTY_PROJECT_ROOT, base: Path | None = None
 ) -> ToolSpec:
     """Bounded directory listing. `root` fences every listing; defaults to
     the vnext repo. Vett gets a wider root (home) for cross-project view."""
@@ -139,7 +139,7 @@ def build_list_directory_tool(
         if not isinstance(path_arg, str):
             raise ToolArgError("path must be a string")
         try:
-            resolved = resolve_within_root(path_arg, root=root, must_exist=True)
+            resolved = resolve_within_root(path_arg, root=root, base=base, must_exist=True)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         except FileNotFoundError as e:
@@ -229,8 +229,14 @@ def build_list_directory_tool(
 WRITE_FILE_MAX_BYTES = 256 * 1024  # 256 KB per write; larger means use git
 
 
-def build_write_file_tool(*, owner_agent: str, root: Path) -> ToolSpec:
+def build_write_file_tool(*, owner_agent: str, root: Path, base: Path | None = None) -> ToolSpec:
     """Verified file write, jailed to `root`.
+
+    `base` anchors RELATIVE paths (default: root). Set it to the repo
+    when the jail is wider than the repo (kernel seat: root=$HOME) so a
+    bare `docs/...` task path lands in the repo, not in $HOME — the
+    2026-09-28 ghost-write had the citizen verifying a file it created
+    in ~/docs while the real repo file went untouched.
 
     The handler never reports success without proof: after writing it
     re-stats the file and reads back the first line. Returns the byte count
@@ -265,7 +271,7 @@ def build_write_file_tool(*, owner_agent: str, root: Path) -> ToolSpec:
                 "parts or via git on the tower"
             )
         try:
-            resolved = resolve_within_root(path_arg, root=root, must_exist=False)
+            resolved = resolve_within_root(path_arg, root=root, base=base, must_exist=False)
         except PathOutOfBoundsError as e:
             raise ToolArgError(str(e))
         if resolved.is_dir():

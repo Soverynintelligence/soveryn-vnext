@@ -212,14 +212,23 @@ def _register_files(ctx: PackContext, owner: str) -> None:
         ctx.registry.register(build_read_file_tool(owner_agent="aetheria"))
         ctx.registry.register(build_list_directory_tool(owner_agent="aetheria"))
     elif owner == "vett":
-        ctx.registry.register(build_read_file_tool(owner_agent="vett", root=Path.home()))
+        # root=$HOME lets Vett see across house trees; base anchors bare
+        # relative paths (docs/...) to the repo — same ghost-write fix as
+        # kernel 2026-09-28 (relative + home root → ~/docs/CURRENT_TRUTH.md).
+        from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
         ctx.registry.register(
-            build_list_directory_tool(owner_agent="vett", root=Path.home())
+            build_read_file_tool(owner_agent="vett", root=Path.home(), base=SCOTTY_PROJECT_ROOT)
+        )
+        ctx.registry.register(
+            build_list_directory_tool(owner_agent="vett", root=Path.home(), base=SCOTTY_PROJECT_ROOT)
         )
     elif owner == "eve":
-        ctx.registry.register(build_read_file_tool(owner_agent="eve", root=Path.home()))
+        from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
         ctx.registry.register(
-            build_list_directory_tool(owner_agent="eve", root=Path.home())
+            build_read_file_tool(owner_agent="eve", root=Path.home(), base=SCOTTY_PROJECT_ROOT)
+        )
+        ctx.registry.register(
+            build_list_directory_tool(owner_agent="eve", root=Path.home(), base=SCOTTY_PROJECT_ROOT)
         )
     elif owner == "kernel":
         ctx.registry.register(build_read_file_tool(owner_agent="kernel"))
@@ -227,10 +236,17 @@ def _register_files(ctx: PackContext, owner: str) -> None:
         # 2026-09-22: the Kernel seat had read/list only — it claimed file
         # builds that never landed (demos/orrery phantom, twice). Verified
         # write hands, jailed to home, with byte + sha proof on success.
+        # 2026-09-28: base=repo — bare relative paths (docs/...) anchor to
+        # the vnext repo, not $HOME. The unanchored version let a commission
+        # write ~/docs/CURRENT_TRUTH.md and byte-verify its own ghost while
+        # the real repo file went untouched.
         from soveryn.agents.scotty.tools.fs import build_write_file_tool
+        from soveryn.agents.scotty.tools.paths import SCOTTY_PROJECT_ROOT
 
         ctx.registry.register(
-            build_write_file_tool(owner_agent="kernel", root=Path.home())
+            build_write_file_tool(
+                owner_agent="kernel", root=Path.home(), base=SCOTTY_PROJECT_ROOT
+            )
         )
     else:
         return
