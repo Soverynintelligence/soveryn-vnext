@@ -1,5 +1,7 @@
 # SOVERYN env-var map (high-stakes)
 
+summary: the env vars that arm egress, money, or restore — one page
+read_when: touching .env, arming a connector, or auditing what is live
 One page. Full dump of every `SOVERYN_*` is not the point — these are the vars that arm egress, money, or restore. Live values live in `~/soveryn_vnext/.env` (gitignored). Authority for *whether* something is armed: `docs/CURRENT_TRUTH.md`.
 
 | Var | Who reads it | What it does | Armed? |

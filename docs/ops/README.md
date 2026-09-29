@@ -1,5 +1,7 @@
 # Ops shelves
 
+summary: ops shelves for the two businesses — CWG and SOVERYN, never mixed
+read_when: filing business documents or looking for tax/ledger/lab shelves
 Two businesses. Do not mix the files.
 
 | Entity | Formation / COI | Tax receipts and ledger |

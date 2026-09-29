@@ -1,5 +1,7 @@
 # Secrets & operator state — backup / restore
 
+summary: backup/restore for secrets and operator state (not in git; must survive tower death)
+read_when: rotating secrets, tower migration, or verifying easystore archives
 **Kill-list #2 (Critic 2026-08-24).**  
 Not in git. Must survive tower death.
 

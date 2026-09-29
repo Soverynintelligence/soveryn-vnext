@@ -1,5 +1,7 @@
 # DEPLOY — SOVERYN vNext (Flask, :5001)
 
+summary: deploy steps for soveryn vNext Flask app on :5001 (tower, user systemd)
+read_when: deploying or restarting the Messages/app server
 **Repo:** `~/soveryn_vnext` (branch: `main`) · **Host:** tower · **Unit:** `soveryn-vnext.service` (user systemd)
 
 ## Deploy steps
