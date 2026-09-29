@@ -299,17 +299,19 @@ def _kernel_server() -> ModelServer:
 
 
 def _eve_flash_server() -> ModelServer:
-    """Eve always on Quadros Flash — does not follow Kernel to Spark."""
+    """Eve — SEAT SWAP 2026-09-29 (Jon): busiest citizen → Blackwell :8090.
+    Port is pinned (not the legacy flash profile port) because the flash
+    profile still points at the Quadro router for historical callers."""
     flash = _KERNEL_BRAIN_PROFILES["flash"]
     return ModelServer(
         name="eve_flash",
         host=str(flash["host"]),
-        port=int(flash["port"]),
+        port=8090,
         model_path=MODEL_ROOT / str(flash["path"]),
         mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
-        role="Eve — marketing on Quadros Qwen3.8-27B :8091 (ctx 65536); Kernel is Flash-Next :8888",
+        role="Eve — marketing on Blackwell Qwen3.8-27B :8090 (ctx 65536)",
         supports_multi_system_messages=False,
-        model_alias=str(flash["alias"]),
+        model_alias="bench-flash",
         chat_template_kwargs={"enable_thinking": False},
         n_ctx=65536,
     )
@@ -319,13 +321,15 @@ def _eve_flash_server() -> ModelServer:
 MODEL_SERVERS: tuple[ModelServer, ...] = (
     ModelServer(
         name="aetheria_primary",
-        port=8090,
-        # CUTOVER 2026-08-17: Qwen3.8-27B UD-Q6_K_XL (was Gemma 4 31B).
-        # Live weights come from router-presets-blackwell.ini [aetheria];
-        # this metadata must agree. Gemma rollback: model=aetheria-gemma.
+        port=8091,
+        # SEAT SWAP 2026-09-29 (Jon): Eve → Blackwell (busiest citizen), so
+        # Aetheria now rides the Quadro router (CUDA1 = the 50b4 card) via
+        # router-presets-quadro.ini [qwen38]. Same GGUF, slower card, low
+        # traffic — acceptable. Row-split upgrade deferred (helper Quadro
+        # VRAM is occupied by nemo-embed).
         model_path=MODEL_ROOT / "Qwen3.8-27B-UD-Q6_K_XL.gguf",
         mmproj_path=MODEL_ROOT / "mmproj-Qwen3.8-27B-BF16.gguf",
-        role="Aetheria primary (Qwen3.8-27B + mmproj on Blackwell)",
+        role="Aetheria primary (Qwen3.8-27B + mmproj on Quadro CUDA1 :8091)",
         # Kept False for safety — prelude fold is pass-through when multi-system
         # works. Stock Qwen on some backends rejects multi system (vett path).
         supports_multi_system_messages=False,
