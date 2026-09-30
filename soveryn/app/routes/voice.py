@@ -26,6 +26,7 @@ from flask import (
     abort,
     current_app,
     jsonify,
+    make_response,
     render_template,
     request,
 )
@@ -50,8 +51,16 @@ bp = Blueprint(
 logger = logging.getLogger(__name__)
 
 
-# Live roster: Eve speaks Vett's F5 clone, Kernel speaks Scotty's.
-SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "kernel")
+# Live roster: Eve speaks Vett's F5 clone, Forge speaks Scotty's.
+SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "forge")
+
+
+def _voice_agent(agent: str) -> str:
+    """Old /voice/kernel links open Forge. The build brain has no voice room."""
+    agent = (agent or "").lower().strip()
+    if agent == "kernel":
+        return "forge"
+    return agent
 
 
 def _voice_state() -> dict:
@@ -74,13 +83,15 @@ def voice_landing():
     """
     state = _voice_state()
     available = [agent for agent in SUPPORTED_AGENTS if agent in state]
-    return render_template("voice_landing.html", agents=available)
+    resp = make_response(render_template("voice_landing.html", agents=available))
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @bp.get("/voice/<agent>")
 def voice_room(agent: str):
     """Per-agent voice room page (orb UI)."""
-    agent = agent.lower().strip()
+    agent = _voice_agent(agent)
     if agent not in SUPPORTED_AGENTS:
         abort(404, description=f"voice not configured for agent {agent!r}")
     if agent not in _voice_state():
@@ -99,7 +110,7 @@ def voice_offer(agent: str):
     only the SDP answer (sdp/type/pc_id); audio flows over WebRTC
     directly between browser and the Pipecat transport.
     """
-    agent = agent.lower().strip()
+    agent = _voice_agent(agent)
     if agent not in SUPPORTED_AGENTS:
         abort(404, description=f"voice not configured for agent {agent!r}")
     state = _voice_state().get(agent)
@@ -177,7 +188,7 @@ def voice_session_offer(session_id: str):
     body = request.get_json(silent=True) or {}
     sdp = body.get("sdp")
     sdp_type = body.get("type", "offer")
-    agent = (body.get("agent") or "").lower().strip()
+    agent = _voice_agent(body.get("agent") or "")
 
     if agent not in SUPPORTED_AGENTS:
         return jsonify({"error": f"unknown agent {agent!r}"}), 400

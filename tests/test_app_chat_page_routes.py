@@ -33,7 +33,10 @@ def test_chat_route_redirects_to_messages(client):
 def test_chat_agent_query_redirects_into_that_thread(client):
     resp = client.get("/chat?agent=kernel")
     assert resp.status_code == 302
-    assert "/messages/kernel" in resp.headers.get("Location", "")
+    assert "/messages/forge" in resp.headers.get("Location", "")
+    old = client.get("/messages/kernel")
+    assert old.status_code == 302
+    assert "/messages/forge" in old.headers.get("Location", "")
 
 
 def test_folded_agents_are_not_messages_contacts(client):

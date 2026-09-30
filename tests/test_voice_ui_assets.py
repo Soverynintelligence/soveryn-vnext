@@ -43,6 +43,7 @@ def test_orb_css_defines_all_state_machine_states():
     for state in ("idle", "listening", "hearing", "thinking", "speaking", "interrupted"):
         assert f'data-state="{state}"' in content, f"missing state CSS: {state}"
     assert 'data-agent="eve"' in content
+    assert 'data-agent="forge"' in content
     assert 'data-agent="kernel"' in content
 
 
@@ -52,6 +53,7 @@ def test_voice_landing_roles_follow_live_roster():
     )
     content = template_path.read_text()
     assert "agent == 'eve'" in content
+    assert "agent == 'forge'" in content
     assert "agent == 'kernel'" in content
     assert "agent == 'vett'" not in content
     assert "agent == 'scotty'" not in content

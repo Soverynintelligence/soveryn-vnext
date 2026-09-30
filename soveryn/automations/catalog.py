@@ -201,7 +201,7 @@ CATALOG: List[AutomationSpec] = [
             "Check standing house work with objective_status (desk=soveryn and "
             "desk=cwg, and state=active). Then:\n"
             "1) If SOVERYN has no active improvement objective, call "
-            "objective_assign desk=soveryn owner_id=kernel with a concrete "
+            "objective_assign desk=soveryn owner_id=forge with a concrete "
             "title/brief for the highest-leverage system improvement you can "
             "name from recent reality (Flash speed, citizen proactive loops, "
             "Messages UX, PondWright, spine debt). Success criteria: a bounded "

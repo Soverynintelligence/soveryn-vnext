@@ -137,6 +137,7 @@ _LABELS = {
     "vett": "Vett",
     "scotty": "Scotty",
     "kernel": "Kernel",
+    "forge": "Forge",
 }
 
 

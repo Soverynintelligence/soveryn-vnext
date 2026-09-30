@@ -34,6 +34,7 @@ _SUN_COLORS = {
     "aetheria": "#8fb8de",
     "eve": "#a8d5b0",
     "kernel": "#cfa9de",
+    "forge": "#cfa9de",
 }
 
 

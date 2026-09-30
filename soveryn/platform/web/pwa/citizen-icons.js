@@ -28,6 +28,7 @@
   };
   var DEFAULTS = {
     aetheria: "round",
+    forge: "squircle",
     kernel: "squircle",
     eve: "pill",
     t_critic: "diamond",
@@ -36,11 +37,12 @@
     scotty: "squircle"
   };
   var NAMES = {
-    aetheria: "Aetheria", kernel: "Kernel", eve: "Eve",
+    aetheria: "Aetheria", forge: "Forge", kernel: "Kernel", eve: "Eve",
     t_critic: "Critic", t_scout: "Scout", vett: "Vett", scotty: "Scotty"
   };
   var PALETTE = {
     aetheria: { hi: "#f0e2b8", mid: "#c6a664", lo: "#8a7038" },
+    forge:    { hi: "#c5f0d4", mid: "#9ee0b8", lo: "#3d7a55" },
     kernel:   { hi: "#c5f0d4", mid: "#9ee0b8", lo: "#3d7a55" },
     eve:      { hi: "#f0d4ff", mid: "#e0b0ff", lo: "#7a4a9a" },
     t_critic: { hi: "#e8c9a0", mid: "#d4a574", lo: "#6b4a2e" },

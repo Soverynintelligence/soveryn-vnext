@@ -62,10 +62,9 @@ def register_teammates_brief_tools(
             "count": len(briefs),
             "routing_hint": (
                 "Assign with house_post_send: "
-                "kernel = code/docs/build; "
-                "vett = research/verify claims; "
-                "scotty = bounded repair/tests; "
-                "eve = marketing/presence. "
+                "forge = code/docs/build; "
+                "eve = research and marketing/presence. "
+                "Vett and Scotty are parked. Kernel is the build brain, not a citizen. "
                 "You decide routing; Jon is the boss."
             ),
         }
@@ -78,8 +77,8 @@ def register_teammates_brief_tools(
                 "Read the latest Teammates overnight brief from Messages "
                 "(Critic or Scout inbox). Use when Jon says act on Critic/Scout "
                 "findings, or Ask Aetheria to act. Then house_post_send "
-                "commissions to kernel (code), vett (verify), scotty (repair), "
-                "or eve (marketing) as fit — one clear brief per assignee."
+                "commissions to forge (code) or eve (research and marketing) "
+                "as fit — one clear brief per assignee. Vett and Scotty are parked."
             ),
             schema={
                 "type": "object",

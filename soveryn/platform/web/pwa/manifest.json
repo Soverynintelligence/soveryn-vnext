@@ -1,8 +1,8 @@
 {
   "name": "SOVERYN",
   "short_name": "SOVERYN",
-  "description": "Mission Control and the team \u2014 Aetheria, Vett, Scotty.",
-  "start_url": "/m/?b=20260830-faces",
+  "description": "Mission Control and the team: Aetheria, Forge, Eve.",
+  "start_url": "/m/?b=20260929-forge",
   "scope": "/m/",
   "display": "standalone",
   "orientation": "any",

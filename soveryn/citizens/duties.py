@@ -23,7 +23,7 @@ FOUNDING_DUTIES: tuple[tuple[str, str, str, str, str | None], ...] = (
     # id, citizen_id, kind, title, schedule
     ("aetheria:chat", "aetheria", "chat", "Chat", None),
     ("aetheria:chief_of_staff", "aetheria", "chief_of_staff",
-     "House closer — dispatch Kernel/Eve, report the solution (not a complaint)", "continuous"),
+     "House closer — dispatch Forge/Eve, report the solution (not a complaint)", "continuous"),
     ("aetheria:heartbeat", "aetheria", "heartbeat", "Heartbeat", "interval:1800"),
     ("aetheria:dream", "aetheria", "dream", "Dream", "quiet_hours:23:00-07:00"),
     ("aetheria:signal", "aetheria", "signal", "Signal bridge", "continuous"),

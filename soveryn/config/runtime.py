@@ -18,15 +18,15 @@ from pathlib import Path
 # ─────────────────────────────────────────────────────────────────────────────
 
 #: Agents with a live `AgentLoop` and chat surface (spec §1, §8 Bucket A).
-#: Kernel is the house build brain (GLM-5.3-Flash TP=2 on Sparks :8001) — chat + memory + read;
-#: file writes stay via Aider / HITL, not free exec tools.
+#: Forge is the Messages citizen for build work. Kernel is the house build
+#: brain (Pi harness, Aider, OpenCode), not a chat contact.
 ACTIVE_AGENTS: tuple[str, ...] = (
     "aetheria", "forge", "eve",
 )
 
 #: Messages contact list (phone door). Subset of ACTIVE_AGENTS + overnight
 #: inboxes are layered in the UI. Fleet freeze: frontier few — one card /
-#: one frontier mind. Vett folded into Eve; Scotty coding into Kernel.
+#: one frontier mind. Vett folded into Eve; Scotty coding into Forge.
 #: Grok is desktop Grok Bots, not a house chat agent.
 MESSAGES_CONTACTS: tuple[str, ...] = (
     "aetheria",  # house closer — Blackwell alone (GPU move is a later cut)
@@ -38,7 +38,7 @@ MESSAGES_CONTACTS: tuple[str, ...] = (
 MESSAGES_PARKED: frozenset[str] = frozenset({"vett", "scotty"})
 
 #: Do not enqueue new CoS commissions / standing objectives to these ids.
-#: Engine-room loops may still exist; new work goes to Eve / Kernel.
+#: Engine-room loops may still exist; new work goes to Eve / Forge.
 COMMISSION_BLOCKED: frozenset[str] = frozenset({"vett", "scotty"})
 
 #: Messages contacts whose turn must not own the HTTP/SSE thread. Work is

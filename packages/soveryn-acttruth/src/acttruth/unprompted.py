@@ -117,9 +117,10 @@ def record_unprompted_tick(
         )
 
 
-# Chat agents + Kernel (HITL) + Eve (marketing). Kernel/Eve have no
-# unprompted pulse budget, but still get ledger streams and CC badges.
-CREW_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel", "eve")
+# Chat agents + Forge (the citizen) + Kernel (build-brain ledger) + Eve.
+# Kernel/Eve/Forge have no unprompted pulse budget, but still get ledger
+# streams and command-center badges. Keep kernel so older ledger rows stay visible.
+CREW_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty", "kernel", "eve", "forge")
 
 
 def crew_status(*, agents: tuple[str, ...] | None = None, limit: int = 5) -> dict[str, Any]:

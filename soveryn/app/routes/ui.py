@@ -38,7 +38,7 @@ _PHONE_UA_RE = re.compile(
 
 # Phone Home Screen PWA caches /messages by URL. Bump this when the list chrome
 # or thread JS changes so iOS is forced onto a new document (start_url + 302).
-_MESSAGES_BUILD = "20260910kernelcli"
+_MESSAGES_BUILD = "20260929forge"
 _CITIZEN_ICONS_CSS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.css"
 _CITIZEN_ICONS_JS = Path(__file__).resolve().parents[2] / "static" / "citizen-icons.js"
 
@@ -95,7 +95,10 @@ def _serve_html(path: Path, *, missing_label: str):
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"
     # Phone Safari / home-screen bookmarks love stale HTML; Messages must be fresh.
-    if path.name in ("messages.html", "message_thread.html", "room.html", "command_center.html"):
+    if path.name in (
+        "messages.html", "message_thread.html", "room.html", "command_center.html",
+        "citizens.html", "documents.html", "lounge.html",
+    ):
         resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         resp.headers["Pragma"] = "no-cache"
     return resp
@@ -264,6 +267,15 @@ def messages_push_client():
     )
 
 
+_MESSAGE_AGENT_ALIAS = {"kernel": "forge"}
+
+
+def _messages_agent(agent: str) -> str:
+    """Old Kernel-citizen links open Forge. Kernel the build brain stays at /build."""
+    key = (agent or "").strip().lower()
+    return _MESSAGE_AGENT_ALIAS.get(key, key)
+
+
 def _thread_build_redirect(agent: str):
     """Same iOS cache-bust as the contacts list — /messages/<agent> is its own URL."""
     if request.args.get("b") == _MESSAGES_BUILD:
@@ -280,6 +292,14 @@ def _thread_build_redirect(agent: str):
 @bp.get("/messages/<agent>")
 def message_thread_page(agent: str):
     """iMessage-style 1:1 thread — matches /messages list chrome."""
+    raw = (agent or "").strip().lower()
+    agent = _messages_agent(raw)
+    if agent != raw:
+        args = request.args.to_dict(flat=True)
+        args["b"] = _MESSAGES_BUILD
+        resp = redirect(f"/messages/{agent}?{urlencode(args)}", code=302)
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        return resp
     bounced = _thread_build_redirect(agent)
     if bounced is not None:
         return bounced
@@ -289,7 +309,7 @@ def message_thread_page(agent: str):
 @bp.get("/chat")
 def chat_index():
     """Legacy lab chat → Messages (house front door)."""
-    agent = (request.args.get("agent") or "").strip().lower()
+    agent = _messages_agent(request.args.get("agent") or "")
     if agent:
         return redirect(f"/messages/{agent}", code=302)
     return redirect("/messages", code=302)
@@ -298,7 +318,7 @@ def chat_index():
 @bp.get("/chat/<session_id>")
 def chat_session(session_id: str):  # noqa: ARG001 - client may use ?agent=
     """Legacy session URL → Messages (session resume happens in-thread)."""
-    agent = (request.args.get("agent") or "").strip().lower()
+    agent = _messages_agent(request.args.get("agent") or "")
     if agent:
         return redirect(
             f"/messages/{agent}?session={session_id}", code=302

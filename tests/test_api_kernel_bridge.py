@@ -74,10 +74,10 @@ def test_kernel_cli_receipt_localhost(app):
     assert r.status_code == 200
     data = r.get_json()
     assert data["ok"] is True
-    assert data["agent"] == "kernel"
+    assert data["agent"] == "forge"
     assert fake.turns
     args, kwargs = fake.turns[0]
-    assert args[1] == "kernel"
+    assert args[1] == "forge"
     assert args[2] == "assistant"
     assert kwargs["source"] == "kernel_cli"
     assert "abc-123" in args[3]

@@ -47,6 +47,7 @@
   .faces .av[data-agent="vett"] { background: linear-gradient(145deg, #7ec8e3, #3a7a9a); }
   .faces .av[data-agent="eve"] { background: linear-gradient(145deg, #e0b0ff, #7a4a9a); }
   .faces .av[data-agent="scotty"] { background: linear-gradient(145deg, #e8a87c, #a65d3b); }
+  .faces .av[data-agent="forge"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
   .faces .av[data-agent="kernel"] { background: linear-gradient(145deg, #9ee0b8, #3d7a55); }
   .faces .av[data-state="working"] {
     box-shadow: 0 0 0 2px var(--mint);
@@ -242,10 +243,11 @@
 
 <script>
 (function () {
-  const ALL_PEERS = ["vett", "eve", "scotty", "kernel"];
+  const ALL_PEERS = ["eve", "forge"];
   const params = new URLSearchParams(location.search);
+  const rawPeer = (params.get("peer") || "eve").toLowerCase();
   const state = {
-    peer: (params.get("peer") || "vett").toLowerCase(),
+    peer: rawPeer === "kernel" ? "forge" : (ALL_PEERS.indexOf(rawPeer) >= 0 ? rawPeer : "eve"),
     peers: [],
     sessionId: params.get("session") || null,
     dmSessionId: params.get("from") || null,

@@ -141,9 +141,10 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
             description=(
                 "Message another citizen and put work on their commission queue "
                 "when you are Aetheria. Commission peers: eve (research + posts), "
-                "kernel (build). Vett and Scotty are parked — do not assign new "
-                "work to them; use eve or kernel instead. When Jon says 'ask Eve "
-                "to…' or 'have Kernel check…' — call this in the SAME turn with "
+                "forge (build). Vett and Scotty are parked — do not assign new "
+                "work to them; use eve or forge instead. Kernel is the build "
+                "brain, not a citizen. When Jon says 'ask Eve "
+                "to…' or 'have Forge check…' — call this in the SAME turn with "
                 "to_id set and a clear brief in body. Prefer kind=request "
                 "(default). Kinds: memo, request, report, directive, ack."
             ),

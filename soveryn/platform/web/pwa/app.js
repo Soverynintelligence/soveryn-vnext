@@ -88,6 +88,7 @@ async function fetchThreads(secret) {
 // --- Agent presentation -----------------------------------------------------
 const AGENT_TAGLINE = {
   aetheria: 'Strategy + coordination',
+  forge:    'Build + local models',
   kernel:   'Build + local models',
   eve:      'Ship + CWG',
   vett:     'Research + verification',
@@ -391,7 +392,7 @@ async function renderAgentPickView($view) {
     showBack: true,
     rightHtml: '',
   });
-  const agents = ['aetheria', 'kernel', 'eve'];
+  const agents = ['aetheria', 'forge', 'eve'];
   $view.innerHTML = `
     <div id="agent-pick-list">
       ${agents.map(a => `

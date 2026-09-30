@@ -1,7 +1,7 @@
-"""Bridge: Kernel CLI status/receipts → SOVERYN Messages (Kernel thread).
+"""Bridge: Kernel CLI status/receipts → SOVERYN Messages (Forge thread).
 
-Localhost-only. Mirrors teammates overnight bridge: append an assistant
-bubble to Kernel's sticky Messages session + optional Web Push.
+Localhost-only. The CLI is still the Kernel build brain. Receipts land in
+Forge's Messages thread, the citizen who owns that seat. Optional Web Push.
 Phone-origin privilege is NOT granted — this is outbound status only.
 """
 
@@ -15,8 +15,8 @@ bp = Blueprint("api_kernel_bridge", __name__)
 
 _LOCALHOST_ADDRS = {"127.0.0.1", "::1"}
 _MAX_BODY = 6000
-_AGENT = "kernel"
-_TITLE = "Kernel · CLI"
+_AGENT = "forge"
+_TITLE = "Forge · CLI"
 
 
 def _require_localhost() -> None:
@@ -37,7 +37,7 @@ def _sticky_session(conv_store) -> str:
 
 @bp.post("/api/internal/kernel_cli_receipt")
 def kernel_cli_receipt():
-    """Accept a CLI receipt/status and append it to Kernel Messages history."""
+    """Accept a CLI receipt/status and append it to Forge's Messages history."""
     _require_localhost()
     body = request.get_json(silent=True) or {}
 
@@ -108,9 +108,9 @@ def kernel_cli_receipt():
         from soveryn.platform.webpush.notify import notify_needs_you
 
         notify_needs_you(
-            title="Kernel CLI",
+            title="Forge",
             body=(summary or action)[:120],
-            url="/messages/kernel",
+            url="/messages/forge",
             tag="kernel-cli-receipt",
         )
     except Exception:

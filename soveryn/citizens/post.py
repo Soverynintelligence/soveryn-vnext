@@ -50,9 +50,12 @@ def send(
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
     if not body.strip():
         raise ValueError("post body required")
-    # Vett folded into Eve — mail and assignments follow the living desk.
+    # Folded seats follow the living desk. Kernel the name is the build
+    # brain; the Messages citizen who takes this mail is Forge.
     if to_id == "vett":
         to_id = "eve"
+    if to_id == "kernel":
+        to_id = "forge"
     if from_id == to_id:
         raise ValueError("cannot post to self — use notes/")
     post_id = str(uuid.uuid4())
@@ -185,6 +188,11 @@ def route_via_cos(
       3. directive COS → assignee (with commission id)
     """
     from soveryn.citizens import commissions
+
+    if assignee_id == "vett":
+        assignee_id = "eve"
+    if assignee_id == "kernel":
+        assignee_id = "forge"
 
     if assignee_id == CHIEF_OF_STAFF_ID:
         # Work for COS herself — commission only (no self-post).

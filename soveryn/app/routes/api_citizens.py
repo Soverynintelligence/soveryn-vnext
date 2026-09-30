@@ -527,6 +527,9 @@ def list_commissions(citizen_id: str):
 def create_commission(citizen_id: str):
     """Enqueue work for a citizen. Localhost-only write."""
     _require_localhost()
+    citizen_id = (citizen_id or "").strip().lower()
+    if citizen_id == "kernel":
+        citizen_id = "forge"
     body_json = request.get_json(silent=True) or {}
     body = body_json.get("body")
     title = body_json.get("title")

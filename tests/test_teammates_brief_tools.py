@@ -39,7 +39,7 @@ def test_reads_latest_assistant_brief(registry: ToolRegistry, store: Conversatio
     assert out["ok"] is True
     assert out["count"] == 1
     assert "Funnel cookie" in out["briefs"][0]["content"]
-    assert "kernel" in out["routing_hint"]
+    assert "forge" in out["routing_hint"]
     assert out["session_id"] == sid
 
 

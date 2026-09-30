@@ -54,6 +54,8 @@ def create_thread(
     title: Optional[str] = None,
 ) -> Thread:
     """Create a new thread + its backing ConversationStore Session."""
+    if agent == "kernel":
+        agent = "forge"
     if agent not in VALID_AGENTS:
         raise ThreadError(
             f"invalid agent: {agent!r}; must be one of {VALID_AGENTS}"

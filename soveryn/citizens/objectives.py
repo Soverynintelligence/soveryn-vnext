@@ -65,9 +65,11 @@ def assign(
         raise ValueError("title and brief required")
     from soveryn.config.runtime import COMMISSION_BLOCKED
 
+    if owner_id == "kernel":
+        owner_id = "forge"
     if owner_id in COMMISSION_BLOCKED:
         raise ValueError(
-            f"{owner_id!r} is parked — assign to eve or kernel "
+            f"{owner_id!r} is parked — assign to eve or forge "
             f"(fleet freeze; research tools live on Eve)"
         )
     exists = conn.execute(

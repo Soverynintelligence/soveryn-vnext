@@ -27,7 +27,7 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
         desk = str(args.get("desk") or "").strip().lower()
         title = str(args.get("title") or "").strip()
         brief = str(args.get("brief") or "").strip()
-        owner_id = str(args.get("owner_id") or "vett").strip().lower()
+        owner_id = str(args.get("owner_id") or objectives_mod.DEFAULT_OWNER).strip().lower()
         success = str(args.get("success_criteria") or "").strip()
         # Injected by AgentLoop from the live Messages/chat session when absent.
         dm_session_id = str(args.get("dm_session_id") or "").strip() or None
@@ -173,8 +173,9 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                 "'put Eve on a real dig'. Prefer this over one-shot house_post for "
                 "multi-step research. Desks: cwg (PondWright/ponds — house Apex/AKT "
                 "catalogs first, not the open web), hl (History's Ledger), soveryn "
-                "(house/product). Owners: eve (research+ship) or kernel (build). "
-                "Vett/Scotty are parked. After they finish, check objective_status "
+                "(house/product). Owners: eve (research+ship) or forge (build). "
+                "Vett/Scotty are parked. Kernel is the build brain, not a citizen. "
+                "After they finish, check objective_status "
                 "and call objective_verify when Jon accepts."
             ),
             schema={
@@ -188,7 +189,7 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                     "brief": {"type": "string"},
                     "owner_id": {
                         "type": "string",
-                        "enum": ["eve", "kernel"],
+                        "enum": ["eve", "forge"],
                     },
                     "success_criteria": {"type": "string"},
                     "enqueue": {"type": "boolean"},

@@ -129,7 +129,7 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
     (
         Citizen(
             id="forge",
-            display_name="Kernel",
+            display_name="Forge",
             soul_path="data/memory/souls/forge.md",
             model_server="kernel_build",
             workspace_path=str(DEFAULT_WORKSPACES / "forge"),
