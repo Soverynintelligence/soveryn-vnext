@@ -11,14 +11,19 @@ tools, not arbitrary outbound network).
 
 from __future__ import annotations
 
+import os
+import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
+from soveryn.platform.web import tinyfish
 from soveryn.platform.web.fetch import (
+    ALLOWED_SCHEMES,
     DEFAULT_MAX_CHARS,
     FetchError,
     SSRFError,
+    _guard_against_ssrf,
     fetch_and_extract,
 )
 from soveryn.platform.web.search import (
@@ -47,6 +52,25 @@ AGENT_USER_AGENTS: dict[str, str] = {
 }
 
 
+def _tinyfish_owners() -> frozenset[str]:
+    """Agents that try TinyFish free Search/Fetch first (default: eve only)."""
+    return frozenset(
+        a.strip()
+        for a in os.environ.get("SOVERYN_TINYFISH_AGENTS", "eve").split(",")
+        if a.strip()
+    )
+
+
+def _local_url_guard(url: str) -> None:
+    """Same scheme/host/private-address refusal the local fetch path applies."""
+    parsed = urllib.parse.urlparse(url.strip())
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise FetchError(f"scheme {parsed.scheme!r} not allowed (only http/https)")
+    if not parsed.hostname:
+        raise FetchError("url has no hostname")
+    _guard_against_ssrf(parsed.hostname)
+
+
 def build_web_search_tool(
     *,
     searxng_url: str,
@@ -65,6 +89,13 @@ def build_web_search_tool(
             raise ToolArgError(
                 f"max_results must be between 1 and {WEB_SEARCH_MAX_K} (got {max_results})"
             )
+        if owner_agent in _tinyfish_owners() and tinyfish.api_key():
+            try:
+                hits = tinyfish.search(query, max_results=max_results)
+                if hits:
+                    return {"query": query.strip(), "engine": "tinyfish", "results": hits}
+            except tinyfish.TinyFishError:
+                pass  # fall through to Brave/SearXNG
         try:
             results = search_web(
                 query, searxng_url=searxng_url, max_results=max_results,
@@ -136,6 +167,20 @@ def build_fetch_url_tool(*, owner_agent: str) -> ToolSpec:
             raise ToolArgError(
                 f"max_chars must be between 1 and 32000 (got {max_chars})"
             )
+        if owner_agent in _tinyfish_owners() and tinyfish.api_key():
+            try:
+                _local_url_guard(url)
+            except SSRFError as e:
+                return {"error": "ssrf_blocked", "message": str(e)}
+            except FetchError as e:
+                return {"error": "fetch_failed", "message": str(e)}
+            try:
+                tf_page = tinyfish.fetch(url.strip(), max_chars=max_chars)
+                if tf_page.get("content"):
+                    tf_page["engine"] = "tinyfish"
+                    return tf_page
+            except tinyfish.TinyFishError:
+                pass  # fall through to local fetch (keeps local SSRF guard path)
         try:
             page = fetch_and_extract(
                 url, max_chars=max_chars, user_agent=agent_ua,
