@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { BRAND, CMD, IS_KERNEL } = require('./paths');
+const { piVersionLabel } = require('./pinned-pi');
 
 const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
@@ -181,7 +182,7 @@ function splashLines(profile, thinking, { online, version, color } = {}) {
   );
   lines.push(
     box.center(
-      `${harnessTag()} · v${ver} · Pi 0.74.2`,
+      `${harnessTag()} · v${ver} · Pi ${piVersionLabel()}`,
       (t) => paint(c, GRAY, t)
     )
   );

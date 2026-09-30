@@ -92,10 +92,40 @@ function providerPath(piBin) {
   );
 }
 
+/**
+ * Pi >=0.8x ships a bundled CLI (dist/bundle/cli.js) with pi-ai inlined into
+ * minified chunks. Locate the openai-completions chunk next to the bundle.
+ */
+function bundledProviderPath(piBin) {
+  const bundleDir = path.dirname(piBin);
+  const chunks = path.join(bundleDir, 'chunks');
+  if (path.basename(bundleDir) !== 'bundle' || !fs.existsSync(chunks)) return null;
+  const hits = fs
+    .readdirSync(chunks)
+    .filter((f) => /^openai-completions-[A-Za-z0-9_-]+\.js$/.test(f));
+  return hits.length === 1 ? path.join(chunks, hits[0]) : null;
+}
+
+const BUNDLE_NEEDLE = '}return params}function convertTools(tools,compat){';
+
 function ensurePiImageCap(piBin) {
   if (!piBin) return { ok: false, reason: 'no pi' };
   const file = providerPath(piBin);
-  if (!fs.existsSync(file)) return { ok: false, reason: `missing ${file}` };
+  if (!fs.existsSync(file)) {
+    const bundled = bundledProviderPath(piBin);
+    if (!bundled) return { ok: false, reason: `missing ${file}` };
+    const bsrc = fs.readFileSync(bundled, 'utf8');
+    if (bsrc.includes(MARKER)) return { ok: true, already: true, file: bundled };
+    if (bsrc.split(BUNDLE_NEEDLE).length !== 2) {
+      return { ok: false, reason: 'bundled convertMessages shape changed', file: bundled };
+    }
+    const bnext = bsrc.replace(
+      BUNDLE_NEEDLE,
+      `}return capOpenAiImages(params)}\n${INJECT}\nfunction convertTools(tools,compat){`,
+    );
+    fs.writeFileSync(bundled, bnext);
+    return { ok: true, patched: true, file: bundled };
+  }
   const src = fs.readFileSync(file, 'utf8');
   if (src.includes(MARKER)) return { ok: true, already: true, file };
   const needle = '    return params;\n}\nfunction convertTools(';
@@ -108,4 +138,4 @@ function ensurePiImageCap(piBin) {
   return { ok: true, patched: true, file };
 }
 
-module.exports = { capOpenAiImages, ensurePiImageCap, providerPath, MARKER };
+module.exports = { capOpenAiImages, ensurePiImageCap, providerPath, bundledProviderPath, MARKER };

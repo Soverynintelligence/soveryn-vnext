@@ -11,6 +11,31 @@ const {
 } = require('./paths');
 const { canonicalizeId, resolveCanonicalKey } = require('./policy/canonical');
 const { ensureLabTheme, bannerLine } = require('./chrome');
+const { piVersionLabel, isPinnedRuntime } = require('./pinned-pi');
+
+const PINNED_RUNTIME_FILE = 'pinned-runtime.json';
+
+/**
+ * SOVERYN-only overlay for the pinned Pi runtime (config/soveryn-cli/pinned-runtime.json).
+ * Pi >=0.80 clamps max_tokens to contextWindow - estimatedContext - 4096, so it must see
+ * the server's real context limit, not the house working budget in profiles.json
+ * (shared with Kernel / Pi 0.74.2, which never clamps). Returns null for Kernel/legacy.
+ */
+function loadPinnedRuntimeOverlay(cfgDir = CFG_DIR, pinned = isPinnedRuntime()) {
+  if (!pinned) return null;
+  try {
+    return JSON.parse(fs.readFileSync(path.join(cfgDir, PINNED_RUNTIME_FILE), 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+function overlayContextWindow(overlay, profile) {
+  const map = overlay && overlay.serverContextWindow;
+  if (!map || typeof map !== 'object') return null;
+  const v = Number(map[profile.id]);
+  return Number.isInteger(v) && v > 0 ? v : null;
+}
 
 /** Legacy kernel_brain / flag aliases → profile ids */
 const PROFILE_ALIASES = Object.freeze({
@@ -137,13 +162,13 @@ function assertEnabled(profile) {
   }
 }
 
-function providerEntry(profile) {
+function providerEntry(profile, overlay = null) {
   const model = {
     id: profile.modelId,
     name: profile.modelName,
     reasoning: !!profile.reasoning,
     input: profile.input || ['text'],
-    contextWindow: profile.contextWindow,
+    contextWindow: overlayContextWindow(overlay, profile) || profile.contextWindow,
     maxTokens: profile.maxTokens,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   };
@@ -162,11 +187,11 @@ function providerEntry(profile) {
   };
 }
 
-function buildPiConfig(data, activeProfile) {
+function buildPiConfig(data, activeProfile, { overlay = loadPinnedRuntimeOverlay() } = {}) {
   const providers = {};
   for (const id of listProfileIds(data)) {
     const p = data.profiles[id];
-    providers[p.piProviderId] = providerEntry(p);
+    providers[p.piProviderId] = providerEntry(p, overlay);
   }
 
   const models = { providers };
@@ -193,7 +218,9 @@ function buildPiConfig(data, activeProfile) {
       provider: { timeoutMs: 3600000, maxRetries: 0 },
     },
     httpIdleTimeoutMs: 600000,
-    lastChangelogVersion: '0.74.2',
+    // Pinned soveryn-cli runtime (0.87.1) vs legacy/Kernel (0.74.2): suppress the
+    // what's-new screen on every launch without lying to the other harness.
+    lastChangelogVersion: piVersionLabel(),
   };
   return { models, settings };
 }
@@ -318,6 +345,10 @@ module.exports = {
   assertEnabled,
   generatePiConfig,
   buildPiConfig,
+  providerEntry,
+  loadPinnedRuntimeOverlay,
+  overlayContextWindow,
+  PINNED_RUNTIME_FILE,
   piModelSpec,
   banner,
   compactionWarnings,

@@ -33,6 +33,7 @@ move it to Done at the bottom (do not delete — the history is cheap).
 - 2026-09-21 — Backup camera arrives (Amazon 111-9440800-7041010) — CWG van install
 - 2026-09-30 — OpenAI ChatGPT Plus Sep billing expected — book when billed (SOVERYN ledger)
 - 2027-03-11 — BAP insurance policy 0630199 expires — renewal due before this date
+- 2027-12-01 — Review Open & Secure AI Alliance (OSAIA) renewal — free LF membership + alliance membership ends 2028-01-01; decide renew vs drop before billing hits
 
 ## Done
 

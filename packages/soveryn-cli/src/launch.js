@@ -10,13 +10,18 @@ const {
   banner,
   assertEnabled,
   compactionWarnings,
+  loadPinnedRuntimeOverlay,
 } = require('./profiles');
 const { getPrintTimeoutMs } = require('./policy/limits');
 const { printSplash, bannerLine } = require('./chrome');
 const { resolvePack, packPiArgs, hasToolsFlag } = require('./presets');
 const { ensurePiImageCap } = require('./cap-pi-images');
+const { pinnedPi, piCommand, stripPinEnv } = require('./pinned-pi');
 
 function findPi() {
+  // soveryn-cli pinned runtime (bin/soveryn-pi087). Kernel never takes this path.
+  const pin = pinnedPi();
+  if (pin) return pin.bin;
   if (process.env.PI_BIN && fs.existsSync(process.env.PI_BIN)) {
     return process.env.PI_BIN;
   }
@@ -28,7 +33,8 @@ function findPi() {
 
 function piVersion(piBin) {
   try {
-    const r = spawnSync(piBin, ['--version'], {
+    const pc = piCommand(piBin, ['--version']);
+    const r = spawnSync(pc.cmd, pc.args, {
       encoding: 'utf8',
       timeout: 5000,
     });
@@ -42,6 +48,11 @@ function piVersion(piBin) {
 function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, packOverride, codeMode, showme }) {
   assertEnabled(profile);
   generatePiConfig(data, profile);
+  if (pinnedPi() && !loadPinnedRuntimeOverlay()) {
+    console.error(
+      `${CMD}: WARN — ${CFG_DIR}/pinned-runtime.json missing/invalid; Pi will clamp max_tokens to profile contextWindow (${profile.contextWindow}) — long contexts truncate`
+    );
+  }
 
   const piBin = findPi();
   if (!piBin) {
@@ -129,7 +140,7 @@ function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, pa
   }
 
   const env = {
-    ...process.env,
+    ...stripPinEnv(process.env),
     PI_CODING_AGENT_DIR: CFG_DIR,
     PI_TELEMETRY: '0',
     PI_SKIP_VERSION_CHECK: '1',
@@ -137,6 +148,12 @@ function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, pa
     KERNEL_LATTICE: process.env.KERNEL_LATTICE || '1',
     KERNEL_MEMORY: process.env.KERNEL_MEMORY || '1',
   };
+  // Pinned Pi >=0.8x auto-detects truecolor and drops to 256-colour
+  // approximations when COLORTERM is absent (0.74.2 always sent truecolor).
+  // Force truecolor so the locked C64 maroon/gold theme renders identically.
+  if (pinnedPi() && process.env.PI_TRUE_COLOR === undefined) {
+    env.PI_TRUE_COLOR = '1';
+  }
 
   const piArgs = [];
   if (offline) {
@@ -186,7 +203,11 @@ function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, pa
     console.error(`${CMD}: WARN — image cap not applied (${cap.reason})`);
   }
   const { spawn } = require('child_process');
-  const child = spawn(piBin, piArgs, {
+  const pc = piCommand(piBin, piArgs);
+  if (pc.cmd !== piBin) {
+    console.error(`${CMD}: pinned Pi runtime node=${pc.cmd}`);
+  }
+  const child = spawn(pc.cmd, pc.args, {
     env,
     cwd,
     stdio,

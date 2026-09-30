@@ -18,12 +18,15 @@ Roster authority: docs/CURRENT_TRUTH.md §0 (House spine) — live roster lives 
 
 ## v0 identity map
 
+Live state: CURRENT_TRUTH §2 (Citizen email row)
+
 | Who | Default From | Also allowed |
 |-----|--------------|--------------|
 | Aetheria | `aetheria@soverynintelligence.com` | `aetheria@carolinawatergardens.com` |
 | Eve / Kernel | `{name}@soverynintelligence.com` | `pondwright@carolinawatergardens.com` (desk alias, Aetheria may send-as) |
 
 ### Superseded — folded identities (folded)
+<!-- EMAIL_IDENTITIES_SUPERSEDED: do-not-allowlist -->
 Vett and Scotty are folded (see README §What is SOVERYN roster tiers); PondWright is a desk alias, not a citizen. Retained for design history only — do not add to `ACTIVE_AGENTS`, the email allowlist, or `SOVERYN_EMAIL_IDENTITIES` as live identities:
 
 | Who | Default From | Also allowed |
@@ -31,6 +34,7 @@ Vett and Scotty are folded (see README §What is SOVERYN roster tiers); PondWrig
 | Vett (folded ⇒ Eve) | `vett@soverynintelligence.com` (folded) | `vett@carolinawatergardens.com` (folded) |
 | Scotty (folded ⇒ Kernel) | `scotty@soverynintelligence.com` (folded) | — |
 | PondWright (desk) | `pondwright@carolinawatergardens.com` (folded; desk alias) | Aetheria may send-as (folded) |
+<!-- EMAIL_IDENTITIES_SUPERSEDED: do-not-allowlist -->
 
 Override: `SOVERYN_EMAIL_IDENTITIES` JSON (see `soveryn/platform/email/identities.py`).
 

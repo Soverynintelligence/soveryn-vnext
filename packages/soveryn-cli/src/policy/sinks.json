@@ -10,9 +10,10 @@
       "callers_audited": true,
       "callers": [
         "src/cli.js cmdCode → launchPi",
-        "src/launch.js launchPi (entry)"
+        "src/launch.js launchPi (entry)",
+        "bin/soveryn-pi087 → src/cli.js (pinned Pi 0.87.1 via src/pinned-pi.js piCommand; soveryn-cli only, Kernel ignores)"
       ],
-      "audited_at": "2026-09-10"
+      "audited_at": "2026-09-28"
     },
     {
       "id": "profile_write",

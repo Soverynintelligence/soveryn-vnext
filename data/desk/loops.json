@@ -1,0 +1,29 @@
+{
+  "loops": [
+    {
+      "id": "glm-54-flash",
+      "title": "Start Lab EXL3 sequence when GLM-5.4-Flash weights land (expected late Oct–Nov 2026)",
+      "created": "2026-09-29",
+      "status": "open"
+    },
+    {
+      "id": "osaia-longtail",
+      "title": "Seed long-tail driver support policy ask inside OSAIA working groups",
+      "created": "2026-09-29",
+      "status": "open"
+    },
+    {
+      "id": "quadro-bake",
+      "title": "Freeze-and-bake Quadro driver/kernel/CUDA stack when NVIDIA announces Turing EOL",
+      "created": "2026-09-29",
+      "status": "open"
+    },
+    {
+      "id": "test-loop",
+      "title": "smoke test loop",
+      "created": "2026-09-29",
+      "status": "done",
+      "doneDate": "2026-09-29"
+    }
+  ]
+}

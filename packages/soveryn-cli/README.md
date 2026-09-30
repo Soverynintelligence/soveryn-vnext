@@ -57,12 +57,26 @@ Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn-074"   # rollback runtime
 # ensure ~/bin is on PATH
 soveryn doctor
 ```
 
-Requires Node 20+ and `pi` 0.74.2 on PATH (nvm).
+Runtime (2026-09-28): `soveryn` runs pinned **Pi 0.87.1** on **Node 22.23.2**
+(`bin/soveryn-pi087`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/0.87.1`; nvm default stays Node 20, PATH untouched).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/0.87.1 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.87.1`.
+`soveryn-074` = legacy Pi 0.74.2 from PATH on Node 20. Kernel (`kernel` / `soveryn-pi`)
+is unaffected: `SOVERYN_HARNESS=kernel` ignores the pin (`src/pinned-pi.js`).
+Pinned-runtime extras: `PI_TRUE_COLOR=1` (keeps the locked theme in truecolor),
+`lastChangelogVersion` follows the runtime; `defaultProjectTrust: "always"` in
+`config/soveryn-cli/settings.json` (agent-dir scoped) means no trust prompt in TUI or `-p`.
+Context window: Pi >=0.80 clamps each request's `max_tokens` to `contextWindow - estimatedContext - 4096`
+(floor 1). profiles.json `contextWindow` is the house working budget shared with Kernel (0.74.2 never
+clamps), so the pinned runtime reads the server's real limit from `config/soveryn-cli/pinned-runtime.json`
+(`serverContextWindow`: glm 1000000, flash 262144, aetheria 65536). Without it, GLM replies truncate
+(`stopReason: length`, 1-300 output tokens) once context passes ~28k. Update it when a serve's limit changes.
 
 
 ## Option 2 chrome (dark lab)

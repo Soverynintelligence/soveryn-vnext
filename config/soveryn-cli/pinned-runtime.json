@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "note": "SOVERYN CLI pinned Pi (>=0.80, currently 0.87.1) only. Pi clamps every request's max_tokens to contextWindow - estimatedContext - 4096 (floor 1). profiles.json contextWindow is the house working budget (shared with Kernel on Pi 0.74.2, which never clamps), so the pinned runtime advertises the SERVER's real limit instead. Kernel and soveryn-074 ignore this file. Update when a serve's --max-model-len / --ctx-size changes.",
+  "serverContextWindow": {
+    "glm": 1000000,
+    "flash": 262144,
+    "aetheria": 65536
+  },
+  "evidence": {
+    "glm": "GET http://10.10.10.2:8001/v1/models -> max_model_len 1000000 (2026-09-28); 0.74.2 sessions ran GLM at up to 523847 input tokens",
+    "flash": "vLLM 400s in session logs: maximum context length is 262144 tokens",
+    "aetheria": "llama-server --alias aetheria --ctx-size 65536 --parallel 1 (router :8090)"
+  }
+}

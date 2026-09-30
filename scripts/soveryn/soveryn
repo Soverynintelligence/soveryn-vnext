@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
 # Thin wrapper → packages/soveryn-cli (parallel to soveryn-pi; does not touch it)
-exec /home/jon-deoliveira/soveryn_vnext/packages/soveryn-cli/bin/soveryn "$@"
+# 2026-09-28: Pi 0.87.1 / Node 22 launcher (legacy 0.74.2: packages/soveryn-cli/bin/soveryn)
+exec /home/jon-deoliveira/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087 "$@"

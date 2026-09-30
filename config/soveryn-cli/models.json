@@ -54,7 +54,7 @@
             "text",
             "image"
           ],
-          "contextWindow": 32768,
+          "contextWindow": 1000000,
           "maxTokens": 16384,
           "cost": {
             "input": 0,
@@ -89,7 +89,7 @@
           "input": [
             "text"
           ],
-          "contextWindow": 32768,
+          "contextWindow": 65536,
           "maxTokens": 16384,
           "cost": {
             "input": 0,
