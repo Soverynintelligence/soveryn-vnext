@@ -327,10 +327,50 @@ def execute_claimed(
     citizen_id = claimed["citizen_id"]
     body = claimed["body"]
     is_cos_relay = (body or "").lstrip().startswith("[COS_RELAY]")
+    from soveryn.rooms.lounge import is_auto_nudge, nudge_replies
+
+    is_lounge_nudge = is_auto_nudge(body)
 
     workspace = _workspace_for(db_path, citizen_id)
     try:
-        content = process_fn(citizen_id, body, commission_id)
+        if is_lounge_nudge:
+            with nudge_replies():
+                content = process_fn(citizen_id, body, commission_id)
+        else:
+            content = process_fn(citizen_id, body, commission_id)
+        # A report that says the edit never landed is not a finished commission.
+        # Closing it as done is what made the same task come back with the
+        # wrong line numbers copied out of the report.
+        unfinished = None if (is_cos_relay or is_lounge_nudge) else commissions.incomplete_reason(content)
+        if unfinished:
+            out_path = write_outbox(
+                workspace, commission_id, body=body, content=content, citizen_id=citizen_id
+            )
+            with connect(db_path) as conn:
+                commissions.fail(conn, commission_id, error=unfinished, at=when)
+                try:
+                    from soveryn.citizens import post as house_post
+
+                    house_post.report_to_cos(
+                        conn,
+                        from_id=citizen_id,
+                        body=(
+                            f"Commission `{commission_id}` **failed**.\n\n"
+                            f"**Task:** {body.strip()[:500]}\n\n"
+                            f"**Result:** {unfinished}. No file was written. "
+                            f"Do not assign this same task again.\n\n"
+                            f"_outbox: {out_path}_"
+                        ),
+                        at=when,
+                        commission_id=commission_id,
+                        subject=f"failed · {citizen_id}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "house post report failed for commission %s", commission_id
+                    )
+                row = commissions.get(conn, commission_id)
+            return row
         out_path = write_outbox(
             workspace, commission_id, body=body, content=content, citizen_id=citizen_id
         )
@@ -374,7 +414,7 @@ def execute_claimed(
                 ok=True,
                 commission_id=commission_id,
             )
-        else:
+        elif not is_lounge_nudge:
             _close_collab_ticket(
                 conv_store=conv_store,
                 data_root=data_root,
@@ -391,6 +431,7 @@ def execute_claimed(
                 ok=True,
             )
             # Peer finished → queue Chief of Staff to summarize for Jon.
+            # A lounge nudge is a tap on the shoulder, not work to brief.
             if citizen_id != "aetheria":
                 _enqueue_cos_summary(
                     db_path,
@@ -444,7 +485,7 @@ def execute_claimed(
                 ok=False,
                 commission_id=commission_id,
             )
-        else:
+        elif not is_lounge_nudge:
             _close_collab_ticket(
                 conv_store=conv_store,
                 data_root=data_root,
@@ -792,11 +833,25 @@ def make_agent_process_fn(
                 f"{body.strip()}"
             )
         else:
+            codeish = any(
+                tok in (body or "").lower()
+                for tok in (".py", "pytest", "edit ", "land it", "write ")
+            )
+            landing = ""
+            if codeish:
+                landing = (
+                    "\n\nIf the change is not written this turn, start your reply "
+                    "with NOT COMPLETE and say that no file was written. Do not "
+                    "call the task done. Line numbers in the assignment are not "
+                    "authoritative. Open the function by name. Do not copy line "
+                    "numbers into a follow-up plan.\n"
+                )
             prompt = (
                 f"[COMMISSION {commission_id}]\n"
                 "You are executing a house commission — discrete work Jon (or a "
                 "duty) placed on your desk. Complete the task. Write a clear, "
                 "self-contained result a human can read without the chat UI."
+                f"{landing}"
                 f"{research_bar}"
                 f"{room_ctx}\n\n"
                 f"{body.strip()}"

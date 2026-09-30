@@ -174,17 +174,33 @@ def test_nudge_reaches_other_citizens_not_jon_not_actor(lounge_room, monkeypatch
 class _FakeConn:
     def __init__(self, sink):
         self.sink = sink
+        self._rows = []
+        self._one = None
 
     def execute(self, sql, params=()):
-        if "INSERT INTO house_post" in sql:
+        text = " ".join(sql.split())
+        self._rows = []
+        self._one = None
+        if "INSERT INTO house_post" in text:
             self.sink.append({"to": params[2], "body": params[5]})
+        elif "FROM citizens" in text and "WHERE" not in text.upper():
+            # list_citizens() — Guard #2's registry check. An empty fetchall
+            # would skip every nudge and hide a real send.
+            self._rows = [
+                {"id": "aetheria"},
+                {"id": "eve"},
+                {"id": "forge"},
+            ]
+        elif "retired_at" in text and "FROM citizens" in text:
+            # status_of() refuses a missing row. These three are registered.
+            self._one = {"retired_at": None}
         return self
 
     def fetchone(self):
-        return None
+        return self._one
 
     def fetchall(self):
-        return []
+        return list(self._rows)
 
     def commit(self):
         pass

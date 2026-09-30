@@ -30,6 +30,7 @@ forever while everyone assumes it is in hand.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import uuid
 from typing import Any
@@ -38,6 +39,77 @@ QUEUED = "queued"
 RUNNING = "running"
 DONE = "done"
 FAILED = "failed"
+
+#: Stored on the commission when the citizen's own reply says the work did not land.
+INCOMPLETE_ERROR = "turn ended without a write"
+
+_WORD = re.compile(r"[a-z0-9_]+")
+_STOP = frozenset({
+    "the", "a", "an", "and", "or", "of", "to", "in", "for", "on", "with", "that",
+    "this", "is", "are", "be", "it", "as", "at", "by", "from", "into", "your",
+    "you", "turn", "this", "not", "was", "were",
+})
+# These bodies repeat on purpose. The no-write guard is for build assignments.
+_NO_REPEAT_PREFIXES = (
+    "lounge nudge:",
+    "[cos_relay]",
+    "[messages_turn]",
+    "[research_objective",
+)
+
+
+def incomplete_reason(content: str) -> str | None:
+    """The reply admits the task did not land. None when it might be real work.
+
+    A passing mention is not enough. The first line has to be the marker, or
+    the opening has to pair "not complete" with a no-write admission.
+    """
+    text = (content or "").strip()
+    if not text:
+        return None
+    first = text.splitlines()[0].strip().casefold().strip("*#: ").strip()
+    head = text[:800].casefold()
+    if first.startswith("not complete"):
+        return INCOMPLETE_ERROR
+    if "not complete" in head and any(
+        phrase in head
+        for phrase in ("no write", "zero bytes", "budget died", "nothing landed", "no file")
+    ):
+        return INCOMPLETE_ERROR
+    return None
+
+
+def _significant(text: str) -> set[str]:
+    return {
+        w for w in _WORD.findall((text or "").casefold())
+        if w not in _STOP and len(w) > 2
+    }
+
+
+def unfinished_repeat_block(conn: sqlite3.Connection, citizen_id: str, body: str) -> str | None:
+    """Block a third assignment of work that already came back twice with no write."""
+    folded = (body or "").lstrip().casefold()
+    if any(folded.startswith(prefix) for prefix in _NO_REPEAT_PREFIXES):
+        return None
+    words = _significant(body)
+    if len(words) < 6:
+        return None
+    hits = 0
+    for row in for_citizen(conn, citizen_id, limit=15, state=FAILED):
+        if INCOMPLETE_ERROR not in (row.get("error") or "").casefold():
+            continue
+        prior = _significant(row.get("body") or "")
+        if not prior:
+            continue
+        score = len(words & prior) / min(len(words), len(prior))
+        if score >= 0.5:
+            hits += 1
+    if hits >= 2:
+        return (
+            f"{citizen_id} already returned this task twice without a write. "
+            "It was not queued again."
+        )
+    return None
 
 
 def enqueue(conn: sqlite3.Connection, citizen_id: str, body: str, *, at: str) -> str:
@@ -49,6 +121,9 @@ def enqueue(conn: sqlite3.Connection, citizen_id: str, body: str, *, at: str) ->
     """
     if not body.strip():
         raise ValueError("a commission needs a body — what is being asked")
+    blocked = unfinished_repeat_block(conn, citizen_id, body)
+    if blocked:
+        raise ValueError(blocked)
     commission_id = str(uuid.uuid4())
     # The foreign key refuses work addressed to a citizen who does not exist,
     # which is the difference between a queue and a place typos go to wait.

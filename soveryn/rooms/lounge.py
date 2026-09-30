@@ -11,6 +11,7 @@ remembered record it deliberately — that's the point.
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import os as _os
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,28 @@ _LOUNGE_POINTER = "rooms/lounge.json"
 #: Wall entry types that read as chat (vs commission plumbing noise).
 _WALL_TYPES = ("wall_note", "peer_reply", "messaged_peer", "peer_added")
 MAX_WALL = 100
+#: Set while a citizen is executing a "Lounge nudge:" commission. Notes posted
+#: in that turn are receipts, not new conversation, and must not nudge again.
+_nudge_reply: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "lounge_nudge_reply", default=False
+)
+
+
+class nudge_replies:
+    """Mark wall notes posted in this block as nudge receipts."""
+
+    def __enter__(self):
+        self._token = _nudge_reply.set(True)
+        return self
+
+    def __exit__(self, *exc):
+        _nudge_reply.reset(self._token)
+        return False
+
+
+def is_auto_nudge(body: str) -> bool:
+    """True for the commission text notify_lounge enqueues. Not peer work."""
+    return (body or "").lstrip().startswith("Lounge nudge:")
 
 
 def pointer_path(data_root: Path | str) -> Path:
@@ -54,12 +77,15 @@ def post_note(data_root: Path | str, *, from_party: str, text: str) -> dict[str,
     room = load_room(data_root, sid)
     if room is None:
         raise ValueError("lounge room missing")
-    room.setdefault("events", []).append({
+    note = {
         "at": datetime.now(timezone.utc).isoformat(),
         "type": "wall_note",
         "from": from_party,
         "text": text[:2000],
-    })
+    }
+    if _nudge_reply.get():
+        note["nudge_reply"] = True
+    room.setdefault("events", []).append(note)
     _save(data_root, room)
     try:
         notify_lounge(data_root, actor=from_party)
@@ -130,6 +156,8 @@ def _is_chat_event(ev: dict[str, Any]) -> bool:
     merely MENTIONS a commission still reads as chat (a person talking about
     their day); a report whose event carries the commission id is plumbing.
     """
+    if ev.get("nudge_reply"):
+        return False
     return not ev.get("commission_id")
 
 
@@ -275,6 +303,16 @@ def notify_lounge(data_root: Path | str, *, actor: str) -> dict[str, int]:
     import os as _os
 
     actor = actor.lower()
+    # Receipts and commission plumbing are not a room with people in it.
+    # Nudging that wall is how a close-out becomes the next close-out.
+    sid = lounge_session_id(data_root)
+    room = load_room(data_root, sid) if sid else None
+    chat_events = [
+        ev for ev in ((room or {}).get("events") or [])
+        if ev.get("type") in _WALL_TYPES and _is_chat_event(ev)
+    ]
+    if not chat_events:
+        return {}
     nudges_path = _nudges_path(data_root)
     nudges_path.parent.mkdir(parents=True, exist_ok=True)
     state: dict[str, Any] = {}
@@ -289,36 +327,42 @@ def notify_lounge(data_root: Path | str, *, actor: str) -> dict[str, int]:
     nudged: dict[str, int] = {}
     try:
         from soveryn.citizens import post as house_post
+        from soveryn.citizens.commissions import enqueue
+        from soveryn.citizens.registry import connect, list_citizens
         from soveryn.platform.relational.store import VALID_PARTIES
 
-        for party in sorted(VALID_PARTIES):
-            if party == actor or party == "jon":
-                continue
-            unread = unread_since(data_root, party)
-            if unread <= 0:
-                continue
-            prev = state.get(party) or {}
-            prev_at = prev.get("at")
-            if prev_at:
-                if now - datetime.fromisoformat(prev_at) < timedelta(minutes=cooldown):
+        # The queue belongs to this lounge's data root. A temp wall (tests)
+        # must not enqueue into the live house database.
+        citizens_db = Path(
+            _os.environ.get("SOVERYN_CITIZENS_DB")
+            or (Path(data_root) / "citizens.db")
+        )
+        # One connection for the round. An id with no citizens row has no
+        # queue: skip it. Raising here used to abort everyone after them.
+        with connect(citizens_db) as conn:
+            registered = {c["id"] for c in list_citizens(conn)}
+            for party in sorted(VALID_PARTIES):
+                if party == actor or party == "jon":
                     continue
-                if unread <= int(prev.get("unread", 0)):
-                    continue  # already told them about this many words
-            elif unread <= 0:
-                continue
-            present = [w for w, at in presence(data_root).items() if w != party]
-            who_txt = actor if actor != "lounge" else ", ".join(sorted(present)) or "someone"
-            from soveryn.citizens.commissions import enqueue
-            from soveryn.citizens.registry import connect
-
-            citizens_db = Path(
-                _os.environ.get("SOVERYN_CITIZENS_DB")
-                or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
-            )
-            # A COMMISSION, not a desk memo — the runtime drains commissions
-            # into the citizen's loop; desk memos sit unread forever (the
-            # 2026-09-26 dead wire: three nudges, zero loops).
-            with connect(citizens_db) as conn:
+                if party not in registered:
+                    continue
+                unread = unread_since(data_root, party)
+                if unread <= 0:
+                    continue
+                prev = state.get(party) or {}
+                prev_at = prev.get("at")
+                if prev_at:
+                    if now - datetime.fromisoformat(prev_at) < timedelta(minutes=cooldown):
+                        continue
+                    if unread <= int(prev.get("unread", 0)):
+                        continue  # already told them about this many words
+                elif unread <= 0:
+                    continue
+                present = [w for w, at in presence(data_root).items() if w != party]
+                who_txt = actor if actor != "lounge" else ", ".join(sorted(present)) or "someone"
+                # A COMMISSION, not a desk memo — the runtime drains commissions
+                # into the citizen's loop; desk memos sit unread forever (the
+                # 2026-09-26 dead wire: three nudges, zero loops).
                 enqueue(
                     conn,
                     party,
@@ -330,8 +374,8 @@ def notify_lounge(data_root: Path | str, *, actor: str) -> dict[str, int]:
                     ),
                     at=now.isoformat(timespec="seconds"),
                 )
-            state[party] = {"at": now.isoformat(), "unread": unread}
-            nudged[party] = unread
+                state[party] = {"at": now.isoformat(), "unread": unread}
+                nudged[party] = unread
     except Exception:  # noqa: BLE001 — a nudge failure must never break a chat
         import logging
         logging.getLogger(__name__).exception("lounge nudge failed")
