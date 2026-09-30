@@ -7,9 +7,9 @@
   "defaultProjectTrust": "always",
   "enableInstallTelemetry": false,
   "compaction": {
-    "enabled": false,
-    "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "enabled": true,
+    "reserveTokens": 18432,
+    "keepRecentTokens": 65536
   },
   "retry": {
     "enabled": true,

@@ -8,9 +8,9 @@ Pi auto-loads this via `AGENTS.md` → `SOVERYN.md` (symlink). `SYSTEM.md` stays
 
 ## Defaults
 - **Brain:** active profile is whatever `~/.soveryn/kernel_brain` says — `kernel status` is truth (2026-09-28: GLM-5.3-Flash EXL3 TP=2 @ `http://10.10.10.2:8001/v1`, live Kernel brain). Flash-Next `:8888` parked. Aetheria @ `:8090`. Do not trust prose in docs over `kernel status`.
-- **Thinking:** **off** unless Jon asks (`kernel --high` / thinking on). Flash-Next is on/off, not GLM low/high/max.
+- **Thinking:** default is Pi **medium**. On this GLM that sends `reasoning_effort` **high**. `kernel --high` sends **max**, and max can spend the whole 16k output cap on reasoning before an answer. `kernel --build` sends the lowest effort this model allows (`low`). GLM has no true off. Flash-Next is on/off, not GLM low/high/max.
 - **Online by default.** No `--offline` / `PI_OFFLINE` unless Jon opts in. Stay on house endpoints; nothing leaves the machine unless `models.json` baseUrl changes.
-- **Compaction:** on (256k ctx). Output cap **16k including thinking**. Do not draft full files in the thinking channel. After a compaction summary: re-read only the files you still need — do not compact-chase or re-walk the whole tree.
+- **Compaction:** on. Working budget **262144** (reserve **18432**, keep-recent **65536**). Stay inside that budget. The server window is larger. Output cap **16k including thinking**. Do not draft full files in the thinking channel. After a compaction summary: re-read only the files you still need. Do not compact-chase or re-walk the whole tree.
 - **Know the time (session start):** run `python -m soveryn.platform.house_clock` (or at least `date`) before planning anything date-sensitive — deadlines, "tonight", "Monday". Calendar: `docs/ops/HOUSE-CALENDAR.md`; add new commitments there when decisions create them.
 - Stay in the directory Jon launched you in. Surgical diffs. Precise greps.
 
@@ -96,7 +96,7 @@ Recall is only as good as what gets written. Kernel writes a lattice fact at eve
 - After **3** failed attempts on one goal: stop. Report what failed, what you tried, and the blocker.
 - Prefer one concrete edit over empty planning loops. Never claim "fixed/updated/done" without a matching tool success.
 - **Code-mode spirit:** if the multi-step plan is already clear, batch into one coherent edit/script pass instead of five micro round-trips (`--code-mode` strengthens this for the session).
-- File jobs: first `write` a short skeleton, then `edit` in pieces. `kernel --build` / thinking off for long canvases.
+- File jobs: first `write` a short skeleton, then `edit` in pieces. `kernel --build` sends the lowest GLM effort (`low`) for long canvases. Do not draft the file in the thinking channel.
 
 ## Politeness (Tetris / current work)
 - Do not casually rewrite, move, or "clean up" Jon's active side projects (e.g. Tetris / `sandbox/paper-tetris`, chess, live demos) unless that tree is the cwd or he named it.

@@ -57,7 +57,7 @@
         "text",
         "image"
       ],
-      "contextWindow": 32768,
+      "contextWindow": 262144,
       "maxTokens": 16384,
       "defaultThinkingLevel": "medium",
       "thinkingLevelMap": {
@@ -73,9 +73,9 @@
         "supportsReasoningEffort": true
       },
       "compaction": {
-        "enabled": false,
-        "reserveTokens": 16384,
-        "keepRecentTokens": 20000
+        "enabled": true,
+        "reserveTokens": 18432,
+        "keepRecentTokens": 65536
       },
       "startCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./start.sh'",
       "stopCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./stop.sh'",

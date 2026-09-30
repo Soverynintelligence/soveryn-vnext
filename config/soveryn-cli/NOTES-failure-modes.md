@@ -28,7 +28,7 @@ OpenCode reference (read-only): house `config/opencode/opencode.json` exposes a 
 | `reserveTokens` | `18432` | ≈ `maxTokens` (16k) + 2k; fires late (~93% of 262144 → trigger above ~243712) |
 | `keepRecentTokens` | `65536` | Keep ~64k recent so multi-tool turns rarely split; reduces compact-chase |
 
-GLM / Aetheria profiles keep **`compaction.enabled: false`** (32k windows — compact would be aggressive and lossy).
+GLM uses the same compaction shape as Flash-Next on a 262144 working budget (`enabled`, reserveTokens 18432, keepRecentTokens 65536). Aetheria stays **`compaction.enabled: false`** on its 32k window, where compact would be aggressive and lossy.
 
 Previous Flash values (`reserveTokens=20480`, `keepRecentTokens=20000`) fired slightly earlier and kept too little after compact for tool-heavy turns.
 
