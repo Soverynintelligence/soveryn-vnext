@@ -234,21 +234,37 @@ def build_save_lead_tool(*, owner_agent: str) -> ToolSpec:
         name="pondwright_save_lead",
         owner=owner_agent,
         description=(
-            "CWG CRM: create a person, or add a note / move status on an existing "
-            "lead_id. Status: new, contacted, quoted, won, lost, service. "
-            "service_plan 2x/year|yearly|monthly|as-needed makes them a service "
-            "customer (not a sales lead). Won opens a job. Do not leave people only in chat."
+            "CWG CRM: create ONE person, or add a note / move status on an existing "
+            "lead_id. A new person needs name + phone or email; job_type (inferred "
+            "from interest/note if you leave it out) and source (default "
+            "'Phone/text unknown' when Jon didn't say how they found CWG). If the "
+            "result says 'Not saved' or 'CRM rejected', tell Jon plainly and ask him "
+            "for what's missing; never retry with blank fields. 'Already in CRM' means "
+            "your note went onto the existing lead. Status: new, contacted, quoted, "
+            "won, lost, service. service_plan 2x/year|yearly|monthly|as-needed makes "
+            "them a service customer (not a sales lead). Won opens a job. Do not leave "
+            "people only in chat."
         ),
         schema={
             "type": "object",
             "properties": {
-                "lead_id": {"type": "string"},
-                "name": {"type": "string"},
-                "phone": {"type": "string"},
+                "lead_id": {"type": "string", "description": "Existing lead to note/update."},
+                "name": {"type": "string", "description": "Required for a new person."},
+                "phone": {"type": "string", "description": "Phone or email required for a new person."},
                 "email": {"type": "string"},
                 "address": {"type": "string"},
-                "interest": {"type": "string"},
-                "source": {"type": "string"},
+                "interest": {"type": "string", "description": "What they want, in Jon's words."},
+                "job_type": {
+                    "type": "string",
+                    "enum": list(pw_crm.LEAD_JOB_TYPES),
+                    "description": "CRM job type. Omit to infer from interest/note; if unclear, ask Jon.",
+                },
+                "source": {
+                    "type": "string",
+                    "enum": list(pw_crm.LEAD_SOURCES),
+                    "default": pw_crm.DEFAULT_SOURCE,
+                    "description": "How they found CWG. Use 'Phone/text unknown' unless Jon says.",
+                },
                 "note": {"type": "string"},
                 "service_plan": {
                     "type": "string",
@@ -309,6 +325,11 @@ def build_save_quote_tool(*, owner_agent: str) -> ToolSpec:
                 },
                 "pdf_ref": {"type": "string"},
                 "source": {"type": "string"},
+                "job_type": {
+                    "type": "string",
+                    "enum": list(pw_crm.LEAD_JOB_TYPES),
+                    "description": "Only used when creating the lead (no lead_id).",
+                },
             },
             "additionalProperties": False,
         },

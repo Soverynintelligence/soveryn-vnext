@@ -16,10 +16,10 @@ const { getPrintTimeoutMs } = require('./policy/limits');
 const { printSplash, bannerLine } = require('./chrome');
 const { resolvePack, packPiArgs, hasToolsFlag } = require('./presets');
 const { ensurePiImageCap } = require('./cap-pi-images');
-const { pinnedPi, piCommand, stripPinEnv } = require('./pinned-pi');
+const { pinnedPi, piCommand, stripPinEnv, pinVersionMismatch } = require('./pinned-pi');
 
 function findPi() {
-  // soveryn-cli pinned runtime (bin/soveryn-pi087). Kernel never takes this path.
+  // soveryn-cli pinned runtime (bin/soveryn-pi099; soveryn-pi087 = rollback). Kernel never takes this path.
   const pin = pinnedPi();
   if (pin) return pin.bin;
   if (process.env.PI_BIN && fs.existsSync(process.env.PI_BIN)) {
@@ -48,6 +48,10 @@ function piVersion(piBin) {
 function launchPi({ data, profile, thinking, passthroughArgs, presetOverride, packOverride, codeMode, showme }) {
   assertEnabled(profile);
   generatePiConfig(data, profile);
+  const pinMismatch = pinVersionMismatch(pinnedPi());
+  if (pinMismatch) {
+    console.error(`${CMD}: WARN — pinned Pi version mismatch: ${pinMismatch}`);
+  }
   if (pinnedPi() && !loadPinnedRuntimeOverlay()) {
     console.error(
       `${CMD}: WARN — ${CFG_DIR}/pinned-runtime.json missing/invalid; Pi will clamp max_tokens to profile contextWindow (${profile.contextWindow}) — long contexts truncate`

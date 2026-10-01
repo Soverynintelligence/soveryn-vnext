@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "SOVERYN CLI pinned Pi (>=0.80, currently 0.87.1) only. Pi clamps every request's max_tokens to contextWindow - estimatedContext - 4096 (floor 1). profiles.json contextWindow is the house working budget (shared with Kernel on Pi 0.74.2, which never clamps), so the pinned runtime advertises the SERVER's real limit instead. Kernel and soveryn-074 ignore this file. Update when a serve's --max-model-len / --ctx-size changes.",
+  "note": "SOVERYN CLI pinned Pi (>=0.80, currently 0.99.1; 0.99.1 still clamps) only. Pi clamps every request's max_tokens to contextWindow - estimatedContext - 4096 (floor 1). profiles.json contextWindow is the house working budget (shared with Kernel on Pi 0.74.2, which never clamps), so the pinned runtime advertises the SERVER's real limit instead. Kernel and soveryn-074 ignore this file. Update when a serve's --max-model-len / --ctx-size changes.",
   "serverContextWindow": {
     "glm": 1000000,
     "flash": 262144,

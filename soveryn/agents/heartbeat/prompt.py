@@ -40,6 +40,11 @@ class BoardSnapshot:
     # gives her a specific commitment to engage with or sit with.
     oldest_open_blueprint_title: str | None
     oldest_open_blueprint_age_hours: int | None
+    # Oldest Refining blueprint that has crossed the stall threshold.
+    # A count of "1 stalled" without a name is how a named wound gets
+    # filled in from the previous standing note.
+    stalled_blueprint_title: str | None = None
+    stalled_blueprint_age_hours: int | None = None
 
 
 @dataclass(frozen=True)
@@ -143,6 +148,10 @@ def build_heartbeat_prompt(
     )
     if board.oldest_open_blueprint_title is not None and board.oldest_open_blueprint_age_hours is not None:
         lines.append(f'  oldest open: "{board.oldest_open_blueprint_title}" ({board.oldest_open_blueprint_age_hours}h)')
+    if board.stalled_blueprint_title and board.stalled_blueprint_age_hours is not None:
+        lines.append(
+            f'  stalled: "{board.stalled_blueprint_title}" ({board.stalled_blueprint_age_hours}h)'
+        )
     lines.append(f"- Friction: {board.open_friction_count} open")
     lines.append(
         f"- Lattice: {lattice.new_node_count_recent_window} new nodes in the last "
@@ -178,6 +187,17 @@ def build_heartbeat_prompt(
         "(research/posts) with the concrete fix. If a collab is already working, "
         "read_collab — do not re-dispatch. If nothing is broken, Quiet — nothing new."
     )
+    lines.append(
+        "task_status with no id returns open tasks and recent finished ones. "
+        "A unique id prefix resolves. failed is a result: read its summary. "
+        "An empty kernel_child list means no child is running now. "
+        "read_collab only sees eve and forge room collabs. An empty collab is not a missing Kernel task."
+    )
+    lines.append(
+        "Before you say a code change is un-landed, open that file this pulse. "
+        "Before you repeat a standing item, including anything left on Jon, "
+        "confirm it with a tool this pulse. A claim you did not check stays out of the standing note."
+    )
     lines.append("")
     lines.append(
         "When you're done, leave a short note on the board / heartbeat panel — what you "
@@ -189,7 +209,8 @@ def build_heartbeat_prompt(
     lines.append("")
     lines.append(
         "Optional: end with a line `Standing note: …` (two or three sentences max). That "
-        "standing note is what becomes lattice memory; the rest of the note still stays "
-        "in your heartbeat session and thoughts log in full."
+        "standing note is what becomes lattice memory, so it may contain only claims a tool "
+        "confirmed this pulse. The rest of the note still stays in your heartbeat session "
+        "and thoughts log in full."
     )
     return "\n".join(lines)

@@ -203,6 +203,33 @@ def build_dispatch_task_tool(
 # ---------------------------------------------------------------------------
 
 _OPEN_STATUSES: frozenset[str] = frozenset({"dispatched", "executing", "in_review"})
+_TERMINAL_STATUSES: frozenset[str] = frozenset({"landed", "rejected", "failed"})
+_RECENT_LIMIT = 8
+# Shorter than this stays an exact-id miss. Eight characters is the prefix
+# she writes into standing notes; a shorter stem matches too many uuid4s.
+_PREFIX_MIN = 8
+
+
+def _lookup_task(store: DelegationStore, task_id: str):
+    """Exact id, else one unique prefix. Ambiguous and unknown stay errors."""
+    task = store.get_task(task_id)
+    if task is not None:
+        return task, None
+    if len(task_id) < _PREFIX_MIN:
+        return None, {"error": "not_found", "task_id": task_id}
+    matches = [t for t in store.list_tasks() if t.id.startswith(task_id)]
+    if len(matches) == 1:
+        return matches[0], None
+    if len(matches) > 1:
+        return None, {
+            "error": "ambiguous",
+            "task_id": task_id,
+            "matches": [
+                {"id": t.id, "status": t.status, "summary": t.summary or ""}
+                for t in matches[:_RECENT_LIMIT]
+            ],
+        }
+    return None, {"error": "not_found", "task_id": task_id}
 
 
 def build_task_status_tool(
@@ -212,19 +239,19 @@ def build_task_status_tool(
 ) -> ToolSpec:
     """Tool that lets Aetheria check the real status of a dispatched task.
 
-    Call with a task_id to get one task's full status info, or with no args
-    to list all open (non-terminal) tasks.  This is the grounding tool that
-    prevents Aetheria from reporting a task as done before it has landed.
+    Call with a task_id (or a unique prefix) for one task. Call with no args
+    for open tasks plus the latest finished ones. An empty open list is not
+    a vanished task: failed work stays in ``recent`` with its summary.
     """
 
     def handler(args: Mapping[str, Any]) -> Any:
-        task_id = args.get("task_id")
+        raw_id = args.get("task_id")
+        task_id = str(raw_id).strip() if raw_id is not None else ""
 
-        if task_id is not None:
-            # Single-task lookup
-            task = store.get_task(task_id)
-            if task is None:
-                return {"error": "not_found", "task_id": task_id}
+        if task_id:
+            task, err = _lookup_task(store, task_id)
+            if err is not None:
+                return err
             return {
                 "id": task.id,
                 "status": task.status,
@@ -233,13 +260,26 @@ def build_task_status_tool(
                 "review_feedback": task.review_feedback,
             }
 
-        # No task_id → list open (non-terminal) tasks, newest-first
+        # No task_id → open tasks, plus recent terminal rows so a finished
+        # failure is still visible. Newest updated_at first (store order).
         all_tasks = store.list_tasks()
-        return [
-            {"id": t.id, "status": t.status, "objective": t.objective}
-            for t in all_tasks
-            if t.status in _OPEN_STATUSES
-        ]
+        return {
+            "open": [
+                {"id": t.id, "status": t.status, "objective": t.objective}
+                for t in all_tasks
+                if t.status in _OPEN_STATUSES
+            ],
+            "recent": [
+                {
+                    "id": t.id,
+                    "status": t.status,
+                    "objective": t.objective,
+                    "summary": t.summary or "",
+                }
+                for t in all_tasks
+                if t.status in _TERMINAL_STATUSES
+            ][:_RECENT_LIMIT],
+        }
 
     return ToolSpec(
         name="task_status",
@@ -250,8 +290,9 @@ def build_task_status_tool(
                 "task_id": {
                     "type": "string",
                     "description": (
-                        "The task id returned by dispatch_task. "
-                        "Omit to list all your open tasks instead."
+                        "The task id returned by dispatch_task, or a unique "
+                        "prefix of at least 8 characters. Omit to list open "
+                        "tasks and recent finished ones."
                     ),
                 },
             },
@@ -259,10 +300,13 @@ def build_task_status_tool(
         },
         handler=handler,
         description=(
-            "Check the real status of a task you dispatched "
-            "(dispatched → executing → in_review → landed/rejected/failed). "
-            "Call with a task_id for one task, or with no args to list your open tasks. "
-            "Use this to report truthfully — a task is only done when its status is 'landed'."
+            "Check a task you dispatched. Pass task_id for one task; a unique "
+            "prefix of at least 8 characters resolves to the full id. Omit "
+            "task_id for {open, recent}: open is dispatched, executing, or "
+            "in_review; recent is the latest landed, rejected, and failed "
+            "tasks with their summary. An empty open list means nothing is "
+            "in flight. Failed work is in recent, not missing. A task is "
+            "done only when its status is 'landed'."
         ),
     )
 

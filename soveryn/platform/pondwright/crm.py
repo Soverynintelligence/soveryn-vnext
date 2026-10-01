@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,6 +19,103 @@ from typing import Any
 _DEFAULT_URL = "http://127.0.0.1:8100"
 _OPS_ENV = Path.home() / "pondwright-cwg-ops" / ".env"
 _TIMEOUT = 12
+
+# Pick-lists mirrored from pondwright-cwg-ops app/main.py (LEAD_JOB_TYPES and
+# LEAD_SOURCES, 2026-10-01). The CRM is the source of truth: it rejects a new
+# lead without name + phone/email + job_type + source (HTTP 422) and merges a
+# repeat phone/email into the existing lead. Keep these in step with the CRM.
+LEAD_JOB_TYPES: tuple[str, ...] = (
+    "Swim pond", "New pond build", "Waterfall/stream", "Remodel/rebuild", "Repair",
+    "Cleanout", "Green water", "Maintenance plan", "Other",
+)
+LEAD_SOURCES: tuple[str, ...] = (
+    "Website/Google search", "Google profile", "Facebook", "Instagram", "Nextdoor",
+    "Yelp", "Referral", "Repeat customer", "Other", "Phone/text unknown",
+)
+DEFAULT_SOURCE = "Phone/text unknown"  # Jon told Eve, but not how they found CWG
+_SOURCE_LEGACY = {
+    "website": "Website/Google search",
+    "repeat": "Repeat customer",
+    "eve": DEFAULT_SOURCE,
+}
+# First match wins (same order as the CRM's own inference).
+_JOB_TYPE_KEYWORDS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"swim"), "Swim pond"),
+    (re.compile(r"clean ?-?out"), "Cleanout"),
+    (re.compile(r"green|algae|duckweed|murky"), "Green water"),
+    (re.compile(r"maintenance|care plan|service plan|2x ?/ ?year|twice a year|pond check"), "Maintenance plan"),
+    (re.compile(r"remodel|rebuild|renovat|\bre-?do\b"), "Remodel/rebuild"),
+    (re.compile(r"repair|leak|pump|broken|not working|\bfix"), "Repair"),
+    (re.compile(r"waterfall|stream|pondless"), "Waterfall/stream"),
+    (re.compile(r"new pond|pond build|build (a |me a )?pond|ecosystem pond|koi pond|install"), "New pond build"),
+)
+_QUOTE_MODE_JOB_TYPES = {"new": "New pond build", "repair": "Repair", "maint": "Maintenance plan"}
+_NO_BLANK_RETRY = (
+    "Do not retry with blank or made-up fields. Tell Jon plainly what the CRM said "
+    "and ask him for what is missing, then save again."
+)
+
+
+def pick_job_type(value: Any) -> str:
+    """Exact pick-list label (case-insensitive), else ''."""
+    v = str(value or "").strip().lower()
+    for label in LEAD_JOB_TYPES:
+        if v == label.lower():
+            return label
+    return ""
+
+
+def infer_job_type(*texts: Any) -> str:
+    """Keyword guess from what the person asked for; '' when unclear."""
+    blob = " ".join(str(t or "") for t in texts).lower()
+    for rx, label in _JOB_TYPE_KEYWORDS:
+        if rx.search(blob):
+            return label
+    return ""
+
+
+def pick_source(value: Any) -> str:
+    """Pick-list source. Blank -> 'Phone/text unknown'. Unknown text goes to the
+    CRM as-is (it maps aliases like 'nextdoor post' itself)."""
+    raw = str(value or "").strip()
+    if not raw:
+        return DEFAULT_SOURCE
+    low = raw.lower()
+    for label in LEAD_SOURCES:
+        if low == label.lower():
+            return label
+    return _SOURCE_LEGACY.get(low, raw)
+
+
+def _digit_count(raw: Any) -> int:
+    return sum(1 for c in str(raw or "") if c.isdigit())
+
+
+def _has_contact(phone: str, email: str) -> bool:
+    # Same bar as the CRM: >= 7 phone digits or an address with "@".
+    return _digit_count(phone) >= 7 or "@" in (email or "")
+
+
+def _http_detail(out: dict[str, Any]) -> str:
+    detail = out.get("detail")
+    if isinstance(detail, list):  # FastAPI validation error list
+        detail = "; ".join(
+            str(d.get("msg") if isinstance(d, dict) else d) for d in detail if d
+        )
+    return str(detail or out.get("error") or f"http_{out.get('http')}").strip()
+
+
+def _rejected(out: dict[str, Any]) -> dict[str, Any]:
+    detail = _http_detail(out)
+    return {
+        "ok": False,
+        "saved": False,
+        "rejected": True,
+        "http": out.get("http"),
+        "error": detail,
+        "message": f"CRM rejected: {detail}",
+        "instruction": _NO_BLANK_RETRY,
+    }
 
 
 def crm_base() -> str:
@@ -179,6 +277,12 @@ def save_lead(payload: dict[str, Any]) -> dict[str, Any]:
         for k in ("name", "phone", "email", "address", "city", "interest", "wants"):
             if payload.get(k):
                 patch[k] = payload[k]
+        if payload.get("job_type"):
+            jt = pick_job_type(payload["job_type"]) or infer_job_type(payload["job_type"])
+            if jt:
+                patch["job_type"] = jt
+        if payload.get("source"):
+            patch["source"] = pick_source(payload["source"])
         if note:
             current = get_lead(lid)
             if _failed(current):
@@ -191,27 +295,80 @@ def save_lead(payload: dict[str, Any]) -> dict[str, Any]:
             lead = get_lead(lid)
             return {"ok": not _failed(lead), "lead_id": lid, "lead": lead}
         out = _request("PATCH", f"/api/leads/{urllib.parse.quote(lid)}", body=patch)
+        if out.get("http") == 422:
+            return _rejected(out)
         if _failed(out):
             return out
         lead = out.get("lead") or get_lead(lid)
         return {"ok": True, "lead_id": lid, "lead": lead}
+    return _create_lead(payload, note=note, status=status)
 
-    body = {
+
+def _create_lead(payload: dict[str, Any], *, note: str, status: str) -> dict[str, Any]:
+    """New person -> POST /api/leads. Checks the CRM's rules first so Eve asks
+    Jon instead of sending blanks; reports 422s and merges in plain words."""
+    name = str(payload.get("name") or "").strip()
+    phone = str(payload.get("phone") or "").strip()
+    email = str(payload.get("email") or "").strip()
+    if not name:
+        return {
+            "ok": False, "saved": False, "needs": "name", "error": "missing_name",
+            "message": "Not saved: no name. Ask Jon who this is (one person per save).",
+        }
+    if not _has_contact(phone, email):
+        return {
+            "ok": False, "saved": False, "needs": "phone_or_email",
+            "error": f"Need phone or email for {name}",
+            "message": (
+                f"Not saved: no phone or email for {name}. Ask Jon for {name}'s "
+                "phone number or email, then save again. Do not save with blanks."
+            ),
+        }
+    job_type = pick_job_type(payload.get("job_type")) or infer_job_type(
+        payload.get("job_type"), payload.get("interest"), payload.get("wants"),
+        payload.get("message"), note,
+    )
+    if not job_type:
+        return {
+            "ok": False, "saved": False, "needs": "job_type",
+            "error": f"Need job type for {name}",
+            "message": (
+                f"Not saved: I can't tell what job {name} wants. Ask Jon what the job is "
+                f"({', '.join(LEAD_JOB_TYPES)}), then save again with job_type."
+            ),
+        }
+    source = pick_source(payload.get("source"))
+    body: dict[str, Any] = {
         k: payload.get(k)
-        for k in (
-            "name", "phone", "email", "interest", "source", "budget",
-            "address", "city", "wants", "message",
-        )
+        for k in ("interest", "budget", "address", "city", "wants", "message")
         if payload.get(k)
     }
+    body.update({"name": name, "job_type": job_type, "source": source})
+    if phone:
+        body["phone"] = phone
+    if email:
+        body["email"] = email
     if note:
         body["message"] = note
-    body.setdefault("source", "eve")
     created = _request("POST", "/api/leads", body=body)
+    if created.get("http") == 422:
+        return _rejected(created)
     if _failed(created):
         return created
-    lead = created.get("lead") or created
-    new_id = str((lead or {}).get("id") or created.get("id") or "")
+    lead = created.get("lead") if isinstance(created.get("lead"), dict) else {}
+    new_id = str(created.get("id") or lead.get("id") or "")
+    if created.get("merged"):
+        shown = str(lead.get("name") or name)
+        out: dict[str, Any] = {
+            "ok": True, "merged": True, "created": False, "lead_id": new_id, "lead": lead,
+            "message": f"Already in CRM as {shown} (id {new_id}); added your note to the existing lead.",
+        }
+        if status:
+            out["status_note"] = (
+                f"Status not changed (existing lead is {lead.get('status') or 'unknown'}). "
+                "Ask Jon, then set it with lead_id."
+            )
+        return out
     if status and new_id:
         patched = _request(
             "PATCH",
@@ -220,19 +377,28 @@ def save_lead(payload: dict[str, Any]) -> dict[str, Any]:
         )
         if not _failed(patched):
             lead = patched.get("lead") or lead
-    return {"ok": True, "lead_id": new_id, "created": True, "lead": lead}
+    return {
+        "ok": True, "created": True, "merged": False, "lead_id": new_id,
+        "job_type": job_type, "source": source, "lead": lead,
+        "message": f"Saved {name} to the CRM as a new lead ({job_type}; source {source}).",
+    }
 
 
 def save_quote(payload: dict[str, Any]) -> dict[str, Any]:
     lid = str(payload.get("lead_id") or "").strip()
     if not lid:
-        created = save_lead(
-            {
-                k: payload[k]
-                for k in ("name", "phone", "email", "address", "interest", "source")
-                if payload.get(k)
-            }
-        )
+        create_args = {
+            k: payload[k]
+            for k in ("name", "phone", "email", "address", "interest", "source", "job_type")
+            if payload.get(k)
+        }
+        if not create_args.get("job_type"):
+            mode_type = _QUOTE_MODE_JOB_TYPES.get(str(payload.get("mode") or "").strip().lower())
+            if mode_type:
+                create_args["job_type"] = mode_type
+        if not create_args.get("interest") and payload.get("summary"):
+            create_args["interest"] = payload["summary"]
+        created = save_lead(create_args)
         if _failed(created):
             return created
         lid = str(created.get("lead_id") or "")

@@ -11,7 +11,7 @@ const {
 } = require('./paths');
 const { canonicalizeId, resolveCanonicalKey } = require('./policy/canonical');
 const { ensureLabTheme, bannerLine } = require('./chrome');
-const { piVersionLabel, isPinnedRuntime } = require('./pinned-pi');
+const { piVersionLabel, isPinnedRuntime, pinnedSettingsExtensions } = require('./pinned-pi');
 
 const PINNED_RUNTIME_FILE = 'pinned-runtime.json';
 
@@ -218,10 +218,15 @@ function buildPiConfig(data, activeProfile, { overlay = loadPinnedRuntimeOverlay
       provider: { timeoutMs: 3600000, maxRetries: 0 },
     },
     httpIdleTimeoutMs: 600000,
-    // Pinned soveryn-cli runtime (0.87.1) vs legacy/Kernel (0.74.2): suppress the
+    // Pinned soveryn-cli runtime (0.99.1) vs legacy/Kernel (0.74.2): suppress the
     // what's-new screen on every launch without lying to the other harness.
     lastChangelogVersion: piVersionLabel(),
   };
+  // Pi >=0.99 pinned runtime only: turn off builtin:mcp (defaultProjectTrust
+  // "always" would otherwise auto-connect any project .pi/mcp.json). Omitted for
+  // Kernel / soveryn-074 / older pins so their settings stay byte-identical.
+  const extensions = pinnedSettingsExtensions();
+  if (extensions) settings.extensions = extensions;
   return { models, settings };
 }
 

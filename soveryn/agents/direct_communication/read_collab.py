@@ -122,7 +122,7 @@ def build_read_collab_tool(
         "properties": {
             "peer": {
                 "type": "string",
-                "description": "kernel or eve",
+                "description": "eve or forge. Kernel is not a room peer; a Kernel task is task_status, not this tool.",
             },
             "commission_id": {
                 "type": "string",
@@ -138,8 +138,10 @@ def build_read_collab_tool(
         schema=schema,
         handler=handler,
         description=(
-            "Inspect a Kernel/Eve collab: state, ticket, last room turns. "
+            "Inspect an eve or forge room collab: state, ticket, last room turns. "
+            "Kernel delegation is not a collab; use task_status for that. "
             "If state is working, read this instead of re-dispatching. "
+            "no collab means this peer has no room thread. It does not mean a Kernel task vanished. "
             "If done or failed, brief Jon from the transcript."
         ),
     )

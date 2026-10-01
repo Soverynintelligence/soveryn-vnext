@@ -5,7 +5,7 @@ from soveryn.config import runtime
 
 
 def test_active_agents_includes_crew_forge_and_eve():
-    """Crew + Kernel (build) + Eve (marketing). Kernel/Eve share :8091;
+    """Crew + Kernel (build) + Eve (marketing). Kernel is the Spark brain;
     Kernel writes stay Aider/HITL; Eve drafts via compose_post → Signal."""
     assert set(runtime.ACTIVE_AGENTS) == {
         "aetheria", "forge", "eve",
@@ -94,7 +94,7 @@ def test_glm_kernel_window_is_32k():
         assert kernel.model_alias == "qwen3.8-flash-next"
     eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
     assert eve.n_ctx == 65536
-    assert eve.port == 8091
+    assert eve.port == 8090  # 2026-09-29 seat swap: Eve → Blackwell :8090
     assert eve.model_alias == "bench-flash"
 
 
@@ -112,42 +112,39 @@ def test_parakeet_stt_service_endpoint_present():
     assert parakeet[0].port == 8087
 
 
-def test_aetheria_alone_on_8090_everyone_else_on_8091():
-    """2026-07-14 — router SPLIT. llama.cpp/ggml initializes a CUDA context on
-    every VISIBLE device — `--device` only restricts where layers are
-    OFFLOADED, not what the process can see — so co-tenant models pinned via
-    `--device CUDA2` were still leaking ~1.7GB onto Aetheria's Blackwell.
-    CUDA_VISIBLE_DEVICES is the only real isolation, and router children
-    inherit env from their router, so one router cannot serve both her and
-    everyone else. Hence two routers:
-        :8090  router-blackwell  -> aetheria ALONE (she does not share)
-        :8091  router-quadro     -> vett-scotty, cognition, reflection
-        :8096  embeddings        -> Librarian Nemotron-3-Embed-8B (own server)
-    This test protects that split. If a future change "helpfully" merges the
-    ports back to a single router, this must fail — that would silently
-    reintroduce the Blackwell VRAM leak onto Aetheria's dedicated GPU.
-    """
+def test_aetheria_on_8091_eve_on_8090_after_seat_swap():
+    """2026-09-29 SEAT SWAP (Jon): Eve (busiest citizen) → Blackwell :8090,
+    Aetheria → Quadro router :8091 (shares with cognition). Before the swap
+    the fleet was split across TWO router ports — :8090 and :8091 — because
+    one shared router silently reintroduced a VRAM leak. The split itself is
+    still the invariant: no merging the router ports back to one."""
     aetheria = [s for s in runtime.MODEL_SERVERS if s.name == "aetheria_primary"]
     others = [s for s in runtime.MODEL_SERVERS if s.name != "aetheria_primary"]
     assert len(aetheria) == 1
-    assert aetheria[0].port == 8090
+    assert aetheria[0].port == 8091  # Quadro CUDA1, post-swap home
     assert others, "expected at least one non-aetheria MODEL_SERVERS entry"
+    # 2026-09-29: Eve took Aetheria's old Blackwell seat. She is the only
+    # tenant on :8090 — nobody may share her card.
+    eve = next(s for s in others if s.name == "eve_flash")
+    assert eve.port == 8090
     # 2026-08-02: Vett + Scotty moved OFF the local routers entirely, to the
     # Spark, freeing 30 GB on a Quadro that was alerting at <1 GB free and
     # 82 C. That strengthens this invariant rather than weakening it — one
-    # fewer tenant able to leak onto her card.
+    # fewer tenant able to leak onto a card.
     # 2026-08-12: the Spark port moved :8000 -> :8001 when laguna-serve was
     # stopped and disabled and qwen-serve took over.
     # cognition on :8091; embeddings on its own :8096 Nemotron server.
     live_others = [s for s in others if not s.skip_preflight]
     ports = {s.port for s in live_others}
-    assert {8091, 8096}.issubset(ports)
+    assert {8090, 8091, 8096}.issubset(ports)
     assert 8001 in ports or 8888 in ports
     # Local quadro slots (and Flash-Next tunnel) stay on loopback; Spark :8001 is remote.
-    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8091, 8096, 8888))
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8090, 8091, 8096, 8888))
     assert all(s.host != "127.0.0.1" for s in live_others if s.port == 8001)
-    # And no non-aetheria entry may share Aetheria's port.
-    assert all(s.port != 8090 for s in others)
+    # No non-eve entry may share Eve's Blackwell port.
+    assert all(s.port != 8090 for s in others if s.name != "eve_flash")
+
+
 
 
 def test_model_servers_have_distinct_logical_names():
@@ -221,7 +218,7 @@ def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
     assert kernel.mmproj_path is None
     assert "eve" in VISION_CAPABLE_AGENTS
     assert "forge" in VISION_CAPABLE_AGENTS
-    assert eve.port == 8091
+    assert eve.port == 8090  # 2026-09-29 seat swap: Eve → Blackwell :8090
     assert eve.model_alias == "bench-flash"
 
 
@@ -239,7 +236,7 @@ def test_quadro_qwen38_preset_names_qwen38_mmproj_not_shepherd():
     assert mmproj == "/mnt/soveryn_models/GGUF/mmproj-Qwen3.8-27B-BF16.gguf"
     assert "shepherd" not in mmproj.lower()
     assert "gemma" not in mmproj.lower()
-    assert "eve" in cp["qwen38"]["alias"]
+    assert "aetheria" in cp["qwen38"]["alias"]  # seat swap: Aetheria rides [qwen38]
 
 
 def test_eve_stays_on_flash_when_kernel_on_qwen38(tmp_path, monkeypatch):

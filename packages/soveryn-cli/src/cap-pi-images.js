@@ -94,7 +94,9 @@ function providerPath(piBin) {
 
 /**
  * Pi >=0.8x ships a bundled CLI (dist/bundle/cli.js) with pi-ai inlined into
- * minified chunks. Locate the openai-completions chunk next to the bundle.
+ * minified chunks (0.87.1: openai-completions-OBX42CLD.js; 0.99.1:
+ * openai-completions-XW2Q5HVC.js — needle verified once in both).
+ * Locate the openai-completions chunk next to the bundle.
  */
 function bundledProviderPath(piBin) {
   const bundleDir = path.dirname(piBin);
@@ -138,4 +140,4 @@ function ensurePiImageCap(piBin) {
   return { ok: true, patched: true, file };
 }
 
-module.exports = { capOpenAiImages, ensurePiImageCap, providerPath, bundledProviderPath, MARKER };
+module.exports = { capOpenAiImages, ensurePiImageCap, providerPath, bundledProviderPath, MARKER, BUNDLE_NEEDLE };

@@ -57,16 +57,25 @@ Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
+# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
 ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn-074"   # rollback runtime
 # ensure ~/bin is on PATH
 soveryn doctor
 ```
 
-Runtime (2026-09-28): `soveryn` runs pinned **Pi 0.87.1** on **Node 22.23.2**
-(`bin/soveryn-pi087`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
-`~/.soveryn/pi/0.87.1`; nvm default stays Node 20, PATH untouched).
-Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/0.87.1 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.87.1`.
+Runtime (2026-09-30): `soveryn` runs pinned **Pi 0.99.1** on **Node 22.23.2**
+(`bin/soveryn-pi099`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/0.99.1`; nvm default stays Node 20, PATH untouched).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/0.99.1 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.99.1`.
+Previous pin `bin/soveryn-pi087` (Pi 0.87.1, `~/.soveryn/pi/0.87.1`) stays installed as the first rollback;
+version-gated settings follow `SOVERYN_PI_VERSION`, so rolling the symlink back also rolls the generated settings back.
+Pi 0.99 built-ins (`builtin:mcp`, `builtin:codemode`, `builtin:tool-search`, `builtin:llama.cpp`):
+the pinned runtime writes `"extensions": ["-builtin:mcp"]` (`src/pinned-pi.js` `pinnedSettingsExtensions`)
+because `defaultProjectTrust: "always"` would otherwise auto-connect a project `.pi/mcp.json`.
+`codemode` / `tool_search` stay loaded but their tools are off by default (only MCP turns them on);
+llama.cpp stays enabled (no `--no-extensions`). Note: a project `.pi/settings.json` entry `+builtin:mcp`
+still overrides the user setting (Pi behavior), same trust surface as project extensions.
 `soveryn-074` = legacy Pi 0.74.2 from PATH on Node 20. Kernel (`kernel` / `soveryn-pi`)
 is unaffected: `SOVERYN_HARNESS=kernel` ignores the pin (`src/pinned-pi.js`).
 Pinned-runtime extras: `PI_TRUE_COLOR=1` (keeps the locked theme in truecolor),

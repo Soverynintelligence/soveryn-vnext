@@ -75,9 +75,13 @@ LATTICE_WINDOW_MINUTES = 60
 # moving. Heuristic; tunable.
 STALLED_BLUEPRINT_THRESHOLD_MINUTES = 240  # 4 hours
 
-# How long the daemon waits for vnext to return Aetheria's response. Real
-# generation can take 30-90s depending on prompt+thinking budget.
-CHAT_TIMEOUT_SECONDS = 240
+# How long the daemon waits for vnext to return Aetheria's response.
+# One Aetheria call is allowed 300s, and a pulse is several tool rounds.
+# 240 dropped the client on 2026-09-30 (pulse 09:53, note written at 10:00)
+# while /chat still saved the assistant turn. Thoughts log and lattice kept
+# the previous standing note, so the next pulse was primed with it.
+# 900 covers that pulse plus the extra rounds she now has to open the file.
+CHAT_TIMEOUT_SECONDS = 900
 
 
 class HeartbeatHTTPError(RuntimeError):
@@ -367,6 +371,8 @@ class HeartbeatDaemon:
                     "oldest_open_signal_age_minutes": board.oldest_open_signal_age_minutes,
                     "oldest_open_blueprint_title": board.oldest_open_blueprint_title,
                     "oldest_open_blueprint_age_hours": board.oldest_open_blueprint_age_hours,
+                    "stalled_blueprint_title": board.stalled_blueprint_title,
+                    "stalled_blueprint_age_hours": board.stalled_blueprint_age_hours,
                 },
                 "material_signals": [
                     {"kind": s.kind, "ref": s.ref, "detail": s.detail}
@@ -706,10 +712,12 @@ class HeartbeatDaemon:
         blocked_blueprint = 0
         open_friction = 0
         # Track the oldest Open Blueprint by name + age so the prompt can
-        # surface the specific commitment instead of just a count. Refining
-        # is excluded — stalled_blueprint_count already names that lane.
+        # surface the specific commitment instead of just a count.
+        # Refining past the stall threshold is named separately below.
         oldest_open_blueprint_title: str | None = None
         oldest_open_blueprint_age_minutes: int | None = None
+        oldest_stalled_title: str | None = None
+        oldest_stalled_age_minutes: int | None = None
         # We need blocked status — query blockers per Blueprint. To avoid N+1,
         # build a set of all blueprint_ids currently blocked.
         currently_blocked: set[str] = set()
@@ -759,13 +767,21 @@ class HeartbeatDaemon:
                         pass
                 elif status == "Refining":
                     open_blueprint += 1
-                    # Stall check
+                    # Stall check. Name the oldest stalled blueprint. A bare
+                    # count left her filling the name from the previous note.
                     try:
                         age_minutes = int(
                             (now - datetime.fromisoformat(r["created_at"])).total_seconds() // 60
                         )
                         if age_minutes >= STALLED_BLUEPRINT_THRESHOLD_MINUTES:
                             stalled_blueprint += 1
+                            if (
+                                oldest_stalled_age_minutes is None
+                                or age_minutes > oldest_stalled_age_minutes
+                            ):
+                                oldest_stalled_age_minutes = age_minutes
+                                first_line = (r["content"] or "").split("\n", 1)[0]
+                                oldest_stalled_title = first_line[:120]
                     except (ValueError, TypeError):
                         pass
                 elif status == "Ready":
@@ -779,6 +795,11 @@ class HeartbeatDaemon:
             if oldest_open_blueprint_age_minutes is not None
             else None
         )
+        oldest_stalled_age_hours = (
+            oldest_stalled_age_minutes // 60
+            if oldest_stalled_age_minutes is not None
+            else None
+        )
         return BoardSnapshot(
             open_signal_count=open_signal,
             open_blueprint_count=open_blueprint,
@@ -789,6 +810,8 @@ class HeartbeatDaemon:
             oldest_open_signal_age_minutes=oldest_open_signal_minutes,
             oldest_open_blueprint_title=oldest_open_blueprint_title,
             oldest_open_blueprint_age_hours=oldest_open_blueprint_age_hours,
+            stalled_blueprint_title=oldest_stalled_title,
+            stalled_blueprint_age_hours=oldest_stalled_age_hours,
         )
 
     def _gather_lattice_snapshot(self, now: datetime) -> LatticeSnapshot:

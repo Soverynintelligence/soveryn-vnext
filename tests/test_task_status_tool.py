@@ -156,6 +156,73 @@ def test_not_found_has_no_spurious_status(store):
     assert "status" not in result
 
 
+def _insert_task(store, task_id, *, objective="obj", summary=None, status="failed"):
+    import sqlite3
+    from datetime import datetime
+
+    now = datetime.now().isoformat()
+    con = sqlite3.connect(store.db_path)
+    con.execute(
+        "INSERT INTO delegation_tasks "
+        "(id, dispatched_by, objective, scope, acceptance, status, summary, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            task_id,
+            "aetheria",
+            objective,
+            "soveryn/x.py",
+            "pytest tests/test_x.py -q",
+            status,
+            summary,
+            now,
+            now,
+        ),
+    )
+    con.commit()
+    con.close()
+
+
+def test_unique_prefix_resolves_failed_task(store):
+    """The 8-character id she writes in a note must still find the failed row."""
+    from soveryn.platform.delegation.tools import build_task_status_tool
+
+    full = "80770207-86da-42f3-be3d-88fbfb02d93e"
+    _insert_task(store, full, summary="acceptance tests failed")
+    tool = build_task_status_tool(store=store)
+
+    result = tool.handler({"task_id": "80770207"})
+    assert result["id"] == full
+    assert result["status"] == "failed"
+    assert result["summary"] == "acceptance tests failed"
+
+
+def test_ambiguous_prefix_lists_matches(store):
+    from soveryn.platform.delegation.tools import build_task_status_tool
+
+    _insert_task(store, "abcdef12-0000-4000-8000-000000000001", summary="one")
+    _insert_task(store, "abcdef12-0000-4000-8000-000000000002", status="landed", summary="two")
+    tool = build_task_status_tool(store=store)
+
+    result = tool.handler({"task_id": "abcdef12"})
+    assert result["error"] == "ambiguous"
+    assert "status" not in result
+    assert {m["id"] for m in result["matches"]} == {
+        "abcdef12-0000-4000-8000-000000000001",
+        "abcdef12-0000-4000-8000-000000000002",
+    }
+
+
+def test_prefix_shorter_than_eight_stays_not_found(store):
+    from soveryn.platform.delegation.tools import build_task_status_tool
+
+    _insert_task(store, "80770207-86da-42f3-be3d-88fbfb02d93e", summary="acceptance tests failed")
+    tool = build_task_status_tool(store=store)
+
+    result = tool.handler({"task_id": "8077020"})
+    assert result["error"] == "not_found"
+    assert "status" not in result
+
+
 # ---------------------------------------------------------------------------
 # 4. No task_id → list open (non-terminal) tasks only, newest-first
 # ---------------------------------------------------------------------------
@@ -168,7 +235,7 @@ def test_no_args_lists_open_tasks(store):
     t2 = _dispatch(store, objective="Task two")
 
     result = tool.handler({})
-    ids = [item["id"] for item in result]
+    ids = [item["id"] for item in result["open"]]
     assert t1 in ids
     assert t2 in ids
 
@@ -196,12 +263,16 @@ def test_no_args_excludes_terminal_tasks(store):
     store.set_status(failed_id, "failed")
 
     result = tool.handler({})
-    ids = [item["id"] for item in result]
+    ids = [item["id"] for item in result["open"]]
+    recent_ids = [item["id"] for item in result["recent"]]
 
     assert open_id in ids
     assert landed_id not in ids
     assert rejected_id not in ids
     assert failed_id not in ids
+    assert failed_id in recent_ids
+    assert landed_id in recent_ids
+    assert rejected_id in recent_ids
 
 
 def test_no_args_includes_all_open_statuses(store):
@@ -218,7 +289,7 @@ def test_no_args_includes_all_open_statuses(store):
     store.set_status(in_review_id, "in_review")
 
     result = tool.handler({})
-    ids = [item["id"] for item in result]
+    ids = [item["id"] for item in result["open"]]
 
     assert dispatched_id in ids
     assert executing_id in ids
@@ -233,18 +304,20 @@ def test_no_args_each_item_has_id_status_objective(store):
     _dispatch(store, objective="Check structure")
     result = tool.handler({})
 
-    assert len(result) >= 1
-    for item in result:
+    assert len(result["open"]) >= 1
+    for item in result["open"]:
         assert "id" in item
         assert "status" in item
         assert "objective" in item
 
 
-def test_no_args_returns_list(store):
+def test_no_args_returns_open_and_recent(store):
     from soveryn.platform.delegation.tools import build_task_status_tool
     tool = build_task_status_tool(store=store)
     result = tool.handler({})
-    assert isinstance(result, list)
+    assert isinstance(result, dict)
+    assert isinstance(result["open"], list)
+    assert isinstance(result["recent"], list)
 
 
 def test_no_args_empty_when_no_open_tasks(store):
@@ -256,7 +329,9 @@ def test_no_args_empty_when_no_open_tasks(store):
     store.set_status(t, "failed")
 
     result = tool.handler({})
-    assert result == []
+    assert result["open"] == []
+    assert [item["id"] for item in result["recent"]] == [t]
+    assert result["recent"][0]["status"] == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +376,7 @@ def test_honesty_invariant_landed_task_not_in_open_list(store):
     store.set_status(task_id, "landed")
 
     result = tool.handler({})
-    ids = [item["id"] for item in result]
+    ids = [item["id"] for item in result["open"]]
     assert task_id not in ids, (
         "A landed task appeared in the open-task list — Aetheria would see it as still open"
     )
@@ -352,8 +427,8 @@ def test_registry_invoke_task_status_no_args(store, registry):
     )
 
     result = registry.invoke("aetheria", "task_status", {})
-    assert isinstance(result, list)
-    assert any(item["objective"] == "Open task" for item in result)
+    assert isinstance(result, dict)
+    assert any(item["objective"] == "Open task" for item in result["open"])
 
 
 def test_registry_invoke_task_status_not_found(store, registry):

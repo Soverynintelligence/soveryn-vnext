@@ -1009,6 +1009,13 @@ def create_app(
                 # net for rare cold prefills even after cache-ram is restored;
                 # warm cache turns finish in seconds and never sit on the budget.
                 kwargs["chat_timeout_seconds"] = 300.0
+                # Default AgentLoop cap is 4. The 2026-09-30 lounge pulse
+                # ended finish_reason=tool_round_limit after task_status,
+                # kernel_child, and read_collab, and the note was written
+                # without opening the file. 8 leaves room for that file read
+                # and one correction. The heartbeat client waits 900s for
+                # the whole turn (soveryn/agents/heartbeat/daemon.py).
+                kwargs["max_tool_rounds"] = 8
                 # Hard cap on per-request reasoning at the wire level. The
                 # router preset for Aetheria has `reasoning = off` and the
                 # Gemma-4-specific `enable_thinking=true` (inverse logic for

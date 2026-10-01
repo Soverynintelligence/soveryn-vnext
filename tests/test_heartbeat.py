@@ -185,6 +185,8 @@ def _board(**kwargs) -> BoardSnapshot:
         oldest_open_signal_age_minutes=kwargs.get("oldest_open_signal_age_minutes"),
         oldest_open_blueprint_title=kwargs.get("oldest_open_blueprint_title"),
         oldest_open_blueprint_age_hours=kwargs.get("oldest_open_blueprint_age_hours"),
+        stalled_blueprint_title=kwargs.get("stalled_blueprint_title"),
+        stalled_blueprint_age_hours=kwargs.get("stalled_blueprint_age_hours"),
     )
 
 
@@ -214,6 +216,23 @@ def test_prompt_omits_oldest_blueprint_line_when_title_absent():
         lattice=_lattice(),
     )
     assert "oldest open:" not in prompt
+
+
+def test_prompt_names_a_stalled_blueprint_and_requires_a_fresh_check():
+    """A stalled count without a name is how the previous note became the wound."""
+    prompt = build_heartbeat_prompt(
+        minutes_since_last_heartbeat=30,
+        board=_board(
+            stalled_blueprint_count=1,
+            stalled_blueprint_title="Lounge auto-nudge echo-loop",
+            stalled_blueprint_age_hours=20,
+        ),
+        lattice=_lattice(),
+    )
+    assert 'stalled: "Lounge auto-nudge echo-loop" (20h)' in prompt
+    assert "open that file this pulse" in prompt
+    assert "empty collab is not a missing Kernel task" in prompt
+    assert "confirmed this pulse" in prompt
 
 
 def _lattice(**kwargs) -> LatticeSnapshot:

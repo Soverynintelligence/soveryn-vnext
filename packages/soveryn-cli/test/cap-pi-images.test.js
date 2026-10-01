@@ -39,3 +39,26 @@ test('patches bundled (Pi >=0.8x) openai-completions chunk once', () => {
   assert.equal(second.already, true);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('pinned Pi install (package.json soverynPi.prefix): one openai-completions chunk, needle once or already capped', (t) => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { bundledProviderPath, BUNDLE_NEEDLE, MARKER } = require('../src/cap-pi-images');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const prefix = String(pkg.soverynPi.prefix).replace(/^~(?=\/)/, os.homedir());
+  const bin = path.join(prefix, 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'bundle', 'cli.js');
+  if (!fs.existsSync(bin)) {
+    t.skip(`pinned Pi not installed at ${prefix}`);
+    return;
+  }
+  const chunk = bundledProviderPath(bin);
+  assert.ok(chunk, 'exactly one openai-completions-*.js chunk');
+  const src = fs.readFileSync(chunk, 'utf8');
+  if (src.includes(MARKER)) {
+    assert.equal(src.split(MARKER).length, 2, 'marker injected once');
+    assert.ok(src.includes('}return capOpenAiImages(params)}'));
+  } else {
+    assert.equal(src.split(BUNDLE_NEEDLE).length, 2, 'BUNDLE_NEEDLE matches exactly once');
+  }
+});

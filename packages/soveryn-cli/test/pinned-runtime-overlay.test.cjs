@@ -33,3 +33,39 @@ test('overlay only loads for the pinned runtime', () => {
   assert.equal(loadPinnedRuntimeOverlay(dir, true).serverContextWindow.glm, 1000000);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('generated settings: extensions -builtin:mcp only on the Pi >=0.99 pin', () => {
+  const { buildPiConfig, loadProfiles, readActiveId } = require('../src/profiles');
+  const KEYS = ['SOVERYN_PI_BIN', 'SOVERYN_PI_NODE', 'SOVERYN_PI_VERSION'];
+  const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+  const setPin = (version) => {
+    for (const k of KEYS) delete process.env[k];
+    if (version) {
+      process.env.SOVERYN_PI_BIN = process.execPath;
+      process.env.SOVERYN_PI_NODE = process.execPath;
+      process.env.SOVERYN_PI_VERSION = version;
+    }
+  };
+  try {
+    const data = loadProfiles();
+    const active = data.profiles[readActiveId(data)];
+    setPin('0.99.1');
+    const cur = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.deepEqual(cur.extensions, ['-builtin:mcp']);
+    assert.equal(cur.lastChangelogVersion, '0.99.1');
+    assert.equal(cur.defaultProjectTrust, 'always');
+    setPin('0.87.1');
+    const prev = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.equal('extensions' in prev, false);
+    assert.equal(prev.lastChangelogVersion, '0.87.1');
+    setPin(null);
+    const legacy = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.equal('extensions' in legacy, false);
+    assert.equal(legacy.lastChangelogVersion, '0.74.2');
+  } finally {
+    for (const k of KEYS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+});
