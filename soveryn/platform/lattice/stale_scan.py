@@ -25,8 +25,9 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from soveryn.platform.lattice.fact_rail import CANONICAL_FACT_TAG
 from soveryn.platform.lattice.legacy import LatticeStore, Node
-from soveryn.platform.lattice.teach import ENTITY_TAG_PREFIX, HISTORICAL_SNAPSHOT_TAG
 
+HISTORICAL_SNAPSHOT_TAG = "historical_snapshot"
+ENTITY_TAG_PREFIX = "entity:"
 SUPERSEDES_REL = "supersedes"
 
 TTL_DAYS_DEFAULT = 90
