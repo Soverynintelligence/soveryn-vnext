@@ -79,6 +79,32 @@ def test_append_is_additive(tmp_path):
     assert json.loads(lines[1]) == r2
 
 
+def test_last_standing_note_walks_past_empty_skips(tmp_path):
+    log = ThoughtsLog(tmp_path / "thoughts.jsonl")
+    log.append({
+        "pulse_id": "real",
+        "ts": "2026-08-19T09:00:00",
+        "note": "I failed with Project Sandbox.",
+        "snapshot": {},
+    })
+    log.append({
+        "pulse_id": "skip1",
+        "ts": "2026-08-19T09:30:00",
+        "note": "",
+        "skipped": "unchanged",
+        "snapshot": {},
+    })
+    log.append({
+        "pulse_id": "skip2",
+        "ts": "2026-08-19T10:00:00",
+        "note": "",
+        "skipped": "unchanged",
+        "snapshot": {},
+    })
+    assert log.last_standing_note() == "I failed with Project Sandbox."
+    assert log.last()["pulse_id"] == "skip2"
+
+
 # ---------------------------------------------------------------------------
 # last() tolerates trailing blank line / empty file → None, no crash
 # ---------------------------------------------------------------------------

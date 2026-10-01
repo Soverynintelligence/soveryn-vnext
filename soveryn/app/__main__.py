@@ -21,8 +21,10 @@ later commit if/when we need it.
 from __future__ import annotations
 import os
 import logging
+import logging.handlers
 import argparse
 import sys
+from pathlib import Path
 
 from flask import Flask
 
@@ -59,7 +61,7 @@ def _resolve_launch_config(
 
 
 def _configure_logging() -> None:
-    """Send the app's Python logging to stdout so systemd captures it.
+    """Send the app's Python logging to stdout plus a rotating file.
 
     Added 2026-07-22. Before this the app configured NO root handler, so every
     ``logging.getLogger(__name__)`` call across the codebase emitted into the
@@ -69,17 +71,44 @@ def _configure_logging() -> None:
     weeks to diagnose. For a project whose thesis is that the audit log is
     ground truth, silent logging is a first-class bug.
 
+    2026-09-18: added RotatingFileHandler. The scotty worker polls the drain
+    endpoint every poll interval, and both access lines per poll landed in
+    logs/vnext.log via StandardOutput=append — 731 MB unbounded in 5 weeks.
+    The file handler caps it (SOVERYN_LOG_MAX_BYTES, default 50 MB,
+    SOVERYN_LOG_BACKUPS, default 5). The unit now streams to journald, so
+    stdout and the file no longer double-write the same lines.
+
     Level is env-overridable via SOVERYN_LOG_LEVEL (default INFO). Idempotent:
     force=True so a re-entrant call (tests, reload) doesn't stack handlers.
     """
     level_name = os.environ.get("SOVERYN_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
-    logging.basicConfig(
-        level=level,
-        stream=sys.stdout,
-        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
-        force=True,
+    fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    root = logging.getLogger()
+    root.setLevel(level)
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    stream = logging.StreamHandler(sys.stdout)
+    stream.setFormatter(fmt)
+    root.addHandler(stream)
+
+    log_file = os.environ.get(
+        "SOVERYN_LOG_FILE",
+        str(Path(__file__).resolve().parents[2] / "logs" / "vnext.log"),
     )
+    max_bytes = int(os.environ.get("SOVERYN_LOG_MAX_BYTES", str(50 * 1024 * 1024)))
+    backups = int(os.environ.get("SOVERYN_LOG_BACKUPS", "5"))
+    try:
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file, maxBytes=max_bytes, backupCount=backups, encoding="utf-8"
+        )
+        file_handler.setFormatter(fmt)
+        root.addHandler(file_handler)
+    except OSError:
+        # Read-only fs or bad path: stdout/journald still carries everything.
+        root.warning("rotating log file unavailable at %s — stdout only", log_file)
 
 
 def _build_startup_line(host: str, port: int, env: EnvConfig, agent_names: list[str]) -> str:
@@ -129,7 +158,8 @@ def main(argv: list[str] | None = None, *, app_factory=create_app, runner=None) 
 
 def _default_runner(app: Flask, *, host: str, port: int) -> None:
     """Default runner: Flask's dev server with debug + reloader OFF."""
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    # threaded=True: SSE producer + /history poll + approval decide must coexist
+    app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
 
 
 if __name__ == "__main__":

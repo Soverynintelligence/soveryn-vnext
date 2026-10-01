@@ -80,7 +80,7 @@ def test_invalid_tool_args_raise_before_dispatch_and_emit_audit_event():
 def test_retired_or_unknown_agent_cannot_own_tool():
     registry = ToolRegistry()
 
-    with pytest.raises(ToolRegistryError, match="not an active agent"):
+    with pytest.raises(ToolRegistryError, match="retired"):
         registry.register(ToolSpec(
             name="old_tool",
             owner="tinker",

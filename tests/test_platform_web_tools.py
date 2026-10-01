@@ -17,11 +17,17 @@ from soveryn.platform.web.fetch import (
     FetchError,
     SSRFError,
     _guard_against_ssrf,
+    fetch_and_extract,
 )
 from soveryn.platform.web.search import (
+    DEFAULT_ENGINES,
     SearchError,
     SearchResult,
+    _parse_brave_web,
     _parse_results,
+    _rank_results,
+    search_via_searxng,
+    search_web,
 )
 from soveryn.platform.web.tools import (
     build_fetch_url_tool,
@@ -57,6 +63,28 @@ def test_parse_results_truncates_to_max():
     assert len(out) == 3
 
 
+def test_parse_results_drops_dictionary_hosts():
+    payload = {
+        "results": [
+            {
+                "url": "https://www.merriam-webster.com/dictionary/sovereign",
+                "title": "SOVEREIGN Definition",
+                "content": "noun",
+                "engine": "bing",
+            },
+            {
+                "url": "https://www.opentext.com/what-is/sovereign-ai",
+                "title": "What is sovereign AI?",
+                "content": "enterprise",
+                "engine": "brave",
+            },
+        ],
+    }
+    out = _parse_results(payload, max_results=5)
+    assert len(out) == 1
+    assert "opentext.com" in out[0].url
+
+
 def test_parse_results_skips_malformed_entries():
     payload = {
         "results": [
@@ -81,6 +109,95 @@ def test_parse_results_rejects_non_dict_payload():
 def test_parse_results_rejects_missing_results_key():
     with pytest.raises(SearchError):
         _parse_results({"query": "test"}, max_results=5)
+
+
+def test_default_engines_include_bing_fallback():
+    assert "brave" in DEFAULT_ENGINES
+    assert "bing" in DEFAULT_ENGINES
+
+
+def test_rank_prefers_query_overlap_over_first_token_junk():
+    results = (
+        SearchResult(
+            title="Pinehurst Resort | Golf, Spa & Dining",
+            url="https://www.pinehurst.com/",
+            snippet="Golf, spa and dining in the Sandhills.",
+            engine="bing",
+        ),
+        SearchResult(
+            title="WaterFall, Koi Pond Care, Landscape Design",
+            url="https://example-ponds.com/pinehurst",
+            snippet="Koi pond maintenance and waterfall installers near Pinehurst NC.",
+            engine="brave",
+        ),
+    )
+    out = _rank_results(
+        "Pinehurst NC pond installer koi waterfall",
+        results,
+        max_results=2,
+    )
+    assert out[0].engine == "brave"
+    assert "pond" in out[0].title.lower()
+
+
+def test_rank_drops_zero_overlap_when_better_hits_exist():
+    results = (
+        SearchResult("OpenAI", "https://openai.com/", "research", "bing"),
+        SearchResult(
+            "SearXNG — privacy-respecting metasearch",
+            "https://docs.searxng.org/",
+            "open source metasearch engine",
+            "bing",
+        ),
+    )
+    out = _rank_results("open source metasearch searxng", results, max_results=5)
+    assert len(out) == 1
+    assert "searxng" in out[0].title.lower()
+
+
+def test_rank_does_not_empty_when_all_hits_are_weak():
+    results = (
+        SearchResult("Unrelated", "https://example.com/a", "zzz", "bing"),
+        SearchResult("Also unrelated", "https://example.com/b", "yyy", "bing"),
+    )
+    out = _rank_results("koi waterfall installer", results, max_results=2)
+    assert len(out) == 2
+
+
+def test_search_returns_bing_hits_when_brave_is_suspended():
+    payload = {
+        "results": [
+            {
+                "url": "https://www.runnersworld.com/gear/best-running-shoes",
+                "title": "The 15 Best Running Shoes of 2026",
+                "content": "Runner's World tested the best running shoes of 2026.",
+                "engine": "bing",
+            }
+        ],
+        "unresponsive_engines": [["brave", "Suspended: too many requests"]],
+    }
+
+    class _Resp:
+        status = 200
+
+        def read(self) -> bytes:
+            return json.dumps(payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    with patch("urllib.request.urlopen", return_value=_Resp()):
+        out = search_via_searxng(
+            "best running shoes 2026 reviews",
+            searxng_url="http://127.0.0.1:8095",
+            max_results=5,
+        )
+    assert len(out) == 1
+    assert out[0].engine == "bing"
+    assert "running shoes" in out[0].title.lower()
 
 
 # ─── SSRF guard ─────────────────────────────────────────────────────────────
@@ -124,6 +241,33 @@ def test_ssrf_guard_resolves_hostname_and_blocks_if_private():
             _guard_against_ssrf("internal.corp.local")
 
 
+def test_redirect_to_loopback_is_refused_before_connect():
+    """A 302 onto loopback must not open a second socket."""
+    calls = []
+
+    def open_pinned(url, ip, *, timeout, headers):
+        calls.append((url, ip))
+        return 302, [("Location", "http://127.0.0.1:5001/secret")], b""
+
+    with patch("soveryn.platform.web.fetch._open_pinned", side_effect=open_pinned):
+        with patch("soveryn.platform.web.fetch._public_ip", side_effect=["1.1.1.1", SSRFError("no")]):
+            with pytest.raises(SSRFError):
+                fetch_and_extract("http://evil.example/go")
+    assert calls == [("http://evil.example/go", "1.1.1.1")]
+
+
+def test_fetch_connects_to_the_approved_address():
+    def open_pinned(url, ip, *, timeout, headers):
+        assert ip == "1.1.1.1"
+        html = b"<html><head><title>T</title></head><body><p>Hello from the page.</p></body></html>"
+        return 200, [("Content-Type", "text/html")], html
+
+    with patch("soveryn.platform.web.fetch._open_pinned", side_effect=open_pinned):
+        with patch("soveryn.platform.web.fetch._public_ip", return_value="1.1.1.1"):
+            page = fetch_and_extract("https://example.com/a")
+    assert "Hello" in page.content
+
+
 def test_ssrf_guard_blocks_if_ANY_resolved_ip_is_forbidden():
     """If a hostname resolves to one public AND one private IP, block."""
     with patch("socket.getaddrinfo") as mock_resolve:
@@ -159,7 +303,7 @@ def test_web_search_tool_wraps_search_failure_as_structured_error():
     """SearchError from the client becomes a {error,message,results} result —
     NOT a thrown exception. The model gets to see and respond to it."""
     tool = build_web_search_tool(searxng_url="http://x", owner_agent="aetheria")
-    with patch("soveryn.platform.web.tools.search_via_searxng") as mock_search:
+    with patch("soveryn.platform.web.tools.search_web") as mock_search:
         mock_search.side_effect = SearchError("connection refused")
         result = tool.handler({"query": "anything"})
     assert result["error"] == "search_failed"
@@ -169,15 +313,97 @@ def test_web_search_tool_wraps_search_failure_as_structured_error():
 
 def test_web_search_tool_returns_structured_results():
     tool = build_web_search_tool(searxng_url="http://x", owner_agent="aetheria")
-    with patch("soveryn.platform.web.tools.search_via_searxng") as mock_search:
+    with patch("soveryn.platform.web.tools.search_web") as mock_search:
         mock_search.return_value = (
-            SearchResult(title="t", url="https://u", snippet="s", engine="google"),
+            SearchResult(title="t", url="https://u", snippet="s", engine="brave-api"),
         )
         result = tool.handler({"query": "anything"})
-    assert result["engine"] == "searxng"
+    assert result["engine"] == "brave-api"
     assert result["results"] == [
-        {"title": "t", "url": "https://u", "snippet": "s", "source": "google"}
+        {"title": "t", "url": "https://u", "snippet": "s", "source": "brave-api"}
     ]
+
+
+def test_parse_brave_web_reads_official_api_shape():
+    payload = {
+        "web": {
+            "results": [
+                {
+                    "title": "SearXNG",
+                    "url": "https://docs.searxng.org/",
+                    "description": "open source metasearch",
+                },
+                {
+                    "title": "skip me",
+                    "url": "https://www.merriam-webster.com/dictionary/search",
+                    "description": "dictionary",
+                },
+            ]
+        }
+    }
+    out = _parse_brave_web(payload, max_results=5)
+    assert len(out) == 1
+    assert out[0].engine == "brave-api"
+    assert out[0].title == "SearXNG"
+
+
+def test_search_web_uses_brave_api_when_key_present():
+    payload = {
+        "web": {
+            "results": [
+                {
+                    "title": "Koi pond installer near Pinehurst",
+                    "url": "https://example-ponds.com/",
+                    "description": "waterfall and koi pond care in the Sandhills",
+                }
+            ]
+        }
+    }
+
+    class _Resp:
+        status = 200
+
+        def read(self) -> bytes:
+            return json.dumps(payload).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "test-key"}, clear=False):
+        with patch("urllib.request.urlopen", return_value=_Resp()):
+            out = search_web(
+                "Pinehurst NC pond installer koi waterfall",
+                searxng_url="http://127.0.0.1:8095",
+                max_results=5,
+            )
+    assert len(out) == 1
+    assert out[0].engine == "brave-api"
+    assert "pond" in out[0].title.lower()
+
+
+def test_search_web_falls_back_to_searxng_when_brave_fails():
+    with patch.dict("os.environ", {"BRAVE_SEARCH_API_KEY": "test-key"}, clear=False):
+        with patch(
+            "soveryn.platform.web.search.search_via_brave_api",
+            side_effect=SearchError("Brave API returned HTTP 429"),
+        ):
+            with patch(
+                "soveryn.platform.web.search.search_via_searxng",
+                return_value=(
+                    SearchResult(
+                        title="bing hit",
+                        url="https://example.com/",
+                        snippet="s",
+                        engine="bing",
+                    ),
+                ),
+            ) as mock_sx:
+                out = search_web("anything", searxng_url="http://x", max_results=3)
+    assert out[0].engine == "bing"
+    mock_sx.assert_called_once()
 
 
 # ─── Tool factory: fetch_url arg validation ─────────────────────────────────

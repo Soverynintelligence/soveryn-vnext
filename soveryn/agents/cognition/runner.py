@@ -43,7 +43,7 @@ from soveryn.agents.dream.cognition import chat_completion
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COGNITION_URL = "http://127.0.0.1:8089"
+DEFAULT_COGNITION_URL = "http://127.0.0.1:8091"
 DEFAULT_TICK_SECONDS = 1800.0      # 30 min — no faster than the heartbeat
 DEFAULT_IDLE_SECONDS = 900.0       # 15 min — a real lull, not a typing pause
 DEFAULT_POLL_SECONDS = 300.0       # check the gate every 5 min, run at most per tick
@@ -126,6 +126,14 @@ def make_conversation_sources(conv_store, agent: str, *, now_fn=None):
         return monotonic() - max(0.0, age)
 
     def recent_turns_fn() -> list[Turn]:
+        """Map conversation-store turns → cognition Turn (with turn_id).
+
+        load_history returns soveryn.memory.conversation_store.Turn objects
+        (session_id, role, content, timestamp) — not cognition.types.Turn.
+        Passing them straight into reflect() crashed every deep cycle with
+        AttributeError: 'Turn' object has no attribute 'turn_id', so Mission
+        Control's Cognition panel stayed empty forever (observed 2026-08-15).
+        """
         since = datetime.now(timezone.utc) - timedelta(hours=DEFAULT_TURN_LOOKBACK_HOURS)
         try:
             sessions = conv_store.list_sessions_with_recent_activity(
@@ -137,9 +145,23 @@ def make_conversation_sources(conv_store, agent: str, *, now_fn=None):
         turns: list[Turn] = []
         for s in sessions:
             try:
-                turns.extend(conv_store.load_history(s.session_id))
+                history = conv_store.load_history(s.session_id)
             except Exception:
                 logger.warning("cognition: could not load session %s", s.session_id)
+                continue
+            for i, t in enumerate(history):
+                role = getattr(t, "role", "") or ""
+                content = getattr(t, "content", "") or ""
+                if not content.strip():
+                    continue
+                ts = getattr(t, "timestamp", "") or ""
+                turns.append(
+                    Turn(
+                        turn_id=f"{s.session_id}:{i}:{ts}",
+                        role=role,
+                        content=content,
+                    )
+                )
         return turns[-DEFAULT_MAX_TURNS:]
 
     return last_activity_fn, recent_turns_fn

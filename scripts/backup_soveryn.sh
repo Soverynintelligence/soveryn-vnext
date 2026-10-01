@@ -64,7 +64,63 @@ while IFS= read -r f; do
     cp -p "$f" "$dst" && echo "$LOG_PREFIX ✓ $rel"
 done < <(find "$DATA" -maxdepth 3 -type f \( -name '*.md' -o -name '*.json' \) 2>/dev/null | sort)
 
+# ── Secrets / operator state (NOT in git; must survive tower death) ───────
+# Critic 2026-08-24: .env was never in the nightly set — Canva OAuth would
+# die with the tower even though tokens.json was copied. Bundle mode 600.
+SECRETS="$DEST/secrets"
+mkdir -p "$SECRETS"
+copy_secret() {
+    local src="$1" name="$2"
+    if [ -f "$src" ]; then
+        cp -p "$src" "$SECRETS/$name"
+        chmod 600 "$SECRETS/$name"
+        echo "$LOG_PREFIX ✓ secrets/$name"
+    else
+        echo "$LOG_PREFIX ⚠ secrets/$name missing at $src (skip)"
+    fi
+}
+copy_secret "$BASE/.env" "soveryn_vnext.env"
+copy_secret "$DATA/canva/tokens.json" "canva_tokens.json"
+copy_secret "$DATA/memory/personas/eve.md" "eve_persona.md"
+# Teammates is a sibling repo — same operator, same restore story.
+copy_secret "$HOME/teammates/.env" "teammates.env"
+copy_secret "$HOME/teammates/roster.toml" "teammates_roster.toml"
+# Manifest (no secret values) so a restore drill can assert completeness.
+{
+    echo "backed_up_at=$(date -Iseconds)"
+    echo "host=$(hostname)"
+    for f in "$SECRETS"/*; do
+        [ -f "$f" ] || continue
+        echo "$(basename "$f") sha256=$(sha256sum "$f" | awk '{print $1}') bytes=$(stat -c%s "$f")"
+    done
+} > "$SECRETS/MANIFEST.txt"
+chmod 600 "$SECRETS/MANIFEST.txt"
+echo "$LOG_PREFIX ✓ secrets/MANIFEST.txt"
+
+# ── Tax books + ops docs (added 2026-09-19) ────────────────────────────
+# docs/ops/tax-* and tax-cwg are gitignored BY DESIGN (public repo), which
+# means git is NOT a backup for them. They are the least replaceable files
+# in the house: receipts, expense ledgers, the reconcile report. Nightly
+# copy into the dated backup so the 4am job covers what git cannot.
+DOCS_SRC="$BASE/docs/ops"
+DOCS_DEST="$DEST/docs-ops"
+mkdir -p "$DOCS_DEST"
+for d in tax tax-cwg soveryn-business cwg-business house-economy; do
+    if [ -d "$DOCS_SRC/$d" ]; then
+        cp -rp "$DOCS_SRC/$d" "$DOCS_DEST/$d"
+        echo "$LOG_PREFIX ✓ docs-ops/$d"
+    fi
+done
+# Pondwright CRM ops DB lives on the Spark; mirror it here when the tunnel is up.
+if curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8100/health 2>/dev/null; then
+    ssh -o ConnectTimeout=8 spark "cat ~/pondwright-cwg-ops/data/ops.sqlite" \
+        > "$DOCS_DEST/pondwright-crm-ops.sqlite" 2>/dev/null \
+        && echo "$LOG_PREFIX ✓ docs-ops/pondwright-crm-ops.sqlite ($(stat -c%s "$DOCS_DEST/pondwright-crm-ops.sqlite") bytes)" \
+        || echo "$LOG_PREFIX ✗ pondwright CRM db copy failed (non-fatal, flagged)"
+fi
+
 # ── Off-disk mirror to easystore ─────────────────────────────────────────
+
 # A missing mirror used to be SILENT: both the skip and the failure branch
 # only echoed, so the script still exited 0 and cron's `|| alert` never fired.
 # Local-only backups then looked identical to healthy ones — which is how the
@@ -83,6 +139,24 @@ mirror_age_note() {
 
 if mountpoint -q /mnt/easystore 2>/dev/null && [ -w /mnt/easystore ]; then
     mkdir -p /mnt/easystore/soveryn_backups
+    # Sensitive subsets (secrets/, docs-ops tax books) DO NOT go on the drive
+    # in plaintext. The drive is NTFS: Linux permissions are unenforceable, so
+    # a plaintext copy there is world-readable to anything that mounts it.
+    # (Found 2026-09-19: .env copies with SMTP creds + API keys were sitting
+    # readable on easystore.) They ship as one AES-256 encrypted archive per
+    # dated backup instead. Passphrase: ~/.soveryn/house-keys/
+    # easystore-archive.key, tower-only, deliberately NOT in backups/.
+    PASSFILE="$HOME/.soveryn/house-keys/easystore-archive.key"
+    if [ -f "$PASSFILE" ] && [ -d "$DEST/secrets" ]; then
+        SENSITIVE_TAR="$DEST/sensitive-encrypted.tar.gz.enc"
+        tar -czf - -C "$DEST" secrets docs-ops 2>/dev/null \
+            | openssl enc -aes-256-cbc -pbkdf2 -salt \
+                -pass file:"$PASSFILE" \
+                -out "$SENSITIVE_TAR.part" \
+            && mv "$SENSITIVE_TAR.part" "$SENSITIVE_TAR" \
+            && echo "$LOG_PREFIX ✓ sensitive-encrypted.tar.gz.enc ($(du -h "$SENSITIVE_TAR" | cut -f1))" \
+            || echo "$LOG_PREFIX ✗ sensitive archive failed (non-fatal, flagged)"
+    fi
     # NO --delete, deliberately (changed 2026-07-22). Local is a ROTATING
     # WORKING SET (7 daily + monthlies, pruned below); the easystore is the
     # PERMANENT ARCHIVE and must keep everything. With --delete the off-box
@@ -90,7 +164,8 @@ if mountpoint -q /mnt/easystore 2>/dev/null && [ -w /mnt/easystore ]; then
     # tower dying but NOT against deleting something and noticing weeks later
     # — and the off-box copy is the one that matters. Divergence is intended:
     # easystore will accumulate snapshots that local has already rotated away.
-    if rsync -a "$BASE/backups/" /mnt/easystore/soveryn_backups/; then
+    if rsync -a --exclude='**/secrets' --exclude='**/docs-ops' \
+            "$BASE/backups/" /mnt/easystore/soveryn_backups/; then
         touch "$MIRROR_STAMP"
         arch_n=$(find /mnt/easystore/soveryn_backups -maxdepth 1 -type d -name "20*-*-*" | wc -l)
         arch_sz=$(du -sh /mnt/easystore/soveryn_backups 2>/dev/null | cut -f1)

@@ -80,6 +80,22 @@ def test_handler_includes_traceback_when_localhost_guard_on(app_with_boom):
     assert data["error"]["exception_message"] == "intentional test failure with context"
 
 
+def test_handler_redacts_traceback_when_request_came_through_the_gate(app_with_boom):
+    """Loopback plus the public-gate mark is the internet, not the console."""
+    app_with_boom.config["SOVERYN_REQUIRE_LOCALHOST"] = True
+    client = app_with_boom.test_client()
+    resp = client.get(
+        "/_test/raise_value_error",
+        environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
+        headers={"X-Soveryn-Edge": "public"},
+    )
+    assert resp.status_code == 500
+    data = resp.get_json()
+    assert "traceback" not in data["error"]
+    assert "exception_message" not in data["error"]
+    assert data["error"]["correlation_id"]
+
+
 def test_handler_redacts_traceback_when_localhost_guard_off(app_with_boom):
     """SOVERYN_REQUIRE_LOCALHOST=False → no traceback in body (no internal leak
     when SOVERYN serves remote callers)."""

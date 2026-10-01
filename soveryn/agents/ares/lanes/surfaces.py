@@ -25,14 +25,43 @@ must never say that.
 """
 from __future__ import annotations
 
+import time
+
 from soveryn.agents.ares.findings import AresFinding, Severity
 from soveryn.platform.surfaces import registry
 from soveryn.platform.surfaces.probe import Status, probe_all
+from soveryn.platform.surfaces.registry import Kind
 from soveryn.platform.surfaces.staleness import Observations
 
 
 class SurfaceProbeError(RuntimeError):
     """The probe pass itself failed. Distinct from 'everything is fine'."""
+
+
+# Consecutive bad probes before a surface is reported. In-memory and reset by a
+# daemon restart, which is the right trade: after a restart the first genuine
+# failure takes two scans (~2 min at the 60s interval) to surface, and nothing
+# is lost that a second look would not confirm.
+FAIL_STREAK = 2
+_STREAK: dict[str, int] = {}
+
+
+def _due_for_probe(surface, *, now: float, last_healthy_at: float | None) -> bool:
+    """Cheap HTTP/unit probes run every Ares scan. FUNCTIONAL POST /chat
+    hits the live model (Eve on the Quadros). Those already declare
+    interval_s=1800; probing them every 60s was burning watts while idle.
+
+    Re-probe function when never verified, when the interval has elapsed,
+    or while a fail streak is open (need the next look to confirm).
+    GET /health (model_ok) still runs every scan.
+    """
+    if surface.kind is not Kind.FUNCTIONAL:
+        return True
+    if _STREAK.get(surface.name, 0) > 0:
+        return True
+    if last_healthy_at is None:
+        return True
+    return (now - last_healthy_at) >= surface.interval_s
 
 
 def collect(*, observations: Observations | None = None,
@@ -43,8 +72,13 @@ def collect(*, observations: Observations | None = None,
                                 "which is not the same as everything being healthy")
 
     obs = observations or Observations()
+    now = time.time()
+    due = tuple(
+        s for s in surfaces
+        if _due_for_probe(s, now=now, last_healthy_at=obs.last_healthy(s.name))
+    )
     try:
-        results = probe_all(surfaces, timeout=timeout)
+        results = probe_all(due, timeout=timeout)
     except Exception as exc:                      # pragma: no cover - defensive
         raise SurfaceProbeError(f"probe pass failed: {type(exc).__name__}: {exc}") from exc
 
@@ -52,16 +86,34 @@ def collect(*, observations: Observations | None = None,
     findings: list[AresFinding] = []
 
     for r in results:
+        if r.status is Status.HEALTHY:
+            _STREAK.pop(r.surface, None)
+            continue
+
+        # A single bad probe is not an outage. On 2026-08-09 this lane fired
+        # CRITICAL to Signal four times in twelve minutes for atticus,
+        # soverynintelligence and pondwright-estimator — every one of which was
+        # healthy on the next scan. The cause was a serial probe pass taking 41s
+        # against a 60s interval, so any latency bump tripped a 20s timeout.
+        # The pass is parallel now, but the tolerance belongs here regardless:
+        # an alert that cries wolf gets muted, and a muted Ares is how 53 lint
+        # findings sat unread while real outages ran underneath.
+        _STREAK[r.surface] = _STREAK.get(r.surface, 0) + 1
+        if _STREAK[r.surface] < FAIL_STREAK:
+            continue
+
         if r.status is Status.FAILED:
             findings.append(AresFinding(
                 "surface.down", Severity.CRITICAL,
                 {"surface": r.surface, "detail": r.detail,
+                 "failed_checks": _STREAK[r.surface],
                  "latency_s": round(r.latency_s, 3)},
                 key=r.surface))
         elif r.status is Status.UNKNOWN:
             findings.append(AresFinding(
                 "surface.unknown", Severity.WARNING,
                 {"surface": r.surface, "detail": r.detail,
+                 "failed_checks": _STREAK[r.surface],
                  "note": "probe could not run — this is NOT evidence the surface "
                          "is healthy"},
                 key=r.surface))

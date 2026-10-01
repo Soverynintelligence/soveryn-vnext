@@ -1,0 +1,96 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "soveryn/coding",
+  "small_model": "soveryn/coding",
+  "enabled_providers": [
+    "soveryn",
+    "kernel-qwen"
+  ],
+  "provider": {
+    "soveryn": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "SOVERYN coding harness \u00b7 GLM-5.3-Flash EXL3 TP=2 :8001",
+      "options": {
+        "baseURL": "http://10.10.10.2:8001/v1",
+        "apiKey": "local"
+      },
+      "models": {
+        "coding": {
+          "id": "glm-5.3-flash",
+          "name": "SOVERYN coding \u00b7 GLM-5.3-Flash EXL3 TP=2",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 131072,
+            "output": 32768
+          }
+        },
+        "glm-5.3-flash": {
+          "name": "SOVERYN \u00b7 GLM-5.3-Flash (direct id)",
+          "tool_call": true,
+          "reasoning": true,
+          "limit": {
+            "context": 131072,
+            "output": 32768
+          }
+        }
+      }
+    },
+    "kernel-qwen": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kernel alt \u00b7 Qwen 3.8 (:8090)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8090/v1",
+        "apiKey": "local"
+      },
+      "models": {
+        "aetheria": {
+          "name": "Kernel \u00b7 Qwen 3.8 (large-ctx / speed lane)",
+          "limit": {
+            "context": 49152,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "kernel": {
+      "description": "SOVERYN house build brain \u2014 GLM-5.3-Flash EXL3 TP=2",
+      "mode": "primary",
+      "model": "soveryn/coding",
+      "temperature": 0.2,
+      "prompt": "{file:./agents/kernel.md}",
+      "color": "#6aa84f",
+      "permission": {
+        "edit": "allow",
+        "bash": {
+          "*": "allow",
+          "rm -rf *": "deny",
+          "sudo *": "ask",
+          "git push*": "ask",
+          "git push --force*": "deny"
+        },
+        "external_directory": "ask",
+        "webfetch": "ask",
+        "websearch": "ask"
+      }
+    },
+    "build": {
+      "model": "soveryn/coding"
+    },
+    "plan": {
+      "model": "soveryn/coding"
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "sudo *": "ask",
+      "git push --force*": "deny"
+    },
+    "external_directory": "ask"
+  },
+  "_rollback_note": "2026-09-13: Kernel unparked to GLM EXL3 TP=2 @ http://10.10.10.2:8001/v1 model glm-5.3-flash (Mia-AiLab EXL3-TR3-4bpw). Flash-Next spark2 parked. Prior Flash-Next week1 config: opencode.json.bak-20260913-pre-glm-unpark + bak-20260909-week1-pre."
+}

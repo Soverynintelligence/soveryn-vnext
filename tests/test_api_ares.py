@@ -61,3 +61,44 @@ def test_malformed_and_unknown_severity_rows_skipped(tmp_path):
     out = read_active_findings(p)
     assert [f["key"] for f in out["findings"]] == ["k4"]
     assert out["counts"]["critical"] == 1
+
+
+def test_clear_findings_by_severity(tmp_path):
+    from soveryn.app.routes.api_ares import clear_findings
+
+    p = _bus(tmp_path, [
+        (_f("e1", "emergency", "active"), "2026-07-03T01:00:00+00:00"),
+        (_f("c1", "critical", "active"), "2026-07-03T02:00:00+00:00"),
+        (_f("w1", "warning", "active"), "2026-07-03T03:00:00+00:00"),
+    ])
+    res = clear_findings(p, severities=["emergency", "critical"], reason="ack")
+    assert res["ok"] is True
+    assert set(res["cleared"]) == {"e1", "c1"}
+    out = read_active_findings(p)
+    assert [f["key"] for f in out["findings"]] == ["w1"]
+    assert out["counts"] == {"emergency": 0, "critical": 0, "warning": 1}
+
+
+def test_clear_findings_by_key(tmp_path):
+    from soveryn.app.routes.api_ares import clear_findings
+
+    p = _bus(tmp_path, [
+        (_f("e1", "emergency", "active"), "2026-07-03T01:00:00+00:00"),
+        (_f("e2", "emergency", "active"), "2026-07-03T02:00:00+00:00"),
+    ])
+    res = clear_findings(p, keys=["e1"])
+    assert res["ok"] is True
+    assert res["cleared"] == ["e1"]
+    out = read_active_findings(p)
+    assert [f["key"] for f in out["findings"]] == ["e2"]
+
+
+def test_clear_findings_requires_filter(tmp_path):
+    from soveryn.app.routes.api_ares import clear_findings
+
+    p = _bus(tmp_path, [
+        (_f("e1", "emergency", "active"), "2026-07-03T01:00:00+00:00"),
+    ])
+    res = clear_findings(p)
+    assert res["ok"] is False
+    assert read_active_findings(p)["counts"]["emergency"] == 1

@@ -94,7 +94,11 @@ def render_active_focus(
     if not active:
         return ""
     states = dispatch_states or {}
-    lines = [BLOCK_HEADER, "Work currently in flight across the boards:"]
+    lines = [
+        BLOCK_HEADER,
+        "Work currently in flight across the boards "
+        "(awareness only — do not open/read nodes unless Jon asked about this work):",
+    ]
     for n in active:
         state = states.get(getattr(n, "id", None))
         if state:

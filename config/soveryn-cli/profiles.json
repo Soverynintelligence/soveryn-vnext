@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "defaultProfile": "flash",
+  "profiles": {
+    "flash": {
+      "id": "flash",
+      "displayName": "Flash-Next",
+      "enabled": true,
+      "piProviderId": "soveryn-flash",
+      "baseUrl": "http://127.0.0.1:8888/v1",
+      "healthPath": "/models",
+      "modelId": "qwen3.8-flash-next",
+      "modelName": "SOVERYN · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 262144,
+      "maxTokens": 16384,
+      "defaultThinkingLevel": "medium",
+      "thinkingLevelMap": {
+        "off": "off",
+        "minimal": "off",
+        "low": "off",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "high"
+      },
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "thinkingFormat": "qwen-chat-template"
+      },
+      "compaction": {
+        "enabled": true,
+        "reserveTokens": 18432,
+        "keepRecentTokens": 65536
+      },
+      "preset": "standard"
+    },
+    "glm": {
+      "id": "glm",
+      "displayName": "GLM 5.3 Flash",
+      "enabled": true,
+      "piProviderId": "soveryn-glm",
+      "baseUrl": "http://10.10.10.2:8001/v1",
+      "healthPath": "/models",
+      "modelId": "glm-5.3-flash",
+      "modelName": "SOVERYN · GLM-5.3-Flash EXL3",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ],
+      "contextWindow": 32768,
+      "maxTokens": 16384,
+      "defaultThinkingLevel": "medium",
+      "thinkingLevelMap": {
+        "off": "low",
+        "minimal": "low",
+        "low": "low",
+        "medium": "high",
+        "high": "max",
+        "xhigh": "max"
+      },
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true
+      },
+      "compaction": {
+        "enabled": false,
+        "reserveTokens": 16384,
+        "keepRecentTokens": 20000
+      },
+      "startCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./start.sh'",
+      "stopCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./stop.sh'",
+      "startNotes": "Lab 2026-09-10: NOT hot-standby. Stop Flash-Next on spark2 first, then EXL3 start on spark1. Prefer EXL3 over legacy NVFP4 glm53-serve. No ABLIT. See: kernel unpark glm (prints steps); kernel unpark glm --confirm",
+      "flashStopCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./stop.sh'",
+      "flashStartCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./start.sh'",
+      "preset": "standard"
+    },
+    "aetheria": {
+      "id": "aetheria",
+      "displayName": "Aetheria",
+      "enabled": true,
+      "piProviderId": "soveryn-aetheria",
+      "baseUrl": "http://127.0.0.1:8090/v1",
+      "healthPath": "/models",
+      "modelId": "aetheria",
+      "modelName": "SOVERYN · Qwen 3.8 (Aetheria lane)",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 32768,
+      "maxTokens": 16384,
+      "defaultThinkingLevel": "off",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "compaction": {
+        "enabled": false,
+        "reserveTokens": 16384,
+        "keepRecentTokens": 20000
+      },
+      "preset": "standard"
+    }
+  },
+  "limits": {
+    "maxPrintSeconds": 120,
+    "note": "Bounded -p/--print spawn; override with SOVERYN_PRINT_TIMEOUT_MS (ms). Enforced in packages/soveryn-cli/src/launch.js"
+  },
+  "defaultPreset": "standard",
+  "presets": {
+    "minimal": {
+      "tools": [
+        "bash",
+        "edit"
+      ],
+      "note": "Pi --tools bash,edit — tight surface (dsh minimal spirit)"
+    },
+    "standard": {
+      "tools": null,
+      "note": "Pi default built-ins (read, bash, edit, write)"
+    }
+  }
+}

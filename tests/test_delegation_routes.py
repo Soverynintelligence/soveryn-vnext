@@ -73,13 +73,19 @@ def _make_app(
     store = FakeStore(tasks)
     merge_calls: list[tuple] = []
     remove_calls: list[tuple] = []
+    order: list[str] = []
 
     def fake_merge(repo_root, branch):
         merge_calls.append((repo_root, branch))
         return merge_result
 
     def fake_remove(repo_root, worktree_path, branch):
+        order.append("remove")
         remove_calls.append((repo_root, worktree_path, branch))
+
+    def fake_preserve(repo_root, branch, tag):
+        order.append("preserve")
+        return tag
 
     app = Flask("test_delegation")
     app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
@@ -88,6 +94,7 @@ def _make_app(
         "delegation_store": store,
         "merge_fn": fake_merge,
         "remove_fn": fake_remove,
+        "preserve_fn": fake_preserve,
         "repo_root": "/fake/repo",
     }
     app.register_blueprint(bp)
@@ -96,6 +103,7 @@ def _make_app(
     app._test_store = store
     app._test_merge_calls = merge_calls
     app._test_remove_calls = remove_calls
+    app._test_order = order
 
     return app
 
@@ -375,3 +383,43 @@ def test_reject_non_in_review_returns_409():
     assert resp.get_json()["ok"] is False
     assert landed.status == "landed"             # unchanged
     assert app._test_remove_calls == []
+
+
+# ─── rejection must not destroy the work it is reviewing ─────────────────────
+
+class TestRejectPreservesWork:
+    """A rejection is a review decision, not a deletion decision.
+
+    2026-08-07: reject ran `remove_worktree(..., delete_branch=True)`, which
+    deletes the branch and leaves the commit dangling — recoverable by sha until
+    the next `git gc`, then gone. A rejected task took 1,138 lines of working,
+    tested code with it. The endpoint returned `{"ok": true}` either way, and the
+    stored review feedback told the agent to build from the branch that same
+    request had just destroyed.
+    """
+
+    def test_preserve_runs_before_remove(self, client_green):
+        client, app = client_green
+        r = client.post("/api/delegation/task-abc/reject", json={"feedback": "no"})
+        assert r.status_code == 200
+        assert app._test_order == ["preserve", "remove"], (
+            f"expected preserve before remove, got {app._test_order} — the work "
+            "is destroyed before it is saved"
+        )
+
+    def test_response_names_the_surviving_ref(self, client_green):
+        client, app = client_green
+        body = client.post("/api/delegation/task-abc/reject", json={"feedback": "no"}).get_json()
+        assert body["preserved_as"] == "rejected/task-abc"
+        assert body.get("warning") is None
+
+    def test_failed_preserve_is_reported_not_swallowed(self, in_review_task):
+        """Silence would mean a caller believes rejection is reversible when it
+        is not — absence of a warning read as evidence of safety."""
+        app = _make_app([in_review_task])
+        app.extensions["soveryn"]["preserve_fn"] = lambda *a, **k: None
+        body = app.test_client().post(
+            "/api/delegation/task-abc/reject", json={"feedback": "x"}
+        ).get_json()
+        assert body["preserved_as"] is None
+        assert "NOT preserved" in (body.get("warning") or "")

@@ -87,7 +87,7 @@ All run as pure SQLite / file checks. Each flag: `{ detector, lattice_id?, entit
 ## Delivery
 
 | Mode | Cadence | Route |
-|------|---------|-------|
+|------|---------|--------|
 | **Digest** | Weekdays ~07:05 America/New_York (after CoS morning digest or as a section of it) | Quiet if zero flags; else bullet list to Jon |
 | **On-demand** | “run lattice stale check” | Same report, immediate |
 

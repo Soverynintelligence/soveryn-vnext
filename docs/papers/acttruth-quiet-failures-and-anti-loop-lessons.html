@@ -1,0 +1,245 @@
+<!DOCTYPE html><html><head><meta charset=utf-8>
+<title>ActTruth</title>
+<style>
+body{font-family:Georgia,serif;max-width:42rem;margin:2rem auto;padding:0 1rem;line-height:1.45;color:#111}
+h1,h2,h3{font-family:system-ui,sans-serif}
+code,pre{font-size:0.88em;background:#f4f4f4}
+pre{padding:0.75rem;overflow:auto}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid #ccc;padding:0.35rem 0.5rem;text-align:left}
+blockquote{border-left:3px solid #5ee1a0;margin-left:0;padding-left:1rem;color:#333}
+</style></head><body>
+<h1>ActTruth: Making Agent Tool Failures Visible and Repeat Failures Teachable</h1>
+<h3>A short systems note on quiet failure, unprompted spend, and soft anti-loop lessons in a multi-agent house</h3>
+<p><strong>SOVERYN Intelligence</strong> · Jon DeOliveira · 18 August 2026 · <strong>v1.0</strong></p>
+<p>Site: <a href="https://acttruth.com">https://acttruth.com</a> · Proof page: <a href="https://acttruth.com/proof.html">https://acttruth.com/proof.html</a></p>
+<blockquote>
+<p><strong>This is a systems note, not a large-N behavioral study.</strong> It documents an
+architectural layer (ActTruth) built in response to a known failure class in
+our deployment: tool outcomes that vanish into silence, and autonomous agents
+that retry the same broken call until a human gets frustrated. Claims are
+locked by an open proof suite (<code>tests/test_acttruth.py</code>). Dogfood ledger
+receipts are reported honestly, including fail rates.</p>
+</blockquote>
+<hr />
+<h2>Abstract</h2>
+<p>Language-model agents fail in two directions that look different but share a
+cause: they <strong>over-claim</strong> (assert success without evidence) and they
+<strong>under-claim</strong> or invent absence when evidence channels are incomplete
+(<a href="https://doi.org/10.5281/zenodo.21650072">10.5281/zenodo.21650072</a>;
+<a href="https://doi.org/10.5281/zenodo.21712932">10.5281/zenodo.21712932</a>). In
+long-running tool-using deployments a third failure mode dominates the operator
+experience: <strong>quiet failure</strong> — timeouts and soft error payloads that never
+become durable facts — followed by <strong>blind retry loops</strong> that burn latency and
+trust.</p>
+<p>We describe <strong>ActTruth</strong>, a thin layer beside any tool-using agent: (1) an
+append-only <strong>act ledger</strong> of short outcome facts; (2) an <strong>unprompted spend
+allowance</strong> for autonomous pulses; (3) <strong>soft lessons</strong> that fire when the same
+tool fails with the same error class repeatedly. ActTruth does not require a
+memory graph. It does not replace forensic logs. It makes wrongness <em>visible</em>
+and repeated wrongness <em>teachable</em>.</p>
+<p>A twelve-test proof suite locks the product claims. A shareable “proof receipt”
+exports ledger aggregates without invented uplift. We argue that as agents
+become more autonomous, receipts become the product — the same cultural
+pressure that makes proof posts travel on X.</p>
+<hr />
+<h2>1. Motivation</h2>
+<h3>1.1 The false-confession lineage</h3>
+<p>On 27 July 2026 an agent in our house dispatched real work, then — after an
+incomplete self-audit — apologised for fabricating that work
+(<a href="https://doi.org/10.5281/zenodo.21650072">10.5281/zenodo.21650072</a>). The moral
+was architectural: every write path needs a corresponding read path back to the
+agent. Aggregate probes later showed asymmetric self-knowledge under incomplete
+evidence (<a href="https://doi.org/10.5281/zenodo.21712932">10.5281/zenodo.21712932</a>).</p>
+<h3>1.2 Quiet failure in the wild</h3>
+<p>In day-to-day tool use the pain is often simpler. An image generation call
+times out. A soft <code>{error: "unreachable"}</code> returns without raising. The turn
+continues. Later the agent (or the human) asks whether it worked — and nothing
+durable answers. Telemetry may exist in another store; black-box trajectories
+may exist only when tools fired in a certain shape; the agent’s own prelude
+does not carry a first-class <strong>FAIL</strong>.</p>
+<p>Quiet failure is not “the model is stupid.” It is <strong>missing product surface
+area for truth</strong>.</p>
+<h3>1.3 Blind loops</h3>
+<p>Once failures are invisible, autonomy makes them worse. Heartbeat and patrol
+agents retry the same tool with the same args. Operators experience the loop as
+theater or brokenness. Soft system prompts (“don’t overthink”) do not stop a
+capable model from hoping the next identical call succeeds.</p>
+<hr />
+<h2>2. Design</h2>
+<p>ActTruth is intentionally thin.</p>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Ledger</strong></td>
+<td>Append-only events: <code>tool_ok</code>, <code>tool_error</code>, <code>timeout</code>, <code>heartbeat</code>, <code>patrol</code>, <code>budget_*</code>, <code>note</code> — short summaries, optional evidence refs</td>
+</tr>
+<tr>
+<td><strong>Budget</strong></td>
+<td>Per-agent unprompted spend allowance (default 2 actions / 6h). Quiet notes do not spend. Exhaustion injects stand-down text.</td>
+</tr>
+<tr>
+<td><strong>Soft lessons</strong></td>
+<td>Same tool + same error class FAIL ≥2× in a window → lesson in prelude and optional <code>acttruth_lesson</code> on the tool result</td>
+</tr>
+<tr>
+<td><strong>Earned-keep (stub)</strong></td>
+<td>Post-hoc score for unprompted acts (durable delta × honesty) — proxy for “earned its keep,” not a measure of being</td>
+</tr>
+<tr>
+<td><strong>Proof export</strong></td>
+<td>Stats + shareable receipt from the ledger; optional pytest pass count</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Non-goals (v1):</strong> replacing Lattice / RAG; hard tool bans; multi-tenant SaaS;
+claiming consciousness.</p>
+<p><strong>Crew:</strong> Aetheria, Vett, Scotty, and Kernel each have a ledger stream. Chat
+agents use the shared tool registry hook; Kernel HITL tools write as
+<code>agent=kernel</code>.</p>
+<hr />
+<h2>3. What “doing it wrong” does for the agent</h2>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Effect on the agent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Failure occurs</td>
+<td>Ledger row (<code>timeout</code> / <code>tool_error</code>), not silence</td>
+</tr>
+<tr>
+<td>Next turn / pulse</td>
+<td><code>[ACTTRUTH — what actually happened]</code> in continuity brief</td>
+</tr>
+<tr>
+<td>Repeat same pattern</td>
+<td><code>[ACTTRUTH LESSONS — stop repeating failures]</code> + in-band <code>acttruth_lesson</code></td>
+</tr>
+<tr>
+<td>Unprompted thrash</td>
+<td>Budget stand-down after allowance spent</td>
+</tr>
+<tr>
+<td>Operator</td>
+<td>Command Center AT badges + drawer; public proof page</td>
+</tr>
+</tbody>
+</table>
+<p>v1 is <strong>soft</strong>: lessons are context, not hard refusals. A confident model can
+still talk past a lesson. Teeth (hard break after ×3) are deferred and should
+be tested separately.</p>
+<hr />
+<h2>4. Proof suite</h2>
+<p>Claims are locked in <code>tests/test_acttruth.py</code> (12 tests at deposit time),
+including:</p>
+<ol>
+<li>Quiet timeouts become visible FAIL / timeout rows + recall brief  </li>
+<li>Soft error dicts count as failures  </li>
+<li>Budget exhaustion yields stand-down  </li>
+<li>Repeat timeouts arm lessons; a single failure does not  </li>
+<li>AgentLoop tool payloads carry <code>acttruth_lesson</code> after a streak  </li>
+<li>Crew status includes Kernel  </li>
+<li>Earned-keep penalizes no durable delta / dishonest ledger  </li>
+<li>Proof/stats posts are ledger-derived and must not invent uplift  </li>
+</ol>
+<p>Reproduce:</p>
+<pre><code>python -m pytest tests/test_acttruth.py -v
+python -m soveryn.platform.acttruth proof
+</code></pre>
+<hr />
+<h2>5. Dogfood receipts (honest)</h2>
+<p>Snapshot from the SOVERYN house ledger (48h window, regenerated for this note):</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th style="text-align: right;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Events</td>
+<td style="text-align: right;">12</td>
+</tr>
+<tr>
+<td>OK</td>
+<td style="text-align: right;">8</td>
+</tr>
+<tr>
+<td>FAIL</td>
+<td style="text-align: right;">4</td>
+</tr>
+<tr>
+<td>Timeouts</td>
+<td style="text-align: right;">3</td>
+</tr>
+<tr>
+<td>Fail rate</td>
+<td style="text-align: right;">33.3%</td>
+</tr>
+<tr>
+<td>Lessons armed</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr>
+<td>Proof suite</td>
+<td style="text-align: right;">12 passed</td>
+</tr>
+</tbody>
+</table>
+<p>Top fail tools (Aetheria): <code>generate_image</code>×2, plus one-off sandbox / harness
+noise. We publish the fail rate on purpose. A product that only shows success
+rates is selling vibes.</p>
+<p>Public surface: <a href="https://acttruth.com">acttruth.com</a> loads a redeployed
+<code>proof-live.json</code> snapshot; regenerate with <code>acttruth-site/refresh-proof.sh</code>.</p>
+<hr />
+<h2>6. Related work (brief)</h2>
+<p>Observability products (traces, eval dashboards) record tool calls for
+<em>operators</em>. ActTruth’s emphasis is <strong>agent-facing truth</strong>: the same facts must
+re-enter the model’s context as durable, short, named failures and lessons.
+Self-knowledge probes measure whether models <em>can</em> report actions under
+incomplete evidence; ActTruth is an engineering control that reduces how often
+the evidence channel is empty for tool outcomes.</p>
+<hr />
+<h2>7. Limitations</h2>
+<ul>
+<li>Soft lessons can be ignored; hard breaks are not yet measured.  </li>
+<li>Dogfood N is small; the note establishes architecture + test-locked claims,
+  not a population rate.  </li>
+<li>Public web stats are snapshots, not a live feed of private house state.  </li>
+<li>Budget rations unprompted spend only; interactive chat remains unrestricted.  </li>
+</ul>
+<hr />
+<h2>8. Conclusion</h2>
+<p>As agents gain autonomy, the scarce resource is not tokens — it is <strong>trust under
+tool failure</strong>. ActTruth’s first step makes quiet failures visible. Its second
+makes repeated failures teachable. Both are provable with tests and shareable
+as receipts. That is the product posture: post the FAIL rate, post the lesson
+count, post the green suite — then improve the architecture.</p>
+<hr />
+<h2>References</h2>
+<ol>
+<li>DeOliveira, J. (2026). <em>A False Confession…</em> Zenodo.
+   https://doi.org/10.5281/zenodo.21650072  </li>
+<li>DeOliveira, J. (2026). <em>Self-Knowledge Is Not Uniform</em> (and lineage). Zenodo.
+   https://doi.org/10.5281/zenodo.21712932  </li>
+<li>ActTruth site and proof page: https://acttruth.com · https://acttruth.com/proof.html  </li>
+</ol>
+<hr />
+<h2>Software / data</h2>
+<ul>
+<li>Implementation: <code>soveryn/platform/acttruth/</code> in the SOVERYN vNext tree  </li>
+<li>Proof suite: <code>tests/test_acttruth.py</code>  </li>
+<li>CLI: <code>python -m soveryn.platform.acttruth {status,stats,proof}</code>  </li>
+</ul>
+</body></html>

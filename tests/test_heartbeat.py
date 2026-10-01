@@ -342,12 +342,13 @@ def conv_db(tmp_path):
 
 
 @pytest.fixture
-def daemon(lattice_db, conv_db):
+def daemon(lattice_db, conv_db, tmp_path):
     return HeartbeatDaemon(
         _config(),
         vnext_base="http://127.0.0.1:5001",
         lattice_db=lattice_db,
         conv_db=conv_db,
+        thoughts_log_path=tmp_path / "heartbeat_thoughts.jsonl",
     )
 
 
@@ -373,7 +374,7 @@ def test_daemon_skipped_tick_writes_log_row(daemon, lattice_db):
 
 
 def test_daemon_dry_run_eligible_tick_logs_without_invoking_chat(
-    daemon, lattice_db, conv_db,
+    daemon, lattice_db, conv_db, tmp_path,
 ):
     """In dry-run mode the daemon should build the prompt but never hit the
     HTTP endpoint. action_taken stays None; response_length captures the
@@ -383,6 +384,7 @@ def test_daemon_dry_run_eligible_tick_logs_without_invoking_chat(
         vnext_base="http://127.0.0.1:5001",
         lattice_db=lattice_db,
         conv_db=conv_db,
+        thoughts_log_path=tmp_path / "dry_thoughts.jsonl",
     )
     with patch.object(dry_daemon, "_call_vnext_chat") as mock_chat:
         dry_daemon._do_tick(

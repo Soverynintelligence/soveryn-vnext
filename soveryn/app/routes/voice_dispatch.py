@@ -27,8 +27,8 @@ def negotiate_and_dispatch_voice(
     agent_name: str,
     agent_loop,
     conv_store,
-    voice_id: str,
-    elevenlabs_api_key: str,
+    voice_id: str | None,
+    elevenlabs_api_key: str | None,
     parakeet_url: str,
     sdp: str,
     sdp_type: str,
@@ -107,8 +107,8 @@ def negotiate_and_dispatch_voice(
                 agent_loop=agent_loop,
                 agent_name=agent_name,
                 session_id=session_id,
-                elevenlabs_api_key=elevenlabs_api_key,
-                voice_id=voice_id,
+                elevenlabs_api_key=elevenlabs_api_key,  # optional when F5 primary
+                voice_id=voice_id or agent_name,
                 parakeet_url=parakeet_url,
             ))
         except Exception:

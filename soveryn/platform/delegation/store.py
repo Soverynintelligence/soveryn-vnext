@@ -230,6 +230,20 @@ class DelegationStore:
             )
         return cur.rowcount > 0
 
+    def clear_worktree(self, task_id: str) -> bool:
+        """Null out worktree_path after the dir is expired (branch retained).
+
+        The merge at approve-time needs only the branch ref; the on-disk
+        worktree is forensics for FAILED tasks and disk for IN_REVIEW ones.
+        Leaves updated_at alone so the task's review age stays honest.
+        Returns True if a row was updated."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE delegation_tasks SET worktree_path = NULL WHERE id = ?",
+                (task_id,),
+            )
+        return cur.rowcount > 0
+
     def set_result(self, task_id: str, *, diff: str, test_output: str, summary: str) -> bool:
         """Record the diff, test output, and summary after Scotty completes work.
         Returns True if a row was updated."""

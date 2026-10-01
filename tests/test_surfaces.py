@@ -169,6 +169,64 @@ def test_retired_surface_does_not_alarm(tmp_path):
     assert registry.BY_NAME["tg-bridge"] not in registry.live()
 
 
+def test_functional_chat_probe_is_not_fired_every_ares_scan(tmp_path, monkeypatch):
+    """Ares scans every 60s. atticus-chat / soveryn-agent / pondwright-chat
+    POST /chat into Eve. Doing that every scan is the idle-GPU bill.
+
+    interval_s on FUNCTIONAL surfaces is how often the live-model path must
+    be re-proven. Cheap GET /health still runs every scan.
+    """
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    cheap = Surface("seneca-public", Kind.HTTP, "https://x/health")
+    burn = Surface(
+        "atticus-chat", Kind.FUNCTIONAL, "https://x/chat",
+        interval_s=1800, method="POST",
+        payload={"session_id": "surface-probe"},
+        expect_json_field="reply",
+    )
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["atticus-chat"] = now - 60  # proven a minute ago
+    obs._save()
+    probed = []
+
+    def capture(surfaces, timeout=0):
+        probed.extend(s.name for s in surfaces)
+        return [Result(s.name, Status.HEALTHY, "ok", 0.01, now) for s in surfaces]
+
+    monkeypatch.setattr(lane_mod, "probe_all", capture)
+    lane_mod._STREAK.clear()
+    lane_mod.collect(observations=obs, surfaces=(cheap, burn))
+    assert "seneca-public" in probed
+    assert "atticus-chat" not in probed
+
+
+def test_functional_chat_probe_runs_when_interval_elapsed(tmp_path, monkeypatch):
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    burn = Surface(
+        "atticus-chat", Kind.FUNCTIONAL, "https://x/chat",
+        interval_s=1800, method="POST",
+    )
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["atticus-chat"] = now - 1801
+    obs._save()
+    probed = []
+    monkeypatch.setattr(
+        lane_mod, "probe_all",
+        lambda surfaces, timeout=0: (
+            probed.extend(s.name for s in surfaces) or [
+                Result(s.name, Status.HEALTHY, "ok", 0.01, now) for s in surfaces
+            ]
+        ),
+    )
+    lane_mod._STREAK.clear()
+    lane_mod.collect(observations=obs, surfaces=(burn,))
+    assert probed == ["atticus-chat"]
+
+
 def test_lane_emits_critical_for_down_and_never_verified(tmp_path, monkeypatch):
     from soveryn.agents.ares.lanes import surfaces as lane_mod
 
@@ -179,22 +237,76 @@ def test_lane_emits_critical_for_down_and_never_verified(tmp_path, monkeypatch):
         Result("dead", Status.FAILED, "HTTP 404, expected 200", 0.1, now),
         Result("blind", Status.UNKNOWN, "could not reach", 0.1, now),
     ])
-    found = lane_mod.collect(observations=Observations(tmp_path / "s.json"),
-                             surfaces=surfaces)
+    lane_mod._STREAK.clear()
+    obs = Observations(tmp_path / "s.json")
+    # A single bad probe is deliberately silent (see FAIL_STREAK); the outage
+    # has to still be there on the next scan.
+    lane_mod.collect(observations=obs, surfaces=surfaces)
+    found = lane_mod.collect(observations=obs, surfaces=surfaces)
     by_type = {f.finding_type: f for f in found}
     assert by_type["surface.down"].severity is Severity.CRITICAL
     assert by_type["surface.unknown"].severity is Severity.WARNING
     # 'blind' was never healthy, so it is ALSO never-verified — unknown and
     # unverified are different facts and both belong in the record.
+    # never_verified is NOT streak-gated: absence of any check is not a blip.
     assert by_type["surface.never_verified"].severity is Severity.CRITICAL
+
+
+def test_a_single_bad_probe_does_not_alarm(tmp_path, monkeypatch):
+    """2026-08-09: this lane fired CRITICAL to Signal four times in twelve
+    minutes for surfaces that were healthy on the very next scan. An alert that
+    cries wolf gets muted, and a muted Ares is how 53 lint findings sat unread
+    while real outages ran underneath."""
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    surfaces = (Surface("flaky", Kind.HTTP, "http://x/"),)
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["flaky"] = now          # healthy before, so not never-verified
+    obs._save()
+    lane_mod._STREAK.clear()
+
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+
+    # ...and a recovery clears the streak, so the next blip is silent again.
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.HEALTHY, "HTTP 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("flaky", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+    assert lane_mod.collect(observations=obs, surfaces=surfaces) == ()
+
+
+def test_a_persistent_failure_still_alarms(tmp_path, monkeypatch):
+    """Tolerance must not become blindness."""
+    from soveryn.agents.ares.lanes import surfaces as lane_mod
+
+    surfaces = (Surface("truly-dead", Kind.HTTP, "http://x/"),)
+    now = time.time()
+    obs = Observations(tmp_path / "s.json")
+    obs._data["truly-dead"] = now
+    obs._save()
+    lane_mod._STREAK.clear()
+    monkeypatch.setattr(lane_mod, "probe_all", lambda s, timeout=0: [
+        Result("truly-dead", Status.FAILED, "HTTP 500, expected 200", 0.1, now)])
+
+    lane_mod.collect(observations=obs, surfaces=surfaces)
+    found = lane_mod.collect(observations=obs, surfaces=surfaces)
+    assert [f.finding_type for f in found] == ["surface.down"]
+    assert found[0].evidence["failed_checks"] >= lane_mod.FAIL_STREAK
 
 
 # ── the registry itself ─────────────────────────────────────────────────────
 
 def test_the_incident_surfaces_are_declared():
     """Every surface that failed silently this week is now watchable."""
-    for name in ("atticus", "soveryn-agent", "shepherd",
-                 "soverynintelligence.com", "router-blackwell", "laguna-spark"):
+    # `atticus` split into atticus-chat / atticus-health on 2026-08-13: both
+    # probes already ran, but they shared a name, so a finding could not say
+    # which had failed.
+    for name in ("atticus-chat", "atticus-health", "soveryn-agent", "shepherd",
+                 "soverynintelligence.com", "router-blackwell", "qwen-spark"):
         assert name in registry.BY_NAME, f"{name} is undeclared and therefore unwatched"
 
 
@@ -208,7 +320,7 @@ def test_chat_surfaces_are_probed_on_the_path_they_actually_serve():
 
     A monitor is only worth its false-positive rate.
     """
-    for name in ("atticus", "soveryn-agent"):
+    for name in ("atticus-chat", "soveryn-agent"):
         s = registry.BY_NAME[name]
         assert s.method == "POST", f"{name} serves POST /chat, not GET"
         assert s.target.endswith("/chat"), f"{name} must be probed on /chat"
@@ -220,3 +332,29 @@ def test_every_surface_has_a_probe_target_and_owner():
         assert s.target.strip(), f"{s.name} has no probe target"
         assert s.owner.strip(), f"{s.name} has no owner"
         assert s.interval_s > 0, f"{s.name} has no staleness interval"
+
+
+def test_surface_names_are_unique():
+    """Two probes may not share a name.
+
+    BY_NAME is a dict, so a repeat silently drops one declaration — and Ares
+    keys findings as `surface.down:<name>`, so a shared name cannot say WHICH
+    probe failed. Found 2026-08-13: `atticus` and `pondwright-chat` were each
+    declared twice, a POST /chat probe and a GET /health probe, so an alert
+    could not distinguish a dead chat endpoint from a dead health endpoint.
+    Both probes were running; only their identity was ambiguous.
+    """
+    names = [s.name for s in registry.SURFACES]
+    assert len(names) == len(set(names)), \
+        f"duplicate surface names: {sorted({n for n in names if names.count(n) > 1})}"
+    assert len(registry.BY_NAME) == len(registry.SURFACES), \
+        "BY_NAME lost a surface — a name collided"
+
+
+def test_each_host_probe_pair_is_separately_addressable():
+    """A chat probe and a health probe on the same host are different facts."""
+    for chat, health in (("atticus-chat", "atticus-health"),
+                         ("pondwright-chat", "pondwright-health")):
+        assert registry.BY_NAME[chat].method == "POST"
+        assert registry.BY_NAME[chat].target.endswith("/chat")
+        assert registry.BY_NAME[health].target.endswith("/health")

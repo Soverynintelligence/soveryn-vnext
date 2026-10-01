@@ -88,9 +88,27 @@ async function fetchThreads(secret) {
 // --- Agent presentation -----------------------------------------------------
 const AGENT_TAGLINE = {
   aetheria: 'Strategy + coordination',
+  kernel:   'Build + local models',
+  eve:      'Ship + CWG',
   vett:     'Research + verification',
   scotty:   'Execution + bounded fixes',
 };
+
+function citIcon(agent, size, busy) {
+  const id = String(agent || '').toLowerCase();
+  if (typeof window.soverynCitizenIcon === 'function') {
+    return window.soverynCitizenIcon(id, { size: size || 40, className: 'pwa-cit', busy: !!busy, label: id });
+  }
+  return `<span class="agent-dot agent-${escapeHtml(id)}"></span>`;
+}
+
+function setPwaHeaderBusy(on) {
+  const el = document.querySelector('#hdr-right .sov-cit, #hdr-right .pwa-cit');
+  if (!el) return;
+  el.classList.toggle('is-busy', !!on);
+  if (on) el.setAttribute('data-busy', '1');
+  else el.removeAttribute('data-busy');
+}
 
 // Which agents have voice configured (from /m/voice/agents). Cached for the
 // session — voice config doesn't change between page loads.
@@ -344,7 +362,7 @@ async function renderThreadListView($view) {
         <div class="thread-card${t.unread ? ' has-unread' : ''}"
              data-tid="${escapeHtml(t.thread_id)}"
              data-agent="${escapeHtml(t.agent)}">
-          <span class="agent-dot agent-dot thread-card-dot agent-${escapeHtml(t.agent)}"></span>
+          <span data-pick-shape="${escapeHtml(t.agent)}" title="Change shape">${citIcon(t.agent, 40)}</span>
           <div class="thread-card-body">
             <div class="thread-card-row1">
               <span class="thread-card-name agent-${escapeHtml(t.agent)}">${escapeHtml(t.agent)}</span>
@@ -373,12 +391,12 @@ async function renderAgentPickView($view) {
     showBack: true,
     rightHtml: '',
   });
-  const agents = ['aetheria', 'vett', 'scotty'];
+  const agents = ['aetheria', 'kernel', 'eve'];
   $view.innerHTML = `
     <div id="agent-pick-list">
       ${agents.map(a => `
         <div class="agent-pick-card" data-agent="${a}">
-          <span class="agent-dot agent-${a}"></span>
+          ${citIcon(a, 44)}
           <div>
             <div class="agent-pick-name agent-${a}">${a.toUpperCase()}</div>
             <div class="agent-pick-tagline">${escapeHtml(AGENT_TAGLINE[a] || '')}</div>
@@ -425,7 +443,7 @@ async function renderThreadView($view, { tid, agent }) {
       (canCall
         ? `<button class="call-btn" id="hdr-call" aria-label="Voice call">&#9742;</button>`
         : '') +
-      `<span class="agent-dot agent-${currentThreadAgent}" style="margin:0 12px"></span>`,
+      citIcon(currentThreadAgent, 28),
   });
   if (canCall) {
     const callBtn = document.getElementById('hdr-call');
@@ -464,8 +482,9 @@ async function renderVoiceView($view, { tid, agent }) {
   });
 
   $view.classList.add('voice-view');
+  const agentClass = 'agent-' + String(agent || 'aetheria').toLowerCase().replace(/[^a-z0-9_-]/g, '');
   $view.innerHTML = `
-    <div class="voice-orb" id="voice-orb" data-state="idle"></div>
+    <div class="voice-orb ${escapeHtml(agentClass)}" id="voice-orb" data-state="idle"></div>
     <div class="voice-title">${escapeHtml(agent.toUpperCase())} &mdash; LIVE</div>
     <div class="voice-status" id="voice-status">connecting&hellip;</div>
     <div class="voice-error" id="voice-error"></div>
@@ -581,10 +600,12 @@ async function sendMessage(tid, currentThreadAgent, $view) {
     client_ts: new Date().toISOString(),
   });
   await IDB.outboxPut({ client_msg_id, url, headers, body });
+  setPwaHeaderBusy(true);
   let r;
   try {
     r = await fetch(url, { method: 'POST', headers, body });
   } catch (netErr) {
+    setPwaHeaderBusy(false);
     // Network failure — entry stays in outbox. Register a background-sync
     // so the SW drains it once connectivity returns. Server idempotency
     // (Task 6) makes the same client_msg_id replay safe.
@@ -598,6 +619,7 @@ async function sendMessage(tid, currentThreadAgent, $view) {
     return;
   }
   if (!r.ok) {
+    setPwaHeaderBusy(false);
     contentEl.textContent += `\n[error: HTTP ${r.status}]`;
     return;
   }
@@ -635,6 +657,7 @@ async function sendMessage(tid, currentThreadAgent, $view) {
   }
   // Stream completed successfully — clear the outbox entry.
   await IDB.outboxDelete(client_msg_id);
+  setPwaHeaderBusy(false);
 }
 
 // Register the service worker so its `sync` listener can drain the outbox
@@ -724,11 +747,25 @@ function renderInstallBanner(ios) {
 // thread-bound offer route and renders into .voice-orb / #voice-status.
 
 const VOICE_STATE = {
-  IDLE: 'idle', LISTENING: 'listening', HEARING: 'hearing',
+  IDLE: 'idle', CONNECTING: 'connecting', LISTENING: 'listening', HEARING: 'hearing',
   THINKING: 'thinking', SPEAKING: 'speaking', INTERRUPTED: 'interrupted',
 };
-const VOICE_THRESHOLD = 0.04;
-const VOICE_SILENCE_MS = 800;
+const VOICE_LABEL = {
+  idle: 'Ready',
+  connecting: 'Connecting…',
+  listening: 'Listening…',
+  hearing: 'Hearing you…',
+  thinking: 'Thinking…',
+  speaking: 'Speaking…',
+  interrupted: 'You first…',
+};
+// Hysteresis + EMA — stops thrashy listen/hear flicker.
+const VOICE_ENTER = 0.055;
+const VOICE_LEAVE = 0.028;
+const VOICE_SILENCE_MS = 1400;
+const VOICE_MIN_DWELL_MS = 280;
+const VOICE_THINK_FALLBACK_MS = 8000;
+const VOICE_EMA_ALPHA = 0.22;
 
 let voicePC = null;
 let voiceMicStream = null;
@@ -738,13 +775,30 @@ let voiceInAnalyser = null;
 let voiceState = VOICE_STATE.IDLE;
 let voiceRAF = null;
 let voiceLastSpokenAt = 0;
+let voiceStateChangedAt = 0;
+let voiceOutEma = 0;
+let voiceInEma = 0;
+let voiceUserActive = false;
+let voiceBotActive = false;
 
-function voiceSetState(s) {
+function voiceSetState(s, force) {
+  if (!force && s === voiceState) return;
+  const now = performance.now();
+  if (!force && voiceState !== VOICE_STATE.IDLE && voiceState !== VOICE_STATE.CONNECTING) {
+    const elapsed = now - voiceStateChangedAt;
+    const sticky =
+      (voiceState === VOICE_STATE.SPEAKING && s === VOICE_STATE.LISTENING) ||
+      (voiceState === VOICE_STATE.HEARING && s === VOICE_STATE.THINKING) ||
+      (voiceState === VOICE_STATE.THINKING && s === VOICE_STATE.LISTENING) ||
+      (voiceState === VOICE_STATE.LISTENING && s === VOICE_STATE.HEARING);
+    if (sticky && elapsed < VOICE_MIN_DWELL_MS) return;
+  }
   voiceState = s;
+  voiceStateChangedAt = now;
   const orb = document.getElementById('voice-orb');
   const st = document.getElementById('voice-status');
   if (orb) orb.dataset.state = s;
-  if (st) st.textContent = s;
+  if (st) st.textContent = VOICE_LABEL[s] || s;
 }
 
 function voiceShowError(msg) {
@@ -766,23 +820,50 @@ function voiceAmp(an) {
   return Math.sqrt(sum / data.length);
 }
 
+function voiceGate(ema, wasActive) {
+  if (wasActive) return ema > VOICE_LEAVE;
+  return ema > VOICE_ENTER;
+}
+
+function voiceWaitIce(pc, timeoutMs = 1500) {
+  if (pc.iceGatheringState === 'complete') return Promise.resolve();
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      pc.removeEventListener('icegatheringstatechange', onChange);
+      resolve();
+    };
+    const onChange = () => {
+      if (pc.iceGatheringState === 'complete') finish();
+    };
+    pc.addEventListener('icegatheringstatechange', onChange);
+    setTimeout(finish, timeoutMs);
+  });
+}
+
 function voiceTick() {
   if (!voiceOutAnalyser) return;
   const orb = document.getElementById('voice-orb');
   if (!orb) return;  // view torn down
-  const out = voiceAmp(voiceOutAnalyser);
-  const inn = voiceInAnalyser ? voiceAmp(voiceInAnalyser) : 0;
+  const outRaw = voiceAmp(voiceOutAnalyser);
+  const innRaw = voiceInAnalyser ? voiceAmp(voiceInAnalyser) : 0;
+  voiceOutEma = voiceOutEma + VOICE_EMA_ALPHA * (outRaw - voiceOutEma);
+  voiceInEma = voiceInEma + VOICE_EMA_ALPHA * (innRaw - voiceInEma);
   const now = performance.now();
-  const userSpeaking = out > VOICE_THRESHOLD;
-  const botSpeaking  = inn > VOICE_THRESHOLD;
+  const userSpeaking = voiceGate(voiceOutEma, voiceUserActive);
+  const botSpeaking  = voiceGate(voiceInEma, voiceBotActive);
+  voiceUserActive = userSpeaking;
+  voiceBotActive = botSpeaking;
 
   if (botSpeaking && userSpeaking && voiceState === VOICE_STATE.SPEAKING) {
-    voiceSetState(VOICE_STATE.INTERRUPTED);
-    setTimeout(() => voiceSetState(VOICE_STATE.HEARING), 200);
+    voiceSetState(VOICE_STATE.INTERRUPTED, true);
+    setTimeout(() => { if (voicePC) voiceSetState(VOICE_STATE.HEARING, true); }, 220);
     voiceLastSpokenAt = now;
   } else if (botSpeaking) {
     voiceSetState(VOICE_STATE.SPEAKING);
-    const scale = 1.0 + Math.min(0.15, inn * 1.5);
+    const scale = 1.0 + Math.min(0.12, voiceInEma * 1.2);
     orb.style.transform = `scale(${scale})`;
   } else if (userSpeaking) {
     voiceSetState(VOICE_STATE.HEARING);
@@ -794,7 +875,7 @@ function voiceTick() {
     } else if (voiceState === VOICE_STATE.SPEAKING) {
       voiceSetState(VOICE_STATE.LISTENING);
       orb.style.transform = '';
-    } else if (voiceState === VOICE_STATE.THINKING && now - voiceLastSpokenAt > 6000) {
+    } else if (voiceState === VOICE_STATE.THINKING && now - voiceLastSpokenAt > VOICE_THINK_FALLBACK_MS) {
       voiceSetState(VOICE_STATE.LISTENING);
     }
   }
@@ -803,9 +884,19 @@ function voiceTick() {
 
 async function startVoiceCall({ tid, agent }) {
   const secret = await loadSecret();
+  voiceOutEma = 0;
+  voiceInEma = 0;
+  voiceUserActive = false;
+  voiceBotActive = false;
+  voiceSetState(VOICE_STATE.CONNECTING, true);
   try {
     voiceMicStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
       video: false,
     });
   } catch (e) {
@@ -813,9 +904,13 @@ async function startVoiceCall({ tid, agent }) {
     return;
   }
   voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (voiceAudioCtx.state === 'suspended') {
+    try { await voiceAudioCtx.resume(); } catch (e) { /* best effort */ }
+  }
   const outSrc = voiceAudioCtx.createMediaStreamSource(voiceMicStream);
   voiceOutAnalyser = voiceAudioCtx.createAnalyser();
-  voiceOutAnalyser.fftSize = 256;
+  voiceOutAnalyser.fftSize = 512;
+  voiceOutAnalyser.smoothingTimeConstant = 0.65;
   outSrc.connect(voiceOutAnalyser);
 
   voicePC = new RTCPeerConnection({
@@ -837,20 +932,23 @@ async function startVoiceCall({ tid, agent }) {
     audioEl.autoplay = true;
     audioEl.play().catch(() => {});
     voiceInAnalyser = voiceAudioCtx.createAnalyser();
-    voiceInAnalyser.fftSize = 256;
+    voiceInAnalyser.fftSize = 512;
+    voiceInAnalyser.smoothingTimeConstant = 0.65;
     voiceAudioCtx.createMediaStreamSource(stream).connect(voiceInAnalyser);
   };
 
   try {
     const offer = await voicePC.createOffer();
     await voicePC.setLocalDescription(offer);
+    await voiceWaitIce(voicePC, 1500);
+    const local = voicePC.localDescription || offer;
     const resp = await fetch(`/m/threads/${tid}/voice/offer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${secret}`,
       },
-      body: JSON.stringify({ sdp: offer.sdp, type: offer.type }),
+      body: JSON.stringify({ sdp: local.sdp, type: local.type }),
     });
     if (!resp.ok) {
       const txt = await resp.text();
@@ -858,7 +956,7 @@ async function startVoiceCall({ tid, agent }) {
     }
     const answer = await resp.json();
     await voicePC.setRemoteDescription({ type: answer.type, sdp: answer.sdp });
-    voiceSetState(VOICE_STATE.LISTENING);
+    voiceSetState(VOICE_STATE.LISTENING, true);
     voiceTick();
   } catch (e) {
     console.error('voice start failed:', e);
@@ -877,6 +975,10 @@ async function endVoiceCall() {
   if (voiceAudioCtx) { try { await voiceAudioCtx.close(); } catch (e) {} voiceAudioCtx = null; }
   voiceOutAnalyser = null;
   voiceInAnalyser = null;
+  voiceOutEma = 0;
+  voiceInEma = 0;
+  voiceUserActive = false;
+  voiceBotActive = false;
   voiceState = VOICE_STATE.IDLE;
 }
 
@@ -885,7 +987,9 @@ async function endVoiceCall() {
   if (!secret) {
     await reset({ kind: 'pairing' });
   } else {
-    await reset({ kind: 'thread-list' });
+    // Open on Mission Control (desktop parity: ops / public agents / cognition).
+    // Team remains one tab away. control.js owns the Control tab renderer.
+    await reset({ kind: 'control-home' });
   }
   showInstallBanner();
 })();

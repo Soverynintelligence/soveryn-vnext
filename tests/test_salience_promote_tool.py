@@ -134,6 +134,7 @@ def test_promote_writes_library_node_with_provenance(paths):
     assert "promoted" in w["tags"]
     p = w["provenance"]
     assert p["source"] == "salience_promotion"
+    assert p["cls"] == "told"  # user-turn promote is Channel A
     assert p["candidate_id"] == cand_id
     assert p["turn_rowid"] == 5
     assert p["session_id"] == "sess-A"

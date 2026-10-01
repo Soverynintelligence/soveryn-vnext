@@ -190,6 +190,16 @@ class PatrolDaemon:
 
         # Live: invoke Vett via /chat with the durable patrol session.
         try:
+            # Continuum — Vett is crew; same unprompted budget/ledger as Aetheria.
+            from soveryn.platform.acttruth.unprompted import (
+                apply_budget_to_prompt,
+                record_unprompted_tick,
+            )
+
+            prompt, _budget = apply_budget_to_prompt(
+                "vett", prompt, rail="patrol",
+            )
+
             session_id = self._ensure_patrol_session()
             sources_before = self._patrol_visit_count_total()
             signals_before = self._signal_count_for_vett()
@@ -199,6 +209,39 @@ class PatrolDaemon:
             sources_visited = max(0, sources_after - sources_before)
             signals_posted = max(0, signals_after - signals_before)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
+            tool_calls = response.get("tool_calls") or []
+            tool_count = len(tool_calls) if isinstance(tool_calls, list) else 0
+            action_taken = (
+                sources_visited > 0
+                or signals_posted > 0
+                or tool_count > 0
+            )
+            record_unprompted_tick(
+                "vett",
+                rail="patrol",
+                tick_id=tick_id,
+                action_taken=action_taken,
+                tool_call_count=tool_count,
+                note_head=(response_text or "")[:120],
+                extra_summary=(
+                    f"sources_visited={sources_visited} "
+                    f"signals_posted={signals_posted}"
+                ),
+            )
+            if action_taken:
+                try:
+                    from soveryn.platform.acttruth.earned_keep import record_earned_keep
+
+                    record_earned_keep(
+                        "vett",
+                        rail="patrol",
+                        tick_id=tick_id,
+                        durable_delta=(sources_visited > 0 or signals_posted > 0),
+                    )
+                except Exception:
+                    logger.exception(
+                        "patrol tick %s: earned_keep record failed", tick_id,
+                    )
             self._write_log_row(
                 tick_id=tick_id,
                 triggered_at=triggered_at,

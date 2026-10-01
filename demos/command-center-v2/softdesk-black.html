@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control — Softdesk (black)</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0d1117; --hi:#161d26; --lo:#070a0e;
+  --txt:#d8dee7; --txt2:#8b96a5; --txt3:#5a6472;
+  --gold:#d3a24a; --ok:#5ee36a; --warn:#ffc857; --rec:#ff4d4d;
+  --sh-out:9px 9px 20px #04060a,-9px -9px 20px #1b2330;
+  --sh-out-sm:5px 5px 12px #04060a,-5px -5px 12px #1b2330;
+  --sh-in:inset 6px 6px 14px #04060a,inset -6px -6px 14px #1b2330;
+  --sh-in-sm:inset 4px 4px 9px #04060a,inset -4px -4px 9px #1b2330;
+  --sans:system-ui,-apple-system,sans-serif; --serif:Georgia,serif; --mono:ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;padding:28px clamp(14px,3vw,48px) 46px;max-width:1180px;margin:0 auto}
+h1{font-size:21px;font-weight:700;letter-spacing:.5px}
+h1 span{color:var(--gold)}
+h2{font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--txt3);font-weight:600;margin:30px 0 14px}
+h2 b{color:var(--gold)}
+header{display:flex;align-items:center;gap:20px;margin:0 auto 8px;flex-wrap:wrap}
+.badge{display:flex;align-items:center;gap:16px;padding:13px 22px;border-radius:20px;
+  background:linear-gradient(145deg,var(--hi),var(--lo));box-shadow:var(--sh-out)}
+.medallion{width:42px;height:42px;border-radius:50%;flex:none;
+  background:radial-gradient(circle at 35% 35%,#2a3542,#0d1117);box-shadow:var(--sh-in-sm);
+  display:flex;align-items:center;justify-content:center;color:var(--gold);font-family:var(--serif);font-size:18px}
+.sub{font-size:11.5px;color:var(--txt3);margin-top:2px;letter-spacing:.4px}
+.health{margin-left:auto;font-size:12px;color:var(--txt2);padding:10px 16px;border-radius:13px;
+  box-shadow:var(--sh-in-sm);background:linear-gradient(145deg,var(--hi),var(--lo));letter-spacing:.4px}
+.health b{color:var(--ok);font-weight:600}
+.panel{border-radius:22px;padding:18px 20px;background:linear-gradient(145deg,var(--hi),var(--lo));box-shadow:var(--sh-out);margin-bottom:20px}
+.panel .ph{display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--txt3);font-weight:600;margin-bottom:12px}
+.ph .live{color:var(--ok)}
+.row{display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #10151c;font-size:13.5px}
+.row:last-child{border-bottom:0}
+.row .t{font-family:var(--mono);color:var(--txt3);font-size:11.5px;min-width:44px;padding-top:2px}
+.row .b{flex:1;color:var(--txt2)}
+.row .b b{color:var(--txt);font-weight:600}
+.row .b small{display:block;color:var(--txt3);font-size:11.5px;margin-top:2px}
+.led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:9px;vertical-align:middle;flex:none;box-shadow:0 0 6px currentColor}
+.led.ok{background:var(--ok);color:var(--ok)}
+.led.warn{background:var(--warn);color:var(--warn)}
+.led.off{background:#1c242e;color:transparent;box-shadow:none}
+.who{color:var(--gold);font-weight:600;min-width:74px;display:inline-block}
+.what{flex:1;color:var(--txt2)}
+.btn{border:0;border-radius:9px;padding:7px 16px;font-size:11px;font-weight:700;letter-spacing:.8px;cursor:pointer}
+.btn.allow{background:#0f1a12;color:var(--ok);box-shadow:var(--sh-out-sm)}
+.btn.deny{background:var(--lo);color:var(--txt3);box-shadow:var(--sh-in-sm)}
+.cit{display:grid;grid-template-columns:130px 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid #10151c;font-size:13.5px}
+.cit:last-child{border-bottom:0}
+.cit .nm{font-family:var(--serif);font-size:16.5px;color:var(--txt)}
+.cit .nm small{display:block;font-family:var(--sans);font-size:10px;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;margin-top:1px}
+.cit .doing{color:var(--txt2);font-size:13px}
+.cit .doing b{color:var(--txt);font-weight:600}
+.pill{font-size:10.5px;padding:4px 12px;border-radius:99px;box-shadow:var(--sh-in-sm);color:var(--ok);letter-spacing:.5px;white-space:nowrap}
+.pill.dim{color:var(--txt3)}
+.estate{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.svc{display:flex;gap:10px;align-items:center;border-radius:14px;padding:11px 14px;
+  background:linear-gradient(145deg,var(--hi),var(--lo));box-shadow:var(--sh-out-sm);font-size:12.5px}
+.svc .b b{color:var(--txt);font-weight:600;display:block;font-size:12.5px}
+.svc .b{color:var(--txt3);font-size:11px;line-height:1.4}
+.psvc{display:flex;gap:10px;align-items:center;border-radius:14px;padding:11px 14px;background:var(--lo);box-shadow:var(--sh-in-sm);font-size:11.5px;color:var(--txt3)}
+.psvc b{color:var(--txt2);font-weight:600;display:block;font-size:11.5px}
+.adv{border-radius:22px;background:linear-gradient(145deg,var(--hi),var(--lo));box-shadow:var(--sh-out);margin-bottom:20px}
+.adv>summary{padding:15px 20px;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--txt3);font-weight:600;cursor:pointer;list-style:none}
+.adv>summary::-webkit-details-marker{display:none}
+.adv>summary::after{content:" +";color:var(--gold)}
+.adv[open]>summary::after{content:" −"}
+.adv .list{padding:4px 20px 16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;font-size:12px;color:var(--txt2)}
+.adv .list span{padding:8px 12px;background:var(--lo);box-shadow:var(--sh-in-sm);border-radius:9px}
+.note{color:var(--txt3);font-size:12px;margin-top:22px;font-style:italic;font-family:var(--serif)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge">
+    <div class="medallion">S</div>
+    <div>
+      <h1>Mission <span>Control</span></h1>
+      <div class="sub">SOVERYN · Wednesday, Sep 23 · 08:12</div>
+    </div>
+  </div>
+  <div class="health">uptime <b>8d</b> · load <b>1.5</b> · easystore <b>✓</b> · sweep <b>clean</b> · <b style="color:var(--warn)">1 needs you</b></div>
+</header>
+
+<h2>Today — <b>the morning run</b></h2>
+<div class="panel">
+  <div class="ph"><span>wed · sep 23 · automated</span><span class="live">● complete — 1 running</span></div>
+  <div class="row"><span class="t">04:00</span><div class="b"><b>Nightly backup</b> — 36 DBs, tax books, CRM mirror, encrypted archive<small>easystore synced · passphrase on file</small></div></div>
+  <div class="row"><span class="t">07:00</span><div class="b"><b>Pond Academy watch</b> — no changes worth reporting<small>Eve</small></div></div>
+  <div class="row"><span class="t">07:30</span><div class="b"><b>Morning brief</b> — first field note live on the site; green-water search traffic is the target<small>Aetheria</small></div></div>
+  <div class="row"><span class="t">08:00</span><div class="b"><b>Funding watch — first run</b> — 2 findings: UK open-source AI fund (stretch), EU Gigafactories deadline Nov 12<small>Eve · V.E.T.T. standard, both sourced</small></div></div>
+  <div class="row"><span class="t">08:06</span><div class="b"><b>AI news digest</b> — 6 items, 2 with SOVERYN fit<small>in Messages</small></div></div>
+  <div class="row"><span class="t">08:07</span><div class="b"><b>Crash watch</b> — all units healthy<small>all monitored units healthy</small></div></div>
+  <div class="row"><span class="t">08:12</span><div class="b"><b>Funding watch wave 2</b> — arxiv re-check<small>running now</small></div></div>
+</div>
+
+<h2>Needs you — <b>1 item</b></h2>
+<div class="panel">
+  <div class="row">
+    <span class="led warn"></span>
+    <span class="who">Aetheria</span>
+    <span class="what">post to X: "The house that runs itself — week in review." <small>Gate: egress</small></span>
+    <button class="btn allow">ALLOW</button><button class="btn deny">DENY</button>
+  </div>
+</div>
+
+<h2>Citizens — <b>3 live</b></h2>
+<div class="panel">
+  <div class="cit">
+    <span class="nm">Aetheria<small>soul · voice · gate</small></span>
+    <span class="doing"><b>Morning brief delivered.</b> Gate item waiting: X post approval. Signal channel armed.</span>
+    <span class="pill">live</span>
+  </div>
+  <div class="cit">
+    <span class="nm">Kernel<small>build · verify · deploy</small></span>
+    <span class="doing"><b>Estate audit done.</b> 5 commits pushed — security layer, reconcile, orrery. Idle since 08:40.</span>
+    <span class="pill">live</span>
+  </div>
+  <div class="cit">
+    <span class="nm">Eve<small>research · ship · watch</small></span>
+    <span class="doing"><b>Funding watch wave 2 running.</b> 2 findings filed. Field note #1 live on the site.</span>
+    <span class="pill">live</span>
+  </div>
+</div>
+
+<h2>Estate — <b>services &amp; iron</b></h2>
+<div class="estate">
+  <div class="svc"><span class="led ok"></span><div class="b"><b>vNext :5001</b>200 · automations 14 registered</div></div>
+  <div class="svc"><span class="led ok"></span><div class="b"><b>CRM :8100</b>fastapi 0.141.1 · 38 tests · /lead throttled</div></div>
+  <div class="svc"><span class="led ok"></span><div class="b"><b>GLM :8001</b>Kernel brain · EXL3 TP=2 · spark2 116/121 GiB</div></div>
+  <div class="svc"><span class="led ok"></span><div class="b"><b>Quadros :8091</b>Eve busy · Qwen 3.8-27B</div></div>
+  <div class="svc"><span class="led ok"></span><div class="b"><b>Blackwell :8090</b>Aetheria · idle</div></div>
+  <div class="svc"><span class="led ok"></span><div class="b"><b>easystore</b>mirrored · encrypted archive on</div></div>
+  <div class="svc"><span class="led warn"></span><div class="b"><b>edge.py</b>parallel session · in flight</div></div>
+</div>
+
+<details class="adv">
+  <summary>Advanced — configuration, memory, legacy surfaces</summary>
+  <div class="list">
+    <span>Gate rules</span><span>Memory &amp; lattice browse</span><span>Cognition surface</span>
+    <span>Library writes</span><span>Comm bus</span><span>Steward — Funding Board</span>
+    <span>ActTruth triage</span><span>Ops console</span><span>Work boards</span>
+    <span>Delivery channels</span><span>Routine docs</span><span>Spawned agents</span>
+  </div>
+</details>
+
+<p class="note">Mockup v2 — softdesk language, command-center content. Contract: docs/designs/2026-09-22-command-center-redesign.md. Order is the design: what happened, what needs you, who is doing what, what is running, config last.</p>
+
+</body>
+</html>

@@ -6,6 +6,7 @@ from requests_oauthlib import OAuth1
 
 _SEARCH_URL = "https://api.twitter.com/2/tweets/search/recent"
 _TWEETS_URL = "https://api.twitter.com/2/tweets"
+_MEDIA_UPLOAD_URL = "https://upload.twitter.com/1.1/media/upload.json"
 
 _ENV_VARS = (
     "X_BEARER_TOKEN",
@@ -87,8 +88,40 @@ class XClient:
                 f"X API returned malformed search response: {type(exc).__name__}"
             ) from exc
 
-    def create_tweet(self, text: str) -> str:
-        return self._post_tweet({"text": text})
+    def upload_media(self, path: str) -> str:
+        """Upload a local image via v1.1; returns media_id_string for v2 tweets."""
+        from pathlib import Path
+
+        p = Path(path)
+        data = p.read_bytes()
+        mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp", ".gif": "image/gif"}.get(p.suffix.lower(), "application/octet-stream")
+        auth = OAuth1(*self._oauth)
+        try:
+            resp = self._http.post(
+                _MEDIA_UPLOAD_URL,
+                files={"media": (p.name, data, mime)},
+                auth=auth,
+            )
+        except Exception as exc:
+            raise XClientError(f"X media upload failed: {type(exc).__name__}") from exc
+        self._raise_for_status(resp)
+        try:
+            body = resp.json()
+            mid = body.get("media_id_string") or str(body.get("media_id") or "")
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise XClientError(
+                f"X API returned malformed media response: {type(exc).__name__}"
+            ) from exc
+        if not mid:
+            raise XClientError("X API media upload returned no media_id")
+        return str(mid)
+
+    def create_tweet(self, text: str, media_ids: list[str] | None = None) -> str:
+        body: dict = {"text": text}
+        if media_ids:
+            body["media"] = {"media_ids": list(media_ids)}
+        return self._post_tweet(body)
 
     def reply_tweet(self, text: str, in_reply_to: str) -> str:
         body = {"text": text, "reply": {"in_reply_to_tweet_id": in_reply_to}}

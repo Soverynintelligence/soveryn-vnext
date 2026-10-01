@@ -27,11 +27,14 @@ _RE_BRACKET_TAG = re.compile(
 )
 _RE_CONTROL_TOKEN = re.compile(r"<\|[^|]*\|>")
 _RE_WHITESPACE = re.compile(r"\s+")
+# Unwrap **bold** / *italic*, then drop leftover asterisks so F5
+# does not speak "asterisk".
+_RE_MD_EMPHASIS = re.compile(r"\*{1,2}([^*]+)\*{1,2}")
 
 
 def sanitize_for_tts(text: str, *, preserve_outer_whitespace: bool = False) -> str:
     """Strip thinking markup, control tokens, tool-call JSON, scratchpad
-    tags, and emoji from `text`. Return clean prose for TTS.
+    tags, emoji, and markdown * / ** from `text`. Return clean prose for TTS.
 
     When ``preserve_outer_whitespace`` is True, keep leading/trailing
     whitespace boundaries after sanitization. This is for chunked TTS
@@ -54,6 +57,8 @@ def sanitize_for_tts(text: str, *, preserve_outer_whitespace: bool = False) -> s
     text = _RE_TOOL_CALL.sub("", text)
     text = _RE_BRACKET_TAG.sub("", text)
     text = _RE_CONTROL_TOKEN.sub("", text)
+    text = _RE_MD_EMPHASIS.sub(r"\1", text)
+    text = text.replace("*", "")
     text = "".join(c for c in text if unicodedata.category(c)[0] != "S")
     text = _RE_WHITESPACE.sub(" ", text)
     if preserve_outer_whitespace:

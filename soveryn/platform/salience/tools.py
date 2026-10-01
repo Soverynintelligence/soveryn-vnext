@@ -99,12 +99,33 @@ def build_promote_salience_candidate_tool(
         if not body:
             body = row["turn_content_head"]
 
+        # Memory Grades: promote a conclusion/intent, not the full turn essay.
+        from soveryn.platform.lattice.content_caps import (
+            LIBRARY_PROMOTE_MAX_CHARS,
+            clamp_content,
+        )
         if intent_text:
-            content = f"{intent_text}\n\nFrom: {row['turn_role']} turn — {body}"
+            content = intent_text.strip()
+            if body:
+                excerpt = (body or "").strip()
+                if len(excerpt) > 400:
+                    excerpt = excerpt[:399].rstrip() + "…"
+                content = f"{content}\n\nFrom: {row['turn_role']} turn — {excerpt}"
         else:
-            content = f"From: {row['turn_role']} turn — {body}"
+            excerpt = (body or "").strip()
+            if len(excerpt) > 400:
+                excerpt = excerpt[:399].rstrip() + "…"
+            content = f"From: {row['turn_role']} turn — {excerpt}"
+        content = clamp_content(
+            "library", content, on_overflow="clamp",
+            max_chars=LIBRARY_PROMOTE_MAX_CHARS,
+        )
 
+        # Channel-A shape: without cls the promote lands as Channel B.
+        role = (row["turn_role"] or "").lower()
+        cls = "told" if role in ("user", "human", "jon") else "witnessed"
         provenance = {
+            "cls": cls,
             "source": "salience_promotion",
             "candidate_id": candidate_id,
             "turn_rowid": int(row["turn_rowid"]),
@@ -112,6 +133,7 @@ def build_promote_salience_candidate_tool(
             "turn_role": row["turn_role"],
             "markers": markers,
             "library_intent": intent_text or None,
+            "grade": "atom",
         }
 
         node_id = lattice_store.write_node(
@@ -122,6 +144,7 @@ def build_promote_salience_candidate_tool(
             intensity=SALIENCE_LIBRARY_INTENSITY,
             tags=(SALIENCE_TAG, PROMOTED_TAG),
             provenance=provenance,
+            on_overflow="clamp",
         )
 
         try:

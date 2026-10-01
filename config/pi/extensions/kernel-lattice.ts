@@ -1,0 +1,1 @@
+../../../packages/soveryn-cli/extensions/kernel-lattice.ts

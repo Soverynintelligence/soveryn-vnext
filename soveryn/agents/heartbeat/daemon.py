@@ -25,14 +25,12 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.agents.heartbeat.daily_post import (
-    DAILY_POST_INVITE,
     DEFAULT_DAILY_POST_HOUR,
-    read_last_invite_date,
-    should_nudge,
-    write_last_invite_date,
 )
 from soveryn.agents.heartbeat.date_extract import build_dated_items
 from soveryn.agents.heartbeat.delta import compute_delta
+from soveryn.agents.heartbeat.house_snapshot import gather_house_snapshot
+from soveryn.agents.heartbeat.failure_sit import detect_failure_avoidance
 from soveryn.agents.heartbeat.materiality import (
     MaterialSignal,
     detect_materiality,
@@ -44,9 +42,6 @@ from soveryn.agents.heartbeat.prompt import (
     build_heartbeat_prompt,
 )
 from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
-from soveryn.agents.presence.candidate_store import CandidateStore
-from soveryn.agents.presence.config import PresenceConfig
-from soveryn.agents.presence.digest import build_digest
 from soveryn.agents.heartbeat.trigger import (
     HeartbeatConfig,
     SkipReason,
@@ -112,8 +107,15 @@ class HeartbeatDaemon:
         daily_post_state_path: Path | None = None,
         daily_post_hour: int = DEFAULT_DAILY_POST_HOUR,
         active_context_db: Path | None = None,
+        citizens_db: Path | None = None,
     ) -> None:
         self.config = config
+        # Citizens commissions registry (charter §12.5). None disables the
+        # bookkeeping entirely and the pulse is unaffected — same posture as
+        # active_context above. record_pulse also swallows its own failures, so
+        # this is belt as well as braces: nothing about writing a commission row
+        # is allowed to cost her a heartbeat.
+        self._citizens_db = citizens_db
         # Cross-rail live thread. The daemon runs OUT OF PROCESS from the Flask
         # app, so it opens the same SQLite file rather than sharing an object —
         # which is exactly why the store was made connection-per-operation and
@@ -267,6 +269,42 @@ class HeartbeatDaemon:
     # ─── Per-tick work ──────────────────────────────────────────────────────
 
     def _do_tick(self, *, now: datetime, eligibility: TickEligibility) -> None:
+        """Run one tick, recorded as a commission when it is a real pulse.
+
+        Charter §12.5. The commission is BOOKKEEPING, not control: it does not
+        decide whether she acts, when she acts, or what she says. It writes down
+        that a pulse happened and how it ended, so `on_duty` is derivable and a
+        daemon that dies mid-pulse leaves a findable row instead of silence.
+
+        record_pulse never raises on its own — a missing, locked or corrupt
+        registry logs and the tick proceeds. A monitoring layer that can silence
+        her is worse than none, and this one wraps her spontaneous initiation.
+        """
+        if not eligibility.eligible:
+            # A skipped tick is not work, so it is not a commission.
+            self._tick_body(now=now, eligibility=eligibility)
+            return
+
+        try:
+            from soveryn.citizens.pulse import record_pulse
+        except ImportError:
+            # pulse.py missing on this install — still run the tick unrecorded.
+            # test_repo_integrity is the check that catches the untracked file.
+            logger.exception(
+                "citizens pulse bookkeeping unavailable; tick proceeds unrecorded"
+            )
+            self._tick_body(now=now, eligibility=eligibility)
+            return
+        with record_pulse(
+            self._citizens_db,
+            "aetheria",
+            "heartbeat pulse",
+            worker="heartbeat",
+            now=now.isoformat(),
+        ):
+            self._tick_body(now=now, eligibility=eligibility)
+
+    def _tick_body(self, *, now: datetime, eligibility: TickEligibility) -> None:
         tick_id = str(uuid.uuid4())
         triggered_at = now.isoformat()
         if not eligibility.eligible:
@@ -310,6 +348,14 @@ class HeartbeatDaemon:
             # record so compute_delta can read it as prev_snapshot next pulse
             # (load-bearing contract: don't drop the "snapshot" key from the
             # ThoughtsLog record below).
+            # House work (automations / gate / triage / active-now) — widen
+            # delta so a still coord board does not silence the whole day.
+            data_root = self.lattice_db.parent.parent if self.lattice_db else None
+            house = gather_house_snapshot(
+                data_root=data_root,
+                citizens_db=self._citizens_db,
+                conv_db=self.conv_db,
+            )
             current_snapshot: dict = {
                 "board": {
                     "open_signal_count": board.open_signal_count,
@@ -331,39 +377,18 @@ class HeartbeatDaemon:
                     "recent_window_minutes": lattice.recent_window_minutes,
                     "new_contradiction_flag_count": lattice.new_contradiction_flag_count,
                 },
+                "house": house,
             }
             prev_record = self._thoughts_log.last()
             delta = compute_delta(current_snapshot, prev_record)
-            # X digest — best-effort. Reads the same feed candidate_store the
-            # read_x tool reads; a feed problem (missing db, corrupt store,
-            # etc.) must never break the heartbeat tick.
-            try:
-                x_digest = build_digest(
-                    CandidateStore(PresenceConfig.default().db_path)
-                ) or ""
-            except Exception:
-                logger.exception("heartbeat tick: X digest build failed, omitting")
-                x_digest = ""
-            # Once-per-day AM post nudge — best-effort. Fires on the FIRST
-            # eligible tick each calendar day at/after `daily_post_hour` local
-            # (`now` is the single wall-clock read passed down from run()), then
-            # persists today's date so a mid-day restart won't re-nudge. Any
-            # failure here must never break the tick.
+            # Aetheria is off X. Do not inject a feed digest or a daily tweet
+            # invite into her pulse — Eve owns @Soveryn_AI now.
+            x_digest = ""
             daily_post_invite = ""
-            try:
-                last_invite = read_last_invite_date(self.daily_post_state_path)
-                if should_nudge(
-                    now=now,
-                    last_invite_date=last_invite,
-                    hour_threshold=self.daily_post_hour,
-                ):
-                    daily_post_invite = DAILY_POST_INVITE
-                    write_last_invite_date(
-                        self.daily_post_state_path, now.date().isoformat()
-                    )
-            except Exception:
-                logger.exception("heartbeat tick: daily post nudge failed, omitting")
-                daily_post_invite = ""
+
+            # Walk past empty unchanged-skip rows to the last real note.
+            last_note = self._thoughts_log.last_standing_note()
+            failure_sit_label = detect_failure_avoidance(last_note)
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -373,6 +398,8 @@ class HeartbeatDaemon:
                 delta=delta,
                 x_digest=x_digest,
                 daily_post_invite=daily_post_invite,
+                last_note=last_note,
+                failure_sit_label=failure_sit_label,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")
@@ -407,6 +434,58 @@ class HeartbeatDaemon:
             )
             return
 
+        # Unchanged world + no morning invite + she already left a note →
+        # skip the model. 2026-08-19: without this, Aetheria re-emitted the
+        # identical "stop the Project Sandbox loop" note every 30m (ActTruth).
+        # Exception: failure-avoidance loops still wake her once to admit/sit.
+        skip_unchanged = os.environ.get(
+            "SOVERYN_HEARTBEAT_SKIP_UNCHANGED", "true"
+        ).strip().lower() in ("1", "true", "yes", "on")
+        if (
+            skip_unchanged
+            and not daily_post_invite
+            and not failure_sit_label
+            and isinstance(delta, dict)
+            and not delta.get("changed", True)
+            and last_note.strip()
+        ):
+            logger.info(
+                "heartbeat tick %s skip unchanged (delta empty, prior note set); "
+                "not invoking model",
+                tick_id,
+            )
+            self._write_log_row(
+                tick_id=tick_id,
+                triggered_at=triggered_at,
+                completed_at=datetime.now().isoformat(),
+                eligible=True,
+                skip_reason=SkipReason.UNCHANGED.value,
+                action_taken=False,
+                tool_call_count=0,
+                response_length=0,
+                error=None,
+            )
+            try:
+                # Do NOT echo last_note — that made CC show the same Sandbox
+                # failure admission as "reflected" every 30m. Snapshot stays so
+                # delta still works; standing note lives on the prior real pulse.
+                self._thoughts_log.append({
+                    "pulse_id": tick_id,
+                    "ts": now.isoformat(),
+                    "snapshot": current_snapshot,
+                    "material_signals": current_snapshot.get("material_signals") or [],
+                    "delta": delta,
+                    "note": "",
+                    "tool_calls": 0,
+                    "surfaced": False,
+                    "skipped": SkipReason.UNCHANGED.value,
+                })
+            except Exception:
+                logger.exception(
+                    "heartbeat tick %s: thoughts-log skip write failed", tick_id
+                )
+            return
+
         # Live: invoke Aetheria via /chat with the durable heartbeat session.
         # The /chat round-trip persists BOTH this prompt and her assistant note
         # into the durable [heartbeat] aetheria session — that session IS the
@@ -415,32 +494,90 @@ class HeartbeatDaemon:
         # pulse (empty note) leaves nothing. Material signals stay visible on
         # the Mission Control tile regardless.
         try:
+            # Continuum competence budget — whole-crew API; this rail is Aetheria.
+            from soveryn.platform.acttruth.unprompted import (
+                apply_budget_to_prompt,
+                record_unprompted_tick,
+            )
+
+            prompt, _budget = apply_budget_to_prompt(
+                "aetheria", prompt, rail="heartbeat",
+            )
+
             session_id = self._ensure_heartbeat_session()
             response = self._call_vnext_chat(session_id, prompt)
             action_taken, tool_call_count = self._summarise_response(response)
             response_text = response.get("content", "") if isinstance(response, dict) else ""
 
+            record_unprompted_tick(
+                "aetheria",
+                rail="heartbeat",
+                tick_id=tick_id,
+                action_taken=bool(action_taken),
+                tool_call_count=int(tool_call_count or 0),
+                note_head=(response_text or "")[:120],
+            )
+            if action_taken:
+                try:
+                    from soveryn.platform.acttruth.earned_keep import record_earned_keep
+
+                    # Heartbeat durable delta is weak without side-effect
+                    # counters; treat any tool use as provisional keep, score
+                    # low durable until we wire richer signals.
+                    record_earned_keep(
+                        "aetheria",
+                        rail="heartbeat",
+                        tick_id=tick_id,
+                        durable_delta=False,
+                    )
+                except Exception:
+                    logger.exception(
+                        "heartbeat tick %s: earned_keep record failed", tick_id,
+                    )
+
             # Her whole response is her note; it already persists in the
             # [heartbeat] session via the /chat round-trip above.
             note = (response_text or "").strip()
 
-            # Phase 1 (2026-07-17): her reflection ALSO lands in the Lattice as a
-            # PRIVATE node, so it becomes part of her associative memory
-            # (recallable via the Librarian embedder) instead of only living in
-            # the black-box thoughts-log + linear [heartbeat] session. Private =
-            # only she recalls it. Best-effort: a lattice/embed failure must never
-            # break the pulse.
+            # Memory Grades PR3: dual-write. Full note stays in thoughts log +
+            # [heartbeat] session (process/self preserved). Lattice gets only a
+            # dense reflection head so always-on writers do not re-bloat essays
+            # as the default self-model. Best-effort: never break the pulse.
             if note:
                 try:
+                    try:
+                        from soveryn.platform.lattice.distill import distill_for_lattice
+                    except ImportError:
+                        # distill module on-disk-only would crash the pulse —
+                        # fall back to a hard head so the tick still completes.
+                        logger.exception(
+                            "heartbeat tick %s: distill module missing; "
+                            "using hard truncation", tick_id,
+                        )
+                        def distill_for_lattice(node_type, text, **kw):  # type: ignore
+                            t = (text or "").strip()
+                            return t if len(t) <= 500 else t[:499].rstrip() + "…"
                     from soveryn.platform.lattice.legacy import LatticeStore, embed_text
-                    LatticeStore(self.lattice_db).write_node(
-                        agent="aetheria", content=note, node_type="reflection",
-                        layer="private", tags=("heartbeat", "reflection"),
-                        embedding=tuple(embed_text(note[:6000])),
-                        provenance={"cls": "witnessed",
-                                    "source": "heartbeat", "pulse_id": tick_id,
-                                    "ts": now.isoformat()},
-                    )
+                    head = distill_for_lattice("reflection", note)
+                    if head:
+                        LatticeStore(self.lattice_db).write_node(
+                            agent="aetheria",
+                            content=head,
+                            node_type="reflection",
+                            layer="private",
+                            tags=("heartbeat", "reflection", "grade:journal"),
+                            embedding=tuple(embed_text(head)),
+                            on_overflow="clamp",
+                            provenance={
+                                "cls": "witnessed",
+                                "source": "heartbeat",
+                                "pulse_id": tick_id,
+                                "ts": now.isoformat(),
+                                "grade": "journal",
+                                "full_text_ref": f"thoughts_log:pulse_id={tick_id}",
+                                "original_chars": len(note),
+                            },
+                        )
                 except Exception:
                     logger.exception(
                         "heartbeat tick %s: lattice private-node write failed "
@@ -950,6 +1087,17 @@ def _build_daemon_from_env() -> HeartbeatDaemon:
                 "SOVERYN_ACTIVE_CONTEXT_DB",
                 str(DEFAULT_CONV_DB.parent.parent / "active_context.db"),
             )
+        ),
+        # Charter §12.5. Set SOVERYN_CITIZENS_DB="" to switch the bookkeeping
+        # off entirely — the pulse is identical either way, and that is the
+        # point: this records her duty, it does not govern it.
+        citizens_db=(
+            Path(_citizens_db_env)
+            if (_citizens_db_env := os.environ.get(
+                "SOVERYN_CITIZENS_DB",
+                str(DEFAULT_CONV_DB.parent.parent / "citizens.db"),
+            ))
+            else None
         ),
     )
 

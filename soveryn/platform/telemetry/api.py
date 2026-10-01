@@ -11,6 +11,7 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -41,6 +42,14 @@ class TelemetryError(Exception):
 
 class TelemetryStore:
     """JSONL + SQLite telemetry store."""
+
+    #: Retention: rows older than this are pruned by :meth:`prune` (2026-09-24).
+    #: The store hit 6.3 GB with no policy — a disk-full-for-everyone bug.
+    RETENTION_DAYS = 30
+    #: Rotate telemetry.jsonl when it exceeds this many bytes; keep the newest
+    #: ROTATE_KEEP archived segments.
+    ROTATE_BYTES = 256 * 1024 * 1024
+    ROTATE_KEEP = 2
 
     def __init__(self, telemetry_dir: Path | None = None) -> None:
         self.telemetry_dir = Path(telemetry_dir) if telemetry_dir is not None else _default_dir()
@@ -92,7 +101,72 @@ class TelemetryStore:
                 "VALUES (?, ?, ?, ?, ?)",
                 (event.source, event.event_type, event.level, encoded_payload, event.created_at),
             )
+        self._maybe_housekeep()
+        if (
+            self.jsonl_path.exists()
+            and self.jsonl_path.stat().st_size >= self.ROTATE_BYTES
+        ):
+            self._rotate_jsonl()  # cheap stat per write; archive only when fat
         return event
+
+    # ── retention (2026-09-24 — the 6.3 GB hole) ────────────────────────────
+    _last_housekeep: float = 0.0  # module-level: prune at most hourly per process
+
+    def _maybe_housekeep(self) -> None:
+        import time
+
+        now = time.time()
+        if now - TelemetryStore._last_housekeep < 3600:
+            return
+        TelemetryStore._last_housekeep = now
+        try:
+            self.prune(days=self.RETENTION_DAYS)
+            self._rotate_jsonl()
+        except Exception:  # noqa: BLE001 — retention must never break a log write
+            import logging
+
+            logging.getLogger(__name__).exception("telemetry housekeeping failed")
+
+    def prune(self, days: int = RETENTION_DAYS) -> int:
+        """Delete rows older than *days*. Returns rows removed.
+
+        created_at is a UTC ISO-8601 string, so lexical comparison with the
+        cutoff is exact. Best-effort: a busy DB (another writer mid-commit)
+        raises, and the caller decides — the hourly hook swallows it.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        with self._conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM telemetry WHERE created_at < ?", (cutoff,)
+            )
+            return cur.rowcount
+
+    def _rotate_jsonl(self) -> None:
+        """Gzip-rotate telemetry.jsonl when it exceeds ROTATE_BYTES.
+
+        The JSONL is the canonical record — rotation ARCHIVES, never deletes
+        content newer than the retention window. Keeps the newest
+        ROTATE_KEEP archives; older archives are deleted (they are past
+        retention by construction).
+        """
+        import gzip
+
+        if (
+            not self.jsonl_path.exists()
+            or self.jsonl_path.stat().st_size < self.ROTATE_BYTES
+        ):
+            return
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        archive = self.telemetry_dir / f"telemetry-{stamp}.jsonl.gz"
+        with self.jsonl_path.open("rb") as src, gzip.open(archive, "wb") as dst:
+            while chunk := src.read(1 << 20):
+                dst.write(chunk)
+        self.jsonl_path.write_text("")  # fresh segment; rows live in the archive
+        archives = sorted(self.telemetry_dir.glob("telemetry-*.jsonl.gz"))
+        for old in archives[: -self.ROTATE_KEEP]:
+            old.unlink(missing_ok=True)
 
     def query(self, filters: dict[str, Any] | None = None, *, limit: int = 100) -> tuple[TelemetryEvent, ...]:
         filters = dict(filters or {})

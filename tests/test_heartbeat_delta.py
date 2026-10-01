@@ -52,6 +52,7 @@ def _make_snapshot(
     new_node_count_recent_window: int = 0,
     recent_window_minutes: int = 60,
     new_contradiction_flag_count: int = 0,
+    house: dict | None = None,
 ) -> dict:
     return {
         "board": {
@@ -70,6 +71,14 @@ def _make_snapshot(
             "new_node_count_recent_window": new_node_count_recent_window,
             "recent_window_minutes": recent_window_minutes,
             "new_contradiction_flag_count": new_contradiction_flag_count,
+        },
+        "house": house if house is not None else {
+            "automations_unread_count": 0,
+            "automations_inbox_latest_id": None,
+            "gate_pending_count": 0,
+            "triage_open_count": 0,
+            "on_duty_count": 0,
+            "active_now_count": 0,
         },
     }
 
@@ -174,3 +183,67 @@ def test_stalled_blueprint_change_detected():
     result = compute_delta(current_snap, prev)
     assert result["changed"] is True
     assert any("stall" in item.lower() for item in result["items"])
+
+
+# ── House-work delta (automations / gate / triage / active-now) ───────────────
+
+
+def test_house_gate_pending_change_wakes():
+    prev = _make_prev_record(_make_snapshot())
+    current = _make_snapshot(house={
+        "automations_unread_count": 0,
+        "automations_inbox_latest_id": None,
+        "gate_pending_count": 2,
+        "triage_open_count": 0,
+        "on_duty_count": 0,
+        "active_now_count": 0,
+    })
+    result = compute_delta(current, prev)
+    assert result["changed"] is True
+    assert any("gate pending" in i for i in result["items"])
+
+
+def test_house_automations_latest_id_wakes():
+    prev = _make_prev_record(_make_snapshot(house={
+        "automations_unread_count": 1,
+        "automations_inbox_latest_id": "old",
+        "gate_pending_count": 0,
+        "triage_open_count": 0,
+        "on_duty_count": 0,
+        "active_now_count": 0,
+    }))
+    current = _make_snapshot(house={
+        "automations_unread_count": 1,
+        "automations_inbox_latest_id": "new-run",
+        "gate_pending_count": 0,
+        "triage_open_count": 0,
+        "on_duty_count": 0,
+        "active_now_count": 0,
+    })
+    result = compute_delta(current, prev)
+    assert result["changed"] is True
+    assert any("automations inbox latest" in i for i in result["items"])
+
+
+def test_house_missing_on_prev_with_zeros_not_changed():
+    """Old thoughts-log rows lack house; all-zero current must not false-wake."""
+    snap = _make_snapshot()
+    prev_snap = {k: v for k, v in snap.items() if k != "house"}
+    prev = _make_prev_record(prev_snap)
+    result = compute_delta(snap, prev)
+    assert result["changed"] is False
+
+
+def test_house_active_now_change_wakes():
+    prev = _make_prev_record(_make_snapshot())
+    current = _make_snapshot(house={
+        "automations_unread_count": 0,
+        "automations_inbox_latest_id": None,
+        "gate_pending_count": 0,
+        "triage_open_count": 0,
+        "on_duty_count": 1,
+        "active_now_count": 1,
+    })
+    result = compute_delta(current, prev)
+    assert result["changed"] is True
+    assert any("active now" in i or "on duty" in i for i in result["items"])

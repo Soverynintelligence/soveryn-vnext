@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURORA — generative silk</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#050208;font-family:'Georgia',serif}
+#c{position:fixed;inset:0;display:block;cursor:crosshair}
+#hud{
+  position:fixed;left:50%;bottom:5vh;transform:translateX(-50%);
+  padding:14px 34px;border-radius:100px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4);
+  color:rgba(255,255,255,.85);letter-spacing:.35em;font-size:11px;text-transform:uppercase;
+  font-family:system-ui,sans-serif;text-align:center;user-select:none;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+  transition:opacity .6s;white-space:nowrap}
+#hud b{color:#9df3e5;font-weight:600;letter-spacing:.2em}
+#hud.dim{opacity:0}
+#title{
+  position:fixed;top:6vh;left:6vw;user-select:none;pointer-events:none}
+#title h1{
+  font-size:clamp(2rem,5vw,4rem);font-weight:400;color:#fff;
+  letter-spacing:.12em;line-height:1;
+  text-shadow:0 0 40px rgba(140,220,255,.35)}
+#title p{
+  margin-top:10px;font-family:system-ui,sans-serif;font-size:11px;
+  letter-spacing:.4em;color:rgba(255,255,255,.4);text-transform:uppercase}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title"><h1>AURORA</h1><p>generative silk · move to disturb</p></div>
+<div id="hud"><b>drag</b> to weave &nbsp;·&nbsp; <b>click</b> to bloom &nbsp;·&nbsp; <b>s</b> saves the sky</div>
+<script>
+'use strict';
+const c=document.getElementById('c'),x=c.getContext('2d');
+let W,H,DPR;const fit=()=>{DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;x.setTransform(DPR,0,0,DPR,0,0)};fit();addEventListener('resize',fit);
+
+// --- flow field: curl-ish noise from layered sines -------------------
+function flow(a,t){
+  const n1=Math.sin(a.y*0.0016+t*0.00021)+Math.sin(a.x*0.0011-t*0.00013);
+  const n2=Math.sin((a.x+a.y)*0.0009+t*0.00017);
+  const n3=Math.sin(Math.hypot(a.x-W/2,a.y-H/2)*0.0013-t*0.0004);
+  return (n1+n2+n3)/3*Math.PI*2;
+}
+
+// --- ribbons ---------------------------------------------------------
+const RIBBONS=42,SEGS=64;
+const palettes=[
+  [[64,224,208],[120,190,255],[180,120,255],[255,120,200]],
+  [[255,160,90],[255,110,140],[200,80,180],[90,120,255]],
+  [[120,255,180],[60,220,200],[255,240,120],[60,160,255]]
+];
+let pal=palettes[0];
+const ribbons=[];
+function spawnRibbon(burst){
+  const i=ribbons.length;
+  const col=pal[i%pal.length];
+  const sx=burst?mx+(Math.random()-.5)*30:Math.random()*W;
+  const sy=burst?my+(Math.random()-.5)*30:Math.random()*H;
+  const r={pts:[],col,
+    w:0.6+Math.random()*2.2,
+    speed:0.5+Math.random()*1.6,
+    life:burst?200+Math.random()*260:Infinity,
+    age:0};
+  for(let s=0;s<SEGS;s++)r.pts.push({x:sx,y:sy,ox:sx,oy:sy});
+  ribbons.push(r);
+}
+for(let i=0;i<RIBBONS;i++)spawnRibbon();
+
+// --- pointer ---------------------------------------------------------
+let mx=W/2,my=H/2,pmx=mx,pmy=my,mv=0,down=false;
+c.addEventListener('pointermove',e=>{mx=e.clientX;my=e.clientY});
+c.addEventListener('pointerdown',e=>{down=true;mx=e.clientX;my=e.clientY;bloom()});
+addEventListener('pointerup',()=>down=false);
+addEventListener('keydown',e=>{
+  if(e.key==='s'||e.key==='S'){const a=document.createElement('a');a.download='aurora.png';a.href=c.toDataURL();a.click();}
+  if(e.key>='1'&&e.key<='3'){pal=palettes[+e.key-1];ribbons.length=0;for(let i=0;i<RIBBONS;i++)spawnRibbon();}
+});
+function bloom(){
+  pal=pal===palettes[0]?palettes[(Math.random()*palettes.length)|0]:palettes[0];
+  const n=14;for(let i=0;i<n;i++)spawnRibbon(true);
+  setTimeout(()=>{for(let i=0;i<n;i++)ribbons.splice(ribbons.findIndex(r=>r.life!==Infinity),1);},2600);
+}
+
+// --- render loop -----------------------------------------------------
+let t=0;
+function frame(now){
+  t=now||0;
+  mv=Math.hypot(mx-pmx,my-pmy);pmx=mx;pmy=my;
+  x.fillStyle='rgba(5,2,8,0.055)';x.fillRect(0,0,W,H);
+  x.globalCompositeOperation='lighter';
+  for(const r of ribbons){
+    r.age++;
+    const fade=r.life===Infinity?1:Math.max(0,1-r.age/r.life);
+    if(fade<=0)continue;
+    const head=r.pts[0];
+    const a=flow(head,t);
+    // flow + gentle attraction toward pointer when nearby
+    let vx=Math.cos(a)*r.speed,vy=Math.sin(a)*r.speed;
+    const dx=mx-head.x,dy=my-head.y,d=Math.hypot(dx,dy);
+    if(d<260){const f=(1-d/260)*(down?2.4:0.55);vx+=dx/d*f;vy+=dy/d*f;}
+    head.x+=vx*2;head.y+=vy*2;
+    // trailing chain
+    for(let s=1;s<SEGS;s++){
+      const p=r.pts[s],q=r.pts[s-1];
+      p.x+=(q.x-p.x)*0.42;p.y+=(q.y-p.y)*0.42;
+    }
+    // draw as tapered glow stroke
+    for(let s=1;s<SEGS;s++){
+      const p=r.pts[s],q=r.pts[s-1];
+      const k=1-s/SEGS;
+      x.strokeStyle=`rgba(${r.col[0]},${r.col[1]},${r.col[2]},${0.05+k*0.16*fade})`;
+      x.lineWidth=r.w*(0.2+k*1.2);
+      x.lineCap='round';
+      x.beginPath();x.moveTo(q.x,q.y);x.lineTo(p.x,p.y);x.stroke();
+    }
+    // wrap edges
+    for(const p of r.pts){
+      if(p.x<-40)p.x=W+40;if(p.x>W+40)p.x=-40;
+      if(p.y<-40)p.y=H+40;if(p.y>H+40)p.y=-40;
+    }
+  }
+  x.globalCompositeOperation='source-over';
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// dim the hint once the user engages
+setTimeout(()=>document.getElementById('hud').classList.add('dim'),9000);
+addEventListener('pointerdown',()=>document.getElementById('hud').classList.add('dim'),{once:true});
+
+</script>
+</body>
+</html>

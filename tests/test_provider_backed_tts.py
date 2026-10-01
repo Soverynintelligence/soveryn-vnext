@@ -269,3 +269,21 @@ def test_build_tts_service_unknown_primary_raises():
 
 def test_default_primary_is_f5tts():
     assert DEFAULT_PRIMARY == "f5tts"
+
+
+def test_build_tts_service_env_selects_kokoro():
+    prior = os.environ.get("SOVEREIGN_TTS_PRIMARY")
+    os.environ["SOVEREIGN_TTS_PRIMARY"] = "kokoro"
+    try:
+        service = build_tts_service(
+            agent_name="aetheria",
+            elevenlabs_voice_id=None,
+            elevenlabs_api_key=None,
+        )
+        assert service.provider_name == "kokoro"
+        assert service.voice_id == "af_heart"
+    finally:
+        if prior is None:
+            os.environ.pop("SOVEREIGN_TTS_PRIMARY", None)
+        else:
+            os.environ["SOVEREIGN_TTS_PRIMARY"] = prior

@@ -1,0 +1,62 @@
+# SearXNG settings for SOVERYN
+# Local-only; behind 127.0.0.1:8095. Programmatic agent access via JSON API.
+#
+# 2026-08-19: DDG/Brave/Startpage/Qwant were CAPTCHA / rate-blocked from this
+# IP, so default web_search returned 0 hits while ActTruth still logged OK.
+# Prefer Bing (+ Wikipedia) until those recover.
+#
+# secret_key is NOT stored here — provided at runtime via
+# ~/.config/soveryn/searxng.env → SEARXNG_SECRET_KEY (see systemd unit).
+
+use_default_settings: true
+
+general:
+  instance_name: "SOVERYN SearXNG"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+server:
+  bind_address: "0.0.0.0"
+  port: 8080
+  # Overridden by SEARXNG_SECRET_KEY from EnvironmentFile at container start.
+  secret_key: "change-me-via-searxng-env"
+  base_url: false
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+ui:
+  static_use_hash: true
+  default_locale: ""
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 60
+  formats:
+    - html
+    - json
+
+engines:
+  - name: bing
+    disabled: false
+  - name: wikipedia
+    disabled: true
+  - name: duckduckgo
+    disabled: true
+  - name: brave
+    disabled: false
+  - name: startpage
+    disabled: true
+  - name: qwant
+    disabled: true
+  - name: google
+    disabled: true

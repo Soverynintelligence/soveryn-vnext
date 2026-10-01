@@ -23,7 +23,7 @@ from soveryn.platform.web.fetch import (
 )
 from soveryn.platform.web.search import (
     SearchError,
-    search_via_searxng,
+    search_web,
 )
 
 
@@ -52,7 +52,7 @@ def build_web_search_tool(
     searxng_url: str,
     owner_agent: str,
 ) -> ToolSpec:
-    """Tool wrapping search_via_searxng with arg validation + structured errors."""
+    """Tool wrapping search_web with arg validation + structured errors."""
 
     def handler(args: Mapping[str, Any]) -> Any:
         query = args.get("query", "")
@@ -66,14 +66,14 @@ def build_web_search_tool(
                 f"max_results must be between 1 and {WEB_SEARCH_MAX_K} (got {max_results})"
             )
         try:
-            results = search_via_searxng(
+            results = search_web(
                 query, searxng_url=searxng_url, max_results=max_results,
             )
         except SearchError as e:
             return {"error": "search_failed", "message": str(e), "results": []}
         return {
             "query": query.strip(),
-            "engine": "searxng",
+            "engine": results[0].engine if results else "none",
             "results": [
                 {
                     "title": r.title,
@@ -109,9 +109,9 @@ def build_web_search_tool(
         schema=schema,
         handler=handler,
         description=(
-            "Search the web via the local SearXNG instance. Returns title, "
-            "url, and a short snippet per result. Use fetch_url to read a "
-            "full page from a returned URL."
+            "Search the web (Brave Search API, SearXNG fallback). Returns "
+            "title, url, and a short snippet per result. Use fetch_url to "
+            "read a full page from a returned URL."
         ),
     )
 

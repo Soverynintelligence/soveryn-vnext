@@ -22,7 +22,9 @@ def _sinks() -> tuple[AresSinks, list[tuple[str, object]]]:
     sinks = AresSinks(
         telemetry_sink=lambda finding: calls.append(("telemetry", finding)),
         bus_sink=lambda finding: calls.append(("bus", finding)),
-        signal_sink=lambda finding, priority=False: calls.append(("signal", (finding, priority))),
+        signal_sink=lambda finding, priority=False, **brakes: calls.append(
+            ("signal", (finding, brakes))
+        ),
     )
     return sinks, calls
 
@@ -45,7 +47,12 @@ def test_warning_routes_to_telemetry_and_bus():
     assert calls == [("telemetry", finding), ("bus", finding)]
 
 
-def test_critical_routes_to_telemetry_bus_and_nonpriority_signal():
+def test_critical_wakes_you_but_still_obeys_the_flap_cap():
+    # Before 2026-08-10 a CRITICAL was sent non-priority, so quiet hours
+    # (23:00-07:00) dropped it silently — 37 minutes of surface.down never
+    # reached the phone. It now bypasses quiet hours, but NOT the rate cap:
+    # the cap is flap protection and a flapping surface once paged four times
+    # in twelve minutes.
     sinks, calls = _sinks()
     finding = _finding(Severity.CRITICAL)
 
@@ -54,11 +61,11 @@ def test_critical_routes_to_telemetry_bus_and_nonpriority_signal():
     assert calls == [
         ("telemetry", finding),
         ("bus", finding),
-        ("signal", (finding, False)),
+        ("signal", (finding, {"bypass_quiet_hours": True, "bypass_rate_cap": False})),
     ]
 
 
-def test_emergency_routes_to_telemetry_bus_and_priority_signal():
+def test_emergency_escapes_both_brakes():
     sinks, calls = _sinks()
     finding = _finding(Severity.EMERGENCY)
 
@@ -67,7 +74,7 @@ def test_emergency_routes_to_telemetry_bus_and_priority_signal():
     assert calls == [
         ("telemetry", finding),
         ("bus", finding),
-        ("signal", (finding, True)),
+        ("signal", (finding, {"bypass_quiet_hours": True, "bypass_rate_cap": True})),
     ]
 
 
@@ -93,10 +100,10 @@ def test_cleared_event_routes_to_telemetry_and_bus_never_signal():
 
 class FakeSignalSender:
     def __init__(self) -> None:
-        self.calls: list[tuple[str, bool]] = []
+        self.calls: list[tuple[str, dict]] = []
 
-    def send(self, message: str, *, priority: bool = False):
-        self.calls.append((message, priority))
+    def send(self, message: str, *, priority: bool = False, **brakes):
+        self.calls.append((message, brakes))
 
 
 def _platform_sinks(tmp_path, monkeypatch):
@@ -107,7 +114,7 @@ def _platform_sinks(tmp_path, monkeypatch):
     return sinks, bus, signal
 
 
-def test_default_sinks_route_emergency_to_telemetry_bus_and_priority_signal(tmp_path, monkeypatch):
+def test_default_sinks_send_emergency_past_both_brakes(tmp_path, monkeypatch):
     sinks, bus, signal = _platform_sinks(tmp_path, monkeypatch)
     finding = _finding(Severity.EMERGENCY)
 
@@ -127,10 +134,13 @@ def test_default_sinks_route_emergency_to_telemetry_bus_and_priority_signal(tmp_
     assert len(bus_events) == 1
     assert bus_events[0].actor == "ares"
     assert bus_events[0].payload == telemetry_events[0].payload
-    assert signal.calls == [("[ARES EMERGENCY] gpu.temperature: {'gpu': 0, 'temp_c': 91}", True)]
+    assert signal.calls == [(
+        "[ARES EMERGENCY] gpu.temperature: {'gpu': 0, 'temp_c': 91}",
+        {"bypass_quiet_hours": True, "bypass_rate_cap": True},
+    )]
 
 
-def test_default_sinks_route_critical_to_nonpriority_signal(tmp_path, monkeypatch):
+def test_default_sinks_send_critical_past_quiet_hours_but_not_the_cap(tmp_path, monkeypatch):
     sinks, bus, signal = _platform_sinks(tmp_path, monkeypatch)
     finding = _finding(Severity.CRITICAL)
 
@@ -141,7 +151,10 @@ def test_default_sinks_route_critical_to_nonpriority_signal(tmp_path, monkeypatc
     assert telemetry_events[0].level == "error"
     assert telemetry_events[0].payload["severity"] == "critical"
     assert bus_events[0].payload["severity"] == "critical"
-    assert signal.calls == [("[ARES CRITICAL] gpu.temperature: {'gpu': 0, 'temp_c': 91}", False)]
+    assert signal.calls == [(
+        "[ARES CRITICAL] gpu.temperature: {'gpu': 0, 'temp_c': 91}",
+        {"bypass_quiet_hours": True, "bypass_rate_cap": False},
+    )]
 
 
 def test_default_sinks_route_warning_to_telemetry_and_bus_only(tmp_path, monkeypatch):

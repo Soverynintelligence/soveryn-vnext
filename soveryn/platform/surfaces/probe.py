@@ -16,6 +16,7 @@ HEALTHY. A caller that wants to treat them the same must say so itself.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import subprocess
 import time
@@ -138,5 +139,19 @@ def probe(surface: Surface, *, timeout: float = 20.0) -> Result:
     return _http(surface, timeout)
 
 
-def probe_all(surfaces, *, timeout: float = 20.0) -> list[Result]:
-    return [probe(s, timeout=timeout) for s in surfaces]
+def probe_all(surfaces, *, timeout: float = 20.0, workers: int = 8) -> list[Result]:
+    """Probe concurrently. These are I/O waits, not work.
+
+    This was serial, and a full pass took ~41s against Ares's 60s scan interval —
+    two-thirds of every cycle spent waiting, with almost no headroom. Any latency
+    bump pushed individual probes into their 20s timeout and fired a CRITICAL for
+    a surface that was fine. Concurrency makes a pass cost about as long as the
+    single slowest surface instead of the sum of all of them.
+
+    Order is preserved so callers can zip results against the input.
+    """
+    surfaces = list(surfaces)
+    if not surfaces:
+        return []
+    with ThreadPoolExecutor(max_workers=min(workers, len(surfaces))) as pool:
+        return list(pool.map(lambda s: probe(s, timeout=timeout), surfaces))

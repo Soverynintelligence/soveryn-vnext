@@ -4,7 +4,7 @@
   - POST /m/threads/<tid>/voice/offer — WebRTC offer bound to thread session
 
 The /voice/agents route lets the PWA gate the call button on per-agent
-voice availability (Phase 1: only Aetheria has a voice character; Vett
+voice availability (Phase 1: only Aetheria has a voice character; Eve
 and Scotty don't until theirs are sourced). The /voice/offer route binds
 the WebRTC call to the thread's existing session_id so transcribed turns
 land in the same ConversationStore history as the text exchange — Aetheria
@@ -47,7 +47,7 @@ def app_no_voice(stores):
     bp = build_messenger_blueprint(
         messenger_store=messenger_store,
         conv_store=conv_store,
-        agent_loops={"aetheria": object(), "vett": object()},
+        agent_loops={"aetheria": object(), "eve": object()},
     )
     flask_app.register_blueprint(bp)
     flask_app.config["TESTING"] = True
@@ -75,7 +75,7 @@ def app_with_voice(stores):
     bp = build_messenger_blueprint(
         messenger_store=messenger_store,
         conv_store=conv_store,
-        agent_loops={"aetheria": object(), "vett": object()},
+        agent_loops={"aetheria": object(), "eve": object()},
     )
     flask_app.register_blueprint(bp)
     flask_app.config["TESTING"] = True
@@ -205,10 +205,10 @@ def test_voice_offer_passes_thread_session_id(app_with_voice, monkeypatch):
 
 
 def test_voice_offer_503_when_agent_no_voice(app_with_voice):
-    """Vett has no voice character in Phase 1 → 503 with agent name."""
+    """Eve has no voice character in Phase 1 → 503 with agent name."""
     client = app_with_voice.test_client()
     secret = _pair_and_get_secret(client)
-    tid = _create_thread(client, secret, "vett")
+    tid = _create_thread(client, secret, "eve")
 
     resp = client.post(
         f"/m/threads/{tid}/voice/offer",
@@ -217,7 +217,7 @@ def test_voice_offer_503_when_agent_no_voice(app_with_voice):
     )
     assert resp.status_code == 503
     body = resp.get_json()
-    assert "vett" in body["error"].lower()
+    assert "eve" in body["error"].lower()
 
 
 def test_voice_offer_404_unknown_thread(app_with_voice):

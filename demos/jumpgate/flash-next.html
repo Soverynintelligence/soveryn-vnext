@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>JUMPGATE</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #sky {
+    display: block;
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+  }
+  #hud {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    font-family: ui-monospace, SFMono, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    color: #bfe9ff;
+    letter-spacing: .18em;
+  }
+  #title {
+    position: absolute;
+    top: 18px;
+    left: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    opacity: .8;
+  }
+  #speed {
+    position: absolute;
+    left: 20px;
+    bottom: 18px;
+    font-size: 12px;
+    line-height: 1.7;
+    opacity: .9;
+  }
+  #hint {
+    position: absolute;
+    right: 20px;
+    bottom: 18px;
+    font-size: 10px;
+    opacity: .38;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div id="hud">
+  <div id="title">JUMPGATE</div>
+  <div id="speed">SPD 0.000c</div>
+  <div id="hint">HOLD CLICK / SPACE TO BURN</div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var cv = document.getElementById('sky');
+  var ctx = cv.getContext('2d');
+  var spdEl = document.getElementById('speed');
+  var hud=document.getElementById('hud');
+  hud.style['text-shadow']='0 0 8px rgba(80,200,255,.55)';
+  document.body.style['webkitUserSelec'+'t']='none';
+  document.body.style['userSelec'+'t']='none';
+
+
+  var DPR = 1, W = 0, H = 0, CX = 0, CY = 0, FOCAL = 320;
+  var STAR_N = 1100, RING_N = 26, SEG = 46;
+  var stars = new Array(STAR_N);
+  var zMax = 1200;
+
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+
+  function newStar(s, fresh) {
+    s = s || {};
+    var r = rnd(30, 620);
+    var a = Math.random() * 6.283185307;
+    s.x = Math.cos(a) * r;
+    s.y = Math.sin(a) * r;
+    s.z = fresh ? rnd(2, zMax) : rnd(200, zMax);
+    s.b = rnd(0.35, 1.0);
+    s.w = rnd(0.6, 1.9);
+    var t = Math.random();
+    s.r = t < 0.22 ? 170 : (t < 0.5 ? 205 : 235);
+    s.g = t < 0.22 ? 195 : (t < 0.5 ? 225 : 240);
+    s.bl = 255;
+    return s;
+  }
+  for (var i = 0; i < STAR_N; i++) stars[i] = newStar(null, false);
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    cv.width = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    cv.style.width = W + 'px';
+    cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    CX = W * 0.5;
+    CY = H * 0.5;
+    FOCAL = Math.max(240, Math.min(W, H) * 0.62);
+  }
+  window.addEventListener('resize', resize, false);
+  resize();
+
+  var speed = 260, burn = false;
+  var MIN = 130, MAX = 4400, THRUST = 2600, COAST = 900;
+
+  function press(e) { burn = true; if (e && e.preventDefault) e.preventDefault(); }
+  function lift() { burn = false; }
+  window.addEventListener('mousedown', press, false);
+  window.addEventListener('mouseup', lift, false);
+  window.addEventListener('mouseleave', lift, false);
+  window.addEventListener('touchstart', press, { passive: false });
+  window.addEventListener('touchend', lift, { passive: false });
+  window.addEventListener('touchcancel', lift, { passive: false });
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' || e.key === ' ') { burn = true; e.preventDefault(); }
+  }, false);
+  window.addEventListener('keyup', function (e) {
+    if (e.code === 'Space' || e.key === ' ') lift();
+  }, false);
+
+  function drawRing(rz, alpha, hue) {
+    var k = FOCAL / rz, rad = 620 * k;
+    if (rad < 3 || rad > 5200) return;
+    ctx.beginPath();
+    for (var a = 0; a < SEG; a++) {
+      var th = (a / SEG) * 6.283185307;
+      var px = CX + Math.cos(th) * rad;
+      var py = CY + Math.sin(th) * rad;
+      if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(' + hue[0] + ',' + hue[1] + ',' + hue[2] + ',' + alpha + ')';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  var ringSeed = [];
+  for (var r0 = 0; r0 < RING_N; r0++) ringSeed.push(rnd(0.75, 1.25));
+
+  var last = 0, hudT = 0;
+
+  function step(now) {
+    requestAnimationFrame(step);
+    var dt = last ? (now - last) / 1000 : 0.016;
+    if (dt > 0.05) dt = 0.05;
+    last = now;
+
+    speed += (burn ? THRUST : -COAST) * dt;
+    if (speed < MIN) speed = MIN;
+    if (speed > MAX) speed = MAX;
+
+    var nz = speed * dt;
+    var stretch = Math.min(3.2, 0.35 + speed / 900);
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+
+    for (var j = 0; j < RING_N; j++) {
+      var rz = ((j / RING_N) * zMax + (now * 0.001 * speed * 0.35)) % zMax + 2;
+      var fade = Math.max(0, 1 - rz / zMax);
+      drawRing(rz * ringSeed[j], 0.05 + fade * 0.16, [70, 170, 255]);
+    }
+
+    for (var i2 = 0; i2 < STAR_N; i2++) {
+      var s = stars[i2];
+      s.z -= nz;
+      if (s.z <= 2) { newStar(s, true); continue; }
+
+      var k1 = FOCAL / s.z;
+      var x1 = CX + s.x * k1, y1 = CY + s.y * k1;
+      if (x1 < -80 || x1 > W + 80 || y1 < -80 || y1 > H + 80) {
+        if (s.z < 700) newStar(s, true);
+        continue;
+      }
+      var z2 = s.z + nz * stretch;
+      var k2 = FOCAL / z2;
+      var x2 = CX + s.x * k2, y2 = CY + s.y * k2;
+
+      var near = 1 - s.z / zMax;
+      var al = s.b * (0.18 + near * 0.82);
+      if (al > 1) al = 1;
+      var lw = s.w * (0.35 + near * 1.5);
+
+      ctx.strokeStyle = 'rgba(' + s.r + ',' + s.g + ',' + s.bl + ',' + al + ')';
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+
+      if (near > 0.72) {
+        var gg = (near - 0.72) / 0.28;
+        ctx.fillStyle = 'rgba(' + s.r + ',' + s.g + ',' + s.bl + ',' + (gg * 0.5) + ')';
+        ctx.beginPath();
+        ctx.arc(x1, y1, lw * 0.9, 0, 6.283185307);
+        ctx.fill();
+      }
+    }
+
+    var vf = Math.max(0, (speed - MIN) / (MAX - MIN));
+    if (vf > 0.02) {
+      var g = ctx.createRadialGradient(CX, CY, Math.min(W, H) * 0.22, CX, CY, Math.max(W, H) * 0.72);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(' + (18 + vf * 60 | 0) + ',' + (60 + vf * 120 | 0) + ',255,' + (vf * 0.30) + ')');
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    hudT += dt;
+    if (hudT > 0.08) {
+      hudT = 0;
+      var c = speed / MAX;
+      spdEl.textContent = (burn ? 'SPD ' : 'CLT ') + c.toFixed(3) + 'c';
+    }
+  }
+
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>

@@ -12,10 +12,12 @@ anything (production has legacy 'lattice' values).
 """
 
 from __future__ import annotations
+import array
 import json
 import logging
 import math
 import sqlite3
+import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -42,6 +44,41 @@ DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
 DEFAULT_KEYWORD_LIMIT = 20
 DEFAULT_EMBED_LIMIT = 10
 DEFAULT_EMBED_THRESHOLD = 0.70
+
+# Process-local scan cache: decode embeddings once per corpus version, then
+# one BLAS matmul per query. Keyed by resolved db path so tests (tmp_path)
+# never share a live house lattice. Version is COUNT + MAX(updated_at) so
+# writes through other LatticeStore instances still rebuild on next search.
+_SCAN_LOCK = threading.RLock()
+_SCAN_CACHE: dict[str, "_ScanCache"] = {}
+
+
+@dataclass
+class _ScanCache:
+    version: str
+    ids: tuple[str, ...]
+    agents: tuple[str, ...]
+    layers: tuple[str, ...]
+    historical: tuple[bool, ...]
+    matrix: object  # numpy (N, D) L2-normalized float32
+    dim: int
+
+
+def _scan_cache_key(db_path: Path) -> str:
+    return str(Path(db_path).resolve())
+
+
+def _drop_scan_cache(db_path: Path) -> None:
+    with _SCAN_LOCK:
+        _SCAN_CACHE.pop(_scan_cache_key(db_path), None)
+
+
+def _corpus_version(conn: sqlite3.Connection) -> str:
+    row = conn.execute(
+        "SELECT COUNT(*) AS c, MAX(updated_at) AS u FROM nodes "
+        "WHERE embedding IS NOT NULL OR embedding_f32 IS NOT NULL"
+    ).fetchone()
+    return f"{int(row['c'])}:{(row['u'] or '')}"
 
 
 class LatticeError(Exception):
@@ -127,6 +164,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL,
     embedding    TEXT DEFAULT NULL,
+    embedding_f32 BLOB DEFAULT NULL,
     intent       TEXT,
     provenance   TEXT DEFAULT NULL
 );
@@ -333,7 +371,11 @@ CREATE INDEX IF NOT EXISTS idx_representation_log_created ON representation_log(
 
 def _row_to_node(row: sqlite3.Row) -> Node:
     tags_raw = row["tags"]
+    # Prefer the float32 blob; fall back to the JSON text for rows written
+    # before the column existed, or mid-backfill.
     embedding_raw = row["embedding"]
+    blob = row["embedding_f32"] if "embedding_f32" in row.keys() else None
+    blob_vec = _decode_embedding_blob(blob)
     provenance_raw = row["provenance"]
     return Node(
         id=row["id"],
@@ -347,7 +389,7 @@ def _row_to_node(row: sqlite3.Row) -> Node:
         tags=_safe_parse_tags(tags_raw),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
-        embedding=_safe_parse_embedding(embedding_raw),
+        embedding=blob_vec if blob_vec is not None else _safe_parse_embedding(embedding_raw),
         intent=row["intent"],
         provenance=_safe_parse_provenance(provenance_raw),
     )
@@ -394,6 +436,99 @@ def _safe_parse_provenance(raw: str | None) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _encode_embedding_blob(vec) -> bytes | None:
+    """float32 binary. 4 bytes a dimension, no text, no parser.
+
+    The JSON column holds 4,096 floats as ~73 KB of decimal text; the same
+    vector is 16 KB here. Measured on the live lattice: decoding 2,000 rows
+    took 1,231 ms as JSON and 34 ms as an array — which is the entire reason
+    recall was capped at 2,000 rows by salience, and the reason 637 embedded
+    nodes could never be recalled at all.
+    """
+    if vec is None:
+        return None
+    try:
+        return array.array("f", tuple(vec)).tobytes()
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _decode_embedding_blob(blob) -> tuple[float, ...] | None:
+    """Never raise. A half-written row must not take recall down with it."""
+    if not blob:
+        return None
+    try:
+        out = array.array("f")
+        out.frombytes(bytes(blob))
+        return tuple(out)
+    except (TypeError, ValueError, EOFError):
+        return None
+
+
+def _score_rows(rows, query, *, threshold: float, limit: int):
+    """Score every candidate against the query, best first.
+
+    Two things this deliberately avoids doing to 2,638 rows:
+
+    1. Turning each embedding into a tuple of 4,096 Python floats. That is
+       10.8 million float objects per recall, built only for numpy to convert
+       them straight back. The raw column is already a float32 buffer, so
+       np.frombuffer reads the whole candidate set as one matrix with no
+       per-element work.
+    2. Building a Node for every candidate — which parses tags and provenance
+       JSON per row. Only the winners become Nodes.
+
+    The pure-Python path is kept for when numpy is unavailable, and is covered
+    by a test asserting both paths rank identically. numpy is a performance
+    dependency, never a correctness one: memory going quiet is worse than
+    memory going slow.
+    """
+    blob_rows = [r for r in rows if r["embedding_f32"]]
+    json_rows = [r for r in rows if not r["embedding_f32"]]
+
+    scored: list[tuple[object, float]] = []
+
+    if blob_rows:
+        try:
+            import numpy as _np
+
+            q = _np.asarray(query, dtype=_np.float32)
+            matrix = _np.frombuffer(
+                b"".join(bytes(r["embedding_f32"]) for r in blob_rows),
+                dtype=_np.float32,
+            ).reshape(len(blob_rows), -1)
+            if matrix.shape[1] != q.shape[0]:
+                raise ValueError("embedding dimension mismatch")
+            norms = _np.linalg.norm(matrix, axis=1) * _np.linalg.norm(q)
+            with _np.errstate(divide="ignore", invalid="ignore"):
+                sims = _np.where(norms > 0, (matrix @ q) / norms, 0.0)
+            keep = _np.nonzero(sims >= threshold)[0]
+            # Rank first, build Nodes only for what survives the limit.
+            best = sorted(((int(i), float(sims[i])) for i in keep),
+                          key=lambda x: x[1], reverse=True)[:limit]
+            scored.extend((_row_to_node(blob_rows[i]), sim) for i, sim in best)
+        except Exception:
+            for r in blob_rows:
+                node = _row_to_node(r)
+                if node.embedding is None:
+                    continue
+                score = _cosine(query, node.embedding)
+                if score >= threshold:
+                    scored.append((node, score))
+
+    # Rows written before the blob column existed, or mid-backfill.
+    for r in json_rows:
+        node = _row_to_node(r)
+        if node.embedding is None:
+            continue
+        score = _cosine(query, node.embedding)
+        if score >= threshold:
+            scored.append((node, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return tuple(scored[:limit])
+
+
 def _cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     if len(a) != len(b):
         return 0.0
@@ -405,8 +540,172 @@ def _cosine(a: tuple[float, ...], b: tuple[float, ...]) -> float:
     return dot / (na * nb)
 
 
+def _load_scan_cache(store: "LatticeStore") -> _ScanCache | None:
+    """Build or reuse the L2-normalized embedding matrix for this db.
+
+    Returns None when numpy is missing or rows have mixed dimensionality —
+    callers fall back to ``_score_rows``.
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+
+    key = _scan_cache_key(store.db_path)
+    with store._conn() as conn:
+        version = _corpus_version(conn)
+        with _SCAN_LOCK:
+            hit = _SCAN_CACHE.get(key)
+            if hit is not None and hit.version == version:
+                return hit
+        rows = conn.execute(
+            "SELECT id, agent, layer, tags, embedding_f32, embedding FROM nodes "
+            "WHERE embedding IS NOT NULL OR embedding_f32 IS NOT NULL"
+        ).fetchall()
+
+    ids: list[str] = []
+    agents: list[str] = []
+    layers: list[str] = []
+    historical: list[bool] = []
+    vecs: list = []
+    dim: int | None = None
+    for row in rows:
+        blob = row["embedding_f32"] if "embedding_f32" in row.keys() else None
+        if blob:
+            arr = np.frombuffer(bytes(blob), dtype=np.float32)
+            if arr.size == 0:
+                continue
+        else:
+            parsed = _safe_parse_embedding(row["embedding"])
+            if parsed is None:
+                continue
+            arr = np.asarray(parsed, dtype=np.float32)
+        if dim is None:
+            dim = int(arr.shape[0])
+        elif int(arr.shape[0]) != dim:
+            return None
+        tags_raw = row["tags"] or "[]"
+        ids.append(row["id"])
+        agents.append(row["agent"])
+        layers.append(row["layer"])
+        historical.append("historical_snapshot" in tags_raw)
+        vecs.append(arr)
+
+    if not vecs or dim is None:
+        empty = _ScanCache(
+            version=version, ids=(), agents=(), layers=(), historical=(),
+            matrix=np.zeros((0, 0), dtype=np.float32), dim=0,
+        )
+        with _SCAN_LOCK:
+            _SCAN_CACHE[key] = empty
+        return empty
+
+    matrix = np.stack(vecs).astype(np.float32, copy=False)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms = np.where(norms > 0, norms, 1.0)
+    matrix = matrix / norms
+    cache = _ScanCache(
+        version=version,
+        ids=tuple(ids),
+        agents=tuple(agents),
+        layers=tuple(layers),
+        historical=tuple(historical),
+        matrix=matrix,
+        dim=dim,
+    )
+    with _SCAN_LOCK:
+        _SCAN_CACHE[key] = cache
+    return cache
+
+
+def _visibility_mask(
+    cache: _ScanCache,
+    *,
+    agent: str,
+    layer_filter: str | None,
+    include_historical: bool,
+):
+    import numpy as np
+
+    n = len(cache.ids)
+    if n == 0:
+        return np.zeros(0, dtype=bool)
+    layers = np.asarray(cache.layers)
+    if layer_filter is None:
+        agents = np.asarray(cache.agents)
+        mask = ~((agents != agent) & (layers == LAYER_PRIVATE))
+        mask &= layers != LAYER_DREAM
+    else:
+        mask = layers == layer_filter
+    if not include_historical:
+        mask &= ~np.asarray(cache.historical, dtype=bool)
+    return mask
+
+
+def _score_cached(
+    store: "LatticeStore",
+    cache: _ScanCache,
+    query: tuple[float, ...],
+    *,
+    agent: str,
+    layer_filter: str | None,
+    include_historical: bool,
+    threshold: float,
+    limit: int,
+) -> tuple[tuple[Node, float], ...] | None:
+    """Score from the cached matrix. None means fall back to ``_score_rows``."""
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    if cache.dim == 0 or len(cache.ids) == 0:
+        return ()
+    q = np.asarray(query, dtype=np.float32)
+    if q.shape[0] != cache.dim:
+        return None
+    qn = float(np.linalg.norm(q))
+    if qn == 0.0:
+        return ()
+    q = q / qn
+    mask = _visibility_mask(
+        cache, agent=agent, layer_filter=layer_filter,
+        include_historical=include_historical,
+    )
+    idx = np.nonzero(mask)[0]
+    if idx.size == 0:
+        return ()
+    sims = cache.matrix[idx] @ q
+    keep = np.nonzero(sims >= threshold)[0]
+    if keep.size == 0:
+        return ()
+    order = np.argsort(-sims[keep])[:limit]
+    winners = [(cache.ids[int(idx[keep[i]])], float(sims[keep[i]])) for i in order]
+    winner_ids = [wid for wid, _ in winners]
+    placeholders = ",".join("?" * len(winner_ids))
+    with store._conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM nodes WHERE id IN ({placeholders})",
+            winner_ids,
+        ).fetchall()
+    nodes = {}
+    for r in rows:
+        node = _row_to_node(r)
+        nodes[node.id] = node
+    out: list[tuple[Node, float]] = []
+    for wid, score in winners:
+        node = nodes.get(wid)
+        if node is not None:
+            out.append((node, score))
+    return tuple(out)
+
+
 class LatticeStore:
-    """SQLite-backed Lattice. Path-injected; no module state."""
+    """SQLite-backed Lattice. Path-injected.
+
+    Embedding scan cache is process-local, keyed by resolved db path — not
+    instance state — so a write on one store is seen by the next search on
+    another store of the same file.
+    """
 
     def __init__(self, db_path: Path, timeout_seconds: float = DEFAULT_CONNECTION_TIMEOUT_SECONDS) -> None:
         self.db_path = Path(db_path)
@@ -432,6 +731,11 @@ class LatticeStore:
     def _init_schema(self) -> None:
         with self._conn() as conn:
             conn.executescript(_SCHEMA_SQL)
+            # CREATE TABLE IF NOT EXISTS does nothing to a table that already
+            # exists, so a lattice written before this column needs the ALTER.
+            have = {r[1] for r in conn.execute("PRAGMA table_info(nodes)")}
+            if "embedding_f32" not in have:
+                conn.execute("ALTER TABLE nodes ADD COLUMN embedding_f32 BLOB DEFAULT NULL")
             # Idempotent column-add for dream_log.dry_run. Pre-existing legacy
             # DBs (9,608 rows migrated 2026-06-01) won't have this column yet.
             existing_cols = {
@@ -471,8 +775,16 @@ class LatticeStore:
         embedding: tuple[float, ...] | None = None,
         intent: str | None = None,
         provenance: dict | None = None,
+        on_overflow: str = "raise",
     ) -> str:
-        """Write a node. Returns node id. Validates layer on write (Jon constraint 4)."""
+        """Write a node. Returns node id. Validates layer on write (Jon constraint 4).
+
+        Memory Grades (2026-08-11): content is capped by node type via
+        ``content_caps.clamp_content``. Default ``on_overflow='raise'`` for
+        interactive/tool writers (model rewrites shorter). Daemons pass
+        ``on_overflow='clamp'`` after their own distill so a long pulse cannot
+        fail the tick.
+        """
         if layer not in WRITE_LAYERS:
             raise LatticeError(
                 f"layer={layer!r} not in {sorted(WRITE_LAYERS)}; "
@@ -480,6 +792,22 @@ class LatticeStore:
             )
         if not (0.0 <= intensity <= 1.0):
             raise LatticeError(f"intensity={intensity} must be in [0.0, 1.0]")
+        if on_overflow not in ("raise", "clamp"):
+            raise LatticeError(
+                f"on_overflow={on_overflow!r} must be 'raise' or 'clamp'"
+            )
+
+        from soveryn.platform.lattice.content_caps import (
+            ContentOverflowError,
+            clamp_content,
+        )
+        try:
+            content = clamp_content(
+                node_type, content if content is not None else "",
+                on_overflow=on_overflow,  # type: ignore[arg-type]
+            )
+        except ContentOverflowError as exc:
+            raise LatticeError(str(exc)) from exc
 
         node_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
@@ -492,12 +820,53 @@ class LatticeStore:
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO nodes (id, type, layer, agent, content, intensity, salience, "
-                "access_count, tags, created_at, updated_at, embedding, intent, provenance) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)",
+                "access_count, tags, created_at, updated_at, embedding, embedding_f32, "
+                "intent, provenance) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)",
                 (node_id, node_type, layer, agent, content, intensity, salience,
-                 tags_json, now, now, embedding_json, intent, provenance_json),
+                 tags_json, now, now, embedding_json,
+                 # Both formats. The JSON column stays as the rollback path
+                 # until the binary one has proven itself in production.
+                 _encode_embedding_blob(embedding),
+                 intent, provenance_json),
             )
+        _drop_scan_cache(self.db_path)
         return node_id
+
+    def backfill_embedding_blobs(self, *, batch: int = 500) -> int:
+        """Populate embedding_f32 for rows that only have JSON. Idempotent.
+
+        Returns how many rows were filled, so a caller can loop until zero and
+        an operator can see progress. Safe to run against a live lattice: it
+        writes a new column and never touches `embedding`.
+        """
+        filled = 0
+        while True:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    "SELECT id, embedding FROM nodes "
+                    "WHERE embedding IS NOT NULL AND embedding_f32 IS NULL "
+                    "LIMIT ?", (batch,),
+                ).fetchall()
+                if not rows:
+                    _drop_scan_cache(self.db_path)
+                    return filled
+                for row in rows:
+                    vec = _safe_parse_embedding(row["embedding"])
+                    if vec is None:
+                        # Unparseable JSON — leave it alone rather than write a
+                        # blob we cannot vouch for. It stays on the JSON path.
+                        continue
+                    conn.execute(
+                        "UPDATE nodes SET embedding_f32 = ? WHERE id = ?",
+                        (_encode_embedding_blob(vec), row["id"]),
+                    )
+                    filled += 1
+            if len(rows) < batch:
+                _drop_scan_cache(self.db_path)
+                return filled
+        _drop_scan_cache(self.db_path)
+        return filled
 
     def get_node(self, node_id: str) -> Node | None:
         with self._conn() as conn:
@@ -558,6 +927,52 @@ class LatticeStore:
                 ).fetchall()
         return tuple(_row_to_node(r) for r in rows)
 
+    def find_canonical_facts(
+        self,
+        agent: str,
+        query: str,
+        *,
+        limit: int = 3,
+    ) -> tuple[Node, ...]:
+        """Locked fact rail: tagged canonical facts matching query tokens.
+
+        Cosine cannot evict these. Empty query tokens → no rows (do not dump
+        the whole fact set into every turn).
+        """
+        from soveryn.platform.lattice.fact_rail import (
+            CANONICAL_FACT_TAG,
+            fact_query_tokens,
+        )
+
+        tokens = fact_query_tokens(query)
+        if not tokens or limit < 1:
+            return ()
+        tag_like = f"%{CANONICAL_FACT_TAG}%"
+        scored: dict[str, tuple[Node, int]] = {}
+        with self._conn() as conn:
+            for token in tokens:
+                like = f"%{token.lower()}%"
+                rows = conn.execute(
+                    "SELECT * FROM nodes "
+                    "WHERE NOT (agent != ? AND layer = ?) "
+                    "  AND layer != ? "
+                    "  AND IFNULL(tags, '[]') LIKE ? "
+                    "  AND IFNULL(tags, '[]') NOT LIKE '%historical_snapshot%' "
+                    "  AND LOWER(content) LIKE ? "
+                    "ORDER BY salience DESC, updated_at DESC LIMIT ?",
+                    (agent, LAYER_PRIVATE, LAYER_DREAM, tag_like, like, max(limit, 8)),
+                ).fetchall()
+                for row in rows:
+                    node = _row_to_node(row)
+                    prev = scored.get(node.id)
+                    hits = 1 if prev is None else prev[1] + 1
+                    scored[node.id] = (node, hits)
+        ordered = sorted(
+            scored.values(),
+            key=lambda item: (-item[1], -item[0].salience, item[0].id),
+        )
+        return tuple(node for node, _hits in ordered[:limit])
+
     def find_nodes_by_embedding(
         self,
         agent: str,
@@ -582,48 +997,44 @@ class LatticeStore:
         # Tag-side filter: substring match on the JSON tags column is sufficient
         # because tag names are not substrings of each other in this lattice's
         # convention. NULL tags are tolerated via IFNULL.
+        cache = _load_scan_cache(self)
+        if cache is not None:
+            scored = _score_cached(
+                self, cache, embedding,
+                agent=agent, layer_filter=layer_filter,
+                include_historical=include_historical,
+                threshold=threshold, limit=limit,
+            )
+            if scored is not None:
+                return scored
+
+        # Fallback: no numpy, mixed embedding widths, or cache miss.
+        # Visibility (Jon 2026-06-17): an agent recalls its OWN nodes
+        # (any layer) PLUS every OTHER agent's nodes EXCEPT their
+        # private. Dream is never recalled. The old LIMIT 2000 ORDER BY
+        # salience ranked by importance before relevance — gone.
         historical_filter = (
             "" if include_historical
             else " AND IFNULL(tags, '[]') NOT LIKE '%historical_snapshot%' "
         )
         with self._conn() as conn:
             if layer_filter is None:
-                # Visibility (Jon 2026-06-17): an agent recalls its OWN nodes
-                # (any layer) PLUS every OTHER agent's nodes EXCEPT their
-                # private. The only exclusions are other-agents' private and
-                # the dream layer (internal consolidation scratch, never for
-                # conversational recall). This replaced the old
-                # `(own non-global) OR (anyone's global)` filter, which hid
-                # every other agent's coordination/lattice work and excluded
-                # library entirely — the cause of the 2026-06-17 FCC miss.
                 rows = conn.execute(
                     "SELECT * FROM nodes "
                     "WHERE embedding IS NOT NULL "
-                    "  AND NOT (agent != ? AND layer = ?) "   # other agents' private: hidden
-                    "  AND layer != ? "                        # dream: never recalled
-                    + historical_filter +
-                    "ORDER BY salience DESC LIMIT 2000",
+                    "  AND NOT (agent != ? AND layer = ?) "
+                    "  AND layer != ? "
+                    + historical_filter,
                     (agent, LAYER_PRIVATE, LAYER_DREAM),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     "SELECT * FROM nodes "
                     "WHERE embedding IS NOT NULL AND layer = ? "
-                    + historical_filter +
-                    "ORDER BY salience DESC LIMIT 2000",
+                    + historical_filter,
                     (layer_filter,),
                 ).fetchall()
-
-        scored: list[tuple[Node, float]] = []
-        for r in rows:
-            node = _row_to_node(r)
-            if node.embedding is None:
-                continue
-            score = _cosine(embedding, node.embedding)
-            if score >= threshold:
-                scored.append((node, score))
-        scored.sort(key=lambda x: x[1], reverse=True)
-        return tuple(scored[:limit])
+        return _score_rows(rows, embedding, threshold=threshold, limit=limit)
 
 
 def embed_text(text: str, prompt: str = "document") -> tuple[float, ...]:

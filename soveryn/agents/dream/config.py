@@ -36,7 +36,7 @@ class DreamConfig:
                 env.get("SOVERYN_DREAM_MAX_INTERNAL_ITERATIONS", "3")
             ),
             cognition_url=env.get(
-                "SOVERYN_DREAM_COGNITION_URL", "http://127.0.0.1:8089"
+                "SOVERYN_DREAM_COGNITION_URL", "http://127.0.0.1:8091"
             ),
             cognition_timeout_seconds=int(
                 env.get("SOVERYN_DREAM_COGNITION_TIMEOUT_SECONDS", "120")

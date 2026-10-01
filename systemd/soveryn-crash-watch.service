@@ -1,0 +1,8 @@
+[Unit]
+Description=SOVERYN systemd health watch (crash-loop detector -> automations watch file)
+PartOf=soveryn.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/jon-deoliveira/soveryn_vnext/scripts/systemd_health_watch.py
+TimeoutStartSec=120

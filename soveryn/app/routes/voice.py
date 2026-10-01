@@ -1,7 +1,6 @@
 """Voice blueprint — /voice landing + /voice/<agent> per-agent voice room.
 
-Aetheria-only in Phase 1. SUPPORTED_AGENTS extends to include vett +
-scotty in Phase 1.5 once their voice characters are sourced.
+Roster fold: Aetheria, Eve (Vett's clone), Kernel (Scotty's clone).
 
 WebRTC signaling: POST /voice/<agent>/offer receives the browser's SDP
 offer, returns an SDP answer via Pipecat's SmallWebRTCConnection. Per
@@ -51,8 +50,8 @@ bp = Blueprint(
 logger = logging.getLogger(__name__)
 
 
-# Phase 2 (2026-06-15): all three voices clone-locally via F5-TTS.
-SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "vett", "scotty")
+# Live roster: Eve speaks Vett's F5 clone, Kernel speaks Scotty's.
+SUPPORTED_AGENTS: tuple[str, ...] = ("aetheria", "eve", "kernel")
 
 
 def _voice_state() -> dict:
@@ -71,8 +70,7 @@ def _voice_state() -> dict:
 def voice_landing():
     """Agent picker landing page. Lists the agents with voice configured.
 
-    Phase 1: only Aetheria. Phase 1.5 adds Vett + Scotty as their voice
-    characters land. Agents not in voice_state are silently omitted.
+    Agents not in voice_state are silently omitted.
     """
     state = _voice_state()
     available = [agent for agent in SUPPORTED_AGENTS if agent in state]
@@ -214,6 +212,51 @@ def voice_session_offer(session_id: str):
         return jsonify({"error": f"signaling failed: {type(exc).__name__}: {exc}"}), 500
 
     return jsonify(answer)
+
+
+
+@bp.post("/voice/transcribe")
+def voice_transcribe():
+    """Proxy composer-mic audio to local Parakeet STT.
+
+    The duplex call path (WebRTC + Pipecat) already uses Parakeet on
+    127.0.0.1:8087. Messages thread dictation for agents without an F5
+    clone (Eve, Kernel) hits the same service so we do not invent a TTS
+    engine — just expose the existing /transcribe wire to the composer.
+    """
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        abort(403, description="voice/transcribe requires localhost")
+    audio = request.get_data() or b""
+    if not audio:
+        return jsonify({"error": "empty audio"}), 400
+    import os
+    import urllib.error
+    import urllib.request
+
+    parakeet = (
+        os.environ.get("SOVERYN_PARAKEET_URL") or "http://127.0.0.1:8087"
+    ).rstrip("/")
+    req = urllib.request.Request(
+        parakeet + "/transcribe",
+        data=audio,
+        method="POST",
+        headers={
+            "Content-Type": request.content_type or "application/octet-stream",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read()
+            return current_app.response_class(
+                body, mimetype="application/json", status=resp.status
+            )
+    except urllib.error.HTTPError as exc:
+        err_body = exc.read().decode("utf-8", errors="replace")[:400]
+        logger.exception("parakeet transcribe HTTP %s", exc.code)
+        return jsonify({"error": f"stt HTTP {exc.code}: {err_body}"}), 502
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("parakeet transcribe failed")
+        return jsonify({"error": f"stt failed: {type(exc).__name__}: {exc}"}), 502
 
 
 __all__ = ["bp", "SUPPORTED_AGENTS"]
