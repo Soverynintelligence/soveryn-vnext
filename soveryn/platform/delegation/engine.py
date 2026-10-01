@@ -172,6 +172,14 @@ def execute_task(
             active_context=active_context,
         )
 
+        # 3b. Purge bytecode caches. A same-size, same-second edit after the
+        # baseline run leaves a stale .pyc that Python considers valid (mtime
+        # in seconds + identical size), and the acceptance gate would judge
+        # the OLD code. Found 2026-09-22 in the e2e isolation test.
+        import shutil as _shutil
+        for pyc_dir in Path(wt_path).rglob("__pycache__"):
+            _shutil.rmtree(pyc_dir, ignore_errors=True)
+
         # 4. Run acceptance gate
         passed, output = run_acceptance(wt_path, task.acceptance)
 

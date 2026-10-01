@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Thin wrapper → packages/soveryn-cli (parallel to soveryn-pi; does not touch it)
+exec /home/jon-deoliveira/soveryn_vnext/packages/soveryn-cli/bin/soveryn "$@"

@@ -48,6 +48,28 @@ def is_tailnet_address(bind: str, networks: tuple) -> bool:
     return any(ip in net for net in networks)
 
 
+# RFC1918 + link-local: the house LAN and point-to-point links. A bind to one
+# of these is reachable only from Jon's own network — not the internet. The
+# bare non-loopback rule classified these EMERGENCY, which is how the tower's
+# own 10.10.10.1:8091 spark-link bind sat in Ares as a permanent emergency.
+# WARNING (visible, worth review) — a specific private bind is not an
+# exposure, but an unexpected one is still worth seeing. 0.0.0.0/:: binds
+# stay EMERGENCY: they listen on every interface including any the router
+# may forward. Override via ARES_NET_LAN_RANGES.
+_DEFAULT_LAN_RANGES = (
+    "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,"
+    "169.254.0.0/16,fe80::/10,fc00::/7"
+)
+
+
+def is_lan_address(bind: str, networks: tuple) -> bool:
+    try:
+        ip = ipaddress.ip_address(bind.split("%", 1)[0])
+    except ValueError:
+        return False
+    return any(ip in net for net in networks)
+
+
 @dataclass(frozen=True)
 class NetworkAllowList:
     """Ports and loopback process names allowed to listen, split by bind class."""
@@ -56,6 +78,7 @@ class NetworkAllowList:
     loopback_process_names: frozenset[str] = field(default_factory=frozenset)
     public_ports: frozenset[tuple[int, str]] = field(default_factory=frozenset)
     tailnet_networks: tuple = field(default_factory=tuple)
+    lan_networks: tuple = field(default_factory=tuple)
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "NetworkAllowList":
@@ -76,6 +99,10 @@ class NetworkAllowList:
             tailnet_networks=_parse_networks(env.get(
                 "ARES_NET_TAILNET_RANGES",
                 _DEFAULT_TAILNET_RANGES,
+            )),
+            lan_networks=_parse_networks(env.get(
+                "ARES_NET_LAN_RANGES",
+                _DEFAULT_LAN_RANGES,
             )),
         )
 
@@ -230,6 +257,20 @@ def _classify(
             Severity.INFO,
             {"bind_address": bind_address, "port": port, "process": process},
             key=f"tailnet:{bind_address}:{port}:{process}",
+        )
+    # House LAN / RFC1918 / link-local: reachable only inside Jon's network,
+    # not the internet. WARNING — visible on review, no phone-buzzing page.
+    # A specific private bind is not an exposure; an unexpected one is still
+    # worth seeing (2026-09-23: the tower's own 10.10.10.1:8091 spark-link
+    # bind sat as a permanent EMERGENCY under the bare non-loopback rule).
+    if is_lan_address(bind_address, allow_list.lan_networks):
+        if allow_list.public_allows(port, process):
+            return None
+        return AresFinding(
+            "network.lan_listener_unallowlisted",
+            Severity.WARNING,
+            {"bind_address": bind_address, "port": port, "process": process},
+            key=f"lan:{bind_address}:{port}:{process}",
         )
     # Genuinely public bind (0.0.0.0, ::, or a real public IP).
     if allow_list.public_allows(port, process):

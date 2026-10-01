@@ -468,6 +468,66 @@ def test_parse_thermal_pos_amount_and_slash_date():
     assert "5010" in row.payment_method
 
 
+GMAIL_NEXT_INSURANCE = """
+Gmail - Your business insurance is active
+Jon DeOliveira <jon.deoliveira@gmail.com>
+Your business insurance is active
+Next Insurance <hello@nextinsurance.com> Sat, Sep 12, 2026 at 3:41 PM
+Hi Jon,
+Congratulations! Your business insurance is now active.
+Policy Details
+General Liability: 09/12/26 - 09/12/27
+General Liability: $86.66 /mo
+Payment Summary
+You have agreed to pay for your policy via ACH, including
+authorizing NEXT to debit the below bank account for any
+amount owed, based on NEXT's terms of service.
+Financial institution: Column Na Mercury
+Account ending in: 2648
+Your first payment has been initiated but may take a few days to
+hit your bank account.
+Payment date: 09/12/26
+Payment amount: $163.33
+Your next automatic payment will be on 10/12/2026
+"""
+
+
+def test_parse_gmail_next_insurance_uses_payment_amount_not_monthly():
+    """Gmail printouts are not invoices. Do not book $86.66/mo or skip the total."""
+    row = parse_receipt(GMAIL_NEXT_INSURANCE, source_name="cwginsurancebill.pdf")
+    assert row.amount_usd == "163.33"
+    assert row.status == "DOCUMENTED"
+    assert row.date == "2026-09-12"
+    assert "Next Insurance" in row.vendor
+    assert "ACH" in row.payment_method
+    assert "insurance" in row.schedule_c_or_form.lower()
+    assert row.gap is None
+
+
+def test_extract_real_gmail_insurance_pdf_if_present():
+    import pytest
+    from soveryn.platform.ledgers.extract import extract_receipt_path
+
+    path = (
+        Path.home()
+        / "soveryn_vnext"
+        / "docs"
+        / "ops"
+        / "tax-cwg"
+        / "evidence"
+        / "2026"
+        / "2026-09-12_unknown_your-business-insurance-is-active_na-2.pdf"
+    )
+    if not path.is_file():
+        pytest.skip("insurance Gmail PDF not on disk")
+    extracted = extract_receipt_path(path)
+    assert extracted.status in ("ok", "partial")
+    assert "163.33" in (extracted.text or "")
+    row = parse_receipt(extracted.text or "", source_name=path.name)
+    assert row.amount_usd == "163.33"
+    assert row.vendor == "Next Insurance"
+
+
 def test_receipt_file_intent_cwg_not_instagram():
     from soveryn.platform.ledgers.auto import receipt_file_book
 

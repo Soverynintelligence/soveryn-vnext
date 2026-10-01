@@ -78,6 +78,11 @@ def test_separate_tools_registered(tiny_catalogs, tmp_path, monkeypatch):
     assert "apex_catalog_search" in names
     assert "akt_catalog_search" in names
     assert "pondwright_catalog_refresh" in names
+    assert "pondwright_leads" in names
+    assert "pondwright_save_lead" in names
+    assert "pondwright_save_quote" in names
+    assert "pondwright_jobs" in names
+    assert "pondwright_customers" in names
     assert "pondwright_catalog_search" not in names
 
     apex_hit = reg.invoke("vett", "apex_catalog_search", {"query": "biofalls"})

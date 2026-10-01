@@ -31,7 +31,7 @@ logger = logging.getLogger("soveryn.citizens.scotty_worker")
 
 DESK = Path.home() / "soveryn_citizens" / "scotty"
 DEFAULT_BASE = "http://127.0.0.1:5001"
-POLL = float(os.environ.get("SOVERYN_SCOTTY_WORKER_POLL", "15"))
+POLL = float(os.environ.get("SOVERYN_SCOTTY_WORKER_POLL", "60"))
 
 
 def _utc() -> str:

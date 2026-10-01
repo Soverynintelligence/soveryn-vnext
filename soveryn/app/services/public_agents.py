@@ -14,6 +14,8 @@ import json
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 SPARK_SSH_USER = "soverynspark"
@@ -52,6 +54,29 @@ PUBLIC_AGENTS: tuple[dict[str, Any], ...] = (
 _CACHE_TTL = 15.0
 _cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
+# Owner ack for the "CRM new leads" chip. Leads keep status='new' in the CRM
+# until someone works them, so the chip needs its own clear: a watermark of
+# when Jon last reviewed. Only leads newer than the watermark count.
+_CRM_ACK_FILE = Path.home() / ".soveryn" / "crm_ack"
+
+
+def _crm_ack_ts() -> str | None:
+    try:
+        raw = _CRM_ACK_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return raw if raw[:4].isdigit() else None
+
+
+def ack_crm_new_leads() -> dict[str, Any]:
+    """Owner cleared the CRM new-leads chip: watermark now, refresh counts."""
+    _CRM_ACK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _CRM_ACK_FILE.write_text(
+        datetime.now(timezone.utc).isoformat(), encoding="utf-8"
+    )
+    _cache["at"] = 0.0  # bust the 15s cache so the ack shows immediately
+    return get_public_agents(force=True)
+
 
 @dataclass
 class AgentGlance:
@@ -73,7 +98,7 @@ class AgentGlance:
     error: str | None = None
 
 
-def _ssh_json_bundle(host: str) -> dict[str, Any] | None:
+def _ssh_json_bundle(host: str, ack: str | None = None) -> dict[str, Any] | None:
     """One SSH: agent summary+health + PondWright CRM pipeline glance.
 
     CRM leads are the real floor (form + chat capture). Chat audit
@@ -83,6 +108,7 @@ def _ssh_json_bundle(host: str) -> dict[str, Any] | None:
 python3 - <<'PY'
 import json, urllib.request, sqlite3, os
 from datetime import datetime, timezone
+ACK = __CRM_ACK__
 out = {"agents": {}, "crm": {"ok": False}, "waitlist": {"ok": False}}
 for port in (8200, 8400, 8500):
     row = {"summary": None, "health": None, "error": None}
@@ -126,8 +152,11 @@ try:
         "ok": True,
         "leads_total": int(total),
         "leads_new": int(con.execute(
-            "SELECT count(*) FROM leads WHERE status='new'"
+            "SELECT count(*) FROM leads WHERE status='new' "
+            "AND (:ack IS NULL OR created_at > :ack)",
+            {"ack": ACK},
         ).fetchone()[0]),
+        "ack": ACK,
         "leads_today": int(leads_today),
         "recent": recent[:8],
         "open": "https://crm.pondwright.com/",
@@ -183,6 +212,10 @@ except Exception as e:
 print(json.dumps(out))
 PY
 """
+    # Inject the ack watermark tower-side. repr() keeps it a safe Python
+    # literal (None or a quoted ISO string); the ack value is validated by
+    # _crm_ack_ts before it ever gets here.
+    remote = remote.replace("__CRM_ACK__", repr(ack))
     try:
         proc = subprocess.run(
             [
@@ -254,7 +287,7 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
     bundle = None
     path = None
     for host, label in ((SPARK_FABRIC_HOST, "fabric"), (SPARK_WIFI_HOST, "wifi")):
-        bundle = _ssh_json_bundle(host)
+        bundle = _ssh_json_bundle(host, ack=_crm_ack_ts())
         if bundle is not None:
             path = label
             break

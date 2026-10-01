@@ -148,20 +148,26 @@ CATALOG: dict[str, ConnectorDef] = {
     ),
     "pondwright": ConnectorDef(
         id="pondwright",
-        title="PondWright pricing",
+        title="PondWright CRM + pricing",
         description=(
-            "House Apex Distribution catalog (MAP/MSRP/WS), AKT Specialty dealer "
-            "catalog, and estimator rate book for CWG quotes — not the public web."
+            "CWG lead/quote/job CRM plus Apex and AKT catalogs and the estimator "
+            "rate book — not the public web."
         ),
         tools=(
             "apex_catalog_search",
             "akt_catalog_search",
             "pondwright_pricing_book",
             "pondwright_catalog_refresh",
+            "pondwright_leads",
+            "pondwright_save_lead",
+            "pondwright_save_quote",
+            "pondwright_jobs",
+            "pondwright_customers",
         ),
         class_="house",
         sovereignty_note=(
-            "Separate pickable catalogs: Apex (xlsx) and AKT Specialty. "
+            "CRM is PondWright SQLite on the Spark (field token). "
+            "Catalogs: Apex (xlsx) and AKT Specialty stay separate. "
             "Wholesale stays house-only."
         ),
     ),
@@ -210,16 +216,18 @@ CATALOG: dict[str, ConnectorDef] = {
 # Founding grants — who may hold which connector (Jon’s grants).
 # Status "armed" still depends on runtime config (SMTP, signal bridge, …).
 FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
+    # Email stays eve + kernel only (Jon, 2026-09-18) — production latch is on,
+    # so granting it elsewhere puts them on live Zoho egress at next restart.
     "aetheria": (
-        "web", "email", "signal", "messenger", "files", "documents",
+        "web", "signal", "messenger", "files", "documents",
         "system", "delegation", "house_post", "pondwright",
     ),
     "vett": (
-        "web", "email", "files", "documents", "system", "house_post",
+        "web", "files", "documents", "system", "house_post",
         "git", "patrol", "pondwright",
     ),
     "scotty": (
-        "files", "system", "house_post", "code", "email",
+        "files", "system", "house_post", "code",
     ),
     "eve": (
         "social", "signal", "files", "documents", "house_post", "email",
@@ -434,7 +442,7 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
     # house connectors always "armed" as local
     if connector_id in (
         "files", "documents", "system", "delegation", "house_post", "git",
-        "patrol", "code",
+        "patrol", "code", "pondwright",
     ):
         return True, "house-local"
     return False, "unknown connector"

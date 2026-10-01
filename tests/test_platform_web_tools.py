@@ -17,6 +17,7 @@ from soveryn.platform.web.fetch import (
     FetchError,
     SSRFError,
     _guard_against_ssrf,
+    fetch_and_extract,
 )
 from soveryn.platform.web.search import (
     DEFAULT_ENGINES,
@@ -238,6 +239,33 @@ def test_ssrf_guard_resolves_hostname_and_blocks_if_private():
         mock_resolve.return_value = [(2, 1, 6, "", ("10.0.0.5", 0))]
         with pytest.raises(SSRFError):
             _guard_against_ssrf("internal.corp.local")
+
+
+def test_redirect_to_loopback_is_refused_before_connect():
+    """A 302 onto loopback must not open a second socket."""
+    calls = []
+
+    def open_pinned(url, ip, *, timeout, headers):
+        calls.append((url, ip))
+        return 302, [("Location", "http://127.0.0.1:5001/secret")], b""
+
+    with patch("soveryn.platform.web.fetch._open_pinned", side_effect=open_pinned):
+        with patch("soveryn.platform.web.fetch._public_ip", side_effect=["1.1.1.1", SSRFError("no")]):
+            with pytest.raises(SSRFError):
+                fetch_and_extract("http://evil.example/go")
+    assert calls == [("http://evil.example/go", "1.1.1.1")]
+
+
+def test_fetch_connects_to_the_approved_address():
+    def open_pinned(url, ip, *, timeout, headers):
+        assert ip == "1.1.1.1"
+        html = b"<html><head><title>T</title></head><body><p>Hello from the page.</p></body></html>"
+        return 200, [("Content-Type", "text/html")], html
+
+    with patch("soveryn.platform.web.fetch._open_pinned", side_effect=open_pinned):
+        with patch("soveryn.platform.web.fetch._public_ip", return_value="1.1.1.1"):
+            page = fetch_and_extract("https://example.com/a")
+    assert "Hello" in page.content
 
 
 def test_ssrf_guard_blocks_if_ANY_resolved_ip_is_forbidden():

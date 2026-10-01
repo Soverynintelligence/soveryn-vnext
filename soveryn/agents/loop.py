@@ -35,7 +35,7 @@ from typing import Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
-from soveryn.agents.skills import get_skill_index
+from soveryn.agents.skills import SkillNameError, get_skill_index
 from soveryn.agents.souls import get_soul
 from soveryn.agents.turn_scope import is_trivial_user_turn
 
@@ -548,11 +548,21 @@ class AgentLoop:
         steering_rack: SteeringRack | None = None,
         verification_gate: "VerificationGate | None" = None,
         approval_gate: "ApprovalBroker | None" = None,
+        server_override: "ModelServer | None" = None,
     ) -> None:
         self.agent_name = agent_name.lower().strip()
         # Route at construction — RoutingError on unknown/retired names
         # bubbles up here, NEVER at turn-processing time.
-        self.server = route_for_agent(self.agent_name)
+        # server_override binds an explicit server and skips the agent-name
+        # route entirely: the delegation runner executes under a folded name
+        # (scotty) whose persona route no longer exists, but whose worker
+        # endpoint is declared in runtime. Non-personal worker lanes need a
+        # server, not a persona.
+        self.server = (
+            server_override
+            if server_override is not None
+            else route_for_agent(self.agent_name)
+        )
         self.conv_store = conv_store
         self.chat_fn = chat_fn
         self.stream_fn = stream_fn
@@ -973,8 +983,16 @@ class AgentLoop:
         skill learned mid-session appears next turn with no restart. Empty
         (no skills on disk yet) → "" so the prelude block is skipped entirely.
         Labeled for the model; soft-capped so a fat index cannot bloat prelude.
+
+        Non-citizen lanes (delegation worker, folded names) have no skills by
+        definition — a SkillNameError degrades to "" here rather than killing
+        the loop. The strict gate lives in soveryn.agents.skills for direct
+        citizen calls; this is the worker-lane fail-soft.
         """
-        raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        try:
+            raw = get_skill_index(self.agent_name, skills_dir=self.skills_dir).strip()
+        except SkillNameError:
+            raw = ""  # worker lanes carry no citizen skills
         if not raw:
             return ""
         # ~2k tokens soft budget for the index (design: citizen skill capture).
@@ -1144,6 +1162,7 @@ class AgentLoop:
         *,
         source: str = "direct",
         skip_user_save: bool = False,
+        files: tuple | None = None,
     ) -> ChatResponse:
         """Run one turn. Returns the raw ChatResponse.
 
@@ -1382,6 +1401,7 @@ class AgentLoop:
                         session_id=session_id,
                         source=source,
                         attachments=attachments,
+                        files=files,
                     )
                     for tool_call in response.tool_calls
                 ]
@@ -1680,6 +1700,7 @@ class AgentLoop:
         source: str = "direct",
         skip_approval_gate: bool = False,
         attachments: tuple[str, ...] | None = None,
+        files: tuple | None = None,
     ) -> ChatMessage:
         call_id = str(tool_call.get("id") or "")
         function = tool_call.get("function") or {}
@@ -1733,13 +1754,14 @@ class AgentLoop:
                 args = dict(args)
                 args["dm_session_id"] = session_id
             try:
+                from soveryn.platform.intake.turn_files import turn_files_bound
                 from soveryn.platform.intake.turn_images import (
                     pop_tool_vision,
                     queue_tool_vision,
                     turn_images_bound,
                 )
 
-                with turn_images_bound(attachments):
+                with turn_images_bound(attachments), turn_files_bound(files):
                     result = self.tool_registry.invoke(
                         self.agent_name, tool_name, args,
                     )
@@ -1837,6 +1859,7 @@ class AgentLoop:
         attachments: tuple[str, ...] | None = None,
         *,
         source: str = "direct",
+        files: tuple | None = None,
     ) -> "Iterator[AgentStreamEvent]":
         """Streaming variant. Yields TokenEvent per content delta, then either
         DoneEvent (success) or ErrorEvent (mid-stream failure). Assistant turn
@@ -2214,6 +2237,7 @@ class AgentLoop:
                             source=source,
                             skip_approval_gate=True,
                             attachments=attachments,
+                            files=files,
                         )
                     else:
                         result_message = self._tool_result_message(
@@ -2221,6 +2245,7 @@ class AgentLoop:
                             session_id=session_id,
                             source=source,
                             attachments=attachments,
+                            files=files,
                         )
                     yield ToolResultEvent(
                         call_id=call_id,

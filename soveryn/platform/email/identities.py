@@ -34,24 +34,29 @@ DEFAULT_IDENTITIES: dict[str, dict[str, Any]] = {
             f"vett@{SOVERYN_DOMAIN}",
             f"vett@{CWG_DOMAIN}",
         ],
-        "note": "Research — house + CWG",
+        "note": "FOLDED into Eve — not a live citizen (2026-08-23 note); row kept for design history only",
+        "folded": True,
     },
     "eve": {
         "default": f"eve@{SOVERYN_DOMAIN}",
-        "aliases": [f"eve@{SOVERYN_DOMAIN}"],
-        "note": "Presence / online",
+        "aliases": [
+            f"eve@{SOVERYN_DOMAIN}",
+            f"eve@{CWG_DOMAIN}",
+        ],
+        "note": "Presence / online + CWG Zoho alias",
     },
     "scotty": {
         "default": f"scotty@{SOVERYN_DOMAIN}",
         "aliases": [f"scotty@{SOVERYN_DOMAIN}"],
-        "note": "Engineering",
+        "note": "FOLDED into Kernel — not a live citizen (2026-08-23 note); row kept for design history only",
+        "folded": True,
     },
     "kernel": {
         "default": f"kernel@{SOVERYN_DOMAIN}",
         "aliases": [f"kernel@{SOVERYN_DOMAIN}"],
         "note": "Build / code (when resident)",
     },
-    # Desk agent identity (not a citizens.db row yet) — Aetheria/Vett may
+    # Desk agent identity (not a citizens.db row yet) — Aetheria may
     # send-as PondWright for CWG customer-facing mail when Gate allows.
     "pondwright": {
         "default": f"pondwright@{CWG_DOMAIN}",
@@ -62,9 +67,9 @@ DEFAULT_IDENTITIES: dict[str, dict[str, Any]] = {
 }
 
 # Who may send-as a desk identity (in addition to their own aliases).
+# vett removed 2026-09-08 — folded into Eve, so no live citizen holds it.
 DESK_SEND_AS: dict[str, tuple[str, ...]] = {
     "aetheria": ("pondwright",),
-    "vett": ("pondwright",),
 }
 
 
@@ -80,6 +85,7 @@ def load_identities() -> dict[str, dict[str, Any]]:
             "aliases": list(v["aliases"]),
             "note": v.get("note") or "",
             **({"desk": v["desk"]} if v.get("desk") else {}),
+            **({"folded": True} if v.get("folded") else {}),
         }
         for k, v in DEFAULT_IDENTITIES.items()
     }
@@ -117,19 +123,23 @@ def identity_for(citizen_id: str) -> dict[str, Any] | None:
 
 
 def allowed_from_addresses(citizen_id: str) -> list[str]:
-    """Addresses this citizen may put in From (own + desk send-as)."""
+    """Addresses this citizen may put in From (own + desk send-as).
+
+    Folded rows (vett, scotty) yield no addresses — the allowlist must match
+    the live roster per the 2026-08-23 citizen-email-identity note.
+    """
     cid = (citizen_id or "").strip().lower()
     identities = load_identities()
     allowed: list[str] = []
     own = identities.get(cid)
-    if own:
+    if own and not own.get("folded"):
         for a in own.get("aliases") or []:
             n = _normalize_addr(a)
             if n and n not in allowed:
                 allowed.append(n)
     for desk_id in DESK_SEND_AS.get(cid, ()):
         desk = identities.get(desk_id)
-        if not desk:
+        if not desk or desk.get("folded"):
             continue
         for a in desk.get("aliases") or []:
             n = _normalize_addr(a)

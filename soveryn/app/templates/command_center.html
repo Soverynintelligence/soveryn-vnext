@@ -2429,6 +2429,23 @@
     background: rgba(111,185,138,0.07);
   }
   .needs-you .ny-chip[data-tone="ok"] .n { color: var(--cc-mint); }
+  /* Dismiss (mark reviewed) — CRM new-leads chip only */
+  .needs-you .ny-chip .ny-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    margin-left: 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    line-height: 1;
+    color: rgba(232,227,213,0.55);
+    cursor: pointer;
+  }
+  .needs-you .ny-chip .ny-x:hover {
+    background: rgba(240,193,74,0.25);
+    color: var(--text);
+  }
 
   /* Active now — activity, not urgency (mint/quiet vs Needs-you gold/hot) */
   .active-now {
@@ -3103,7 +3120,8 @@
   }
 
   /* ═══ Easy mode (default) — Grok-Bot-simple front door ═══ */
-  body.cc-easy .cc-advanced { display: none !important; }
+  /* legacy cc-advanced rule removed 2026-09-22: the advanced folds are re-homed
+   inside the labeled Advanced drawer, so nothing is deleted from the DOM. */
   body.cc-easy .acttruth-badge { display: none !important; }
   body.cc-easy .dispatch-box { display: none !important; }
   body.cc-easy .agent-more,
@@ -3173,9 +3191,207 @@
   .cc-mode-toggle:hover { border-color: rgba(192,130,79,0.55); color: #f3e7db; }
   body:not(.cc-easy) .cc-mode-toggle { border-color: rgba(94,225,160,0.35); color: #9ee0b8; }
 
+
+/* advanced drawer (2026-09-22 redesign) */
+details.cc-drawer{border:1px dashed rgba(107,118,132,.4);border-radius:12px;margin:26px 0}
+details.cc-drawer>summary{cursor:pointer;list-style:none;font-size:11.5px;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--txt3);font-weight:600;padding:14px 18px}
+details.cc-drawer>summary::-webkit-details-marker{display:none}
+details.cc-drawer>summary::after{content:" +";color:var(--gold)}
+details.cc-drawer[open]>summary::after{content:" −"}
+
+/* Soft desk in black.
+   The white desk reads because the page is a mid gray and every control
+   is either pushed out (light edge + dark edge) or pressed in.
+   Same trick here: the field is #222a33, not pure black, or the edges vanish. */
+body.lab.sd{
+  background:#222a33 !important;
+  color:#d5dbe3 !important;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif !important;
+  min-height:100vh;
+}
+body.lab.sd .page{
+  max-width:1040px !important;
+  gap:18px !important;
+  padding:32px clamp(16px,4vw,48px) 64px !important;
+}
+body.lab.sd .plate{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  padding:0 0 8px !important;
+  margin:0 0 18px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:22px !important;
+  flex-wrap:wrap !important;
+  position:static !important;
+  top:auto !important;
+  z-index:auto !important;
+  height:auto !important;
+  overflow:visible !important;
+}
+body.lab.sd .plate nav{
+  display:flex !important;
+  align-items:center !important;
+  gap:16px !important;
+}
+body.lab.sd .plate > div{gap:16px !important}
+body.lab.sd .plate .id{
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  border-radius:18px !important;
+  padding:8px 14px !important;
+  box-shadow:4px 4px 8px #12181f,-4px -4px 8px #323c48 !important;
+}
+body.lab.sd .plate .id img{width:32px !important;height:32px !important}
+body.lab.sd .plate .id b{color:#e7edf3;letter-spacing:.4px}
+body.lab.sd .plate .id i{color:#8b97a6}
+body.lab.sd .plate nav a{
+  color:#9aa6b4 !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a);
+  border:0 !important;
+  border-radius:12px;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  line-height:1.2 !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48;
+}
+body.lab.sd .plate nav a.active{
+  color:#e7edf3 !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48;
+  background:linear-gradient(145deg,#1c242d,#2a333e);
+}
+body.lab.sd .status-pill{
+  color:#b7c0cb !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+  box-shadow:inset 3px 3px 6px #12181f,inset -3px -3px 6px #323c48 !important;
+}
+body.lab.sd .cc-mode-toggle{
+  color:#d3a24a !important;
+  border:0 !important;
+  border-radius:12px !important;
+  padding:6px 12px !important;
+  font-size:11px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  box-shadow:3px 3px 6px #12181f,-3px -3px 6px #323c48 !important;
+}
+body.lab.sd .brief-actions{gap:14px !important}
+body.lab.sd .sd-h{
+  font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8b97a6;
+  font-weight:700;margin:22px 2px 12px;
+}
+body.lab.sd .needs-you,
+body.lab.sd .active-now,
+body.lab.sd .greeting,
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card,
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  background:linear-gradient(145deg,#2e3742,#1b222b) !important;
+  border:0 !important;
+  border-radius:28px !important;
+  box-shadow:9px 9px 18px #12181f,-9px -9px 18px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results{
+  background:transparent !important;
+  box-shadow:none !important;
+  border:0 !important;
+  padding:0 !important;
+}
+body.lab.sd .agent-row,
+body.lab.sd .daemon-row{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:22px;
+  background:transparent !important;box-shadow:none !important;border:0 !important;
+}
+body.lab.sd .agent-card,
+body.lab.sd .daemon-card{padding:22px 18px !important}
+body.lab.sd .agent-card .name{
+  font-family:Georgia,serif !important;font-size:20px !important;font-weight:600 !important;
+  letter-spacing:.3px !important;text-transform:none !important;color:#e7edf3 !important;
+}
+body.lab.sd .agent-card .role,
+body.lab.sd .agent-card .state,
+body.lab.sd .daemon-card .meta{color:#8b97a6 !important;text-transform:none !important;letter-spacing:0 !important}
+body.lab.sd .greeting h1{font-family:Georgia,serif;font-size:28px;font-weight:600;color:#e7edf3}
+body.lab.sd .greeting p{color:#8b97a6}
+body.lab.sd .ny-label,body.lab.sd .an-label{display:none}
+body.lab.sd .ny-clear{color:#8b97a6;font-size:15px}
+body.lab.sd .brief-act,
+body.lab.sd .agent-act{
+  border:0 !important;
+  border-radius:14px !important;
+  background:linear-gradient(145deg,#2c3540,#1a212a) !important;
+  color:#d5dbe3 !important;
+  box-shadow:5px 5px 10px #12181f,-4px -4px 10px #323c48 !important;
+}
+body.lab.sd .brief-act.primary,
+body.lab.sd .agent-act.primary{
+  color:#ffb199 !important;
+  box-shadow:inset 4px 4px 8px #12181f,inset -4px -4px 8px #323c48 !important;
+  background:linear-gradient(145deg,#1c242d,#2a333e) !important;
+}
+body.lab.sd .easy-results .er-item{
+  border:0 !important;
+  border-left:0 !important;
+  border-radius:16px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  color:#d5dbe3 !important;
+}
+body.lab.sd .easy-results .er-head h3,
+body.lab.sd .easy-results .er-hint{color:#8b97a6 !important}
+body.lab.sd details.cc-fold,
+body.lab.sd details.cc-drawer{
+  margin:16px 0 !important;
+  overflow:hidden !important;
+  border-radius:28px !important;
+}
+body.lab.sd details.cc-fold>summary,
+body.lab.sd details.cc-drawer>summary{
+  color:#8b97a6;letter-spacing:2px;
+  background:transparent !important;
+  border-radius:28px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:16px !important;
+  padding:14px 18px !important;
+}
+body.lab.sd details.cc-chapter>summary::before{content:none !important}
+body.lab.sd details.cc-fold>summary .cc-fold-hint{margin-left:auto;margin-right:4px}
+body.lab.sd details.cc-fold>summary::after{position:static !important;flex:none}
+body.lab.sd.cc-easy .acttruth-badge{display:none !important}
+body.lab.sd .agent-card .acttruth-badge{
+  position:static !important;
+  align-self:flex-start;
+  margin:0 0 10px;
+  border-radius:12px !important;
+}
+body.lab.sd .agent-card .agent-actions{position:static !important;margin-top:14px}
+body.lab.sd details.cc-fold .panel,
+body.lab.sd details.cc-fold section.panel,
+body.lab.sd details.cc-fold .scotty-approvals,
+body.lab.sd details.cc-drawer .panel,
+body.lab.sd details.cc-drawer section.panel{
+  border:0 !important;
+  border-radius:18px !important;
+  background:linear-gradient(145deg,#1a212a,#2a333e) !important;
+  box-shadow:inset 6px 6px 12px #12181f,inset -6px -6px 12px #323c48 !important;
+  padding:14px 16px !important;
+}
+@media(max-width:800px){
+  body.lab.sd .agent-row,body.lab.sd .daemon-row{grid-template-columns:1fr}
+}
 </style>
 </head>
-<body class="lab cc-easy" data-lab data-testid="command-center" data-cc-mode="easy">
+<body class="lab cc-easy sd" data-lab data-testid="command-center" data-cc-mode="easy">
   <div class="page">
     <div class="plate">
       <a class="id" href="/messages">
@@ -3196,20 +3412,10 @@
       </div>
     </div>
 
-    <!-- ═══ Operator zone: needs-you + briefing + agents + approvals ═══ -->
+    <!-- Operator zone: today, needs you, citizens, estate -->
     <div class="cc-operator-zone">
 
-    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
-      <span class="ny-label">Needs you</span>
-      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
-      <div data-needs-chips style="display:contents"></div>
-    </section>
-
-    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
-      <span class="an-label">Active now</span>
-      <div data-active-chips style="display:contents"></div>
-    </section>
-
+    <h2 class="sd-h">Today</h2>
     <section class="panel greeting" data-testid="greeting">
       <h1 data-greeting-heading>…</h1>
       <p data-greeting-body>Loading your team…</p>
@@ -3240,7 +3446,28 @@
         </form>
       </div>
     </section>
+    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
+      <div class="er-head">
+        <h3>Results</h3>
+        <span class="er-hint">from your team · automations</span>
+      </div>
+      <div class="er-list" data-easy-results-list>
+        <div class="er-empty">Loading results…</div>
+      </div>
+    </section>
 
+    <h2 class="sd-h">Needs you</h2>
+    <section class="needs-you" data-testid="needs-you" data-state="loading" aria-live="polite" aria-label="Items that need you">
+      <span class="ny-label">Needs you</span>
+      <span class="ny-clear" data-needs-clear style="display:none">Nothing needs you.</span>
+      <div data-needs-chips style="display:contents"></div>
+    </section>
+    <section class="active-now" data-testid="active-now" data-state="loading" aria-live="polite" aria-label="Who is mid-work right now">
+      <span class="an-label">Active now</span>
+      <div data-active-chips style="display:contents"></div>
+    </section>
+
+    <h2 class="sd-h">Citizens</h2>
     <section class="agent-row" data-testid="agent-row" aria-label="Your team">
       <div class="agent-card" data-agent="aetheria" aria-label="Aetheria — runs the house">
         <button type="button" class="acttruth-badge" data-acttruth-badge="aetheria" title="ActTruth — click for crew ledger" aria-label="ActTruth for Aetheria">
@@ -3300,13 +3527,19 @@
       </div>
     </section>
 
-    <section class="easy-results" data-testid="easy-results" aria-label="Results from your team">
-      <div class="er-head">
-        <h3>Results</h3>
-        <span class="er-hint">from your team · automations</span>
+    <h2 class="sd-h">Estate</h2>
+    <section class="daemon-row" data-testid="daemon-strip">
+      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
       </div>
-      <div class="er-list" data-easy-results-list>
-        <div class="er-empty">Loading results…</div>
+      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
+      </div>
+      <div class="daemon-card" data-daemon="ares" data-status="unknown">
+        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
+        <div class="meta" data-daemon-meta>loading…</div>
       </div>
     </section>
 
@@ -3315,459 +3548,12 @@
 
     
     <!-- ═══ 2. Gates ═══ -->
-    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
-      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
-      <div class="cc-fold-body">
-<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
-    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
-      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
-        <div class="empty">Nothing staged.</div>
-      </div>
-    </section>
-    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
-      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
-        <div class="empty">No proposals awaiting review.</div>
-      </div>
-    </section>
-    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
-      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
-      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
-        <div class="empty">Nothing at the gate.</div>
-      </div>
-    </section>
-    </div>
-
-    
-      </div>
-    </details>
-
-    <!-- ═══ 3. Work ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-work">
-      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
-      <div class="cc-fold-body">
-<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
-    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
-      <div class="boards-strip-head">
-        <h3>Boards</h3>
-        <span style="flex:1;"></span>
-        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
-      </div>
-      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
-        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
-          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
-            <option value="Signal">Signal</option>
-            <option value="Blueprint">Blueprint</option>
-            <option value="Friction">Friction</option>
-          </select>
-          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
-            <input type="checkbox" data-board-create-notify checked> notify team
-          </label>
-        </div>
-        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
-        <div class="row">
-          <span class="err" data-board-create-err></span>
-          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
-          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
-        </div>
-      </form>
-      <div class="boards">
-        <div class="board-col" data-board="signal">
-          <h4>Signal <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open signals.</div></div>
-        </div>
-        <div class="board-col" data-board="blueprint">
-          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open blueprints.</div></div>
-        </div>
-        <div class="board-col" data-board="friction">
-          <h4>Friction <span class="count" data-board-count>0</span></h4>
-          <div data-board-list><div class="empty">no open friction.</div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Public agents + web intake: four equal columns across the width -->
-    <section class="panel public-agents-strip" data-testid="public-agents-panel">
-      <div class="boards-strip-head">
-        <h3>Public agents &amp; web intake</h3>
-        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
-          chat · waitlist · CRM — tracked here, not only email
-        </span>
-      </div>
-      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
-    </section>
-    <script>
-    (function(){
-      var el = document.querySelector('[data-public-agents]');
-      if(!el) return;
-      function esc(s){
-        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
-          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-        });
-      }
-      function relTime(iso){
-        if(!iso) return '—';
-        var t = Date.parse(iso);
-        if(!t) return esc(iso);
-        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
-        if(sec < 90) return 'just now';
-        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
-        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
-        return Math.floor(sec/86400) + 'd ago';
-      }
-      function card(a){
-        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
-        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
-        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
-        // Same live-ask stream PondWright has — Seneca/Atticus already publish
-        // recent visitor previews on /summary (polled every 20s).
-        var rec = (a.recent||[]).slice(0,5).map(function(r){
-          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
-            + esc(r.preview||'…')
-            + (r.captured ? ' · lead' : '')
-            + '</div>';
-        }).join('');
-        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
-        return '<div class="cc-pa-card">'
-          + '<div class="cc-pa-head">'
-          + '<h4>'+esc(a.name)+'</h4>'
-          + '<span class="cc-pa-status">'
-          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
-          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
-          + '<div class="cc-pa-stats">'
-          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
-          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
-          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
-          + '</div>'
-          + '<div class="cc-pa-asks-label">Recent asks</div>'
-          + '<div class="cc-pa-asks">'+rec+'</div>'
-          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
-          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
-          + '</div></div>';
-      }
-      function liveAsksStrip(agents){
-        // Cross-agent feed — same previews, newest first, so you scan all
-        // public desks the way you scan PondWright CRM lines.
-        var rows = [];
-        (agents||[]).forEach(function(a){
-          (a.recent||[]).forEach(function(r){
-            rows.push({
-              agent: a.name || a.id,
-              id: a.id,
-              ts: r.ts || '',
-              preview: r.preview || '',
-              captured: !!r.captured,
-            });
-          });
-        });
-        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
-        rows = rows.slice(0, 10);
-        if(!rows.length){
-          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
-        }
-        var body = rows.map(function(r){
-          return '<div class="cc-pa-live-row">'
-            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
-            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
-            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
-            + (r.captured ? ' <em>· lead</em>' : '')
-            + '</span></div>';
-        }).join('');
-        return '<div class="cc-pa-live">'
-          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
-          + '<div class="cc-pa-live-list">'+body+'</div>'
-          + '</div>';
-      }
-      function intakeCard(d){
-        var intake = (d && d.intake) || {};
-        var crm = (d && d.crm) || {};
-        var wl = (d && d.waitlist) || {};
-        var ok = !!intake.ok;
-        var pending = intake.pending || 0;
-        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
-        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
-        var lines = (intake.recent || []).slice(0, 4).map(function(r){
-          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
-          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
-            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
-            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
-            + esc(r.who || '—')
-            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
-            + '</div>';
-        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
-        return '<div class="cc-pa-card cc-pa-intake">'
-          + '<div class="cc-pa-head">'
-          + '<h4>Web intake</h4>'
-          + '<span class="cc-pa-status">'
-          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
-          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
-          + '<div class="cc-pa-stats">'
-          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
-          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
-          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
-          + '</div>'
-          + lines
-          + '<div class="cc-pa-foot">'
-          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
-          + ' <span class="cc-pa-model">·</span> '
-          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
-          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
-          + '</div></div>';
-      }
-      function paint(d){
-        var agents = (d && d.agents) || [];
-        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
-        var banner = (d.talking && d.talking.length)
-          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
-          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
-        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
-        el.innerHTML = banner
-          + liveAsksStrip(agents)
-          + '<div class="cc-pa-grid">'
-          + agents.map(card).join('')
-          + intakeCard(d)
-          + '</div>';
-      }
-      function load(){
-        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
-          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
-      }
-      load(); setInterval(load, 20000);
-    })();
-    </script>
-
-
-    
-      </div>
-    </details>
-
-<!-- Ops folded — power tools, not the default face -->
-    <details class="cc-fold cc-advanced" data-testid="ops-fold">
-      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
-      <div class="cc-fold-body">
-<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
-    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
-      <div class="hb-label">
-        <span class="hb-kicker">Spark hard brain</span>
-        <span class="hb-active" data-hard-brain-active>…</span>
-        <span class="hb-note" data-hard-brain-note></span>
-      </div>
-      <div class="hb-buttons" data-hard-brain-buttons></div>
-      <div class="hb-status" data-hard-brain-status></div>
-    </section>
-
-    <section class="panel ops-panel" data-testid="ops-panel">
-      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
-      <div class="ops-grid">
-        <div class="ops-block">
-          <h4>Run tests</h4>
-          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
-          <div class="ops-test-row" data-ops-test-buttons></div>
-          <div class="ops-status" data-ops-test-status></div>
-          <pre class="ops-log" data-ops-test-log></pre>
-        </div>
-      </div>
-    </section>
-    <script>
-    (function(){
-      var hardActive = document.querySelector('[data-hard-brain-active]');
-      var hardNote = document.querySelector('[data-hard-brain-note]');
-      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
-      var hardStatus = document.querySelector('[data-hard-brain-status]');
-      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
-      var brainMeta = null;
-      var brainStatus = hardStatus;
-      var brainLog = null;
-      var testBtns = document.querySelector('[data-ops-test-buttons]');
-      var testStatus = document.querySelector('[data-ops-test-status]');
-      var testLog = document.querySelector('[data-ops-test-log]');
-      if(!brainBtns && !testBtns) return;
-      var brainPoll = null, testPoll = null;
-
-      function setStatus(el, cls, text){
-        if(!el) return;
-        el.className = 'ops-status' + (cls ? ' '+cls : '');
-        el.textContent = text || '';
-      }
-      function setLog(el, text){
-        if(!el) return;
-        if(text && String(text).trim()){
-          el.textContent = text;
-          el.classList.add('show');
-        } else {
-          el.textContent = '';
-          el.classList.remove('show');
-        }
-      }
-      function paintBrain(d){
-        var cur = d.brain || '?';
-        var hname = d.house_name || cur;
-        if(hardActive){
-          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
-        }
-        if(hardNote){
-          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
-        }
-        if(hardBtns){
-          hardBtns.innerHTML = (d.brains||[]).map(function(b){
-            var active = b.id === cur ? ' is-active' : '';
-            var label = b.house_name || b.id;
-            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
-          }).join('');
-          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
-            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
-          });
-        }
-        if(d.job && d.job.status){
-          var st = d.job.status;
-          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
-          if(hardStatus){
-            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
-            hardStatus.textContent = d.job.message || st;
-          }
-          if(st==='running'||st==='starting') startBrainPoll();
-        }
-      }
-      function switchBrain(id){
-        if(!id) return;
-        var label = id;
-        var btn = document.querySelector('[data-brain="'+id+'"]');
-        if(btn) label = btn.textContent || id;
-        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
-        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
-        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
-        setLog(brainLog, '');
-        fetch('/api/ops/brain', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({brain:id})
-        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
-          .then(function(x){
-            if(!x.ok){
-              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
-              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
-              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              return;
-            }
-            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
-            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
-            startBrainPoll();
-          })
-          .catch(function(e){
-            setStatus(brainStatus, 'fail', String(e));
-            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
-            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-          });
-      }
-      function startBrainPoll(){
-        if(brainPoll) return;
-        brainPoll = setInterval(function(){
-          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
-            setLog(brainLog, d.log_tail || '');
-            var j = d.job;
-            if(!j) return;
-            var st = j.status;
-            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
-            setStatus(brainStatus, cls, j.message || st);
-            if(hardStatus){
-              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
-              hardStatus.textContent = j.message || st;
-            }
-            if(st==='ok' || st==='failed'){
-              clearInterval(brainPoll); brainPoll = null;
-              loadBrain();
-            }
-          }).catch(function(){ /* app may be restarting */ });
-        }, 4000);
-      }
-      function loadBrain(){
-        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
-          .catch(function(){
-            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
-            if(hardActive) hardActive.textContent = 'unavailable';
-          });
-      }
-
-      function paintSuites(d){
-        testBtns.innerHTML = (d.suites||[]).map(function(s){
-          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
-        }).join('');
-        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
-          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
-        });
-        if(d.job && d.job.status){
-          var st = d.job.status;
-          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
-          setStatus(testStatus, cls, d.job.message || st);
-          setLog(testLog, d.log_tail || d.job.summary || '');
-          if(st==='running'||st==='starting') startTestPoll();
-        }
-      }
-      function runTests(suite){
-        if(!suite) return;
-        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
-        setStatus(testStatus, 'run', 'Starting '+suite+'…');
-        setLog(testLog, '');
-        fetch('/api/ops/tests', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({suite:suite})
-        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
-          .then(function(x){
-            if(!x.ok){
-              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
-              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-              return;
-            }
-            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
-            startTestPoll();
-          })
-          .catch(function(e){
-            setStatus(testStatus, 'fail', String(e));
-            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-          });
-      }
-      function startTestPoll(){
-        if(testPoll) return;
-        testPoll = setInterval(function(){
-          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
-            setLog(testLog, d.log_tail || '');
-            var j = d.job;
-            if(!j) return;
-            var st = j.status;
-            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
-            setStatus(testStatus, cls, j.message || st);
-            if(st==='ok' || st==='failed'){
-              clearInterval(testPoll); testPoll = null;
-              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
-            }
-          }).catch(function(){});
-        }, 2000);
-      }
-      function loadTests(){
-        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
-          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
-      }
-
-      loadBrain();
-      loadTests();
-    })();
-    </script>
-      </div>
-    </details>
-
-    <!-- Automations — scheduler + CC inbox; Signal preview only -->
-    <details class="cc-fold cc-advanced" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
+    <details class="cc-fold cc-chapter" data-testid="automations-fold" id="automations-anchor" style="scroll-margin-top:24px">
       <summary>Automations <span class="cc-fold-hint">scheduled · CC inbox · routines</span></summary>
       <div class="cc-fold-body">
     <section class="panel auto-panel" data-testid="automations-panel">
       <div class="auto-head">
-        <h3>Automations</h3>
+        <h3>Automations — daily briefs land here</h3>
         <span class="auto-badge">CC inbox · Signal not armed</span>
         <span class="auto-meta" data-auto-meta>loading…</span>
       </div>
@@ -4092,28 +3878,459 @@
       </div>
     </details>
 
-    <!-- ═══ Pulse (folded) ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-pulse">
-      <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
+    <details class="cc-fold cc-chapter" data-testid="chapter-gates">
+      <summary>Needs a yes <span class="cc-fold-hint">approvals</span></summary>
       <div class="cc-fold-body">
-<!-- Daemon status strip — autonomous fleet at a glance. -->
-    <section class="daemon-row" data-testid="daemon-strip">
-      <div class="daemon-card" data-daemon="heartbeat" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Heartbeat · Aetheria</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
+<div id="approvals-anchor" class="cognition-approvals-row" style="scroll-margin-top:24px">
+    <section class="panel scotty-approvals" data-testid="x-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Aetheria — post awaiting your word</h3>
+      <div class="scotty-approvals-feed" data-x-approvals-feed aria-live="polite" aria-label="Staged X posts awaiting approval">
+        <div class="empty">Nothing staged.</div>
       </div>
-      <div class="daemon-card" data-daemon="patrol" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Patrol · Vett</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="scotty-approvals-panel">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Scotty — proposals</h3>
+      <div class="scotty-approvals-feed" data-scotty-approvals-feed aria-live="polite" aria-label="Scotty proposals awaiting review">
+        <div class="empty">No proposals awaiting review.</div>
       </div>
-      <div class="daemon-card" data-daemon="ares" data-status="unknown">
-        <div class="label"><span class="dot"></span><span class="name">Sentinel · Ares</span></div>
-        <div class="meta" data-daemon-meta>loading…</div>
+    </section>
+    <section class="panel scotty-approvals" data-testid="gate-approvals-panel" style="grid-column: 1 / -1;">
+      <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Approval Gate — egress waiting</h3>
+      <div class="scotty-approvals-feed" data-gate-approvals-feed aria-live="polite" aria-label="Approval Gate egress awaiting decision">
+        <div class="empty">Nothing at the gate.</div>
+      </div>
+    </section>
+    </div>
+
+    
+      </div>
+    </details>
+
+    <!-- ═══ 3. Work ═══ -->
+<details class="cc-drawer" data-testid="advanced-drawer">
+  <summary>Advanced — configuration, memory, legacy surfaces</summary>
+    <details class="cc-fold" data-testid="ops-fold">
+      <summary>Ops <span class="cc-fold-hint">Spark brain · pytest</span></summary>
+      <div class="cc-fold-body">
+<!-- Spark hard brains — Vett/Scotty/public. One at a time; not soul, not Kernel. -->
+    <section class="hard-brain-strip" data-testid="hard-brain-strip" aria-label="Spark hard brain">
+      <div class="hb-label">
+        <span class="hb-kicker">Spark hard brain</span>
+        <span class="hb-active" data-hard-brain-active>…</span>
+        <span class="hb-note" data-hard-brain-note></span>
+      </div>
+      <div class="hb-buttons" data-hard-brain-buttons></div>
+      <div class="hb-status" data-hard-brain-status></div>
+    </section>
+
+    <section class="panel ops-panel" data-testid="ops-panel">
+      <h3 style="font-size:11px;color:rgba(232,227,213,0.45);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ops console</h3>
+      <div class="ops-grid">
+        <div class="ops-block">
+          <h4>Run tests</h4>
+          <div class="ops-meta">Localhost only. Presets hit the real pytest suite — no need to ask the agent.</div>
+          <div class="ops-test-row" data-ops-test-buttons></div>
+          <div class="ops-status" data-ops-test-status></div>
+          <pre class="ops-log" data-ops-test-log></pre>
+        </div>
+      </div>
+    </section>
+    <script>
+    (function(){
+      var hardActive = document.querySelector('[data-hard-brain-active]');
+      var hardNote = document.querySelector('[data-hard-brain-note]');
+      var hardBtns = document.querySelector('[data-hard-brain-buttons]');
+      var hardStatus = document.querySelector('[data-hard-brain-status]');
+      var brainBtns = hardBtns; /* single Spark brain UI — hard-brain strip */
+      var brainMeta = null;
+      var brainStatus = hardStatus;
+      var brainLog = null;
+      var testBtns = document.querySelector('[data-ops-test-buttons]');
+      var testStatus = document.querySelector('[data-ops-test-status]');
+      var testLog = document.querySelector('[data-ops-test-log]');
+      if(!brainBtns && !testBtns) return;
+      var brainPoll = null, testPoll = null;
+
+      function setStatus(el, cls, text){
+        if(!el) return;
+        el.className = 'ops-status' + (cls ? ' '+cls : '');
+        el.textContent = text || '';
+      }
+      function setLog(el, text){
+        if(!el) return;
+        if(text && String(text).trim()){
+          el.textContent = text;
+          el.classList.add('show');
+        } else {
+          el.textContent = '';
+          el.classList.remove('show');
+        }
+      }
+      function paintBrain(d){
+        var cur = d.brain || '?';
+        var hname = d.house_name || cur;
+        if(hardActive){
+          hardActive.textContent = hname + ' · ' + (d.routed_alias || d.alias || cur);
+        }
+        if(hardNote){
+          hardNote.textContent = d.blurb || 'Vett · Scotty · public agents (one model on Spark)';
+        }
+        if(hardBtns){
+          hardBtns.innerHTML = (d.brains||[]).map(function(b){
+            var active = b.id === cur ? ' is-active' : '';
+            var label = b.house_name || b.id;
+            return '<button type="button" class="hb-btn'+active+'" data-brain="'+b.id+'" title="'+(b.blurb||b.role||'')+'">'+label+'</button>';
+          }).join('');
+          hardBtns.querySelectorAll('[data-brain]').forEach(function(btn){
+            btn.onclick = function(){ switchBrain(btn.getAttribute('data-brain')); };
+          });
+        }
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          if(hardStatus){
+            hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+            hardStatus.textContent = d.job.message || st;
+          }
+          if(st==='running'||st==='starting') startBrainPoll();
+        }
+      }
+      function switchBrain(id){
+        if(!id) return;
+        var label = id;
+        var btn = document.querySelector('[data-brain="'+id+'"]');
+        if(btn) label = btn.textContent || id;
+        if(!confirm('Switch Spark hard brain to '+label+'?\n\nReloads vLLM (can take minutes). Restarts the app briefly.\nAetheria + Kernel stay on the tower.')) return;
+        brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(brainStatus, 'run', 'Starting switch to '+label+'…');
+        if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = 'Switching to '+label+'…'; }
+        setLog(brainLog, '');
+        fetch('/api/ops/brain', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({brain:id})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(brainStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'switch failed');
+              if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = (x.j && (x.j.message||x.j.error)) || 'switch failed'; }
+              brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(brainStatus, 'run', (x.j.job && x.j.job.message) || 'switching…');
+            if(hardStatus){ hardStatus.className = 'hb-status run'; hardStatus.textContent = (x.j.job && x.j.job.message) || 'switching…'; }
+            startBrainPoll();
+          })
+          .catch(function(e){
+            setStatus(brainStatus, 'fail', String(e));
+            if(hardStatus){ hardStatus.className = 'hb-status fail'; hardStatus.textContent = String(e); }
+            brainBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            if(hardBtns) hardBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startBrainPoll(){
+        if(brainPoll) return;
+        brainPoll = setInterval(function(){
+          fetch('/api/ops/jobs/brain').then(function(r){ return r.json(); }).then(function(d){
+            setLog(brainLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(brainStatus, cls, j.message || st);
+            if(hardStatus){
+              hardStatus.className = 'hb-status' + (cls ? ' '+cls : '');
+              hardStatus.textContent = j.message || st;
+            }
+            if(st==='ok' || st==='failed'){
+              clearInterval(brainPoll); brainPoll = null;
+              loadBrain();
+            }
+          }).catch(function(){ /* app may be restarting */ });
+        }, 4000);
+      }
+      function loadBrain(){
+        fetch('/api/ops/brain').then(function(r){ return r.json(); }).then(paintBrain)
+          .catch(function(){
+            brainMeta.textContent = 'ops brain API unavailable (localhost only)';
+            if(hardActive) hardActive.textContent = 'unavailable';
+          });
+      }
+
+      function paintSuites(d){
+        testBtns.innerHTML = (d.suites||[]).map(function(s){
+          return '<button type="button" class="ops-test-btn" data-suite="'+s.id+'">'+s.label+'</button>';
+        }).join('');
+        testBtns.querySelectorAll('[data-suite]').forEach(function(btn){
+          btn.onclick = function(){ runTests(btn.getAttribute('data-suite')); };
+        });
+        if(d.job && d.job.status){
+          var st = d.job.status;
+          var cls = st==='ok'?'ok':(st==='failed'?'fail':(st==='running'||st==='starting'?'run':''));
+          setStatus(testStatus, cls, d.job.message || st);
+          setLog(testLog, d.log_tail || d.job.summary || '');
+          if(st==='running'||st==='starting') startTestPoll();
+        }
+      }
+      function runTests(suite){
+        if(!suite) return;
+        testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        setStatus(testStatus, 'run', 'Starting '+suite+'…');
+        setLog(testLog, '');
+        fetch('/api/ops/tests', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({suite:suite})
+        }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+          .then(function(x){
+            if(!x.ok){
+              setStatus(testStatus, 'fail', (x.j && (x.j.message||x.j.error)) || 'failed');
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+              return;
+            }
+            setStatus(testStatus, 'run', (x.j.job && x.j.job.message) || 'running…');
+            startTestPoll();
+          })
+          .catch(function(e){
+            setStatus(testStatus, 'fail', String(e));
+            testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+          });
+      }
+      function startTestPoll(){
+        if(testPoll) return;
+        testPoll = setInterval(function(){
+          fetch('/api/ops/jobs/tests').then(function(r){ return r.json(); }).then(function(d){
+            setLog(testLog, d.log_tail || '');
+            var j = d.job;
+            if(!j) return;
+            var st = j.status;
+            var cls = st==='ok'?'ok':(st==='failed'?'fail':'run');
+            setStatus(testStatus, cls, j.message || st);
+            if(st==='ok' || st==='failed'){
+              clearInterval(testPoll); testPoll = null;
+              testBtns.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            }
+          }).catch(function(){});
+        }, 2000);
+      }
+      function loadTests(){
+        fetch('/api/ops/tests').then(function(r){ return r.json(); }).then(paintSuites)
+          .catch(function(){ testStatus.textContent = 'ops tests API unavailable'; });
+      }
+
+      loadBrain();
+      loadTests();
+    })();
+    </script>
+      </div>
+    </details>
+
+    <!-- Automations — scheduler + CC inbox; Signal preview only -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-work">
+      <summary>Work surface <span class="cc-fold-hint">boards · public · intake</span></summary>
+      <div class="cc-fold-body">
+<!-- Boards: full-width narrow strip (Signal · Blueprint · Friction) -->
+    <section class="panel boards-strip" data-testid="boards-panel" id="boards-anchor" style="scroll-margin-top:24px">
+      <div class="boards-strip-head">
+        <h3>Boards</h3>
+        <span style="flex:1;"></span>
+        <button class="board-item-action" data-board-new-toggle type="button">+ New</button>
+      </div>
+      <form class="board-item-lesson" data-board-create hidden style="margin-bottom:10px;">
+        <div class="row" style="justify-content:flex-start; margin-bottom:6px;">
+          <select data-board-create-board style="background:rgba(0,0,0,0.25); color:var(--text); border:1px solid rgba(225,210,170,0.15); border-radius:4px; padding:3px 6px; font-size:11px;">
+            <option value="Signal">Signal</option>
+            <option value="Blueprint">Blueprint</option>
+            <option value="Friction">Friction</option>
+          </select>
+          <label style="font-size:11px; color:rgba(232,227,213,0.6); display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" data-board-create-notify checked> notify team
+          </label>
+        </div>
+        <textarea data-board-create-content placeholder="note to the team… (uncheck 'notify team' to park it quietly, no agent pinged)"></textarea>
+        <div class="row">
+          <span class="err" data-board-create-err></span>
+          <button class="board-item-action" data-board-create-cancel type="button">Cancel</button>
+          <button class="board-item-action active" data-board-create-submit type="submit">Add</button>
+        </div>
+      </form>
+      <div class="boards">
+        <div class="board-col" data-board="signal">
+          <h4>Signal <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open signals.</div></div>
+        </div>
+        <div class="board-col" data-board="blueprint">
+          <h4>Blueprint <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open blueprints.</div></div>
+        </div>
+        <div class="board-col" data-board="friction">
+          <h4>Friction <span class="count" data-board-count>0</span></h4>
+          <div data-board-list><div class="empty">no open friction.</div></div>
+        </div>
       </div>
     </section>
 
+    <!-- Public agents + web intake: four equal columns across the width -->
+    <section class="panel public-agents-strip" data-testid="public-agents-panel">
+      <div class="boards-strip-head">
+        <h3>Public agents &amp; web intake</h3>
+        <span class="cc-fold-hint" style="margin-left:auto;letter-spacing:0.04em;text-transform:none;font-size:11px;color:rgba(232,227,213,0.4)">
+          chat · waitlist · CRM — tracked here, not only email
+        </span>
+      </div>
+      <div class="pw-cc" data-public-agents aria-live="polite"><div class="empty">loading…</div></div>
+    </section>
+    <script>
+    (function(){
+      var el = document.querySelector('[data-public-agents]');
+      if(!el) return;
+      function esc(s){
+        return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+          return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+        });
+      }
+      function relTime(iso){
+        if(!iso) return '—';
+        var t = Date.parse(iso);
+        if(!t) return esc(iso);
+        var sec = Math.max(0, Math.floor((Date.now()-t)/1000));
+        if(sec < 90) return 'just now';
+        if(sec < 3600) return Math.floor(sec/60) + 'm ago';
+        if(sec < 86400) return Math.floor(sec/3600) + 'h ago';
+        return Math.floor(sec/86400) + 'd ago';
+      }
+      function card(a){
+        var hot = (a.conversations_today||0) > 0 || (a.turns_today||0) > 0;
+        var dot = !a.reachable ? '#c0392b' : (a.model_ok===false ? '#d4a827' : (hot ? '#3f9a5f' : 'rgba(232,227,213,0.35)'));
+        var status = !a.reachable ? 'offline' : (a.model_ok===false ? 'model' : (hot ? 'talking' : (a.enabled===false ? 'paused' : 'quiet')));
+        // Same live-ask stream PondWright has — Seneca/Atticus already publish
+        // recent visitor previews on /summary (polled every 20s).
+        var rec = (a.recent||[]).slice(0,5).map(function(r){
+          return '<div class="cc-pa-line" title="'+esc(r.preview||'')+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + esc(r.preview||'…')
+            + (r.captured ? ' · lead' : '')
+            + '</div>';
+        }).join('');
+        if(!rec) rec = '<div class="cc-pa-line" style="opacity:.4">No recent asks yet</div>';
+        return '<div class="cc-pa-card">'
+          + '<div class="cc-pa-head">'
+          + '<h4>'+esc(a.name)+'</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">'+esc(a.role||'')+'</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(a.conversations_today==null?'—':a.conversations_today)+'</b><span>today</span></div>'
+          + '<div><b>'+(a.turns_today==null?'—':a.turns_today)+'</b><span>turns</span></div>'
+          + '<div><b title="'+esc(relTime(a.last_activity))+'">'+esc(relTime(a.last_activity))+'</b><span>last</span></div>'
+          + '</div>'
+          + '<div class="cc-pa-asks-label">Recent asks</div>'
+          + '<div class="cc-pa-asks">'+rec+'</div>'
+          + '<div class="cc-pa-foot"><a href="'+esc(a.open||a.site||'#')+'" target="_blank" rel="noopener">open →</a>'
+          + (a.model ? ' <span class="cc-pa-model">· '+esc(a.model)+'</span>' : '')
+          + '</div></div>';
+      }
+      function liveAsksStrip(agents){
+        // Cross-agent feed — same previews, newest first, so you scan all
+        // public desks the way you scan PondWright CRM lines.
+        var rows = [];
+        (agents||[]).forEach(function(a){
+          (a.recent||[]).forEach(function(r){
+            rows.push({
+              agent: a.name || a.id,
+              id: a.id,
+              ts: r.ts || '',
+              preview: r.preview || '',
+              captured: !!r.captured,
+            });
+          });
+        });
+        rows.sort(function(x,y){ return (y.ts||'').localeCompare(x.ts||''); });
+        rows = rows.slice(0, 10);
+        if(!rows.length){
+          return '<div class="cc-pa-live"><div class="cc-pa-banner">No visitor asks in the recent window yet.</div></div>';
+        }
+        var body = rows.map(function(r){
+          return '<div class="cc-pa-live-row">'
+            + '<span class="cc-pa-live-who">'+esc(r.agent)+'</span>'
+            + '<span class="cc-pa-live-when">'+esc(relTime(r.ts))+'</span>'
+            + '<span class="cc-pa-live-q" title="'+esc(r.preview)+'">'+esc(r.preview||'…')
+            + (r.captured ? ' <em>· lead</em>' : '')
+            + '</span></div>';
+        }).join('');
+        return '<div class="cc-pa-live">'
+          + '<div class="cc-pa-banner">Live visitor asks · all public desks</div>'
+          + '<div class="cc-pa-live-list">'+body+'</div>'
+          + '</div>';
+      }
+      function intakeCard(d){
+        var intake = (d && d.intake) || {};
+        var crm = (d && d.crm) || {};
+        var wl = (d && d.waitlist) || {};
+        var ok = !!intake.ok;
+        var pending = intake.pending || 0;
+        var dot = !ok ? '#c0392b' : (pending > 0 ? '#d4a827' : 'rgba(232,227,213,0.35)');
+        var status = !ok ? 'offline' : (pending > 0 ? 'new' : 'quiet');
+        var lines = (intake.recent || []).slice(0, 4).map(function(r){
+          var ch = r.channel === 'pondwright' ? 'PW' : (r.channel === 'historysledger' ? 'HL' : (r.channel || '?'));
+          return '<div class="cc-pa-line" title="'+esc((r.detail||'')+' · '+(r.status||''))+'">'
+            + '<span style="opacity:.45;margin-right:4px;">'+esc(relTime(r.ts))+'</span>'
+            + '<span style="opacity:.55;margin-right:4px;">'+esc(ch)+'</span>'
+            + esc(r.who || '—')
+            + (r.detail ? ' · '+esc(String(r.detail).slice(0,48)) : '')
+            + '</div>';
+        }).join('') || '<div class="cc-pa-line" style="opacity:.4">No web intake yet</div>';
+        return '<div class="cc-pa-card cc-pa-intake">'
+          + '<div class="cc-pa-head">'
+          + '<h4>Web intake</h4>'
+          + '<span class="cc-pa-status">'
+          + '<span class="cc-pa-dot" style="background:'+dot+'"></span>'+esc(status)+'</span></div>'
+          + '<div class="cc-pa-meta">CRM leads · HL Family waitlist</div>'
+          + '<div class="cc-pa-stats">'
+          + '<div><b>'+(intake.crm_new==null?'—':intake.crm_new)+'</b><span>CRM new</span></div>'
+          + '<div><b>'+(intake.waitlist_today==null?'—':intake.waitlist_today)+'</b><span>waitlist</span></div>'
+          + '<div><b>'+(intake.waitlist_total==null?'—':intake.waitlist_total)+'</b><span>HL total</span></div>'
+          + '</div>'
+          + lines
+          + '<div class="cc-pa-foot">'
+          + '<a href="'+esc(intake.crm_open||'https://crm.pondwright.com/')+'" target="_blank" rel="noopener">CRM →</a>'
+          + ' <span class="cc-pa-model">·</span> '
+          + '<a href="'+esc(intake.waitlist_open||'https://historysledger.com/family#waitlist')+'" target="_blank" rel="noopener">waitlist →</a>'
+          + (!ok && crm.error ? ' <span class="cc-pa-model">· '+esc(crm.error||wl.error||'')+'</span>' : '')
+          + '</div></div>';
+      }
+      function paint(d){
+        var agents = (d && d.agents) || [];
+        if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
+        var banner = (d.talking && d.talking.length)
+          ? '<div class="cc-pa-banner hot">Talking today: '+esc(d.talking.join(', '))+'</div>'
+          : '<div class="cc-pa-banner">Quiet today (probes excluded) · asks still listed below</div>';
+        // Live asks strip + four columns: PondWright · Seneca · Atticus · Web intake
+        el.innerHTML = banner
+          + liveAsksStrip(agents)
+          + '<div class="cc-pa-grid">'
+          + agents.map(card).join('')
+          + intakeCard(d)
+          + '</div>';
+      }
+      function load(){
+        fetch('/api/system/public_agents').then(function(r){ return r.json(); }).then(paint)
+          .catch(function(){ el.innerHTML='<div class="empty">public agents probe failed</div>'; });
+      }
+      load(); setInterval(load, 20000);
+    })();
+    </script>
+
+
     
-<!-- Heartbeat + Ares -->
+      </div>
+    </details>
+
+<!-- Ops folded — power tools, not the default face -->
+    <details class="cc-fold cc-chapter" data-testid="chapter-pulse">
+      <summary>Pulse <span class="cc-fold-hint">heartbeat · patrol · Ares</span></summary>
+      <div class="cc-fold-body">
+<!-- Heartbeat + Ares stay in Pulse. The status strip is on the first screen. -->
     <div class="pulse-row">
     <section class="panel heartbeat-panel" data-testid="heartbeat-panel">
       <h3 style="font-size:11px; color:rgba(232,227,213,0.45); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:14px;">Heartbeat</h3>
@@ -4142,7 +4359,7 @@
     </details>
 
     <!-- ═══ 4. Memory ═══ -->
-    <details class="cc-fold cc-chapter cc-advanced" data-testid="chapter-memory">
+    <details class="cc-fold cc-chapter" data-testid="chapter-memory">
       <summary>Memory &amp; lattice <span class="cc-fold-hint">cognition · bus · writes</span></summary>
       <div class="cc-fold-body">
 <!-- Specialists + Comm bus — what Aetheria is doing as orchestrator.
@@ -4322,6 +4539,9 @@
     
       </div>
     </details>
+  </details>
+
+    <!-- ═══ Pulse (folded) ═══ -->
 
 
 
@@ -4391,7 +4611,7 @@
     const intake = publicA && publicA.intake;
     const crmNew = (intake && intake.crm_new) || (publicA && publicA.crm && publicA.crm.leads_new) || 0;
     const wlToday = (intake && intake.waitlist_today) || 0;
-    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn" });
+    if (crmNew > 0) chips.push({ n: crmNew, label: "CRM new leads", href: (intake && intake.crm_open) || "https://crm.pondwright.com/", tone: "warn", dismiss: true });
 
     const crit = ares && ares.counts && ((ares.counts.emergency || 0) + (ares.counts.critical || 0));
     if (crit > 0) chips.push({ n: crit, label: "Ares critical", href: "#ares-anchor", tone: "hot", scroll: "[data-testid='ares-panel']" });
@@ -4430,12 +4650,25 @@
       const n = (typeof c.n === "number") ? c.n : c.n;
       const href = c.href || "#";
       const scroll = c.scroll ? ` data-scroll="${c.scroll}"` : "";
-      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span></a>`;
+      const x = c.dismiss ? `<span class="ny-x" role="button" tabindex="0" aria-label="Clear ${c.label}" title="Mark reviewed (clears until new leads arrive)">&times;</span>` : "";
+      return `<a class="ny-chip" data-tone="${c.tone || ""}" href="${href}"${scroll}><span class="n">${n}</span><span>${c.label}</span>${x}</a>`;
     }).join("");
     const openChapter = (id) => {
       const ch = document.querySelector(`[data-testid="${id}"]`);
       if (ch && ch.tagName === "DETAILS") ch.open = true;
     };
+    chipsEl.querySelectorAll(".ny-x").forEach((x) => {
+      const clear = async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        try {
+          await fetch("/api/system/crm/ack", { method: "POST" });
+        } catch (e) { /* endpoint down: chip stays, nothing breaks */ }
+        renderNeedsYou();
+      };
+      x.addEventListener("click", clear);
+      x.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") clear(ev); });
+    });
     chipsEl.querySelectorAll("a.ny-chip").forEach((a) => {
       a.addEventListener("click", (ev) => {
         const href = a.getAttribute("href") || "";

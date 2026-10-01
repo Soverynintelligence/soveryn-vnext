@@ -214,6 +214,23 @@ def test_list_directory_truncates_at_max_entries(tmp_path):
             test_dir.rmdir()
 
 
+def test_list_directory_glob_filters_and_mtime_puts_newest_first(tmp_path):
+    (tmp_path / "old.pdf").write_bytes(b"%PDF-old")
+    (tmp_path / "skip.txt").write_text("no")
+    (tmp_path / "new.pdf").write_bytes(b"%PDF-new")
+    import os, time
+    old = tmp_path / "old.pdf"
+    new = tmp_path / "new.pdf"
+    now = time.time()
+    os.utime(old, (now - 100, now - 100))
+    os.utime(new, (now, now))
+    tool = build_list_directory_tool(owner_agent="eve", root=tmp_path)
+    result = tool.handler({"path": str(tmp_path), "glob": "*.pdf", "sort": "mtime"})
+    names = [e["name"] for e in result["entries"]]
+    assert names == ["new.pdf", "old.pdf"]
+    assert result["truncated"] is False
+
+
 # ─── git_status ─────────────────────────────────────────────────────────────
 
 def test_git_status_returns_branch_summary_and_changes():

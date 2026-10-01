@@ -11,7 +11,7 @@ from soveryn.app.services.bench_flash import chat as bench_flash_chat
 from soveryn.app.services.bench_flash import get_status as bench_flash_status
 from soveryn.app.services.bench_flash import start_warm as bench_flash_warm
 from soveryn.app.services.gpu_stats import get_gpu_stats
-from soveryn.app.services.public_agents import get_public_agents
+from soveryn.app.services.public_agents import ack_crm_new_leads, get_public_agents
 from soveryn.app.services.rig_stats import get_rig_stats
 from soveryn.app.services.spark_stats import get_spark_stats, get_spark2_stats
 
@@ -84,6 +84,13 @@ def api_system_public_agents():
     previews only — never full transcripts, never lattice writes.
     """
     return jsonify(get_public_agents()), 200
+
+
+@bp.post("/api/system/crm/ack")
+def api_system_crm_ack():
+    """Clear the 'CRM new leads' chip. Watermarks the ack time; leads are
+    untouched in the CRM itself. Returns a fresh public_agents payload."""
+    return jsonify(ack_crm_new_leads()), 200
 
 
 @bp.get("/api/system/acttruth")

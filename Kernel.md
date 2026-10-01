@@ -10,7 +10,7 @@
 - **Project:** SOVERYN vNext
 - **Root:** `/home/jon-deoliveira/soveryn_vnext/`
 - **Nature:** Side-by-side Flask rebuild of the SOVERYN platform, built beside (not replacing) production.
-- **Source of authority:** `docs/CURRENT_TRUTH_2026-05-23.md` — "Not aspirational. Not historical. Observed."
+- **Source of authority:** `docs/archive/CURRENT_TRUTH_2026-05-23.md` — "Not aspirational. Not historical. Observed."
   - Rule: any change to runtime behavior updates `CURRENT_TRUTH` first, then code.
 
 ## 2. Agent Roster
@@ -53,4 +53,5 @@ Three active chat agents (registered in `app.py`, in `agent_loops`):
 
 ## 7. Work Log
 - Created this Kernel.md (persistent memory seed).
-- (append notable work here)
+- **2026-09-12 JIT harness** (`~/ablit-bake/jit-exp/`): stock Flash-Next, production OpenCode untouched, ABLIT off. Exp1 PARTIAL (curl deny leaked via python urllib) — **do not promote**. Exp2 retry plugin PASS as `JIT_TOOL_RETRY=1` default-off overlay — **do not patch Pi**. Decisions: `~/ablit-bake/jit-exp/DECISIONS.md`. dsh still not installed (Node 20).
+- **2026-09-12 CWG live paper** recorded in `~/carolinawatergardens/SITE-STATE.md` (topbar, short homepage, Pricing page, CRM `/lead`). Commit that tree so navy git cannot overwrite live.

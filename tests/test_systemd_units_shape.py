@@ -11,7 +11,9 @@ SYSTEMD_DIR = REPO_ROOT / "systemd"
 
 
 def _load_unit(name: str) -> ConfigParser:
-    parser = ConfigParser(interpolation=None)
+    # strict=False: systemd allows repeated directives (multiple Environment=
+    # lines in soveryn-ares.service since 2026-09-24) — real units parse fine.
+    parser = ConfigParser(interpolation=None, strict=False)
     parser.optionxform = str
     with (SYSTEMD_DIR / name).open(encoding="utf-8") as fh:
         parser.read_file(fh)
@@ -112,12 +114,26 @@ def test_ares_unit_is_user_scoped_and_timebounded():
     assert unit.get("Service", "StandardError") == "append:/tmp/soveryn-ares.log"
 
 
+def _env_lines(name: str) -> list[str]:
+    """Raw Environment= values, in order — systemd allows repeated directives."""
+    out = []
+    for ln in (SYSTEMD_DIR / name).read_text(encoding="utf-8").splitlines():
+        s = ln.strip()
+        if s.startswith("Environment="):
+            out.append(s[len("Environment="):])
+    return out
+
+
 def test_ares_unit_exposes_loopback_allowlist_env():
-    unit = _load_unit("soveryn-ares.service")
-    env = unit.get("Service", "Environment")
+    env = "\n".join(_env_lines("soveryn-ares.service"))
     assert "PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin" in env
     assert "ARES_NET_LOOPBACK_ALLOWLIST=5001,8090,8087,47017,39477,53,631" in env
-    assert "network-online.target" in unit.get("Unit", "Wants")
+    # Jon-confirmed public binds (2026-09-24): tunnel origin + phone console.
+    assert "ARES_NET_PUBLIC_ALLOWLIST=22:sshd,5055:python,5065:python3,5075:teammates" in env
+    assert "network-online.target" in "\n".join(
+        ln for ln in (SYSTEMD_DIR / "soveryn-ares.service").read_text(encoding="utf-8").splitlines()
+        if ln.strip().startswith(("Wants=", "After="))
+    )
 
 
 def test_ares_unit_installs_under_soveryn_target():

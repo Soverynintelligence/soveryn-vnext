@@ -110,3 +110,19 @@ def test_the_souls_and_the_origin_essay_are_tracked():
         if s.relative_to(REPO).as_posix() not in tracked
     ]
     assert not untracked, f"soul documents exist only on this disk: {untracked}"
+
+
+def test_agent_writes_never_pollute_home():
+    """Tripwire 2026-09-24: a docs-hygiene pass ran with cwd=$HOME, wrote
+    README.md and a truncated docs/CURRENT_TRUTH.md into the home directory,
+    then verified its own misplaced writes — the room reported 'reverted'
+    for days while the repo files were simply untouched. Repo-relative doc
+    paths MUST resolve inside the repo. If a stray copy reappears in $HOME,
+    this fails loudly instead of a citizen chasing ghosts."""
+    home = pathlib.Path.home()
+    assert not (home / "README.md").exists(), (
+        "stray README.md in $HOME — an agent wrote outside the repo"
+    )
+    assert not (home / "docs" / "CURRENT_TRUTH.md").exists(), (
+        "stray CURRENT_TRUTH.md in $HOME/docs — an agent wrote outside the repo"
+    )

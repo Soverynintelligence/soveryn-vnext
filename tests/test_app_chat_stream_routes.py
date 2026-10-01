@@ -314,6 +314,10 @@ def test_chat_stream_client_disconnect_still_saves_assistant(tmp_path):
         it = iter(gen)
         first = next(it)
         first_s = first if isinstance(first, str) else first.decode("utf-8", "replace")
+        # SSE comment lines (": connected") precede the first real token; skip them.
+        while first_s.startswith(":"):
+            first = next(it)
+            first_s = first if isinstance(first, str) else first.decode("utf-8", "replace")
         assert "hello" in first_s or "token" in first_s
         # Simulate client disconnect while producer is blocked on gate.
         close = getattr(gen, "close", None) or getattr(it, "close", None)

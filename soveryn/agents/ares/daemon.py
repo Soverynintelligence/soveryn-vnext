@@ -164,6 +164,23 @@ class AresDaemonSurface:
         sinks = self.sinks or _default_sinks()
         if not self.dry_run:
             return sinks
+        if self.sinks is None:
+            # Bare construction (no sinks injected) — this is how every test
+            # builds the surface. Before 2026-09-23 a dry-run surface here
+            # still routed the REAL bus sink, so each pytest run injected its
+            # synthetic findings (gpu.headroom:gpu0 free_mb=942,
+            # network.listener:n1) into the production ares_bus.sqlite3 and
+            # Mission Control showed Jon "1 critical · 1 warning" forever.
+            # A bare dry-run surface writes to no sink at all.
+            return AresSinks(
+                telemetry_sink=_suppress_bus,
+                bus_sink=_suppress_bus,
+                signal_sink=_suppress_signal,
+                telemetry_cleared_sink=_suppress_bus,
+                bus_cleared_sink=_suppress_bus,
+            )
+        # Injected sinks + dry-run: telemetry and bus stay live, Signal is
+        # suppressed. **brakes absorbs bypass_quiet_hours / bypass_rate_cap.
         return AresSinks(
             telemetry_sink=sinks.telemetry_sink,
             bus_sink=sinks.bus_sink,
@@ -203,6 +220,12 @@ def _default_bus_path() -> Path:
 
 def _suppress_signal(finding: AresFinding, priority: bool = False, **brakes) -> None:
     # **brakes absorbs bypass_quiet_hours / bypass_rate_cap in dry-run mode.
+    return None
+
+
+def _suppress_bus(finding: AresFinding, **kwargs) -> None:
+    # Dry-run bus no-op — mirrors _suppress_signal. kwargs absorbs any
+    # status/extra args the cleared routing passes through.
     return None
 
 
