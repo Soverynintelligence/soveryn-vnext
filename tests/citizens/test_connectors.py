@@ -5,6 +5,7 @@ import os
 
 from soveryn.citizens.connectors import (
     AUTOMATION_AUTO_APPROVE_TOOLS,
+    CATALOG,
     FOUNDING_GRANTS,
     board_payload,
     email_armed,
@@ -91,6 +92,13 @@ def test_board_payload_shape():
     assert "catalog" in p and "by_citizen" in p and "house" in p
     assert "aetheria" in p["by_citizen"]
     assert any(c["id"] == "web" for c in p["by_citizen"]["aetheria"])
+
+
+def test_pondwright_connector_names_live_cwg_ops_crm():
+    note = CATALOG["pondwright"].sovereignty_note
+    assert "pondwright-cwg-ops" in note
+    assert "field token" not in note.lower()
+    assert "crm.pondwright.com" in note
 
 
 def test_requires_approval_web_ungated_writes_gated():

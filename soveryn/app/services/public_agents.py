@@ -98,18 +98,36 @@ class AgentGlance:
     error: str | None = None
 
 
-def _ssh_json_bundle(host: str, ack: str | None = None) -> dict[str, Any] | None:
-    """One SSH: agent summary+health + PondWright CRM pipeline glance.
+def _crm_pipeline(ack: str | None = None) -> dict[str, Any]:
+    """Live cwg-ops pipeline glance via the tower CRM client. Never raises."""
+    unavailable = {
+        "ok": False,
+        "error": "crm_unavailable",
+        "open": "https://crm.pondwright.com/",
+        "label": "PondWright CRM",
+    }
+    try:
+        from soveryn.platform.pondwright import crm as pw_crm
+        out = pw_crm.pipeline_glance(ack=ack)
+    except Exception as e:  # noqa: BLE001 — glance must not blank Mission Control
+        unavailable["error"] = type(e).__name__
+        return unavailable
+    if isinstance(out, dict):
+        return out
+    return unavailable
 
-    CRM leads are the real floor (form + chat capture). Chat audit
-    `leads_captured` alone misses form leads and can disagree with the CRM.
+
+def _ssh_json_bundle(host: str) -> dict[str, Any] | None:
+    """One SSH: agent summary+health + HL waitlist. CRM is not on this hop.
+
+    PondWright pipeline counts come from the live cwg-ops book over HTTP
+    (see `_crm_pipeline`). The legacy `~/pondwright-crm/leads.db` is frozen.
     """
     remote = r"""
 python3 - <<'PY'
-import json, urllib.request, sqlite3, os
+import json, urllib.request, os
 from datetime import datetime, timezone
-ACK = __CRM_ACK__
-out = {"agents": {}, "crm": {"ok": False}, "waitlist": {"ok": False}}
+out = {"agents": {}, "waitlist": {"ok": False}}
 for port in (8200, 8400, 8500):
     row = {"summary": None, "health": None, "error": None}
     for kind in ("summary", "health"):
@@ -119,52 +137,6 @@ for port in (8200, 8400, 8500):
         except Exception as e:
             row["error"] = f"{kind}:{type(e).__name__}"
     out["agents"][str(port)] = row
-# PondWright CRM — pipeline truth (names/phones for Mission Control only)
-db = os.path.expanduser("~/pondwright-crm/leads.db")
-try:
-    con = sqlite3.connect(db)
-    con.row_factory = sqlite3.Row
-    rows = con.execute(
-        "SELECT id, created_at, name, phone, email, source, status, interest "
-        "FROM leads ORDER BY created_at DESC LIMIT 12"
-    ).fetchall()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    recent = []
-    for r in rows:
-        d = dict(r)
-        st = d.get("status") or "new"
-        ts = d.get("created_at") or ""
-        recent.append({
-            "id": d.get("id"),
-            "created_at": ts,
-            "name": d.get("name") or "—",
-            "phone": d.get("phone") or "",
-            "email": d.get("email") or "",
-            "source": d.get("source") or "",
-            "status": st,
-            "interest": (d.get("interest") or "")[:80],
-        })
-    total = con.execute("SELECT count(*) FROM leads").fetchone()[0]
-    leads_today = con.execute(
-        "SELECT count(*) FROM leads WHERE created_at LIKE ?", (today + "%",)
-    ).fetchone()[0]
-    out["crm"] = {
-        "ok": True,
-        "leads_total": int(total),
-        "leads_new": int(con.execute(
-            "SELECT count(*) FROM leads WHERE status='new' "
-            "AND (:ack IS NULL OR created_at > :ack)",
-            {"ack": ACK},
-        ).fetchone()[0]),
-        "ack": ACK,
-        "leads_today": int(leads_today),
-        "recent": recent[:8],
-        "open": "https://crm.pondwright.com/",
-        "label": "PondWright CRM",
-    }
-    con.close()
-except Exception as e:
-    out["crm"] = {"ok": False, "error": type(e).__name__}
 
 # History's Ledger Family waitlist (Atticus) — emails Jon; also on disk
 wl_path = os.path.expanduser("~/atticus/waitlist.jsonl")
@@ -212,10 +184,6 @@ except Exception as e:
 print(json.dumps(out))
 PY
 """
-    # Inject the ack watermark tower-side. repr() keeps it a safe Python
-    # literal (None or a quoted ISO string); the ack value is validated by
-    # _crm_ack_ts before it ever gets here.
-    remote = remote.replace("__CRM_ACK__", repr(ack))
     try:
         proc = subprocess.run(
             [
@@ -287,19 +255,25 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
     bundle = None
     path = None
     for host, label in ((SPARK_FABRIC_HOST, "fabric"), (SPARK_WIFI_HOST, "wifi")):
-        bundle = _ssh_json_bundle(host, ack=_crm_ack_ts())
+        bundle = _ssh_json_bundle(host)
         if bundle is not None:
             path = label
             break
 
-    # Bundle shape: {agents, crm, waitlist}. Older shape was port-keyed only.
+    # CRM is the live cwg-ops book on the tower tunnel — not the SSH hop,
+    # and not the frozen pondwright-crm leads.db. Fail-soft: a dead CRM
+    # must not blank PondWright / Seneca / Atticus or the waitlist.
+    crm = _crm_pipeline(ack=_crm_ack_ts())
+    if not isinstance(crm, dict):
+        crm = {"ok": False, "error": "crm_unavailable"}
+
+    # Bundle shape: {agents, waitlist}. Older shape was port-keyed only.
+    # A leftover `crm` key from an older Spark script is ignored.
     agent_rows: dict[str, Any] = {}
-    crm: dict[str, Any] = {"ok": False}
     waitlist: dict[str, Any] = {"ok": False}
     if isinstance(bundle, dict):
         if "agents" in bundle and isinstance(bundle.get("agents"), dict):
             agent_rows = bundle["agents"]
-            crm = bundle.get("crm") if isinstance(bundle.get("crm"), dict) else crm
             waitlist = (
                 bundle.get("waitlist")
                 if isinstance(bundle.get("waitlist"), dict)

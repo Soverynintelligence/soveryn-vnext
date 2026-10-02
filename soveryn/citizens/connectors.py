@@ -166,7 +166,8 @@ CATALOG: dict[str, ConnectorDef] = {
         ),
         class_="house",
         sovereignty_note=(
-            "CRM is PondWright SQLite on the Spark (field token). "
+            "CRM is pondwright-cwg-ops on the Spark (Eve ops Basic at "
+            "crm.pondwright.com / tunneled 127.0.0.1:8100). "
             "Catalogs: Apex (xlsx) and AKT Specialty stay separate. "
             "Wholesale stays house-only."
         ),
