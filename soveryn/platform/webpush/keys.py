@@ -13,12 +13,17 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_PATH = SoverynPaths.root() / "data" / "memory" / "vapid_keys.json"
+def _default_keys_path() -> Path:
+    """Resolve VAPID keys at call time so a temp data root cannot mint/read live keys."""
+    data_root = os.environ.get("SOVERYN_DATA_ROOT", "").strip()
+    if data_root:
+        return Path(data_root) / "memory" / "vapid_keys.json"
+    return SoverynPaths.data() / "memory" / "vapid_keys.json"
 
 
 def _keys_path() -> Path:
     raw = os.environ.get("SOVERYN_VAPID_KEYS_PATH", "").strip()
-    return Path(raw) if raw else _DEFAULT_PATH
+    return Path(raw) if raw else _default_keys_path()
 
 
 def _b64url(data: bytes) -> str:

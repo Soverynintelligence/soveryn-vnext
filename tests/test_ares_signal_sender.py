@@ -165,6 +165,10 @@ def test_provider_failure_returns_failed_result():
 
 
 def test_signal_cli_provider_uses_expected_send_command(monkeypatch):
+    from types import SimpleNamespace
+
+    import soveryn.agents.ares.signal_sender as sender_mod
+
     calls = []
 
     class Completed:
@@ -174,7 +178,10 @@ def test_signal_cli_provider_uses_expected_send_command(monkeypatch):
         calls.append((cmd, kwargs))
         return Completed()
 
-    monkeypatch.setattr("soveryn.agents.ares.signal_sender.subprocess.run", fake_run)
+    # Replace the module object, not subprocess.run on the stdlib module.
+    # `import subprocess` is shared process-wide; patching .run there records
+    # leftover daemon-thread calls from earlier tests and flakes under -x.
+    monkeypatch.setattr(sender_mod, "subprocess", SimpleNamespace(run=fake_run))
     provider = SignalCliProvider(bot_number="+15550000001", binary="/usr/bin/signal-cli")
 
     assert provider.send("Ares warning", "+15550000002") is True
@@ -184,13 +191,50 @@ def test_signal_cli_provider_uses_expected_send_command(monkeypatch):
     )]
 
 
+def test_signal_cli_provider_is_isolated_from_global_subprocess_run(monkeypatch):
+    """A noisy stdlib subprocess.run (leftover spy / other thread) must not
+    appear in the provider's send command log."""
+    import subprocess
+    from types import SimpleNamespace
+
+    import soveryn.agents.ares.signal_sender as sender_mod
+
+    leaked: list = []
+    real_run = subprocess.run
+
+    def noisy(cmd, **kwargs):
+        leaked.append(cmd)
+        return real_run(cmd, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", noisy)
+
+    calls = []
+
+    class Completed:
+        returncode = 0
+
+    def fake_run(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        return Completed()
+
+    monkeypatch.setattr(sender_mod, "subprocess", SimpleNamespace(run=fake_run))
+    provider = SignalCliProvider(bot_number="+15550000001", binary="/usr/bin/signal-cli")
+
+    assert provider.send("Ares warning", "+15550000002") is True
+    assert len(calls) == 1
+    assert leaked == []
+
+
 def test_signal_cli_provider_returns_false_on_nonzero_exit(monkeypatch):
+    from types import SimpleNamespace
+
+    import soveryn.agents.ares.signal_sender as sender_mod
+
     class Completed:
         returncode = 1
 
     monkeypatch.setattr(
-        "soveryn.agents.ares.signal_sender.subprocess.run",
-        lambda cmd, **kwargs: Completed(),
+        sender_mod, "subprocess", SimpleNamespace(run=lambda cmd, **kwargs: Completed())
     )
     provider = SignalCliProvider(bot_number="+15550000001", binary="/usr/bin/signal-cli")
 

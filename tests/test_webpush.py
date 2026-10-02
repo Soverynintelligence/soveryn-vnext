@@ -59,3 +59,59 @@ def test_approval_broker_request_does_not_raise_without_subs(tmp_path: Path, mon
     )
     assert req.id
     assert req.citizen == "eve"
+
+
+def test_webpush_send_during_tests_does_not_call_the_network(
+    webpush_network_guard, monkeypatch
+):
+    """A push with a live-looking subscription must not open a socket.
+
+    The autouse fixture stubs pywebpush.webpush and points the store at a
+    temp data root. This exercises the real _send_all path so a regression
+    that drops the stub would fail on the socket probe, not silently hit FCM.
+    """
+    import socket
+
+    from soveryn.platform.webpush.notify import _send_all
+
+    opened: list[object] = []
+
+    def _forbid_connect(self, address):
+        opened.append(address)
+        raise AssertionError(f"outbound socket forbidden during tests: {address}")
+
+    monkeypatch.setattr(socket.socket, "connect", _forbid_connect)
+
+    push_store.upsert_subscription(
+        endpoint="https://fcm.googleapis.com/fcm/send/test-subscription",
+        p256dh="dGVzdC1wMjU2ZGg",
+        auth="dGVzdC1hdXRo",
+        user_agent="regression",
+    )
+    _send_all(title="needs you", body="ping", url="/messages", tag="regression")
+
+    assert opened == []
+    assert webpush_network_guard.calls, "expected the pywebpush stub to intercept the send"
+    endpoint = webpush_network_guard.calls[0]["kwargs"].get("subscription_info", {}).get(
+        "endpoint"
+    )
+    if endpoint is None and webpush_network_guard.calls[0]["args"]:
+        info = webpush_network_guard.calls[0]["args"][0]
+        endpoint = info.get("endpoint") if isinstance(info, dict) else None
+    assert endpoint == "https://fcm.googleapis.com/fcm/send/test-subscription"
+
+
+def test_webpush_db_follows_temp_data_root(tmp_path: Path, monkeypatch):
+    """SOVERYN_DATA_ROOT must win over the checkout's live webpush.db."""
+    monkeypatch.delenv("SOVERYN_WEBPUSH_DB", raising=False)
+    data_root = tmp_path / "temp-data-root"
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(data_root))
+    push_store.upsert_subscription(
+        endpoint="https://push.example/isolated",
+        p256dh="abc",
+        auth="def",
+    )
+    assert (data_root / "memory" / "webpush.db").is_file()
+    rows = push_store.list_subscriptions()
+    assert len(rows) == 1
+    assert rows[0]["endpoint"].endswith("/isolated")
