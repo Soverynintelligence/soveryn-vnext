@@ -8,8 +8,8 @@ Phase 2b-ii-b1 migrated prod-derived legacy memory into vnext storage while keep
 - Final code/data-record commit before this docs closeout: `fc54015 lattice: record dark legacy migration execution`
 - Full test command: `/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m pytest -q`
 - Full test result: `798 passed in 5.63s`
-- Migration report: `docs/PHASE2B_II_B1_MIGRATION_REPORT.md`
-- Structured result artifact: `docs/phase2b-ii-b1-real-migration-result.json`
+- Migration report: `docs/archive/2026-phase-receipts/PHASE2B_II_B1_MIGRATION_REPORT.md`
+- Structured result artifact: `docs/archive/2026-phase-receipts/phase2b-ii-b1-real-migration-result.json`
 - Live recall remains unchanged from the dark-boundary baseline `c930fef`.
 
 Live-recall unchanged check:

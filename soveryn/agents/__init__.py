@@ -1,5 +1,5 @@
 """SOVERYN vNext — agents package.
 
-Contains the AgentRegistry (registry.py) and per-agent policy definitions
-(policies.py). AgentLoop implementation comes in a later vNext step.
+Contains the AgentRegistry (registry.py) and per-agent packages. AgentLoop
+lives in loop.py.
 """

@@ -163,8 +163,8 @@ def test_model_servers_have_distinct_logical_names():
 
 def test_each_model_server_has_router_alias_populated():
     """Under router mode, the chat/embeddings payload "model" field must match
-    a preset alias registered in router-presets.ini. Verify each ModelServer
-    carries the alias that router-presets.ini knows about.
+    a preset alias registered in router-presets-blackwell.ini or
+    router-presets-quadro.ini. Verify each ModelServer carries that alias.
 
     Vett/Scotty alias is brain-swappable (qwen36 | qwen38 | lightning) via
     ~/.soveryn/vett_brain — assert the active profile, not a fixed id.

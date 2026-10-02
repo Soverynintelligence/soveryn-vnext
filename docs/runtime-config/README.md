@@ -2,11 +2,19 @@
 
 This directory holds runtime configuration files that the SOVERYN systemd units read at startup. **These files are the canonical, version-controlled source.** Edit them here.
 
+**Live router presets (2026-10):** `runtime/router-presets-blackwell.ini` and
+`runtime/router-presets-quadro.ini`. The combined `runtime/router-presets.ini`
+(`cache-ram = 0`) was deleted. Do not copy a stale combined file over either
+live preset. The systemd unit in this repo still names the museum path
+`~/soveryn_complete/router-presets.ini` — that is the tower's live file, not
+the deleted combined copy.
+
 ## Files
 
 | Tracked file | Live location read by systemd | Owner unit |
 |---|---|---|
-| `router-presets.ini` | `~/soveryn_complete/router-presets.ini` | `soveryn-router.service` |
+| `runtime/router-presets-blackwell.ini` | tower Blackwell unit `:8090` | `soveryn-router` / blackwell |
+| `runtime/router-presets-quadro.ini` | tower Quadro unit `:8091` | quadro router |
 
 ## Why this exists
 
@@ -37,12 +45,13 @@ When you need to change router preset behavior:
 
 1. **Edit the tracked file:**
    ```bash
-   $EDITOR ~/soveryn_vnext/docs/runtime-config/router-presets.ini
+   $EDITOR ~/soveryn_vnext/runtime/router-presets-blackwell.ini   # or -quadro
    ```
 
 2. **Sync to the live location** (the systemd unit still reads from the museum path):
    ```bash
-   cp ~/soveryn_vnext/docs/runtime-config/router-presets.ini ~/soveryn_complete/router-presets.ini
+   # Only if the tower unit still reads the museum path, and only after review:
+   # cp the matching live preset (blackwell or quadro), never a cache-ram=0 copy.
    ```
 
 3. **Restart the router** to pick up the new preset:
@@ -59,7 +68,7 @@ When you need to change router preset behavior:
 5. **Commit the tracked change** with a message that explains the WHY (not just the WHAT):
    ```bash
    cd ~/soveryn_vnext
-   git add docs/runtime-config/router-presets.ini
+   git add runtime/router-presets-blackwell.ini   # or -quadro
    git commit -m "config(router): <what changed> — <why>"
    ```
 
@@ -95,7 +104,7 @@ Any hits with `sim = 0.0X` (low similarity) mean per-turn prompt variance is bac
 
 This two-location split (tracked + live-in-museum) is transitional. When the `~/soveryn_complete/` decommission lands, the cleanup is:
 
-1. Update `~/.config/systemd/user/soveryn-router.service` `ExecStart` to point at `~/soveryn_vnext/docs/runtime-config/router-presets.ini` (or the eventual `~/soveryn_vnext/data/router-presets.ini` per path-consolidation runbook)
+1. Update `~/.config/systemd/user/soveryn-router.service` `ExecStart` to point at `~/soveryn_vnext/runtime/router-presets-blackwell.ini` (or `-quadro` for the Quadro unit)
 2. Update the `--models-preset` argument to match
 3. `systemctl --user daemon-reload && systemctl --user restart soveryn-router.service`
 4. Remove the live museum copy after verifying the router reads cleanly from the new path

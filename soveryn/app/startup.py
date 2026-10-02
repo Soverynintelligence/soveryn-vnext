@@ -1045,7 +1045,7 @@ def create_app(
                 kwargs["thinking_budget_tokens"] = 0
                 # As of 2026-06-01 Aetheria runs on Gemma 4 31B (vanilla Google
                 # instruct) with thinking disabled via chat-template-kwargs in
-                # router-presets.ini. Reason: llama.cpp's generic reasoning
+                # the live router preset. Reason: llama.cpp's generic reasoning
                 # extractor doesn't have model-specific parsers — Qwen3-A3B
                 # bleeds and Gemma's <|channel>thought consumes all output.
                 # The proper fix (per-model parsers like vLLM's --reasoning-parser

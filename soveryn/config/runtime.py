@@ -88,8 +88,9 @@ class ModelServer:
     A router that cannot SEE a card cannot allocate on it.
     `name` remains the logical preset identity inside vNext;
     `model_alias` is the router-facing identifier sent in the OpenAI `model`
-    field. The router's preset .ini (soveryn_vnext/runtime/router-presets.ini)
-    has both the alias and the model basename registered, so both resolve.
+    field. The live router presets (runtime/router-presets-blackwell.ini and
+    runtime/router-presets-quadro.ini) register both the alias and the model
+    basename, so both resolve.
     """
     name: str                       # logical identity, e.g. "aetheria_primary"
     port: int                       # <host>:<port> — 8090 = Blackwell router (aetheria only), 8091 = Quadro router
@@ -117,7 +118,8 @@ class ModelServer:
     supports_multi_system_messages: bool = True
     #: Router-facing model identifier. This goes into the "model" field of
     #: /v1/chat/completions and /v1/embeddings request bodies. Must match a
-    #: preset alias (section name or registered basename) in router-presets.ini.
+    #: preset alias (section name or registered basename) in
+    #: router-presets-blackwell.ini or router-presets-quadro.ini.
     model_alias: str = ""
     #: When True, preflight does not probe this endpoint (external backends
     #: such as Grok Build CLI that inject custom chat_fn and never hit llama).

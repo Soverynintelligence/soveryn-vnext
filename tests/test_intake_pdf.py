@@ -76,7 +76,7 @@ def test_extract_text_layer_ok():
 
 def test_extract_real_house_pdf_if_present():
     pytest.importorskip("pypdf")
-    path = SoverynPaths.root() / "docs" / "notes" / "2026-08-14-matter-ops-product-brief.pdf"
+    path = SoverynPaths.root() / "docs" / "papers" / "honesty-is-architectural.pdf"
     if not path.is_file():
         path = Path.home() / "historysledger-site" / "sample-chapters.pdf"
     if not path.is_file():

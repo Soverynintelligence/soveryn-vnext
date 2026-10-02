@@ -51,8 +51,8 @@ Target behavior:
 
 Phase 2b-ii-b1 is complete:
 
-- `docs/PHASE2B_II_B1_VERIFY.md` exists.
-- `docs/PHASE2B_II_B1_MIGRATION_REPORT.md` exists.
+- `docs/archive/2026-phase-receipts/PHASE2B_II_B1_VERIFY.md` exists.
+- `docs/archive/2026-phase-receipts/PHASE2B_II_B1_MIGRATION_REPORT.md` exists.
 - vnext Attic contains the raw legacy corpus as low-confidence LEGACY material.
 - vnext canonical lattice contains a 12-entry reviewed identity spine with `CONSOLIDATED` provenance and `source="legacy_identity_review"`.
 - Runtime DBs are not committed.

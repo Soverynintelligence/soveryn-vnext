@@ -43,10 +43,6 @@ Sleep = Callable[[float], None]
 StopRequested = Callable[[], bool]
 
 
-class AresDaemonNotPortedError(NotImplementedError):
-    """Backward-compatible exception name from the declared Phase 1 surface."""
-
-
 class AresDaemonSurface:
     """No-LLM Ares daemon entry surface."""
 

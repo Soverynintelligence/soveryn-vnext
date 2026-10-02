@@ -31,7 +31,7 @@ cbd2778 platform: add provisional lattice facets
 
 ## Acceptance Criteria
 
-- Baseline/API audit exists and was committed before implementation: `docs/phase2b-i-baseline-audit.md`.
+- Baseline/API audit exists and was committed before implementation: `docs/archive/2026-phase-receipts/phase2b-i-baseline-audit.md`.
 - Provenance is first-class:
   - `ProvenanceClass`: witnessed, told, inferred, consolidated, legacy.
   - `Provenance` validates confidence in `[0.0, 1.0]`.

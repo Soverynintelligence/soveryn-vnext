@@ -109,7 +109,7 @@ The reviewed identity-spine promotion helper is implemented and fixture-tested. 
 - Canonical identity spine promoted this run: `12`
 - Identity promotion skipped existing/missing/unaccepted: `0` / `0` / `1405`
 - Idempotency check, second identity run promoted/skipped-existing: `0` / `12`
-- Result JSON: `docs/phase2b-ii-b1-real-migration-result.json`
+- Result JSON: `docs/archive/2026-phase-receipts/phase2b-ii-b1-real-migration-result.json`
 - Live recall diff vs `c930fef` for `recall_policy.py`, `loop.py`, `startup.py`: `empty`
 - Runtime DBs are intentionally not committed; `data/lattice/*.db*` is ignored.
 
