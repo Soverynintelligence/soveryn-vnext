@@ -11,7 +11,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_DB = SoverynPaths.root() / "data" / "memory" / "webpush.db"
+def _default_db() -> Path:
+    """Resolve the subscriptions file at call time (not import time).
+
+    ``SOVERYN_DATA_ROOT`` wins so a temp data root never reads the live
+    house ``webpush.db``. Otherwise ``SoverynPaths.data()`` (honors
+    ``SOVERYN_ROOT``).
+    """
+    data_root = os.environ.get("SOVERYN_DATA_ROOT", "").strip()
+    if data_root:
+        return Path(data_root) / "memory" / "webpush.db"
+    return SoverynPaths.data() / "memory" / "webpush.db"
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -27,7 +38,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 
 def _db_path() -> Path:
     raw = os.environ.get("SOVERYN_WEBPUSH_DB", "").strip()
-    return Path(raw) if raw else _DEFAULT_DB
+    return Path(raw) if raw else _default_db()
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
