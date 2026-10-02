@@ -50,19 +50,28 @@ class ChatReceiptHook:
     """Best-effort ledger splice for chat image turns.
 
     A missing or raising CWG/ledger receipt hook must never 500 the turn.
+    Plugins contribute via ``chat_image_hooks``; each call is swallowed.
     """
 
     @staticmethod
     def apply(message: str, images: tuple[str, ...]) -> str:
         try:
-            from soveryn.platform.ledgers.auto import apply_chat_receipt
+            from soveryn.plugins.loader import iter_chat_image_hooks
 
-            ledger_block = apply_chat_receipt(message, images)
+            hooks = iter_chat_image_hooks()
         except Exception:
             logger.exception("chat receipt hook failed; continuing without ledger splice")
             return message
-        if ledger_block:
-            return ledger_block + "\n\n" + message
+        for hook in hooks:
+            try:
+                ledger_block = hook(message, images)
+            except Exception:
+                logger.exception(
+                    "chat receipt hook failed; continuing without ledger splice"
+                )
+                continue
+            if ledger_block:
+                return ledger_block + "\n\n" + message
         return message
 
 

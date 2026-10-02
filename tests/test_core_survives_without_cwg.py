@@ -112,18 +112,61 @@ def _configure_env(monkeypatch, *, tmp_path, fake_souls_dir, fake_pinned, recall
     monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
 
 
+def _apply_plugin_boot_mode(mode: str, monkeypatch) -> None:
+    """SOVERYN_PLUGINS / builtin-failure cases the step-2a boot test must survive."""
+    from soveryn.plugins.loader import reset_plugins
+
+    if mode == "unset":
+        monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
+    elif mode == "cwg_external_missing":
+        monkeypatch.setenv("SOVERYN_PLUGINS", "cwg")
+        monkeypatch.setattr(
+            "soveryn.plugins.loader._external_entry_points",
+            lambda: [],
+        )
+    elif mode == "register_raises":
+        monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
+
+        def _boom(self, ctx, connector_id, owner):
+            raise RuntimeError("register boom")
+
+        monkeypatch.setattr(
+            "soveryn.plugins.builtin_cwg.BuiltinCwgPlugin.register",
+            _boom,
+        )
+    elif mode == "workers_raises":
+        monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
+
+        def _boom(self, app):
+            raise RuntimeError("workers boom")
+
+        monkeypatch.setattr(
+            "soveryn.plugins.builtin_cwg.BuiltinCwgPlugin.background_workers",
+            _boom,
+        )
+    else:
+        raise AssertionError(f"unknown plugin boot mode {mode!r}")
+    reset_plugins()
+
+
 def _post(client, path, body):
     return client.post(path, data=json.dumps(body), content_type="application/json")
 
 
+@pytest.mark.parametrize(
+    "plugin_boot_mode",
+    ("unset", "cwg_external_missing", "register_raises", "workers_raises"),
+)
 def test_create_app_and_chat_survive_missing_cwg(
     tmp_path,
     monkeypatch,
     fake_souls_dir,
     fake_pinned,
     recall_lattice_path,
+    plugin_boot_mode,
 ):
     """create_app succeeds and image chat turns do not 500 when CWG is gone."""
+    _apply_plugin_boot_mode(plugin_boot_mode, monkeypatch)
     _hide_cwg_modules(monkeypatch)
     _disable_non_lead_workers(monkeypatch)
     _configure_env(

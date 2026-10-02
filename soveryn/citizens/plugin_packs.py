@@ -80,17 +80,6 @@ def _register_house_post(ctx: PackContext, owner: str) -> None:
     _ok(ctx, owner, "house_post")
 
 
-def _register_pondwright(ctx: PackContext, owner: str) -> None:
-    from soveryn.platform.pondwright import register_pondwright_tools
-
-    try:
-        register_pondwright_tools(ctx.registry, owner_agent=owner)
-    except Exception:
-        logger.exception("pondwright pack failed owner=%s", owner)
-        return
-    _ok(ctx, owner, "pondwright")
-
-
 def _register_system(ctx: PackContext, owner: str) -> None:
     # Preserve prior startup shape: spark for aetheria/vett/scotty/eve;
     # system_probe for vett/aetheria/eve. Kernel grant is armed but had no
@@ -350,7 +339,6 @@ def _register_social(ctx: PackContext, owner: str) -> None:
     env = ctx.env
     if env is not None and Path(env.lattice_db).is_file() and ctx.signal_config is not None:
         from soveryn.agents.marketing_tools import register_compose_post_tool
-        from soveryn.agents.eve_ig_tools import register_eve_ig_post_tool
 
         register_compose_post_tool(
             ctx.registry,
@@ -358,27 +346,6 @@ def _register_social(ctx: PackContext, owner: str) -> None:
             lattice_db_path=env.lattice_db,
             owner_agent="eve",
         )
-        register_eve_ig_post_tool(ctx.registry, owner_agent="eve")
-    try:
-        from soveryn.platform.gbp import register_gbp_tools
-
-        register_gbp_tools(ctx.registry, owner_agent="eve")
-    except Exception:
-        logger.exception("gbp tools not registered")
-    try:
-        from soveryn.platform.gcal import register_gcal_tools
-
-        register_gcal_tools(ctx.registry, owner_agent="eve")
-    except Exception:
-        logger.exception("gcal tools not registered")
-    try:
-        from soveryn.platform.social.google_desk_tools import (
-            register_google_desk_tools,
-        )
-
-        register_google_desk_tools(ctx.registry, owner_agent="eve")
-    except Exception:
-        logger.exception("google desk tools not registered")
     _ok(ctx, owner, "social")
 
 
@@ -387,7 +354,6 @@ PACK_REGISTRARS: dict[str, RegisterFn] = {
     "web": _register_web,
     "email": _register_email,
     "house_post": _register_house_post,
-    "pondwright": _register_pondwright,
     "system": _register_system,
     "delegation": _register_delegation,
     "git": _register_git,
@@ -404,6 +370,9 @@ PACK_REGISTRARS: dict[str, RegisterFn] = {
 
 def granted_armed_packs(owner: str) -> list[str]:
     """Return connector ids in FOUNDING_GRANTS[owner] that are currently armed."""
+    from soveryn.plugins.loader import ensure_loaded
+
+    ensure_loaded()
     grants = FOUNDING_GRANTS.get(owner, ())
     out: list[str] = []
     for pack_id in grants:
@@ -420,15 +389,13 @@ def register_packs_for_owner(
     require_armed: bool = True,
 ) -> list[str]:
     """Register catalog packs for one owner. Returns pack ids registered."""
+    from soveryn.plugins.loader import ensure_loaded, register_plugin_pack
+
+    ensure_loaded()
     grants = FOUNDING_GRANTS.get(owner, ())
     registered: list[str] = []
     for pack_id in grants:
         registrar = PACK_REGISTRARS.get(pack_id)
-        if registrar is None:
-            logger.warning(
-                "plugin_pack: no registrar for pack=%s owner=%s", pack_id, owner
-            )
-            continue
         if require_armed:
             armed, reason = connector_armed(pack_id)
             if not armed:
@@ -439,6 +406,21 @@ def register_packs_for_owner(
                     reason,
                 )
                 continue
+        if registrar is None:
+            try:
+                if register_plugin_pack(ctx, pack_id, owner):
+                    registered.append(pack_id)
+                else:
+                    logger.warning(
+                        "plugin_pack: no registrar for pack=%s owner=%s",
+                        pack_id,
+                        owner,
+                    )
+            except Exception:
+                logger.exception(
+                    "plugin_pack failed pack=%s owner=%s", pack_id, owner
+                )
+            continue
         try:
             registrar(ctx, owner)
             registered.append(pack_id)

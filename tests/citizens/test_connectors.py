@@ -92,9 +92,14 @@ def test_board_payload_shape():
     assert "catalog" in p and "by_citizen" in p and "house" in p
     assert "aetheria" in p["by_citizen"]
     assert any(c["id"] == "web" for c in p["by_citizen"]["aetheria"])
+    assert "plugins" in p
+    assert any(row["id"] == "cwg" and row["source"] == "builtin" for row in p["plugins"])
 
 
 def test_pondwright_connector_names_live_cwg_ops_crm():
+    from soveryn.plugins.loader import ensure_loaded
+
+    ensure_loaded()
     note = CATALOG["pondwright"].sovereignty_note
     assert "pondwright-cwg-ops" in note
     assert "field token" not in note.lower()
