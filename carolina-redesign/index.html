@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carolina Water Gardens — Redesign Concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0a0f16;--ink2:#0e1520;--gold:#d3a24a;--gold2:#ecc978;
+  --cream:#f6edd4;--paper:#f6f2e9;--mute:#8aa0b4;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --sans:'Inter',system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--ink);color:var(--cream);font-family:var(--sans);font-weight:300;line-height:1.7;overflow-x:hidden}
+::selection{background:var(--gold);color:var(--ink)}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1240px;margin:0 auto;padding:0 clamp(20px,5vw,60px)}
+
+/* ---- type ---- */
+.eyebrow{font-size:11px;letter-spacing:.45em;text-transform:uppercase;color:var(--gold);font-weight:500}
+.h-display{font-family:var(--serif);font-weight:500;line-height:1.04;letter-spacing:.01em}
+h2.h-display{font-size:clamp(2.4rem,5.5vw,4.4rem);margin:.35em 0 .5em}
+.lead{color:var(--mute);max-width:60ch;font-size:clamp(1rem,1.4vw,1.15rem)}
+
+/* ---- nav ---- */
+#nav{position:fixed;inset:0 0 auto;z-index:50;transition:.4s}
+#nav .bar{display:flex;align-items:center;justify-content:space-between;padding:18px clamp(20px,5vw,60px)}
+#nav.scrolled{background:rgba(10,15,22,.82);backdrop-filter:blur(16px);border-bottom:1px solid rgba(211,162,74,.18)}
+#nav.scrolled .bar{padding-block:10px}
+.brand{display:flex;align-items:center;gap:14px}
+.nav-seal{width:52px;height:52px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px rgba(211,162,74,.45),0 8px 22px rgba(0,0,0,.45)}
+.wordmark{font-family:var(--serif);font-size:1.15rem;letter-spacing:.14em;text-transform:uppercase}
+.wordmark b{color:var(--gold);font-weight:600}
+@media(max-width:640px){.wordmark{display:none}}
+#nav .links{display:flex;gap:34px;font-size:12px;letter-spacing:.22em;text-transform:uppercase}
+#nav .links a{opacity:.75;transition:.25s}
+#nav .links a:hover{opacity:1;color:var(--gold2)}
+.nav-cta{border:1px solid var(--gold);padding:10px 22px;border-radius:2px;font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold2)!important;transition:.3s}
+.nav-cta:hover{background:var(--gold);color:var(--ink)!important}
+@media(max-width:900px){#nav .links a:not(.nav-cta){display:none}}
+
+/* ---- hero ---- */
+#hero{position:relative;min-height:100vh;display:flex;align-items:center;isolation:isolate}
+#hero .bg{position:absolute;inset:0;z-index:-2;background:url('https://carolinawatergardens.com/images/hero-sunset.jpg') center/cover;animation:heroZoom 18s ease-out forwards}
+@keyframes heroZoom{from{transform:scale(1.12)}to{transform:scale(1)}}
+#hero::after{content:'';position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(180deg,rgba(10,15,22,.45) 0%,rgba(10,15,22,.2) 40%,var(--ink) 100%)}
+#hero .inner{padding:88px 0 36px;width:100%;text-align:center}
+#hero .hero-seal{
+  width:min(420px,72vw);max-height:min(44vh,420px);height:auto;object-fit:contain;
+  margin:0 auto 10px;border-radius:0;
+  background:transparent;padding:0;
+  filter:drop-shadow(0 28px 70px rgba(0,0,0,.55));
+  display:block;
+}
+#hero h1{font-size:clamp(2.1rem,5vw,4.4rem)}
+#hero h1 em{font-style:italic;color:var(--gold2)}
+#hero .lead{margin:18px auto 28px}
+.reveal{opacity:0;transform:translateY(34px);animation:up 1s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes up{to{opacity:1;transform:none}}
+.d1{animation-delay:.15s}.d2{animation-delay:.35s}.d3{animation-delay:.55s}.d4{animation-delay:.75s}
+
+/* ---- buttons ---- */
+.btn{display:inline-block;padding:16px 38px;font-size:12px;letter-spacing:.28em;text-transform:uppercase;border-radius:2px;transition:.35s;cursor:pointer}
+.btn-gold{background:var(--gold);color:var(--ink);font-weight:600}
+.btn-gold:hover{background:var(--gold2);transform:translateY(-2px);box-shadow:0 14px 34px rgba(211,162,74,.3)}
+.btn-ghost{border:1px solid rgba(246,237,212,.4);color:var(--cream);margin-left:14px}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold2)}
+@media(max-width:600px){.btn-ghost{margin-left:0;margin-top:14px}}
+
+/* ---- pillar strip ---- */
+#pillar{border-block:1px solid rgba(211,162,74,.16)}
+#pillar .grid{display:grid;grid-template-columns:repeat(4,1fr)}
+#pillar article{padding:44px 30px;border-left:1px solid rgba(211,162,74,.16);transition:.35s}
+#pillar article:first-child{border-left:none}
+#pillar article:hover{background:rgba(211,162,74,.05)}
+#pillar .num{font-family:var(--serif);font-size:.95rem;color:var(--gold);letter-spacing:.2em}
+#pillar h3{font-family:var(--serif);font-size:1.5rem;font-weight:500;margin:10px 0 6px}
+#pillar p{font-size:.86rem;color:var(--mute)}
+@media(max-width:800px){#pillar .grid{grid-template-columns:1fr 1fr}#pillar article:nth-child(3){border-left:none}}
+
+/* ---- sections ---- */
+section{padding:clamp(80px,12vh,150px) 0;scroll-margin-top:88px}
+.sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:60px;flex-wrap:wrap}
+
+/* ---- story ---- */
+#story{background:var(--ink2);position:relative;overflow:hidden}
+#story .cols{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(40px,7vw,110px);align-items:center}
+#story .img-frame{position:relative}
+#story .img-frame img{border-radius:3px;box-shadow:0 40px 90px rgba(0,0,0,.55)}
+#story .img-frame::before{content:'';position:absolute;inset:-18px 18px 18px -18px;border:1px solid rgba(211,162,74,.35);border-radius:3px;z-index:-1}
+#story blockquote{font-family:var(--serif);font-style:italic;font-size:clamp(1.4rem,2.4vw,1.9rem);line-height:1.4;border-left:2px solid var(--gold);padding-left:28px;margin:34px 0;color:var(--cream)}
+#story p{color:var(--mute);margin-bottom:20px}
+.sig{font-family:var(--serif);font-size:1.15rem;color:var(--gold2);font-style:italic}
+@media(max-width:900px){#story .cols{grid-template-columns:1fr}}
+
+/* ---- truck wrap ---- */
+#truck{background:var(--ink);text-align:center}
+#truck .lead{margin:0 auto}
+#truck .shot{max-width:1080px;margin:48px auto 0;cursor:zoom-in;aspect-ratio:3/2}
+#truck .shot img{width:100%;height:auto;border-radius:3px;box-shadow:0 40px 90px rgba(0,0,0,.55);border:1px solid rgba(211,162,74,.22)}
+#truck .meta{margin-top:28px;display:flex;justify-content:center;gap:28px;flex-wrap:wrap;font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold2)}
+
+/* ---- work / gallery ---- */
+#work .masonry{columns:3;column-gap:18px}
+#work .masonry figure{break-inside:avoid;margin-bottom:18px;position:relative;cursor:pointer;overflow:hidden;border-radius:3px}
+#work img{width:100%;transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+#work figure:hover img{transform:scale(1.06)}
+#work figcaption{position:absolute;inset:auto 0 0;padding:40px 20px 16px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--cream);background:linear-gradient(transparent,rgba(10,15,22,.85));opacity:0;transition:.4s}
+#work figure:hover figcaption{opacity:1}
+@media(max-width:900px){#work .masonry{columns:2}}
+@media(max-width:560px){#work .masonry{columns:1}}
+
+/* ---- services ---- */
+#services{background:var(--paper);color:var(--ink)}
+#services .eyebrow{color:#a8802f}
+#services .lead{color:#5d6470}
+#services .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+#services .card{position:relative;min-height:430px;border-radius:3px;overflow:hidden;display:flex;align-items:flex-end;isolation:isolate;transition:.4s}
+#services .card:hover{transform:translateY(-6px);box-shadow:0 30px 60px rgba(10,15,22,.25)}
+#services .card .bg{position:absolute;inset:0;z-index:-2;transition:transform .8s}
+#services .card:hover .bg{transform:scale(1.07)}
+#services .card::after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(10,15,22,.05) 30%,rgba(10,15,22,.88))}
+#services .card div{padding:28px}
+#services h3{font-family:var(--serif);font-size:1.7rem;font-weight:500;color:var(--cream)}
+#services .card p{font-size:.84rem;color:rgba(246,237,212,.75);margin-top:8px}
+@media(max-width:1000px){#services .cards{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){#services .cards{grid-template-columns:1fr}}
+
+/* ---- process ---- */
+#process .steps{display:grid;grid-template-columns:1fr 1fr;gap:0 clamp(40px,6vw,90px)}
+#process .step{display:flex;gap:26px;padding:26px 0;border-bottom:1px solid rgba(211,162,74,.14)}
+#process .n{font-family:var(--serif);font-size:2rem;color:var(--gold);line-height:1;min-width:56px}
+#process h4{font-family:var(--serif);font-size:1.3rem;font-weight:500}
+#process p{font-size:.86rem;color:var(--mute);margin-top:6px}
+@media(max-width:800px){#process .steps{grid-template-columns:1fr}}
+
+/* ---- areas ---- */
+#areas{background:var(--ink2);text-align:center}
+#areas .towns{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-top:44px}
+#areas .town{border:1px solid rgba(211,162,74,.3);padding:12px 26px;border-radius:100px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;transition:.3s}
+#areas .town:hover{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+
+/* ---- faq ---- */
+.faq-item{border-bottom:1px solid rgba(211,162,74,.16)}
+.faq-item button{all:unset;display:flex;justify-content:space-between;align-items:center;width:100%;padding:26px 0;cursor:pointer;font-family:var(--serif);font-size:1.35rem;font-weight:500;color:var(--cream);transition:.25s}
+.faq-item button:hover{color:var(--gold2)}
+.faq-item .pm{color:var(--gold);font-family:var(--sans);font-size:1.4rem;transition:.35s}
+.faq-item.open .pm{transform:rotate(45deg)}
+.faq-item .a{max-height:0;overflow:hidden;transition:max-height .5s ease;color:var(--mute);font-size:.95rem;max-width:75ch}
+.faq-item.open .a{max-height:400px;padding-bottom:26px}
+
+/* ---- contact ---- */
+#contact{background:linear-gradient(rgba(10,15,22,.88),rgba(10,15,22,.94)),url('https://carolinawatergardens.com/images/night-koi.jpg') center/cover fixed}
+#contact .box{max-width:640px;margin:0 auto;text-align:center}
+#contact form{display:grid;gap:16px;margin-top:44px;text-align:left}
+#contact input{background:rgba(246,237,212,.06);border:1px solid rgba(246,237,212,.25);border-radius:2px;padding:16px 20px;color:var(--cream);font-family:var(--sans);font-size:.95rem;transition:.3s}
+#contact input:focus{outline:none;border-color:var(--gold);background:rgba(246,237,212,.09)}
+#contact input::placeholder{color:rgba(246,237,212,.4)}
+#contact .btn{width:100%;margin-top:8px}
+
+/* ---- footer ---- */
+#foot{border-top:1px solid rgba(211,162,74,.16);padding:60px 0 40px;font-size:.85rem;color:var(--mute)}
+#foot .cols{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap}
+#foot .legal{margin-top:40px;padding-top:24px;border-top:1px solid rgba(211,162,74,.1);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:.78rem}
+
+/* ---- lightbox ---- */
+#lightbox{position:fixed;inset:0;z-index:100;background:rgba(5,8,12,.94);display:none;align-items:center;justify-content:center;cursor:zoom-out}
+#lightbox.on{display:flex}
+#lightbox img{max-width:92vw;max-height:88vh;border-radius:3px;box-shadow:0 40px 120px rgba(0,0,0,.8)}
+</style>
+</head>
+<body>
+<nav id="nav">
+  <div class="bar">
+    <a class="brand" href="#top">
+      <img class="nav-seal" src="assets/logo-round.png" alt="Carolina Water Gardens">
+    </a>
+    <div class="links">
+      <a href="#work">The Work</a>
+      <a href="#services">What We Build</a>
+      <a href="#process">Process</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-cta" href="#contact">Free Estimate</a>
+    </div>
+  </div>
+</nav>
+<header id="hero">
+  <div class="bg"></div>
+  <div class="wrap inner">
+    <img class="hero-seal reveal d1" src="assets/logo-fancy.png" alt="Carolina Water Gardens — Pondwright">
+    <p class="eyebrow reveal d2">Pinehurst · The NC Sandhills</p>
+    <h1 class="h-display reveal d2">Welcome to<br>Your <em>Oasis</em></h1>
+    <p class="lead reveal d3">Ecosystem ponds, pondless waterfalls, and fountainscapes — owner-built and engineered to stay clear. Designed into your yard like it was always there.</p>
+    <div class="reveal d4">
+      <a class="btn btn-gold" href="#contact">Get a Free Estimate</a>
+      <a class="btn btn-ghost" href="#work">Explore Our Work</a>
+    </div>
+  </div>
+</header>
+<section id="pillar">
+  <div class="wrap grid">
+    <article><div class="num">01</div><h3>Custom</h3><p>Every pond one of a kind — set to your grade, your stone, your view.</p></article>
+    <article><div class="num">02</div><h3>Ecosystem</h3><p>Low-maintenance by design. Circulation, filtration, plants, fish.</p></article>
+    <article><div class="num">03</div><h3>Full-service</h3><p>Design, build, and ongoing care — one crew, start to clear.</p></article>
+    <article><div class="num">04</div><h3>Owner-built</h3><p>Local, family-run. Never subcontracted.</p></article>
+  </div>
+</section>
+<section id="story">
+  <div class="wrap cols">
+    <div class="img-frame"><img src="assets/mascot.png" alt="The Pondwright — Carolina Water Gardens mascot" loading="lazy"></div>
+    <div>
+      <p class="eyebrow">The Dragon Gate</p>
+      <h2 class="h-display">A climb in every build</h2>
+      <blockquote>“Swim far enough up the river, leap the falls at the Dragon Gate, and the fish becomes a dragon.”</blockquote>
+      <p>It's why koi are almost always painted climbing water — never still. And it's why we've never built a pond without giving the water somewhere to fall from. The falls aren't decoration on top of the pond. They're the reason the whole thing works: moving water, aerated water, water with somewhere to go.</p>
+      <p>Every build has a climb in it. A two-foot cascade off a patio. Sixteen feet of stream through a side yard. A sheer drop you can hear from the back door.</p>
+      <p>The old fish who builds them, we call the <b style="color:var(--gold2)">Pondwright</b>.</p>
+      <p class="sig">— Jon, the Pondwright</p>
+    </div>
+  </div>
+</section>
+<section id="truck">
+  <div class="wrap">
+    <p class="eyebrow">On the road</p>
+    <h2 class="h-display">The truck you'll see in the Sandhills</h2>
+    <p class="lead">Door lockup, tailgate Pondwright, phone and site on the bed. Same marks as the site — navy, gold, and the king who builds them.</p>
+    <figure class="shot">
+      <img src="assets/truck-wrap.png" alt="Carolina Water Gardens truck lettering — door, tailgate, and Pondwright">
+    </figure>
+    <p class="meta">
+      <span>910-581-3970</span>
+      <span>CarolinaWaterGardens.com</span>
+    </p>
+  </div>
+</section>
+<section id="work">
+  <div class="wrap">
+    <div class="sec-head">
+      <div><p class="eyebrow">The Work</p><h2 class="h-display">Ponds we've brought to life</h2></div>
+      <p class="lead">Real builds across the Sandhills — koi ponds, waterfalls, and full backyard ecosystems.</p>
+    </div>
+    <div class="masonry">
+      <figure><img src="https://carolinawatergardens.com/images/hero-koi-light.jpg" alt="Ecosystem pond" loading="lazy"><figcaption>Ecosystem pond &amp; plantings</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/koi-close.jpg" alt="Koi in clear water" loading="lazy"><figcaption>Koi in crystal-clear water</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/waterfall-stream.jpg" alt="Waterfall and stream" loading="lazy"><figcaption>Boulder waterfall &amp; stream</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/koi-lily.jpg" alt="Koi and water lilies" loading="lazy"><figcaption>Koi &amp; water lilies</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/pond-lush.jpg" alt="Lush pond" loading="lazy"><figcaption>Plantings established</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/night-waterfall.jpg" alt="Evening lighting" loading="lazy"><figcaption>Lit for the evening</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/lotus.jpg" alt="Lotus in bloom" loading="lazy"><figcaption>Lotus in bloom</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/basalt-fountain.jpg" alt="Basalt fountain" loading="lazy"><figcaption>Basalt fountain</figcaption></figure>
+      <figure><img src="https://carolinawatergardens.com/images/fire-dusk.jpg" alt="Fire and water at dusk" loading="lazy"><figcaption>Fire in the water</figcaption></figure>
+    </div>
+  </div>
+</section>
+<section id="services">
+  <div class="wrap">
+    <div class="sec-head">
+      <div><p class="eyebrow">What We Build</p><h2 class="h-display">From a bubbling fountain<br>to a swimmable pond</h2></div>
+    </div>
+    <div class="cards">
+      <a class="card" href="#contact"><div class="bg" style="background:url('https://carolinawatergardens.com/images/koi-aerial.jpg') center/cover"></div><div><h3>Ponds</h3><p>Koi and garden ecosystem ponds — liner, filtration, rock, and planting. Built to stay clear.</p></div></a>
+      <a class="card" href="#contact"><div class="bg" style="background:url('https://carolinawatergardens.com/images/wide-pond.jpg') center/cover"></div><div><h3>Waterfalls &amp; Streams</h3><p>Open water or pondless — moving water you can hear from the house.</p></div></a>
+      <a class="card" href="#contact"><div class="bg" style="background:url('https://carolinawatergardens.com/images/basalt-fountain.jpg') center/cover"></div><div><h3>Fountains</h3><p>Statement fountains and bubblers for courtyards, entries, and gardens.</p></div></a>
+      <a class="card" href="#contact"><div class="bg" style="background:url('https://carolinawatergardens.com/images/bog-finished-1.jpg') center/cover"></div><div><h3>Maintenance &amp; Repair</h3><p>Seasonal care, cleanouts, leak fixes — and help when the pond won't clear.</p></div></a>
+    </div>
+  </div>
+</section>
+<section id="process">
+  <div class="wrap">
+    <div class="sec-head">
+      <div><p class="eyebrow">Our Process</p><h2 class="h-display">From first mark to living water</h2></div>
+      <p class="lead">The pond is a living system — circulation, filtration, rock, gravel, plants, and fish in balance — so it stays clear with almost no chemicals.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><div><h4>Layout and shape</h4><p>We outline the pond and stream until the shape sits right in the yard.</p></div></div>
+      <div class="step"><div class="n">02</div><div><h4>Filter positioning</h4><p>Skimmer and biological filter at opposite ends so water travels the full length.</p></div></div>
+      <div class="step"><div class="n">03</div><div><h4>Excavation</h4><p>Stepped shelves and clean walls — the bones of the ecosystem.</p></div></div>
+      <div class="step"><div class="n">04</div><div><h4>Underlayment and liner</h4><p>Geotextile first, then flexible rubber liner. The watertight shell.</p></div></div>
+      <div class="step"><div class="n">05</div><div><h4>Plumbing</h4><p>Pump in the skimmer, buried lines — you never see a pipe.</p></div></div>
+      <div class="step"><div class="n">06</div><div><h4>Rock and gravel</h4><p>Boulders and river gravel set by hand over the liner.</p></div></div>
+      <div class="step"><div class="n">07</div><div><h4>Waterfall construction</h4><p>Feature rocks and foam tell the water exactly where to go.</p></div></div>
+      <div class="step"><div class="n">08</div><div><h4>Edge finishing</h4><p>Liner folded above the water line, backfilled with soil and gravel.</p></div></div>
+      <div class="step"><div class="n">09</div><div><h4>Landscaping and startup</h4><p>Marginal plants, fill, beneficial bacteria. Then it starts to live.</p></div></div>
+    </div>
+  </div>
+</section>
+<section id="areas">
+  <div class="wrap">
+    <p class="eyebrow">Where We Build</p>
+    <h2 class="h-display">Across the Sandhills</h2>
+    <div class="towns">
+      <span class="town">Pinehurst</span><span class="town">Southern Pines</span><span class="town">Aberdeen</span>
+      <span class="town">Whispering Pines</span><span class="town">Seven Lakes</span><span class="town">Pinebluff</span>
+      <span class="town">West End</span><span class="town">Sanford</span><span class="town">Fayetteville</span>
+    </div>
+  </div>
+</section>
+<section id="faq">
+  <div class="wrap" style="max-width:900px">
+    <p class="eyebrow">Questions &amp; Answers</p>
+    <h2 class="h-display">Have questions? We have answers.</h2>
+    <div class="faq-item"><button>What makes Carolina Water Gardens different?<span class="pm">+</span></button><div class="a">We're pond builders first — not a landscaping company that also does water. Every pond is a true low-maintenance ecosystem: engineered filtration buried entirely beneath a natural design of stone, water and plants. It looks like it has always belonged in your yard, and it stays clear on its own.</div></div>
+    <div class="faq-item"><button>Do you only install ponds, or also maintain and repair?<span class="pm">+</span></button><div class="a">Both. We design and build new ponds, waterfalls and fountains — and we handle seasonal maintenance, cleanouts, and repair or full renovation of existing ponds, including ponds other companies built. If you inherited a pond that's more work than joy, we can often turn it around.</div></div>
+    <div class="faq-item"><button>Who will actually be working on my property?<span class="pm">+</span></button><div class="a">You work directly with Jon from the first walkthrough through the final fill. Every build is done by our own crew — never subcontracted — so the people who design your pond are the same people who build it.</div></div>
+    <div class="faq-item"><button>Is a UV clarifier included?<span class="pm">+</span></button><div class="a">No — UV is an optional add-on, quoted separately, and not always needed. A well-built ecosystem pond stays clear with circulation, filtration, rock, plants, and fish. We recommend UV only when the pond calls for it.</div></div>
+    <div class="faq-item"><button>Is there a warranty?<span class="pm">+</span></button><div class="a">Equipment carries manufacturers' warranties, and our own work is guaranteed against leaks caused by our construction. What no one can warranty is nature — but because we service what we build, we're always a phone call away.</div></div>
+  </div>
+</section>
+<section id="contact">
+  <div class="wrap box">
+    <p class="eyebrow">Free, No-Pressure Estimate</p>
+    <h2 class="h-display">Ready to transform your space?</h2>
+    <p class="lead" style="margin:0 auto">Tell us about your yard and we'll design the water feature that fits it. We'll follow up personally — usually within a day.</p>
+    <form onsubmit="event.preventDefault();this.innerHTML='<p style=\'font-family:var(--serif);font-size:1.5rem;color:var(--gold2)\'>Thank you — we\'ve got your information and will reach out personally, usually within a day.</p>'">
+      <input type="text" placeholder="Your name" required>
+      <input type="text" placeholder="How can we reach you?" required>
+      <input type="text" placeholder="Property address">
+      <button class="btn btn-gold" type="submit">Request My Free Estimate</button>
+      <p style="font-size:.75rem;color:var(--mute);text-align:center">No obligation. We'll never share your information.</p>
+    </form>
+  </div>
+</section>
+<footer id="foot">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <div class="wordmark">Carolina <b>Water</b> Gardens</div>
+        <p style="margin-top:14px;max-width:38ch">Ecosystem ponds, koi ponds, waterfalls and fountains — designed, built and maintained across the North Carolina Sandhills.</p>
+      </div>
+      <div><p class="eyebrow">Get in Touch</p><p style="margin-top:14px"><a href="tel:+19105813970">(910) 581-3970</a></p></div>
+      <div style="display:flex;align-items:flex-end;gap:16px">
+        <img src="assets/logo-round.png" alt="Carolina Water Gardens" style="width:96px;border-radius:50%;box-shadow:0 10px 30px rgba(0,0,0,.5)">
+        <img src="assets/mascot.png" alt="The Pondwright" style="width:72px;height:auto;filter:drop-shadow(0 8px 16px rgba(0,0,0,.5))">
+      </div>
+      <div><p class="eyebrow">★ 5.0</p><p style="margin-top:14px">Rated on Google</p></div>
+    </div>
+    <div class="legal"><span>© 2026 Carolina Water Gardens</span><span>Pond builder · Pinehurst · Southern Pines · Aberdeen · the NC Sandhills</span><span>Redesign concept — local preview only</span></div>
+  </div>
+</footer>
+<div id="lightbox"><img alt="Full size"></div>
+<script>
+'use strict';
+// nav scroll state
+const nav=document.getElementById('nav');
+addEventListener('scroll',()=>nav.classList.toggle('scrolled',scrollY>60),{passive:true});
+
+// FAQ accordion
+document.querySelectorAll('.faq-item').forEach(item=>{
+  item.querySelector('button').addEventListener('click',()=>{
+    const open=item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(o=>o.classList.remove('open'));
+    if(!open)item.classList.add('open');
+  });
+});
+
+// lightbox
+const lb=document.getElementById('lightbox'),lbImg=lb.querySelector('img');
+document.querySelectorAll('#work figure img, #truck .shot img').forEach(img=>{
+  img.addEventListener('click',()=>{lbImg.src=img.src;lb.classList.add('on');});
+});
+lb.addEventListener('click',()=>lb.classList.remove('on'));
+addEventListener('keydown',e=>{if(e.key==='Escape')lb.classList.remove('on');});
+
+// scroll reveal for sections below the fold
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){e.target.style.opacity=1;e.target.style.transform='none';io.unobserve(e.target);}
+}),{threshold:.12});
+document.querySelectorAll('section > .wrap, #story .cols > div').forEach(el=>{
+  el.style.opacity=0;el.style.transform='translateY(36px)';
+  el.style.transition='opacity .9s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1)';
+  io.observe(el);
+});
+
+</script>
+</body>
+</html>

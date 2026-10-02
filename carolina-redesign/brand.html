@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CWG — Brand & Truck Application</title>
+<style>
+:root{--ink:#0a0f16;--ink2:#0e1520;--gold:#d3a24a;--gold2:#ecc978;--cream:#f6edd4;--mute:#8aa0b4;--serif:'Cormorant Garamond',Georgia,serif;--sans:'Inter',system-ui,sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--ink);color:var(--cream);font-family:var(--sans);font-weight:300;line-height:1.7}
+a{color:inherit;text-decoration:none}
+.wrap{max-width:1200px;margin:0 auto;padding:0 clamp(20px,4vw,50px)}
+.eyebrow{font-size:11px;letter-spacing:.45em;text-transform:uppercase;color:var(--gold);font-weight:500}
+h1,h2{font-family:var(--serif);font-weight:500;line-height:1.05}
+h1{font-size:clamp(2.4rem,6vw,4.6rem);margin:14px 0 10px}
+h2{font-size:clamp(1.9rem,4vw,3rem);margin:10px 0 34px}
+section{padding:70px 0;border-bottom:1px solid rgba(211,162,74,.12)}
+header{padding:90px 0 50px;background:radial-gradient(1200px 500px at 70% -10%,rgba(211,162,74,.12),transparent),var(--ink)}
+.back{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute)}
+.back:hover{color:var(--gold2)}
+
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.asset{background:var(--ink2);border:1px solid rgba(211,162,74,.2);border-radius:6px;padding:30px;text-align:center}
+.asset img{max-width:100%;margin:0 auto 20px;border-radius:6px}
+.asset .seal-img{width:min(320px,80%)}
+.asset h3{font-family:var(--serif);font-size:1.5rem;font-weight:500}
+.asset p{font-size:.85rem;color:var(--mute);max-width:42ch;margin:8px auto 0}
+.tag{display:inline-block;margin-top:14px;padding:6px 16px;border:1px solid var(--gold);border-radius:100px;font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold2)}
+@media(max-width:800px){.duo{grid-template-columns:1fr}}
+
+.lockups{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+.lockup{background:var(--ink2);border:1px solid rgba(211,162,74,.2);border-radius:6px;padding:30px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
+.lockup .canvas{min-height:170px;display:flex;align-items:center;justify-content:center;width:100%}
+.lockup h4{font-family:var(--serif);font-size:1.2rem;font-weight:500;color:var(--gold2)}
+.lockup p{font-size:.8rem;color:var(--mute)}
+.lockup .combo{display:flex;align-items:center;gap:16px}
+.lockup .combo img.seal-s{width:86px;border-radius:50%}
+.lockup .combo .txt{text-align:left}
+.lockup .combo .txt b{font-family:var(--serif);font-size:1.3rem;font-weight:600;letter-spacing:.06em;display:block;line-height:1.1}
+.lockup .combo .txt span{font-size:.62rem;letter-spacing:.4em;text-transform:uppercase;color:var(--gold)}
+@media(max-width:900px){.lockups{grid-template-columns:1fr}}
+
+#truck{background:linear-gradient(180deg,#131b26,#0a0f16)}
+.stage{position:relative;border-radius:8px;overflow:hidden;background:linear-gradient(180deg,#1c2836 0%,#0e1520 70%,#0a0f16 100%);padding:60px 40px 30px;box-shadow:inset 0 0 120px rgba(0,0,0,.5)}
+.truck-wrap{position:relative;max-width:900px;margin:0 auto}
+.truck-wrap img.base{width:100%;filter:drop-shadow(0 30px 40px rgba(0,0,0,.5))}
+.decal{position:absolute;transition:.3s}
+.decal:hover{transform:scale(1.04)}
+#d-door{width:30%;left:34%;top:38%}
+#d-topper{width:22%;left:7%;top:14%;border-radius:50%}
+#d-bed{font-family:var(--serif);letter-spacing:.35em;color:#1a2431;font-size:clamp(10px,1.6vw,17px);left:8%;top:47%;text-transform:uppercase;font-weight:600}
+#d-web{font-size:clamp(8px,1.2vw,13px);letter-spacing:.3em;color:var(--gold);left:34.5%;top:63%;text-transform:uppercase;font-weight:500}
+.legend{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;margin-top:30px;font-size:.8rem;color:var(--mute)}
+.legend span b{color:var(--gold2);font-weight:500}
+.note{font-size:.8rem;color:var(--mute);max-width:70ch;margin-top:18px}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="wrap">
+    <a class="back" href="index.html">← Back to site concept</a>
+    <h1>Brand Application</h1>
+    <p style="color:var(--mute);max-width:60ch">The Pondwright and the seal — how the two marks work together, and where they land on the truck.</p>
+  </div>
+</header>
+<section id="assets">
+  <div class="wrap">
+    <p class="eyebrow">The Two Marks</p>
+    <h2>Character + Crest</h2>
+    <div class="duo">
+      <div class="asset"><img src="assets/mascot.png" alt="Pondwright plaque"><h3>The Pondwright Plaque</h3><p>The character mark — the koi who climbed the Dragon Gate, staff in hand. Warm, memorable, unmistakably yours. This is the face on the truck.</p><span class="tag">Primary · Vehicle &amp; Signage</span></div>
+      <div class="asset"><img class="seal-img" src="assets/seal.png" alt="CWG seal"><h3>The Tranquility Seal</h3><p>The formal mark — lotus, cattails, still water. Quiet and premium. Works small, stamps well, and reads as a badge of craft.</p><span class="tag">Secondary · Print, Apparel, Small</span></div>
+    </div>
+  </div>
+</section>
+<section id="lockups">
+  <div class="wrap">
+    <p class="eyebrow">Working Together</p>
+    <h2>Three lockups</h2>
+    <div class="lockups">
+      <div class="lockup"><div class="canvas"><img src="assets/mascot.png" style="width:100%" alt="Full plaque"></div><h4>01 · Full Plaque</h4><p>Tailgate, trailer, storefront. Nothing else needs to be said.</p></div>
+      <div class="lockup"><div class="canvas"><div class="combo"><img class="seal-s" src="assets/seal.png" alt="Seal"><div class="txt"><b>Carolina<br>Water Gardens</b><span>Est. Sandhills · NC</span></div></div></div><h4>02 · Seal + Wordmark</h4><p>Estimates, invoices, door decals. The everyday lockup.</p></div>
+      <div class="lockup"><div class="canvas"><img class="seal-s" src="assets/seal.png" style="width:120px" alt="Seal alone"></div><h4>03 · Seal Alone</h4><p>Hats, shirts, water bottles. Small-space stamp.</p></div>
+    </div>
+  </div>
+</section>
+<section id="truck">
+  <div class="wrap">
+    <p class="eyebrow">On The Road</p>
+    <h2>Lettered wrap</h2>
+    <div class="stage">
+      <div class="truck-wrap">
+        <img class="base" src="assets/truck-wrap.png" alt="Carolina Water Gardens lettered truck — door, tailgate, Pondwright">
+      </div>
+      <div class="legend">
+        <span><b>A</b> — Pinecone lockup + wordmark, doors</span>
+        <span><b>B</b> — Phone, site, social on the bed</span>
+        <span><b>C</b> — Pondwright on the tailgate</span>
+        <span><b>D</b> — Plate + front mark</span>
+      </div>
+      <p class="note" style="text-align:center">This is the lettering we like — not the oval website mockup. Same king, same navy and gold, readable at twenty feet.</p>
+    </div>
+  </div>
+</section>
+</body>
+</html>
