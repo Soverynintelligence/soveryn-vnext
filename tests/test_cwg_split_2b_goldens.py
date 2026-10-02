@@ -3,6 +3,10 @@
 Commit these files BEFORE the seam refactor. After the refactor they must
 still match (production behavior identical). Rewrite with
 ``SOVERYN_UPDATE_GOLDEN=1 pytest tests/test_cwg_split_2b_goldens.py``.
+
+Persona / skill / routine lookups are redirected to a tmp data root
+(see ``_hermetic_cwg_2b_data``). Eve and Forge skill indexes come from
+``tests/fixtures/cwg_split_2b/skills/``, not the live checkout ``data/``.
 """
 from __future__ import annotations
 
@@ -35,6 +39,7 @@ from tests.helpers.cwg_2b_capture import (
     write_json,
     write_text,
 )
+from tests.helpers.hermetic import isolate_data_root
 
 
 def _update() -> bool:
@@ -43,6 +48,12 @@ def _update() -> bool:
 
 def _read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_cwg_2b_data(tmp_path, monkeypatch) -> Path:
+    """Every 2b golden must read personas/skills/routines from tmp, not data/."""
+    return isolate_data_root(tmp_path, monkeypatch, seed_skill_fixtures=True)
 
 
 @pytest.fixture
@@ -101,6 +112,41 @@ def test_persona_goldens_match_main():
             continue
         assert path.is_file(), f"missing persona golden {path}"
         assert body == path.read_text(encoding="utf-8")
+
+
+def test_goldens_ignore_repo_data_persona_override(tmp_path):
+    """A local data/memory/personas/eve.md must not change 2b goldens."""
+    from soveryn.agents.personas import persona_override_path
+    from soveryn.config.loader import load_env_config
+
+    tmp = tmp_path.resolve()
+    cfg = load_env_config()
+    override = persona_override_path("eve")
+    assert cfg.data_root.resolve().is_relative_to(tmp)
+    assert cfg.skills_dir.resolve().is_relative_to(tmp)
+    assert override.resolve().is_relative_to(tmp)
+    assert not override.is_file()
+
+    repo_dir = Path(__file__).resolve().parents[1] / "data" / "memory" / "personas"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    junk = repo_dir / "eve.md"
+    previous = junk.read_text(encoding="utf-8") if junk.is_file() else None
+    try:
+        junk.write_text(
+            "# JUNK local Eve override — goldens must ignore this\n",
+            encoding="utf-8",
+        )
+        texts = assembled_personas()
+        expected = (GOLDEN_DIR / "personas" / "eve.md").read_text(encoding="utf-8")
+        assert texts["eve"] == expected
+        assert "JUNK local Eve override" not in texts["eve"]
+        snap = routines_and_skills_snapshot()
+        assert snap == _read_json(GOLDEN_DIR / "routines_and_skills.json")
+    finally:
+        if previous is None:
+            junk.unlink(missing_ok=True)
+        else:
+            junk.write_text(previous, encoding="utf-8")
 
 
 def test_tool_schema_golden(

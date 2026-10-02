@@ -15,6 +15,7 @@ from soveryn.plugins.loader import (
     plugin_board_rows,
     reset_plugins,
 )
+from tests.helpers.hermetic import isolate_data_root
 
 
 class _FakeCwg(PluginBase):
@@ -86,12 +87,28 @@ class _EP:
 
 
 @pytest.fixture(autouse=True)
+def _hermetic_data_root(tmp_path, monkeypatch):
+    isolate_data_root(tmp_path, monkeypatch)
+
+
+@pytest.fixture(autouse=True)
 def _clean_plugins(monkeypatch):
     monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
     reset_plugins()
     yield
     monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
     reset_plugins()
+
+
+def test_plugin_loader_lookups_stay_under_tmp_path(tmp_path):
+    from soveryn.agents.personas import persona_override_path
+    from soveryn.config.loader import load_env_config
+
+    tmp = tmp_path.resolve()
+    cfg = load_env_config()
+    assert cfg.data_root.resolve().is_relative_to(tmp)
+    assert cfg.skills_dir.resolve().is_relative_to(tmp)
+    assert persona_override_path("eve").resolve().is_relative_to(tmp)
 
 
 def test_unset_loads_builtin_not_external(monkeypatch):
