@@ -148,11 +148,11 @@ Suggested first seeds (Jon confirms wording):
 2. CWG Google Ads Performance Max paused (account + conversion tag kept) — `cwg.ads.pmax`
 3. Customer job holds / don’t-contact notes — local `seed_customer_facts.json` only (not in git)
 4. Builds: travel where customer pays; green-water / maintenance stay local Sandhills (not Charlotte green-water) — `cwg.rule.travel`
-6. Aetheria TTS = Kokoro (not F5) — `lab.voice.tts`
-7. Kernel = OpenCode + vLLM on Sparks; not Hermes runtime — `lab.kernel.runtime`
-8. Vett folded into Eve — no live Vett seat — `house.bench.vett`
-9. Aquascape Inc = supplier / trend signal for backyard ideas — not peer competitor — `cwg.supplier.aquascape`
-10. Estimator locked; pondwright.com public build hold — as applicable
+5. Aetheria TTS = Kokoro (not F5) — `lab.voice.tts`
+6. Kernel = OpenCode + vLLM on Sparks; not Hermes runtime — `lab.kernel.runtime`
+7. Vett folded into Eve — no live Vett seat — `house.bench.vett`
+8. Aquascape Inc = supplier / trend signal for backyard ideas — not peer competitor — `cwg.supplier.aquascape`
+9. Estimator locked; pondwright.com public build hold — as applicable
 
 Acceptance: Eve and Aetheria both retrieve the same node id for a query that hits the fact rail.
 
