@@ -75,6 +75,8 @@ jobs:
         if: steps.install.outcome == 'success'
         run: ruff check --select E9,F821 soveryn scripts packages
 
+      # GHA skips later steps after a failure unless the condition handles
+      # failure. always() is required so pytest still runs when ruff is red.
       - name: Pytest (default markers)
-        if: steps.install.outcome == 'success'
+        if: always() && steps.install.outcome == 'success'
         run: python -m pytest
