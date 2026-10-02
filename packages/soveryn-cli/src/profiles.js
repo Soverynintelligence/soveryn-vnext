@@ -11,7 +11,12 @@ const {
 } = require('./paths');
 const { canonicalizeId, resolveCanonicalKey } = require('./policy/canonical');
 const { ensureLabTheme, bannerLine } = require('./chrome');
-const { piVersionLabel, isPinnedRuntime, pinnedSettingsExtensions } = require('./pinned-pi');
+const {
+  piVersionLabel,
+  isPinnedRuntime,
+  pinnedSettingsExtensions,
+  pinnedSettingsTuiMode,
+} = require('./pinned-pi');
 
 const PINNED_RUNTIME_FILE = 'pinned-runtime.json';
 
@@ -218,7 +223,7 @@ function buildPiConfig(data, activeProfile, { overlay = loadPinnedRuntimeOverlay
       provider: { timeoutMs: 3600000, maxRetries: 0 },
     },
     httpIdleTimeoutMs: 600000,
-    // Pinned soveryn-cli runtime (0.99.1) vs legacy/Kernel (0.74.2): suppress the
+    // Pinned soveryn-cli runtime (1.0.0) vs legacy/Kernel (0.74.2): suppress the
     // what's-new screen on every launch without lying to the other harness.
     lastChangelogVersion: piVersionLabel(),
   };
@@ -227,6 +232,11 @@ function buildPiConfig(data, activeProfile, { overlay = loadPinnedRuntimeOverlay
   // Kernel / soveryn-074 / older pins so their settings stay byte-identical.
   const extensions = pinnedSettingsExtensions();
   if (extensions) settings.extensions = extensions;
+  // Pi >=1.0 pinned runtime only: Pi 1.0 defaults the TUI to fullscreen (alt
+  // screen); pin "regular" so the locked look + normal scrollback stay as on
+  // 0.99.1. Omitted for older pins / Kernel / soveryn-074 (byte-identical).
+  const tuiMode = pinnedSettingsTuiMode();
+  if (tuiMode) settings.tuiMode = tuiMode;
   return { models, settings };
 }
 

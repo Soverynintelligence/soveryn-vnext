@@ -1,9 +1,10 @@
 {
   "name": "soveryn",
   "version": "0.1.0",
-  "description": "SOVERYN branded CLI coding harness (Pi wrapper; soveryn = pinned Pi 0.99.1 on Node 22, soveryn-pi087 = Pi 0.87.1 rollback, soveryn-074 = Pi 0.74.2 legacy rollback). Parallel to kernel/soveryn-pi — does not touch config/pi.",
+  "description": "SOVERYN branded CLI coding harness (Pi wrapper; soveryn = pinned Pi 1.0.0 on Node 22, soveryn-pi099 = Pi 0.99.1 rollback, soveryn-pi087 = Pi 0.87.1 rollback, soveryn-074 = Pi 0.74.2 legacy rollback). Parallel to kernel/soveryn-pi — does not touch config/pi.",
   "bin": {
-    "soveryn": "./bin/soveryn-pi099",
+    "soveryn": "./bin/soveryn-pi100",
+    "soveryn-pi099": "./bin/soveryn-pi099",
     "soveryn-pi087": "./bin/soveryn-pi087",
     "soveryn-074": "./bin/soveryn"
   },
@@ -17,14 +18,17 @@
     "test": "node --test test/*.cjs test/*.js"
   },
   "soverynPi": {
-    "version": "0.99.1",
+    "version": "1.0.0",
     "node": "v22.23.2",
-    "prefix": "~/.soveryn/pi/0.99.1",
-    "previous": "0.87.1",
-    "previousPrefix": "~/.soveryn/pi/0.87.1",
+    "prefix": "~/.soveryn/pi/1.0.0",
+    "previous": "0.99.1",
+    "previousPrefix": "~/.soveryn/pi/0.99.1",
+    "older": "0.87.1",
+    "olderPrefix": "~/.soveryn/pi/0.87.1",
     "legacy": "0.74.2",
     "disabledBuiltins": [
       "mcp"
-    ]
+    ],
+    "tuiMode": "regular"
   }
 }

@@ -3,7 +3,8 @@
 /**
  * Pinned Pi runtime for the SOVERYN CLI.
  *   2026-09-28: Pi 0.87.1 on Node 22 (bin/soveryn-pi087 — kept as rollback)
- *   2026-09-30: Pi 0.99.1 on Node 22 (bin/soveryn-pi099 — current)
+ *   2026-09-30: Pi 0.99.1 on Node 22 (bin/soveryn-pi099 — kept as first rollback)
+ *   2026-10-02: Pi 1.0.0 on Node 22 (bin/soveryn-pi100 — current)
  *
  * bin/soveryn-piNNN exports SOVERYN_PI_BIN + SOVERYN_PI_NODE (+ SOVERYN_PI_VERSION).
  * Only the soveryn-cli harness honors them. Kernel (SOVERYN_HARNESS=kernel via
@@ -33,6 +34,15 @@ const BUILTIN_EXTENSIONS_SINCE = '0.99.0';
  * off by default and only MCP would switch them on.
  */
 const DISABLED_BUILTINS = Object.freeze(['mcp']);
+
+/** First Pi release whose interactive TUI defaults to fullscreen (alt screen). */
+const TUI_MODE_SINCE = '1.0.0';
+
+/**
+ * TUI mode the SOVERYN CLI pins on Pi >=1.0: "regular" keeps the terminal's
+ * normal scrollback (the locked C64/PETSCII look as on 0.99.1 and earlier).
+ */
+const PINNED_TUI_MODE = 'regular';
 
 /** The pin package.json declares (bin/soveryn → current launcher). */
 function declaredPin() {
@@ -129,6 +139,17 @@ function pinnedSettingsExtensions(env = process.env) {
   return DISABLED_BUILTINS.map((n) => `-builtin:${n}`);
 }
 
+/**
+ * `tuiMode` setting for the generated settings.json, or null to omit the key.
+ * Only the pinned runtime on Pi >=1.0.0 (fullscreen became the default there);
+ * older pins / Kernel / soveryn-074 settings stay byte-identical.
+ */
+function pinnedSettingsTuiMode(env = process.env) {
+  if (!isPinnedRuntime(env)) return null;
+  if (compareVersions(piVersionLabel(env), TUI_MODE_SINCE) < 0) return null;
+  return PINNED_TUI_MODE;
+}
+
 function stripPinEnv(env) {
   const out = { ...env };
   for (const k of PIN_ENV_KEYS) delete out[k];
@@ -140,6 +161,8 @@ module.exports = {
   LEGACY_PI_VERSION,
   BUILTIN_EXTENSIONS_SINCE,
   DISABLED_BUILTINS,
+  TUI_MODE_SINCE,
+  PINNED_TUI_MODE,
   declaredPin,
   piPackageVersion,
   compareVersions,
@@ -149,5 +172,6 @@ module.exports = {
   piVersionLabel,
   isPinnedRuntime,
   pinnedSettingsExtensions,
+  pinnedSettingsTuiMode,
   stripPinEnv,
 };

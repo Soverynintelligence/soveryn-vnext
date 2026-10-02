@@ -517,6 +517,8 @@
     deferred: false,
     awaitingServer: false,
     awaitBaseline: 0,
+    // Quiet poll deadline after a reload onto a recent user turn.
+    recoverUntil: 0,
   };
   // iOS suspends fetch on background; we never AbortController.abort() on hide.
   const CAN_BEACON = typeof navigator !== "undefined"
@@ -1235,19 +1237,29 @@
       // History grew past pre-send baseline and ends on a real assistant reply.
       const done = turnsArr.length > (state.awaitBaseline || 0)
         && last && last.role === "assistant" && !isAck;
-      if (done) {
+      const quietWait = !state.sending && !state.deferred
+        && state.recoverUntil && Date.now() >= state.recoverUntil;
+      if (done || quietWait) {
         state.deferred = false;
         state.awaitingServer = false;
+        state.recoverUntil = 0;
         $("[data-agent-sub]").textContent = contact.sub;
         stopPoll();
         setHeaderBusy(false);
-      } else {
+      } else if (state.sending || state.deferred) {
         $("[data-agent-sub]").textContent = "working in the background";
+        startPoll();
+      } else {
+        // Reopened onto a user turn that may still be finishing.
+        // Keep the contact line. A dead turn must not claim work.
+        $("[data-agent-sub]").textContent = contact.sub;
+        setHeaderBusy(false);
         startPoll();
       }
     } else {
       // iOS may kill the page mid turn. Producer still finishes server-side;
-      // re-open must resume polling when history ends on a fresh user turn.
+      // re-open polls when history ends on a fresh user turn, without the
+      // busy line. That line is only for a send this page still owns.
       const turnsArr = turns || [];
       const last = turnsArr[turnsArr.length - 1];
       let recovered = false;
@@ -1256,8 +1268,9 @@
         if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs < 15 * 60 * 1000) {
           state.awaitingServer = true;
           state.awaitBaseline = Math.max(0, turnsArr.length - 1);
-          $("[data-agent-sub]").textContent = "working in the background";
-          setHeaderBusy(true);
+          state.recoverUntil = Date.parse(last.timestamp) + 15 * 60 * 1000;
+          $("[data-agent-sub]").textContent = contact.sub;
+          setHeaderBusy(false);
           startPoll();
           recovered = true;
         }
@@ -1265,6 +1278,7 @@
       if (!recovered) {
         $("[data-agent-sub]").textContent = contact.sub;
         stopPoll();
+        if (!state.sending) setHeaderBusy(false);
       }
     }
     // History rebuild wiped Gate cards — re-pull pending so Allow returns.
@@ -1648,20 +1662,25 @@
           }
         }
       }
-      if (!text) them.textContent = "(no reply)";
-      else setBubbleText(them, text, true);
+      if (text) setBubbleText(them, text, true);
+      else if (!them.textContent || them.textContent === "…"
+          || them.textContent.indexOf("working in the background") === 0) {
+        them.textContent = "(no reply)";
+      }
       if (state.deferred) {
         startPoll();
       } else if (text) {
         state.awaitingServer = false;
+        state.recoverUntil = 0;
         await applyHistory(state.sessionId);
-      } else if (state.awaitingServer) {
-        // Stream ended without tokens (or was cut) — poll for server-owned reply.
-        them.textContent = "working in the background…";
-        startPoll();
       } else {
+        // The SSE body closed. The producer is finished. Keep an error
+        // frame if one landed; do not claim the citizen is still working.
         state.awaitingServer = false;
-        await applyHistory(state.sessionId);
+        state.recoverUntil = 0;
+        $("[data-agent-sub]").textContent = contact.sub;
+        setHeaderBusy(false);
+        stopPoll();
       }
     } catch (e) {
       // iOS kills fetch on pagehide/sleep — treat as server-owned turn.

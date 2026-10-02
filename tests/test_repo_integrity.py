@@ -72,7 +72,9 @@ def test_every_internal_import_resolves_to_a_tracked_file():
                 continue
 
             for module in modules:
-                if not module.startswith("soveryn"):
+                # The soveryn package, not house scripts whose names happen
+                # to start with those letters (e.g. soveryn_console_app).
+                if module != "soveryn" and not module.startswith("soveryn."):
                     continue
                 candidates = _candidates(module)
                 if any(c.as_posix() in tracked for c in candidates):

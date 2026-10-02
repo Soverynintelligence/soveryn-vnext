@@ -34,7 +34,7 @@ test('overlay only loads for the pinned runtime', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('generated settings: extensions -builtin:mcp only on the Pi >=0.99 pin', () => {
+test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode regular only on Pi >=1.0', () => {
   const { buildPiConfig, loadProfiles, readActiveId } = require('../src/profiles');
   const KEYS = ['SOVERYN_PI_BIN', 'SOVERYN_PI_NODE', 'SOVERYN_PI_VERSION'];
   const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
@@ -49,18 +49,30 @@ test('generated settings: extensions -builtin:mcp only on the Pi >=0.99 pin', ()
   try {
     const data = loadProfiles();
     const active = data.profiles[readActiveId(data)];
-    setPin('0.99.1');
+    setPin('1.0.0');
     const cur = buildPiConfig(data, active, { overlay: null }).settings;
     assert.deepEqual(cur.extensions, ['-builtin:mcp']);
-    assert.equal(cur.lastChangelogVersion, '0.99.1');
+    assert.equal(cur.tuiMode, 'regular');
+    assert.equal(cur.lastChangelogVersion, '1.0.0');
     assert.equal(cur.defaultProjectTrust, 'always');
+    setPin('0.99.1');
+    const p099 = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.deepEqual(p099.extensions, ['-builtin:mcp']);
+    assert.equal('tuiMode' in p099, false);
+    assert.equal(p099.lastChangelogVersion, '0.99.1');
+    // 1.0.0 settings = 0.99.1 settings + tuiMode only (no other drift)
+    const { tuiMode, lastChangelogVersion, ...curRest } = cur;
+    const { lastChangelogVersion: _l, ...p099Rest } = p099;
+    assert.deepEqual(curRest, p099Rest);
     setPin('0.87.1');
     const prev = buildPiConfig(data, active, { overlay: null }).settings;
     assert.equal('extensions' in prev, false);
+    assert.equal('tuiMode' in prev, false);
     assert.equal(prev.lastChangelogVersion, '0.87.1');
     setPin(null);
     const legacy = buildPiConfig(data, active, { overlay: null }).settings;
     assert.equal('extensions' in legacy, false);
+    assert.equal('tuiMode' in legacy, false);
     assert.equal(legacy.lastChangelogVersion, '0.74.2');
   } finally {
     for (const k of KEYS) {
