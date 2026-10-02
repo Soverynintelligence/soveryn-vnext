@@ -166,10 +166,12 @@ SURFACES: tuple[Surface, ...] = (
         notes="The openly-AI intake agent. Never quotes prices. POST /chat only.",
     ),
     Surface(
-        "pondwright-estimator", Kind.HTTP, "https://estimator.pondwright.com/",
-        owner="jon", interval_s=3600,
-        notes="Password-gated PWA; serves a real page at the root. NEVER expose "
-              "estimator Step 2 — it is Jon's margin.",
+        "pondwright-estimator", Kind.HTTP, "https://crm.pondwright.com/field/login",
+        owner="jon", interval_s=3600, expect_status=200,
+        notes="Field estimator now lives in pondwright-cwg-ops at /field "
+              "(estimator.pondwright.com 301s there). Probe the login page: "
+              "GET /field itself 401s non-HTML clients after the redirect. "
+              "NEVER expose estimator Step 2 — it is Jon's margin.",
     ),
     Surface(
         "carolinawatergardens", Kind.PUBLIC, "https://carolinawatergardens.com/",

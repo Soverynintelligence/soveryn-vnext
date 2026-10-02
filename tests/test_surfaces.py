@@ -300,6 +300,35 @@ def test_a_persistent_failure_still_alarms(tmp_path, monkeypatch):
 
 # ── the registry itself ─────────────────────────────────────────────────────
 
+def test_pondwright_estimator_probes_live_field_login():
+    """Old estimator.pondwright.com 301s to /field, which 401s non-HTML clients.
+
+    Keep the surface id stable (Ares keys findings by name). Probe the
+    login page, which answers 200.
+    """
+    s = registry.BY_NAME["pondwright-estimator"]
+    assert s.target == "https://crm.pondwright.com/field/login"
+    assert s.expect_status == 200
+    assert s.kind is Kind.HTTP
+    assert "estimator.pondwright.com" not in s.target
+
+
+def test_http_surface_interval_does_not_throttle_ares_probes():
+    """interval_s on HTTP is a staleness clock, not the probe cadence.
+
+    Ares `run_forever` defaults to 60s. `_due_for_probe` returns True for
+    every non-FUNCTIONAL surface on every scan. That is why live logs show
+    pondwright-estimator (interval_s=3600) hitting about every 61s.
+    Investigate-only — cadence is unchanged.
+    """
+    s = registry.BY_NAME["pondwright-estimator"]
+    assert s.interval_s == 3600
+    assert s.kind is Kind.HTTP
+    now = 1_700_000_000.0
+    assert lane._due_for_probe(s, now=now, last_healthy_at=now - 1) is True
+    assert lane._due_for_probe(s, now=now, last_healthy_at=now - 3599) is True
+
+
 def test_the_incident_surfaces_are_declared():
     """Every surface that failed silently this week is now watchable."""
     # `atticus` split into atticus-chat / atticus-health on 2026-08-13: both

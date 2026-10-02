@@ -213,3 +213,29 @@ def test_list_leads_does_not_treat_401_as_empty(monkeypatch):
 def test_401_without_error_key_is_still_failure():
     assert pw_crm._failed({"detail": "auth required", "ok": False, "http": 401}) is True
     assert pw_crm._failed({"leads": []}) is False
+
+
+def test_summarize_leads_excludes_is_test_and_counts_pipeline():
+    leads = [
+        {"id": "1", "name": "Real", "status": "new", "created_at": "2026-10-02T08:00:00Z", "is_test": 0},
+        {"id": "2", "name": "Quoted", "status": "quoted", "created_at": "2026-10-02T09:00:00Z"},
+        {"id": "3", "name": "Probe", "status": "new", "created_at": "2026-10-02T10:00:00Z", "is_test": True},
+        {"id": "4", "name": "Old new", "status": "new", "created_at": "2026-09-01T00:00:00Z", "is_test": "0"},
+    ]
+    out = pw_crm.summarize_leads(leads, today="2026-10-02")
+    assert out["ok"] is True
+    assert out["leads_total"] == 3
+    assert out["leads_today"] == 2
+    assert out["leads_new"] == 2
+    assert [L["name"] for L in out["recent"]] == ["Quoted", "Real", "Old new"]
+
+
+def test_pipeline_glance_http_failure_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        pw_crm, "_request",
+        lambda *a, **k: {"ok": False, "error": "crm_unreachable"},
+    )
+    out = pw_crm.pipeline_glance(ack="2026-10-01T00:00:00Z")
+    assert out["ok"] is False
+    assert out["error"] == "crm_unreachable"
+    assert out["open"] == "https://crm.pondwright.com/"

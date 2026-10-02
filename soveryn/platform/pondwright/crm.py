@@ -13,6 +13,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -232,6 +233,84 @@ def crm_status() -> dict[str, Any]:
         "health": health,
         "auth": None if not ping else {"ok": not _failed(ping), "error": ping.get("error")},
     }
+
+
+def _is_test_lead(lead: dict[str, Any]) -> bool:
+    """ops.sqlite `leads.is_test` — smoke/admin rows must not inflate the floor."""
+    v = lead.get("is_test")
+    if v is True or v == 1:
+        return True
+    if isinstance(v, str) and v.strip().lower() in {"1", "true", "yes"}:
+        return True
+    return False
+
+
+def _lead_created(lead: dict[str, Any]) -> str:
+    return str(lead.get("created_at") or lead.get("created") or "")
+
+
+def summarize_leads(
+    leads: list[Any],
+    *,
+    ack: str | None = None,
+    today: str | None = None,
+) -> dict[str, Any]:
+    """Pipeline counts from a lead list. Excludes is_test. No I/O."""
+    day = today or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    real = [L for L in leads if isinstance(L, dict) and not _is_test_lead(L)]
+    real.sort(key=_lead_created, reverse=True)
+    recent: list[dict[str, Any]] = []
+    for L in real[:12]:
+        recent.append({
+            "id": L.get("id"),
+            "created_at": _lead_created(L),
+            "name": L.get("name") or "—",
+            "phone": L.get("phone") or "",
+            "email": L.get("email") or "",
+            "source": L.get("source") or "",
+            "status": L.get("status") or "new",
+            "interest": (L.get("interest") or L.get("wants") or "")[:80],
+        })
+    leads_new = sum(
+        1 for L in real
+        if (L.get("status") or "") == "new"
+        and (ack is None or _lead_created(L) > ack)
+    )
+    leads_today = sum(1 for L in real if _lead_created(L).startswith(day))
+    return {
+        "ok": True,
+        "leads_total": len(real),
+        "leads_new": int(leads_new),
+        "ack": ack,
+        "leads_today": int(leads_today),
+        "recent": recent[:8],
+        "open": "https://crm.pondwright.com/",
+        "label": "PondWright CRM",
+        "base": crm_base(),
+    }
+
+
+def pipeline_glance(*, ack: str | None = None) -> dict[str, Any]:
+    """Mission Control CRM block from live cwg-ops GET /api/leads.
+
+    URL: SOVERYN_PONDWRIGHT_CRM_URL (default http://127.0.0.1:8100).
+    Fail-soft: never raises; ok=False when the book is unreachable.
+    """
+    out = _request("GET", "/api/leads")
+    if _failed(out):
+        return {
+            "ok": False,
+            "error": out.get("error") or "crm_unreachable",
+            "detail": out.get("detail"),
+            "http": out.get("http"),
+            "open": "https://crm.pondwright.com/",
+            "label": "PondWright CRM",
+            "base": crm_base(),
+        }
+    raw = out.get("leads")
+    if raw is None and isinstance(out.get("data"), list):
+        raw = out["data"]
+    return summarize_leads(list(raw or []), ack=ack)
 
 
 def list_leads(*, status: str | None = None, query: str | None = None, limit: int = 40) -> dict[str, Any]:
