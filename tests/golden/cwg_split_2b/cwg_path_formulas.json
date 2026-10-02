@@ -1,0 +1,14 @@
+{
+  "cwg_contracts": "docs/ops/cwg-business/contracts",
+  "cwg_csv": "docs/ops/tax-cwg/CWG-2025-2026-expense-ledger.csv",
+  "cwg_evidence": "docs/ops/tax-cwg/evidence",
+  "cwg_ig": "{home}/Desktop/CWG-Instagram",
+  "cwg_insurance": "docs/ops/cwg-business/insurance",
+  "cwg_licenses": "docs/ops/cwg-business/licenses",
+  "cwg_vehicles": "docs/ops/cwg-business/vehicles",
+  "gbp_token_dir": "{data}/gbp",
+  "gcal_token_dir": "{data}/gcal",
+  "ig_profile_dir": "{checkout}/data/eve_ig_profile",
+  "lead_watch_state": "data/memory/pondwright_lead_watch.json",
+  "photo_inbox": "{home}/Desktop/CWG-Instagram"
+}

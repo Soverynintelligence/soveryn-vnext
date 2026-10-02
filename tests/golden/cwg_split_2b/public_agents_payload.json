@@ -1,0 +1,109 @@
+{
+  "agents": [
+    {
+      "conversations_today": 1,
+      "conversations_total": 4,
+      "enabled": true,
+      "error": null,
+      "id": "pondwright",
+      "last_activity": "2026-10-02T12:00:00",
+      "leads_captured": 3,
+      "model": "lightning-30b",
+      "model_ok": true,
+      "name": "PondWright",
+      "open": "https://pondwright.com",
+      "reachable": true,
+      "recent": [
+        {
+          "captured": false,
+          "preview": "hello",
+          "ts": "2026-10-02T12:00:00"
+        }
+      ],
+      "role": "Carolina Water Gardens chat",
+      "site": "https://chat.pondwright.com",
+      "turns_today": 2
+    },
+    {
+      "conversations_today": 0,
+      "conversations_total": 1,
+      "enabled": true,
+      "error": null,
+      "id": "seneca",
+      "last_activity": null,
+      "leads_captured": 0,
+      "model": "x",
+      "model_ok": true,
+      "name": "Seneca",
+      "open": "https://soverynintelligence.com",
+      "reachable": true,
+      "recent": [],
+      "role": "SOVERYN public voice",
+      "site": "https://ask.soverynintelligence.com",
+      "turns_today": 0
+    },
+    {
+      "conversations_today": 0,
+      "conversations_total": 1,
+      "enabled": true,
+      "error": null,
+      "id": "atticus",
+      "last_activity": null,
+      "leads_captured": 0,
+      "model": "x",
+      "model_ok": true,
+      "name": "Atticus",
+      "open": "https://atticus.historysledger.com",
+      "reachable": true,
+      "recent": [],
+      "role": "History's Ledger curator",
+      "site": "https://atticus.historysledger.com",
+      "turns_today": 0
+    }
+  ],
+  "crm": {
+    "label": "PondWright CRM",
+    "leads_new": 2,
+    "leads_today": 1,
+    "leads_total": 3,
+    "ok": true,
+    "open": "https://crm.pondwright.com/",
+    "recent": [
+      {
+        "created_at": "2026-10-02T10:00:00Z",
+        "interest": "cleanout",
+        "name": "Lead A",
+        "phone": "",
+        "status": "new"
+      }
+    ]
+  },
+  "fetched_at": "<ts>",
+  "intake": {
+    "crm_new": 2,
+    "crm_open": "https://crm.pondwright.com/",
+    "crm_today": 1,
+    "ok": true,
+    "pending": 2,
+    "recent": [
+      {
+        "channel": "pondwright",
+        "detail": "cleanout \u00b7 new",
+        "kind": "crm_lead",
+        "status": "new",
+        "ts": "2026-10-02T10:00:00Z",
+        "who": "Lead A"
+      }
+    ],
+    "waitlist_open": "https://historysledger.com/family#waitlist",
+    "waitlist_today": 0,
+    "waitlist_total": 0
+  },
+  "path": "fabric",
+  "talking": [
+    "pondwright"
+  ],
+  "waitlist": {
+    "ok": false
+  }
+}

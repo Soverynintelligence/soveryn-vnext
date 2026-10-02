@@ -1,0 +1,109 @@
+{
+  "routine_ids": [
+    "morning_brief",
+    "ai_news_digest",
+    "x_trends_digest",
+    "competitor_watch",
+    "daily_planner",
+    "weekly_review",
+    "task_extractor",
+    "paper_watch",
+    "weekend_deep_dive",
+    "eve_product_advertise",
+    "house_improvement_scan",
+    "service_crash_watch",
+    "pond_academy_watch",
+    "funding_watch"
+  ],
+  "routines": [
+    {
+      "bytes": 1608,
+      "has_routine": true,
+      "id": "morning_brief",
+      "source": "package"
+    },
+    {
+      "bytes": 1215,
+      "has_routine": true,
+      "id": "ai_news_digest",
+      "source": "package"
+    },
+    {
+      "bytes": 1208,
+      "has_routine": true,
+      "id": "x_trends_digest",
+      "source": "package"
+    },
+    {
+      "bytes": 1252,
+      "has_routine": true,
+      "id": "competitor_watch",
+      "source": "package"
+    },
+    {
+      "bytes": 1217,
+      "has_routine": true,
+      "id": "daily_planner",
+      "source": "package"
+    },
+    {
+      "bytes": 1138,
+      "has_routine": true,
+      "id": "weekly_review",
+      "source": "package"
+    },
+    {
+      "bytes": 1219,
+      "has_routine": true,
+      "id": "task_extractor",
+      "source": "package"
+    },
+    {
+      "bytes": 1168,
+      "has_routine": true,
+      "id": "paper_watch",
+      "source": "package"
+    },
+    {
+      "bytes": 1252,
+      "has_routine": true,
+      "id": "weekend_deep_dive",
+      "source": "package"
+    },
+    {
+      "bytes": 878,
+      "has_routine": true,
+      "id": "eve_product_advertise",
+      "source": "package"
+    },
+    {
+      "bytes": 755,
+      "has_routine": true,
+      "id": "house_improvement_scan",
+      "source": "package"
+    },
+    {
+      "bytes": 1824,
+      "has_routine": true,
+      "id": "service_crash_watch",
+      "source": "package"
+    },
+    {
+      "bytes": 1815,
+      "has_routine": true,
+      "id": "pond_academy_watch",
+      "source": "package"
+    },
+    {
+      "bytes": 1851,
+      "has_routine": true,
+      "id": "funding_watch",
+      "source": "package"
+    }
+  ],
+  "skill_index": {
+    "aetheria": "",
+    "eve": "# Eve skills\n\n- `cwg-crm` \u2014 PondWright CRM is the CWG lead/quote/job book. Never invent a second one. Saving a lead: one person per save, needs phone or email (ask Jon), never from a photo alone, never retry blanks.\n- `receipts-ledger` \u2014 receipts: file_away to cwg_evidence/soveryn_evidence + ledger_ingest, same session. Never into quotes/, never hand-filed. Weekly reconcile catches drift.\n- `cwg-content` \u2014 weekly Journal posts for carolinawatergardens.com: keyword map, voice via _check_copy.py, deploy.sh --cwg-only, Jon approves every post.\n- `funding-watch` \u2014 V.E.T.T.'s inherited watch: 7 funding/research sources daily, verify-or-say-nothing standard. Sources in the skill note; automation `funding_watch` 08:00 daily.\n",
+    "forge": "# Kernel skills\n\n- `no-ai-slop` \u2014 strip AI marketing cadence from copy and replies. Recall before shipping prose.\n"
+  }
+}
