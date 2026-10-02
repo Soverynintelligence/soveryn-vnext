@@ -217,13 +217,13 @@
     ],
     [
       "pondwright_save_lead",
-      false,
-      false
+      true,
+      true
     ],
     [
       "pondwright_save_quote",
-      false,
-      false
+      true,
+      true
     ],
     [
       "promote_coordination_node",
@@ -699,13 +699,13 @@
     ],
     [
       "pondwright_save_lead",
-      false,
-      false
+      true,
+      true
     ],
     [
       "pondwright_save_quote",
-      false,
-      false
+      true,
+      true
     ],
     [
       "post_to_x",
@@ -1230,13 +1230,13 @@
     ],
     [
       "pondwright_save_lead",
-      false,
-      false
+      true,
+      true
     ],
     [
       "pondwright_save_quote",
-      false,
-      false
+      true,
+      true
     ],
     [
       "promote_coordination_node",

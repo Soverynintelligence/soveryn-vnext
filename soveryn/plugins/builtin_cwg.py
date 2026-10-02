@@ -17,11 +17,14 @@ logger = logging.getLogger(__name__)
 
 # Live CWG surfaces — also listed in core CORE_ALWAYS_GATED so a future
 # external plugin can never auto-approve them.
+# D3 (Jon, 2026-10-02): pondwright_save_* write the live CRM and are gated.
 _GATED: frozenset[str] = frozenset({
     "eve_ig_post",
     "eve_gbp_post",
     "eve_calendar_create",
     "eve_calendar_complete",
+    "pondwright_save_lead",
+    "pondwright_save_quote",
 })
 
 # House-local / read-only — same names core auto-approved before the split.
@@ -35,16 +38,13 @@ _AUTO_APPROVE: frozenset[str] = frozenset({
     "eve_photo_inbox",
 })
 
-# Explicit "no gate" (core's unknown→False). Includes the live-CRM writes
-# until the D3 commit flips save_* into _GATED.
+# Explicit "no gate" (core's unknown→False). Read-only CRM / desk status.
 _UNGATED: frozenset[str] = frozenset({
     "eve_gbp_status",
     "eve_google_desk_status",
     "pondwright_leads",
     "pondwright_jobs",
     "pondwright_customers",
-    "pondwright_save_lead",
-    "pondwright_save_quote",
 })
 
 
