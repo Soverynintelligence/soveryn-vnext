@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
 from decimal import Decimal, InvalidOperation
+import hashlib
 from pathlib import Path
 import re
 import shutil
@@ -203,6 +204,18 @@ def ingest_path(
             message=f"order {parsed.order_id} already on the {book} book",
         )
 
+    filed = _already_filed(path, existing, Path(ev_roots[book]))
+    if filed:
+        return IngestResult(
+            book=book,
+            action="duplicate",
+            source_name=path.name,
+            order_id=parsed.order_id,
+            amount_usd=parsed.amount_usd,
+            evidence=filed,
+            message=f"same file already on the {book} book as {filed}",
+        )
+
     other = next((bid for bid in book_paths if bid != book), None)
     other_csv = book_paths.get(other) if other else None
     if parsed.order_id and other_csv is not None and has_order_id(load_rows(other_csv), parsed.order_id):
@@ -371,6 +384,35 @@ def _split_row(parsed: ParsedRow, spec: SplitSpec) -> dict[str, str]:
         "evidence": parsed.evidence,
         "notes": " | ".join(note_bits),
     }
+
+
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _already_filed(
+    path: Path, rows: list[dict[str, str]], dest_root: Path
+) -> str | None:
+    """Evidence path of a row whose filed file is byte-identical to path."""
+    if not path.is_file():
+        return None
+    size = path.stat().st_size
+    digest: str | None = None
+    for row in rows:
+        rel = (row.get("evidence") or "").strip()
+        if not rel.startswith("evidence/"):
+            continue
+        cand = dest_root / rel[len("evidence/"):]
+        if not cand.is_file() or cand.stat().st_size != size:
+            continue
+        digest = digest or _sha256(path)
+        if _sha256(cand) == digest:
+            return rel
+    return None
 
 
 def _place_evidence(path: Path, parsed: ParsedRow, dest_root: Path) -> str:

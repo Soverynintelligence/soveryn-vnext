@@ -59,6 +59,9 @@ _ORDER_PATTERNS = (
     re.compile(r"Trans(?:action)?\s*I\.?D\.?\s*:?\s*(\d{10,})", re.I),
     re.compile(r"\border\s+(\d{2}-\d{5}-\d{5})\b", re.I),
     re.compile(r"\border\s+(\d{6,8})\b", re.I),
+    # Storefront order pages (Apex Distribution "Order #1216"). Last, so the
+    # vendor-specific patterns above win; never eats an Amazon 111-... id.
+    re.compile(r"\bOrder\s*#\s*(\d{4,6})(?![\d-])", re.I),
 )
 
 _DATE_PATTERNS = (
@@ -75,8 +78,11 @@ _DATE_PATTERNS = (
 _SUBTOTAL = re.compile(r"Item(?:\(s\))?\s*Subtotal:|\bSubtotal\b", re.I)
 _TAX = re.compile(r"Estimated tax to be\s*collected:|(?<!before )(?<!after )\bTax\b", re.I)
 _REWARDS = re.compile(r"Rewards(?: Points)?:", re.I)
+# Optional carrier parenthetical: "Shipping (FedEx Ground®) $20.16".
+_SHIP_CARRIER = r"(?:\s*\([^)\n]{1,40}\))?"
 _SHIP = re.compile(
-    r"Shipping(?:\s*&\s*Handling)?:|(?:^|\n)\s*Shipping\s+(?=\$)",
+    r"Shipping(?:\s*&\s*Handling)?" + _SHIP_CARRIER + r":"
+    r"|(?:^|\n)\s*Shipping" + _SHIP_CARRIER + r"\s+(?=\$)",
     re.I,
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
@@ -159,8 +165,10 @@ def _cash(
         parts.append(_fmt(subtotal))
         if shipping is not None:
             recomputed += shipping
+            parts.append(f"shipping {_fmt(shipping)}")
         if free_ship is not None:
             recomputed -= free_ship
+            parts.append(f"free shipping -{_fmt(free_ship)}")
         if tax is not None:
             recomputed += tax
             parts.append(f"tax {_fmt(tax)}")
@@ -172,7 +180,20 @@ def _cash(
         if abs(recomputed - listed) <= Decimal("0.01"):
             note = " + ".join(parts) + f" = cash {_fmt(listed)}"
             return _fmt(listed), note, None, "DOCUMENTED"
-        # Prefer the recompute when the printed total disagrees — OCR lies.
+        # A clean printed total ABOVE a recompute that is missing a component
+        # (shipping or tax never parsed) is the cash that left the account.
+        # Booking the recompute there books the product subtotal (Apex #1216:
+        # Total 127.16 booked as 107.00, the $20.16 FedEx line dropped).
+        missing = shipping is None or tax is None
+        if listed > recomputed and missing:
+            note = (
+                " + ".join(parts)
+                + f" + unitemized {_fmt(listed - recomputed)}"
+                + " (shipping/tax/fees not parsed)"
+                + f" = printed total {_fmt(listed)}"
+            )
+            return _fmt(listed), note, None, "DOCUMENTED"
+        # Otherwise prefer the recompute when the printed total disagrees — OCR lies.
         note = (
             "printed total "
             + _fmt(listed)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 from typing import Mapping
 
@@ -64,18 +65,23 @@ def order_blob(row: Mapping[str, str]) -> str:
     return " ".join(row.get(k, "") for k in ("description", "notes", "evidence", "vendor"))
 
 
+def _order_rx(order_id: str) -> re.Pattern[str]:
+    # Whole-token match: "1216" must not hit "111-1216..." or "$1216.00".
+    return re.compile(r"(?<![\w.$-])" + re.escape(order_id.strip()) + r"(?![\w-]|\.\d)", re.I)
+
+
 def rows_for_order(rows: list[dict[str, str]], order_id: str) -> list[dict[str, str]]:
-    if not order_id:
+    if not order_id or not order_id.strip():
         return []
-    needle = order_id.strip().lower()
-    return [row for row in rows if needle in order_blob(row).lower()]
+    rx = _order_rx(order_id)
+    return [row for row in rows if rx.search(order_blob(row))]
 
 
 def without_order(rows: list[dict[str, str]], order_id: str) -> list[dict[str, str]]:
-    if not order_id:
+    if not order_id or not order_id.strip():
         return list(rows)
-    needle = order_id.strip().lower()
-    return [row for row in rows if needle not in order_blob(row).lower()]
+    rx = _order_rx(order_id)
+    return [row for row in rows if not rx.search(order_blob(row))]
 
 
 def has_order_id(rows: list[dict[str, str]], order_id: str) -> bool:
