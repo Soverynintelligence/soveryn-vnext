@@ -53,20 +53,20 @@ def _wave_prompt(
                 lines.append(f"- {f}")
         prior = "Findings so far:\n" + "\n".join(lines) + "\n\n"
 
+    try:
+        from soveryn.plugins.loader import plugin_research_bar
+
+        wave_bar = plugin_research_bar("wave")
+    except Exception:
+        wave_bar = ""
+
     return (
         f"[RESEARCH WAVE {wave + 1}/{max_waves} · objective {objective['id'][:8]}]\n"
         f"Desk: {objective['desk']} · Title: {objective['title']}\n"
         f"Success: {objective.get('success_criteria') or 'sourced table or honest gap'}\n\n"
         f"{objective['brief']}\n\n"
         f"{prior}"
-        "PondWright bar for this wave:\n"
-        "- **House first:** pick `apex_catalog_search` OR `akt_catalog_search` "
-        "(separate catalogs), plus `pondwright_pricing_book` for rates.\n"
-        "- Extract Brand | Model/MPN | Coverage | Price | Source "
-        "(Apex catalog / rate book / URL only if web fallback).\n"
-        "- Customer retail = MAP else MSRP. Never publish wholesale.\n"
-        "- Web only if the house book cannot answer. Cite-or-stop.\n"
-        "- End with a short WAVE_SUMMARY listing new rows added or why none.\n"
+        f"{wave_bar}"
     )
 
 
@@ -162,22 +162,22 @@ def run_research_objective(
                 f for f in findings
                 if isinstance(f, dict) and f.get("price") and "$" in str(f.get("price"))
             ]
-            # CWG house catalogs: accept Apex/AKT/rate-book sources without "$"
-            # if the price cell is numeric-looking.
+            desk = (objective.get("desk") or "").lower()
+            try:
+                from soveryn.plugins.loader import plugin_accept_house_source
+            except Exception:
+                plugin_accept_house_source = lambda source, d: False  # noqa: E731
             house_priced = [
                 f for f in findings
                 if isinstance(f, dict)
                 and f.get("price")
                 and (
                     "$" in str(f.get("price"))
-                    or any(
-                        s in str(f.get("source", "")).lower()
-                        for s in ("apex", "akt", "rate book", "pondwright")
-                    )
+                    or plugin_accept_house_source(str(f.get("source", "")), desk)
                 )
             ]
             enough = len(priced) >= 3 or (
-                (objective.get("desk") or "").lower() == "cwg" and len(house_priced) >= 3
+                desk == "cwg" and len(house_priced) >= 3
             )
             if enough:
                 objectives_mod.set_state(

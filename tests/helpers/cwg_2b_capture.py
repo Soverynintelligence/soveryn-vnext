@@ -17,7 +17,7 @@ from soveryn.automations.registry import load_automations
 from soveryn.automations.routines import load_routine
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.platform.email.identities import load_identities, board_identities
-from soveryn.platform.intake.file_away import BUCKETS
+from soveryn.platform.intake.file_away import all_buckets
 from soveryn.platform.ledgers import paths as ledger_paths
 from soveryn.platform.social import instagram_desk
 
@@ -82,7 +82,9 @@ def resolved_cwg_paths(*, root: Path, data_root: Path, home: Path) -> dict[str, 
         "gcal_token_dir": str(data_root / "gcal"),
         "ig_profile_dir": str(instagram_desk.DEFAULT_PROFILE),
         "photo_inbox": str(instagram_desk.DEFAULT_INBOX),
-        "file_away_buckets": {k: str(v) for k, v in BUCKETS.items() if k.startswith("cwg_")},
+        "file_away_buckets": {
+            k: str(v) for k, v in all_buckets().items() if k.startswith("cwg_")
+        },
     }
 
 

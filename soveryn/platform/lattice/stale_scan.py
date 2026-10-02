@@ -31,12 +31,24 @@ ENTITY_TAG_PREFIX = "entity:"
 SUPERSEDES_REL = "supersedes"
 
 TTL_DAYS_DEFAULT = 90
-TTL_DAYS_BY_ENTITY_PREFIX: dict[str, int] = {
+CORE_TTL_DAYS_BY_ENTITY_PREFIX: dict[str, int] = {
     "house.rule.": 180,
-    "cwg.job.": 60,
-    "cwg.ads.": 30,
     "lab.": 90,
 }
+
+
+def _ttl_prefixes() -> dict[str, int]:
+    out = dict(CORE_TTL_DAYS_BY_ENTITY_PREFIX)
+    try:
+        from soveryn.plugins.loader import plugin_stale_prefixes
+
+        out.update(plugin_stale_prefixes())
+    except Exception:
+        pass
+    return out
+
+
+TTL_DAYS_BY_ENTITY_PREFIX = CORE_TTL_DAYS_BY_ENTITY_PREFIX
 MAX_FLAGS_PER_DIGEST = 20
 
 DETECTOR_TTL = "d1_ttl"
@@ -70,10 +82,22 @@ class PinChecklistRow:
 
 
 # Tiny v1 house checklist — injectable in tests. Inverse = swap needles.
-DEFAULT_PIN_CHECKLIST: tuple[PinChecklistRow, ...] = (
-    PinChecklistRow("cwg.ads.pmax", "paused", "live"),
+CORE_PIN_CHECKLIST: tuple[PinChecklistRow, ...] = (
     PinChecklistRow("house.travel", "hold", "active"),
 )
+
+
+def _default_pin_checklist() -> tuple[PinChecklistRow, ...]:
+    try:
+        from soveryn.plugins.loader import plugin_stale_pins
+
+        extra = tuple(plugin_stale_pins())
+    except Exception:
+        extra = ()
+    return extra + CORE_PIN_CHECKLIST
+
+
+DEFAULT_PIN_CHECKLIST = CORE_PIN_CHECKLIST
 
 
 def lattice_stale_scan(
@@ -92,9 +116,9 @@ def lattice_stale_scan(
     provided (including an empty sequence, which disables D3).
     """
     when = _as_utc(now or datetime.now(timezone.utc))
-    prefixes = dict(ttl_days_by_entity_prefix or TTL_DAYS_BY_ENTITY_PREFIX)
+    prefixes = dict(ttl_days_by_entity_prefix or _ttl_prefixes())
     checklist = (
-        DEFAULT_PIN_CHECKLIST if pin_checklist is None else tuple(pin_checklist)
+        _default_pin_checklist() if pin_checklist is None else tuple(pin_checklist)
     )
 
     nodes = store.iter_nodes(include_library=True)
@@ -363,7 +387,13 @@ def _ttl_for_entity(
 def _ttl_severity(entity: str | None) -> str:
     if not entity:
         return SEVERITY_LOW
-    if entity.startswith("cwg.job.") or entity.startswith("cwg.ads."):
+    try:
+        from soveryn.plugins.loader import plugin_stale_prefixes
+
+        extra = plugin_stale_prefixes()
+    except Exception:
+        extra = {}
+    if any(entity.startswith(prefix) for prefix in extra):
         return SEVERITY_MED
     parts = entity.split(".")
     if "travel" in parts:

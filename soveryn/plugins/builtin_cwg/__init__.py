@@ -1,19 +1,33 @@
-"""In-tree CWG adapter — wraps existing modules, moves nothing.
+"""In-tree CWG adapter — wraps existing modules, feeds every 2b hook.
 
-This is the default ``cwg`` plugin when ``SOVERYN_PLUGINS`` is unset, or when
-it is set to ``cwg`` and no external ``soveryn-cwg`` entry point imports.
-Step 2d will delete this file after the private package has soaked.
+``from soveryn.plugins.builtin_cwg import BuiltinCwgPlugin`` still works.
+Step 2d will delete this package after the private ``soveryn-cwg`` soaks.
 """
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from soveryn.citizens.connectors import ConnectorDef, signal_armed
-from soveryn.plugins.api import PLUGIN_API, PluginBase, Worker
+from soveryn.plugins.api import PLUGIN_API, BookDef, MissionControlGlance, PluginBase, Worker
+from soveryn.plugins.builtin_cwg.advertise import CWG_LANE
+from soveryn.plugins.builtin_cwg.email import identities as cwg_email_identities
+from soveryn.plugins.builtin_cwg.file_away import (
+    BUCKET_HELP,
+    buckets as cwg_buckets,
+    photo_inbox,
+)
+from soveryn.plugins.builtin_cwg.ledgers import books as cwg_ledger_books
+from soveryn.plugins.builtin_cwg.research import (
+    accept_house_source as cwg_accept_house_source,
+    research_bar as cwg_research_bar,
+)
+from soveryn.plugins.builtin_cwg.stale import PINS, PREFIXES
 
 logger = logging.getLogger(__name__)
+
+_PKG = Path(__file__).resolve().parent
 
 # Live CWG surfaces — also listed in core CORE_ALWAYS_GATED so a future
 # external plugin can never auto-approve them.
@@ -27,7 +41,6 @@ _GATED: frozenset[str] = frozenset({
     "pondwright_save_quote",
 })
 
-# House-local / read-only — same names core auto-approved before the split.
 _AUTO_APPROVE: frozenset[str] = frozenset({
     "apex_catalog_search",
     "akt_catalog_search",
@@ -38,7 +51,6 @@ _AUTO_APPROVE: frozenset[str] = frozenset({
     "eve_photo_inbox",
 })
 
-# Explicit "no gate" (core's unknown→False). Read-only CRM / desk status.
 _UNGATED: frozenset[str] = frozenset({
     "eve_gbp_status",
     "eve_google_desk_status",
@@ -119,7 +131,6 @@ class BuiltinCwgPlugin(PluginBase):
         if connector_id == "pondwright":
             return True, "house-local"
         if connector_id == "cwg_social":
-            # Same gate as core `social` (compose_post delivery via Signal).
             return signal_armed()
         return False, "unknown connector"
 
@@ -144,8 +155,6 @@ class BuiltinCwgPlugin(PluginBase):
         return _UNGATED
 
     def background_workers(self, app: Any) -> list[Worker]:
-        # Default ON — same as startup.py before the seam. Tests / ops disable
-        # via app.config["SOVERYN_START_LEAD_WATCH"] = False.
         if app is not None and not app.config.setdefault("SOVERYN_START_LEAD_WATCH", True):
             return []
         from soveryn.platform.pondwright.lead_watch import run_forever
@@ -167,6 +176,64 @@ class BuiltinCwgPlugin(PluginBase):
             return apply_chat_receipt(message, images)
 
         return [_apply]
+
+    def prompt_fragments(self, agent: str) -> str:
+        name = (agent or "").strip().lower()
+        path = _PKG / "prompts" / f"{name}.md"
+        if not path.is_file():
+            return ""
+        text = path.read_text(encoding="utf-8")
+        return text
+
+    def skills_dirs(self) -> Mapping[str, Path]:
+        # Skill files stay in data/memory/skills/eve until 2c. The extra-dirs
+        # hook is wired; returning the same tree would duplicate the index.
+        return {}
+
+    def routines_dirs(self) -> list[Path]:
+        return [_PKG / "routines"]
+
+    def file_away_buckets(self) -> Mapping[str, Path]:
+        return cwg_buckets()
+
+    def file_away_bucket_help(self) -> Mapping[str, str]:
+        return dict(BUCKET_HELP)
+
+    def ledger_books(self) -> list[BookDef]:
+        return list(cwg_ledger_books())
+
+    def email_identities(self) -> Mapping[str, dict[str, Any]]:
+        return cwg_email_identities()
+
+    def extra_allowed_roots(self, agent: str) -> list[Path]:
+        if (agent or "").strip().lower() != "eve":
+            return []
+        return [photo_inbox()]
+
+    def mission_control_glance(self) -> MissionControlGlance | None:
+        from soveryn.plugins.builtin_cwg.mission_control import glance
+
+        return glance()
+
+    def surfaces(self) -> list[Any]:
+        from soveryn.plugins.builtin_cwg.surfaces import surfaces as cwg_surfaces
+
+        return cwg_surfaces()
+
+    def research_bar(self, desk: str) -> str:
+        return cwg_research_bar(desk)
+
+    def accept_house_source(self, source: str, desk: str) -> bool:
+        return cwg_accept_house_source(source, desk)
+
+    def stale_prefixes(self) -> Mapping[str, int]:
+        return dict(PREFIXES)
+
+    def stale_pins(self) -> list[Any]:
+        return list(PINS)
+
+    def advertise_lane(self) -> str:
+        return CWG_LANE
 
     @staticmethod
     def _register_pondwright(ctx: Any, owner: str) -> None:

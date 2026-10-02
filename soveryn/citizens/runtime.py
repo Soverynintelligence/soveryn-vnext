@@ -805,20 +805,12 @@ def make_agent_process_fn(
                 "pond",
             )
         ):
-            research_bar = (
-                "\n\nRESEARCH BAR (PondWright-grade — do not phone this in):\n"
-                "- **House first:** pick a catalog — `apex_catalog_search` "
-                "(Apex MAP/MSRP/WS) or `akt_catalog_search` (AKT dealer WS) — "
-                "plus `pondwright_pricing_book` for labor/service rates. "
-                "Catalogs are separate; do not blend them. Customer retail from "
-                "Apex = MAP (else MSRP). Never quote wholesale (ws).\n"
-                "- Prefer tables: Brand | Model/MPN | Coverage | Price | Source "
-                "(Apex catalog / rate book).\n"
-                "- Web is fallback only when the house catalog/rate book cannot "
-                "answer (e.g. competitor comps). Do not dig the web for Apex/"
-                "Aquascape dealer list prices that already live in the house.\n"
-                "- Cite-or-stop: if you cannot verify a number, say so; never invent.\n"
-            )
+            try:
+                from soveryn.plugins.loader import plugin_research_bar
+
+                research_bar = plugin_research_bar("runtime")
+            except Exception:
+                research_bar = ""
         if is_cos_relay:
             prompt = (
                 f"[COMMISSION {commission_id}]\n"

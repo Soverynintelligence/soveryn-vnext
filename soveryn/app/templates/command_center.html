@@ -3522,8 +3522,8 @@ body.lab.sd .cc-fold-body pre{
         <a class="brief-act" href="/messages/aetheria">Message Aetheria</a>
         <a class="brief-act" href="/messages/eve">Message Eve</a>
         <a class="brief-act" href="/messages/forge">Message Forge</a>
-        <a class="brief-act" href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
-        <a class="brief-act" href="https://crm.pondwright.com/field" target="_blank" rel="noopener">Quote</a>
+        <a class="brief-act" data-crm-open href="https://crm.pondwright.com/" target="_blank" rel="noopener">CRM</a>
+        <a class="brief-act" data-crm-quote href="https://crm.pondwright.com/field" target="_blank" rel="noopener">Quote</a>
         <a class="brief-act" data-easy-hide href="/build">Kernel build</a>
         <a class="brief-act" data-easy-hide href="#approvals-anchor" data-open-chapter="chapter-gates">Review queue</a>
       </div>
@@ -4467,6 +4467,11 @@ body.lab.sd .cc-fold-body pre{
           + '</div></div>';
       }
       function paint(d){
+        var crmOpen = (d && d.intake && d.intake.crm_open) || (d && d.crm && d.crm.open) || '';
+        var crmLink = document.querySelector('[data-crm-open]');
+        if (crmLink && crmOpen) crmLink.href = crmOpen;
+        var quoteLink = document.querySelector('[data-crm-quote]');
+        if (quoteLink && crmOpen) quoteLink.href = crmOpen.replace(/\/?$/, '') + '/field';
         var agents = (d && d.agents) || [];
         if(!agents.length){ el.innerHTML='<div class="empty">no public agents</div>'; return; }
         var banner = (d.talking && d.talking.length)

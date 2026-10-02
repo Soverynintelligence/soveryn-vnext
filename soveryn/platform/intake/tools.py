@@ -23,16 +23,17 @@ from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
 
 # Paths agents may read for intake (house-local only).
-_DEFAULT_ALLOWED_ROOTS: tuple[Path, ...] = (
+DEFAULT_ALLOWED_ROOTS: tuple[Path, ...] = (
     SoverynPaths.root() / "data",
     Path.home() / "soveryn_citizens",
     Path.home() / "historys-ledger",
     Path.home() / "historysledger-site",
     Path.home() / "Downloads",
 )
+_DEFAULT_ALLOWED_ROOTS = DEFAULT_ALLOWED_ROOTS
 
 
-def _resolve_allowed(path: Path, allowed_roots: tuple[Path, ...]) -> Path:
+def resolve_allowed(path: Path, allowed_roots: tuple[Path, ...]) -> Path:
     resolved = path.expanduser().resolve()
     for root in allowed_roots:
         try:
@@ -48,6 +49,9 @@ def _resolve_allowed(path: Path, allowed_roots: tuple[Path, ...]) -> Path:
         f"path {path} is outside allowed intake roots "
         f"(house data, citizens desks, History's Ledger, Downloads)"
     )
+
+
+_resolve_allowed = resolve_allowed
 
 
 def build_intake_extract_pdf_tool(
@@ -745,8 +749,23 @@ def build_draw_text_tool(
     )
 
 
-def _default_cwg_ig_root() -> Path:
+def _photo_inbox_root() -> Path:
+    """Eve photo inbox — plugin extra_allowed_roots or CWG_PHOTO_INBOX."""
+    from soveryn.plugins.loader import plugin_extra_allowed_roots
+
+    extra = plugin_extra_allowed_roots("eve")
+    if extra:
+        return Path(extra[0]).expanduser()
+    import os
+
+    raw = (os.environ.get("CWG_PHOTO_INBOX") or "").strip()
+    if raw:
+        return Path(raw).expanduser()
     return Path.home() / "Desktop" / "CWG-Instagram"
+
+
+def _default_cwg_ig_root() -> Path:
+    return _photo_inbox_root()
 
 
 def build_look_at_tool(
@@ -1014,11 +1033,56 @@ def build_make_collage_tool(
     )
 
 
+_CORE_BUCKET_HELP = {
+    "models": "models (.gguf → /mnt/soveryn_models/GGUF)",
+    "soveryn_evidence": "soveryn_evidence (SOVERYN receipt)",
+    "soveryn_licenses": "soveryn_licenses (SOVERYN LLC / EIN)",
+    "soveryn_insurance": "soveryn_insurance (SOVERYN COI, not bills)",
+    "soveryn_contracts": "soveryn_contracts",
+    "pictures": "pictures (iCloud dumps)",
+    "installers": "installers (.deb/.AppImage)",
+}
+
+
+def _file_away_help() -> dict[str, str]:
+    from soveryn.plugins.loader import plugin_file_away_bucket_help
+
+    merged = dict(_CORE_BUCKET_HELP)
+    merged.update(plugin_file_away_bucket_help())
+    return merged
+
+
+def _file_away_dest_names() -> list[str]:
+    from soveryn.platform.intake.file_away import all_buckets
+
+    return list(all_buckets())
+
+
+def _file_away_dest_error() -> str:
+    names = _file_away_dest_names()
+    if not names:
+        return "dest must be a named house bucket"
+    if len(names) == 1:
+        return f"dest must be {names[0]}"
+    return "dest must be " + ", ".join(names[:-1]) + f", or {names[-1]}"
+
+
+def _file_away_dest_description() -> str:
+    help_map = _file_away_help()
+    names = _file_away_dest_names()
+    bits = [help_map.get(name, name) for name in names]
+    return (
+        "Bucket: "
+        + ", ".join(bits)
+        + ". Paid receipts still need ledger_ingest after filing."
+    )
+
+
 def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> ToolSpec:
     """Eve files a Downloads/Desktop item into a named house bucket."""
 
     def handler(args: Mapping[str, Any]) -> Any:
-        from soveryn.platform.intake.file_away import BUCKETS, file_away
+        from soveryn.platform.intake.file_away import all_buckets, file_away
         from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 
         src = args.get("path") or args.get("src") or ""
@@ -1026,12 +1090,7 @@ def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> To
         if not isinstance(src, str) or not src.strip():
             raise ToolArgError("path must be a non-empty string")
         if not isinstance(dest, str) or not dest.strip():
-            raise ToolArgError(
-                "dest must be models, cwg_ig, cwg_evidence, "
-                "cwg_insurance, cwg_licenses, cwg_vehicles, "
-                "cwg_contracts, soveryn_evidence, soveryn_licenses, "
-                "soveryn_insurance, soveryn_contracts, pictures, or installers"
-            )
+            raise ToolArgError(_file_away_dest_error())
         dest_key = dest.strip()
         src_s = src.strip()
         if parse_current_index(src_s) is not None:
@@ -1046,7 +1105,7 @@ def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> To
                         "second). Do not look for attachment-1.pdf on disk."
                     ),
                 }
-            bucks = buckets if buckets is not None else BUCKETS
+            bucks = buckets if buckets is not None else all_buckets()
             key = dest_key.lower().replace("-", "_")
             if key not in bucks:
                 return {
@@ -1095,22 +1154,7 @@ def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> To
                 },
                 "dest": {
                     "type": "string",
-                    "description": (
-                        "Bucket: models (.gguf → /mnt/soveryn_models/GGUF), "
-                        "cwg_ig (pond photos → Desktop/CWG-Instagram), "
-                        "cwg_evidence (CWG paid receipt image/PDF), "
-                        "cwg_insurance (COI / insurance certificates — not bills), "
-                        "cwg_licenses (licenses / EIN), "
-                        "cwg_vehicles (title / registration), "
-                        "cwg_contracts (vendor contracts — not customer quotes), "
-                        "soveryn_evidence (SOVERYN receipt), "
-                        "soveryn_licenses (SOVERYN LLC / EIN), "
-                        "soveryn_insurance (SOVERYN COI, not bills), "
-                        "soveryn_contracts, "
-                        "pictures (iCloud dumps), "
-                        "installers (.deb/.AppImage). "
-                        "Paid receipts still need ledger_ingest after filing."
-                    ),
+                    "description": _file_away_dest_description(),
                 },
             },
             "required": ["path", "dest"],

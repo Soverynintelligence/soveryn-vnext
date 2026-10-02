@@ -14,14 +14,8 @@ from typing import Any
 
 _HOME = Path.home()
 
-BUCKETS: dict[str, Path] = {
+CORE_BUCKETS: dict[str, Path] = {
     "models": Path("/mnt/soveryn_models/GGUF"),
-    "cwg_ig": _HOME / "Desktop" / "CWG-Instagram",
-    "cwg_evidence": SoverynPaths.root() / "docs" / "ops" / "tax-cwg" / "evidence",
-    "cwg_insurance": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "insurance",
-    "cwg_licenses": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "licenses",
-    "cwg_vehicles": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "vehicles",
-    "cwg_contracts": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "contracts",
     "soveryn_evidence": SoverynPaths.root() / "docs" / "ops" / "tax" / "evidence",
     "soveryn_licenses": SoverynPaths.root() / "docs" / "ops" / "soveryn-business" / "licenses",
     "soveryn_insurance": SoverynPaths.root() / "docs" / "ops" / "soveryn-business" / "insurance",
@@ -29,6 +23,43 @@ BUCKETS: dict[str, Path] = {
     "pictures": _HOME / "Pictures",
     "installers": _HOME / "Downloads" / "installers",
 }
+
+# Historical dest order — rebuilt when the builtin CWG plugin is loaded.
+_DEST_ORDER = (
+    "models",
+    "cwg_ig",
+    "cwg_evidence",
+    "cwg_insurance",
+    "cwg_licenses",
+    "cwg_vehicles",
+    "cwg_contracts",
+    "soveryn_evidence",
+    "soveryn_licenses",
+    "soveryn_insurance",
+    "soveryn_contracts",
+    "pictures",
+    "installers",
+)
+
+
+def all_buckets() -> dict[str, Path]:
+    from soveryn.plugins.loader import plugin_file_away_buckets
+
+    merged: dict[str, Path] = dict(CORE_BUCKETS)
+    merged.update(plugin_file_away_buckets())
+    ordered: dict[str, Path] = {}
+    for key in _DEST_ORDER:
+        if key in merged:
+            ordered[key] = merged[key]
+    for key, path in merged.items():
+        if key not in ordered:
+            ordered[key] = path
+    return ordered
+
+
+# Compatibility: tests and callers that inject `buckets=` still work.
+# Default filing uses all_buckets() so CWG keys come from the plugin.
+BUCKETS = CORE_BUCKETS
 
 _SRC_ROOTS: tuple[Path, ...] = (
     _HOME / "Downloads",
@@ -47,7 +78,7 @@ _MODELS_SUFFIXES = {".gguf"}
 
 
 def bucket_paths() -> dict[str, str]:
-    return {k: str(v) for k, v in BUCKETS.items()}
+    return {k: str(v) for k, v in all_buckets().items()}
 
 
 def file_away(
@@ -59,7 +90,7 @@ def file_away(
 ) -> dict[str, Any]:
     """Move ``src`` into named bucket ``dest``. Returns ok/path/miss."""
     roots = src_roots if src_roots is not None else _SRC_ROOTS
-    bucks = buckets if buckets is not None else BUCKETS
+    bucks = buckets if buckets is not None else all_buckets()
     raw = Path(str(src)).expanduser()
     if not str(dest).strip():
         return {"ok": False, "miss": "no_dest", "path": str(raw)}

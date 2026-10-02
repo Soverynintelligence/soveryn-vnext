@@ -12,6 +12,7 @@ _REQUIRED = {
     "ExtractResult",
     "SignalBridgeConfig",
     "SignalCliError",
+    "SoverynPaths",
     "ToolArgError",
     "ToolRegistry",
     "ToolSpec",

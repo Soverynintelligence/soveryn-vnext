@@ -80,7 +80,7 @@ class Surface:
 # Ordered roughly by blast radius: public things a stranger can hit, then the
 # products, then internal machinery.
 
-SURFACES: tuple[Surface, ...] = (
+CORE_SURFACES: tuple[Surface, ...] = (
     # ── public ────────────────────────────────────────────────────────────
     Surface(
         "soverynintelligence.com", Kind.PUBLIC, "https://soverynintelligence.com/",
@@ -146,36 +146,10 @@ SURFACES: tuple[Surface, ...] = (
     Surface(
         "pondwright", Kind.PUBLIC, "https://pondwright.com/",
         owner="jon", interval_s=3600,
-    ),
-    # The three PondWright surfaces on the Spark. Each has a DIFFERENT healthy
-    # answer at the root — 401, 404 and 200 respectively — which is precisely
-    # why "GET / should be 200" is not a rule that can be applied by default.
-    Surface(
-        "pondwright-crm", Kind.HTTP, "https://crm.pondwright.com/",
-        owner="jon", interval_s=1800, expect_status=401,
-        notes="401 is healthy — the CRM is password-gated. Holds real customer "
-              "leads; leads.db is git-ignored by stem, not extension.",
-    ),
-    Surface(
-        "pondwright-chat", Kind.FUNCTIONAL, "https://chat.pondwright.com/chat",
-        owner="jon", interval_s=1800, method="POST",
-        payload={"session_id": "surface-probe",
-                 "messages": [{"role": "user",
-                               "content": "In one sentence, what do you help with?"}]},
-        expect_json_field="reply", expect_min_chars=40,
-        notes="The openly-AI intake agent. Never quotes prices. POST /chat only.",
-    ),
-    Surface(
-        "pondwright-estimator", Kind.HTTP, "https://crm.pondwright.com/field/login",
-        owner="jon", interval_s=3600, expect_status=200,
-        notes="Field estimator now lives in pondwright-cwg-ops at /field "
-              "(estimator.pondwright.com 301s there). Probe the login page: "
-              "GET /field itself 401s non-HTML clients after the redirect. "
-              "NEVER expose estimator Step 2 — it is Jon's margin.",
-    ),
-    Surface(
-        "carolinawatergardens", Kind.PUBLIC, "https://carolinawatergardens.com/",
-        owner="jon", interval_s=3600,
+        notes="Public PondWright site. CRM/chat/estimator/health probes are "
+              "plugin.surfaces() contributions. This row stays — the "
+              "pondwright cloudflared tunnel also fronts cathedral, Ares, "
+              "and shepherdfcc.",
     ),
 
     # ── inference ─────────────────────────────────────────────────────────
@@ -206,11 +180,6 @@ SURFACES: tuple[Surface, ...] = (
     # against a backend that had moved: systemd green, /health green, and every
     # visitor got the fallback message. /health now asks the backend whether it
     # serves the configured model, so a repeat says so instead of looking fine.
-    Surface(
-        "pondwright-health", Kind.HTTP, "https://chat.pondwright.com/health",
-        owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
-        notes="CWG chat agent on the Spark; red means it lost its model backend.",
-    ),
     Surface(
         "seneca-public", Kind.HTTP, "https://ask.soverynintelligence.com/health",
         owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
@@ -256,29 +225,42 @@ SURFACES: tuple[Surface, ...] = (
     ),
 )
 
-_duplicate_names = sorted(
-    {s.name for s in SURFACES if sum(1 for t in SURFACES if t.name == s.name) > 1}
-)
-if _duplicate_names:
-    # BY_NAME is a dict, so a repeated name silently drops one declaration and
-    # any by-name lookup returns an arbitrary winner. Worse, Ares keys findings
-    # by surface name (`surface.down:<name>`), so two probes sharing a name
-    # cannot say WHICH one failed. Found 2026-08-13: `atticus` and
-    # `pondwright-chat` were each declared twice — a POST /chat probe and a GET
-    # /health probe — so an alert could not distinguish a dead chat endpoint
-    # from a dead health endpoint. Fail loudly at import rather than ship an
-    # ambiguous monitor.
-    raise ValueError(
-        "duplicate surface names: " + ", ".join(_duplicate_names) +
-        " — each surface needs its own name; findings are keyed by it"
-    )
+def all_surfaces() -> tuple[Surface, ...]:
+    try:
+        from soveryn.plugins.loader import plugin_surfaces
 
-BY_NAME = {s.name: s for s in SURFACES}
+        extra = plugin_surfaces()
+    except Exception:
+        extra = []
+    seen = {s.name for s in CORE_SURFACES}
+    out = list(CORE_SURFACES)
+    for item in extra:
+        name = getattr(item, "name", None)
+        if not name or name in seen:
+            continue
+        out.append(item)
+        seen.add(name)
+    names = [s.name for s in out]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise ValueError(
+            "duplicate surface names: " + ", ".join(dupes) +
+            " — each surface needs its own name; findings are keyed by it"
+        )
+    return tuple(out)
+
+
+def __getattr__(name: str):
+    if name == "SURFACES":
+        return all_surfaces()
+    if name == "BY_NAME":
+        return {s.name: s for s in all_surfaces()}
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def live() -> tuple[Surface, ...]:
     """Surfaces that are expected to be up right now."""
-    return tuple(s for s in SURFACES if not s.retired)
+    return tuple(s for s in all_surfaces() if not s.retired)
 
 
 def owned_by(agent: str) -> tuple[Surface, ...]:

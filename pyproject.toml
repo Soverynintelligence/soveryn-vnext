@@ -37,7 +37,11 @@ where = [".", "packages/soveryn-acttruth/src"]
 include = ["soveryn*", "acttruth*"]
 
 [tool.setuptools.package-data]
-soveryn = ["automations/routines/*.md"]
+soveryn = [
+    "automations/routines/*.md",
+    "plugins/builtin_cwg/prompts/*.md",
+    "plugins/builtin_cwg/routines/*.md",
+]
 acttruth = ["py.typed"]
 
 [tool.pytest.ini_options]

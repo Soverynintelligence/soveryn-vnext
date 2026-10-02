@@ -199,20 +199,12 @@ def research_commission_body(objective: dict[str, Any]) -> str:
     desk = (objective.get("desk") or "").strip().lower()
     cwg_bar = ""
     if desk == "cwg":
-        cwg_bar = (
-            "\nCWG HOUSE PRICING (mandatory):\n"
-            "- Pick a catalog — do not blend:\n"
-            "  • `apex_catalog_search` — Aquascape/Apex MAP/MSRP/WS "
-            "(customer retail = MAP else MSRP)\n"
-            "  • `akt_catalog_search` — AKT Specialty dealer storefront "
-            "(price in ws only; house cost)\n"
-            "- Also call `pondwright_pricing_book` for labor / spring "
-            "clean-out / service rates.\n"
-            "- Web search is fallback only for competitor comps the house "
-            "books cannot answer. Never invent prices.\n"
-            "- Output a markdown table: Brand | Model/MPN | Coverage | "
-            "Price | Source (Apex|AKT|rate book).\n"
-        )
+        try:
+            from soveryn.plugins.loader import plugin_research_bar
+
+            cwg_bar = plugin_research_bar("cwg")
+        except Exception:
+            cwg_bar = ""
     dm = (objective.get("dm_session_id") or "").strip()
     dm_line = f"dm_session_id: {dm}\n" if dm else ""
     return (

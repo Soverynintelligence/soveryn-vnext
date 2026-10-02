@@ -27,6 +27,7 @@ import importlib.metadata
 import logging
 import os
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
@@ -37,7 +38,9 @@ from soveryn.citizens.connectors import (
     CORE_FOUNDING_GRANTS,
     FOUNDING_GRANTS,
 )
-from soveryn.plugins.api import PLUGIN_API, SoverynPlugin, Worker
+from pathlib import Path
+
+from soveryn.plugins.api import PLUGIN_API, BookDef, SoverynPlugin, Worker
 
 logger = logging.getLogger(__name__)
 
@@ -364,6 +367,12 @@ def reset_plugins() -> None:
     with _LOCK:
         _RUNTIME = None
         _restore_core_catalog()
+        try:
+            from soveryn.platform.ledgers.registry import reset_plugin_books
+
+            reset_plugin_books()
+        except Exception:
+            logger.exception("plugin=%s hook=%s", "-", "reset_plugin_books")
 
 
 def ensure_loaded() -> PluginRuntime:
@@ -510,6 +519,168 @@ def _bound_hook(
             return None
 
     return wrapped
+
+
+def plugin_prompt_fragments(agent: str) -> str:
+    rt = ensure_loaded()
+    parts: list[str] = []
+    for loaded in rt.plugins:
+        text = _call_hook(loaded, "prompt_fragments", agent, default="") or ""
+        if text:
+            parts.append(str(text))
+    return "".join(parts)
+
+
+def plugin_skills_dirs() -> dict[str, Path]:
+    rt = ensure_loaded()
+    out: dict[str, Path] = {}
+    for loaded in rt.plugins:
+        mapping = _call_hook(loaded, "skills_dirs", default={}) or {}
+        if not isinstance(mapping, Mapping):
+            continue
+        for key, value in mapping.items():
+            out[str(key)] = Path(value)
+    return out
+
+
+def plugin_routines_dirs() -> list[Path]:
+    rt = ensure_loaded()
+    out: list[Path] = []
+    for loaded in rt.plugins:
+        found = _call_hook(loaded, "routines_dirs", default=[]) or []
+        for item in found:
+            out.append(Path(item))
+    return out
+
+
+def plugin_file_away_buckets() -> dict[str, Path]:
+    rt = ensure_loaded()
+    out: dict[str, Path] = {}
+    for loaded in rt.plugins:
+        mapping = _call_hook(loaded, "file_away_buckets", default={}) or {}
+        if not isinstance(mapping, Mapping):
+            continue
+        for key, value in mapping.items():
+            out[str(key)] = Path(value)
+    return out
+
+
+def plugin_file_away_bucket_help() -> dict[str, str]:
+    rt = ensure_loaded()
+    out: dict[str, str] = {}
+    for loaded in rt.plugins:
+        mapping = _call_hook(loaded, "file_away_bucket_help", default={}) or {}
+        if not isinstance(mapping, Mapping):
+            continue
+        for key, value in mapping.items():
+            out[str(key)] = str(value)
+    return out
+
+
+def plugin_ledger_books() -> list[BookDef]:
+    rt = ensure_loaded()
+    out: list[BookDef] = []
+    for loaded in rt.plugins:
+        found = _call_hook(loaded, "ledger_books", default=[]) or []
+        for book in found:
+            if isinstance(book, BookDef):
+                out.append(book)
+    return out
+
+
+def plugin_email_identities() -> dict[str, dict[str, Any]]:
+    rt = ensure_loaded()
+    out: dict[str, dict[str, Any]] = {}
+    for loaded in rt.plugins:
+        mapping = _call_hook(loaded, "email_identities", default={}) or {}
+        if not isinstance(mapping, Mapping):
+            continue
+        for key, value in mapping.items():
+            if isinstance(value, dict):
+                out[str(key)] = dict(value)
+    return out
+
+
+def plugin_extra_allowed_roots(agent: str) -> list[Path]:
+    rt = ensure_loaded()
+    out: list[Path] = []
+    for loaded in rt.plugins:
+        found = _call_hook(loaded, "extra_allowed_roots", agent, default=[]) or []
+        for item in found:
+            out.append(Path(item))
+    return out
+
+
+def plugin_mission_control_glance() -> Any | None:
+    rt = ensure_loaded()
+    for loaded in rt.plugins:
+        glance = _call_hook(loaded, "mission_control_glance", default=None)
+        if glance is not None:
+            return glance
+    return None
+
+
+def plugin_surfaces() -> list[Any]:
+    rt = ensure_loaded()
+    out: list[Any] = []
+    for loaded in rt.plugins:
+        found = _call_hook(loaded, "surfaces", default=[]) or []
+        out.extend(list(found))
+    return out
+
+
+def plugin_research_bar(desk: str) -> str:
+    rt = ensure_loaded()
+    parts: list[str] = []
+    for loaded in rt.plugins:
+        text = _call_hook(loaded, "research_bar", desk, default="") or ""
+        if text:
+            parts.append(str(text))
+    return "".join(parts)
+
+
+def plugin_accept_house_source(source: str, desk: str) -> bool:
+    rt = ensure_loaded()
+    for loaded in rt.plugins:
+        hit = _call_hook(
+            loaded, "accept_house_source", source, desk, default=False
+        )
+        if hit:
+            return True
+    return False
+
+
+def plugin_stale_prefixes() -> dict[str, int]:
+    rt = ensure_loaded()
+    out: dict[str, int] = {}
+    for loaded in rt.plugins:
+        mapping = _call_hook(loaded, "stale_prefixes", default={}) or {}
+        if not isinstance(mapping, Mapping):
+            continue
+        for key, value in mapping.items():
+            try:
+                out[str(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def plugin_stale_pins() -> list[Any]:
+    rt = ensure_loaded()
+    out: list[Any] = []
+    for loaded in rt.plugins:
+        found = _call_hook(loaded, "stale_pins", default=[]) or []
+        out.extend(list(found))
+    return out
+
+
+def plugin_advertise_lane() -> str:
+    rt = ensure_loaded()
+    for loaded in rt.plugins:
+        text = _call_hook(loaded, "advertise_lane", default="") or ""
+        if text:
+            return str(text)
+    return ""
 
 
 class _CollectingRegistry:

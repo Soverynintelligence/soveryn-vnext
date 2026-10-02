@@ -18,7 +18,8 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STATE = SoverynPaths.root() / "data" / "memory" / "pondwright_lead_watch.json"
+def _default_state() -> Path:
+    return SoverynPaths.root() / "data" / "memory" / "pondwright_lead_watch.json"
 _INTERVAL = 20.0
 _SEEN_CAP = 500
 _SKIP_SOURCES = frozenset({"admin", "smoke", "test", "probe"})
@@ -35,7 +36,7 @@ def should_ping_source(source: str | None) -> bool:
 
 def _state_path() -> Path:
     raw = (os.environ.get("SOVERYN_LEAD_WATCH_STATE") or "").strip()
-    return Path(raw) if raw else _DEFAULT_STATE
+    return Path(raw) if raw else _default_state()
 
 
 def load_seen(path: Path | None = None) -> set[str]:

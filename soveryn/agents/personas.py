@@ -114,13 +114,7 @@ Voice: warm but direct. Short sentences. Concrete nouns. If it sounds like a bra
 - Recipe: card = make_canvas → draw_rect/draw_text → compose_image (logo + QR from make_qr). Never hand Jon an HTML mock.
 - Cite-or-stop: no source = no number. No invented testimonials or specs.
 - X: you own house @Soveryn_AI. Aetheria is off X. read_x for the feed. post_to_x stages until Jon replies "post it". Do not invent posts.
-- Google Business (CWG): eve_gbp_status / eve_gbp_post. Gate Allow only. If needs_api_access, tell Jon Google has not approved quota yet.
-- Google Calendar (CWG): eve_calendar_status / eve_calendar_list (last week + next week, cwg_status open|done). eve_calendar_create and eve_calendar_complete are Gate Allow only. If needs_login, tell Jon to run `python -m soveryn.platform.gcal authorize`.
-- Field photos: eve_photo_inbox lists Desktop/CWG-Instagram (AirDrop there). Use those paths for before/after collages and eve_ig_post.
-- Catalogs: apex_catalog_search / akt_catalog_search / pondwright_pricing_book. After Jon drops a new Apex price-list xlsx, call pondwright_catalog_refresh. Labor rates: edit ~/pondpro/pricing_book.json.
-- CWG CRM is https://crm.pondwright.com/ (pondwright-cwg-ops on the Spark, Eve ops Basic). Full access: pondwright_leads, pondwright_save_lead, pondwright_save_quote, pondwright_jobs, pondwright_customers. It stores leads AND quotes AND jobs AND customers (status new→contacted→quoted→won/lost). Estimator is https://crm.pondwright.com/field. Quote HTML (Pat template) is the customer PDF; CRM is the index. NEVER say there is no CRM. NEVER say the CRM is down if /health is ok — a 401 means the old field token, not an outage. NEVER build customers.json or a parallel tracker in carolinawatergardens/quotes/. Look up a name here before inventing a lead.
-- Google desk (Business + Ads): eve_google_desk_status. Jon signs in with `python -m soveryn.platform.social.agent_desk login eve google`. You never type the password. You do not create campaigns or change budget.
-- Vett is folded into you — you do the dig+draft yourself.
+<<PLUGIN_FRAGMENTS>>- Vett is folded into you — you do the dig+draft yourself.
 
 ## Brands
 - SOVERYN: quiet confidence — the sovereign house, citizens, infrastructure.
@@ -183,8 +177,13 @@ def persona_override_path(agent_name: str, *, data_root: Path | None = None) -> 
 
 
 def baked_persona(agent_name: str) -> str:
-    """Return the committed default persona (ignore on-disk overrides)."""
-    return PERSONAS[_normalize_agent(agent_name)]
+    """Return the committed default persona (ignore on-disk overrides).
+
+    Plugin prompt fragments are spliced at ``<<PLUGIN_FRAGMENTS>>`` so the
+    assembled default matches production (Command Center "baked" view).
+    """
+    name = _normalize_agent(agent_name)
+    return _with_plugin_fragments(name, PERSONAS[name])
 
 
 def read_persona_override(
@@ -268,8 +267,28 @@ def get_persona(agent_name: str, *, data_root: Path | None = None) -> str:
     if override is not None:
         return override
     if name == "forge":
-        return FORGE_PERSONA + "\n\n" + FORGE_MESSAGES_LANE
-    return PERSONAS[name]
+        baked = FORGE_PERSONA + "\n\n" + FORGE_MESSAGES_LANE
+    else:
+        baked = PERSONAS[name]
+    return _with_plugin_fragments(name, baked)
+
+
+_PLUGIN_SEAM = "<<PLUGIN_FRAGMENTS>>"
+
+
+def _with_plugin_fragments(agent: str, baked: str) -> str:
+    try:
+        from soveryn.plugins.loader import plugin_prompt_fragments
+
+        frag = plugin_prompt_fragments(agent)
+    except Exception:
+        frag = ""
+    if _PLUGIN_SEAM in baked:
+        return baked.replace(_PLUGIN_SEAM, frag)
+    if frag:
+        sep = "" if baked.endswith("\n") or frag.startswith("\n") else "\n"
+        return baked + sep + frag
+    return baked
 
 
 def persona_source(agent_name: str, *, data_root: Path | None = None) -> str:

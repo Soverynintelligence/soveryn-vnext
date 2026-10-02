@@ -134,6 +134,16 @@ def _apply_plugin_boot_mode(mode: str, monkeypatch) -> None:
             "soveryn.plugins.builtin_cwg.BuiltinCwgPlugin.register",
             _boom,
         )
+    elif mode == "fragments_raises":
+        monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
+
+        def _boom(self, agent):
+            raise RuntimeError("fragments boom")
+
+        monkeypatch.setattr(
+            "soveryn.plugins.builtin_cwg.BuiltinCwgPlugin.prompt_fragments",
+            _boom,
+        )
     elif mode == "workers_raises":
         monkeypatch.delenv("SOVERYN_PLUGINS", raising=False)
 
@@ -155,7 +165,7 @@ def _post(client, path, body):
 
 @pytest.mark.parametrize(
     "plugin_boot_mode",
-    ("unset", "cwg_external_missing", "register_raises", "workers_raises"),
+    ("unset", "cwg_external_missing", "register_raises", "workers_raises", "fragments_raises"),
 )
 def test_create_app_and_chat_survive_missing_cwg(
     tmp_path,

@@ -7,6 +7,15 @@ from .registry import AutomationSpec, Delivery
 
 _SJON = Delivery(channel="signal", target="jon")
 
+
+def _cwg_advertise_lane() -> str:
+    try:
+        from soveryn.plugins.loader import plugin_advertise_lane
+
+        return plugin_advertise_lane()
+    except Exception:
+        return ""
+
 CATALOG: List[AutomationSpec] = [
     # --- News -----------------------------------------------------------------
     AutomationSpec(
@@ -161,10 +170,7 @@ CATALOG: List[AutomationSpec] = [
             "2) SOVERYN — PondWright as a product tool (only when this slot is "
             "picked): honest quote/CRM tooling. Keep MAP/catalog talk HERE, "
             "not in CWG brand posts.\n"
-            "3) CWG — outdoor oasis & serenity: living water ecosystems, "
-            "wildlife, birds/dragonflies, shade, stillness, the beauty of "
-            "being outside. Sensory and local. NEVER lead with prices, MAP, "
-            "or catalog quoting — that is not CWG brand voice.\n"
+            f"{_cwg_advertise_lane()}"
             "4) ActTruth — ledger/truth standard: cite-or-stop, no fake stats.\n"
             "Rotate — prefer CWG beauty posts often. Write about the thing, "
             "not ticket IDs.\n"

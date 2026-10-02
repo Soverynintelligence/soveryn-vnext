@@ -10,6 +10,36 @@ PLUGIN_API = 1
 
 
 @dataclass(frozen=True)
+class BookDef:
+    """One tax book a plugin (or core) contributes to the ledger engine."""
+
+    id: str
+    csv_rel: str
+    evidence_rel: str
+    classify_terms: tuple[str, ...] = ()
+    name_regex: str = ""
+    domain_signals: tuple[str, ...] = ()
+    exclusive_domain: bool = False
+    quote_needles: tuple[str, ...] = ()
+    chat_regex: str = ""
+
+    def csv_path(self, root: Path) -> Path:
+        return Path(root) / self.csv_rel
+
+    def evidence_path(self, root: Path) -> Path:
+        return Path(root) / self.evidence_rel
+
+
+@dataclass
+class MissionControlGlance:
+    """CRM (or other) Mission Control chip a plugin owns."""
+
+    id: str
+    payload: Callable[..., dict[str, Any]]
+    ack: Callable[[], dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class Worker:
     """One background thread a plugin wants started at boot."""
 
@@ -42,7 +72,7 @@ class SoverynPlugin(Protocol):
 
 
 class PluginBase:
-    """No-op defaults. 2a hooks are implemented by the CWG adapter; 2b stay empty."""
+    """No-op defaults. 2a/2b hooks are implemented by the CWG adapter."""
 
     id: str = ""
     api_version: int = PLUGIN_API
@@ -112,5 +142,17 @@ class PluginBase:
     def research_bar(self, desk: str) -> str:
         return ""
 
+    def accept_house_source(self, source: str, desk: str) -> bool:
+        return False
+
     def stale_prefixes(self) -> Mapping[str, int]:
         return {}
+
+    def stale_pins(self) -> list[Any]:
+        return []
+
+    def file_away_bucket_help(self) -> Mapping[str, str]:
+        return {}
+
+    def advertise_lane(self) -> str:
+        return ""

@@ -12,19 +12,32 @@ def repo_root() -> Path:
 
 
 def soveryn_csv(root: Path | None = None) -> Path:
+    from soveryn.platform.ledgers.registry import resolve_csv
+
     base = root or repo_root()
+    found = resolve_csv("soveryn", base)
+    if found is not None:
+        return found
     return base / "docs" / "ops" / "tax" / "SOVERYN-2025-2026-expense-ledger.csv"
 
 
 def cwg_csv(root: Path | None = None) -> Path:
+    from soveryn.platform.ledgers.registry import resolve_csv
+
     base = root or repo_root()
+    found = resolve_csv("cwg", base)
+    if found is not None:
+        return found
     return base / "docs" / "ops" / "tax-cwg" / "CWG-2025-2026-expense-ledger.csv"
 
 
 def evidence_root(book: str, root: Path | None = None) -> Path:
+    from soveryn.platform.ledgers.registry import resolve_evidence
+
     base = root or repo_root()
-    if book == "cwg":
-        return base / "docs" / "ops" / "tax-cwg" / "evidence"
+    found = resolve_evidence(book, base)
+    if found is not None:
+        return found
     return base / "docs" / "ops" / "tax" / "evidence"
 
 
@@ -34,8 +47,11 @@ def drop_root(root: Path | None = None) -> Path:
 
 
 def ensure_drop_dirs(root: Path | None = None) -> Path:
+    from soveryn.platform.ledgers.registry import book_ids
+
     drop = drop_root(root)
-    for name in ("soveryn", "cwg", "unsorted"):
+    names = set(book_ids()) | {"soveryn", "unsorted"}
+    for name in sorted(names):
         (drop / name).mkdir(parents=True, exist_ok=True)
     return drop
 

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from soveryn.platform.intake.tools import _DEFAULT_ALLOWED_ROOTS, _resolve_allowed
+from soveryn.platform.intake.tools import DEFAULT_ALLOWED_ROOTS, resolve_allowed
 from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 from soveryn.platform.intake.turn_images import current_turn_images
 from soveryn.platform.ledgers.extract import RECEIPT_SUFFIXES
@@ -22,7 +22,16 @@ from soveryn.platform.ledgers.paths import drop_root, ensure_drop_dirs
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
 
-_BOOKS = frozenset({"soveryn", "cwg", "auto"})
+def _book_choices() -> frozenset[str]:
+    from soveryn.platform.ledgers.registry import book_ids
+
+    return frozenset(book_ids()) | {"auto"}
+
+
+def _split_books() -> frozenset[str]:
+    from soveryn.platform.ledgers.registry import book_ids
+
+    return frozenset(book_ids())
 
 
 def _decode_data_url(url: str) -> tuple[bytes, str]:
@@ -54,7 +63,7 @@ def _save_current_file(*, book: str, src: str) -> Path:
             "and pass path=current (current:2 for the second). "
             "Do not look for attachment-1.pdf on disk."
         )
-    folder = book if book in {"soveryn", "cwg"} else "unsorted"
+    folder = book if book in _split_books() else "unsorted"
     dest_dir = ensure_drop_dirs() / folder
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -73,7 +82,7 @@ def _save_current_photo(*, book: str) -> Path:
             "no photo on this turn — attach a receipt picture or pass path"
         )
     data, suffix = _decode_data_url(urls[0])
-    folder = book if book in {"soveryn", "cwg"} else "unsorted"
+    folder = book if book in _split_books() else "unsorted"
     dest_dir = ensure_drop_dirs() / folder
     dest_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -101,8 +110,9 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
         image_s = raw_image.strip() if isinstance(raw_image, str) else ""
         order_id = raw_order.strip() if isinstance(raw_order, str) else ""
         book = (raw_book or "auto").strip().lower() or "auto"
-        if book not in _BOOKS:
-            raise ToolArgError("book must be soveryn, cwg, or auto")
+        if book not in _book_choices():
+            allowed = ", ".join(sorted(_book_choices()))
+            raise ToolArgError(f"book must be {allowed.replace('auto', 'or auto')}")
         forced = None if book == "auto" else book
         splits = None
         if raw_splits is not None:
@@ -139,7 +149,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
             ).as_dict()
 
         if path_s:
-            p = _resolve_allowed(Path(path_s), _DEFAULT_ALLOWED_ROOTS)
+            p = resolve_allowed(Path(path_s), DEFAULT_ALLOWED_ROOTS)
             if not p.is_file():
                 raise ToolArgError(f"path is not a file: {p}")
             if p.suffix.lower() not in RECEIPT_SUFFIXES:
@@ -188,7 +198,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 },
                 "book": {
                     "type": "string",
-                    "enum": ["soveryn", "cwg", "auto"],
+                    "enum": sorted(_book_choices(), key=lambda n: (n != "soveryn", n != "cwg", n)),
                     "description": (
                         "soveryn or cwg when Jon says which business. "
                         "auto (default) classifies from the file/OCR. "
@@ -220,7 +230,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                         "properties": {
                             "book": {
                                 "type": "string",
-                                "enum": ["soveryn", "cwg"],
+                                "enum": sorted(_split_books(), key=lambda n: (n != "soveryn", n != "cwg", n)),
                             },
                             "amount": {"type": "string"},
                             "amount_usd": {"type": "string"},

@@ -173,8 +173,22 @@ def notify_share(*, agent: str, preview: str = "") -> None:
     )
 
 
+def notify_lead(
+    *,
+    title: str,
+    body: str = "",
+    url: str = "/messages",
+    tag: str | None = None,
+) -> None:
+    """Generic phone ping. Prefer this over the PondWright-named helper."""
+    notify_needs_you(title=title, body=body, url=url, tag=tag)
+
+
 def notify_pondwright_lead(lead: dict[str, Any]) -> None:
-    """Phone ping for a new website/chat lead. Tap opens the CRM."""
+    """Phone ping for a new website/chat lead. Tap opens the CRM.
+
+    Alias kept for one release; new code should call :func:`notify_lead`.
+    """
     name = (lead.get("name") or "New lead").strip() or "New lead"
     source = (lead.get("source") or "web").strip()
     wants = (
@@ -188,7 +202,7 @@ def notify_pondwright_lead(lead: dict[str, Any]) -> None:
         bits.append(city)
     body = " · ".join(bits)
     lid = str(lead.get("id") or "").strip()
-    notify_needs_you(
+    notify_lead(
         title=f"PondWright · {name}"[:80],
         body=body[:140],
         url="https://crm.pondwright.com/",

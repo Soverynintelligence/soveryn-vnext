@@ -17,22 +17,20 @@ from typing import Any
 
 # Domains Jon locked for v0 (AgentMail-wave steal, house-shaped).
 SOVERYN_DOMAIN = "soverynintelligence.com"
-CWG_DOMAIN = "carolinawatergardens.com"
+CWG_DOMAIN = "carolinawatergardens.com"  # plugin overlay; kept for import compatibility
 
 DEFAULT_IDENTITIES: dict[str, dict[str, Any]] = {
     "aetheria": {
         "default": f"aetheria@{SOVERYN_DOMAIN}",
         "aliases": [
             f"aetheria@{SOVERYN_DOMAIN}",
-            f"aetheria@{CWG_DOMAIN}",
         ],
-        "note": "CoS — house + CWG voice",
+        "note": "CoS — house voice",
     },
     "vett": {
         "default": f"vett@{SOVERYN_DOMAIN}",
         "aliases": [
             f"vett@{SOVERYN_DOMAIN}",
-            f"vett@{CWG_DOMAIN}",
         ],
         "note": "FOLDED into Eve — not a live citizen (2026-08-23 note); row kept for design history only",
         "folded": True,
@@ -41,9 +39,8 @@ DEFAULT_IDENTITIES: dict[str, dict[str, Any]] = {
         "default": f"eve@{SOVERYN_DOMAIN}",
         "aliases": [
             f"eve@{SOVERYN_DOMAIN}",
-            f"eve@{CWG_DOMAIN}",
         ],
-        "note": "Presence / online + CWG Zoho alias",
+        "note": "Presence / online",
     },
     "scotty": {
         "default": f"scotty@{SOVERYN_DOMAIN}",
@@ -55,14 +52,6 @@ DEFAULT_IDENTITIES: dict[str, dict[str, Any]] = {
         "default": f"kernel@{SOVERYN_DOMAIN}",
         "aliases": [f"kernel@{SOVERYN_DOMAIN}"],
         "note": "Build / code (when resident)",
-    },
-    # Desk agent identity (not a citizens.db row yet) — Aetheria may
-    # send-as PondWright for CWG customer-facing mail when Gate allows.
-    "pondwright": {
-        "default": f"pondwright@{CWG_DOMAIN}",
-        "aliases": [f"pondwright@{CWG_DOMAIN}"],
-        "note": "CWG desk agent status address",
-        "desk": "cwg",
     },
 }
 
@@ -77,18 +66,72 @@ def _normalize_addr(addr: str) -> str:
     return (addr or "").strip().lower()
 
 
-def load_identities() -> dict[str, dict[str, Any]]:
-    """Merge defaults with optional SOVERYN_EMAIL_IDENTITIES JSON override."""
-    out: dict[str, dict[str, Any]] = {
-        k: {
-            "default": v["default"],
-            "aliases": list(v["aliases"]),
-            "note": v.get("note") or "",
-            **({"desk": v["desk"]} if v.get("desk") else {}),
-            **({"folded": True} if v.get("folded") else {}),
-        }
-        for k, v in DEFAULT_IDENTITIES.items()
+def _identity_domains() -> list[str]:
+    domains = [SOVERYN_DOMAIN]
+    try:
+        from soveryn.plugins.loader import plugin_email_identities
+
+        extra = plugin_email_identities()
+    except Exception:
+        extra = {}
+    packed = extra.get("_domains") if isinstance(extra.get("_domains"), dict) else {}
+    for item in packed.get("aliases") or []:
+        name = str(item or "").strip().lower()
+        if name and name not in domains:
+            domains.append(name)
+    if extra.get("pondwright") and CWG_DOMAIN not in domains:
+        domains.append(CWG_DOMAIN)
+    return domains
+
+
+def _copy_identity(spec: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "default": spec.get("default") or "",
+        "aliases": list(spec.get("aliases") or []),
+        "note": spec.get("note") or "",
+        **({"desk": spec["desk"]} if spec.get("desk") else {}),
+        **({"folded": True} if spec.get("folded") else {}),
     }
+
+
+def _merge_identity(base: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
+    aliases = spec.get("aliases")
+    if isinstance(aliases, list):
+        extra = [_normalize_addr(a) for a in aliases if str(a).strip()]
+        for addr in extra:
+            if addr and addr not in base["aliases"]:
+                base["aliases"].append(addr)
+    default = spec.get("default")
+    if default:
+        base["default"] = _normalize_addr(str(default))
+        if base["default"] and base["default"] not in base["aliases"]:
+            base["aliases"].insert(0, base["default"])
+    if spec.get("note"):
+        base["note"] = str(spec["note"])
+    if spec.get("desk"):
+        base["desk"] = spec["desk"]
+    if spec.get("folded"):
+        base["folded"] = True
+    return base
+
+
+def load_identities() -> dict[str, dict[str, Any]]:
+    """Merge defaults, plugin overlay, then SOVERYN_EMAIL_IDENTITIES (env wins)."""
+    out: dict[str, dict[str, Any]] = {
+        k: _copy_identity(v) for k, v in DEFAULT_IDENTITIES.items()
+    }
+    try:
+        from soveryn.plugins.loader import plugin_email_identities
+
+        overlay = plugin_email_identities()
+    except Exception:
+        overlay = {}
+    for cid, spec in overlay.items():
+        if cid.startswith("_") or not isinstance(spec, dict):
+            continue
+        key = str(cid).strip().lower()
+        base = out.get(key, {"default": "", "aliases": [], "note": ""})
+        out[key] = _merge_identity(base, spec)
     raw = (os.environ.get("SOVERYN_EMAIL_IDENTITIES") or "").strip()
     if not raw:
         return out
@@ -197,7 +240,7 @@ def board_identities() -> dict[str, Any]:
     )
     prod = bool(smtp_ready and latch)
     return {
-        "domains": [SOVERYN_DOMAIN, CWG_DOMAIN],
+        "domains": _identity_domains(),
         "by_citizen": by_citizen,
         "desk": {
             "pondwright": identities.get("pondwright"),
