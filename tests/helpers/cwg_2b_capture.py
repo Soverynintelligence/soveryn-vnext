@@ -13,9 +13,9 @@ from typing import Any
 from flask import Flask
 
 from soveryn.agents.personas import get_persona
-from soveryn.agents.skills import get_skill_index
 from soveryn.automations.registry import load_automations
 from soveryn.automations.routines import load_routine
+from soveryn.config.loader import load_env_config
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.platform.email.identities import load_identities, board_identities
 from soveryn.platform.intake.file_away import all_buckets
@@ -26,9 +26,10 @@ GOLDEN_DIR = Path(__file__).resolve().parents[1] / "golden" / "cwg_split_2b"
 
 
 def assembled_personas() -> dict[str, str]:
+    data_root = load_env_config().data_root
     return {
-        "eve": get_persona("eve"),
-        "aetheria": get_persona("aetheria"),
+        "eve": get_persona("eve", data_root=data_root),
+        "aetheria": get_persona("aetheria", data_root=data_root),
     }
 
 
@@ -139,10 +140,14 @@ def email_identities_snapshot() -> dict[str, Any]:
 
 
 def routines_and_skills_snapshot() -> dict[str, Any]:
-    catalog, order = load_automations()
+    from soveryn.agents.skills import get_skill_index
+
+    data_root = load_env_config().data_root
+    skills_dir = load_env_config().skills_dir
+    _catalog, order = load_automations()
     routines = []
     for aid in order:
-        doc = load_routine(aid)
+        doc = load_routine(aid, data_root=data_root)
         routines.append(
             {
                 "id": aid,
@@ -151,7 +156,10 @@ def routines_and_skills_snapshot() -> dict[str, Any]:
                 "bytes": (doc or {}).get("bytes"),
             }
         )
-    skills = {agent: get_skill_index(agent) for agent in sorted(ACTIVE_AGENTS)}
+    skills = {
+        agent: get_skill_index(agent, skills_dir=skills_dir)
+        for agent in sorted(ACTIVE_AGENTS)
+    }
     return {
         "routine_ids": list(order),
         "routines": routines,

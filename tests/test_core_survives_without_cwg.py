@@ -15,6 +15,7 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.inference.llama_server_client import ChatResponse, StreamChunk
 from soveryn.memory.conversation_store import ConversationStore
 from soveryn.memory.lattice import LatticeStore
+from tests.helpers.hermetic import isolate_data_root
 
 _CWG_MODULES = (
     "soveryn.platform.pondwright.lead_watch",
@@ -53,6 +54,11 @@ class _StreamFn:
         return _g()
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_data_root(tmp_path, monkeypatch):
+    isolate_data_root(tmp_path, monkeypatch)
+
+
 @pytest.fixture
 def fake_souls_dir(tmp_path) -> Path:
     souls_dir = tmp_path / "souls"
@@ -84,6 +90,17 @@ def recall_lattice_path(tmp_path) -> Path:
         },
     )
     return tmp_path / "recall_lattice.db"
+
+
+def test_core_without_cwg_lookups_stay_under_tmp_path(tmp_path):
+    from soveryn.agents.personas import persona_override_path
+    from soveryn.config.loader import load_env_config
+
+    tmp = tmp_path.resolve()
+    cfg = load_env_config()
+    assert cfg.data_root.resolve().is_relative_to(tmp)
+    assert cfg.skills_dir.resolve().is_relative_to(tmp)
+    assert persona_override_path("eve").resolve().is_relative_to(tmp)
 
 
 def _hide_cwg_modules(monkeypatch) -> None:
