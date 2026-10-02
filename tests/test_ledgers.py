@@ -472,7 +472,7 @@ def test_parse_thermal_pos_amount_and_slash_date():
 
 GMAIL_NEXT_INSURANCE = """
 Gmail - Your business insurance is active
-Jon DeOliveira <jon.deoliveira@gmail.com>
+Jon DeOliveira <owner@example.test>
 Your business insurance is active
 Next Insurance <hello@nextinsurance.com> Sat, Sep 12, 2026 at 3:41 PM
 Hi Jon,

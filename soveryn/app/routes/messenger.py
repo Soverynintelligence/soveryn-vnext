@@ -33,6 +33,31 @@ from soveryn.edge import is_operator_local
 from soveryn.memory.conversation_store import ConversationStore
 
 
+class PwaSharedAsset:
+    """Serve one on-disk copy of assets the PWA and /static both need.
+
+    Flask/Werkzeug ``send_from_directory`` can refuse outbound symlinks, so
+    the PWA URL space aliases these names to ``soveryn/static/`` instead of
+    keeping a second copy under ``platform/web/pwa/``.
+    """
+
+    _STATIC = _P(__file__).resolve().parents[2] / "static"
+    _MAP = {
+        "citizen-icons.css": _STATIC / "citizen-icons.css",
+        "citizen-icons.js": _STATIC / "citizen-icons.js",
+        "icons/icon-180.png": _STATIC / "messages" / "icons" / "icon-180.png",
+        "icons/icon-192.png": _STATIC / "messages" / "icons" / "icon-192.png",
+        "icons/icon-512.png": _STATIC / "messages" / "icons" / "icon-512.png",
+    }
+
+    @staticmethod
+    def send(pwa_dir: _P, path: str):
+        alias = PwaSharedAsset._MAP.get(path)
+        if alias is not None and alias.is_file():
+            return send_from_directory(str(alias.parent), alias.name)
+        return send_from_directory(str(pwa_dir), path)
+
+
 def _is_localhost() -> bool:
     return is_operator_local(request.remote_addr, request.headers)
 
@@ -401,7 +426,7 @@ def build_messenger_blueprint(
         index.html also pins assets with ?v= so a single shell refresh pulls a
         new control.js even if an intermediate cache ignored ETag changes.
         """
-        resp = make_response(send_from_directory(str(_PWA_DIR), path))
+        resp = make_response(PwaSharedAsset.send(_PWA_DIR, path))
         name = path.rsplit("/", 1)[-1]
         if name == "index.html" or name.endswith(".html"):
             resp.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"

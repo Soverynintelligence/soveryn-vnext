@@ -45,7 +45,6 @@ _RAW_IO_EXEMPT_PATH_SUBSTRINGS: tuple[str, ...] = (
     "/agents/direct_communication/",
     "/agents/aetheria/tools/", # tool implementations may use HTTP
     "/agents/aetheria/reflection/",
-    "/agents/vett/harness/",   # vendor harness
 )
 
 _RAW_IO_EXEMPT_FILENAMES: frozenset[str] = frozenset({

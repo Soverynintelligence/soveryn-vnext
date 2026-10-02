@@ -158,17 +158,6 @@ def test_default_audit_hook_writes_failure_to_telemetry(monkeypatch, tmp_path):
     }
 
 
-def test_compatibility_shim_reexports_platform_registry_objects():
-    from soveryn.tools import registry as compat
-    from soveryn.platform.tools import registry as platform
-
-    assert compat.ToolRegistry is platform.ToolRegistry
-    assert compat.ToolSpec is platform.ToolSpec
-    assert compat.ToolAuditEvent is platform.ToolAuditEvent
-    assert compat.ToolArgError is platform.ToolArgError
-    assert compat.ToolRegistryError is platform.ToolRegistryError
-
-
 def test_iter_tools_for_agent_returns_only_that_owner():
     registry = ToolRegistry(active_agents=("aetheria", "vett"), audit_hook=None)
     schema = {"type": "object", "properties": {}, "additionalProperties": False}

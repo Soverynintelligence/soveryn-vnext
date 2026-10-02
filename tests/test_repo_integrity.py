@@ -112,6 +112,20 @@ def test_the_souls_and_the_origin_essay_are_tracked():
     assert not untracked, f"soul documents exist only on this disk: {untracked}"
 
 
+def test_soveryn_lab_theme_has_one_source():
+    """config/pi and config/soveryn-cli themes are symlinks to the package SSOT."""
+    ssot = (REPO / "packages" / "soveryn-cli" / "themes" / "soveryn-lab.json").resolve()
+    assert ssot.is_file()
+    for rel in (
+        "config/pi/themes/soveryn-lab.json",
+        "config/soveryn-cli/themes/soveryn-lab.json",
+    ):
+        path = REPO / rel
+        assert path.is_symlink(), rel
+        assert path.resolve() == ssot, rel
+        assert path.is_file(), rel
+
+
 def test_agent_writes_never_pollute_home():
     """Tripwire 2026-09-24: a docs-hygiene pass ran with cwd=$HOME, wrote
     README.md and a truncated docs/CURRENT_TRUTH.md into the home directory,

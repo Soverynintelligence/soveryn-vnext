@@ -92,7 +92,8 @@ clamps), so the pinned runtime reads the server's real limit from `config/sovery
 
 Pre-launch splash + status HUD: large monospace **SOVERYN** wordmark, cyan/amber accents on near-black, active brain + ONLINE.
 
-- Theme: Pi `soveryn-lab` (copied into `config/soveryn-cli/themes/` and `config/pi/themes/` on launch)
+- Theme: Pi `soveryn-lab` (SSOT `packages/soveryn-cli/themes/soveryn-lab.json`; `config/*/themes/` are symlinks). `ensureLabTheme` still copies into the live agent dir on launch if the symlink is missing.
+- File search: install `fd` on `PATH` (`apt install fd-find` then symlink `fdfind` → `fd`, or `brew install fd`). Do not vendor the binary.
 - Skip splash: `SOVERYN_NO_SPLASH=1`
 - Splash is local-only (<100ms; no network)
 

@@ -32,6 +32,39 @@ from typing import Any
 import requests
 
 
+class CrossSourceLink:
+    """Pinned cross_source_link prompt + evidence IDs.
+
+    Lived under the deleted Vett harness eval_tasks module. Kept here so
+    this live /chat rerun does not import vendored harness code.
+    """
+
+    NAME = "cross_source_link"
+    EXPECTED_IDS = (
+        "bc6e16f3-a251-4791-8547-3f2a8da2058e",
+        "7e406410-09d3-43ee-b953-00339dfe626c",
+        "b42064cc-fce8-4b84-940d-ff4faf2eec75",
+    )
+    TOPIC = "SOVERYN's current-state architecture, agent roster, and hardware fleet"
+    CLAIM = (
+        "SOVERYN is a fully-local multi-agent AI platform with Scotty as the "
+        "engineering agent (renamed from Tinker on 2026-05-02), running on a "
+        "143 GiB VRAM fleet across three GPUs (2x Quadro RTX 8000 + 1x RTX PRO "
+        "5000 Blackwell)."
+    )
+
+    @staticmethod
+    def query() -> str:
+        return (
+            f"Search the lattice for evidence about this topic: {CrossSourceLink.TOPIC}\n"
+            f"Once you have candidate documents, verify this claim against them: "
+            f"{CrossSourceLink.CLAIM}\n"
+            "Curate the strongest evidence set, link the documents that mutually "
+            "support the claim, and stop when you've reached a confident "
+            "verification or determined the claim is unsupported."
+        )
+
+
 def _post_chat(
     *,
     chat_url: str,
@@ -99,21 +132,13 @@ def _score(response_text: str, expected_ids: tuple[str, ...]) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-url", default="http://127.0.0.1:5001")
-    parser.add_argument(
-        "--task-module",
-        default="soveryn.agents.vett.harness.eval_tasks.cross_source_link",
-    )
     parser.add_argument("--output-dir", default="eval_runs")
     parser.add_argument("--timeout", type=float, default=300.0)
     parser.add_argument("--label", default="vett_current_post_phase3")
     args = parser.parse_args(argv)
 
-    # Load the task definition
-    import importlib
-    mod = importlib.import_module(args.task_module)
-    task = mod.CROSS_SOURCE_LINK
-    query = task.query
-    expected_ids = tuple(task.expected_evidence_ids)
+    query = CrossSourceLink.query()
+    expected_ids = CrossSourceLink.EXPECTED_IDS
 
     # Run
     sessions_url = f"{args.app_url}/sessions"
@@ -155,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{timestamp}_{args.label}.json"
     payload = {
-        "task": task.name,
+        "task": CrossSourceLink.NAME,
         "query": query,
         "expected_ids": list(expected_ids),
         "response": response_text,

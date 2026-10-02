@@ -75,7 +75,7 @@ Do not attach this file. Do not paste the floors table.
 
 ---
 
-## 08-23 prospect (IP 89.187.177.74)
+## 08-23 prospect (IP 0.0.0.0)
 
 Two turns, empty `session_id`, **no name/email/phone**.  
 1) “Can this run on our own hardware?” 2) “What would this cost us?”  
