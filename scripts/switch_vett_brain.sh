@@ -40,7 +40,7 @@ current() {
     | python -c 'import sys,json; d=json.load(sys.stdin); print(",".join(m["id"] for m in d.get("data",[])))' \
     2>/dev/null || echo "(unreachable)"
   echo -n "vnext routing:    "
-  cd "$HOME/soveryn_vnext" && /home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -c '
+  cd "${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}" && /home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -c '
 from soveryn.config.runtime import resolve_vett_brain, MODEL_SERVERS
 key = resolve_vett_brain()
 srv = next(s for s in MODEL_SERVERS if s.name == "vett_scotty_shared")

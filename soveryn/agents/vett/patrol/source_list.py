@@ -16,6 +16,8 @@ silently start with corrupted config).
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -27,7 +29,7 @@ import yaml
 
 
 PATROL_SOURCES_DEFAULT_PATH = (
-    Path.home() / "soveryn_vnext" / "data" / "vett_patrol_sources.yaml"
+    SoverynPaths.root() / "data" / "vett_patrol_sources.yaml"
 )
 
 _ALLOWED_KINDS = frozenset({"html", "rss", "atom"})

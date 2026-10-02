@@ -14,10 +14,16 @@ chain, with no llama-server:
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+_skip_if_no_bwrap = pytest.mark.skipif(
+    shutil.which("bwrap") is None,
+    reason="bwrap not on PATH; acceptance refuses closed rather than run unsandboxed",
+)
 
 from soveryn.platform.delegation.store import DelegationStore
 from soveryn.platform.delegation.engine import execute_task
@@ -57,6 +63,7 @@ def _tool(reg, name):
     raise AssertionError(name)
 
 
+@_skip_if_no_bwrap
 def test_delegation_isolation_end_to_end(live_repo):
     store = DelegationStore(live_repo / "delegation.db")
     task_id = store.create_task(

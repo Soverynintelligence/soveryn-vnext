@@ -8,6 +8,8 @@ Mirrors soveryn/agents/dream/__main__.py / daemon.py pattern:
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 import os
 import sys
@@ -20,9 +22,9 @@ from soveryn.platform.lattice.legacy import LatticeStore
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
-DEFAULT_DRYRUN_LOG = Path.home() / "soveryn_vnext" / "data" / "memory" / "representation_dryrun.jsonl"
+DEFAULT_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_DRYRUN_LOG = SoverynPaths.root() / "data" / "memory" / "representation_dryrun.jsonl"
 
 
 def _main() -> int:

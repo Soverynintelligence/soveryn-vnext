@@ -37,6 +37,7 @@ from pathlib import Path
 import pytest
 
 from soveryn.config.runtime import RUNTIME_SERVICES
+from soveryn.paths import SoverynPaths
 
 APP_DIR = Path(__file__).resolve().parent.parent / "soveryn" / "app"
 
@@ -132,56 +133,58 @@ def test_declared_app_startup_thread_is_actually_started(service):
 # been derived from the code rather than written by hand. That is the whole
 # argument for deriving rather than declaring.
 #
-# These checks need a live systemd, so they skip where there isn't one (CI)
-# rather than failing. A skip is honest; a false green is not.
+# These checks used to ask a live `systemctl --user`. That is host state,
+# not repo state: GitHub runners have user systemd (so the skip never
+# fired) but do not have the units installed, and three of the four
+# declared services had no unit file in systemd/ at all. The contract
+# is "a declared systemd service has a unit in this tree" — check the
+# files, not whether this machine has enabled them.
 
 SYSTEMD_SERVICES = [
     s for s in RUNTIME_SERVICES if s.launch == "systemd"
 ]
 
 
-def _systemctl(*args: str) -> tuple[int, str]:
-    import subprocess
-    try:
-        r = subprocess.run(["systemctl", "--user", *args],
-                           capture_output=True, text=True, timeout=15)
-        return r.returncode, r.stdout.strip()
-    except (FileNotFoundError, OSError, subprocess.SubprocessError):
-        return 127, ""
-
-
-@pytest.mark.parametrize("service", SYSTEMD_SERVICES, ids=lambda s: s.name)
-def test_declared_systemd_service_has_a_unit(service):
-    """A service declared launch="systemd" must have a unit systemd knows about.
-
-    Checks existence, not liveness — a stopped service is an operational matter,
-    but a *nonexistent* unit means the registry is describing something that
-    cannot run at all.
-    """
-    rc, _ = _systemctl("--version")
-    if rc != 0:
-        pytest.skip("no user systemd available")
-
-    # Unit names are inferred, which is itself a weak link — the registry has no
-    # field naming its unit, so this guesses. If it ever guesses wrong the right
-    # fix is to add an explicit `unit:` field to RuntimeService rather than to
-    # widen this list again. Guessing is the failure mode this file exists to
-    # catch, and it should not be load-bearing here forever.
-    base = service.name
+def _unit_stems(service_name: str) -> set[str]:
+    base = service_name
     stems = {base, base.replace("_", "-")}
     for suffix in ("_daemon", "_aetheria", "_cycle"):
         if base.endswith(suffix):
             trimmed = base[: -len(suffix)]
             stems |= {trimmed, trimmed.replace("_", "-")}
-    candidates = [f"soveryn-{s}.service" for s in sorted(stems)]
-    candidates += [f"{s}.service" for s in sorted(stems)]
-    for unit in candidates:
-        rc, out = _systemctl("show", unit, "-p", "LoadState", "--no-pager")
-        if rc == 0 and "LoadState=loaded" in out:
-            return
-    pytest.fail(
+    return stems
+
+
+def _unit_candidates(service_name: str) -> list[str]:
+    stems = _unit_stems(service_name)
+    names = [f"soveryn-{s}.service" for s in sorted(stems)]
+    names += [f"{s}.service" for s in sorted(stems)]
+    names += [f"soveryn-{s}.timer" for s in sorted(stems)]
+    names += [f"{s}.timer" for s in sorted(stems)]
+    return names
+
+
+@pytest.mark.parametrize("service", SYSTEMD_SERVICES, ids=lambda s: s.name)
+def test_declared_systemd_service_has_a_unit(service):
+    """A service declared launch="systemd" must have a unit file in systemd/.
+
+    Checks existence, not liveness — a stopped service is an operational matter,
+    but a *missing* unit file means the registry is describing something that
+    cannot run at all.
+    """
+    # Unit names are inferred, which is itself a weak link — the registry has no
+    # field naming its unit, so this guesses. If it ever guesses wrong the right
+    # fix is to add an explicit `unit:` field to RuntimeService rather than to
+    # widen this list again. Guessing is the failure mode this file exists to
+    # catch, and it should not be load-bearing here forever.
+    systemd_dir = SoverynPaths.root() / "systemd"
+    assert systemd_dir.is_dir(), f"missing systemd/ directory at {systemd_dir}"
+    existing = {p.name for p in systemd_dir.iterdir() if p.is_file()}
+    candidates = _unit_candidates(service.name)
+    matches = [c for c in candidates if c in existing]
+    assert matches, (
         f"RUNTIME_SERVICES declares {service.name!r} as launch='systemd', but no "
-        f"loaded unit matches any of {candidates}.\n"
+        f"unit file in systemd/ matches any of {candidates}.\n"
         f"  declared role: {service.role}\n"
         "Either the unit is missing, or the declaration names it wrongly."
     )

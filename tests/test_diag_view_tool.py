@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from soveryn.paths import SoverynPaths
 from soveryn.platform.diag_view_tool import (
     ALLOWED_ROOTS,
     build_house_diag_tool,
@@ -34,8 +35,12 @@ def test_unit_rejects_injection():
         diag_unit("no-extension")
 
 
-def test_http_is_localhost_only():
-    out = diag_http(8095, "/search?q=test")  # real SearXNG probe
+def test_http_is_localhost_only(monkeypatch):
+    monkeypatch.setattr(
+        "soveryn.platform.diag_view_tool._run",
+        lambda argv: "HTTP 200 text/html",
+    )
+    out = diag_http(8095, "/search?q=test")
     assert "HTTP 200" in out
     with pytest.raises(ToolArgError):
         diag_http("example.com")
@@ -43,15 +48,21 @@ def test_http_is_localhost_only():
         diag_http(8095, "/x rm -rf")  # no spaces/quotes in path
 
 
-def test_path_is_house_roots_only_and_secrets_denied():
+def test_path_is_house_roots_only_and_secrets_denied(tmp_path, monkeypatch):
+    eyes = tmp_path / "soveryn_eyes"
+    eyes.mkdir()
+    (eyes / "latest.png").write_bytes(b"x")
+    monkeypatch.setattr(
+        "soveryn.platform.diag_view_tool.ALLOWED_ROOTS",
+        ALLOWED_ROOTS + (eyes,),
+    )
     with pytest.raises(ToolArgError):
         diag_file("/etc/shadow")
     with pytest.raises(ToolArgError):
         diag_file(str(Path.home() / ".ssh" / "config"))
     with pytest.raises(ToolArgError):
         diag_file(str(REPO / "data" / "secrets" / "whatever.env"))
-    # an allowed root itself lists fine
-    out = diag_file(str(Path.home() / "soveryn_eyes"))
+    out = diag_file(str(eyes))
     assert "latest.png" in out
 
 
@@ -79,6 +90,10 @@ def test_tool_handler_receipts_every_call(tmp_path, monkeypatch):
         "soveryn.platform.diag_view_tool._receipt_dir",
         lambda: tmp_path / "diag",
     )
+    monkeypatch.setattr(
+        "soveryn.platform.diag_view_tool._run",
+        lambda argv: "HTTP 200 text/html",
+    )
     tool = build_house_diag_tool(owner_agent="aetheria")
     result = tool.handler({"action": "http", "port": 8095, "path": "/"})
     assert result["ok"] is True
@@ -95,4 +110,5 @@ def test_tool_handler_receipts_every_call(tmp_path, monkeypatch):
 
 def test_allowlist_covers_expected_roots():
     names = [p.name for p in ALLOWED_ROOTS]
-    assert "soveryn_vnext" in names and "teammates" in names
+    assert SoverynPaths.root() in ALLOWED_ROOTS
+    assert "teammates" in names

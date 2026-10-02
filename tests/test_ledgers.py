@@ -5,6 +5,8 @@ Never mix the entities. Never invent a garbled total. Unsorted when unsure.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 from pathlib import Path
 
 from soveryn.platform.intake.pdf import ExtractResult
@@ -509,8 +511,7 @@ def test_extract_real_gmail_insurance_pdf_if_present():
     from soveryn.platform.ledgers.extract import extract_receipt_path
 
     path = (
-        Path.home()
-        / "soveryn_vnext"
+        SoverynPaths.root()
         / "docs"
         / "ops"
         / "tax-cwg"

@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-REPO="${SOVERYN_VNEXT:-$HOME/soveryn_vnext}"
+REPO="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}"
 CLI_JS="${REPO}/packages/soveryn-cli/src/cli.js"
 if [[ ! -f "$CLI_JS" ]]; then
   echo "soveryn-pi: missing $CLI_JS" >&2
@@ -35,6 +35,7 @@ fi
 KERNEL_CFG="${SOVERYN_KERNEL_DIR:-$REPO/config/pi}"
 
 export SOVERYN_HARNESS=kernel
+export SOVERYN_ROOT="$REPO"
 export SOVERYN_VNEXT="$REPO"
 export SOVERYN_CLI_DIR="$KERNEL_CFG"
 export PI_CODING_AGENT_DIR="$KERNEL_CFG"

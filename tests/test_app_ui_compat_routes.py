@@ -4,6 +4,7 @@ Uses tmp_path for the legacy dir; NEVER points at the real production
 soveryn_complete/templates path.
 """
 
+from soveryn.paths import SoverynPaths
 import json
 import pytest
 
@@ -166,7 +167,7 @@ def test_default_legacy_templates_dir_is_production_path(tmp_path, fake_chat):
     conv = ConversationStore(tmp_path / "conv.db")
     loops = {n: AgentLoop(n, conv, chat_fn=fake_chat) for n in ACTIVE_AGENTS}
     app = create_app(conv_store=conv, agent_loops=loops)
-    expected = str(Path.home() / "soveryn_vnext" / "data" / "templates_legacy")
+    expected = str(SoverynPaths.root() / "data" / "templates_legacy")
     assert app.config["SOVERYN_LEGACY_TEMPLATES_DIR"] == expected
 
 

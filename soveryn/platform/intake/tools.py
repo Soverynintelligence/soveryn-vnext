@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import base64
 from collections.abc import Mapping
 from pathlib import Path
@@ -22,7 +24,7 @@ from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
 
 # Paths agents may read for intake (house-local only).
 _DEFAULT_ALLOWED_ROOTS: tuple[Path, ...] = (
-    Path.home() / "soveryn_vnext" / "data",
+    SoverynPaths.root() / "data",
     Path.home() / "soveryn_citizens",
     Path.home() / "historys-ledger",
     Path.home() / "historysledger-site",
@@ -238,7 +240,7 @@ def _default_media_root() -> Path:
 
         return Path(DEFAULT_DATA_ROOT) / "media"
     except Exception:
-        return Path.home() / "soveryn_vnext" / "data" / "media"
+        return SoverynPaths.root() / "data" / "media"
 
 
 def _require_http_url(raw: Any) -> str:
@@ -756,7 +758,7 @@ def build_look_at_tool(
     """Put house-disk photos on the current vision turn. Eve desk only."""
     roots = allowed_roots if allowed_roots is not None else (
         _default_cwg_ig_root(),
-        Path.home() / "soveryn_vnext" / "data",
+        SoverynPaths.root() / "data",
         Path.home() / "Downloads",
     )
     default = (default_root or _default_cwg_ig_root()).expanduser()
@@ -925,7 +927,7 @@ def build_make_collage_tool(
     """CWG Instagram before/after collage. Eve desk only."""
     roots = allowed_roots if allowed_roots is not None else (
         _default_cwg_ig_root(),
-        Path.home() / "soveryn_vnext" / "data",
+        SoverynPaths.root() / "data",
         Path.home() / "Downloads",
     )
     default = (default_root or _default_cwg_ig_root()).expanduser()

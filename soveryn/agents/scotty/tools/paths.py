@@ -7,11 +7,13 @@ root, and `..` traversal that lands outside are all rejected.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from pathlib import Path
 
 
-SCOTTY_PROJECT_ROOT = (Path.home() / "soveryn_vnext").resolve()
+SCOTTY_PROJECT_ROOT = (SoverynPaths.root()).resolve()
 
 
 class PathOutOfBoundsError(ValueError):

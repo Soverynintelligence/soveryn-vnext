@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator
 
 from soveryn.agents.personas import get_persona
 from soveryn.agents.aetheria.speech_assembler import assemble_ranked_recall
@@ -77,6 +77,10 @@ try:
     from soveryn.platform.approval.store import ApprovalBroker
 except ImportError:  # pragma: no cover
     ApprovalBroker = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    from soveryn.config.runtime import ModelServer
+    from soveryn.platform.coordination.store import CoordinationStore
 
 
 ChatFn = Callable[..., ChatResponse]

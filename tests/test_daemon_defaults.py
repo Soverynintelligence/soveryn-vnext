@@ -1,28 +1,29 @@
+from soveryn.paths import SoverynPaths
 from pathlib import Path
 
 
 def test_heartbeat_daemon_defaults_under_data_root():
     from soveryn.agents.heartbeat import daemon
-    assert daemon.DEFAULT_LATTICE_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-    assert daemon.DEFAULT_CONV_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
-    assert daemon.DEFAULT_SALIENCE_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "salience_vnext.db"
+    assert daemon.DEFAULT_LATTICE_DB == SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+    assert daemon.DEFAULT_CONV_DB == SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
+    assert daemon.DEFAULT_SALIENCE_DB == SoverynPaths.root() / "data" / "memory" / "salience_vnext.db"
 
 
 def test_dream_daemon_defaults_under_data_root():
     from soveryn.agents.dream import daemon
-    assert daemon.DEFAULT_LATTICE_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-    assert daemon.DEFAULT_CONV_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+    assert daemon.DEFAULT_LATTICE_DB == SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+    assert daemon.DEFAULT_CONV_DB == SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 
 
 def test_vett_patrol_daemon_defaults_under_data_root():
     from soveryn.agents.vett.patrol import daemon
-    assert daemon.DEFAULT_LATTICE_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-    assert daemon.DEFAULT_CONV_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+    assert daemon.DEFAULT_LATTICE_DB == SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+    assert daemon.DEFAULT_CONV_DB == SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 
 
 def test_signal_bridge_daemon_defaults_under_data_root():
     from soveryn.agents.signal_bridge import daemon
-    assert daemon.DEFAULT_LATTICE_DB == Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+    assert daemon.DEFAULT_LATTICE_DB == SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
 
 
 def test_no_soveryn_complete_in_daemon_defaults():

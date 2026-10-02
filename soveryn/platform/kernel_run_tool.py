@@ -13,6 +13,8 @@ data/black_box/kernel/. Mutate verbs in report prompts are refused.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import re
@@ -26,9 +28,9 @@ from typing import Any, Callable
 
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
-DEFAULT_REPO = Path.home() / "soveryn_vnext"
+DEFAULT_REPO = SoverynPaths.root()
 ALLOWED_ROOTS: tuple[Path, ...] = (
-    Path.home() / "soveryn_vnext",
+    SoverynPaths.root(),
     Path.home() / "soveryn_citizens" / "kernel",
 )
 # Read-only Pi tool surface — never bash/edit/write from phone-origin runs.
@@ -103,7 +105,7 @@ def find_launcher() -> str | None:
     home_bin = Path.home() / "bin" / "kernel"
     if home_bin.is_file() and os.access(home_bin, os.X_OK):
         return str(home_bin)
-    script = Path.home() / "soveryn_vnext" / "scripts" / "soveryn-pi"
+    script = SoverynPaths.root() / "scripts" / "soveryn-pi"
     if script.is_file() and os.access(script, os.X_OK):
         return str(script)
     return None

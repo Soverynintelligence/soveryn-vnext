@@ -3,6 +3,7 @@
 Governs whether Aetheria's X posts publish or wait for approval.
 Safety principle: fail closed to Stage 0 on any error.
 """
+from soveryn.paths import SoverynPaths
 import argparse
 import json
 import os
@@ -102,7 +103,7 @@ def panic_to_zero(path: Path) -> None:
 def _get_default_trust_path() -> Path:
     """Get the default trust file path.
 
-    Default: Path.home()/"soveryn_vnext"/"data"/"x_trust.json"
+    Default: SoverynPaths.root()/"data"/"x_trust.json"
     Can be overridden by X_TRUST_PATH environment variable.
 
     Returns:
@@ -111,7 +112,7 @@ def _get_default_trust_path() -> Path:
     env_path = os.environ.get("X_TRUST_PATH")
     if env_path:
         return Path(env_path)
-    return Path.home() / "soveryn_vnext" / "data" / "x_trust.json"
+    return SoverynPaths.root() / "data" / "x_trust.json"
 
 
 def main() -> None:

@@ -6,6 +6,8 @@ one-shots. Same house fence as opencode_tool. GLM :8001 is parked.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 import shutil
 import subprocess
@@ -32,7 +34,7 @@ def find_aider() -> str | None:
         found = shutil.which(name)
         if found:
             return found
-    script = Path.home() / "soveryn_vnext" / "scripts" / "soveryn-aider"
+    script = SoverynPaths.root() / "scripts" / "soveryn-aider"
     if script.is_file() and os.access(script, os.X_OK):
         return str(script)
     return None

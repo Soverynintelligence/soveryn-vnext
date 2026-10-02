@@ -29,7 +29,7 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+WorkingDirectory=%h/soveryn_vnext
 Environment="LD_LIBRARY_PATH=/home/jon-deoliveira/miniconda3/envs/cuda131/cuda-compat:/home/jon-deoliveira/miniconda3/envs/cuda131/lib"
 ExecStart=/home/jon-deoliveira/llama.cpp_head/build/bin/llama-server \
   --model /mnt/soveryn_models/GGUF/google_gemma-4-31B-it-Q8_0.gguf \

@@ -19,4 +19,4 @@ else
   MSG="Xid verdict: NOT FIXED. $N event(s) since the rebuild. That rules out the stale llama.cpp and points at the driver or the card. Last: $LAST"
 fi
 echo "$MSG"
-~/soveryn_vnext/scripts/alert_signal.sh "$MSG" 2>/dev/null || echo "(signal send failed — verdict above)"
+"${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}/scripts/alert_signal.sh" "$MSG" 2>/dev/null || echo "(signal send failed — verdict above)"

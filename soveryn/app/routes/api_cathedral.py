@@ -10,6 +10,8 @@ it is Jon's view of his own house's mind.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import sqlite3
 from pathlib import Path
@@ -18,8 +20,8 @@ from flask import Blueprint, jsonify
 
 bp = Blueprint("api_cathedral", __name__)
 
-_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-_RELATIONAL_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "relational.db"
+_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+_RELATIONAL_DB = SoverynPaths.root() / "data" / "memory" / "relational.db"
 
 #: Named landmarks — real nodes pinned with labels you fly past.
 _LANDMARK_QUERIES = (

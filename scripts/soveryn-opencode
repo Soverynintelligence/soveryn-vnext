@@ -28,7 +28,7 @@ if [[ -z "${OPENCODE_BIN}" || ! -x "$OPENCODE_BIN" ]]; then
   exit 1
 fi
 
-CFG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/soveryn_vnext/config/opencode}"
+CFG_DIR="${OPENCODE_CONFIG_DIR:-${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}/config/opencode}"
 CFG_FILE="${OPENCODE_CONFIG:-$CFG_DIR/opencode.json}"
 if [[ ! -f "$CFG_FILE" ]]; then
   echo "soveryn-opencode: missing config at $CFG_FILE" >&2

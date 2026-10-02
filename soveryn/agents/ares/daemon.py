@@ -7,6 +7,8 @@ through the Ares severity router.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 import os
 import time
@@ -24,7 +26,7 @@ from soveryn.agents.ares.lanes.surfaces import collect as collect_surfaces_live
 from soveryn.agents.ares.router import AresSinks, default_sinks, route_cleared, route_finding
 from soveryn.platform.bus import SQLiteBus
 
-DEFAULT_ARES_BUS_PATH = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_bus.sqlite3"
+DEFAULT_ARES_BUS_PATH = SoverynPaths.root() / "data" / "ares" / "ares_bus.sqlite3"
 
 logger = logging.getLogger(__name__)
 # Severity → logging level for the audit trail (so journald/log severity

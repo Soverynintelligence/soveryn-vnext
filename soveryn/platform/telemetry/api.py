@@ -7,6 +7,8 @@ the mirror can be rebuilt from JSONL.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import sqlite3
@@ -17,7 +19,7 @@ from typing import Any, Iterator
 
 from soveryn.platform.telemetry.events import TelemetryEvent, TelemetryLevel
 
-DEFAULT_TELEMETRY_DIR = Path.home() / "soveryn_vnext" / "data" / "telemetry"
+DEFAULT_TELEMETRY_DIR = SoverynPaths.root() / "data" / "telemetry"
 VALID_LEVELS = {"debug", "info", "warning", "error"}
 
 _SCHEMA_SQL = """

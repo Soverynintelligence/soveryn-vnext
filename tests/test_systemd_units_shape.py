@@ -70,7 +70,7 @@ def test_vnext_unit_runs_flask_app_on_5001_with_locked_env_port():
     assert "SOVERYN_APP_PORT=5001" in env
     assert unit.get("Service", "ExecStart").endswith("-m soveryn.app")
     assert "python" in unit.get("Service", "ExecStart")
-    assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
+    assert unit.get("Service", "WorkingDirectory") == "%h/soveryn_vnext"
 
 
 def test_vnext_unit_exposes_path_and_parakeet_wants():
@@ -108,7 +108,7 @@ def test_ares_unit_waits_for_vnext_health_and_runs_without_restart():
 def test_ares_unit_is_user_scoped_and_timebounded():
     unit = _load_unit("soveryn-ares.service")
     assert not unit.has_option("Service", "User")
-    assert unit.get("Service", "WorkingDirectory") == "/home/jon-deoliveira/soveryn_vnext"
+    assert unit.get("Service", "WorkingDirectory") == "%h/soveryn_vnext"
     assert unit.get("Service", "Type") == "simple"
     # journald since 2026-09-24 (audit hole #9): the /tmp append log never
     # rotated and died on reboot.

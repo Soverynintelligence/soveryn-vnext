@@ -31,6 +31,8 @@ without interactive UI".
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 import sqlite3
 import time
@@ -703,7 +705,7 @@ def make_agent_process_fn(
         citizens_db
         or _os.environ.get(
             "SOVERYN_CITIZENS_DB",
-            str(Path.home() / "soveryn_vnext" / "data" / "citizens.db"),
+            str(SoverynPaths.root() / "data" / "citizens.db"),
         )
     )
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from soveryn.paths import SoverynPaths
+
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return SoverynPaths.root()
 
 
 def soveryn_csv(root: Path | None = None) -> Path:

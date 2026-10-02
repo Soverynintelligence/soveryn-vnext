@@ -14,6 +14,8 @@ localhost guard in startup.py + the funnel config gate are the access layer).
 """
 
 from __future__ import annotations
+
+from soveryn.paths import SoverynPaths
 import json
 import os
 import sqlite3
@@ -34,7 +36,7 @@ MAX_LIMIT = 100
 # only say "silent", which is how ~727k characters of her reflection went unread
 # between 2026-07-12 and 07-27: surfacing to a primary chat was removed (721fb93,
 # correctly — it minted a new chat every 30 min) and nothing replaced it.
-_THOUGHTS = os.path.expanduser("~/soveryn_vnext/data/heartbeat_thoughts.jsonl")
+_THOUGHTS = str(SoverynPaths.root() / "data/heartbeat_thoughts.jsonl")
 _TAIL_BYTES = 512 * 1024      # plenty for the last few hundred pulses
 
 

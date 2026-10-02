@@ -7,6 +7,8 @@ probe fails safe (returns []) so a probe error never crashes the Ares daemon.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 import sqlite3
 import subprocess
@@ -23,7 +25,7 @@ HER_GPU_UUID = os.environ.get(
     "ARES_HER_GPU_UUID", "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"
 )
 
-DELEGATION_DB = Path.home() / "soveryn_vnext" / "data" / "delegation.db"
+DELEGATION_DB = SoverynPaths.root() / "data" / "delegation.db"
 EYES_ALIVE = Path.home() / "soveryn_eyes" / ".alive"
 EYES_STALE_SECONDS = 900  # 15 min: eyesd ticks every 5s, so 900s means dead or blind
 

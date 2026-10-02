@@ -10,6 +10,8 @@ Run as a module: `python -m soveryn.agents.heartbeat`.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import os
@@ -54,18 +56,18 @@ logger = logging.getLogger(__name__)
 
 # Defaults — overridable via env.
 DEFAULT_VNEXT_BASE = "http://127.0.0.1:5001"
-DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
-DEFAULT_SALIENCE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "salience_vnext.db"
-DEFAULT_THOUGHTS_LOG = Path.home() / "soveryn_vnext" / "data" / "heartbeat_thoughts.jsonl"
+DEFAULT_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_SALIENCE_DB = SoverynPaths.root() / "data" / "memory" / "salience_vnext.db"
+DEFAULT_THOUGHTS_LOG = SoverynPaths.root() / "data" / "heartbeat_thoughts.jsonl"
 # Sentinel file for T6 stall amnesty deploy clock.  Written once on first
 # heartbeat tick after deploy; subsequent ticks read it to compute
 # hours_since_deploy for the amnesty/worst-first logic in detect_materiality.
 # Path is gitignored (data/heartbeat_deploy_started_at).
-DEFAULT_DEPLOY_SENTINEL = Path.home() / "soveryn_vnext" / "data" / "heartbeat_deploy_started_at"
+DEFAULT_DEPLOY_SENTINEL = SoverynPaths.root() / "data" / "heartbeat_deploy_started_at"
 # Once-per-day AM X-post nudge: persists the last-nudged date so a mid-day
 # daemon restart doesn't re-nudge. Path is gitignored (data/).
-DEFAULT_DAILY_POST_STATE = Path.home() / "soveryn_vnext" / "data" / "x_daily_post_state.json"
+DEFAULT_DAILY_POST_STATE = SoverynPaths.root() / "data" / "x_daily_post_state.json"
 
 # Window of lattice activity to summarise in the brief (separate from the
 # interval/backoff knobs since this is a *content* knob not a *timing* knob).

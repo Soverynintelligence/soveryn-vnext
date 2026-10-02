@@ -10,6 +10,8 @@ the complexity.
 """
 
 from __future__ import annotations
+
+from soveryn.paths import SoverynPaths
 import argparse
 import os
 import shutil
@@ -23,7 +25,7 @@ from soveryn.backup.rotation import (
 )
 
 
-DEFAULT_REPO = Path.home() / "soveryn_vnext"
+DEFAULT_REPO = SoverynPaths.root()
 # Backup destination is deployment-specific (typically an external drive
 # mountpoint under /media/<user>/<volume>/). Override via SOVERYN_BACKUP_DEST
 # env var on deploy; the home-dir fallback is a sentinel so an unconfigured

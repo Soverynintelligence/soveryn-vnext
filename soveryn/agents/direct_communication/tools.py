@@ -14,6 +14,8 @@ See docs/superpowers/specs/2026-06-05-direct-agent-communication-design.md.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import urllib.error
@@ -63,7 +65,7 @@ def _commission_peer_for_dm(
         when = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         db = Path(
             os.environ.get("SOVERYN_CITIZENS_DB")
-            or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
+            or (SoverynPaths.root() / "data" / "citizens.db")
         )
         dm = None
         root = None

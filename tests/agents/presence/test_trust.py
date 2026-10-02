@@ -1,4 +1,5 @@
 """Tests for the X trust-stage store."""
+from soveryn.paths import SoverynPaths
 import json
 import pytest
 from pathlib import Path
@@ -215,19 +216,16 @@ class TestCLI:
         assert "1" in captured.out
 
     def test_cli_default_path(self, monkeypatch, tmp_path):
-        """CLI uses default path from Path.home()/'soveryn_vnext'/'data'/'x_trust.json'."""
+        """CLI uses default path from SoverynPaths.root()/'data'/'x_trust.json'."""
         import sys
-        from pathlib import Path
         from soveryn.agents.presence.trust import main
 
-        # Create a fake home directory structure
-        fake_home = tmp_path / "home" / "user"
-        fake_home.mkdir(parents=True)
-        data_dir = fake_home / "soveryn_vnext" / "data"
+        fake_root = tmp_path / "soveryn_vnext"
+        data_dir = fake_root / "data"
         data_dir.mkdir(parents=True)
         trust_file = data_dir / "x_trust.json"
 
-        monkeypatch.setattr(Path, "home", lambda: fake_home)
+        monkeypatch.setenv("SOVERYN_ROOT", str(fake_root))
         monkeypatch.delenv("X_TRUST_PATH", raising=False)
 
         monkeypatch.setattr(sys, "argv", ["trust", "set", "1"])

@@ -6,6 +6,8 @@ of the house buckets. Never quotes, _incoming, or ledger CSVs. Never overwrite.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import shutil
 from pathlib import Path
 from typing import Any
@@ -15,15 +17,15 @@ _HOME = Path.home()
 BUCKETS: dict[str, Path] = {
     "models": Path("/mnt/soveryn_models/GGUF"),
     "cwg_ig": _HOME / "Desktop" / "CWG-Instagram",
-    "cwg_evidence": _HOME / "soveryn_vnext" / "docs" / "ops" / "tax-cwg" / "evidence",
-    "cwg_insurance": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "insurance",
-    "cwg_licenses": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "licenses",
-    "cwg_vehicles": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "vehicles",
-    "cwg_contracts": _HOME / "soveryn_vnext" / "docs" / "ops" / "cwg-business" / "contracts",
-    "soveryn_evidence": _HOME / "soveryn_vnext" / "docs" / "ops" / "tax" / "evidence",
-    "soveryn_licenses": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "licenses",
-    "soveryn_insurance": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "insurance",
-    "soveryn_contracts": _HOME / "soveryn_vnext" / "docs" / "ops" / "soveryn-business" / "contracts",
+    "cwg_evidence": SoverynPaths.root() / "docs" / "ops" / "tax-cwg" / "evidence",
+    "cwg_insurance": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "insurance",
+    "cwg_licenses": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "licenses",
+    "cwg_vehicles": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "vehicles",
+    "cwg_contracts": SoverynPaths.root() / "docs" / "ops" / "cwg-business" / "contracts",
+    "soveryn_evidence": SoverynPaths.root() / "docs" / "ops" / "tax" / "evidence",
+    "soveryn_licenses": SoverynPaths.root() / "docs" / "ops" / "soveryn-business" / "licenses",
+    "soveryn_insurance": SoverynPaths.root() / "docs" / "ops" / "soveryn-business" / "insurance",
+    "soveryn_contracts": SoverynPaths.root() / "docs" / "ops" / "soveryn-business" / "contracts",
     "pictures": _HOME / "Pictures",
     "installers": _HOME / "Downloads" / "installers",
 }

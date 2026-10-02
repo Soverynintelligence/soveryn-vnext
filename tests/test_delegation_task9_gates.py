@@ -5,12 +5,19 @@ worker turns on.
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
 from soveryn.platform.delegation.acceptance import run_acceptance_in_worktree
+
+_NO_BWRAP = shutil.which("bwrap") is None
+_skip_if_no_bwrap = pytest.mark.skipif(
+    _NO_BWRAP,
+    reason="bwrap not on PATH; acceptance refuses closed rather than run unsandboxed",
+)
 from soveryn.platform.delegation.worktree import merge_worktree, current_branch
 from soveryn.platform.delegation.worker import _recover_stale_executing
 
@@ -31,6 +38,7 @@ def wt(tmp_path):
     return root
 
 
+@_skip_if_no_bwrap
 def test_acceptance_green(wt):
     (wt / "tests" / "test_ok.py").write_text("def test_ok():\n    assert True\n")
     passed, output = run_acceptance_in_worktree(str(wt), "python -m pytest tests/test_ok.py -q")
@@ -44,6 +52,7 @@ def test_acceptance_red(wt):
     assert passed is False
 
 
+@_skip_if_no_bwrap
 def test_acceptance_respects_shlex_quoting(wt):
     # argv[1] must arrive as the single token "a b" — shlex keeps it whole;
     # naive str.split() would shatter it into '"a' and 'b"' and the exit code

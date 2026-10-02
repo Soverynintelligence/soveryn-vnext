@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from collections.abc import Mapping
 from pathlib import Path
@@ -47,7 +49,7 @@ def build_read_collab_tool(
                 conv = None
         db = citizens_db or Path(
             os.environ.get("SOVERYN_CITIZENS_DB")
-            or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
+            or (SoverynPaths.root() / "data" / "citizens.db")
         )
         if not root:
             return {"ok": False, "error": "no data_root"}

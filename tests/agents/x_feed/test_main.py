@@ -72,6 +72,9 @@ def test_build_worker_success(tmp_path: Path, monkeypatch):
     }
     for k, v in fake_env.items():
         monkeypatch.setenv(k, v)
+    # Isolate PresenceConfig.default() DBs from the checkout / $HOME.
+    monkeypatch.setenv("SOVERYN_ROOT", str(tmp_path))
+    (tmp_path / "data").mkdir()
 
     # Mock XClient.from_env to avoid any network or requests library instantiation.
     fake_x_client = MagicMock()

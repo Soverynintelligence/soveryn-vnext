@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import argparse
 import json
 import os
@@ -20,7 +22,7 @@ from soveryn.citizens.registry import connect
 DEFAULT_DB = Path(
     os.environ.get(
         "SOVERYN_CITIZENS_DB",
-        str(Path.home() / "soveryn_vnext" / "data" / "citizens.db"),
+        str(SoverynPaths.root() / "data" / "citizens.db"),
     )
 )
 

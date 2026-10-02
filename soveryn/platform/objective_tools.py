@@ -1,6 +1,8 @@
 """Tools so Aetheria can assign standing objectives (Grok-bot style work)."""
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -10,7 +12,7 @@ from soveryn.citizens import objectives as objectives_mod
 from soveryn.citizens.registry import connect
 from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
 
-_DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "citizens.db"
+_DEFAULT_DB = SoverynPaths.root() / "data" / "citizens.db"
 
 
 def _now() -> str:

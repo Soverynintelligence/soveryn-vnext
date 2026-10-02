@@ -10,6 +10,8 @@ Usage (from repo root)::
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import argparse
 import sys
 from pathlib import Path
@@ -64,7 +66,7 @@ SEED_FACTS: tuple[tuple[str, str], ...] = (
 
 
 def default_lattice_db() -> Path:
-    return Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+    return SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
 
 
 def main(argv: list[str] | None = None) -> int:

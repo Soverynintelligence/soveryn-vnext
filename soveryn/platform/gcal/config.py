@@ -5,6 +5,8 @@ Tokens are stored separately so Calendar consent does not rewrite GBP tokens.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,7 +28,7 @@ def _data_root() -> Path:
 
         return Path(DEFAULT_DATA_ROOT)
     except Exception:
-        return Path.home() / "soveryn_vnext" / "data"
+        return SoverynPaths.root() / "data"
 
 
 def _clean(raw: str | None) -> str:
@@ -43,7 +45,7 @@ def _load_house_env() -> None:
     which made `python -m soveryn.platform.gcal authorize` claim the
     client was unset after he had already saved it.
     """
-    path = Path.home() / "soveryn_vnext" / ".env"
+    path = SoverynPaths.root() / ".env"
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:

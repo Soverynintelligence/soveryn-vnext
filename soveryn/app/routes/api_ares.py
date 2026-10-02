@@ -11,6 +11,8 @@ If Ares re-detects a finding as *new* later, it will reappear on the bus.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import sqlite3
@@ -22,7 +24,7 @@ from flask import Blueprint, abort, current_app, jsonify, request
 
 bp = Blueprint("api_ares", __name__)
 
-_DEFAULT_BUS = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_bus.sqlite3"
+_DEFAULT_BUS = SoverynPaths.root() / "data" / "ares" / "ares_bus.sqlite3"
 _SEV_ORDER = {"emergency": 0, "critical": 1, "warning": 2}
 _LOCALHOST_ADDRS = {"127.0.0.1", "::1"}
 

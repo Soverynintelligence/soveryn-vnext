@@ -29,6 +29,8 @@ Tests inject fakes via the extensions dict so no real git or DB is required.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 from typing import Callable
 
@@ -60,9 +62,9 @@ def _get_store():
         from pathlib import Path
         env = ext.get("env")
         if env is not None:
-            db_path = getattr(env, "data_root", Path.home() / "soveryn_vnext" / "data") / "delegation.db"
+            db_path = getattr(env, "data_root", SoverynPaths.root() / "data") / "delegation.db"
         else:
-            db_path = Path.home() / "soveryn_vnext" / "data" / "delegation.db"
+            db_path = SoverynPaths.root() / "data" / "delegation.db"
         return DelegationStore(db_path)
     except Exception:
         return None
@@ -105,8 +107,7 @@ def _get_repo_root() -> str:
     root = _ext().get("repo_root")
     if root is not None:
         return str(root)
-    import os
-    return os.path.expanduser("~/soveryn_vnext")
+    return str(SoverynPaths.root())
 
 
 def _task_to_dict(task) -> dict:

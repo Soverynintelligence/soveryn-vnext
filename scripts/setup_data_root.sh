@@ -8,7 +8,7 @@
 
 set -eu
 
-DATA_ROOT="${SOVERYN_DATA_ROOT:-$HOME/soveryn_vnext/data}"
+DATA_ROOT="${SOVERYN_DATA_ROOT:-${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}/data}"
 
 echo "Setting up SOVERYN data root at: $DATA_ROOT"
 

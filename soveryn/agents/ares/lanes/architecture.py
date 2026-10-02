@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import ast
 import os
 from pathlib import Path
@@ -53,7 +55,7 @@ _RAW_IO_EXEMPT_FILENAMES: frozenset[str] = frozenset({
     "store.py",
 })
 
-DEFAULT_VNEXT_SOVERYN_ROOT = Path.home() / "soveryn_vnext" / "soveryn"
+DEFAULT_VNEXT_SOVERYN_ROOT = SoverynPaths.root() / "soveryn"
 
 
 def check_no_raw_io_in_agents(sources: dict[Path, str]) -> list[AresFinding]:
