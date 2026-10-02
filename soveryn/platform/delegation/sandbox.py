@@ -18,6 +18,7 @@ execute Scotty's code unsandboxed on the host. Requires bwrap to be usable
 from __future__ import annotations
 
 import shutil
+import sys
 from pathlib import Path
 
 #: Resolved once. None if bwrap isn't on PATH — callers must treat that as
@@ -57,6 +58,29 @@ class Sandbox:
         return flags
 
     @staticmethod
+    def host_bin_flags() -> list[str]:
+        """Re-expose the host interpreter when ``--tmpfs /tmp`` hid it.
+
+        CI and local venvs often live under ``/tmp/venv-…`` or
+        ``/tmp/pytest-of-…``. After the ephemeral tmpfs those paths vanish
+        and ``bwrap: execvp python: No such file or directory`` is a clean
+        red even though bwrap is installed. The founder conda env lives
+        under ``/home/...`` and is unaffected.
+        """
+        # Prefer sys.prefix (the venv root). sys.executable often resolves
+        # through a symlink to /usr/bin/python3, which is not under /tmp
+        # and would skip the bind while PATH still points at the hidden venv.
+        prefix = Path(sys.prefix).resolve()
+        tmp = Path("/tmp")
+        try:
+            prefix.relative_to(tmp)
+        except ValueError:
+            return []
+        flags = Sandbox.dest_dir_flags(str(prefix))
+        flags.extend(["--ro-bind", str(prefix), str(prefix)])
+        return flags
+
+    @staticmethod
     def argv(worktree_path: str, argv: list[str]) -> list[str]:
         if BWRAP is None:
             raise SandboxUnavailable(
@@ -71,6 +95,7 @@ class Sandbox:
             "--proc", "/proc",
             "--tmpfs", "/tmp",
             *Sandbox.dest_dir_flags(wt),
+            *Sandbox.host_bin_flags(),
             "--bind", wt, wt,
             "--unshare-net",
             "--unshare-pid", "--unshare-ipc", "--unshare-uts",
