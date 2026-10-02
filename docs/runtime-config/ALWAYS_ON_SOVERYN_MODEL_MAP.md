@@ -247,7 +247,7 @@ process, port or directory. "Vett and Scotty moved to the Spark" refers to their
 | Quadro **embeddings** nomic section | Still in `router-presets-quadro.ini` | Prefer standalone :8096 only; drop orphan nomic from live max-instances pressure |
 | Three **shepherd** presets | In quadro ini | Pin only if Shepherd product is live; else unload |
 | `messie` :5066 | Process present | Document as always-on or retire |
-| Dangerous preset copies | `runtime/router-presets.ini` / `data/router-presets.ini` with **cache-ram=0** | Never load for production; watermark or delete |
+| Dangerous preset copies | `runtime/router-presets.ini` **deleted** (cleanup pass 2). `data/router-presets.ini` is gitignored runtime noise | Never load a cache-ram=0 copy over blackwell/quadro |
 | CUDA story | Unit comments: driver 570 + cuda131 compat | After Blackwell fix: document **working** driver/toolkit pair + tok/s acceptance |
 
 ---
@@ -350,7 +350,7 @@ Today three stories fight:
 ## 9. Implementation checklist (bring live → target)
 
 - [x] **Confirm Blackwell prefill tok/s after CUDA fix — DONE 2026-08-12.** Same 14,899-token probe: **111 → 1,592 tok/s**. Router logs date the regression to the hour: Jun 25–Aug 7 steady 1,300–1,800; Aug 8 12h **1,383**; Aug 8 13h **97**; flat ~90–110 until fixed. The llama.cpp rebuild at 11:49 that morning is the delta.  
-- [ ] Watermark/delete `runtime/router-presets.ini` and `data/router-presets.ini` if they still ship `cache-ram = 0`  
+- [x] Delete `runtime/router-presets.ini` (cache-ram=0 landmine). `data/router-presets.ini` remains gitignored. Live presets: `-blackwell` / `-quadro` only.
 - [ ] Retire or comment out `[vett-scotty]` on quadro preset (Spark owns workers)  
 - [ ] Unify dream/cognition: one URL, one alias, one unit  
 - [ ] Align `runtime.py` MODEL_SERVERS cognition row with that choice  

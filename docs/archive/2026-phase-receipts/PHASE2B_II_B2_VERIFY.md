@@ -87,7 +87,7 @@ print(assemble_ranked_recall(ranked_nodes=(), identity_nodes=spine))
 
 Expected: `Spine nodes: 12`, followed by a `Stateable recall:` block with 12 lines each prefixed `- From older reviewed notes, I carry …`.
 
-**Recovery if the spine ever needs re-promotion** — the migration helpers live at `soveryn/platform/lattice/migration.py`. The 12 accepted legacy ids are persisted in `docs/phase2b-ii-b1-real-migration-result.json` field `accepted_legacy_ids`. Re-running `promote_identity_spine(...)` against the existing `AtticStore` (`data/lattice/attic.db`) with `lattice_store=LatticeStore(<the env path above>)` and candidates flagged `accepted=True` will recreate the spine deterministically. Idempotency guards prevent duplicates if the spine partially exists.
+**Recovery if the spine ever needs re-promotion** — the migration helpers live at `soveryn/platform/lattice/migration.py`. The 12 accepted legacy ids are persisted in `docs/archive/2026-phase-receipts/phase2b-ii-b1-real-migration-result.json` field `accepted_legacy_ids`. Re-running `promote_identity_spine(...)` against the existing `AtticStore` (`data/lattice/attic.db`) with `lattice_store=LatticeStore(<the env path above>)` and candidates flagged `accepted=True` will recreate the spine deterministically. Idempotency guards prevent duplicates if the spine partially exists.
 
 ## Behavioral Proofs
 

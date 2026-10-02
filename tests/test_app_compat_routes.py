@@ -165,62 +165,6 @@ def test_api_persona_no_stub_marker(app_state):
     assert "_stub" not in payload
 
 
-# ─── /api/message_board ──────────────────────────────────────────────────────
-
-def test_api_message_board_no_agent_returns_dict_for_all_active(app_state):
-    resp = app_state.get("/api/message_board")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    assert payload["_stub"] is True
-    for name in ACTIVE_AGENTS:
-        assert payload[name] == []
-    # No retired agents in the dict
-    for retired in ("scout", "ares_llm", "vision"):
-        assert retired not in payload
-
-
-def test_api_message_board_specific_active_agent(app_state):
-    resp = app_state.get("/api/message_board?agent=aetheria")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    assert payload["_stub"] is True
-    assert payload["aetheria"] == []
-
-
-@pytest.mark.parametrize("retired", ["scout", "vision", "tinker", "telegram", "chromadb"])
-def test_api_message_board_retired_agent_400(app_state, retired):
-    resp = app_state.get(f"/api/message_board?agent={retired}")
-    assert resp.status_code == 400
-    assert _err(resp)["code"] == "retired_agent"
-
-
-def test_api_message_board_unknown_agent_400(app_state):
-    resp = app_state.get("/api/message_board?agent=fnord")
-    assert resp.status_code == 400
-    assert _err(resp)["code"] == "unknown_agent"
-
-
-# ─── POST /api/message_board/clear ───────────────────────────────────────────
-
-def test_api_message_board_clear_stub_response(app_state):
-    resp = app_state.post("/api/message_board/clear")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    assert payload["_stub"] is True
-    assert payload["deleted"] == []
-    assert "not implemented" in payload["message"].lower()
-
-
-# ─── /api/research_journal ───────────────────────────────────────────────────
-
-def test_api_research_journal_returns_empty_stub(app_state):
-    resp = app_state.get("/api/research_journal")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    assert payload["_stub"] is True
-    assert payload["content"] == ""
-
-
 # ─── Deferred endpoints — verify they 404 with JSON envelope ─────────────────
 
 def test_api_memory_evidence_returns_404(app_state):
@@ -245,9 +189,9 @@ def test_todo_markers_use_ticket_format(tmp_path):
     )
 
 
-def test_stub_endpoints_carry_stub_marker(app_state):
-    """Defense in depth: every stub endpoint's payload has _stub: true."""
-    for path in ("/api/message_board", "/api/research_journal"):
-        resp = app_state.get(path)
-        assert resp.status_code == 200
-        assert json.loads(resp.data).get("_stub") is True, f"{path} missing _stub marker"
+def test_removed_stub_endpoints_404(app_state):
+    """message_board / research_journal stubs are gone; UI never called them."""
+    for path in ("/api/message_board", "/api/message_board/clear", "/api/research_journal"):
+        resp = app_state.get(path) if not path.endswith("clear") else app_state.post(path)
+        assert resp.status_code == 404
+        assert _err(resp)["code"] == "not_found"

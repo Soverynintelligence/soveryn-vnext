@@ -30,7 +30,7 @@
 
 **Created files (in-repo):**
 - `scripts/path_migration.sh` — the maintenance-window data-move script (Task 6)
-- `docs/PATH_CONSOLIDATION_RUNBOOK.md` — verification checklist + rollback procedure
+- `docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md` — verification checklist + rollback procedure
 
 **Not touched:**
 - `soveryn/platform/lattice/consolidate.py` — archival script for the once-and-done 2026-06-01 prod→vnext lattice consolidation. Per spec: leave as-is. Modifying it would alter the historical record. If it ever needs to re-run, paths can be passed explicitly.
@@ -493,7 +493,7 @@ git commit -m "infra(data): setup script for SOVERYN data root structure"
 
 **Files:**
 - Create: `scripts/path_migration.sh`
-- Create: `docs/PATH_CONSOLIDATION_RUNBOOK.md`
+- Create: `docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md`
 
 THIS IS THE ATOMIC OPERATION. Services down, data moved, services up, verify. Jon-run; not subagent-dispatchable.
 
@@ -597,7 +597,7 @@ echo
 echo "=== Migration done ==="
 echo "Verify: sqlite3 $NEW_MEMORY/conversations_vnext.db 'SELECT COUNT(*) FROM conversations;'"
 echo "Smoke test: open the UI, chat with Aetheria, confirm conv history visible."
-echo "Rollback: see docs/PATH_CONSOLIDATION_RUNBOOK.md"
+echo "Rollback: see docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md"
 ```
 
 - [ ] **Step 2: Write the runbook doc**
@@ -673,7 +673,7 @@ chmod +x /home/jon-deoliveira/soveryn_vnext/scripts/path_migration.sh
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/path_migration.sh docs/PATH_CONSOLIDATION_RUNBOOK.md
+git add scripts/path_migration.sh docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md
 git commit -m "infra(data): migration script + runbook for path consolidation"
 ```
 

@@ -22,7 +22,7 @@ Result: empty diff.
 
 Files changed during Phase 2b-ii-a:
 
-- `docs/phase2b-ii-a-baseline-audit.md`
+- `docs/archive/2026-phase-receipts/phase2b-ii-a-baseline-audit.md`
 - `soveryn/agents/aetheria/channels.py`
 - `soveryn/agents/aetheria/phrase_renderer.py`
 - `soveryn/agents/aetheria/speech_assembler.py`

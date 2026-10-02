@@ -43,7 +43,7 @@ soveryn/
 ~/teammates/        # Critic/Scout overnight — briefs → Messages
 ```
 
-Phase / track verify docs live under `docs/` (`PHASE1_…`, `PHASE2_…`, `TRACK2_…`).
+Phase / track verify receipts live under `docs/archive/2026-phase-receipts/`.
 
 ## Running tests
 

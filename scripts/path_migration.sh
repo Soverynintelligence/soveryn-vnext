@@ -11,7 +11,7 @@
 #      tar czf ~/soveryn_complete_memory_backup_$(date +%Y%m%d-%H%M%S).tar.gz \
 #          -C ~/soveryn_complete soveryn_memory
 #
-# Rollback procedure: see docs/PATH_CONSOLIDATION_RUNBOOK.md
+# Rollback procedure: see docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md
 
 set -eu
 
@@ -121,4 +121,4 @@ echo
 echo "=== Migration complete ==="
 echo
 echo "Next: open the UI, chat with Aetheria, confirm she responds with prior history."
-echo "Rollback procedure: docs/PATH_CONSOLIDATION_RUNBOOK.md"
+echo "Rollback procedure: docs/archive/2026-phase-receipts/PATH_CONSOLIDATION_RUNBOOK.md"

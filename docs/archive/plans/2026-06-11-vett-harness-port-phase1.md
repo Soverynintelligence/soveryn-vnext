@@ -2072,7 +2072,7 @@ Phase 1 port of the Harness-1 retrieval orchestration pattern onto Vett's
 existing model + SOVERYN's lattice. CLI-only; no Vett product wiring.
 
 Spec: docs/superpowers/specs/2026-06-11-vett-harness-port-design.md
-Plan: docs/superpowers/plans/2026-06-11-vett-harness-port-phase1.md
+Plan: docs/archive/plans/2026-06-11-vett-harness-port-phase1.md
 
 ## What's in this PR
 

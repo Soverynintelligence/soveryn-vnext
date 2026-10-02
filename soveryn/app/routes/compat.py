@@ -1,17 +1,11 @@
 """SOVERYN vNext — UI compatibility REST endpoints.
 
-These exist so the existing desktop UI doesn't break when pointed at
-vNext on :5001. Two are real implementations (models, personas) off
-existing data. Three are explicit stubs (message_board GET, clear, and
-research_journal) marked with `_stub: true` so consumers — including
-side-by-side compare — can tell what hasn't been implemented yet.
-
-Two production routes are NOT mirrored:
+Real implementations of /api/models and /api/persona/* off existing data.
+The old /api/message_board and /api/research_journal stubs were removed
+(no UI or JS caller). Unmirrored production routes 404 via the global
+handler in soveryn/app/startup.py:
   /api/memory/evidence    — TODO(vnext-memory-evidence): needs memory router
   WebSocket vision_frame  — TODO(vnext-perception-ws): needs SocketIO + perception layer
-
-The UI will get a clean JSON 404 envelope for those, courtesy of the
-global error handler in soveryn/app/startup.py.
 """
 
 from __future__ import annotations
@@ -142,47 +136,3 @@ def api_persona_delete(agent_name: str):
         "source": "baked",
         "baked": baked_persona(agent),
     }), 200
-
-
-# ─── /api/message_board  (STUB — TODO(vnext-message-board)) ──────────────────
-
-@bp.get("/api/message_board")
-def api_message_board():
-    """STUB: returns empty inbox per agent.
-
-    Real implementation needs the agent_message_board untracked infra ported
-    to vNext. TODO(vnext-message-board).
-
-    With ?agent=X: returns {"<X>": []} after active-agent validation.
-    Without ?agent: returns {agent: []} for every active agent.
-    """
-    requested = request.args.get("agent")
-    if requested is not None and requested.strip():
-        agent, err = _resolve_agent(requested)
-        if err:
-            return err
-        return jsonify({"_stub": True, agent: []}), 200
-    return jsonify({"_stub": True, **{a: [] for a in sorted(ACTIVE_AGENTS)}}), 200
-
-
-@bp.post("/api/message_board/clear")
-def api_message_board_clear():
-    """STUB: does NOT touch state. TODO(vnext-message-board)."""
-    return jsonify({
-        "_stub": True,
-        "deleted": [],
-        "message": "message board not implemented in vNext yet",
-    }), 200
-
-
-# ─── /api/research_journal  (STUB — TODO(vnext-research-journal)) ────────────
-
-@bp.get("/api/research_journal")
-def api_research_journal():
-    """STUB: returns empty content.
-
-    Production reads soveryn_memory/aetheria_research_journal.md. vNext
-    will need its own write path before this becomes real.
-    TODO(vnext-research-journal).
-    """
-    return jsonify({"_stub": True, "content": ""}), 200

@@ -60,7 +60,7 @@ vNext is a real multi-agent fleet that grew faster than its SSOT. The highest-co
 | Path | cache-ram | Note |
 |------|-----------|------|
 | `runtime/router-presets-blackwell.ini` | **32768** | Intended live Aetheria |
-| `runtime/router-presets.ini` | **0** | Combined/stale — **dangerous if loaded** |
+| `runtime/router-presets.ini` | **0** | **Deleted** (cleanup pass 2) — was combined/stale and dangerous if loaded |
 | `data/router-presets.ini` | **0** | Runtime noise copy |
 | `docs/runtime-config/router-presets.ini` | absent/minimal | Docs claim SSOT, path still mentions `soveryn_complete` |
 | Multiple `runtime/*.bak-*` | various | Bak pile |
@@ -150,13 +150,11 @@ In `app/startup.py`: Vett gets `max_tokens=8192`, `chat_timeout_seconds=300`. Sc
 
 ### H6 — Compat API stubs look healthy but empty
 
-`app/routes/compat.py`:
+`app/routes/compat.py` stubs `/api/message_board` and `/api/research_journal`
+were **deleted** (cleanup pass 2; no UI/JS caller). Remaining TODOs in the
+module docstring: memory evidence, vision WebSocket.
 
-- `/api/message_board` — `_stub: true`, empty
-- `/api/research_journal` — empty
-- TODOs: memory evidence, vision WebSocket
-
-**Why it matters:** UI can show empty boards forever without error.
+**Why it mattered:** UI could show empty boards forever without error.
 
 ---
 
@@ -164,10 +162,10 @@ In `app/startup.py`: Vett gets `max_tokens=8192`, `chat_timeout_seconds=300`. Sc
 
 | File | Reality |
 |------|---------|
-| `aetheria/heartbeat_surface.py` | Raises; real heartbeat is `agents/heartbeat/` process |
-| `scotty/repair_surface.py` | Raises; real path is tools/delegation |
-| `vett/research_surface.py` | Raises; real path is tools/harness |
-| `ares/daemon.py` | `AresDaemonNotPortedError` class leftover while daemon works |
+| `aetheria/heartbeat_surface.py` | **Deleted** (cleanup pass 2). Real heartbeat is `agents/heartbeat/` |
+| `scotty/repair_surface.py` | **Deleted** (cleanup pass 2). Real path is tools/delegation |
+| `vett/research_surface.py` | **Deleted** (cleanup pass 2). Real path is tools, not the harness |
+| `ares/daemon.py` | `AresDaemonNotPortedError` **deleted** (cleanup pass 2); daemon works |
 
 ---
 

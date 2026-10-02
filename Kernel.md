@@ -37,7 +37,7 @@ Three active chat agents (registered in `app.py`, in `agent_loops`):
 
 ## 4. Roadmap / Phases
 
-`docs/` holds a phased refactor with a baseline-audit-verify cycle:
+Phase / track receipts are archived at `docs/archive/2026-phase-receipts/`:
 - PHASE1, PHASE2, PHASE3
 - 2a, 2b-i, 2b-ii-a, 2b-ii-b1, 2b-ii-b2, 2c
 - track2

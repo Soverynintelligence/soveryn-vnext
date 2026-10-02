@@ -19,7 +19,7 @@ e7551a1 platform: add supervisor telemetry repair skeletons
 
 ## Phase 1 Close Confirmation
 
-`docs/PHASE1_VNEXT_REFACTOR_VERIFY.md` exists and records Phase 1 completion.
+`docs/archive/2026-phase-receipts/PHASE1_VNEXT_REFACTOR_VERIFY.md` exists and records Phase 1 completion.
 
 ## Test Baseline
 

@@ -7,41 +7,18 @@ from soveryn.agents.ares.daemon import (
     AresFinding,
 )
 from soveryn.agents.registry import AgentRegistry, AgentRegistryError
-from soveryn.agents.scotty.repair_surface import (
-    RepairRequest,
-    ScottyRepairNotPortedError,
-    ScottyRepairSurface,
-)
-from soveryn.agents.vett.research_surface import (
-    ResearchRequest,
-    VettResearchNotPortedError,
-    VettResearchSurface,
-)
 from soveryn.config.runtime import ACTIVE_AGENTS, DAEMONS, RETIRED
 
 
 def test_agent_package_contracts_import_and_name_surfaces():
     assert AresDaemonSurface.agent_name == "ares"
     assert AresDaemonSurface.uses_llm is False
-    assert VettResearchSurface.agent_name == "vett"
-    assert ScottyRepairSurface.agent_name == "scotty"
 
 
 def test_contract_dataclasses_are_instantiable():
     finding = AresFinding("filesystem", "low", {"path": "/tmp"})
-    research = ResearchRequest("find source", constraints={"fresh": True})
-    repair = RepairRequest("restart_service", "A", {"service": "demo"})
 
     assert finding.severity == "low"
-    assert research.constraints == {"fresh": True}
-    assert repair.tier == "A"
-
-
-def test_contract_surfaces_are_declared_not_ported():
-    with pytest.raises(VettResearchNotPortedError):
-        VettResearchSurface().run(ResearchRequest("query"))
-    with pytest.raises(ScottyRepairNotPortedError):
-        ScottyRepairSurface().execute(RepairRequest("recipe", "A", {}))
 
 
 def test_ares_daemon_surface_now_scans_without_llm(tmp_path):
