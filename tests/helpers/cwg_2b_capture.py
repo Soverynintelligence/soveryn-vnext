@@ -6,6 +6,7 @@ Used by tests/test_cwg_split_2b_goldens.py. Update files with
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,25 @@ def tool_schemas_from_app(app: Flask) -> dict[str, list[dict[str, Any]]]:
             uniq.append(row)
         out[owner] = uniq
     return out
+
+
+_HOME_PREFIX = re.compile(r"/home/[^/]+")
+
+
+def stabilize_tool_schemas(obj: Any) -> Any:
+    """Drop machine home prefixes so the golden is CI-portable.
+
+    Catalog tool descriptions embed ``~/pondpro/*.json`` as an absolute path
+    (``/home/<user>/pondpro/...``). The golden was captured on unmodified
+    main; compare after rewriting the home prefix, do not regenerate.
+    """
+    if isinstance(obj, str):
+        return _HOME_PREFIX.sub("{home}", obj)
+    if isinstance(obj, dict):
+        return {k: stabilize_tool_schemas(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [stabilize_tool_schemas(v) for v in obj]
+    return obj
 
 
 def resolved_cwg_paths(*, root: Path, data_root: Path, home: Path) -> dict[str, str]:

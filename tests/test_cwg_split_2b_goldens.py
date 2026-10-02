@@ -30,6 +30,7 @@ from tests.helpers.cwg_2b_capture import (
     public_agents_payload_shape,
     resolved_cwg_paths,
     routines_and_skills_snapshot,
+    stabilize_tool_schemas,
     tool_schemas_from_app,
     write_json,
     write_text,
@@ -133,7 +134,7 @@ def test_tool_schema_golden(
         return
     assert path.is_file(), f"missing tool schema golden {path}"
     expected = _read_json(path)
-    assert schemas == expected
+    assert stabilize_tool_schemas(schemas) == stabilize_tool_schemas(expected)
 
     # Spotlight the tools the 2b prompt names — dest/book enums must not drift.
     eve = {row["name"]: row for row in schemas["eve"]}
