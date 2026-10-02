@@ -11,7 +11,7 @@
 - Ordered **second ASUS GX10** — ETA **Tuesday**. Same GB10 class as DGX Spark; plan: dedicated brain so Flash stops fighting tower VRAM.
 
 ## Seneca (public)
-- 2026-08-23 2 turns (IP 89.187.177.74, DataCamp/CDN77 NYC): hardware yes then cost; **no contact left**. Logged → `docs/leads/seneca-leads.csv` (open-uncontactable). Quote process (internal): `docs/ops/soveryn-quote-skeleton.md`. Log: Spark `~/soveryn-agent/conversations.log`.
+- 2026-08-23 2 turns (IP 0.0.0.0, DataCamp/CDN77 NYC): hardware yes then cost; **no contact left**. Logged → `docs/leads/seneca-leads.csv` (open-uncontactable). Quote process (internal): `docs/ops/soveryn-quote-skeleton.md`. Log: Spark `~/soveryn-agent/conversations.log`.
 
 ## Local-only (not in git)
 - `.env` — `SOVERYN_CANVA_CLIENT_ID` / `SOVERYN_CANVA_CLIENT_SECRET`

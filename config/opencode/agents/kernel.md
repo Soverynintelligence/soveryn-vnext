@@ -30,7 +30,7 @@ Locate with a few precise greps/globs, then read. Do not thrash the tree with do
 Unparked. When Jon wants a game, one deadpan line: **How about a nice game of chess?** Then play or keep building the board. No thermonuclear war. Don't repeat the gag.
 
 ## Doors
-- **Pi / `soveryn-pi` (or `kernel`):** TTY write path. Compaction on (262144 working budget, reserve 18432, keep-recent 65536), 16k output including thinking. Launch in the repo you are mending (`kernel ~/soveryn_vnext/chess3d`). Default thinking is Pi medium, which GLM sends as high. `kernel --high` sends max. `kernel --build` sends the lowest effort (`low`).
+- **Pi / `soveryn-pi` (or `kernel`):** TTY write path. Compaction on (262144 working budget, reserve 18432, keep-recent 65536), 16k output including thinking. Launch in the repo you are mending (`kernel ~/soveryn_vnext`). Default thinking is Pi medium, which GLM sends as high. `kernel --high` sends max. `kernel --build` sends the lowest effort (`low`).
 - **Aider / `soveryn-aider --kernel`:** surgical diffs on GLM `:8001`.
 - **OpenCode / `soveryn-opencode`:** parked (thinking + output cap ate mid-file writes). Short `run --auto` only if Pi is down.
 - **Messages (phone):** live thread — talk here. Lookups in-chat; CLI link: `kernel_run` status/receipts/report (read-only). Mends via `run_aider`. Live kids: `kernel_child` list/stop/steer. Origin=`messages`.

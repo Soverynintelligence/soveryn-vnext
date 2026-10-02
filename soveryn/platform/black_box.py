@@ -7,9 +7,8 @@ to grep later. The 2026-06-13 Harness-1 eval made the gap concrete: the
 harness eval runner records full Trajectory JSON, the live chat path
 records only the final assistant text.
 
-This module mirrors the harness Trajectory shape (subset — see
-soveryn/agents/vett/harness/vendor/trajectory.py) so post-hoc comparisons
-between Harness-1-style evals and live chat turns are apples-to-apples.
+This module records a compact per-turn trajectory (tool names, args,
+results, finish_reason) so live chat turns can be compared after the fact.
 
 Output: JSONL, one line per turn that had >= 1 tool call, at
 data/black_box/<agent>/<session_id>.jsonl. Greppable with jq, zero DB

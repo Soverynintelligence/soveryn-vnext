@@ -58,9 +58,7 @@ _DEFAULT_WATCHED_TOOLS: frozenset[str] = frozenset({
     # Vett's web tools (soveryn/platform/web/tools.py)
     "web_search",
     "fetch_url",
-    # Vett-harness tools (soveryn/agents/vett/harness/run_eval.py) — separate
-    # from production /chat but go through the same AgentLoop dispatch when
-    # the harness drives a SoverynVettInferenceModel through a tool loop.
+    # Lattice / document tools (still watched if an agent exposes them).
     "search_corpus",
     "fan_out_search",
     "read_document",

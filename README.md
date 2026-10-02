@@ -38,7 +38,6 @@ soveryn/
 ├── memory/        # conversation store + lattice compatibility shim
 ├── platform/      # shared mechanisms
 │   └── email/     # citizen email (not armed)
-├── tools/         # compatibility shim to platform.tools
 └── validation/    # prod-vnext comparison harness
 
 ~/teammates/        # Critic/Scout overnight — briefs → Messages
@@ -50,4 +49,18 @@ Phase / track verify docs live under `docs/` (`PHASE1_…`, `PHASE2_…`, `TRACK
 
 ```bash
 /home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m pytest
+```
+
+## Host tools
+
+Pi / Kernel file search uses `fd` from `PATH` (not a bundled binary). Install from the package manager:
+
+```bash
+# Debian / Ubuntu
+sudo apt install fd-find
+mkdir -p ~/.local/bin
+ln -s "$(command -v fdfind)" ~/.local/bin/fd   # fdfind is the Debian name
+
+# macOS
+brew install fd
 ```

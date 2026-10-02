@@ -64,6 +64,9 @@ data/router-presets.ini
 # Eval stderr capture (debug noise; .json artifacts stay committed)
 eval_runs/*.stderr
 
+# Lead sheets (personal / visitor data — never commit)
+docs/leads/
+
 # Eve CWG Instagram desk — session cookies, not git
 data/eve_ig_profile/
 # Per-agent browser desks (Google Ads/Business, etc.) — cookies, not git
@@ -123,6 +126,8 @@ tmp/
 
 # OpenCode local install deps (config + plugins are tracked)
 config/opencode/node_modules/
+config/opencode/package.json
+config/opencode/.gitignore
 
 # Package build artifacts
 packages/*/build/

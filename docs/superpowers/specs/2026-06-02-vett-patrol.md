@@ -207,7 +207,7 @@ The pattern is a deliberate copy of the heartbeat shape because that's the right
 
 4. **Should the daemon read Aetheria-tagged domains from the lattice?** I.e., if Aetheria writes a Signal mentioning "Horizon Europe," should Vett's patrol pick that up as a hint of where to look? My instinct: yes, but as a low-priority signal — appears in the briefing under "Aetheria-tagged domains in recent lattice activity" but Vett can ignore. Encourages organic cross-agent influence without hardwiring.
 
-5. **Web etiquette / fetch discipline:** is there a user-agent string you want Vett to identify as? Default suggestion: `"SOVERYN-Vett/1.0 (Sovereign AI Research Agent; contact: jon.deoliveira@gmail.com)"`. Concrete, identifiable, contactable. Some sites block anonymous bots; this respects them.
+5. **Web etiquette / fetch discipline:** is there a user-agent string you want Vett to identify as? Default suggestion: `"SOVERYN-Vett/1.0 (Sovereign AI Research Agent; contact: contact@example.test)"`. Concrete, identifiable, contactable. Some sites block anonymous bots; this respects them.
 
 ## Known risks worth naming up front
 

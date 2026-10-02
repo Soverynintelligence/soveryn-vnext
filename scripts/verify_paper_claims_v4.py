@@ -3,9 +3,8 @@
 
     python scripts/verify_paper_claims_v4.py
 
-Companion to verify_paper_claims.py, which pins v3. That one stays as it is: it
-guards the 840 original trials, and v4 changes none of them. This one guards the
-840 new ones and every claim built on both.
+Current verifier for the published calibration / self-knowledge paper.
+Guards the original 840 trials plus the 840 added in v4.
 
 v4 withdraws v3's headline. A version that withdraws a claim has to be at least
 as checkable as the one it corrects, or the correction is just a different

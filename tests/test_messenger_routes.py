@@ -130,3 +130,24 @@ def test_send_stream_routes_to_agent_loop(client, monkeypatch):
     # In this scaffold test, agent_loops={} so we expect a 503
     # ("agent not loaded"). The Task 12 e2e test fills in a real loop.
     assert resp.status_code in (200, 503)
+
+
+def test_pwa_shared_assets_resolve_to_static_copies():
+    from soveryn.app.routes.messenger import PwaSharedAsset
+
+    for rel, path in PwaSharedAsset._MAP.items():
+        assert path.is_file(), rel
+
+
+def test_pwa_serves_shared_citizen_icons_and_icons(client):
+    css = client.get("/m/pwa/citizen-icons.css")
+    assert css.status_code == 200
+    assert b".sov-cit" in css.data
+
+    js = client.get("/m/pwa/citizen-icons.js")
+    assert js.status_code == 200
+    assert b"soverynCitizenIcon" in js.data
+
+    icon = client.get("/m/pwa/icons/icon-192.png")
+    assert icon.status_code == 200
+    assert icon.data[:8] == b"\x89PNG\r\n\x1a\n"

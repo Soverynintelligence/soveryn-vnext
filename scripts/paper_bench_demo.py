@@ -22,7 +22,6 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-V3 = ROOT / "scripts" / "verify_paper_claims.py"
 V4 = ROOT / "scripts" / "verify_paper_claims_v4.py"
 EVAL = ROOT / "scripts" / "self_knowledge_eval.py"
 
@@ -114,7 +113,6 @@ def main() -> int:
                     help="model for --live (alias:port, default aetheria:8090)")
     ap.add_argument("--export", type=Path, default=None,
                     help="write slim JSON summary for lab/papers-record.html")
-    ap.add_argument("--skip-v3", action="store_true")
     ap.add_argument("--skip-v4", action="store_true")
     args = ap.parse_args()
     turbo = args.turbo
@@ -144,17 +142,6 @@ def main() -> int:
     }
 
     code = 0
-    if not args.skip_v3:
-        banner("ARM A · v3 claim verifier (840 original trials)")
-        print(f"  script: {V3.name}\n")
-        pause(0.3, turbo=turbo)
-        c, lines = run_verifier(V3, turbo=turbo)
-        summary = parse_pass_fail(lines)
-        summary["name"] = "v3 · scale-does-not-buy-self-knowledge checks"
-        results["arms"].append(summary)
-        code |= c
-        pause(0.5, turbo=turbo)
-
     if not args.skip_v4:
         banner("ARM B · v4 claim verifier (1,680 trials total)")
         print(f"  script: {V4.name}\n")
@@ -190,9 +177,7 @@ def main() -> int:
             "false_accept_trials": 420,
             "false_accept_overclaims": 0,
             "false_deny_cells": 420,
-            "v3_checks": next((a["n"] for a in results["arms"] if "v3" in a["name"]), None),
             "v4_checks": next((a["n"] for a in results["arms"] if "v4" in a["name"]), None),
-            "v3_passed": next((a["passed"] for a in results["arms"] if "v3" in a["name"]), None),
             "v4_passed": next((a["passed"] for a in results["arms"] if "v4" in a["name"]), None),
             "all_ok": all(a["all_ok"] for a in results["arms"]) if results["arms"] else False,
             "tagline": "Every quantitative claim reproduces from raw trials.",
@@ -200,7 +185,7 @@ def main() -> int:
                 "1,680 trials across the self-knowledge ladder",
                 "420 / 420 false-accept probes: zero over-claims",
                 "Scale did not buy self-knowledge; calibration moves more",
-                "Same checks as scripts/verify_paper_claims*.py",
+                "Same checks as scripts/verify_paper_claims_v4.py",
             ],
         }
         slim = {
