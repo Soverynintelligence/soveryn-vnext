@@ -1278,7 +1278,7 @@ def create_app(
                     or _os.environ.get(
                         "SOVERYN_CITIZENS_DB",
                         str(
-                            _CitizensSoverynPaths.root()
+                            SoverynPaths.root()
                             / "data"
                             / "citizens.db"
                         ),
