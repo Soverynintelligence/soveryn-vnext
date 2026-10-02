@@ -1,0 +1,75 @@
+{
+  "aetheria_allowed_from": [
+    "aetheria@soverynintelligence.com",
+    "aetheria@carolinawatergardens.com",
+    "pondwright@carolinawatergardens.com"
+  ],
+  "desk": {
+    "pondwright": {
+      "aliases": [
+        "pondwright@carolinawatergardens.com"
+      ],
+      "default": "pondwright@carolinawatergardens.com",
+      "desk": "cwg",
+      "note": "CWG desk agent status address"
+    }
+  },
+  "domains": [
+    "soverynintelligence.com",
+    "carolinawatergardens.com"
+  ],
+  "eve_allowed_from": [
+    "eve@soverynintelligence.com",
+    "eve@carolinawatergardens.com"
+  ],
+  "identities": {
+    "aetheria": {
+      "aliases": [
+        "aetheria@soverynintelligence.com",
+        "aetheria@carolinawatergardens.com"
+      ],
+      "default": "aetheria@soverynintelligence.com",
+      "note": "CoS \u2014 house + CWG voice"
+    },
+    "eve": {
+      "aliases": [
+        "eve@soverynintelligence.com",
+        "eve@carolinawatergardens.com"
+      ],
+      "default": "eve@soverynintelligence.com",
+      "note": "Presence / online + CWG Zoho alias"
+    },
+    "kernel": {
+      "aliases": [
+        "kernel@soverynintelligence.com"
+      ],
+      "default": "kernel@soverynintelligence.com",
+      "note": "Build / code (when resident)"
+    },
+    "pondwright": {
+      "aliases": [
+        "pondwright@carolinawatergardens.com"
+      ],
+      "default": "pondwright@carolinawatergardens.com",
+      "desk": "cwg",
+      "note": "CWG desk agent status address"
+    },
+    "scotty": {
+      "aliases": [
+        "scotty@soverynintelligence.com"
+      ],
+      "default": "scotty@soverynintelligence.com",
+      "folded": true,
+      "note": "FOLDED into Kernel \u2014 not a live citizen (2026-08-23 note); row kept for design history only"
+    },
+    "vett": {
+      "aliases": [
+        "vett@soverynintelligence.com",
+        "vett@carolinawatergardens.com"
+      ],
+      "default": "vett@soverynintelligence.com",
+      "folded": true,
+      "note": "FOLDED into Eve \u2014 not a live citizen (2026-08-23 note); row kept for design history only"
+    }
+  }
+}

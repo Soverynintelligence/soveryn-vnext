@@ -79,11 +79,29 @@ def get_skill_index(
     description so the model knows what exists without loading full bodies.
     """
     name = _normalize_agent(agent)
-    skills_dir = _skills_dir(skills_dir)
-    path = skills_dir / name / "_index.md"
-    if not path.is_file():
-        return ""
-    return path.read_text(encoding="utf-8")
+    primary = _skills_dir(skills_dir)
+    path = primary / name / "_index.md"
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    extras: list[str] = []
+    try:
+        from soveryn.plugins.loader import plugin_skills_dirs
+
+        extra_map = plugin_skills_dirs()
+    except Exception:
+        extra_map = {}
+    extra = extra_map.get(name)
+    if extra is not None:
+        extra_path = Path(extra)
+        if extra_path.name != name:
+            extra_path = extra_path / name if extra_path.is_dir() else extra_path
+        index = extra_path / "_index.md" if extra_path.is_dir() else extra_path
+        if index.is_file() and index.resolve() != path.resolve():
+            extras.append(index.read_text(encoding="utf-8"))
+    if extras:
+        extra_blob = "\n".join(extras)
+        if extra_blob and extra_blob not in text:
+            text = (text.rstrip() + "\n" + extra_blob) if text else extra_blob
+    return text
 
 
 def load_skill(
@@ -99,8 +117,22 @@ def load_skill(
     """
     name = _normalize_agent(agent)
     skill_name = _normalize_skill(skill)
-    skills_dir = _skills_dir(skills_dir)
-    path = skills_dir / name / f"{skill_name}.md"
-    if not path.is_file():
+    primary = _skills_dir(skills_dir)
+    path = primary / name / f"{skill_name}.md"
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    try:
+        from soveryn.plugins.loader import plugin_skills_dirs
+
+        extra = plugin_skills_dirs().get(name)
+    except Exception:
+        extra = None
+    if extra is None:
         return ""
-    return path.read_text(encoding="utf-8")
+    extra_dir = Path(extra)
+    if extra_dir.name != name and extra_dir.is_dir():
+        extra_dir = extra_dir / name
+    alt = extra_dir / f"{skill_name}.md"
+    if alt.is_file():
+        return alt.read_text(encoding="utf-8")
+    return ""

@@ -23,13 +23,25 @@ from soveryn.platform.ledgers.extract import RECEIPT_SUFFIXES, extract_receipt_p
 from soveryn.platform.ledgers.parse import ParsedRow, parse_receipt
 from soveryn.platform.ledgers.parse import _schedule as schedule_for
 from soveryn.platform.ledgers.paths import (
-    cwg_csv,
     ensure_drop_dirs,
-    evidence_root as default_evidence_root,
-    soveryn_csv,
+    repo_root,
 )
 
 ExtractFn = Callable[[Path], ExtractResult]
+
+
+def _registered_book_paths() -> dict[str, Path]:
+    from soveryn.platform.ledgers.registry import all_books
+
+    base = repo_root()
+    return {b.id: b.csv_path(base) for b in all_books()}
+
+
+def _registered_evidence_roots() -> dict[str, Path]:
+    from soveryn.platform.ledgers.registry import all_books
+
+    base = repo_root()
+    return {b.id: b.evidence_path(base) for b in all_books()}
 
 
 @dataclass(frozen=True)
@@ -71,7 +83,9 @@ def normalize_splits(raw: Sequence[Mapping[str, object]] | Sequence[SplitSpec]) 
             desc = str(item.get("description") or "").strip()
         else:
             raise ValueError(f"splits[{i}] must be an object with book and amount")
-        if book not in {"soveryn", "cwg"}:
+        from soveryn.platform.ledgers.registry import book_ids
+
+        if book not in book_ids():
             raise ValueError(f"splits[{i}].book must be soveryn or cwg")
         cash = _money(amount)
         if cash is None:
@@ -106,14 +120,8 @@ def ingest_path(
     path = Path(path)
     extract_fn = extract or extract_receipt_path
     house_defaults = books is None
-    book_paths = books or {
-        "soveryn": soveryn_csv(),
-        "cwg": cwg_csv(),
-    }
-    ev_roots = evidence_roots or {
-        "soveryn": default_evidence_root("soveryn"),
-        "cwg": default_evidence_root("cwg"),
-    }
+    book_paths = books if books is not None else _registered_book_paths()
+    ev_roots = evidence_roots if evidence_roots is not None else _registered_evidence_roots()
 
     extracted = extract_fn(path)
     text = extracted.text or ""
@@ -143,12 +151,15 @@ def ingest_path(
         )
 
     forced = (book or "").strip().lower() or None
-    if forced in {"soveryn", "cwg"}:
+    from soveryn.platform.ledgers.registry import book_ids
+
+    known = book_ids()
+    if forced in known:
         routed = forced
     else:
         routed = hit.book
         hint = (folder_hint or path.parent.name or "").lower()
-        if hint in {"soveryn", "cwg"}:
+        if hint in known:
             if routed == "unsorted":
                 routed = hint
             elif routed != hint:
@@ -192,8 +203,8 @@ def ingest_path(
             message=f"order {parsed.order_id} already on the {book} book",
         )
 
-    other = "cwg" if book == "soveryn" else "soveryn"
-    other_csv = book_paths.get(other)
+    other = next((bid for bid in book_paths if bid != book), None)
+    other_csv = book_paths.get(other) if other else None
     if parsed.order_id and other_csv is not None and has_order_id(load_rows(other_csv), parsed.order_id):
         return IngestResult(
             book="unsorted",
@@ -235,14 +246,8 @@ def split_existing_order(
     if not oid:
         raise ValueError("order_id is required to split an already-filed receipt")
     specs = normalize_splits(splits)
-    book_paths = books or {
-        "soveryn": soveryn_csv(),
-        "cwg": cwg_csv(),
-    }
-    ev_roots = evidence_roots or {
-        "soveryn": default_evidence_root("soveryn"),
-        "cwg": default_evidence_root("cwg"),
-    }
+    book_paths = books if books is not None else _registered_book_paths()
+    ev_roots = evidence_roots if evidence_roots is not None else _registered_evidence_roots()
     template: dict[str, str] | None = None
     for csv_path in book_paths.values():
         hits = rows_for_order(load_rows(csv_path), oid)
@@ -301,8 +306,7 @@ def _apply_splits(
             message="no order id",
         )
 
-    for book in ("soveryn", "cwg"):
-        csv_path = book_paths[book]
+    for book, csv_path in book_paths.items():
         existing = load_rows(csv_path)
         kept = without_order(existing, oid)
         if len(kept) != len(existing):
@@ -392,11 +396,15 @@ def ingest_drop(
         root = ensure_drop_dirs()
     else:
         root = Path(drop)
-        for name in ("soveryn", "cwg", "unsorted"):
+        from soveryn.platform.ledgers.registry import book_ids
+
+        for name in set(book_ids()) | {"unsorted"}:
             (root / name).mkdir(parents=True, exist_ok=True)
 
     results: list[IngestResult] = []
-    for folder in ("soveryn", "cwg", "unsorted"):
+    from soveryn.platform.ledgers.registry import book_ids
+
+    for folder in sorted(set(book_ids()) | {"unsorted"}):
         folder_path = root / folder
         if not folder_path.is_dir():
             continue

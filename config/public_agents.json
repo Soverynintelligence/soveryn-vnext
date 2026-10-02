@@ -1,0 +1,26 @@
+[
+  {
+    "id": "pondwright",
+    "name": "PondWright",
+    "role": "Carolina Water Gardens chat",
+    "port": 8200,
+    "site": "https://chat.pondwright.com",
+    "open": "https://pondwright.com"
+  },
+  {
+    "id": "seneca",
+    "name": "Seneca",
+    "role": "SOVERYN public voice",
+    "port": 8400,
+    "site": "https://ask.soverynintelligence.com",
+    "open": "https://soverynintelligence.com"
+  },
+  {
+    "id": "atticus",
+    "name": "Atticus",
+    "role": "History's Ledger curator",
+    "port": 8500,
+    "site": "https://atticus.historysledger.com",
+    "open": "https://atticus.historysledger.com"
+  }
+]

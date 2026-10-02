@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from soveryn.agents.loop import AgentLoop
-from soveryn.agents.personas import PERSONAS
+from soveryn.agents.personas import PERSONAS, baked_persona, get_persona
 from soveryn.app.startup import create_app
 from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.inference.llama_server_client import ChatResponse
@@ -110,8 +110,10 @@ def test_api_persona_each_active_agent_round_trips(app_state):
         assert payload["persona"]
         if name == "forge":
             assert payload["source"] == "baked"
+            assert payload["persona"] == get_persona(name)
         else:
-            assert payload["persona"] == PERSONAS[name]
+            assert payload["persona"] == get_persona(name)
+            assert payload["baked"] == baked_persona(name)
             assert payload["source"] == "baked"
 
 
@@ -134,8 +136,8 @@ def test_api_persona_put_and_reset(app_state):
     assert reset.status_code == 200
     back = json.loads(reset.data)
     assert back["source"] == "baked"
-    assert back["persona"] == PERSONAS[agent]
-    assert app_state._soveryn_loops[agent].system_prompt == PERSONAS[agent]
+    assert back["persona"] == get_persona(agent)
+    assert app_state._soveryn_loops[agent].system_prompt == get_persona(agent)
 
 
 def test_api_persona_put_rejects_empty(app_state):

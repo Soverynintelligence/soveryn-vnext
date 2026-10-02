@@ -7,23 +7,40 @@ allowlisted. See ``loader.py`` for ``SOVERYN_PLUGINS`` semantics.
 """
 from __future__ import annotations
 
-from soveryn.plugins.api import PLUGIN_API, PluginBase, SoverynPlugin, Worker
+from soveryn.plugins.api import (
+    PLUGIN_API,
+    BookDef,
+    MissionControlGlance,
+    PluginBase,
+    SoverynPlugin,
+    Worker,
+)
 from soveryn.plugins.loader import (
     ensure_loaded,
     iter_chat_image_hooks,
     plugin_board_rows,
+    plugin_extra_allowed_roots,
+    plugin_file_away_buckets,
+    plugin_ledger_books,
+    plugin_prompt_fragments,
     reset_plugins,
     start_background_workers,
 )
 
 __all__ = [
     "PLUGIN_API",
+    "BookDef",
+    "MissionControlGlance",
     "PluginBase",
     "SoverynPlugin",
     "Worker",
     "ensure_loaded",
     "iter_chat_image_hooks",
     "plugin_board_rows",
+    "plugin_extra_allowed_roots",
+    "plugin_file_away_buckets",
+    "plugin_ledger_books",
+    "plugin_prompt_fragments",
     "reset_plugins",
     "start_background_workers",
 ]

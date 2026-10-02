@@ -15,8 +15,16 @@ _FILE_INTENT = re.compile(
     r"\b(file|log|book|ingest|receipt|expense|ledger|tax)\b",
     re.I,
 )
-_CWG = re.compile(r"\bcwg\b|carolina water", re.I)
 _SOVERYN = re.compile(r"\bsoveryn\b|\bsovery\b", re.I)
+
+
+def _chat_regex(book_id: str) -> re.Pattern[str] | None:
+    from soveryn.platform.ledgers.registry import get_book
+
+    book = get_book(book_id)
+    if book is None or not book.chat_regex:
+        return None
+    return re.compile(book.chat_regex, re.I)
 
 
 def receipt_file_book(message: str) -> str | None:
@@ -24,7 +32,8 @@ def receipt_file_book(message: str) -> str | None:
     text = message or ""
     if not _FILE_INTENT.search(text):
         return None
-    cwg = bool(_CWG.search(text))
+    cwg_rx = _chat_regex("cwg")
+    cwg = bool(cwg_rx.search(text)) if cwg_rx is not None else False
     sov = bool(_SOVERYN.search(text))
     if cwg and not sov:
         return "cwg"

@@ -4,12 +4,12 @@ import pytest
 
 from soveryn.agents.personas import (
     AETHERIA_PERSONA,
-    EVE_PERSONA,
     FORGE_PERSONA,
     PERSONAS,
     PersonaError,
     SCOTTY_PERSONA,
     VETT_PERSONA,
+    baked_persona,
     get_persona,
 )
 from soveryn.config.runtime import ACTIVE_AGENTS
@@ -76,7 +76,11 @@ def test_forge_chess_is_unparked_wargames_line(no_persona_overrides):
 
 
 def test_get_persona_returns_eve_string(no_persona_overrides):
-    assert get_persona("eve") == EVE_PERSONA
+    # Assembled default includes builtin CWG fragments; the PERSONAS
+    # constant is the core template with <<PLUGIN_FRAGMENTS>>.
+    assert get_persona("eve") == baked_persona("eve")
+    assert "<<PLUGIN_FRAGMENTS>>" not in get_persona("eve")
+    assert "eve_gbp_status" in get_persona("eve")
 
 
 def test_eve_persona_mentions_decode_qr(no_persona_overrides):
@@ -99,13 +103,13 @@ def test_persona_override_round_trip(tmp_path, monkeypatch):
 
     monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
     assert persona_source("eve") == "baked"
-    assert get_persona("eve") == EVE_PERSONA
+    assert get_persona("eve") == baked_persona("eve")
     save_persona_override("eve", "Eve override for tests.")
     assert persona_source("eve") == "override"
     assert get_persona("eve") == "Eve override for tests."
     clear_persona_override("eve")
     assert persona_source("eve") == "baked"
-    assert get_persona("eve") == EVE_PERSONA
+    assert get_persona("eve") == baked_persona("eve")
 
 
 def test_get_persona_normalizes_case_and_whitespace(no_persona_overrides):
@@ -168,6 +172,8 @@ def test_no_persona_contains_templating_markers():
         assert "}" not in p
         assert "%(" not in p
         assert "<<" not in p
+    assert "<<" not in get_persona("eve")
+    assert "<<" not in baked_persona("eve")
 
 
 def test_personas_are_strings_not_bytes():

@@ -48,6 +48,16 @@ def routine_path(
     bundled = package_dir() / name
     if bundled.is_file():
         return bundled
+    try:
+        from soveryn.plugins.loader import plugin_routines_dirs
+
+        extras = plugin_routines_dirs()
+    except Exception:
+        extras = []
+    for extra in extras:
+        cand = Path(extra) / name
+        if cand.is_file():
+            return cand
     return None
 
 

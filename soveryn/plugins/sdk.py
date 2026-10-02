@@ -12,19 +12,21 @@ from soveryn.agents.signal_bridge.config import SignalBridgeConfig
 from soveryn.config.loader import DEFAULT_DATA_ROOT
 from soveryn.paths import SoverynPaths
 from soveryn.platform.intake.pdf import ExtractResult, extract_pdf_path
-from soveryn.platform.intake.tools import (
+from soveryn.platform.intake.tools import (  # noqa: F401 — underscore aliases stay
+    DEFAULT_ALLOWED_ROOTS,
     _DEFAULT_ALLOWED_ROOTS,
     _resolve_allowed,
+    resolve_allowed,
 )
 from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 from soveryn.platform.intake.turn_images import current_turn_images
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
-from soveryn.platform.webpush.notify import notify_needs_you, notify_pondwright_lead
-
-# Public aliases for the intake helpers (2b will drop the underscore names).
-DEFAULT_ALLOWED_ROOTS = _DEFAULT_ALLOWED_ROOTS
-resolve_allowed = _resolve_allowed
+from soveryn.platform.webpush.notify import (
+    notify_lead,
+    notify_needs_you,
+    notify_pondwright_lead,
+)
 
 
 def data_root() -> Path:
@@ -35,17 +37,6 @@ def data_root() -> Path:
 def repo_root() -> Path:
     """vNext checkout root via ``SoverynPaths`` (never the plugin's ``__file__``)."""
     return SoverynPaths.root()
-
-
-def notify_lead(
-    *,
-    title: str,
-    body: str = "",
-    url: str = "/messages",
-    tag: str | None = None,
-) -> None:
-    """Generic phone ping. Prefer this over the PondWright-named helper."""
-    notify_needs_you(title=title, body=body, url=url, tag=tag)
 
 
 __all__ = [

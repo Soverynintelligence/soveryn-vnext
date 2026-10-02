@@ -671,8 +671,9 @@ def create_app(
         # Not on the all-agent intake loop: do not give this to Kernel or
         # Aetheria.
         from soveryn.platform.intake.tools import register_qr_tools as _register_qr_tools
-        _cwg_ig = Path.home() / "Desktop" / "CWG-Instagram"
-        _qr_roots = _intake_roots + (_cwg_ig,)
+        from soveryn.plugins.loader import plugin_extra_allowed_roots
+
+        _qr_roots = _intake_roots + tuple(plugin_extra_allowed_roots("eve"))
         for _qr_agent in ("eve",):
             _register_qr_tools(
                 tool_registry,

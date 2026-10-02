@@ -14,8 +14,6 @@ import json
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 SPARK_SSH_USER = "soverynspark"
@@ -24,7 +22,7 @@ SPARK_WIFI_HOST = "192.168.86.26"
 _SSH_TIMEOUT = 6.0
 _SSH_CONNECT = 3
 
-PUBLIC_AGENTS: tuple[dict[str, Any], ...] = (
+_DEFAULT_PUBLIC_AGENTS: tuple[dict[str, Any], ...] = (
     {
         "id": "pondwright",
         "name": "PondWright",
@@ -51,30 +49,37 @@ PUBLIC_AGENTS: tuple[dict[str, Any], ...] = (
     },
 )
 
+
+def _load_public_agents() -> tuple[dict[str, Any], ...]:
+    from soveryn.paths import SoverynPaths
+
+    path = SoverynPaths.root() / "config" / "public_agents.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return _DEFAULT_PUBLIC_AGENTS
+    if not isinstance(rows, list) or not rows:
+        return _DEFAULT_PUBLIC_AGENTS
+    clean: list[dict[str, Any]] = []
+    for row in rows:
+        if isinstance(row, dict) and row.get("id"):
+            clean.append(row)
+    return tuple(clean) if clean else _DEFAULT_PUBLIC_AGENTS
+
+
+PUBLIC_AGENTS: tuple[dict[str, Any], ...] = _load_public_agents()
+
 _CACHE_TTL = 15.0
 _cache: dict[str, Any] = {"at": 0.0, "payload": None}
 
-# Owner ack for the "CRM new leads" chip. Leads keep status='new' in the CRM
-# until someone works them, so the chip needs its own clear: a watermark of
-# when Jon last reviewed. Only leads newer than the watermark count.
-_CRM_ACK_FILE = Path.home() / ".soveryn" / "crm_ack"
-
-
-def _crm_ack_ts() -> str | None:
-    try:
-        raw = _CRM_ACK_FILE.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    return raw if raw[:4].isdigit() else None
-
-
 def ack_crm_new_leads() -> dict[str, Any]:
-    """Owner cleared the CRM new-leads chip: watermark now, refresh counts."""
-    _CRM_ACK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    _CRM_ACK_FILE.write_text(
-        datetime.now(timezone.utc).isoformat(), encoding="utf-8"
-    )
-    _cache["at"] = 0.0  # bust the 15s cache so the ack shows immediately
+    """Owner cleared the CRM new-leads chip. Dispatches to the plugin glance."""
+    from soveryn.plugins.loader import plugin_mission_control_glance
+
+    glance = plugin_mission_control_glance()
+    if glance is not None and getattr(glance, "ack", None):
+        return glance.ack()
+    _cache["at"] = 0.0
     return get_public_agents(force=True)
 
 
@@ -99,16 +104,15 @@ class AgentGlance:
 
 
 def _crm_pipeline(ack: str | None = None) -> dict[str, Any]:
-    """Live cwg-ops pipeline glance via the tower CRM client. Never raises."""
-    unavailable = {
-        "ok": False,
-        "error": "crm_unavailable",
-        "open": "https://crm.pondwright.com/",
-        "label": "PondWright CRM",
-    }
+    """Live CRM glance via plugin.mission_control_glance(). Never raises."""
+    from soveryn.plugins.loader import plugin_mission_control_glance
+
+    unavailable = {"ok": False, "error": "crm_unavailable"}
+    glance = plugin_mission_control_glance()
+    if glance is None:
+        return unavailable
     try:
-        from soveryn.platform.pondwright import crm as pw_crm
-        out = pw_crm.pipeline_glance(ack=ack)
+        out = glance.payload(ack=ack)
     except Exception as e:  # noqa: BLE001 — glance must not blank Mission Control
         unavailable["error"] = type(e).__name__
         return unavailable
@@ -263,7 +267,7 @@ def get_public_agents(*, force: bool = False) -> dict[str, Any]:
     # CRM is the live cwg-ops book on the tower tunnel — not the SSH hop,
     # and not the frozen pondwright-crm leads.db. Fail-soft: a dead CRM
     # must not blank PondWright / Seneca / Atticus or the waitlist.
-    crm = _crm_pipeline(ack=_crm_ack_ts())
+    crm = _crm_pipeline()
     if not isinstance(crm, dict):
         crm = {"ok": False, "error": "crm_unavailable"}
 

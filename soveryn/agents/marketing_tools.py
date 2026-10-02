@@ -56,13 +56,52 @@ def _resolve_media_path(raw: str) -> Path:
     return via_media
 
 
+def _photo_inbox() -> Path | None:
+    try:
+        from soveryn.plugins.loader import plugin_extra_allowed_roots
+
+        extra = plugin_extra_allowed_roots("eve")
+    except Exception:
+        extra = []
+    if extra:
+        return Path(extra[0]).expanduser()
+    import os
+
+    raw = (os.environ.get("CWG_PHOTO_INBOX") or "").strip()
+    if raw:
+        return Path(raw).expanduser()
+    return None
+
+
+def _list_inbox_images(inbox: Path, limit: int) -> list[str]:
+    if not inbox.is_dir():
+        return []
+    found: list[str] = []
+    for p in sorted(inbox.iterdir()):
+        if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES:
+            found.append(str(p))
+            if len(found) >= limit:
+                break
+    return found
+
+
+def _in_roots(path: Path, roots: list[Path]) -> bool:
+    for root in roots:
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 def _suggest_media(limit: int = 8) -> list[str]:
     found: list[str] = []
-    from soveryn.platform.social.instagram_desk import list_inbox_images
-    for p in list_inbox_images():
-        found.append(p)
+    inbox = _photo_inbox()
+    if inbox is not None:
+        found.extend(_list_inbox_images(inbox, limit))
         if len(found) >= limit:
-            return found
+            return found[:limit]
     if not MEDIA_ROOT.is_dir():
         return found
     for p in sorted(MEDIA_ROOT.rglob("*")):
@@ -89,13 +128,12 @@ def _validate_media_path(raw: str) -> tuple[str | None, Path | None]:
     if not isinstance(raw, str) or not raw.strip():
         return "image_path must be a non-empty string", None
     p = _resolve_media_path(raw)
-    from soveryn.platform.social.instagram_desk import DEFAULT_INBOX, _in_roots
     roots = [MEDIA_ROOT.resolve()]
-    if DEFAULT_INBOX.exists():
-        roots.append(DEFAULT_INBOX.resolve())
-        # bare filename in the desktop inbox
+    inbox = _photo_inbox()
+    if inbox is not None and inbox.exists():
+        roots.append(inbox.resolve())
         if not p.exists():
-            via_inbox = (DEFAULT_INBOX / Path(raw.strip()).name).resolve()
+            via_inbox = (inbox / Path(raw.strip()).name).resolve()
             if via_inbox.is_file():
                 p = via_inbox
     if not _in_roots(p, roots):
