@@ -57,19 +57,25 @@ Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
-# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
+# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
 ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn-074"   # rollback runtime
 # ensure ~/bin is on PATH
 soveryn doctor
 ```
 
-Runtime (2026-09-30): `soveryn` runs pinned **Pi 0.99.1** on **Node 22.23.2**
-(`bin/soveryn-pi099`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
-`~/.soveryn/pi/0.99.1`; nvm default stays Node 20, PATH untouched).
-Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/0.99.1 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@0.99.1`.
-Previous pin `bin/soveryn-pi087` (Pi 0.87.1, `~/.soveryn/pi/0.87.1`) stays installed as the first rollback;
+Runtime (2026-10-02): `soveryn` runs pinned **Pi 1.0.0** on **Node 22.23.2**
+(`bin/soveryn-pi100`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/1.0.0`; nvm default stays Node 20, PATH untouched; Pi 1.0.0 needs Node >=22.19).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.0.0 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.0.0`.
+Previous pin `bin/soveryn-pi099` (Pi 0.99.1, `~/.soveryn/pi/0.99.1`) stays installed as the first rollback,
+`bin/soveryn-pi087` (Pi 0.87.1, `~/.soveryn/pi/0.87.1`) as the second;
 version-gated settings follow `SOVERYN_PI_VERSION`, so rolling the symlink back also rolls the generated settings back.
+Pi 1.0 defaults the interactive TUI to fullscreen (alt screen). The pinned runtime on Pi >=1.0.0 writes
+`"tuiMode": "regular"` (`src/pinned-pi.js` `pinnedSettingsTuiMode`) so the locked C64/PETSCII look and the
+terminal's normal scrollback stay as on 0.99.1; older pins omit the key (settings byte-identical).
+The wrapper always passes `--model provider/model` (Pi 1.0 errors on `--provider` without `--model`).
 Pi 0.99 built-ins (`builtin:mcp`, `builtin:codemode`, `builtin:tool-search`, `builtin:llama.cpp`):
 the pinned runtime writes `"extensions": ["-builtin:mcp"]` (`src/pinned-pi.js` `pinnedSettingsExtensions`)
 because `defaultProjectTrust: "always"` would otherwise auto-connect a project `.pi/mcp.json`.

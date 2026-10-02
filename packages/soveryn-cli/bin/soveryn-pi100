@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# SOVERYN CLI on pinned Pi 1.0.0 / Node 22 (cut over 2026-10-02).
+#
+# Side-by-side runtimes:
+#   ~/bin/soveryn      -> this file (Pi 1.0.0, Node 22 via explicit nvm path)
+#   bin/soveryn-pi099  -> previous pin (Pi 0.99.1) — kept as first rollback:
+#                         ln -sfn ~/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099 ~/bin/soveryn
+#   bin/soveryn-pi087  -> older pin (Pi 0.87.1) — second rollback
+#   ~/bin/soveryn-074  -> bin/soveryn (Pi 0.74.2 from PATH, Node 20) — legacy rollback
+#   kernel/soveryn-pi  -> unchanged (Pi 0.74.2, Node 20, config/pi)
+#
+# Does NOT change the default Node (nvm default stays 20) and does not touch
+# PATH, so tools run inside a session still see Node 20 / Pi 0.74.2 on PATH.
+#
+# Pi >=0.99 ships built-in extensions (mcp, codemode, tool-search, llama.cpp).
+# src/profiles.js writes "extensions": ["-builtin:mcp"] for this runtime so a
+# project mcp.json never auto-loads under defaultProjectTrust "always".
+# Pi >=1.0 defaults the TUI to fullscreen; src/profiles.js writes
+# "tuiMode": "regular" for this runtime to keep the locked look + scrollback.
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+PKG="$(cd "$(dirname "$SELF")/.." && pwd)"
+REPO="${SOVERYN_VNEXT:-$HOME/soveryn_vnext}"
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+
+PI_PIN_VERSION="1.0.0"
+NODE_PIN_VERSION="v22.23.2"
+
+SOVERYN_PI_NODE="${SOVERYN_PI_NODE:-$NVM_DIR/versions/node/$NODE_PIN_VERSION/bin/node}"
+SOVERYN_PI_BIN="${SOVERYN_PI_BIN:-$HOME/.soveryn/pi/$PI_PIN_VERSION/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js}"
+
+if [[ ! -x "$SOVERYN_PI_NODE" ]]; then
+  echo "soveryn: pinned node missing: $SOVERYN_PI_NODE (rollback: soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  exit 1
+fi
+if [[ ! -f "$SOVERYN_PI_BIN" ]]; then
+  echo "soveryn: pinned Pi $PI_PIN_VERSION missing: $SOVERYN_PI_BIN (rollback: soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  exit 1
+fi
+
+# Always the soveryn-cli harness + its own agent dir, even when launched from
+# inside a Kernel session (soveryn-pi exports SOVERYN_HARNESS=kernel and points
+# SOVERYN_CLI_DIR/PI_CODING_AGENT_DIR at config/pi).
+export SOVERYN_HARNESS=soveryn-cli
+export SOVERYN_VNEXT="$REPO"
+unset SOVERYN_KERNEL_DIR SOVERYN_CLI_PROFILE_FILE
+case "${SOVERYN_CLI_DIR:-}" in
+  ""|*/config/pi|*/config/pi/) export SOVERYN_CLI_DIR="$REPO/config/soveryn-cli" ;;
+esac
+
+export SOVERYN_PI_NODE SOVERYN_PI_BIN
+export SOVERYN_PI_VERSION="$PI_PIN_VERSION"
+
+exec "$SOVERYN_PI_NODE" "$PKG/src/cli.js" "$@"
