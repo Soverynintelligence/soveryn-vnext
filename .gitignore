@@ -147,6 +147,10 @@ data/gbp/
 # Google Calendar OAuth tokens (never commit)
 data/gcal/
 
+# Local customer teach facts (PII — never commit)
+seed_customer_facts.json
+**/seed_customer_facts.json
+
 # Live tax books and receipt evidence (EIN, address, invoices). Public repo.
 # Keep the tax-cwg README so Eve can see COI vs receipt routing.
 docs/ops/tax/

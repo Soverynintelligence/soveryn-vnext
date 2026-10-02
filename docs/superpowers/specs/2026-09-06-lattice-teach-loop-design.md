@@ -60,8 +60,7 @@ One sentence of **current operational truth**.
 **Entity key (optional but preferred for supersede):** stable slug, e.g.
 
 - `house.rule.no_street_address`
-- `cwg.job.valkanoff`
-- `cwg.job.dan_ward`
+- `cwg.job.example` (customer job facts live in untracked local seed, not git)
 - `cwg.ads.pmax`
 - `lab.voice.tts`
 - `lab.kernel.runtime`
@@ -77,7 +76,7 @@ One sentence of **current operational truth**.
 **In:**
 
 1. House operating rules (no public street, seating freezes, voice=Kokoro, Kernel=OpenCode+Sparks, Vett folded→Eve, …)
-2. CWG job / ops facts Jon locks (Ward hold, Valkanoff don’t-contact, Care budgets, ads paused, travel rule builds-vs-green-water)
+2. CWG job / ops facts Jon locks (customer holds and don’t-contact notes stay in the untracked local seed; Care budgets, ads paused, travel rule builds-vs-green-water)
 
 **Out (v1):**
 
@@ -145,18 +144,17 @@ Teach via `remember_fact` (or one-shot script using the same Writer path) — do
 
 Suggested first seeds (Jon confirms wording):
 
-1. CWG has no public street address (home = office); service-area + (910) 581-3970 only — `house.rule.no_street_address` / `cwg.rule.no_street`
+1. CWG has no public street address (home = office); service-area business only — `house.rule.no_street_address` / `cwg.rule.no_street`
 2. CWG Google Ads Performance Max paused (account + conversion tag kept) — `cwg.ads.pmax`
-3. Dan Ward rebuild ON HOLD — do not quote / lock dollars — `cwg.job.dan_ward`
-4. Andrew Valkanoff: paid; do not contact; CWG owes two fish; twice-yearly service $170 — `cwg.job.valkanoff`
-5. Builds: travel where customer pays; green-water / maintenance stay local Sandhills (not Charlotte green-water) — `cwg.rule.travel`
+3. Customer job holds / don’t-contact notes — local `seed_customer_facts.json` only (not in git)
+4. Builds: travel where customer pays; green-water / maintenance stay local Sandhills (not Charlotte green-water) — `cwg.rule.travel`
 6. Aetheria TTS = Kokoro (not F5) — `lab.voice.tts`
 7. Kernel = OpenCode + vLLM on Sparks; not Hermes runtime — `lab.kernel.runtime`
 8. Vett folded into Eve — no live Vett seat — `house.bench.vett`
 9. Aquascape Inc = supplier / trend signal for backyard ideas — not peer competitor — `cwg.supplier.aquascape`
 10. Estimator locked; pondwright.com public build hold — as applicable
 
-Acceptance: Eve and Aetheria both retrieve the same node id for a phone/name query that hits the fact rail.
+Acceptance: Eve and Aetheria both retrieve the same node id for a query that hits the fact rail.
 
 ---
 

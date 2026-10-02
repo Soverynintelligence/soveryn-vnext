@@ -145,3 +145,22 @@ def test_automation_source_auto_approves_read_tools_not_writes():
     assert requires_approval("eve_google_desk_status", source="direct") is False
     assert requires_approval("read_x", source="direct") is False
     assert requires_approval("read_x", source="automation") is False
+
+
+def test_cwg_live_posting_tools_require_approval():
+    """Split contract: live CWG surfaces stay gated.
+
+    ``requires_approval`` treats unknown tools as ungated. If these names
+    drift off the hardcoded list during the CWG extract, posting would
+    go live without the Approval Gate. Lock the names here; do not change
+    the fail-safe default.
+    """
+    for tool in (
+        "eve_ig_post",
+        "eve_gbp_post",
+        "eve_calendar_create",
+        "eve_calendar_complete",
+    ):
+        assert requires_approval(tool) is True, tool
+        assert requires_approval(tool, source="direct") is True, tool
+        assert requires_approval(tool, source="automation") is True, tool
