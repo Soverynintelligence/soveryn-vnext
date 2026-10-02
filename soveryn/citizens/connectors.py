@@ -146,35 +146,6 @@ CATALOG: dict[str, ConnectorDef] = {
         class_="house",
         sovereignty_note="House patrol state + web via web connector.",
     ),
-    "pondwright": ConnectorDef(
-        id="pondwright",
-        title="PondWright CRM + pricing",
-        description=(
-            "CWG lead/quote/job CRM plus Apex and AKT catalogs and the estimator "
-            "rate book — not the public web."
-        ),
-        tools=(
-            "apex_catalog_search",
-            "akt_catalog_search",
-            "pondwright_pricing_book",
-            "pondwright_catalog_refresh",
-            "pondwright_leads",
-            "pondwright_save_lead",
-            "pondwright_save_quote",
-            "pondwright_jobs",
-            "pondwright_customers",
-        ),
-        class_="house",
-        sovereignty_note=(
-            "CRM is pondwright-cwg-ops on the Spark (Eve ops Basic at "
-            "crm.pondwright.com / tunneled 127.0.0.1:8100). "
-            "Catalogs: Apex (xlsx) and AKT Specialty stay separate. "
-            "Wholesale stays house-only."
-        ),
-    ),
-
-
-
     "code": ConnectorDef(
         id="code",
         title="Local code exec",
@@ -190,54 +161,50 @@ CATALOG: dict[str, ConnectorDef] = {
             "Compose Instagram/Facebook post drafts. In Messages, Gate Allow "
             "sends the pack to Signal for manual publishing."
         ),
-        tools=(
-            "compose_post",
-            "eve_ig_post",
-            "eve_gbp_post",
-            "eve_gbp_status",
-            "eve_google_desk_status",
-            "eve_calendar_status",
-            "eve_calendar_list",
-            "eve_calendar_create",
-            "eve_calendar_complete",
-            "eve_photo_inbox",
-        ),
+        tools=("compose_post",),
         class_="channel",
         sovereignty_note=(
             "Interactive compose_post is Gate-approved (Allow → Signal). "
             "Scheduled Eve cadence may auto-drop drafts. "
-            "eve_ig_post, eve_gbp_post, and eve_calendar_create are Gate-only "
-            "(never cadence) — CWG Instagram / Google Business / Calendar. "
-            "No password, no ads spend. Calendar list/status are read-only."
+            "CWG Instagram / GBP / Calendar live on the cwg plugin "
+            "(``cwg_social``), not this core connector."
         ),
     ),
 }
 
+# Frozen core snapshot. The loader restores these before merging plugin
+# connectors / grants so ``SOVERYN_PLUGINS`` flips do not accumulate.
+CORE_CATALOG: dict[str, ConnectorDef] = dict(CATALOG)
+CATALOG = dict(CORE_CATALOG)
 
 # Founding grants — who may hold which connector (Jon’s grants).
 # Status "armed" still depends on runtime config (SMTP, signal bridge, …).
-FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
+# PondWright / cwg_social come from the CWG plugin's default_grants().
+CORE_FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
     # Email stays eve + kernel only (Jon, 2026-09-18) — production latch is on,
     # so granting it elsewhere puts them on live Zoho egress at next restart.
     "aetheria": (
         "web", "signal", "messenger", "files", "documents",
-        "system", "delegation", "house_post", "pondwright",
+        "system", "delegation", "house_post",
     ),
     "vett": (
         "web", "files", "documents", "system", "house_post",
-        "git", "patrol", "pondwright",
+        "git", "patrol",
     ),
     "scotty": (
         "files", "system", "house_post", "code",
     ),
     "eve": (
         "social", "signal", "files", "documents", "house_post", "email",
-        "web", "git", "pondwright", "system", "x",
+        "web", "git", "system", "x",
     ),
     "forge": (
         "files", "documents", "system", "house_post", "code", "git", "email",
         "web",
     ),
+}
+FOUNDING_GRANTS: dict[str, tuple[str, ...]] = {
+    k: tuple(v) for k, v in CORE_FOUNDING_GRANTS.items()
 }
 
 
@@ -276,21 +243,19 @@ X_READ_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
     "read_x",
 })
 
-# House-local PondWright pricing — always ungated (no egress).
-PONDWRIGHT_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
-    "apex_catalog_search",
-    "akt_catalog_search",
-    "pondwright_pricing_book",
-    "pondwright_catalog_refresh",
+# Hardcoded in core — plugins can never auto-approve these. The loader
+# logs and drops any overlap with plugin auto/ungated sets. ``compose_post``
+# stays in AUTOMATION_AUTO_APPROVE_TOOLS so source=automation still bypasses
+# (Eve Mon/Thu cadence); that core exception is not plugin-controlled.
+CORE_ALWAYS_GATED: frozenset[str] = frozenset({
+    "email_send",
+    "messenger_send",
+    "compose_post",
+    "eve_ig_post",
+    "eve_gbp_post",
+    "eve_calendar_create",
+    "eve_calendar_complete",
 })
-
-# CWG Google Calendar reads — no egress.
-GCAL_READ_AUTO_APPROVE_TOOLS: frozenset[str] = frozenset({
-    "eve_calendar_status",
-    "eve_calendar_list",
-    "eve_photo_inbox",
-})
-
 
 
 # Read-only tools that scheduled/manual automations may use without blocking
@@ -327,35 +292,39 @@ def requires_approval(tool_name: str, *, source: str | None = None) -> bool:
     When ``source="automation"``, additional tools in
     ``AUTOMATION_AUTO_APPROVE_TOOLS`` also bypass. Write egress stays gated.
 
-    Fail-safe: unknown tools return False (house-local, never egress).
+    Plugin tools: gated / auto-approve / ungated sets from the loader. A
+    plugin can never auto-approve a ``CORE_ALWAYS_GATED`` name. Undeclared
+    plugin tools are fail-closed (gated). Core's own unknown → False
+    default is unchanged.
+
+    Fail-safe: unknown *core* tools return False (house-local, never egress).
     """
+    from soveryn.plugins.loader import plugin_gate_sets
+
+    plugin_auto, plugin_gated, plugin_automation_auto = plugin_gate_sets()
+
     if tool_name in WEB_AUTO_APPROVE_TOOLS:
         return False
     if tool_name in X_READ_AUTO_APPROVE_TOOLS:
         return False
-    if tool_name in PONDWRIGHT_AUTO_APPROVE_TOOLS:
-        return False
-    if tool_name in GCAL_READ_AUTO_APPROVE_TOOLS:
+    # Plugin auto-approve replaces the old in-tree PondWright / GCal read sets.
+    # Loader already stripped CORE_ALWAYS_GATED names from this set.
+    if tool_name in plugin_auto:
         return False
     if source == "automation" and tool_name in AUTOMATION_AUTO_APPROVE_TOOLS:
         return False
+    if source == "automation" and tool_name in plugin_automation_auto:
+        return False
+    if tool_name in CORE_ALWAYS_GATED:
+        return True
+    if tool_name in plugin_gated:
+        return True
 
     for defn in CATALOG.values():
         if defn.class_ != "optional_egress":
             continue
         if tool_name in defn.tools:
             return True
-    # human-facing channels: outbound to the world — gated
-    if tool_name in (
-        "email_send",
-        "messenger_send",
-        "compose_post",
-        "eve_ig_post",
-        "eve_gbp_post",
-        "eve_calendar_create",
-        "eve_calendar_complete",
-    ):
-        return True
     return False
 
 
@@ -425,6 +394,11 @@ def signal_armed() -> tuple[bool, str]:
 
 
 def connector_armed(connector_id: str) -> tuple[bool, str]:
+    from soveryn.plugins.loader import plugin_armed
+
+    plugin_result = plugin_armed(connector_id)
+    if plugin_result is not None:
+        return plugin_result
     if connector_id == "web":
         return web_armed()
     if connector_id == "email":
@@ -443,7 +417,7 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
     # house connectors always "armed" as local
     if connector_id in (
         "files", "documents", "system", "delegation", "house_post", "git",
-        "patrol", "code", "pondwright",
+        "patrol", "code",
     ):
         return True, "house-local"
     return False, "unknown connector"
@@ -451,7 +425,9 @@ def connector_armed(connector_id: str) -> tuple[bool, str]:
 
 def for_citizen(citizen_id: str) -> list[ConnectorStatus]:
     from soveryn.platform.email.identities import allowed_from_addresses, identity_for
+    from soveryn.plugins.loader import ensure_loaded
 
+    ensure_loaded()
     grants = set(FOUNDING_GRANTS.get(citizen_id, ()))
     out: list[ConnectorStatus] = []
     for cid, defn in CATALOG.items():
@@ -485,7 +461,9 @@ def for_citizen(citizen_id: str) -> list[ConnectorStatus]:
 
 def board_payload() -> dict[str, Any]:
     from soveryn.platform.email.identities import board_identities
+    from soveryn.plugins.loader import ensure_loaded, plugin_board_rows
 
+    ensure_loaded()
     by_citizen = {
         cid: [c.as_dict() for c in for_citizen(cid) if c.granted]
         for cid in FOUNDING_GRANTS
@@ -517,6 +495,7 @@ def board_payload() -> dict[str, Any]:
             "web_armed": web_ok,
             "web_note": web_why,
         },
+        "plugins": plugin_board_rows(),
         "reading": (
             "Connectors are grants + configuration. Armed means the house can "
             "actually invoke the channel. Citizen email is NOT PRODUCTION until "

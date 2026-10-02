@@ -92,9 +92,14 @@ def test_board_payload_shape():
     assert "catalog" in p and "by_citizen" in p and "house" in p
     assert "aetheria" in p["by_citizen"]
     assert any(c["id"] == "web" for c in p["by_citizen"]["aetheria"])
+    assert "plugins" in p
+    assert any(row["id"] == "cwg" and row["source"] == "builtin" for row in p["plugins"])
 
 
 def test_pondwright_connector_names_live_cwg_ops_crm():
+    from soveryn.plugins.loader import ensure_loaded
+
+    ensure_loaded()
     note = CATALOG["pondwright"].sovereignty_note
     assert "pondwright-cwg-ops" in note
     assert "field token" not in note.lower()
@@ -120,8 +125,9 @@ def test_requires_approval_web_ungated_writes_gated():
     assert requires_approval("eve_photo_inbox") is False
     assert requires_approval("pondwright_catalog_refresh") is False
     assert requires_approval("pondwright_leads") is False
-    assert requires_approval("pondwright_save_lead") is False
-    assert requires_approval("pondwright_save_quote") is False
+    # D3 (2026-10-02): live CRM writes are Approval-Gated.
+    assert requires_approval("pondwright_save_lead") is True
+    assert requires_approval("pondwright_save_quote") is True
     assert requires_approval("pondwright_jobs") is False
     assert requires_approval("pondwright_customers") is False
     assert requires_approval("eve_calendar_list") is False

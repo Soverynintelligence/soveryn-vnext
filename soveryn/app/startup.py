@@ -1190,24 +1190,16 @@ def create_app(
                 name="messenger-delivery-worker",
             ).start()
 
-        # PondWright lead watch — CRM is on Spark; Messages push is here.
-        # Polls the existing :8100 tunnel. First tick seeds IDs (no dump).
-        # Default ON when the module imports; a missing CWG package must not
-        # take down create_app.
-        if app.config.setdefault("SOVERYN_START_LEAD_WATCH", True):
-            import threading as _lead_watch_threading
-            try:
-                from soveryn.platform.pondwright.lead_watch import (
-                    run_forever as _lead_watch_run,
-                )
-            except Exception:
-                logger.exception("pondwright lead-watch not started")
-            else:
-                _lead_watch_threading.Thread(
-                    target=_lead_watch_run,
-                    daemon=True,
-                    name="pondwright-lead-watch",
-                ).start()
+        # Plugin background workers (CWG lead-watch today). Default ON —
+        # SOVERYN_START_LEAD_WATCH still gates the builtin worker. A missing
+        # or raising plugin must not take down create_app.
+        app.config.setdefault("SOVERYN_START_LEAD_WATCH", True)
+        try:
+            from soveryn.plugins.loader import start_background_workers
+
+            start_background_workers(app)
+        except Exception:
+            logger.exception("plugin background workers not started")
 
         # Delegation background worker — drains dispatched tasks every 5s,
         # calling execute_task for each (engine drives worktree isolation,
