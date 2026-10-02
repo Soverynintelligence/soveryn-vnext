@@ -42,7 +42,7 @@ def wt(tmp_path):
 def test_acceptance_green(wt):
     (wt / "tests" / "test_ok.py").write_text("def test_ok():\n    assert True\n")
     passed, output = run_acceptance_in_worktree(str(wt), "python -m pytest tests/test_ok.py -q")
-    assert passed is True
+    assert passed is True, output
     assert "passed" in output
 
 
@@ -58,8 +58,8 @@ def test_acceptance_respects_shlex_quoting(wt):
     # naive str.split() would shatter it into '"a' and 'b"' and the exit code
     # would flip. This is the concrete shlex-vs-split regression guard.
     cmd = 'python -c \'import sys; sys.exit(0 if sys.argv[1] == "a b" else 3)\' "a b"'
-    passed, _ = run_acceptance_in_worktree(str(wt), cmd)
-    assert passed is True
+    passed, output = run_acceptance_in_worktree(str(wt), cmd)
+    assert passed is True, output
 
 
 def test_acceptance_bad_quotes_is_clean_false(wt):

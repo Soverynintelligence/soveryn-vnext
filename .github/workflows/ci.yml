@@ -1,0 +1,56 @@
+# Minimal CI: install, ruff correctness, default-marker pytest.
+# Do not deselect tests or loosen the ruff select here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install bubblewrap
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          # ubuntu-latest is 24.04+: AppArmor defaults to
+          # kernel.apparmor_restrict_unprivileged_userns=1, which makes
+          # `bwrap --unshare-net` fail with
+          # "loopback: Failed RTM_NEWADDR: Operation not permitted".
+          # The sandbox still uses --unshare-net; this only lets the
+          # runner create the user namespace bwrap needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Install package and test deps
+        id: install
+        run: |
+          set -eux
+          python -m pip install -U pip setuptools wheel
+          python -m pip install -e .
+          python -m pip install pytest ruff
+
+      - name: Ruff (correctness only)
+        if: steps.install.outcome == 'success'
+        run: ruff check --select E9,F821 soveryn scripts packages
+
+      # GHA skips later steps after a failure unless the condition handles
+      # failure. always() is required so pytest still runs when ruff is red.
+      - name: Pytest (default markers)
+        if: always() && steps.install.outcome == 'success'
+        run: python -m pytest
