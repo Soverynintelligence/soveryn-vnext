@@ -27,7 +27,15 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install bubblewrap
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          # ubuntu-latest is 24.04+: AppArmor defaults to
+          # kernel.apparmor_restrict_unprivileged_userns=1, which makes
+          # `bwrap --unshare-net` fail with
+          # "loopback: Failed RTM_NEWADDR: Operation not permitted".
+          # The sandbox still uses --unshare-net; this only lets the
+          # runner create the user namespace bwrap needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Install package and test deps
         id: install
