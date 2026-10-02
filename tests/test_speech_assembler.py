@@ -159,7 +159,7 @@ def test_assemble_ranked_recall_lists_locked_facts_ahead_of_cosine() -> None:
         type="semantic",
         layer="private",
         agent="aetheria",
-        content="CWG phone is (910) 581-3970",
+        content="House desk phone is (555) 010-0000",
         intensity=1.0,
         salience=1.0,
         access_count=0,
@@ -190,7 +190,7 @@ def test_assemble_ranked_recall_lists_locked_facts_ahead_of_cosine() -> None:
     )
     rendered = assemble_ranked_recall(((other, 0.99),), fact_nodes=(fact,))
     assert rendered.startswith("Locked facts:")
-    assert "(910) 581-3970" in rendered
+    assert "(555) 010-0000" in rendered
     assert rendered.index("Locked facts:") < rendered.index("Stateable recall:")
 
 

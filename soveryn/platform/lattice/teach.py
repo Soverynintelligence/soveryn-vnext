@@ -275,7 +275,7 @@ def build_remember_fact_tool(
                 },
                 "entity": {
                     "type": "string",
-                    "description": "Stable slug e.g. cwg.job.dan_ward",
+                    "description": "Stable slug e.g. cwg.job.example",
                 },
                 "source": {
                     "type": "string",

@@ -25,8 +25,8 @@ def _stores(tmp_path):
 def test_remember_fact_writes_global_canonical(tmp_path):
     lattice, attic = _stores(tmp_path)
     out = remember_fact(
-        "CWG phone is (910) 581-3970",
-        entity="cwg.phone",
+        "House desk phone is (555) 010-0000",
+        entity="house.phone",
         source="jon",
         as_of="2026-09-06",
         lattice_store=lattice,
@@ -41,26 +41,26 @@ def test_remember_fact_writes_global_canonical(tmp_path):
     assert node.layer == LAYER_GLOBAL
     assert node.type == "fact"
     assert CANONICAL_FACT_TAG in node.tags
-    assert entity_tag("cwg.phone") in node.tags
+    assert entity_tag("house.phone") in node.tags
     assert node.provenance["cls"] == "told"
     assert node.provenance["source"] == "jon"
     assert node.provenance["generator"] == "teach_loop"
     assert node.provenance["receipt"]["kind"] == "user_remember"
-    assert attic.fetch("910") == ()
+    assert attic.fetch("555") == ()
 
 
 def test_remember_fact_supersedes_entity(tmp_path):
     lattice, attic = _stores(tmp_path)
     first = remember_fact(
-        "Dan Ward rebuild active",
-        entity="cwg.job.dan_ward",
+        "example job rebuild active",
+        entity="cwg.job.example",
         lattice_store=lattice,
         attic_store=attic,
         agent="eve",
     )
     second = remember_fact(
-        "Dan Ward rebuild ON HOLD — do not quote dollars",
-        entity="cwg.job.dan_ward",
+        "example job rebuild ON HOLD — do not quote dollars",
+        entity="cwg.job.example",
         lattice_store=lattice,
         attic_store=attic,
         agent="eve",
@@ -72,12 +72,12 @@ def test_remember_fact_supersedes_entity(tmp_path):
     old = lattice.get_node(first["lattice_id"])
     new = lattice.get_node(second["lattice_id"])
     assert HISTORICAL_SNAPSHOT_TAG in old.tags
-    assert old.content == "Dan Ward rebuild active"
+    assert old.content == "example job rebuild active"
     assert CANONICAL_FACT_TAG in new.tags
     assert HISTORICAL_SNAPSHOT_TAG not in new.tags
     assert new.layer == LAYER_GLOBAL
 
-    current = find_current_canonical_by_entity(lattice, "cwg.job.dan_ward")
+    current = find_current_canonical_by_entity(lattice, "cwg.job.example")
     assert current is not None
     assert current.id == second["lattice_id"]
 
@@ -100,15 +100,15 @@ def test_remember_fact_supersedes_entity(tmp_path):
 def test_fact_rail_returns_seed(tmp_path):
     lattice, attic = _stores(tmp_path)
     out = remember_fact(
-        "CWG has no public street address; service-area + (910) 581-3970 only",
+        "CWG has no public street address; service-area business only",
         entity="house.rule.no_street_address",
         lattice_store=lattice,
         attic_store=attic,
         agent="aetheria",
     )
-    hits = lattice.find_canonical_facts("eve", "what is the 910 number")
+    hits = lattice.find_canonical_facts("eve", "what is the street address rule")
     assert any(n.id == out["lattice_id"] for n in hits)
-    hits_a = lattice.find_canonical_facts("aetheria", "street address 910")
+    hits_a = lattice.find_canonical_facts("aetheria", "street address service-area")
     assert any(n.id == out["lattice_id"] for n in hits_a)
 
 

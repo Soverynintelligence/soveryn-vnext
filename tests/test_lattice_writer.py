@@ -118,7 +118,7 @@ def test_factual_anchor_with_tool_receipt_is_canonical_fact(tmp_path):
     writer = LatticeWriter(lattice_store=lattice, attic_store=attic, agent="aetheria")
 
     result = writer.write(
-        "CWG phone is (910) 581-3970",
+        "House desk phone is (555) 010-0000",
         region=Region.SEMANTIC,
         kind="factual_anchor",
         provenance=_provenance(),
@@ -128,7 +128,7 @@ def test_factual_anchor_with_tool_receipt_is_canonical_fact(tmp_path):
     assert result.destination == "lattice"
     node = lattice.get_node(result.lattice_id)
     assert CANONICAL_FACT_TAG in node.tags
-    hits = lattice.find_canonical_facts("aetheria", "what is the 910 number")
+    hits = lattice.find_canonical_facts("aetheria", "what is the 555 number")
     assert any(n.id == node.id for n in hits)
 
 

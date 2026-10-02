@@ -13,6 +13,8 @@ from __future__ import annotations
 from soveryn.paths import SoverynPaths
 
 import argparse
+import json
+import os
 import sys
 from pathlib import Path
 
@@ -20,23 +22,21 @@ from soveryn.platform.lattice.attic import AtticStore
 from soveryn.platform.lattice.legacy import LatticeStore
 from soveryn.platform.lattice.teach import remember_fact
 
+# Optional untracked customer facts (PII). Env overrides the default path.
+CUSTOMER_FACTS_ENV = "SOVERYN_SEED_CUSTOMER_FACTS"
+CUSTOMER_FACTS_FILENAME = "seed_customer_facts.json"
+
 # Spec seed list (2026-09-06 lattice teach loop). Content ≤400 chars.
+# Customer-specific names, notes, and phone numbers live in the optional
+# local file — never in this public list.
 SEED_FACTS: tuple[tuple[str, str], ...] = (
     (
         "house.rule.no_street_address",
-        "CWG has no public street address (home = office); service-area business + (910) 581-3970 only.",
+        "CWG has no public street address (home = office); service-area business only.",
     ),
     (
         "cwg.ads.pmax",
         "CWG Google Ads Performance Max is paused; account and conversion tag kept.",
-    ),
-    (
-        "cwg.job.dan_ward",
-        "Dan Ward rebuild is ON HOLD — do not quote or lock dollars.",
-    ),
-    (
-        "cwg.job.valkanoff",
-        "Andrew Valkanoff: paid; do not contact; CWG owes two fish; twice-yearly service $170.",
     ),
     (
         "cwg.rule.travel",
@@ -69,6 +69,42 @@ def default_lattice_db() -> Path:
     return SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
 
 
+def customer_facts_path() -> Path:
+    override = (os.environ.get(CUSTOMER_FACTS_ENV) or "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / "soveryn_vnext" / "data" / "memory" / CUSTOMER_FACTS_FILENAME
+
+
+def load_customer_facts(path: Path | None = None) -> tuple[tuple[str, str], ...]:
+    """Read optional local customer facts. Missing or unreadable → empty."""
+    target = path if path is not None else customer_facts_path()
+    try:
+        if not target.is_file():
+            return ()
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except Exception:
+        return ()
+    if not isinstance(raw, list):
+        return ()
+    facts: list[tuple[str, str]] = []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            entity, content = str(item[0]).strip(), str(item[1]).strip()
+        elif isinstance(item, dict):
+            entity = str(item.get("entity") or "").strip()
+            content = str(item.get("content") or "").strip()
+        else:
+            continue
+        if entity and content:
+            facts.append((entity, content))
+    return tuple(facts)
+
+
+def all_seed_facts() -> tuple[tuple[str, str], ...]:
+    return SEED_FACTS + load_customer_facts()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Seed Lattice teach-loop house facts")
     parser.add_argument(
@@ -94,15 +130,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: lattice db not found: {db}", file=sys.stderr)
         return 2
 
+    facts = all_seed_facts()
     if args.dry_run:
-        for entity, content in SEED_FACTS:
+        for entity, content in facts:
             print(f"DRY {entity}: {content}")
         return 0
 
     lattice = LatticeStore(db)
     attic = AtticStore()
     results = []
-    for entity, content in SEED_FACTS:
+    for entity, content in facts:
         out = remember_fact(
             content,
             entity=entity,

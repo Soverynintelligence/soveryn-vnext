@@ -6,6 +6,7 @@ Stable machine-readable error codes (see soveryn/app/startup.py).
 
 from __future__ import annotations
 import json as _json
+import logging
 from datetime import datetime
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
@@ -20,6 +21,7 @@ from soveryn.inference.llama_server_client import LlamaServerError, LlamaServerT
 from soveryn.inference.routing import RoutingError
 
 bp = Blueprint("chat", __name__)
+logger = logging.getLogger(__name__)
 
 # Teammates overnight → Messages inboxes (read-only; not chattable agents).
 INBOX_AGENTS: frozenset[str] = frozenset({"t_critic", "t_scout"})
@@ -43,6 +45,26 @@ _PDF_DATA_PREFIX = "data:application/pdf"
 
 
 # ─── Small helpers (route-local, deliberately not abstracted further) ────────
+
+class ChatReceiptHook:
+    """Best-effort ledger splice for chat image turns.
+
+    A missing or raising CWG/ledger receipt hook must never 500 the turn.
+    """
+
+    @staticmethod
+    def apply(message: str, images: tuple[str, ...]) -> str:
+        try:
+            from soveryn.platform.ledgers.auto import apply_chat_receipt
+
+            ledger_block = apply_chat_receipt(message, images)
+        except Exception:
+            logger.exception("chat receipt hook failed; continuing without ledger splice")
+            return message
+        if ledger_block:
+            return ledger_block + "\n\n" + message
+        return message
+
 
 def _err(code: str, message: str, status: int):
     return jsonify({"error": {"code": code, "message": message}}), status
@@ -373,11 +395,7 @@ def chat():
     elif not message.strip():
         message = "(image)"
     if images:
-        from soveryn.platform.ledgers.auto import apply_chat_receipt
-
-        ledger_block = apply_chat_receipt(message, images)
-        if ledger_block:
-            message = ledger_block + "\n\n" + message
+        message = ChatReceiptHook.apply(message, images)
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:
@@ -542,11 +560,7 @@ def chat_stream():
     elif not message.strip():
         message = "(image)"
     if images:
-        from soveryn.platform.ledgers.auto import apply_chat_receipt
-
-        ledger_block = apply_chat_receipt(message, images)
-        if ledger_block:
-            message = ledger_block + "\n\n" + message
+        message = ChatReceiptHook.apply(message, images)
 
     source, source_err = _validate_source(body.get("source"))
     if source_err is not None:

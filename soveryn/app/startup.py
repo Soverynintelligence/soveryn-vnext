@@ -654,12 +654,15 @@ def create_app(
             )
 
         # Two tax books (SOVERYN vs CWG). Same agents as PDF intake.
-        from soveryn.platform.ledgers.tools import (
-            register_ledger_tools as _register_ledger_tools,
-        )
-
-        for _ledger_agent in _INTAKE_AGENTS:
-            _register_ledger_tools(tool_registry, owner_agent=_ledger_agent)
+        # Optional: a missing CWG/ledger package must not take down create_app.
+        try:
+            from soveryn.platform.ledgers.tools import (
+                register_ledger_tools as _register_ledger_tools,
+            )
+            for _ledger_agent in _INTAKE_AGENTS:
+                _register_ledger_tools(tool_registry, owner_agent=_ledger_agent)
+        except Exception:
+            logger.exception("ledger tools not registered")
 
         # Eve desk — decode_qr / make_qr / compose_image / make_canvas /
         # draw_rect / draw_text / look_at / make_collage / file_away. Same
@@ -1189,15 +1192,22 @@ def create_app(
 
         # PondWright lead watch — CRM is on Spark; Messages push is here.
         # Polls the existing :8100 tunnel. First tick seeds IDs (no dump).
+        # Default ON when the module imports; a missing CWG package must not
+        # take down create_app.
         if app.config.setdefault("SOVERYN_START_LEAD_WATCH", True):
             import threading as _lead_watch_threading
-            from soveryn.platform.pondwright.lead_watch import run_forever as _lead_watch_run
-
-            _lead_watch_threading.Thread(
-                target=_lead_watch_run,
-                daemon=True,
-                name="pondwright-lead-watch",
-            ).start()
+            try:
+                from soveryn.platform.pondwright.lead_watch import (
+                    run_forever as _lead_watch_run,
+                )
+            except Exception:
+                logger.exception("pondwright lead-watch not started")
+            else:
+                _lead_watch_threading.Thread(
+                    target=_lead_watch_run,
+                    daemon=True,
+                    name="pondwright-lead-watch",
+                ).start()
 
         # Delegation background worker — drains dispatched tasks every 5s,
         # calling execute_task for each (engine drives worktree isolation,

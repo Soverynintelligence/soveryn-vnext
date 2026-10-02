@@ -1,0 +1,197 @@
+"""SOVERYN core must boot and chat when CWG/ledger modules are absent."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+from flask import Flask
+
+from soveryn.agents.loop import AgentLoop
+from soveryn.app.startup import create_app
+from soveryn.config.runtime import ACTIVE_AGENTS
+from soveryn.inference.llama_server_client import ChatResponse, StreamChunk
+from soveryn.memory.conversation_store import ConversationStore
+from soveryn.memory.lattice import LatticeStore
+
+_CWG_MODULES = (
+    "soveryn.platform.pondwright.lead_watch",
+    "soveryn.platform.ledgers.tools",
+    "soveryn.platform.ledgers.auto",
+)
+
+
+class _FakeChat:
+    def __init__(self, *, content="hello back"):
+        self.calls: list[dict] = []
+        self.content = content
+
+    def __call__(self, request, server, timeout=60.0):
+        self.calls.append({"request": request, "server": server})
+        return ChatResponse(
+            content=self.content,
+            finish_reason="stop",
+            tool_calls=None,
+            usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            raw={},
+        )
+
+
+class _StreamFn:
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def __call__(self, request, server, timeout=120.0):
+        self.calls.append({"request": request, "server": server})
+
+        def _g():
+            yield StreamChunk(delta="ok", finish_reason=None, tool_calls_delta=None, usage=None, raw={})
+            yield StreamChunk(delta="", finish_reason="stop", tool_calls_delta=None, usage=None, raw={})
+
+        return _g()
+
+
+@pytest.fixture
+def fake_souls_dir(tmp_path) -> Path:
+    souls_dir = tmp_path / "souls"
+    souls_dir.mkdir()
+    for agent in ACTIVE_AGENTS:
+        (souls_dir / f"{agent}.md").write_text(f"# {agent}\n", encoding="utf-8")
+    return souls_dir
+
+
+@pytest.fixture
+def fake_pinned(tmp_path) -> Path:
+    pinned = tmp_path / "pinned.md"
+    pinned.write_text("# Pinned relationship substrate\n", encoding="utf-8")
+    return pinned
+
+
+@pytest.fixture
+def recall_lattice_path(tmp_path) -> Path:
+    store = LatticeStore(tmp_path / "recall_lattice.db")
+    store.write_node(
+        "aetheria",
+        "core-without-cwg fixture memory",
+        provenance={
+            "cls": "witnessed",
+            "source": "test",
+            "confidence": 0.9,
+            "temporal_context": "fixture",
+            "generator": "test",
+        },
+    )
+    return tmp_path / "recall_lattice.db"
+
+
+def _hide_cwg_modules(monkeypatch) -> None:
+    for name in _CWG_MODULES:
+        monkeypatch.setitem(sys.modules, name, None)
+
+
+def _disable_non_lead_workers(monkeypatch) -> None:
+    """Keep lead-watch default-ON (import is hidden). Skip other daemons."""
+    original_init = Flask.__init__
+
+    def _init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        self.config["SOVERYN_START_MESSENGER_WORKER"] = False
+        self.config["SOVERYN_START_DELEGATION_WORKER"] = False
+        self.config["SOVERYN_START_CITIZENS_WORKER"] = False
+
+    monkeypatch.setattr(Flask, "__init__", _init)
+
+
+def _configure_env(monkeypatch, *, tmp_path, fake_souls_dir, fake_pinned, recall_lattice_path) -> None:
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path / "data"))
+    monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
+    monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
+
+
+def _post(client, path, body):
+    return client.post(path, data=json.dumps(body), content_type="application/json")
+
+
+def test_create_app_and_chat_survive_missing_cwg(
+    tmp_path,
+    monkeypatch,
+    fake_souls_dir,
+    fake_pinned,
+    recall_lattice_path,
+):
+    """create_app succeeds and image chat turns do not 500 when CWG is gone."""
+    _hide_cwg_modules(monkeypatch)
+    _disable_non_lead_workers(monkeypatch)
+    _configure_env(
+        monkeypatch,
+        tmp_path=tmp_path,
+        fake_souls_dir=fake_souls_dir,
+        fake_pinned=fake_pinned,
+        recall_lattice_path=recall_lattice_path,
+    )
+
+    conv = ConversationStore(tmp_path / "conv.db")
+    app = create_app(conv_store=conv)
+    assert app is not None
+
+    fake_chat = _FakeChat()
+    stream = _StreamFn()
+    loops = {
+        name: AgentLoop(name, conv, chat_fn=fake_chat, stream_fn=stream)
+        for name in ACTIVE_AGENTS
+    }
+    app.extensions["soveryn"]["agent_loops"] = loops
+    app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
+    client = app.test_client()
+
+    img = "data:image/jpeg;base64,AAAA"
+    create = _post(client, "/sessions", {"agent": "aetheria"})
+    assert create.status_code == 201
+    sid = json.loads(create.data)["session_id"]
+
+    chat = _post(
+        client,
+        "/chat",
+        {
+            "agent": "aetheria",
+            "session_id": sid,
+            "message": "what's this?",
+            "attachments": [img],
+        },
+    )
+    assert chat.status_code == 200, chat.data
+
+    stream_create = _post(client, "/sessions", {"agent": "aetheria"})
+    assert stream_create.status_code == 201
+    stream_sid = json.loads(stream_create.data)["session_id"]
+    streamed = _post(
+        client,
+        "/chat_stream",
+        {
+            "agent": "aetheria",
+            "session_id": stream_sid,
+            "message": "what's this?",
+            "attachments": [img],
+        },
+    )
+    assert streamed.status_code == 200, streamed.data
+
+
+def test_chat_receipt_hook_swallows_import_and_raise(monkeypatch):
+    """Missing or raising apply_chat_receipt must return the original message."""
+    from soveryn.app.routes.chat import ChatReceiptHook
+
+    monkeypatch.setitem(sys.modules, "soveryn.platform.ledgers.auto", None)
+    assert ChatReceiptHook.apply("keep me", ("data:image/jpeg;base64,AAAA",)) == "keep me"
+
+    class _Boom:
+        @staticmethod
+        def apply_chat_receipt(message, images):
+            raise RuntimeError("ledger boom")
+
+    monkeypatch.setitem(sys.modules, "soveryn.platform.ledgers.auto", _Boom)
+    assert ChatReceiptHook.apply("keep me", ("data:image/jpeg;base64,AAAA",)) == "keep me"

@@ -29,9 +29,9 @@ def _node(nid: str, content: str) -> Node:
 
 
 def test_fact_query_tokens_keep_phone_year_and_negation():
-    tokens = fact_query_tokens("Call (910) 581-3970 — that is not Stripe")
+    tokens = fact_query_tokens("Call (555) 010-0000 — that is not Stripe")
     joined = " ".join(tokens)
-    assert "910" in joined or "5813970" in joined or "9105813970" in joined
+    assert "555" in joined or "0100000" in joined or "5550100000" in joined
     assert "stripe" in joined
 
 
