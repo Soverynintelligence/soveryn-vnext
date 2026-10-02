@@ -1,7 +1,5 @@
-# First CI for this repo. Intentionally minimal: install, ruff correctness,
-# default-marker pytest. Do not deselect known-red tests here; the fixes PR
-# owns the hard-coded ~/soveryn_vnext root, missing PDF extras, the live
-# heartbeat stream test, and the two F821 NameErrors.
+# Minimal CI: install, ruff correctness, default-marker pytest.
+# Do not deselect tests or loosen the ruff select here.
 name: CI
 
 on:
@@ -36,39 +34,7 @@ jobs:
         run: |
           set -eux
           python -m pip install -U pip setuptools wheel
-          # Workaround: pip rejects the relative file: dep in
-          # [project.dependencies] ("relative path without a working
-          # directory"). Install acttruth first, then the remaining
-          # runtime deps, then the editable tree without resolving
-          # dependencies. Can be simplified to `pip install -e .`
-          # once the fixes PR lands.
-          python -m pip install -e packages/soveryn-acttruth
-          python - <<'PY'
-          import subprocess
-          import tomllib
-          from pathlib import Path
-
-          class InstallPlan:
-              @staticmethod
-              def runtime_deps_without_acttruth() -> list[str]:
-                  data = tomllib.loads(Path("pyproject.toml").read_text())
-                  return [
-                      dep
-                      for dep in data["project"]["dependencies"]
-                      if "soveryn-acttruth" not in dep
-                  ]
-
-          subprocess.check_call(
-              [
-                  "python",
-                  "-m",
-                  "pip",
-                  "install",
-                  *InstallPlan.runtime_deps_without_acttruth(),
-              ]
-          )
-          PY
-          python -m pip install -e . --no-deps
+          python -m pip install -e .
           python -m pip install pytest ruff
 
       - name: Ruff (correctness only)
