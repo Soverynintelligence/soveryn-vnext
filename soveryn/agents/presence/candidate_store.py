@@ -53,6 +53,7 @@ class CandidateStore:
     ) -> None:
         self.db_path = Path(db_path)
         self.timeout_seconds = timeout_seconds
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._bootstrap_schema()
 
     def _bootstrap_schema(self) -> None:

@@ -18,6 +18,10 @@ UNITS=(
   soveryn-ares.service
   soveryn.target
   soveryn-cognition-instance.service
+  soveryn-heartbeat.service
+  soveryn-cognition-cycle.service
+  soveryn-dream-aetheria.service
+  soveryn-dream-aetheria.timer
   soveryn-eyes.service
   soveryn-night-fixer.service
   soveryn-night-fixer.timer

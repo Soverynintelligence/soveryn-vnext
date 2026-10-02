@@ -1,6 +1,8 @@
 """Tools so agents can use House Post from inside AgentLoop."""
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -9,7 +11,7 @@ from soveryn.citizens import post as house_post
 from soveryn.citizens.registry import connect
 from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
 
-_DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "citizens.db"
+_DEFAULT_DB = SoverynPaths.root() / "data" / "citizens.db"
 
 # CoS → peer kinds that should enqueue real work (not just desk mail).
 _WORK_KINDS = frozenset({"request", "directive", "memo"})

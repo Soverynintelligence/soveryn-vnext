@@ -12,7 +12,8 @@ set -euo pipefail
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 PKG="$(cd "$(dirname "$SELF")/.." && pwd)"
-REPO="${SOVERYN_VNEXT:-$HOME/soveryn_vnext}"
+_DEFAULT_REPO="$(cd "$PKG/../.." && pwd)"
+REPO="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$_DEFAULT_REPO}}"
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
 PI_PIN_VERSION="0.87.1"
@@ -34,6 +35,7 @@ fi
 # inside a Kernel session (soveryn-pi exports SOVERYN_HARNESS=kernel and points
 # SOVERYN_CLI_DIR/PI_CODING_AGENT_DIR at config/pi).
 export SOVERYN_HARNESS=soveryn-cli
+export SOVERYN_ROOT="$REPO"
 export SOVERYN_VNEXT="$REPO"
 unset SOVERYN_KERNEL_DIR SOVERYN_CLI_PROFILE_FILE
 case "${SOVERYN_CLI_DIR:-}" in

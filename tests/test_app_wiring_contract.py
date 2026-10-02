@@ -67,10 +67,22 @@ def recall_lattice_path(tmp_path) -> Path:
 def app(tmp_path, monkeypatch, fake_souls_dir, fake_pinned, recall_lattice_path):
     """The REAL app factory, no injected agent_loops — only a tmp conv_store
     for isolation. This is the whole point: exercise production wiring."""
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    monkeypatch.setenv("SOVERYN_ROOT", str(tmp_path))
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(data_root))
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    # coord_store / request_direction / DAC tools are gated on lattice_db
+    # existing as a file. On the founder box that file lives under the
+    # checkout; on a fresh runner it does not. Point both lattice paths
+    # at the isolated fixture so this contract exercises production
+    # wiring, not the host's live DB.
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
-    return create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    monkeypatch.setenv("SOVERYN_START_DELEGATION_WORKER", "false")
+    app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
+    return app
 
 
 def _ext(app):
@@ -221,9 +233,15 @@ def test_create_app_boots_with_no_x_creds(tmp_path, monkeypatch, fake_souls_dir,
         "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET",
     ):
         monkeypatch.delenv(name, raising=False)
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    monkeypatch.setenv("SOVERYN_ROOT", str(tmp_path))
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(data_root))
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
+    monkeypatch.setenv("SOVERYN_START_DELEGATION_WORKER", "false")
     app = create_app(conv_store=ConversationStore(tmp_path / "conv2.db"))
     names = _tool_names(_loops(app)["eve"], "eve")
     assert "read_x" in names

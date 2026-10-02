@@ -29,13 +29,15 @@ automatically on import):
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import sqlite3
 from pathlib import Path
 
 HEARTBEAT_SESSION_TITLE = "[heartbeat] aetheria"
 HEARTBEAT_PREFIX = "[HEARTBEAT]"
 
-LIVE_DB_PATH = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+LIVE_DB_PATH = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 BACKUP_SUFFIX = ".backup-2026-07-18"
 
 

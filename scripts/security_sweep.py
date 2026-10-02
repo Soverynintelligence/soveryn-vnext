@@ -13,6 +13,8 @@ Usage:
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import argparse
 
 import json
@@ -22,7 +24,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 HOME = Path.home()
-REPO_ROOT = HOME / "soveryn_vnext"
+REPO_ROOT = SoverynPaths.root()
 # House repos gitleaks scans (skip sandbox: vendored upstream code, not ours).
 REPOS = [d for d in (HOME / "").glob("*/") if (d / ".git").is_dir() and "sandbox" not in d.name]
 REPOS = sorted(set(REPOS) | {REPO_ROOT, HOME / "pondwright-cwg-ops", HOME / "carolinawatergardens", HOME / "pondpro"})

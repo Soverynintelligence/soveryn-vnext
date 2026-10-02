@@ -14,6 +14,8 @@ the census is a separate act: `python -m soveryn.citizens.census`.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -23,7 +25,7 @@ from flask import Blueprint, abort, current_app, jsonify, request
 
 bp = Blueprint("api_citizens", __name__)
 
-_DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "citizens.db"
+_DEFAULT_DB = SoverynPaths.root() / "data" / "citizens.db"
 _LOCALHOST_ADDRS = {"127.0.0.1", "::1"}
 
 

@@ -9,6 +9,8 @@ Embed-on-write still runs all day for new nodes; this pass catches stragglers.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import argparse
 import json
 import sqlite3
@@ -32,9 +34,9 @@ def _find_db(explicit: str | None) -> Path:
     # legacy names kept as fallbacks.
     for cand in (
         REPO / "data" / "memory" / "lattice_vnext.db",
-        Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db",
+        SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db",
         REPO / "data" / "lattice.db",
-        Path.home() / "soveryn_vnext" / "data" / "lattice.db",
+        SoverynPaths.root() / "data" / "lattice.db",
         Path.home() / "soveryn_data" / "lattice.db",
     ):
         if cand.is_file():

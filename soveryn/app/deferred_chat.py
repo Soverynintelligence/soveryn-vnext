@@ -7,6 +7,8 @@ in a daemon thread. Result lands on the same session.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 import threading
 from datetime import datetime, timezone
@@ -152,7 +154,7 @@ def try_defer_chat(
     )
     db_path = Path(
         configured
-        or (Path.home() / "soveryn_vnext" / "data" / "citizens.db")
+        or (SoverynPaths.root() / "data" / "citizens.db")
     )
     if not db_path.exists():
         return None

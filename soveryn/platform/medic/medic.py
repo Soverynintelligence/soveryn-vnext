@@ -11,6 +11,8 @@ loop. `FORBIDDEN_UNITS` + a test enforce this.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import sqlite3
 import subprocess
@@ -23,14 +25,14 @@ from pathlib import Path
 
 from soveryn.agents.ares import signal_sender
 
-STATE_DIR = Path.home() / "soveryn_vnext" / "data" / "medic"
+STATE_DIR = SoverynPaths.root() / "data" / "medic"
 STATE_FILE = STATE_DIR / "medic_state.json"
 LOG_FILE = STATE_DIR / "medic.jsonl"
 
 # Liveness comes from heartbeat_log (a row EVERY ~30-min tick, including
 # quiet-hours skips) — NOT the thoughts file, which only moves when she
 # produces a thought. A resting heartbeat still ticks; it is not a glitch.
-HEARTBEAT_LOG_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
+HEARTBEAT_LOG_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
 HEARTBEAT_MAX_AGE_S = 2400.0   # 40 min — one missed 30-min beat + margin
 
 LOOPGUARD_MAX = 3

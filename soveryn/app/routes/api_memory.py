@@ -1,9 +1,12 @@
 """SOVERYN vNext — /api/memory/* read-only memory stats."""
 
 from __future__ import annotations
+import logging
 from dataclasses import asdict
 
 from flask import Blueprint, current_app, jsonify, request
+
+logger = logging.getLogger(__name__)
 
 from soveryn.app.services.memory_activity import (
     daily_write_counts, recent_library_writes, total_node_count,

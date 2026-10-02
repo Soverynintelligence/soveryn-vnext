@@ -15,6 +15,8 @@ consecutive skipped ticks don't leave sleep_target stuck in the past
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import os
@@ -51,8 +53,8 @@ from soveryn.agents.vett.patrol.trigger import (
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 
 # Window of recent lattice activity to summarise in the briefing.
 LATTICE_WINDOW_MINUTES = 240   # 4h — slower cadence than heartbeat's hour

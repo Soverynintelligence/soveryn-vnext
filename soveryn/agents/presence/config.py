@@ -1,3 +1,4 @@
+from soveryn.paths import SoverynPaths
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,7 +28,7 @@ class PresenceConfig:
 
     @classmethod
     def default(cls) -> "PresenceConfig":
-        base = Path.home() / "soveryn_vnext" / "data"
+        base = SoverynPaths.root() / "data"
         return cls(
             niche_terms=_NICHE, own_handle="Soveryn_AI", score_threshold=2.0,
             max_drafts_per_scan=3, poll_interval_seconds=300.0,

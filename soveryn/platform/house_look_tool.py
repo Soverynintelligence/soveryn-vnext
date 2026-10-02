@@ -19,6 +19,8 @@ image_url natively (probed 2026-09-24: verbatim text off a rendered frame).
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import subprocess
 import uuid
@@ -37,7 +39,7 @@ CAM_WARMUP_FRAMES = 3  # first frames are auto-exposure mud; keep the last
 PAN_RANGE_DEG = (-150, 150)   # pan_absolute ±540000, 3600 per degree
 TILT_RANGE_DEG = (-90, 90)    # tilt_absolute ±324000
 FRESH_TIMEOUT_S = 15
-LOOK_SH = Path.home() / "soveryn_vnext" / "scripts" / "look.sh"
+LOOK_SH = SoverynPaths.root() / "scripts" / "look.sh"
 
 ACTIONS = ("screen_latest", "screen_fresh", "cam")
 

@@ -16,7 +16,7 @@ set -euo pipefail
 SPARK_HOST="${SPARK_HOST:-spark}"
 SPARK_URL="${SPARK_URL:-http://10.10.10.2:8001}"
 BRAIN_FILE_TOWER="${HOME}/.soveryn/kernel_brain"
-REPO="${HOME}/soveryn_vnext"
+REPO="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}"
 PY="${SOVERYN_PYTHON:-/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python}"
 VETT_SWITCH="${REPO}/scripts/switch_vett_brain.sh"
 

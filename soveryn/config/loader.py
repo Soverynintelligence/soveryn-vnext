@@ -9,6 +9,8 @@ per-deployment overrides without editing the source constants.
 """
 
 from __future__ import annotations
+
+from soveryn.paths import SoverynPaths
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +29,7 @@ from soveryn.config import runtime
 # renamed to lattice_legacy_FROZEN_<timestamp>.db and preserved on disk for
 # rollback. See soveryn/platform/lattice/consolidate.py for the migration.
 
-DEFAULT_DATA_ROOT = Path.home() / "soveryn_vnext" / "data"
+DEFAULT_DATA_ROOT = SoverynPaths.root() / "data"
 
 
 def _memory_dir(root: Path) -> Path:

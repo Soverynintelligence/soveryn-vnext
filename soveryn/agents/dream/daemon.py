@@ -9,6 +9,8 @@ Run as: `python -m soveryn.agents.dream`.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import signal
@@ -37,8 +39,8 @@ from soveryn.agents.dream.writeback import write_dream_outputs
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 DEFAULT_TICK_INTERVAL_SECONDS = 600  # 10 minutes — checks gates every 10 min during window
 
 

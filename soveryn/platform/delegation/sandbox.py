@@ -18,6 +18,7 @@ execute Scotty's code unsandboxed on the host. Requires bwrap to be usable
 from __future__ import annotations
 
 import shutil
+from pathlib import Path
 
 #: Resolved once. None if bwrap isn't on PATH — callers must treat that as
 #: "refuse to run", never "run unsandboxed".
@@ -31,6 +32,55 @@ class SandboxUnavailable(RuntimeError):
     """bwrap is not available; the caller must refuse to run."""
 
 
+class Sandbox:
+    """Build a fail-closed bubblewrap argv for one worktree."""
+
+    @staticmethod
+    def dest_dir_flags(worktree_path: str) -> list[str]:
+        """Recreate dest parents after ``--tmpfs /tmp`` so a /tmp worktree binds.
+
+        pytest's ``tmp_path`` lives under ``/tmp/pytest-of-…``. ``--tmpfs /tmp``
+        hides those parents; ``--bind`` then cannot create the mount point and
+        acceptance fails even though bwrap is installed.
+        """
+        flags: list[str] = []
+        tmp = Path("/tmp")
+        parent = Path(worktree_path).resolve().parent
+        try:
+            rel = parent.relative_to(tmp)
+        except ValueError:
+            return flags
+        acc = tmp
+        for part in rel.parts:
+            acc = acc / part
+            flags.extend(["--dir", str(acc)])
+        return flags
+
+    @staticmethod
+    def argv(worktree_path: str, argv: list[str]) -> list[str]:
+        if BWRAP is None:
+            raise SandboxUnavailable(
+                "bwrap (bubblewrap) not found on PATH; refusing to run delegated "
+                "code unsandboxed."
+            )
+        wt = str(Path(worktree_path).resolve())
+        return [
+            BWRAP,
+            "--ro-bind", "/", "/",
+            "--dev", "/dev",
+            "--proc", "/proc",
+            "--tmpfs", "/tmp",
+            *Sandbox.dest_dir_flags(wt),
+            "--bind", wt, wt,
+            "--unshare-net",
+            "--unshare-pid", "--unshare-ipc", "--unshare-uts",
+            "--die-with-parent", "--new-session",
+            "--chdir", wt,
+            "--",
+            *argv,
+        ]
+
+
 def sandbox_argv(worktree_path: str, argv: list[str]) -> list[str]:
     """Prefix *argv* with a bubblewrap jail scoped to *worktree_path*.
 
@@ -38,22 +88,4 @@ def sandbox_argv(worktree_path: str, argv: list[str]) -> list[str]:
     fail closed. The returned list is a full ``bwrap … -- <argv>`` command ready
     for ``subprocess.run``.
     """
-    if BWRAP is None:
-        raise SandboxUnavailable(
-            "bwrap (bubblewrap) not found on PATH; refusing to run delegated "
-            "code unsandboxed."
-        )
-    return [
-        BWRAP,
-        "--ro-bind", "/", "/",
-        "--dev", "/dev",
-        "--proc", "/proc",
-        "--tmpfs", "/tmp",
-        "--bind", worktree_path, worktree_path,
-        "--unshare-net",
-        "--unshare-pid", "--unshare-ipc", "--unshare-uts",
-        "--die-with-parent", "--new-session",
-        "--chdir", worktree_path,
-        "--",
-        *argv,
-    ]
+    return Sandbox.argv(worktree_path, argv)

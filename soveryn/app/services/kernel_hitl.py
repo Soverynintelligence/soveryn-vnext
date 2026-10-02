@@ -6,6 +6,8 @@ commands become *proposals* until the operator approves in /build.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import re
@@ -23,7 +25,7 @@ PROPOSALS_DIR = REPO / "data" / "kernel_proposals"
 # Where Kernel may touch files (read free; write via proposal).
 DEFAULT_WORKSPACES = [
     REPO,
-    HOUSE / "soveryn_vnext",
+    SoverynPaths.root(),
     HOUSE / "projects",
     HOUSE / "tgthrmess-app",
     HOUSE / "Desktop" / "soveryn",

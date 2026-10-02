@@ -7,6 +7,8 @@ coding tools live inside the grok process.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import os
@@ -26,7 +28,7 @@ from soveryn.platform.inference.llama_server_client import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_GROK_BIN = Path.home() / ".grok" / "bin" / "grok"
-DEFAULT_CWD = Path("/home/jon-deoliveira/soveryn_vnext")
+DEFAULT_CWD = SoverynPaths.root()
 DEFAULT_TIMEOUT = 900.0
 DEFAULT_MAX_TURNS = 40
 

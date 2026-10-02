@@ -1,6 +1,8 @@
 """Google Business Profile config — CWG listing, OAuth once."""
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +24,7 @@ def _data_root() -> Path:
 
         return Path(DEFAULT_DATA_ROOT)
     except Exception:
-        return Path.home() / "soveryn_vnext" / "data"
+        return SoverynPaths.root() / "data"
 
 
 def _clean(raw: str | None) -> str:

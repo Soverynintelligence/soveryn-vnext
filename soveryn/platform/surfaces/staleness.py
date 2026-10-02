@@ -22,6 +22,8 @@ last look," which is exactly the fact that went missing.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import tempfile
@@ -32,7 +34,7 @@ from pathlib import Path
 from soveryn.platform.surfaces.probe import Result, Status
 from soveryn.platform.surfaces.registry import Surface
 
-DEFAULT_PATH = Path.home() / "soveryn_vnext" / "data" / "surfaces" / "last_seen.json"
+DEFAULT_PATH = SoverynPaths.root() / "data" / "surfaces" / "last_seen.json"
 
 NEVER = "never"
 

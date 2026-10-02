@@ -1,6 +1,8 @@
 """Canva Connect configuration from env + data root."""
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,7 +55,7 @@ def _data_root() -> Path:
 
         return Path(DEFAULT_DATA_ROOT)
     except Exception:
-        return Path.home() / "soveryn_vnext" / "data"
+        return SoverynPaths.root() / "data"
 
 
 def load_brand_templates() -> dict[str, str]:

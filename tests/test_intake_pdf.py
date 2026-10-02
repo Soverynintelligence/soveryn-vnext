@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 from io import BytesIO
 from pathlib import Path
 
@@ -54,12 +56,14 @@ def _make_pdf_with_text(text: str) -> bytes:
 
 
 def test_extract_rejects_non_pdf():
+    pytest.importorskip("pypdf")
     r = extract_pdf_bytes(b"not a pdf", source_name="x.bin")
     assert r.status == "failed"
     assert "not a PDF" in (r.gap or "")
 
 
 def test_extract_text_layer_ok():
+    pytest.importorskip("pypdf")
     data = _make_pdf_with_text("Hello intake spine")
     r = extract_pdf_bytes(data, source_name="hello.pdf")
     # Hand-rolled PDF may or may not extract depending on font; prefer reportlab
@@ -71,7 +75,8 @@ def test_extract_text_layer_ok():
 
 
 def test_extract_real_house_pdf_if_present():
-    path = Path.home() / "soveryn_vnext" / "docs" / "notes" / "2026-08-14-matter-ops-product-brief.pdf"
+    pytest.importorskip("pypdf")
+    path = SoverynPaths.root() / "docs" / "notes" / "2026-08-14-matter-ops-product-brief.pdf"
     if not path.is_file():
         path = Path.home() / "historysledger-site" / "sample-chapters.pdf"
     if not path.is_file():

@@ -6,6 +6,8 @@ or uncertain material separately from the canonical Lattice tables.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import sqlite3
@@ -19,7 +21,7 @@ from typing import Any, Iterator
 from soveryn.platform.lattice.provenance import Provenance, ProvenanceClass
 from soveryn.platform.lattice.types import Entry, Region
 
-DEFAULT_ATTIC_DB_PATH = Path.home() / "soveryn_vnext" / "data" / "lattice" / "attic.db"
+DEFAULT_ATTIC_DB_PATH = SoverynPaths.root() / "data" / "lattice" / "attic.db"
 DEFAULT_CONNECTION_TIMEOUT_SECONDS = 30.0
 
 _SCHEMA_SQL = """

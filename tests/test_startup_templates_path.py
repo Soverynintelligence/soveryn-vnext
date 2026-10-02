@@ -9,6 +9,8 @@ files touched).
 """
 
 from __future__ import annotations
+
+from soveryn.paths import SoverynPaths
 from pathlib import Path
 
 import pytest
@@ -57,9 +59,13 @@ def test_legacy_templates_dir_default_under_data_root(
 ):
     """SOVERYN_LEGACY_TEMPLATES_DIR default should be under
     ~/soveryn_vnext/data/templates_legacy, NOT under soveryn_complete."""
+    monkeypatch.setenv("SOVERYN_ROOT", str(tmp_path))
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
+    monkeypatch.setenv("SOVERYN_START_DELEGATION_WORKER", "false")
 
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     legacy = str(app.config["SOVERYN_LEGACY_TEMPLATES_DIR"])
@@ -67,7 +73,7 @@ def test_legacy_templates_dir_default_under_data_root(
         f"templates dir still points at museum: {legacy}"
     )
     assert "templates_legacy" in legacy
-    assert "soveryn_vnext" in legacy
+    assert str(SoverynPaths.root()) in legacy
 
 
 def test_legacy_templates_dir_uses_path_home_not_hardcoded_user(
@@ -75,11 +81,15 @@ def test_legacy_templates_dir_uses_path_home_not_hardcoded_user(
 ):
     """Default must derive from Path.home(), so it works for any user —
     not just jon-deoliveira."""
+    monkeypatch.setenv("SOVERYN_ROOT", str(tmp_path))
+    monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path / "data"))
     monkeypatch.setenv("SOVERYN_SOULS_DIR", str(fake_souls_dir))
     monkeypatch.setenv("SOVERYN_PINNED_MEMORY_PATH", str(fake_pinned))
+    monkeypatch.setenv("SOVERYN_LATTICE_DB", str(recall_lattice_path))
     monkeypatch.setenv("SOVERYN_RECALL_LATTICE_DB", str(recall_lattice_path))
+    monkeypatch.setenv("SOVERYN_START_DELEGATION_WORKER", "false")
 
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     legacy = str(app.config["SOVERYN_LEGACY_TEMPLATES_DIR"])
-    expected = str(Path.home() / "soveryn_vnext" / "data" / "templates_legacy")
+    expected = str(SoverynPaths.root() / "data" / "templates_legacy")
     assert legacy == expected

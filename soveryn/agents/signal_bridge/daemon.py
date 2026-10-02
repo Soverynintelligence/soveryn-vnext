@@ -16,6 +16,8 @@ reply becomes an assistant turn — same shape as /chat for the chat UI.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import base64
 import json
 import logging
@@ -43,8 +45,8 @@ from soveryn.agents.signal_bridge.config import SignalBridgeConfig
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_LATTICE_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "lattice_vnext.db"
-DEFAULT_CONV_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "conversations_vnext.db"
+DEFAULT_LATTICE_DB = SoverynPaths.root() / "data" / "memory" / "lattice_vnext.db"
+DEFAULT_CONV_DB = SoverynPaths.root() / "data" / "memory" / "conversations_vnext.db"
 SIGNAL_SESSION_TITLE_PREFIX = "[signal] "
 SIGNAL_AGENT = "aetheria"
 

@@ -7,6 +7,8 @@ Jon typed it himself.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import logging
 import os
@@ -16,7 +18,7 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STATE = Path.home() / "soveryn_vnext" / "data" / "memory" / "pondwright_lead_watch.json"
+_DEFAULT_STATE = SoverynPaths.root() / "data" / "memory" / "pondwright_lead_watch.json"
 _INTERVAL = 20.0
 _SEEN_CAP = 500
 _SKIP_SOURCES = frozenset({"admin", "smoke", "test", "probe"})

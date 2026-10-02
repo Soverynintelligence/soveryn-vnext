@@ -17,6 +17,8 @@ Scope (v1, honest):
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -28,7 +30,7 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 #: Parties to a relationship. Citizens plus the constant.
 VALID_PARTIES = frozenset((*ACTIVE_AGENTS, "jon"))
 
-DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "relational.db"
+DEFAULT_DB = SoverynPaths.root() / "data" / "memory" / "relational.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS encounters (

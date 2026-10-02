@@ -4,7 +4,17 @@ const path = require('path');
 const os = require('os');
 
 const HOME = process.env.HOME || os.homedir();
-const REPO = process.env.SOVERYN_VNEXT || path.join(HOME, 'soveryn_vnext');
+
+class SoverynPaths {
+  static root() {
+    const override = process.env.SOVERYN_ROOT || process.env.SOVERYN_VNEXT;
+    if (override) return path.resolve(override);
+    // packages/soveryn-cli/src/paths.js → checkout root is three levels up
+    return path.resolve(__dirname, '..', '..', '..');
+  }
+}
+
+const REPO = SoverynPaths.root();
 
 /** kernel | soveryn-cli — Kernel writes config/pi; CLI writes config/soveryn-cli */
 const HARNESS = String(process.env.SOVERYN_HARNESS || 'soveryn-cli').toLowerCase();
@@ -60,6 +70,7 @@ const CMD = IS_KERNEL ? 'kernel' : 'soveryn';
 module.exports = {
   HOME,
   REPO,
+  SoverynPaths,
   HARNESS,
   IS_KERNEL,
   CFG_DIR,

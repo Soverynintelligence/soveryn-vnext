@@ -11,11 +11,13 @@ Wired into the night librarian (03:00 timer). Run standalone:
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import argparse
 import sys
 from pathlib import Path
 
-DEFAULT_BLACKBOX = Path.home() / "soveryn_vnext" / "data" / "black_box"
+DEFAULT_BLACKBOX = SoverynPaths.root() / "data" / "black_box"
 DEFAULT_KEEP = 200
 
 

@@ -9,6 +9,8 @@ See: docs/superpowers/specs/2026-08-11-memory-grades-self-through-memory-design.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 from pathlib import Path
 from typing import Literal
 
@@ -125,7 +127,7 @@ def resolve_full_text_ref(
         return None
 
     root = Path(data_root) if data_root is not None else (
-        Path.home() / "soveryn_vnext" / "data"
+        SoverynPaths.root() / "data"
     )
     s = str(ref).strip()
 

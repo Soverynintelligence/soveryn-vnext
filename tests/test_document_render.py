@@ -58,12 +58,14 @@ class TestMdToHtml:
 
 class TestHtmlToPdf:
     def test_returns_pdf_bytes(self):
+        pytest.importorskip("weasyprint")
         html = md_to_html("# Hi")
         result = html_to_pdf(html)
         assert isinstance(result, bytes)
         assert result[:4] == b"%PDF"
 
     def test_non_empty(self):
+        pytest.importorskip("weasyprint")
         html = md_to_html("# Hi\n\nSome content here.")
         result = html_to_pdf(html)
         assert len(result) > 1000  # a real PDF has heft
@@ -85,6 +87,7 @@ class TestRenderDocument:
         assert mime == "text/html"
 
     def test_pdf_format_starts_with_pdf_magic(self):
+        pytest.importorskip("weasyprint")
         data, mime = render_document("# T", "pdf")
         assert data[:4] == b"%PDF"
         assert mime == "application/pdf"

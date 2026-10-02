@@ -20,6 +20,8 @@ returns ``{"error": "not_a_repo"}`` rather than raising.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import subprocess
 from pathlib import Path
 from typing import Any, Mapping
@@ -34,8 +36,7 @@ _FS = "\x1f"  # unit separator — safe field delimiter for --pretty (never in s
 
 
 def _default_repo_root() -> Path:
-    import os
-    return Path(os.path.expanduser("~/soveryn_vnext"))
+    return SoverynPaths.root()
 
 
 def _resolve_repo(path_arg: Any, default_root: Path) -> tuple[Path | None, dict | None]:

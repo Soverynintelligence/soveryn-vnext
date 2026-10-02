@@ -36,6 +36,8 @@ anything.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import collections
 import json
 import os
@@ -52,11 +54,11 @@ GPU_UUID = "GPU-946b08b0-e9d3-949b-6eab-b6c5b8a5f5cd"   # the Blackwell
 PCI_TAG = "Xid (PCI:0000:c1:00)"
 # Backend port is discovered per-sample; see _aetheria_port().
 OUT_DIR = Path(os.environ.get("XID_CAPTURE_DIR",
-                              Path.home() / "soveryn_vnext" / "data" / "xid_captures"))
+                              SoverynPaths.root() / "data" / "xid_captures"))
 SAMPLE_SECONDS = 2.0
 RING_MINUTES = 12
 RING_LEN = int(RING_MINUTES * 60 / SAMPLE_SECONDS)
-ALERT = Path.home() / "soveryn_vnext" / "scripts" / "alert_signal.sh"
+ALERT = SoverynPaths.root() / "scripts" / "alert_signal.sh"
 
 # Sampled by the ring. Anything that could plausibly distinguish "idle
 # transition" from "still busy" belongs here — the point is to not have to guess

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import base64
 import json
 import logging
@@ -11,7 +13,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_PATH = Path.home() / "soveryn_vnext" / "data" / "memory" / "vapid_keys.json"
+_DEFAULT_PATH = SoverynPaths.root() / "data" / "memory" / "vapid_keys.json"
 
 
 def _keys_path() -> Path:

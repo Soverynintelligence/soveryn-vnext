@@ -1,5 +1,6 @@
 """Tests for soveryn.backup.daemon CLI."""
 
+from soveryn.paths import SoverynPaths
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -32,7 +33,7 @@ def test_parser_defaults():
 
 def test_parser_repo_default_is_hardcoded_vnext():
     """Constraint 4: must not read from EnvConfig."""
-    assert DEFAULT_REPO == Path.home() / "soveryn_vnext"
+    assert DEFAULT_REPO == SoverynPaths.root()
 
 
 def test_parser_dest_default_is_env_var_driven(monkeypatch):

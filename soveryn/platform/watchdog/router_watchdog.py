@@ -15,6 +15,8 @@ pure and unit-tested; `run_once` is the thin journalctl/systemctl shell.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import re
@@ -28,7 +30,7 @@ from datetime import datetime
 DEFAULT_GUARDED = {"aetheria", "vett-scotty", "cognition", "embeddings", "reflection"}
 
 ROUTER_UNIT = "soveryn-router.service"
-STATE_DIR = os.path.expanduser("~/soveryn_vnext/data/watchdog")
+STATE_DIR = str(SoverynPaths.root() / "data/watchdog")
 COOLDOWN_FILE = os.path.join(STATE_DIR, "last_restart")
 LOG_FILE = os.path.join(STATE_DIR, "watchdog.jsonl")
 

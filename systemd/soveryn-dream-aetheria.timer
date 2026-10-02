@@ -1,0 +1,11 @@
+[Unit]
+Description=SOVERYN Dream — nightly Aetheria consolidation at 03:00
+PartOf=soveryn.target
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=soveryn-dream-aetheria.service
+
+[Install]
+WantedBy=soveryn.target

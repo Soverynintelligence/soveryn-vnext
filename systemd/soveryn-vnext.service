@@ -10,8 +10,9 @@ Requires=soveryn-router.service
 Wants=parakeet.service network-online.target
 
 [Service]
+Environment=SOVERYN_ROOT=%h/soveryn_vnext
 Type=simple
-WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+WorkingDirectory=%h/soveryn_vnext
 Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin SOVERYN_APP_PORT=5001
 # Block until the router's /props endpoint reports ok (up to 60s).
 # If the router isn't ready, ExecStart never fires and systemd marks

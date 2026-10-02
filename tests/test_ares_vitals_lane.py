@@ -92,6 +92,10 @@ def test_collect_vitals_live_is_zero_arg_and_safe(monkeypatch):
     monkeypatch.setattr(vitals, "_read_gpu_headroom_rows", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(vitals, "_read_compute_apps", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(vitals, "_read_executing_tasks", lambda: (_ for _ in ()).throw(RuntimeError("boom")))
+    # collect_eyes_stale defaults to ~/soveryn_eyes/.alive. Off the founder
+    # box that marker is missing and the collector emits eyes.stale, so
+    # this "everything failed → []" contract would fail on CI.
+    monkeypatch.setattr(vitals, "collect_eyes_stale", lambda *a, **k: [])
     assert vitals.collect_vitals_live() == []
 
 

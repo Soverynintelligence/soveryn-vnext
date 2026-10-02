@@ -24,6 +24,8 @@ Output cap and timeout keep a misbehaving caller from stalling the wire.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import re
 import subprocess
@@ -45,7 +47,7 @@ _GIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 #: Roots a citizen may inspect. Everything else is out of scope.
 ALLOWED_ROOTS = (
     Path(DEFAULT_DATA_ROOT),
-    Path.home() / "soveryn_vnext",
+    SoverynPaths.root(),
     Path.home() / "teammates",
     Path.home() / "soveryn_citizens",
     Path.home() / "soveryn_eyes",

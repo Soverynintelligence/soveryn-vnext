@@ -7,6 +7,8 @@ on-duty citizens — not only coord board churn.
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import logging
 import sqlite3
 from pathlib import Path
@@ -140,7 +142,7 @@ def _lounge_unread(root: Path | None) -> int:
     try:
         from soveryn.rooms.lounge import unread_since
 
-        base = root if root is not None else Path.home() / "soveryn_vnext" / "data"
+        base = root if root is not None else SoverynPaths.root() / "data"
         return unread_since(base, "aetheria")
     except Exception:  # noqa: BLE001
         return 0

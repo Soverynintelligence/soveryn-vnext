@@ -22,11 +22,13 @@ costs a failed worktree, not the house.
 """
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 REPO = Path(__file__).resolve().parents[1]
 MAX_PER_NIGHT = 2
@@ -166,7 +168,7 @@ def main() -> int:
     from soveryn.automations.inbox import append_inbox
     from soveryn.platform.delegation.store import DelegationStore
 
-    store = DelegationStore(_P.home() / "soveryn_vnext" / "data" / "delegation.db")
+    store = DelegationStore(SoverynPaths.root() / "data" / "delegation.db")
     fixer = NightFixer(
         store=store,
         run_pytest=_default_run_pytest,

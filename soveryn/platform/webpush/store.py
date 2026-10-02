@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 import sqlite3
@@ -9,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_DB = Path.home() / "soveryn_vnext" / "data" / "memory" / "webpush.db"
+_DEFAULT_DB = SoverynPaths.root() / "data" / "memory" / "webpush.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS push_subscriptions (

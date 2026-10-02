@@ -15,12 +15,13 @@
 
 set -eu
 
+_SOVERYN_ROOT="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}"
 OLD_MEMORY="$HOME/soveryn_complete/soveryn_memory"
-NEW_MEMORY="$HOME/soveryn_vnext/data/memory"
+NEW_MEMORY="$_SOVERYN_ROOT/data/memory"
 OLD_TEMPLATES="$HOME/soveryn_complete/templates"
-NEW_TEMPLATES="$HOME/soveryn_vnext/data/templates_legacy"
+NEW_TEMPLATES="$_SOVERYN_ROOT/data/templates_legacy"
 OLD_ROUTER_PRESET="$HOME/soveryn_complete/router-presets.ini"
-NEW_ROUTER_PRESET="$HOME/soveryn_vnext/data/router-presets.ini"
+NEW_ROUTER_PRESET="$_SOVERYN_ROOT/data/router-presets.ini"
 
 echo "=== SOVERYN Path Consolidation Maintenance Window ==="
 echo "OLD memory: $OLD_MEMORY"

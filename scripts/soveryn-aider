@@ -22,7 +22,7 @@ if [[ ! -x "$AIDER_BIN" ]]; then
   exit 1
 fi
 
-KERNEL_SOUL="${KERNEL_SOUL:-$HOME/soveryn_vnext/data/memory/souls/kernel.md}"
+KERNEL_SOUL="${KERNEL_SOUL:-${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$HOME/soveryn_vnext}}/data/memory/souls/kernel.md}"
 EXTRA_READ=()
 
 ARGS=()

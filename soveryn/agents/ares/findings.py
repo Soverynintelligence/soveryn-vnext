@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import json
 import os
 from dataclasses import dataclass, field
@@ -10,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_ARES_STATE_PATH = Path.home() / "soveryn_vnext" / "data" / "ares" / "ares_daemon_state.json"
+DEFAULT_ARES_STATE_PATH = SoverynPaths.root() / "data" / "ares" / "ares_daemon_state.json"
 
 
 class Severity(str, Enum):

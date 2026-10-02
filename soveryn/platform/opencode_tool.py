@@ -6,6 +6,8 @@ AgentLoop stays read/search in Messages. Mends go through
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 import shutil
 import subprocess
@@ -15,9 +17,9 @@ from typing import Any
 
 from soveryn.platform.tools.registry import ToolArgError, ToolSpec
 
-DEFAULT_REPO = Path.home() / "soveryn_vnext"
+DEFAULT_REPO = SoverynPaths.root()
 ALLOWED_ROOTS: tuple[Path, ...] = (
-    Path.home() / "soveryn_vnext",
+    SoverynPaths.root(),
     Path.home() / "soveryn_citizens" / "kernel",
 )
 MAX_PROMPT_CHARS = 8000
@@ -65,7 +67,7 @@ def find_launcher() -> str | None:
         found = shutil.which(name)
         if found:
             return found
-    script = Path.home() / "soveryn_vnext" / "scripts" / "soveryn-opencode"
+    script = SoverynPaths.root() / "scripts" / "soveryn-opencode"
     if script.is_file() and os.access(script, os.X_OK):
         return str(script)
     return None

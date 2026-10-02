@@ -18,7 +18,8 @@
  */
 import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -31,7 +32,10 @@ function enabled() {
   return v === "1" || v === "true" || v === "TRUE";
 }
 
-const ROOT = process.env.SOVERYN_VNEXT || join(homedir(), "soveryn_vnext");
+const ROOT =
+  process.env.SOVERYN_ROOT ||
+  process.env.SOVERYN_VNEXT ||
+  join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const PYTHON =
   process.env.SOVERYN_PYTHON ||
   join(homedir(), "miniconda3", "envs", "soveryn", "bin", "python");

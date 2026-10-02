@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soveryn.paths import SoverynPaths
+
 import os
 from pathlib import Path
 
@@ -34,7 +36,7 @@ def _data_root() -> Path:
     raw = os.environ.get("SOVERYN_DATA_ROOT")
     if raw:
         return Path(raw)
-    return Path.home() / "soveryn_vnext" / "data"
+    return SoverynPaths.root() / "data"
 
 
 def _citizens_db() -> Path:
@@ -44,7 +46,7 @@ def _citizens_db() -> Path:
     )
     if configured:
         return Path(configured)
-    return Path.home() / "soveryn_vnext" / "data" / "citizens.db"
+    return SoverynPaths.root() / "data" / "citizens.db"
 
 
 def _conv():

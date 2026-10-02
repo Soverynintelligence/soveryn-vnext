@@ -148,7 +148,11 @@ def _post(client, path, body):
 def app_state(tmp_path):
     conv = ConversationStore(tmp_path / "app_conv.db")
     fake_chat = _FakeChat()
-    loops = {name: AgentLoop(name, conv, chat_fn=fake_chat) for name in ACTIVE_AGENTS}
+    fake_stream = _CapturingStream()
+    loops = {
+        name: AgentLoop(name, conv, chat_fn=fake_chat, stream_fn=fake_stream)
+        for name in ACTIVE_AGENTS
+    }
     app = create_app(conv_store=conv, agent_loops=loops)
     app.config["SOVERYN_REQUIRE_LOCALHOST"] = False
     return {"app": app, "client": app.test_client(), "conv": conv, "fake_chat": fake_chat}

@@ -18,6 +18,8 @@ def test_tool_identity():
 
 
 def test_converts_markdown_to_valid_pdf(tmp_path):
+    import pytest
+    pytest.importorskip("weasyprint")
     src = tmp_path / "doc.md"
     src.write_text("# Title\n\nHello **world** — a test.\n\n- one\n- two\n")
     res = build_convert_to_pdf_tool().handler({"source_path": str(src)})
@@ -29,6 +31,8 @@ def test_converts_markdown_to_valid_pdf(tmp_path):
 
 
 def test_custom_output_path_and_parent_created(tmp_path):
+    import pytest
+    pytest.importorskip("weasyprint")
     src = tmp_path / "d.md"
     src.write_text("# Hi\n")
     dst = tmp_path / "nested" / "out" / "custom.pdf"   # parent does not exist yet

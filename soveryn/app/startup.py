@@ -18,6 +18,8 @@ app.extensions['soveryn']:
 """
 
 from __future__ import annotations
+
+from soveryn.paths import SoverynPaths
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -64,6 +66,10 @@ def create_app(
     app = Flask("soveryn")
     app.config.setdefault("SOVERYN_REQUIRE_LOCALHOST", True)
     app.config.setdefault("SOVERYN_VERSION", __version__)
+    import os as _os
+    _delegation_flag = _os.environ.get("SOVERYN_START_DELEGATION_WORKER", "").strip().lower()
+    if _delegation_flag in ("0", "false", "no", "off"):
+        app.config["SOVERYN_START_DELEGATION_WORKER"] = False
     if agent_loops is not None:
         app.config.setdefault("DEFER_CHAT", False)
     # Bound pre-validation memory: a ~50MB cap leaves headroom above the
@@ -75,7 +81,7 @@ def create_app(
     app.config.setdefault("MAX_CONTENT_LENGTH", 50 * 1024 * 1024)
     app.config.setdefault(
         "SOVERYN_LEGACY_TEMPLATES_DIR",
-        str(Path.home() / "soveryn_vnext" / "data" / "templates_legacy"),
+        str(SoverynPaths.root() / "data" / "templates_legacy"),
     )
 
     env = env if env is not None else load_env_config()
@@ -1227,7 +1233,7 @@ def create_app(
             )
 
             _delegation_repo_root = str(
-                __import__('pathlib').Path.home() / "soveryn_vnext"
+                SoverynPaths.root()
             )
             _threading.Thread(
                 target=_delegation_run_forever,
@@ -1272,8 +1278,7 @@ def create_app(
                     or _os.environ.get(
                         "SOVERYN_CITIZENS_DB",
                         str(
-                            _CitizensPath.home()
-                            / "soveryn_vnext"
+                            _CitizensSoverynPaths.root()
                             / "data"
                             / "citizens.db"
                         ),
@@ -1376,8 +1381,7 @@ def create_app(
         merge_worktree as _merge_worktree,
         remove_worktree as _remove_worktree,
     )
-    import os as _os
-    _repo_root = _os.path.expanduser("~/soveryn_vnext")
+    _repo_root = str(SoverynPaths.root())
     app.extensions["soveryn"] = {
         "env": env,
         "conv_store": conv_store,
