@@ -708,3 +708,72 @@ def test_split_existing_replaces_full_amount_on_both_books(tmp_path: Path):
     assert len(sov_amt) == 1 and sov_amt[0]["amount_usd"] == "69.90"
     assert len(cwg_amt) == 1 and cwg_amt[0]["amount_usd"] == "22.30"
     assert not any(r["amount_usd"] == "71.86" for r in sov + cwg)
+
+
+APEX_ORDER_PAGE = """
+Apex Distribution
+My orders
+My addresses
+Logout
+My orders
+Product Quantity Total
+4 oz. 15' wide Geotextile Underlayment - 15'x10'
+$27.00 1 $27.00
+10' Wide PondGard 45 mil EPDM Pond Liners -
+8'x10'
+$80.00
+1 $80.00
+Subtotal $107.00
+Shipping (FedEx Ground\u00ae) $20.16
+ Back to orders October 02, 2026 at 19:09pm
+ORDER #1216
+October 02, 2026 at 19:09pm
+10/2/26, 7:10 PM Order #1216
+https://www.apexdistribution.net/account/orders/1216
+Order #1216
+Total $127.16
+BILLING ADDRESS
+"""
+
+
+def test_parse_apex_books_total_including_carrier_shipping():
+    row = parse_receipt(APEX_ORDER_PAGE, source_name="chat-apex.pdf")
+    assert row.vendor == "Apex Distribution"
+    assert row.order_id == "1216"
+    assert row.amount_usd == "127.16"
+    assert "shipping 20.16" in row.notes
+
+
+def test_parse_prefers_printed_total_when_shipping_line_unparsed():
+    text = "Order placed May 1, 2026\nSubtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
+    row = parse_receipt(text, source_name="x.pdf")
+    assert row.amount_usd == "127.16"
+    assert "unitemized 20.16" in row.notes
+
+
+def test_short_order_id_does_not_match_substrings():
+    from soveryn.platform.ledgers.books import has_order_id
+
+    rows = [{"description": "x (order 111-1216000-0000000)", "notes": "paid $1216.00", "evidence": "", "vendor": ""}]
+    assert not has_order_id(rows, "1216")
+    rows.append({"description": "Liner (order 1216)", "notes": "", "evidence": "", "vendor": ""})
+    assert has_order_id(rows, "1216")
+
+
+def test_reingesting_same_file_without_order_id_is_duplicate(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    pdf = tmp_path / "chat-1.pdf"
+    pdf.write_bytes(b"%PDF-receipt-no-order-id")
+    text = "Aquascape pond bacteria\nOrder placed May 1, 2026\nSubtotal $10.00\nTax $0.70\nTotal $10.70\n"
+    kw = dict(
+        books={"soveryn": tmp_path / "s.csv", "cwg": cwg},
+        evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
+        extract=lambda _p: _extract(text, "chat-1.pdf"),
+        book="cwg",
+    )
+    first = ingest_path(pdf, **kw)
+    second = ingest_path(pdf, **kw)
+    assert first.action == "appended"
+    assert second.action == "duplicate"
+    assert len(load_rows(cwg)) == 1

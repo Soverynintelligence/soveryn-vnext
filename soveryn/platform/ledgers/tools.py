@@ -128,6 +128,14 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
         if splits and order_id and not path_s and image_s.lower() != "current" and parse_current_index(path_s) is None:
             return split_existing_order(order_id, splits).as_dict()
 
+        if order_id and not splits and not path_s and not image_s:
+            # Without this, order_id alone fell through to ingest_drop() and
+            # re-appended every no-order-id receipt in the drop folders.
+            raise ToolArgError(
+                "order_id alone does not edit a filed row — pass splits to "
+                "split it, or path/current to file a receipt"
+            )
+
         if parse_current_index(path_s) is not None:
             saved = _save_current_file(book=book, src=path_s)
             return ingest_path(
