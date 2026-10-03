@@ -47,6 +47,11 @@ CSV_FIELDS: tuple[str, ...] = LEGACY_FIELDS + NEW_FIELDS
 DEFAULT_BACKUP_KEEP = 8
 BACKUP_KEEP_ENV = "LEDGER_BACKUP_KEEP"
 
+# Never sniff. A quote-free sample makes csv.Sniffer pick doublequote=False
+# (and no escapechar), which garbles later `12""` fields and then raises
+# `_csv.Error: need to escape, but no escapechar set` on rewrite.
+BOOK_CSV = csv.excel
+
 _THREAD_LOCKS: dict[str, threading.RLock] = {}
 _THREAD_LOCKS_GUARD = threading.Lock()
 
@@ -166,13 +171,9 @@ def _decode(raw: bytes) -> str:
     return raw.decode("utf-8")
 
 
-def _sniff_dialect(sample: str) -> csv.Dialect:
-    if not sample.strip():
-        return csv.excel
-    try:
-        return csv.Sniffer().sniff(sample, delimiters=",")
-    except csv.Error:
-        return csv.excel
+def _csv_cells(line: str) -> list[str]:
+    """Parse one physical line as standard comma CSV (csv.excel)."""
+    return next(csv.reader([line], dialect=BOOK_CSV), [])
 
 
 @dataclass
@@ -210,7 +211,7 @@ def load_book(path: Path) -> LoadedBook:
             header_raw=None,
             rows=[],
             row_raw=[],
-            dialect=csv.excel,
+            dialect=BOOK_CSV,
             default_ending=b"\n",
             exists=False,
         )
@@ -223,24 +224,20 @@ def load_book(path: Path) -> LoadedBook:
             header_raw=None,
             rows=[],
             row_raw=[],
-            dialect=csv.excel,
+            dialect=BOOK_CSV,
             default_ending=b"\n",
             exists=True,
         )
-    sample = "\n".join(_decode(_strip_ending(line)) for line in raw_lines[:8])
-    dialect = _sniff_dialect(sample)
     header_line = _decode(_strip_ending(raw_lines[0]))
-    reader = csv.reader(io.StringIO(header_line), dialect=dialect)
-    header = [cell.strip() for cell in next(reader, [])]
+    header = [cell.strip() for cell in _csv_cells(header_line)]
     if not header:
         header = list(LEGACY_FIELDS)
     rows: list[dict[str, str]] = []
     row_raw: list[bytes | None] = []
     data_lines = [line for line in raw_lines[1:] if _strip_ending(line).strip()]
-    body = "\n".join(_decode(_strip_ending(line)) for line in data_lines)
-    parsed = list(csv.DictReader(io.StringIO(body), fieldnames=header, dialect=dialect))
-    for i, raw in enumerate(data_lines):
-        values = parsed[i] if i < len(parsed) else {}
+    for raw in data_lines:
+        cells = _csv_cells(_decode(_strip_ending(raw)))
+        values = {name: (cells[i] if i < len(cells) else "") for i, name in enumerate(header)}
         rows.append(_parse_row(values, header))
         row_raw.append(raw)
     ending = _ending_of(raw_lines[0])
@@ -250,7 +247,7 @@ def load_book(path: Path) -> LoadedBook:
         header_raw=raw_lines[0],
         rows=rows,
         row_raw=row_raw,
-        dialect=dialect,
+        dialect=BOOK_CSV,
         default_ending=ending,
         exists=True,
     )
@@ -277,29 +274,34 @@ def _output_header(existing: Sequence[str], *, ensure_new_columns: bool) -> list
 def _serialize_line(
     row: Mapping[str, str],
     header: Sequence[str],
-    dialect: csv.Dialect,
     ending: bytes,
 ) -> bytes:
-    buf = io.StringIO()
+    buf = io.StringIO(newline="")
     writer = csv.DictWriter(
         buf,
         fieldnames=list(header),
         extrasaction="ignore",
         lineterminator="",
-        dialect=dialect,
+        dialect=BOOK_CSV,
+        quoting=csv.QUOTE_MINIMAL,
+        doublequote=True,
+        quotechar='"',
     )
     writer.writerow({k: row.get(k, "") for k in header})
     return buf.getvalue().encode("utf-8") + ending
 
 
-def _serialize_header(header: Sequence[str], dialect: csv.Dialect, ending: bytes) -> bytes:
-    buf = io.StringIO()
+def _serialize_header(header: Sequence[str], ending: bytes) -> bytes:
+    buf = io.StringIO(newline="")
     writer = csv.DictWriter(
         buf,
         fieldnames=list(header),
         extrasaction="ignore",
         lineterminator="",
-        dialect=dialect,
+        dialect=BOOK_CSV,
+        quoting=csv.QUOTE_MINIMAL,
+        doublequote=True,
+        quotechar='"',
     )
     writer.writeheader()
     return buf.getvalue().encode("utf-8") + ending
@@ -336,7 +338,7 @@ def render_book_bytes(
     ):
         parts.append(loaded.header_raw)
     else:
-        parts.append(_serialize_header(header, loaded.dialect, ending))
+        parts.append(_serialize_header(header, ending))
 
     orig_by_id: dict[str, tuple[dict[str, str], bytes | None]] = {}
     orig_queue: list[tuple[dict[str, str], bytes | None]] = []
@@ -365,7 +367,7 @@ def render_book_bytes(
         ):
             parts.append(matched[1])
         else:
-            parts.append(_serialize_line(row, header, loaded.dialect, ending))
+            parts.append(_serialize_line(row, header, ending))
     return b"".join(parts)
 
 
@@ -439,22 +441,32 @@ def _append_changelog(
 
 @contextmanager
 def exclusive_book(path: Path) -> Iterator[None]:
-    """Exclusive process + thread lock for one book."""
+    """Exclusive process + thread lock for one book.
+
+    flock is always released in ``finally`` so a failed write cannot leave
+    a lock that blocks the next writer. The ``.lock`` file is only an
+    inode for flock; leftover empty files do not hold the lock.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     thread = _thread_lock(path)
     lock_file = lock_path(path)
     thread.acquire()
-    fh = lock_file.open("a+")
+    fh = None
     try:
+        fh = lock_file.open("a+")
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
         yield
     finally:
-        try:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-        except OSError:
-            pass
-        fh.close()
+        if fh is not None:
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                fh.close()
+            except OSError:
+                pass
         thread.release()
 
 
@@ -494,21 +506,34 @@ def _write_book_unlocked(
         ]
 
     loaded = load_book(path)
-    if loaded.exists and path.is_file() and path.stat().st_size > 0:
-        backup = _backup_path(path, stamp)
-        backup.write_bytes(path.read_bytes())
-        try:
-            with backup.open("rb") as fh:
-                os.fsync(fh.fileno())
-        except OSError:
-            pass
-        _prune_backups(path, keep)
-    payload = render_book_bytes(
-        loaded, prepared, ensure_new_columns=ensure_new_columns
-    )
-    _atomic_replace(path, payload)
-    _append_changelog(path, logged, actor=actor, timestamp=timestamp)
-    return prepared
+    backup: Path | None = None
+    replaced = False
+    try:
+        if loaded.exists and path.is_file() and path.stat().st_size > 0:
+            backup = _backup_path(path, stamp)
+            backup.write_bytes(path.read_bytes())
+            try:
+                with backup.open("rb") as fh:
+                    os.fsync(fh.fileno())
+            except OSError:
+                pass
+            _prune_backups(path, keep)
+        payload = render_book_bytes(
+            loaded, prepared, ensure_new_columns=ensure_new_columns
+        )
+        _atomic_replace(path, payload)
+        replaced = True
+        _append_changelog(path, logged, actor=actor, timestamp=timestamp)
+        return prepared
+    except Exception:
+        # Original file is intact if replace never ran; drop the spare backup
+        # so a failed serialize does not leave a stray .bak-* beside the book.
+        if not replaced and backup is not None:
+            try:
+                backup.unlink()
+            except OSError:
+                pass
+        raise
 
 
 def write_book(
@@ -524,8 +549,9 @@ def write_book(
 ) -> list[dict[str, str]]:
     """Single writer: lock, backup, atomic replace, changelog.
 
-    Preserves the existing header, column order, quoting, and per-line
-    endings for unchanged rows so mixed CRLF/LF books stay mixed.
+    Unchanged lines keep their original bytes (quoting and endings) so
+    mixed CRLF/LF books stay mixed. New or edited lines are written as
+    standard comma CSV (csv.excel: doublequote, QUOTE_MINIMAL).
     """
     if already_locked:
         return _write_book_unlocked(
@@ -688,7 +714,14 @@ def archive_removed_rows(
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(
-            fh, fieldnames=header, extrasaction="ignore", lineterminator="\n"
+            fh,
+            fieldnames=header,
+            extrasaction="ignore",
+            lineterminator="\n",
+            dialect=BOOK_CSV,
+            quoting=csv.QUOTE_MINIMAL,
+            doublequote=True,
+            quotechar='"',
         )
         writer.writeheader()
         for row in rows:

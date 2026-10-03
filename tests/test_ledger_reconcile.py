@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from soveryn.platform.ledgers.reconcile import check_book, format_report
+from soveryn.platform.ledgers.reconcile import (
+    EVIDENCE_ARCHIVE_FOLDERS,
+    audit_books,
+    check_book,
+    format_report,
+)
 
 
 @pytest.fixture()
@@ -84,6 +89,30 @@ def test_superseded_and_readme_ignored(book: Path):
     p = _csv(book, [_row(evidence="")])
     rep = check_book(p)
     assert rep["counts"]["ORPHAN_EVIDENCE"] == 0
+    assert "superseded" in EVIDENCE_ARCHIVE_FOLDERS
+    assert "duplicates" in EVIDENCE_ARCHIVE_FOLDERS
+
+
+def test_duplicates_folder_not_unreferenced_undated_still_is(book: Path):
+    (book / "evidence" / "duplicates").mkdir(parents=True)
+    (book / "evidence" / "undated").mkdir(parents=True)
+    (book / "evidence" / "duplicates" / "copy.pdf").write_text("dup")
+    (book / "evidence" / "undated" / "stray.pdf").write_text("stray")
+    p = _csv(book, [_row(evidence="")])
+    rep = check_book(p)
+    orphans = [item["evidence"] for item in rep["defects"]["ORPHAN_EVIDENCE"]]
+    assert not any("duplicates/" in ev for ev in orphans)
+    assert any("undated/" in ev and "stray.pdf" in ev for ev in orphans)
+    assert rep["counts"]["ORPHAN_EVIDENCE"] == 1
+    assert rep["archived_evidence_files"] == 1
+
+    audit = audit_books({"cwg": p}, {"cwg": book / "evidence"})
+    unref = [item["evidence"] for item in audit["books"][0]["unreferenced_evidence"]]
+    assert not any("duplicates/" in ev for ev in unref)
+    assert any("undated/" in ev and "stray.pdf" in ev for ev in unref)
+    assert audit["books"][0]["counts"]["unreferenced_evidence"] == 1
+    assert audit["books"][0]["counts"]["archived_evidence"] == 1
+    assert audit["books"][0]["archived_evidence_files"] == 1
 
 
 def test_open_aging_uses_row_date(book: Path):
