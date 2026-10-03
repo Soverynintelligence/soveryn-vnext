@@ -13,6 +13,8 @@ from soveryn.platform.intake.pdf import ExtractResult
 from soveryn.platform.kb.chunk import iter_doc_files
 import json
 import os
+import stat
+import sys
 import threading
 
 import pytest
@@ -1239,6 +1241,88 @@ def test_write_book_is_single_writer(tmp_path: Path):
     assert backups
     log = changes_path(book).read_text(encoding="utf-8")
     assert "second" in log
+
+
+_skip_windows_modes = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="POSIX permission bits are not meaningful on Windows",
+)
+
+
+def _file_mode(path: Path) -> int:
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+def _legacy_mode_fixture(path: Path) -> None:
+    path.write_text(
+        ",".join(LEGACY_FIELDS)
+        + "\n"
+        + "2026,2026-10-01,OldCo,legacy row,supplies,3.50,DOCUMENTED,,"
+        + "evidence/2026/old.pdf,note only\n",
+        encoding="utf-8",
+    )
+
+
+def _mode_row(**overrides: str) -> dict[str, str]:
+    row = {
+        "tax_year": "2026",
+        "date": "2026-10-03",
+        "vendor": "Acme",
+        "description": "widget",
+        "schedule_c_or_form": "supplies",
+        "amount_usd": "10.00",
+        "status": "DOCUMENTED",
+        "payment_method": "",
+        "evidence": "",
+        "notes": "",
+    }
+    row.update(overrides)
+    return row
+
+
+@_skip_windows_modes
+@pytest.mark.parametrize("mode", [0o664, 0o640])
+def test_atomic_write_preserves_existing_book_mode(tmp_path: Path, mode: int):
+    book = tmp_path / "book.csv"
+    _legacy_mode_fixture(book)
+    book.chmod(mode)
+    assert _file_mode(book) == mode
+
+    appended = append_row(book, _mode_row(), actor="test", reason="append")
+    assert _file_mode(book) == mode
+    backups = list(tmp_path.glob("book.csv.bak-*"))
+    assert backups
+    assert _file_mode(backups[0]) == mode
+
+    edited = amend_row(
+        book,
+        appended["row_id"],
+        reason="correct vendor spelling",
+        updates={"vendor": "Acme LLC"},
+        actor="ledger_amend",
+    )
+    assert edited["ok"] is True
+    assert _file_mode(book) == mode
+
+    from scripts.migrate_ledger_columns import main as migrate_main
+
+    assert migrate_main(["--path", str(book), "--apply"]) == 0
+    assert _file_mode(book) == mode
+    leftover_tmps = list(tmp_path.glob(".book.csv.*.tmp"))
+    assert leftover_tmps == []
+
+
+@_skip_windows_modes
+def test_new_book_uses_umask_derived_mode(tmp_path: Path):
+    book = tmp_path / "new.csv"
+    previous = os.umask(0o002)
+    try:
+        append_row(book, _mode_row(), actor="test", reason="create")
+        mode = _file_mode(book)
+        assert mode == (0o666 & ~0o002)
+        assert mode != 0o600
+    finally:
+        os.umask(previous)
 
 
 QUOTED_INCH_DESC = 'Pump Pro-Tector 12" + Sealproof 2" pipe'
