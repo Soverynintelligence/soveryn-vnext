@@ -8,6 +8,8 @@ import io
 import json
 import os
 import re
+import shutil
+import stat
 import tempfile
 import threading
 import uuid
@@ -379,8 +381,25 @@ def _fsync_dir(directory: Path) -> None:
         os.close(fd)
 
 
+def _umask_file_mode() -> int:
+    """Permission bits a new file would get: ``0666 & ~umask``."""
+    mask = os.umask(0)
+    os.umask(mask)
+    return 0o666 & ~mask
+
+
 def _atomic_replace(path: Path, data: bytes) -> None:
+    """Write ``data`` then replace ``path``. Preserve an existing file's mode.
+
+    ``mkstemp`` always creates the temp file as ``0600``. Copy the target's
+    permission bits onto it before ``os.replace`` so a rewrite does not
+    tighten a shared book (e.g. ``0664`` → ``0600``). A brand-new book gets
+    the umask-derived mode instead of ``0600``. Ownership is left alone.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    existing_mode: int | None = None
+    if path.exists():
+        existing_mode = stat.S_IMODE(os.stat(path).st_mode)
     fd, tmp = tempfile.mkstemp(
         dir=str(path.parent),
         prefix=f".{path.name}.",
@@ -391,6 +410,10 @@ def _atomic_replace(path: Path, data: bytes) -> None:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
+        if existing_mode is not None:
+            os.chmod(tmp, existing_mode)
+        else:
+            os.chmod(tmp, _umask_file_mode())
         os.replace(tmp, path)
         _fsync_dir(path.parent)
     except Exception:
@@ -511,7 +534,7 @@ def _write_book_unlocked(
     try:
         if loaded.exists and path.is_file() and path.stat().st_size > 0:
             backup = _backup_path(path, stamp)
-            backup.write_bytes(path.read_bytes())
+            shutil.copy2(path, backup)
             try:
                 with backup.open("rb") as fh:
                     os.fsync(fh.fileno())
