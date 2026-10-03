@@ -1,4 +1,4 @@
-"""Agent tool: drop a receipt (PDF or photo) onto the SOVERYN or CWG tax book."""
+"""Agent tools: preview/confirm ingest, amend a row, read-only reconcile."""
 
 from __future__ import annotations
 
@@ -11,16 +11,18 @@ from typing import Any
 from soveryn.platform.intake.tools import DEFAULT_ALLOWED_ROOTS, resolve_allowed
 from soveryn.platform.intake.turn_files import parse_current_index, pick_current
 from soveryn.platform.intake.turn_images import current_turn_images
+from soveryn.platform.ledgers.books import amend_row
 from soveryn.platform.ledgers.extract import RECEIPT_SUFFIXES
 from soveryn.platform.ledgers.ingest import (
-    ingest_drop,
     ingest_path,
     normalize_splits,
     split_existing_order,
 )
-from soveryn.platform.ledgers.paths import drop_root, ensure_drop_dirs
+from soveryn.platform.ledgers.paths import ensure_drop_dirs
+from soveryn.platform.ledgers.reconcile import audit_books
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
+
 
 def _book_choices() -> frozenset[str]:
     from soveryn.platform.ledgers.registry import book_ids
@@ -91,6 +93,38 @@ def _save_current_photo(*, book: str) -> Path:
     return dest
 
 
+def _as_bool(raw: Any, *, name: str) -> bool:
+    if raw is None or raw is False:
+        return False
+    if raw is True:
+        return True
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    raise ToolArgError(f"{name} must be a boolean")
+
+
+def _ingest_kwargs(args: Mapping[str, Any]) -> dict[str, Any]:
+    confirm = _as_bool(args.get("confirm"), name="confirm")
+    token = args.get("confirm_token", "")
+    override = args.get("override_reason", "")
+    if token is not None and not isinstance(token, str):
+        raise ToolArgError("confirm_token must be a string")
+    if override is not None and not isinstance(override, str):
+        raise ToolArgError("override_reason must be a string")
+    token_s = token.strip() if isinstance(token, str) else ""
+    override_s = override.strip() if isinstance(override, str) else ""
+    if confirm and not token_s:
+        raise ToolArgError(
+            "confirm=true requires the confirm_token from the preview call"
+        )
+    return {
+        "confirm": confirm,
+        "confirm_token": token_s or None,
+        "override_reason": override_s or None,
+        "actor": "ledger_ingest",
+    }
+
+
 def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
     def handler(args: Mapping[str, Any]) -> Any:
         raw = args.get("path", "")
@@ -124,13 +158,18 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 splits = normalize_splits(raw_splits)
             except ValueError as exc:
                 raise ToolArgError(str(exc)) from exc
+        extra = _ingest_kwargs(args)
 
         if splits and order_id and not path_s and image_s.lower() != "current" and parse_current_index(path_s) is None:
-            return split_existing_order(order_id, splits).as_dict()
+            return split_existing_order(
+                order_id,
+                splits,
+                confirm=extra["confirm"],
+                override_reason=extra["override_reason"],
+                actor=extra["actor"],
+            ).as_dict()
 
         if order_id and not splits and not path_s and not image_s:
-            # Without this, order_id alone fell through to ingest_drop() and
-            # re-appended every no-order-id receipt in the drop folders.
             raise ToolArgError(
                 "order_id alone does not edit a filed row — pass splits to "
                 "split it, or path/current to file a receipt"
@@ -143,6 +182,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 folder_hint=forced,
                 book=forced,
                 splits=splits,
+                **extra,
             ).as_dict()
 
         if image_s.lower() == "current" or (image_s and not path_s):
@@ -154,6 +194,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 folder_hint=forced,
                 book=forced,
                 splits=splits,
+                **extra,
             ).as_dict()
 
         if path_s:
@@ -165,7 +206,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                     "ledger_ingest accepts PDF or a photo (jpg/png/webp)"
                 )
             return ingest_path(
-                p, folder_hint=forced, book=forced, splits=splits
+                p, folder_hint=forced, book=forced, splits=splits, **extra
             ).as_dict()
 
         if splits:
@@ -173,14 +214,10 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 "splits need path, image=\"current\", or order_id of an already-filed receipt"
             )
 
-        ensure_drop_dirs()
-        results = ingest_drop()
-        return {
-            "ok": True,
-            "drop": str(drop_root()),
-            "results": [r.as_dict() for r in results],
-            "count": len(results),
-        }
+        raise ToolArgError(
+            "ledger_ingest refuses folder-wide ingest — pass path, "
+            "image=\"current\", or order_id+splits for a specific item"
+        )
 
     return ToolSpec(
         name="ledger_ingest",
@@ -191,9 +228,9 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                 "path": {
                     "type": "string",
                     "description": (
-                        "Absolute path, or 'current' / 'current:2' for a PDF "
-                        "Jon just attached in this chat turn. "
-                        "Omit with image=\"current\" for a picture."
+                        "Absolute path to one receipt, or 'current' / 'current:2' "
+                        "for a PDF Jon just attached. Required unless image or "
+                        "order_id+splits. Folder-wide ingest is refused."
                     ),
                 },
                 "image": {
@@ -218,7 +255,7 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                     "type": "string",
                     "description": (
                         "Amazon/eBay/etc order id when splitting a receipt "
-                        "already on the books (no file needed)."
+                        "already on the books (no file needed). Alone is an error."
                     ),
                 },
                 "splits": {
@@ -248,21 +285,177 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                         "additionalProperties": False,
                     },
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Default false: return a preview of the rows that would "
+                        "be added plus a short-lived confirm_token. Writes only "
+                        "when confirm=true and that token is returned."
+                    ),
+                },
+                "confirm_token": {
+                    "type": "string",
+                    "description": (
+                        "Token from the preview call. Required with confirm=true."
+                    ),
+                },
+                "override_reason": {
+                    "type": "string",
+                    "description": (
+                        "Required to book when subtotal+shipping+tax-discount "
+                        "does not match the printed total within a cent. "
+                        "Logged in the change log."
+                    ),
+                },
             },
             "additionalProperties": False,
         },
         handler=handler,
         description=(
-            "File a receipt onto the SOVERYN or CWG tax ledger. "
-            "PDF print or a photo in chat (image=\"current\"), like Expensify. "
-            "Pass book=cwg or book=soveryn when Jon names the entity. "
-            "One receipt, two businesses: pass splits with each line's "
-            "book/amount/description (and path or order_id). Never book the "
-            "full total on both. Always use this for receipts — never "
-            "create_document. Cite-or-stop on garbled totals. Does not file a return."
+            "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. "
+            "First call (confirm omitted/false) returns the exact rows that would "
+            "be added and a short-lived confirm_token; it writes nothing. "
+            "Second call with confirm=true and that token writes through the "
+            "single locked book writer. Name a specific file "
+            "(path, image=\"current\", or order_id+splits) — folder-wide "
+            "re-ingest is refused. Re-submitting the same receipt is a safe "
+            "no-op that returns the existing row. Totals that do not match "
+            "within a cent are blocked unless override_reason is given. "
+            "One receipt, two businesses: pass splits. Never create_document. "
+            "Cite-or-stop on garbled totals. Does not file a return. "
+            "Use ledger_amend to edit/remove a row; ledger_reconcile to audit."
+        ),
+    )
+
+
+def build_ledger_amend_tool(*, owner_agent: str) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_book = args.get("book", "")
+        raw_id = args.get("row_id", "")
+        raw_reason = args.get("reason", "")
+        raw_remove = args.get("remove", False)
+        raw_updates = args.get("updates")
+        if not isinstance(raw_book, str) or not raw_book.strip():
+            raise ToolArgError("book is required (soveryn or cwg)")
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise ToolArgError("row_id is required")
+        if not isinstance(raw_reason, str) or not raw_reason.strip():
+            raise ToolArgError("reason is required")
+        book = raw_book.strip().lower()
+        if book not in _split_books():
+            raise ToolArgError("book must be soveryn or cwg")
+        remove = _as_bool(raw_remove, name="remove")
+        updates: dict[str, str] | None = None
+        if raw_updates is not None:
+            if not isinstance(raw_updates, Mapping):
+                raise ToolArgError("updates must be an object of column=value")
+            updates = {str(k): "" if v is None else str(v) for k, v in raw_updates.items()}
+        from soveryn.platform.ledgers.registry import resolve_csv
+
+        csv_path = resolve_csv(book)
+        if csv_path is None:
+            raise ToolArgError(f"unknown book: {book}")
+        try:
+            return amend_row(
+                csv_path,
+                raw_id.strip(),
+                reason=raw_reason.strip(),
+                updates=updates,
+                remove=remove,
+                actor="ledger_amend",
+            )
+        except ValueError as exc:
+            raise ToolArgError(str(exc)) from exc
+
+    return ToolSpec(
+        name="ledger_amend",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "book": {
+                    "type": "string",
+                    "enum": sorted(_split_books(), key=lambda n: (n != "soveryn", n != "cwg", n)),
+                    "description": "Which book holds the row.",
+                },
+                "row_id": {
+                    "type": "string",
+                    "description": "Stable row_id from the book (end columns).",
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Required. Written to the change log.",
+                },
+                "remove": {
+                    "type": "boolean",
+                    "description": (
+                        "If true, archive the row to duplicates-removed-*.csv "
+                        "beside the book and drop it from the live CSV. "
+                        "Never a silent delete."
+                    ),
+                },
+                "updates": {
+                    "type": "object",
+                    "description": "Column=value edits. Cannot change row_id.",
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+            "required": ["book", "row_id", "reason"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Edit or remove one tax-book row by row_id. Reason is required and "
+            "is written to <book>.changes.jsonl through the single locked "
+            "writer. Removed rows are archived to duplicates-removed-*.csv "
+            "beside the book — never silently deleted. Does not ingest."
+        ),
+    )
+
+
+def build_ledger_reconcile_tool(*, owner_agent: str) -> ToolSpec:
+    def handler(args: Mapping[str, Any]) -> Any:
+        raw_book = args.get("book", "")
+        if raw_book is not None and not isinstance(raw_book, str):
+            raise ToolArgError("book must be a string")
+        wanted = (raw_book or "").strip().lower()
+        from soveryn.platform.ledgers.registry import all_books, book_ids
+
+        if wanted and wanted not in book_ids():
+            raise ToolArgError("book must be soveryn, cwg, or omitted for both")
+        chosen = [b for b in all_books() if not wanted or b.id == wanted]
+        from soveryn.platform.ledgers.paths import repo_root
+
+        base = repo_root()
+        books = {b.id: b.csv_path(base) for b in chosen}
+        evidence = {b.id: b.evidence_path(base) for b in chosen}
+        return audit_books(books, evidence)
+
+    return ToolSpec(
+        name="ledger_reconcile",
+        owner=owner_agent,
+        schema={
+            "type": "object",
+            "properties": {
+                "book": {
+                    "type": "string",
+                    "enum": sorted(_split_books(), key=lambda n: (n != "soveryn", n != "cwg", n)),
+                    "description": "Optional. Omit to audit every registered book.",
+                },
+            },
+            "additionalProperties": False,
+        },
+        handler=handler,
+        description=(
+            "Read-only audit of the tax books. Reports likely duplicates "
+            "(same evidence_sha256, same order_id, or same date+vendor+amount), "
+            "rows whose evidence files are missing, evidence files no row "
+            "references, and per-book counts and totals. Writes nothing."
         ),
     )
 
 
 def register_ledger_tools(registry: ToolRegistry, *, owner_agent: str) -> None:
     registry.register(build_ledger_ingest_tool(owner_agent=owner_agent))
+    registry.register(build_ledger_amend_tool(owner_agent=owner_agent))
+    registry.register(build_ledger_reconcile_tool(owner_agent=owner_agent))

@@ -2,7 +2,7 @@
 
 Compliance docs for SOVERYN Intelligence LLC. **Not** the tax book.
 
-Paid receipts stay in [tax](../tax/README.md) via `file_away` dest `soveryn_evidence` then `ledger_ingest` book=soveryn.
+Paid receipts stay in [tax](../tax/README.md) via `file_away` dest `soveryn_evidence` then `ledger_ingest` book=soveryn (preview, then confirm=true).
 
 | Folder | What goes here | `file_away` dest |
 |---|---|---|

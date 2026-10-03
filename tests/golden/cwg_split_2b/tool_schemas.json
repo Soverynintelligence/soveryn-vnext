@@ -754,7 +754,49 @@
       }
     },
     {
-      "description": "File a receipt onto the SOVERYN or CWG tax ledger. PDF print or a photo in chat (image=\"current\"), like Expensify. Pass book=cwg or book=soveryn when Jon names the entity. One receipt, two businesses: pass splits with each line's book/amount/description (and path or order_id). Never book the full total on both. Always use this for receipts \u2014 never create_document. Cite-or-stop on garbled totals. Does not file a return.",
+      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "name": "ledger_amend",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Which book holds the row.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Required. Written to the change log.",
+            "type": "string"
+          },
+          "remove": {
+            "description": "If true, archive the row to duplicates-removed-*.csv beside the book and drop it from the live CSV. Never a silent delete.",
+            "type": "boolean"
+          },
+          "row_id": {
+            "description": "Stable row_id from the book (end columns).",
+            "type": "string"
+          },
+          "updates": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Column=value edits. Cannot change row_id.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "book",
+          "row_id",
+          "reason"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
         "additionalProperties": false,
@@ -768,16 +810,28 @@
             ],
             "type": "string"
           },
+          "confirm": {
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
+          },
+          "confirm_token": {
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
+          },
           "image": {
             "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
             "type": "string"
           },
           "order_id": {
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed).",
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
             "type": "string"
           },
           "path": {
-            "description": "Absolute path, or 'current' / 'current:2' for a PDF Jon just attached in this chat turn. Omit with image=\"current\" for a picture.",
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
             "type": "string"
           },
           "splits": {
@@ -808,6 +862,24 @@
               "type": "object"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "name": "ledger_reconcile",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Optional. Omit to audit every registered book.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
@@ -2943,13 +3015,13 @@
       }
     },
     {
-      "description": "Move one Downloads/Desktop item, or an in-flight chat PDF (path=current / current:2), into a house bucket. Chat PDFs are not saved as attachment-1.pdf \u2014 use current. GGUF \u2192 dest=models. Pond shots \u2192 cwg_ig. Paid receipts \u2192 cwg_evidence or soveryn_evidence then ledger_ingest. COI / insurance certificates \u2192 cwg_insurance (not ledger). Licenses/EIN \u2192 cwg_licenses. Vehicle title/reg \u2192 cwg_vehicles. Vendor contracts \u2192 cwg_contracts. Does not delete. Does not overwrite. Not a free mv.",
+      "description": "Move one Downloads/Desktop item, or an in-flight chat PDF (path=current / current:2), into a house bucket. Chat PDFs are not saved as attachment-1.pdf \u2014 use current. GGUF \u2192 dest=models. Pond shots \u2192 cwg_ig. Paid receipts \u2192 cwg_evidence or soveryn_evidence then ledger_ingest (preview, then confirm=true). COI / insurance certificates \u2192 cwg_insurance (not ledger). Licenses/EIN \u2192 cwg_licenses. Vehicle title/reg \u2192 cwg_vehicles. Vendor contracts \u2192 cwg_contracts. Does not delete. Does not overwrite. Not a free mv.",
       "name": "file_away",
       "schema": {
         "additionalProperties": false,
         "properties": {
           "dest": {
-            "description": "Bucket: models (.gguf \u2192 /mnt/soveryn_models/GGUF), cwg_ig (pond photos \u2192 Desktop/CWG-Instagram), cwg_evidence (CWG paid receipt image/PDF), cwg_insurance (COI / insurance certificates \u2014 not bills), cwg_licenses (licenses / EIN), cwg_vehicles (title / registration), cwg_contracts (vendor contracts \u2014 not customer quotes), soveryn_evidence (SOVERYN receipt), soveryn_licenses (SOVERYN LLC / EIN), soveryn_insurance (SOVERYN COI, not bills), soveryn_contracts, pictures (iCloud dumps), installers (.deb/.AppImage). Paid receipts still need ledger_ingest after filing.",
+            "description": "Bucket: models (.gguf \u2192 /mnt/soveryn_models/GGUF), cwg_ig (pond photos \u2192 Desktop/CWG-Instagram), cwg_evidence (CWG paid receipt image/PDF), cwg_insurance (COI / insurance certificates \u2014 not bills), cwg_licenses (licenses / EIN), cwg_vehicles (title / registration), cwg_contracts (vendor contracts \u2014 not customer quotes), soveryn_evidence (SOVERYN receipt), soveryn_licenses (SOVERYN LLC / EIN), soveryn_insurance (SOVERYN COI, not bills), soveryn_contracts, pictures (iCloud dumps), installers (.deb/.AppImage). Paid receipts still need ledger_ingest (preview, then confirm=true) after filing.",
             "type": "string"
           },
           "path": {
@@ -3233,7 +3305,49 @@
       }
     },
     {
-      "description": "File a receipt onto the SOVERYN or CWG tax ledger. PDF print or a photo in chat (image=\"current\"), like Expensify. Pass book=cwg or book=soveryn when Jon names the entity. One receipt, two businesses: pass splits with each line's book/amount/description (and path or order_id). Never book the full total on both. Always use this for receipts \u2014 never create_document. Cite-or-stop on garbled totals. Does not file a return.",
+      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "name": "ledger_amend",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Which book holds the row.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Required. Written to the change log.",
+            "type": "string"
+          },
+          "remove": {
+            "description": "If true, archive the row to duplicates-removed-*.csv beside the book and drop it from the live CSV. Never a silent delete.",
+            "type": "boolean"
+          },
+          "row_id": {
+            "description": "Stable row_id from the book (end columns).",
+            "type": "string"
+          },
+          "updates": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Column=value edits. Cannot change row_id.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "book",
+          "row_id",
+          "reason"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
         "additionalProperties": false,
@@ -3247,16 +3361,28 @@
             ],
             "type": "string"
           },
+          "confirm": {
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
+          },
+          "confirm_token": {
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
+          },
           "image": {
             "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
             "type": "string"
           },
           "order_id": {
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed).",
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
             "type": "string"
           },
           "path": {
-            "description": "Absolute path, or 'current' / 'current:2' for a PDF Jon just attached in this chat turn. Omit with image=\"current\" for a picture.",
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
             "type": "string"
           },
           "splits": {
@@ -3287,6 +3413,24 @@
               "type": "object"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "name": "ledger_reconcile",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Optional. Omit to audit every registered book.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
           }
         },
         "type": "object"
@@ -4674,7 +4818,49 @@
       }
     },
     {
-      "description": "File a receipt onto the SOVERYN or CWG tax ledger. PDF print or a photo in chat (image=\"current\"), like Expensify. Pass book=cwg or book=soveryn when Jon names the entity. One receipt, two businesses: pass splits with each line's book/amount/description (and path or order_id). Never book the full total on both. Always use this for receipts \u2014 never create_document. Cite-or-stop on garbled totals. Does not file a return.",
+      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "name": "ledger_amend",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Which book holds the row.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "description": "Required. Written to the change log.",
+            "type": "string"
+          },
+          "remove": {
+            "description": "If true, archive the row to duplicates-removed-*.csv beside the book and drop it from the live CSV. Never a silent delete.",
+            "type": "boolean"
+          },
+          "row_id": {
+            "description": "Stable row_id from the book (end columns).",
+            "type": "string"
+          },
+          "updates": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Column=value edits. Cannot change row_id.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "book",
+          "row_id",
+          "reason"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
         "additionalProperties": false,
@@ -4688,16 +4874,28 @@
             ],
             "type": "string"
           },
+          "confirm": {
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
+          },
+          "confirm_token": {
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
+          },
           "image": {
             "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
             "type": "string"
           },
           "order_id": {
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed).",
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
             "type": "string"
           },
           "path": {
-            "description": "Absolute path, or 'current' / 'current:2' for a PDF Jon just attached in this chat turn. Omit with image=\"current\" for a picture.",
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
             "type": "string"
           },
           "splits": {
@@ -4728,6 +4926,24 @@
               "type": "object"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "name": "ledger_reconcile",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "book": {
+            "description": "Optional. Omit to audit every registered book.",
+            "enum": [
+              "soveryn",
+              "cwg"
+            ],
+            "type": "string"
           }
         },
         "type": "object"

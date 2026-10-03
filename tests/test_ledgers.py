@@ -11,9 +11,26 @@ from pathlib import Path
 
 from soveryn.platform.intake.pdf import ExtractResult
 from soveryn.platform.kb.chunk import iter_doc_files
-from soveryn.platform.ledgers.books import CSV_FIELDS, append_row, load_rows
+import json
+import threading
+
+import pytest
+
+from soveryn.platform.ledgers.books import (
+    CSV_FIELDS,
+    LEGACY_FIELDS,
+    append_row,
+    changes_path,
+    load_rows,
+    write_book,
+)
 from soveryn.platform.ledgers.classify import classify_receipt
-from soveryn.platform.ledgers.ingest import ingest_path, ingest_drop, split_existing_order
+from soveryn.platform.ledgers.ingest import (
+    FOLDER_WIDE_REFUSED,
+    ingest_path,
+    ingest_drop,
+    split_existing_order,
+)
 from soveryn.platform.ledgers.parse import parse_receipt
 
 
@@ -377,6 +394,7 @@ def test_ingest_drop_routes_each_file(tmp_path: Path):
 
     results = ingest_drop(
         drop,
+        files=[drop / "soveryn" / "spark.pdf", drop / "cwg" / "bacteria.pdf"],
         books={"soveryn": soveryn_csv, "cwg": cwg_csv},
         evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
         extract=extract,
@@ -554,6 +572,7 @@ def test_ingest_drop_picks_up_jpg(tmp_path: Path):
 
     results = ingest_drop(
         drop,
+        files=[drop / "cwg" / "pond.jpg"],
         books={"soveryn": soveryn_csv, "cwg": cwg_csv},
         evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
         extract=lambda p: _extract(AMAZON_CWG, p.name),
@@ -776,4 +795,443 @@ def test_reingesting_same_file_without_order_id_is_duplicate(tmp_path: Path):
     second = ingest_path(pdf, **kw)
     assert first.action == "appended"
     assert second.action == "duplicate"
+    assert second.row is not None
     assert len(load_rows(cwg)) == 1
+
+
+def _ingest_kw(tmp_path: Path, csv_path: Path, text: str, name: str, book: str = "cwg"):
+    return dict(
+        books={"soveryn": tmp_path / "s.csv", "cwg": csv_path if book == "cwg" else tmp_path / "c.csv"},
+        evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
+        extract=lambda _p: _extract(text, name),
+        book=book,
+    )
+
+
+def test_order_1216_reingest_is_noop(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    pdf = tmp_path / "apex-1216.pdf"
+    pdf.write_bytes(b"%PDF-apex-1216")
+    kw = _ingest_kw(tmp_path, cwg, APEX_ORDER_PAGE, "apex-1216.pdf")
+    first = ingest_path(pdf, **kw)
+    second = ingest_path(pdf, **kw)
+    assert first.action == "appended"
+    assert first.amount_usd == "127.16"
+    assert first.row and first.row["order_id"] == "1216"
+    assert second.action == "duplicate"
+    assert second.row is not None
+    assert second.row["row_id"] == first.row["row_id"]
+    assert len(load_rows(cwg)) == 1
+
+
+def test_order_id_without_splits_is_error():
+    from soveryn.platform.ledgers.tools import build_ledger_ingest_tool
+    from soveryn.platform.tools.registry import ToolArgError
+
+    tool = build_ledger_ingest_tool(owner_agent="eve")
+    with pytest.raises(ToolArgError, match="order_id alone"):
+        tool.handler({"order_id": "1216"})
+
+
+def test_folder_wide_ingest_refused_by_tool_and_library():
+    from soveryn.platform.ledgers.tools import build_ledger_ingest_tool
+    from soveryn.platform.tools.registry import ToolArgError
+
+    tool = build_ledger_ingest_tool(owner_agent="eve")
+    with pytest.raises(ToolArgError, match="folder-wide"):
+        tool.handler({})
+    with pytest.raises(ValueError, match="folder-wide"):
+        ingest_drop()
+    assert "specific files" in FOLDER_WIDE_REFUSED
+
+
+def test_retry_storm_same_receipt_one_row(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    pdf = tmp_path / "storm.pdf"
+    pdf.write_bytes(b"%PDF-storm-same-bytes")
+    kw = _ingest_kw(tmp_path, cwg, APEX_ORDER_PAGE, "storm.pdf")
+    for _ in range(20):
+        ingest_path(pdf, **kw)
+    assert len(load_rows(cwg)) == 1
+
+    errors: list[BaseException] = []
+
+    def _once() -> None:
+        try:
+            ingest_path(pdf, **kw)
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_once) for _ in range(20)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert len(load_rows(cwg)) == 1
+
+
+def test_lock_contention_two_writers(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    book.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    errors: list[BaseException] = []
+
+    def _append(vendor: str) -> None:
+        try:
+            append_row(
+                book,
+                {
+                    "tax_year": "2026",
+                    "date": "2026-10-03",
+                    "vendor": vendor,
+                    "description": vendor,
+                    "schedule_c_or_form": "supplies",
+                    "amount_usd": "1.00",
+                    "status": "DOCUMENTED",
+                    "payment_method": "",
+                    "evidence": "",
+                    "notes": "",
+                },
+                actor="test",
+                reason="lock contention",
+            )
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=_append, args=("Alpha",)),
+        threading.Thread(target=_append, args=("Beta",)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    vendors = {row["vendor"] for row in load_rows(book)}
+    assert vendors == {"Alpha", "Beta"}
+
+
+def test_atomic_write_survives_exception_mid_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    book = tmp_path / "book.csv"
+    first = append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Keep",
+            "description": "original",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "5.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "",
+            "notes": "",
+        },
+        actor="test",
+        reason="seed",
+    )
+    original = book.read_bytes()
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("disk full mid-write")
+
+    monkeypatch.setattr("soveryn.platform.ledgers.books.os.replace", _boom)
+    with pytest.raises(RuntimeError, match="disk full"):
+        append_row(
+            book,
+            {
+                "tax_year": "2026",
+                "date": "2026-10-03",
+                "vendor": "Nope",
+                "description": "should not land",
+                "schedule_c_or_form": "supplies",
+                "amount_usd": "9.00",
+                "status": "DOCUMENTED",
+                "payment_method": "",
+                "evidence": "",
+                "notes": "",
+            },
+            actor="test",
+            reason="fail",
+        )
+    assert book.read_bytes() == original
+    rows = load_rows(book)
+    assert len(rows) == 1
+    assert rows[0]["vendor"] == "Keep"
+    assert rows[0]["row_id"] == first["row_id"]
+
+
+def test_preview_without_confirm_writes_nothing(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    pdf = tmp_path / "preview.pdf"
+    pdf.write_bytes(b"%PDF-preview")
+    kw = _ingest_kw(tmp_path, cwg, APEX_ORDER_PAGE, "preview.pdf")
+    preview = ingest_path(pdf, confirm=False, **kw)
+    assert preview.action == "preview"
+    assert preview.confirm_token
+    assert preview.rows and preview.rows[0]["amount_usd"] == "127.16"
+    assert load_rows(cwg) == []
+    assert not list((tmp_path / "ev-c").rglob("*.pdf"))
+
+    from soveryn.platform.ledgers.tools import build_ledger_ingest_tool
+    from soveryn.platform.tools.registry import ToolArgError
+
+    tool = build_ledger_ingest_tool(owner_agent="eve")
+    with pytest.raises(ToolArgError, match="confirm_token"):
+        tool.handler({"confirm": True})
+
+
+def test_mismatch_block_and_override(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    pdf = tmp_path / "freight.pdf"
+    pdf.write_bytes(b"%PDF-freight")
+    text = (
+        "Aquascape pond liner\nOrder placed May 1, 2026\n"
+        "Subtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
+    )
+    kw = _ingest_kw(tmp_path, cwg, text, "freight.pdf")
+    blocked = ingest_path(pdf, **kw)
+    assert blocked.action == "blocked"
+    assert "printed_total" in (blocked.gap or "")
+    assert load_rows(cwg) == []
+    written = ingest_path(
+        pdf, override_reason="unitemized LTL freight is cash that left the account", **kw
+    )
+    assert written.action == "appended"
+    rows = load_rows(cwg)
+    assert len(rows) == 1
+    assert rows[0]["amount_usd"] == "127.16"
+    log = changes_path(cwg).read_text(encoding="utf-8")
+    assert "unitemized LTL freight" in log
+
+
+def test_amend_with_audit_trail(tmp_path: Path):
+    from soveryn.platform.ledgers.books import amend_row
+
+    book = tmp_path / "book.csv"
+    row = append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Acme",
+            "description": "widget",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "10.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "evidence/2026/widget.pdf",
+            "notes": "",
+        },
+        actor="test",
+        reason="seed",
+    )
+    edited = amend_row(
+        book,
+        row["row_id"],
+        reason="correct vendor spelling",
+        updates={"vendor": "Acme LLC"},
+        actor="ledger_amend",
+    )
+    assert edited["ok"] is True
+    assert edited["action"] == "edited"
+    assert load_rows(book)[0]["vendor"] == "Acme LLC"
+    removed = amend_row(
+        book,
+        row["row_id"],
+        reason="duplicate of later filing",
+        remove=True,
+        actor="ledger_amend",
+    )
+    assert removed["ok"] is True
+    assert removed["action"] == "removed"
+    assert load_rows(book) == []
+    archive = Path(str(removed["archive"]))
+    assert archive.is_file()
+    assert archive.name.startswith("duplicates-removed-")
+    assert "Acme LLC" in archive.read_text(encoding="utf-8")
+    log_lines = [
+        json.loads(line)
+        for line in changes_path(book).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    actions = [item["action"] for item in log_lines]
+    assert "edit" in actions
+    assert "remove" in actions
+    assert any(item["reason"] == "correct vendor spelling" for item in log_lines)
+
+
+def test_reconcile_output(tmp_path: Path):
+    from soveryn.platform.ledgers.reconcile import audit_books
+
+    book = tmp_path / "book.csv"
+    ev = tmp_path / "evidence"
+    (ev / "2026").mkdir(parents=True)
+    (ev / "2026" / "kept.pdf").write_bytes(b"same-bytes")
+    (ev / "2026" / "orphan.pdf").write_bytes(b"orphan")
+    append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Acme",
+            "description": "one (order 9999)",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "10.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "evidence/2026/kept.pdf",
+            "notes": "",
+            "order_id": "9999",
+            "evidence_sha256": "abc",
+        },
+        actor="test",
+        reason="seed-a",
+    )
+    append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Acme",
+            "description": "two (order 9999)",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "10.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "evidence/2026/missing.pdf",
+            "notes": "",
+            "order_id": "9999",
+            "evidence_sha256": "abc",
+        },
+        actor="test",
+        reason="seed-b",
+    )
+    report = audit_books({"cwg": book}, {"cwg": ev})
+    cwg = report["books"][0]
+    assert cwg["rows"] == 2
+    assert cwg["total_usd"] == "20.00"
+    assert cwg["counts"]["missing_evidence"] == 1
+    assert cwg["counts"]["unreferenced_evidence"] == 1
+    kinds = {item["kind"] for item in cwg["duplicates"]}
+    assert "order_id" in kinds
+    assert "evidence_sha256" in kinds
+    assert "date_vendor_amount" in kinds
+    assert report["read_only"] is True
+
+
+def test_old_format_book_without_new_columns(tmp_path: Path):
+    book = tmp_path / "old.csv"
+    header = ",".join(LEGACY_FIELDS) + "\r\n"
+    body = (
+        "2026,2026-10-01,OldCo,legacy row,supplies,3.50,DOCUMENTED,,"
+        "evidence/2026/old.pdf,note only\n"
+    )
+    book.write_bytes((header + body).encode("utf-8"))
+    rows = load_rows(book)
+    assert len(rows) == 1
+    assert rows[0]["vendor"] == "OldCo"
+    assert rows[0]["row_id"] == ""
+    assert rows[0]["evidence_sha256"] == ""
+    assert rows[0]["printed_total"] == ""
+    raw = book.read_bytes()
+    assert b"\r\n" in raw and b"note only\n" in raw
+
+    pdf = tmp_path / "new.pdf"
+    pdf.write_bytes(b"%PDF-old-format")
+    result = ingest_path(
+        pdf,
+        books={"soveryn": tmp_path / "s.csv", "cwg": book},
+        evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
+        extract=lambda _p: _extract(AMAZON_CWG, "new.pdf"),
+        book="cwg",
+    )
+    assert result.action == "appended"
+    after = load_rows(book)
+    assert len(after) == 2
+    assert after[0]["vendor"] == "OldCo"
+    leftover = book.read_bytes()
+    assert b"legacy row" in leftover
+
+
+def test_migrate_ledger_columns_dry_run_then_apply(tmp_path: Path):
+    from scripts.migrate_ledger_columns import apply_migration, plan_migration
+
+    book = tmp_path / "old.csv"
+    ev = tmp_path / "evidence" / "2026"
+    ev.mkdir(parents=True)
+    blob = b"synthetic-evidence-bytes"
+    (ev / "old.pdf").write_bytes(blob)
+    book.write_text(
+        ",".join(LEGACY_FIELDS)
+        + "\n"
+        + "2026,2026-10-01,OldCo,legacy row,supplies,3.50,DOCUMENTED,,"
+        + "evidence/2026/old.pdf,note only\n",
+        encoding="utf-8",
+    )
+    before = book.read_bytes()
+    plan = plan_migration(book)
+    assert "row_id" in plan["missing_columns"]
+    assert plan["row_ids_to_fill"] == 1
+    assert plan["hashes_to_fill"] == 1
+    assert book.read_bytes() == before
+    apply_migration(book, plan)
+    rows = load_rows(book)
+    assert rows[0]["row_id"]
+    assert rows[0]["evidence_sha256"]
+    assert rows[0]["vendor"] == "OldCo"
+    header = book.read_text(encoding="utf-8").splitlines()[0]
+    assert header.endswith("printed_total")
+    assert "row_id" in header
+
+
+def test_write_book_is_single_writer(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    write_book(
+        book,
+        [
+            {
+                "tax_year": "2026",
+                "date": "2026-10-03",
+                "vendor": "Solo",
+                "description": "one",
+                "schedule_c_or_form": "supplies",
+                "amount_usd": "1.00",
+                "status": "DOCUMENTED",
+                "payment_method": "",
+                "evidence": "",
+                "notes": "",
+            }
+        ],
+        actor="test",
+        changes=[],
+        reason="create",
+    )
+    backups = list(tmp_path.glob("book.csv.bak-*"))
+    # first create has no prior bytes, so no backup required
+    assert load_rows(book)[0]["vendor"] == "Solo"
+    append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Two",
+            "description": "two",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "2.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "",
+            "notes": "",
+        },
+        actor="test",
+        reason="second",
+    )
+    backups = list(tmp_path.glob("book.csv.bak-*"))
+    assert backups
+    log = changes_path(book).read_text(encoding="utf-8")
+    assert "second" in log
