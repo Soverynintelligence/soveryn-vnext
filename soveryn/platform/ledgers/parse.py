@@ -24,8 +24,13 @@ class ParsedRow:
     order_id: str | None = None
     gap: str | None = None
     subtotal: str = ""
+    shipping: str = ""
     tax: str = ""
+    discount: str = ""
+    printed_total: str = ""
     rewards: str = ""
+    evidence_sha256: str = ""
+    row_id: str = ""
 
     def as_csv(self) -> dict[str, str]:
         return {
@@ -39,6 +44,14 @@ class ParsedRow:
             "payment_method": self.payment_method,
             "evidence": self.evidence,
             "notes": self.notes,
+            "row_id": self.row_id,
+            "evidence_sha256": self.evidence_sha256,
+            "order_id": self.order_id or "",
+            "subtotal": self.subtotal,
+            "shipping": self.shipping,
+            "tax": self.tax,
+            "discount": self.discount or self.rewards,
+            "printed_total": self.printed_total,
         }
 
 
@@ -114,6 +127,7 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
     garbled_grand = grand is None and bool(
         re.search(r"Grand Total:", blob, re.I)
     )
+    listed = grand if grand is not None else total
 
     cash, notes, gap, status = _cash(
         subtotal=subtotal,
@@ -121,7 +135,7 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
         rewards=rewards,
         shipping=shipping,
         free_ship=free_ship,
-        listed=grand if grand is not None else total,
+        listed=listed,
         garbled_grand=garbled_grand,
     )
 
@@ -143,7 +157,10 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
         order_id=order_id,
         gap=gap,
         subtotal=_fmt(subtotal) if subtotal is not None else "",
+        shipping=_fmt(shipping) if shipping is not None else "",
         tax=_fmt(tax) if tax is not None else "",
+        discount=_fmt(rewards) if rewards is not None else "",
+        printed_total=_fmt(listed) if listed is not None else "",
         rewards=_fmt(rewards) if rewards is not None else "",
     )
 

@@ -22,10 +22,11 @@ data/intake/ledgers/unsorted/  # classifier decides, or holds gaps
 ```
 
 ```bash
-python -m scripts.ledger_ingest
-python -m scripts.ledger_ingest --path ~/Downloads/receipt.pdf
-python -m scripts.ledger_ingest --dry-run
+python -m scripts.ledger_ingest --path /tmp/receipt.pdf
+python -m scripts.ledger_ingest --path /tmp/receipt.jpg --dry-run
 ```
+
+Name specific files. Folder-wide walks are refused. The agent tool previews first, then writes only with `confirm=true` and the returned token.
 
 Books land in `docs/ops/tax/` and `docs/ops/tax-cwg/`. Pondwright customer quotes stay in `pondwright/` — do not drop those on a tax book.
 

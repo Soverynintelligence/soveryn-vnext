@@ -11,9 +11,18 @@ house's tax spine. Never freelance a filing location.
    - SOVERYN paid receipt → dest `soveryn_evidence`
    (insurance certificates / licenses are NOT receipts → `cwg_insurance`,
    `soveryn_licenses` shelves)
-3. `ledger_ingest` writes the row on the matching book (cwg / soveryn) with
-   the math in notes: subtotal + tax − rewards = cash.
-4. Done. If the ledger row can't be written (missing amount, can't read the
+3. `ledger_ingest` on a **named** file (path / image="current" / order_id+splits).
+   First call is a preview: the exact rows that would be added, plus a
+   short-lived `confirm_token`. It writes nothing. Call again with
+   `confirm=true` and that token to write. Folder-wide re-ingest is refused.
+   Re-submitting the same receipt is a safe no-op that returns the existing
+   row. Totals that do not match within a cent are blocked unless
+   `override_reason` is given. Math in notes: subtotal + shipping + tax −
+   discount = printed total.
+4. `ledger_amend` edits or removes a row by `row_id` (reason required; removed
+   rows go to `duplicates-removed-*.csv`). `ledger_reconcile` is read-only
+   audit (duplicates, missing evidence, orphans, counts/totals).
+5. Done. If the ledger row can't be written (missing amount, can't read the
    image), file it anyway and say what's missing. Never park a receipt in
    Downloads, Desktop, or quotes/.
 

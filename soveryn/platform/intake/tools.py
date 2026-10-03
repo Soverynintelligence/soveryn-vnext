@@ -1074,7 +1074,7 @@ def _file_away_dest_description() -> str:
     return (
         "Bucket: "
         + ", ".join(bits)
-        + ". Paid receipts still need ledger_ingest after filing."
+        + ". Paid receipts still need ledger_ingest (preview, then confirm=true) after filing."
     )
 
 
@@ -1166,7 +1166,8 @@ def build_file_away_tool(*, owner_agent: str, buckets: dict | None = None) -> To
             "(path=current / current:2), into a house bucket. Chat PDFs "
             "are not saved as attachment-1.pdf — use current. "
             "GGUF → dest=models. Pond shots → cwg_ig. Paid receipts → "
-            "cwg_evidence or soveryn_evidence then ledger_ingest. "
+            "cwg_evidence or soveryn_evidence then ledger_ingest "
+            "(preview, then confirm=true). "
             "COI / insurance certificates → cwg_insurance (not ledger). "
             "Licenses/EIN → cwg_licenses. Vehicle title/reg → cwg_vehicles. "
             "Vendor contracts → cwg_contracts. "

@@ -22,14 +22,16 @@ Exit code 0 = clean, 1 = drift found (so cron/systemd can alert on it).
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import logging
 import sys
+from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
+from .books import load_rows
 from .paths import cwg_csv, evidence_root, repo_root, soveryn_csv
 
 DOCUMENTED = "DOCUMENTED"
@@ -83,10 +85,7 @@ def check_book(csv_path: Path, *, open_days: int = DEFAULT_OPEN_DAYS, today: dat
     # instead so a renamed csv never points the check at the wrong tree.
     ev_root = root / "evidence"
 
-    rows: list[dict[str, str]] = []
-    if csv_path.is_file():
-        with open(csv_path, newline="", encoding="utf-8") as fh:
-            rows = [dict(r) for r in csv.DictReader(fh)]
+    rows = load_rows(csv_path)
 
     on_disk = _evidence_files(ev_root)
     referenced: set[str] = set()
@@ -159,6 +158,115 @@ def check_all(*, root: Path | None = None, open_days: int = DEFAULT_OPEN_DAYS, t
     ]
     total = sum(sum(b["counts"].values()) for b in books)
     return {"checked_at": datetime.now().isoformat(timespec="seconds"), "clean": total == 0, "total_defects": total, "books": books}
+
+
+def _amount_total(rows: list[dict[str, str]]) -> str:
+    total = Decimal("0.00")
+    for row in rows:
+        raw = (row.get("amount_usd") or "").replace("$", "").replace(",", "").strip()
+        if not raw:
+            continue
+        try:
+            total += Decimal(raw)
+        except InvalidOperation:
+            continue
+    return f"{total.quantize(Decimal('0.01'))}"
+
+
+def _dup_groups(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+    for row in rows:
+        digest = (row.get("evidence_sha256") or "").strip().lower()
+        if digest:
+            groups[("evidence_sha256", digest)].append(row)
+        oid = (row.get("order_id") or "").strip()
+        if oid:
+            groups[("order_id", oid)].append(row)
+        key = (
+            (row.get("date") or "").strip(),
+            (row.get("vendor") or "").strip().lower(),
+            (row.get("amount_usd") or "").strip(),
+        )
+        if all(key):
+            groups[("date_vendor_amount", "|".join(key))].append(row)
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    for (kind, value), members in groups.items():
+        if len(members) < 2:
+            continue
+        ids = tuple(sorted((m.get("row_id") or "") for m in members))
+        stamp = (kind, ids)
+        if stamp in seen:
+            continue
+        seen.add(stamp)
+        out.append(
+            {
+                "kind": kind,
+                "value": value,
+                "count": len(members),
+                "row_ids": [m.get("row_id", "") for m in members],
+                "amounts": [m.get("amount_usd", "") for m in members],
+            }
+        )
+    return out
+
+
+def audit_books(
+    books: Mapping[str, Path],
+    evidence_roots: Mapping[str, Path] | None = None,
+) -> dict[str, Any]:
+    """Read-only report: duplicates, missing evidence, orphans, counts/totals."""
+    ev_roots = evidence_roots or {}
+    reports: list[dict[str, Any]] = []
+    for book_id, csv_path in sorted(books.items()):
+        csv_path = Path(csv_path)
+        rows = load_rows(csv_path)
+        ev_root = Path(ev_roots.get(book_id) or (csv_path.parent / "evidence"))
+        on_disk = _evidence_files(ev_root)
+        referenced: set[str] = set()
+        missing: list[dict[str, str]] = []
+        for row in rows:
+            ev = (row.get("evidence") or "").strip()
+            if not _is_evidence_path(ev):
+                continue
+            referenced.add(ev)
+            rel = ev[len("evidence/") :] if ev.startswith("evidence/") else ev
+            disk = ev_root / rel
+            beside = csv_path.parent / ev
+            if not disk.is_file() and not beside.is_file():
+                missing.append(
+                    {
+                        "row_id": row.get("row_id", ""),
+                        "date": row.get("date", ""),
+                        "vendor": row.get("vendor", ""),
+                        "evidence": ev,
+                    }
+                )
+        orphans = sorted(set(on_disk) - referenced)
+        duplicates = _dup_groups(rows)
+        reports.append(
+            {
+                "book": book_id,
+                "csv": str(csv_path),
+                "rows": len(rows),
+                "total_usd": _amount_total(rows),
+                "evidence_files": len(on_disk),
+                "duplicates": duplicates,
+                "missing_evidence": missing,
+                "unreferenced_evidence": [{"evidence": f} for f in orphans],
+                "counts": {
+                    "rows": len(rows),
+                    "duplicates": len(duplicates),
+                    "missing_evidence": len(missing),
+                    "unreferenced_evidence": len(orphans),
+                },
+            }
+        )
+    return {
+        "checked_at": datetime.now().isoformat(timespec="seconds"),
+        "read_only": True,
+        "books": reports,
+    }
 
 
 def format_report(report: dict[str, Any]) -> str:

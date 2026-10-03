@@ -2,7 +2,7 @@
 
 Compliance and ops docs for Carolina Water Gardens. **Not** the tax book.
 
-Paid receipts and insurance **bills** stay in [tax-cwg](../tax-cwg/README.md) via `file_away` dest `cwg_evidence` then `ledger_ingest` book=cwg. Customer quotes stay in CRM, not here.
+Paid receipts and insurance **bills** stay in [tax-cwg](../tax-cwg/README.md) via `file_away` dest `cwg_evidence` then `ledger_ingest` book=cwg (preview, then confirm=true). Customer quotes stay in CRM, not here.
 
 | Folder | What goes here | `file_away` dest |
 |---|---|---|

@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Drop receipt PDFs or photos onto the SOVERYN or CWG tax book.
+"""Drop a named receipt PDF or photo onto the SOVERYN or CWG tax book.
 
-    python -m scripts.ledger_ingest
-    python -m scripts.ledger_ingest --path ~/Downloads/receipt.pdf
-    python -m scripts.ledger_ingest --path ~/Downloads/receipt.jpg
-    python -m scripts.ledger_ingest --dry-run
+    python -m scripts.ledger_ingest --path /tmp/receipt.pdf
+    python -m scripts.ledger_ingest --path /tmp/receipt.jpg --dry-run
 
-Default walk is data/intake/ledgers/{soveryn,cwg,unsorted}/.
+A path is required. Folder-wide walks of data/intake/ledgers/ are refused.
 Photos OCR via tesseract; garbled totals are not invented.
 Does not file a return. Does not mix the two entities.
 """
@@ -27,8 +25,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--path",
         action="append",
-        default=[],
-        help="Receipt PDF or photo (repeatable). Default: the drop folder.",
+        required=True,
+        help="Receipt PDF or photo (repeatable). Folder-wide ingest is refused.",
     )
     parser.add_argument(
         "--dry-run",
@@ -39,24 +37,17 @@ def main(argv: list[str] | None = None) -> int:
 
     from soveryn.platform.ledgers.classify import classify_receipt
     from soveryn.platform.ledgers.extract import RECEIPT_SUFFIXES, extract_receipt_path
-    from soveryn.platform.ledgers.ingest import ingest_drop, ingest_path
+    from soveryn.platform.ledgers.ingest import ingest_path
     from soveryn.platform.ledgers.parse import parse_receipt
-    from soveryn.platform.ledgers.paths import drop_root, ensure_drop_dirs
 
-    if args.path:
-        paths = [Path(p).expanduser() for p in args.path]
-    else:
-        ensure_drop_dirs()
-        drop = drop_root()
-        paths = []
-        for folder in ("soveryn", "cwg", "unsorted"):
-            for path in sorted((drop / folder).iterdir()):
-                if path.is_file() and path.suffix.lower() in RECEIPT_SUFFIXES:
-                    paths.append(path)
-
-    if not paths:
-        print(f"ledger_ingest: nothing to ingest (drop PDFs in {drop_root()}/)")
-        return 0
+    paths = [Path(p).expanduser() for p in args.path]
+    for path in paths:
+        if not path.is_file():
+            print(f"ledger_ingest: not a file: {path}", file=sys.stderr)
+            return 2
+        if path.suffix.lower() not in RECEIPT_SUFFIXES:
+            print(f"ledger_ingest: not a receipt suffix: {path}", file=sys.stderr)
+            return 2
 
     if args.dry_run:
         for path in paths:
@@ -70,13 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
-    results = []
-    if args.path:
-        for path in paths:
-            results.append(ingest_path(path))
-    else:
-        results = ingest_drop()
-
+    results = [ingest_path(path, confirm=True) for path in paths]
     for r in results:
         extra = f" {r.amount_usd}" if r.amount_usd else ""
         gap = f" gap={r.gap}" if r.gap else ""
