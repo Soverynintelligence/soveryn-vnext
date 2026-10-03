@@ -130,6 +130,55 @@ def test_open_aging_uses_row_date(book: Path):
     assert rep["counts"]["OPEN_AGING_PLANNING" if False else "ORPHAN_EVIDENCE"] == 0
 
 
+def test_exclude_row_skipped_in_total_and_duplicates(book: Path):
+    (book / "evidence" / "2026" / "kept.pdf").write_text("kept")
+    (book / "evidence" / "2026" / "excluded.pdf").write_text("excluded")
+    path = _csv(
+        book,
+        [
+            _row(
+                vendor="OtherCo",
+                amount_usd="4431.60",
+                evidence="evidence/2026/kept.pdf",
+                date="2026-09-01",
+            ),
+            _row(
+                vendor="Cloudflare",
+                amount_usd="10.46",
+                evidence="evidence/2026/kept.pdf",
+                date="2026-03-01",
+                description="invoice IN75662012",
+            ),
+            _row(
+                vendor="Cloudflare",
+                amount_usd="10.46",
+                status="EXCLUDE",
+                evidence="evidence/2026/excluded.pdf",
+                date="2026-03-01",
+                description="invoice IN75664146",
+            ),
+        ],
+    )
+    audit = audit_books({"cwg": path}, {"cwg": book / "evidence"})
+    cwg = audit["books"][0]
+    assert cwg["rows"] == 3
+    assert cwg["total_usd"] == "4452.52"
+    assert cwg["counted_usd"] == "4442.06"
+    assert cwg["excluded_rows"] == 1
+    assert cwg["excluded_usd"] == "10.46"
+    assert cwg["counts"]["excluded_rows"] == 1
+    kinds = {item["kind"] for item in cwg["duplicates"]}
+    assert "date_vendor_amount" not in kinds
+    assert cwg["counts"]["duplicates"] == 0
+    unref = [item["evidence"] for item in cwg["unreferenced_evidence"]]
+    assert not any("excluded.pdf" in ev for ev in unref)
+    assert cwg["counts"]["unreferenced_evidence"] == 0
+
+    check = check_book(path)
+    assert check["counts"]["ORPHAN_EVIDENCE"] == 0
+    assert check["counts"]["OPEN_AGING"] == 0
+
+
 def test_report_text_names_defects(book: Path):
     (book / "evidence" / "2026" / "stray.pdf").write_text("x")
     p = _csv(book, [_row(vendor="Ghost", evidence="evidence/2026/ghost.pdf")])

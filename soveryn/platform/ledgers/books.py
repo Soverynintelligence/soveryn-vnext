@@ -10,12 +10,12 @@ import os
 import re
 import shutil
 import stat
-import tempfile
 import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Iterator, Mapping, Sequence
 
@@ -46,6 +46,10 @@ NEW_FIELDS: tuple[str, ...] = (
 
 CSV_FIELDS: tuple[str, ...] = LEGACY_FIELDS + NEW_FIELDS
 
+# Book status that drops a row from counted totals and duplicate grouping.
+# check_book already skipped EXCLUDE from OPEN_AGING; one predicate everywhere.
+EXCLUDE_STATUS = "EXCLUDE"
+
 DEFAULT_BACKUP_KEEP = 8
 BACKUP_KEEP_ENV = "LEDGER_BACKUP_KEEP"
 
@@ -70,6 +74,64 @@ def backup_keep_default() -> int:
     if raw.isdigit():
         return max(1, int(raw))
     return DEFAULT_BACKUP_KEEP
+
+
+def row_is_excluded(row: Mapping[str, str]) -> bool:
+    """True when ``status`` is the exact book value ``EXCLUDE``.
+
+    The amount stays on the row; callers decide whether to count it.
+    """
+    return (row.get("status") or "").strip() == EXCLUDE_STATUS
+
+
+def parse_amount_usd(raw: str) -> Decimal | None:
+    cleaned = (raw or "").replace("$", "").replace(",", "").strip()
+    if not cleaned:
+        return None
+    try:
+        return Decimal(cleaned)
+    except InvalidOperation:
+        return None
+
+
+def _quantize_usd(value: Decimal) -> str:
+    return f"{value.quantize(Decimal('0.01'))}"
+
+
+def sum_amount_usd(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    skip_excluded: bool = False,
+) -> str:
+    """Sum ``amount_usd``. EXCLUDE amounts stay in place unless skipped."""
+    total = Decimal("0.00")
+    for row in rows:
+        if skip_excluded and row_is_excluded(row):
+            continue
+        amount = parse_amount_usd(row.get("amount_usd") or "")
+        if amount is not None:
+            total += amount
+    return _quantize_usd(total)
+
+
+def counted_total_usd(rows: Sequence[Mapping[str, str]]) -> str:
+    """Book total that skips EXCLUDE rows (the counted / printed Total)."""
+    return sum_amount_usd(rows, skip_excluded=True)
+
+
+def excluded_total_usd(rows: Sequence[Mapping[str, str]]) -> str:
+    total = Decimal("0.00")
+    for row in rows:
+        if not row_is_excluded(row):
+            continue
+        amount = parse_amount_usd(row.get("amount_usd") or "")
+        if amount is not None:
+            total += amount
+    return _quantize_usd(total)
+
+
+def excluded_row_count(rows: Sequence[Mapping[str, str]]) -> int:
+    return sum(1 for row in rows if row_is_excluded(row))
 
 
 def changes_path(path: Path) -> Path:
@@ -381,39 +443,27 @@ def _fsync_dir(directory: Path) -> None:
         os.close(fd)
 
 
-def _umask_file_mode() -> int:
-    """Permission bits a new file would get: ``0666 & ~umask``."""
-    mask = os.umask(0)
-    os.umask(mask)
-    return 0o666 & ~mask
-
-
 def _atomic_replace(path: Path, data: bytes) -> None:
     """Write ``data`` then replace ``path``. Preserve an existing file's mode.
 
-    ``mkstemp`` always creates the temp file as ``0600``. Copy the target's
-    permission bits onto it before ``os.replace`` so a rewrite does not
-    tighten a shared book (e.g. ``0664`` → ``0600``). A brand-new book gets
-    the umask-derived mode instead of ``0600``. Ownership is left alone.
+    The temp file is created with ``os.open(..., 0o666)`` so the kernel
+    applies the current umask (thread-safe; no process-wide ``os.umask``
+    dance). If the target exists, copy its permission bits onto the temp
+    file before ``os.replace``. Ownership is left alone.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     existing_mode: int | None = None
     if path.exists():
         existing_mode = stat.S_IMODE(os.stat(path).st_mode)
-    fd, tmp = tempfile.mkstemp(
-        dir=str(path.parent),
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-    )
+    tmp = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
         if existing_mode is not None:
-            os.chmod(tmp, existing_mode)
-        else:
-            os.chmod(tmp, _umask_file_mode())
+            os.chmod(str(tmp), existing_mode)
         os.replace(tmp, path)
         _fsync_dir(path.parent)
     except Exception:
@@ -752,6 +802,62 @@ def archive_removed_rows(
     return dest
 
 
+def _field_changes(
+    before: Mapping[str, str],
+    after: Mapping[str, str] | None,
+) -> list[dict[str, str]]:
+    after_map = after or {}
+    keys = list(dict.fromkeys([*CSV_FIELDS, *before.keys(), *after_map.keys()]))
+    changes: list[dict[str, str]] = []
+    for key in keys:
+        left = "" if before.get(key) is None else str(before.get(key, ""))
+        right = "" if after is None else str(after_map.get(key, "") or "")
+        if left != right:
+            changes.append({"field": key, "before": left, "after": right})
+    return changes
+
+
+def _total_change(
+    before_rows: Sequence[Mapping[str, str]],
+    after_rows: Sequence[Mapping[str, str]],
+) -> dict[str, str]:
+    before_usd = counted_total_usd(before_rows)
+    after_usd = counted_total_usd(after_rows)
+    delta = Decimal(after_usd) - Decimal(before_usd)
+    return {
+        "before_usd": before_usd,
+        "after_usd": after_usd,
+        "delta_usd": _quantize_usd(delta),
+    }
+
+
+def _planned_amend(
+    existing: Sequence[Mapping[str, str]],
+    current: Mapping[str, str],
+    *,
+    rid: str,
+    updates: Mapping[str, str] | None,
+    remove: bool,
+) -> tuple[list[dict[str, str]], dict[str, str] | None]:
+    if remove:
+        kept = [row for row in existing if (row.get("row_id") or "").strip() != rid]
+        return kept, None
+    allowed = set(CSV_FIELDS)
+    after = dict(current)
+    for key, value in (updates or {}).items():
+        if key not in allowed:
+            raise ValueError(f"unknown ledger column: {key}")
+        if key == "row_id":
+            raise ValueError("row_id cannot be changed")
+        after[key] = "" if value is None else str(value)
+    after["row_id"] = rid
+    next_rows = [
+        after if (row.get("row_id") or "").strip() == rid else dict(row)
+        for row in existing
+    ]
+    return next_rows, after
+
+
 def amend_row(
     path: Path,
     row_id: str,
@@ -761,8 +867,13 @@ def amend_row(
     remove: bool = False,
     actor: str = "ledger_amend",
     backup_keep: int | None = None,
+    confirm: bool = False,
 ) -> dict[str, object]:
-    """Edit or remove one row by row_id. Reason is required."""
+    """Preview (default) or confirm an edit/remove of one row by row_id.
+
+    Without ``confirm=True`` this returns the row, field-by-field before/after,
+    and the counted-total change, and writes nothing. Reason is required.
+    """
     why = (reason or "").strip()
     if not why:
         raise ValueError("ledger_amend requires a reason")
@@ -779,12 +890,29 @@ def amend_row(
         current = row_by_id(existing, rid)
         if current is None:
             return {"ok": False, "action": "missing", "row_id": rid, "reason": why}
+        next_rows, after = _planned_amend(
+            existing, current, rid=rid, updates=updates, remove=remove
+        )
+        payload: dict[str, object] = {
+            "ok": True,
+            "action": "preview",
+            "would": "remove" if remove else "edit",
+            "row_id": rid,
+            "reason": why,
+            "row": current,
+            "before": current,
+            "after": after,
+            "fields": _field_changes(current, after),
+            "total_change": _total_change(existing, next_rows),
+            "written": False,
+        }
+        if not confirm:
+            return payload
         if remove:
-            kept = [row for row in existing if (row.get("row_id") or "").strip() != rid]
             archive = archive_removed_rows(path, [current])
             _write_book_unlocked(
                 path,
-                kept,
+                next_rows,
                 actor=actor,
                 changes=[
                     ChangeRecord(
@@ -798,27 +926,10 @@ def amend_row(
                 reason=why,
                 backup_keep=backup_keep,
             )
-            return {
-                "ok": True,
-                "action": "removed",
-                "row_id": rid,
-                "reason": why,
-                "before": current,
-                "archive": str(archive),
-            }
-        allowed = set(CSV_FIELDS)
-        after = dict(current)
-        for key, value in (updates or {}).items():
-            if key not in allowed:
-                raise ValueError(f"unknown ledger column: {key}")
-            if key == "row_id":
-                raise ValueError("row_id cannot be changed")
-            after[key] = "" if value is None else str(value)
-        after["row_id"] = rid
-        next_rows = [
-            after if (row.get("row_id") or "").strip() == rid else row
-            for row in existing
-        ]
+            payload["action"] = "removed"
+            payload["written"] = True
+            payload["archive"] = str(archive)
+            return payload
         _write_book_unlocked(
             path,
             next_rows,
@@ -835,25 +946,25 @@ def amend_row(
             reason=why,
             backup_keep=backup_keep,
         )
-        return {
-            "ok": True,
-            "action": "edited",
-            "row_id": rid,
-            "reason": why,
-            "before": current,
-            "after": after,
-        }
+        payload["action"] = "edited"
+        payload["written"] = True
+        return payload
 
 
 # Re-export for callers that imported asdict from here in tests.
 __all__ = [
     "CSV_FIELDS",
     "ChangeRecord",
+    "EXCLUDE_STATUS",
     "LEGACY_FIELDS",
     "NEW_FIELDS",
     "amend_row",
     "append_row",
+    "counted_total_usd",
     "changes_path",
+    "excluded_row_count",
+    "excluded_total_usd",
+    "sum_amount_usd",
     "exclusive_book",
     "find_duplicate",
     "has_order_id",
@@ -861,7 +972,9 @@ __all__ = [
     "load_rows",
     "new_row_id",
     "order_blob",
+    "parse_amount_usd",
     "row_by_id",
+    "row_is_excluded",
     "rows_for_order",
     "without_order",
     "write_book",

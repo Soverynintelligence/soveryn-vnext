@@ -1042,6 +1042,7 @@ def test_amend_with_audit_trail(tmp_path: Path):
         reason="correct vendor spelling",
         updates={"vendor": "Acme LLC"},
         actor="ledger_amend",
+        confirm=True,
     )
     assert edited["ok"] is True
     assert edited["action"] == "edited"
@@ -1052,6 +1053,7 @@ def test_amend_with_audit_trail(tmp_path: Path):
         reason="duplicate of later filing",
         remove=True,
         actor="ledger_amend",
+        confirm=True,
     )
     assert removed["ok"] is True
     assert removed["action"] == "removed"
@@ -1069,6 +1071,131 @@ def test_amend_with_audit_trail(tmp_path: Path):
     assert "edit" in actions
     assert "remove" in actions
     assert any(item["reason"] == "correct vendor spelling" for item in log_lines)
+
+
+def _seed_amend_row(book: Path) -> dict[str, str]:
+    return append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-10-03",
+            "vendor": "Acme",
+            "description": "widget",
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "10.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "evidence/2026/widget.pdf",
+            "notes": "",
+        },
+        actor="test",
+        reason="seed",
+    )
+
+
+def test_amend_without_confirm_writes_nothing(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    row = _seed_amend_row(book)
+    log = changes_path(book)
+    before_bytes = book.read_bytes()
+    before_mtime = book.stat().st_mtime_ns
+    before_log = log.read_bytes() if log.is_file() else None
+
+    preview = amend_row(
+        book,
+        row["row_id"],
+        reason="correct vendor spelling",
+        updates={"vendor": "Acme LLC", "amount_usd": "12.50"},
+        actor="ledger_amend",
+    )
+    assert preview["ok"] is True
+    assert preview["action"] == "preview"
+    assert preview["written"] is False
+    assert preview["would"] == "edit"
+    assert preview["row"]["vendor"] == "Acme"
+    fields = {item["field"]: item for item in preview["fields"]}
+    assert fields["vendor"] == {"field": "vendor", "before": "Acme", "after": "Acme LLC"}
+    assert fields["amount_usd"] == {
+        "field": "amount_usd",
+        "before": "10.00",
+        "after": "12.50",
+    }
+    assert preview["total_change"] == {
+        "before_usd": "10.00",
+        "after_usd": "12.50",
+        "delta_usd": "2.50",
+    }
+    assert book.read_bytes() == before_bytes
+    assert book.stat().st_mtime_ns == before_mtime
+    if before_log is None:
+        assert not log.exists()
+    else:
+        assert log.read_bytes() == before_log
+    assert load_rows(book)[0]["vendor"] == "Acme"
+
+
+def test_amend_confirm_matches_preview(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    row = _seed_amend_row(book)
+    preview = amend_row(
+        book,
+        row["row_id"],
+        reason="correct vendor spelling",
+        updates={"vendor": "Acme LLC", "amount_usd": "12.50"},
+        actor="ledger_amend",
+    )
+    written = amend_row(
+        book,
+        row["row_id"],
+        reason="correct vendor spelling",
+        updates={"vendor": "Acme LLC", "amount_usd": "12.50"},
+        actor="ledger_amend",
+        confirm=True,
+    )
+    assert written["ok"] is True
+    assert written["action"] == "edited"
+    assert written["written"] is True
+    assert written["fields"] == preview["fields"]
+    assert written["total_change"] == preview["total_change"]
+    assert written["before"] == preview["before"]
+    assert written["after"] == preview["after"]
+    assert load_rows(book)[0]["vendor"] == "Acme LLC"
+    assert load_rows(book)[0]["amount_usd"] == "12.50"
+    log = changes_path(book).read_text(encoding="utf-8")
+    assert "correct vendor spelling" in log
+
+
+def test_amend_tool_preview_default_requires_confirm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    book = tmp_path / "book.csv"
+    row = _seed_amend_row(book)
+    from soveryn.platform.ledgers.tools import build_ledger_amend_tool
+
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.registry.resolve_csv",
+        lambda _book: book,
+    )
+    tool = build_ledger_amend_tool(owner_agent="eve")
+    preview = tool.handler(
+        {
+            "book": "cwg",
+            "row_id": row["row_id"],
+            "reason": "correct vendor spelling",
+            "updates": {"vendor": "Acme LLC"},
+        }
+    )
+    assert preview["action"] == "preview"
+    assert load_rows(book)[0]["vendor"] == "Acme"
+    written = tool.handler(
+        {
+            "book": "cwg",
+            "row_id": row["row_id"],
+            "reason": "correct vendor spelling",
+            "updates": {"vendor": "Acme LLC"},
+            "confirm": True,
+        }
+    )
+    assert written["action"] == "edited"
+    assert load_rows(book)[0]["vendor"] == "Acme LLC"
 
 
 def test_reconcile_output(tmp_path: Path):
@@ -1121,6 +1248,7 @@ def test_reconcile_output(tmp_path: Path):
     cwg = report["books"][0]
     assert cwg["rows"] == 2
     assert cwg["total_usd"] == "20.00"
+    assert cwg["counted_usd"] == "20.00"
     assert cwg["counts"]["missing_evidence"] == 1
     assert cwg["counts"]["unreferenced_evidence"] == 1
     kinds = {item["kind"] for item in cwg["duplicates"]}
@@ -1300,8 +1428,10 @@ def test_atomic_write_preserves_existing_book_mode(tmp_path: Path, mode: int):
         reason="correct vendor spelling",
         updates={"vendor": "Acme LLC"},
         actor="ledger_amend",
+        confirm=True,
     )
     assert edited["ok"] is True
+    assert edited["action"] == "edited"
     assert _file_mode(book) == mode
 
     from scripts.migrate_ledger_columns import main as migrate_main
@@ -1401,6 +1531,7 @@ def test_append_and_amend_quoted_inch_row(tmp_path: Path):
         reason="clarify note",
         updates={"notes": "kept the inch marks"},
         actor="ledger_amend",
+        confirm=True,
     )
     assert edited["ok"] is True
     after_amend = load_rows(book)
