@@ -32,7 +32,7 @@ Conversation turns live in `data/memory/conversations_vnext.db`
 | Canva exports | `data/media/canva/` · ComfyUI stills `~/ComfyUI/output/eve_*.png` |
 | Eve IG photos | `~/Desktop/CWG-Instagram` · profile `data/eve_ig_profile/` |
 | Lattice (memory graph) | `data/lattice/` (nodes/edges; conclusions use provenance JSON) |
-| Ledger receipts | `soveryn/platform/ledgers` + `ledger_ingest` (preview then confirm), `ledger_amend`, `ledger_reconcile` |
+| Ledger receipts | `soveryn/platform/ledgers` + `ledger_ingest` (preview then confirm), `ledger_amend` (preview then confirm), `ledger_reconcile` |
 | Gate/telemetry evidence | `data/acttruth/`, `data/telemetry/`, per-cwd `.soveryn/evidence/` |
 
 ## Agents & brains

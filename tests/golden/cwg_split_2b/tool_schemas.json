@@ -754,7 +754,7 @@
       }
     },
     {
-      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "description": "Preview, then confirm, an edit or remove of one tax-book row by row_id. First call (confirm omitted/false) returns the row, field-by-field before/after, and the would-be counted total change; it writes nothing. Second call with confirm=true writes through the single locked writer. Reason is required and is written to <book>.changes.jsonl. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
       "name": "ledger_amend",
       "schema": {
         "additionalProperties": false,
@@ -766,6 +766,10 @@
               "cwg"
             ],
             "type": "string"
+          },
+          "confirm": {
+            "description": "Default false: return a preview of the row, field-by-field before/after, and the would-be counted total change. Writes nothing. Writes only when confirm=true (same flag as ledger_ingest).",
+            "type": "boolean"
           },
           "reason": {
             "description": "Required. Written to the change log.",
@@ -868,7 +872,7 @@
       }
     },
     {
-      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. EXCLUDE rows stay visible (excluded_rows / excluded_usd). total_usd is the raw sum of every row; counted_usd skips EXCLUDE. Excluded rows are omitted from duplicate grouping; their evidence still counts as referenced. Writes nothing.",
       "name": "ledger_reconcile",
       "schema": {
         "additionalProperties": false,
@@ -3305,7 +3309,7 @@
       }
     },
     {
-      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "description": "Preview, then confirm, an edit or remove of one tax-book row by row_id. First call (confirm omitted/false) returns the row, field-by-field before/after, and the would-be counted total change; it writes nothing. Second call with confirm=true writes through the single locked writer. Reason is required and is written to <book>.changes.jsonl. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
       "name": "ledger_amend",
       "schema": {
         "additionalProperties": false,
@@ -3317,6 +3321,10 @@
               "cwg"
             ],
             "type": "string"
+          },
+          "confirm": {
+            "description": "Default false: return a preview of the row, field-by-field before/after, and the would-be counted total change. Writes nothing. Writes only when confirm=true (same flag as ledger_ingest).",
+            "type": "boolean"
           },
           "reason": {
             "description": "Required. Written to the change log.",
@@ -3419,7 +3427,7 @@
       }
     },
     {
-      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. EXCLUDE rows stay visible (excluded_rows / excluded_usd). total_usd is the raw sum of every row; counted_usd skips EXCLUDE. Excluded rows are omitted from duplicate grouping; their evidence still counts as referenced. Writes nothing.",
       "name": "ledger_reconcile",
       "schema": {
         "additionalProperties": false,
@@ -4818,7 +4826,7 @@
       }
     },
     {
-      "description": "Edit or remove one tax-book row by row_id. Reason is required and is written to <book>.changes.jsonl through the single locked writer. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
+      "description": "Preview, then confirm, an edit or remove of one tax-book row by row_id. First call (confirm omitted/false) returns the row, field-by-field before/after, and the would-be counted total change; it writes nothing. Second call with confirm=true writes through the single locked writer. Reason is required and is written to <book>.changes.jsonl. Removed rows are archived to duplicates-removed-*.csv beside the book \u2014 never silently deleted. Does not ingest.",
       "name": "ledger_amend",
       "schema": {
         "additionalProperties": false,
@@ -4830,6 +4838,10 @@
               "cwg"
             ],
             "type": "string"
+          },
+          "confirm": {
+            "description": "Default false: return a preview of the row, field-by-field before/after, and the would-be counted total change. Writes nothing. Writes only when confirm=true (same flag as ledger_ingest).",
+            "type": "boolean"
           },
           "reason": {
             "description": "Required. Written to the change log.",
@@ -4932,7 +4944,7 @@
       }
     },
     {
-      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. Writes nothing.",
+      "description": "Read-only audit of the tax books. Reports likely duplicates (same evidence_sha256, same order_id, or same date+vendor+amount), rows whose evidence files are missing, evidence files no row references, and per-book counts and totals. EXCLUDE rows stay visible (excluded_rows / excluded_usd). total_usd is the raw sum of every row; counted_usd skips EXCLUDE. Excluded rows are omitted from duplicate grouping; their evidence still counts as referenced. Writes nothing.",
       "name": "ledger_reconcile",
       "schema": {
         "additionalProperties": false,

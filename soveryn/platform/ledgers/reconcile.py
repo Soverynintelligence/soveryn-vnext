@@ -27,11 +27,17 @@ import logging
 import sys
 from collections import defaultdict
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Mapping
 
-from .books import load_rows
+from .books import (
+    counted_total_usd,
+    excluded_row_count,
+    excluded_total_usd,
+    load_rows,
+    row_is_excluded,
+    sum_amount_usd,
+)
 from .paths import cwg_csv, evidence_root, repo_root, soveryn_csv
 
 DOCUMENTED = "DOCUMENTED"
@@ -118,7 +124,7 @@ def check_book(csv_path: Path, *, open_days: int = DEFAULT_OPEN_DAYS, today: dat
         elif status == DOCUMENTED and ev:
             prose.append({"date": r.get("date", ""), "vendor": r.get("vendor", ""), "evidence": ev[:80]})
 
-        if status and status != DOCUMENTED and status not in ("EXCLUDE",):
+        if status and status != DOCUMENTED and not row_is_excluded(r):
             d = _parse_row_date(r.get("date", ""))
             age = (today - d).days if d else None
             item = {
@@ -175,21 +181,20 @@ def check_all(*, root: Path | None = None, open_days: int = DEFAULT_OPEN_DAYS, t
 
 
 def _amount_total(rows: list[dict[str, str]]) -> str:
-    total = Decimal("0.00")
-    for row in rows:
-        raw = (row.get("amount_usd") or "").replace("$", "").replace(",", "").strip()
-        if not raw:
-            continue
-        try:
-            total += Decimal(raw)
-        except InvalidOperation:
-            continue
-    return f"{total.quantize(Decimal('0.01'))}"
+    """Raw sum of every row. EXCLUDE amounts stay in place."""
+    return sum_amount_usd(rows)
+
+
+def _counted_total(rows: list[dict[str, str]]) -> str:
+    """Counted total: EXCLUDE rows are omitted."""
+    return counted_total_usd(rows)
 
 
 def _dup_groups(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
     for row in rows:
+        if row_is_excluded(row):
+            continue
         digest = (row.get("evidence_sha256") or "").strip().lower()
         if digest:
             groups[("evidence_sha256", digest)].append(row)
@@ -258,12 +263,17 @@ def audit_books(
                 )
         orphans = sorted(set(on_disk) - referenced)
         duplicates = _dup_groups(rows)
+        excluded_n = excluded_row_count(rows)
+        excluded_usd = excluded_total_usd(rows)
         reports.append(
             {
                 "book": book_id,
                 "csv": str(csv_path),
                 "rows": len(rows),
                 "total_usd": _amount_total(rows),
+                "counted_usd": _counted_total(rows),
+                "excluded_rows": excluded_n,
+                "excluded_usd": excluded_usd,
                 "evidence_files": len(on_disk),
                 "archived_evidence_files": archived_n,
                 "duplicates": duplicates,
@@ -271,6 +281,7 @@ def audit_books(
                 "unreferenced_evidence": [{"evidence": f} for f in orphans],
                 "counts": {
                     "rows": len(rows),
+                    "excluded_rows": excluded_n,
                     "duplicates": len(duplicates),
                     "missing_evidence": len(missing),
                     "unreferenced_evidence": len(orphans),

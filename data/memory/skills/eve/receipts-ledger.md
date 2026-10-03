@@ -20,8 +20,11 @@ house's tax spine. Never freelance a filing location.
    `override_reason` is given. Math in notes: subtotal + shipping + tax −
    discount = printed total.
 4. `ledger_amend` edits or removes a row by `row_id` (reason required; removed
-   rows go to `duplicates-removed-*.csv`). `ledger_reconcile` is read-only
-   audit (duplicates, missing evidence, orphans, counts/totals).
+   rows go to `duplicates-removed-*.csv`). First call is a preview: the row,
+   field-by-field before/after, and the would-be counted total change. It
+   writes nothing. Call again with `confirm=true` to write. `ledger_reconcile`
+   is read-only audit (duplicates, missing evidence, orphans, counts/totals;
+   total_usd is the raw sum, counted_usd skips EXCLUDE rows).
 5. Done. If the ledger row can't be written (missing amount, can't read the
    image), file it anyway and say what's missing. Never park a receipt in
    Downloads, Desktop, or quotes/.

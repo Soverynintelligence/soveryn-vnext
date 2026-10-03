@@ -1,4 +1,4 @@
-"""Agent tools: preview/confirm ingest, amend a row, read-only reconcile."""
+"""Agent tools: preview/confirm ingest, preview/confirm amend, read-only reconcile."""
 
 from __future__ import annotations
 
@@ -335,6 +335,7 @@ def build_ledger_amend_tool(*, owner_agent: str) -> ToolSpec:
         raw_reason = args.get("reason", "")
         raw_remove = args.get("remove", False)
         raw_updates = args.get("updates")
+        confirm = _as_bool(args.get("confirm"), name="confirm")
         if not isinstance(raw_book, str) or not raw_book.strip():
             raise ToolArgError("book is required (soveryn or cwg)")
         if not isinstance(raw_id, str) or not raw_id.strip():
@@ -363,6 +364,7 @@ def build_ledger_amend_tool(*, owner_agent: str) -> ToolSpec:
                 updates=updates,
                 remove=remove,
                 actor="ledger_amend",
+                confirm=confirm,
             )
         except ValueError as exc:
             raise ToolArgError(str(exc)) from exc
@@ -399,16 +401,29 @@ def build_ledger_amend_tool(*, owner_agent: str) -> ToolSpec:
                     "description": "Column=value edits. Cannot change row_id.",
                     "additionalProperties": {"type": "string"},
                 },
+                "confirm": {
+                    "type": "boolean",
+                    "description": (
+                        "Default false: return a preview of the row, "
+                        "field-by-field before/after, and the would-be counted "
+                        "total change. Writes nothing. Writes only when "
+                        "confirm=true (same flag as ledger_ingest)."
+                    ),
+                },
             },
             "required": ["book", "row_id", "reason"],
             "additionalProperties": False,
         },
         handler=handler,
         description=(
-            "Edit or remove one tax-book row by row_id. Reason is required and "
-            "is written to <book>.changes.jsonl through the single locked "
-            "writer. Removed rows are archived to duplicates-removed-*.csv "
-            "beside the book — never silently deleted. Does not ingest."
+            "Preview, then confirm, an edit or remove of one tax-book row by "
+            "row_id. First call (confirm omitted/false) returns the row, "
+            "field-by-field before/after, and the would-be counted total "
+            "change; it writes nothing. Second call with confirm=true writes "
+            "through the single locked writer. Reason is required and is "
+            "written to <book>.changes.jsonl. Removed rows are archived to "
+            "duplicates-removed-*.csv beside the book — never silently "
+            "deleted. Does not ingest."
         ),
     )
 
@@ -450,7 +465,11 @@ def build_ledger_reconcile_tool(*, owner_agent: str) -> ToolSpec:
             "Read-only audit of the tax books. Reports likely duplicates "
             "(same evidence_sha256, same order_id, or same date+vendor+amount), "
             "rows whose evidence files are missing, evidence files no row "
-            "references, and per-book counts and totals. Writes nothing."
+            "references, and per-book counts and totals. EXCLUDE rows stay "
+            "visible (excluded_rows / excluded_usd). total_usd is the raw sum "
+            "of every row; counted_usd skips EXCLUDE. Excluded rows are "
+            "omitted from duplicate grouping; their evidence still counts as "
+            "referenced. Writes nothing."
         ),
     )
 
