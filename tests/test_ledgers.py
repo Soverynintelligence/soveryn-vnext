@@ -12,6 +12,7 @@ from pathlib import Path
 from soveryn.platform.intake.pdf import ExtractResult
 from soveryn.platform.kb.chunk import iter_doc_files
 import json
+import os
 import threading
 
 import pytest
@@ -19,8 +20,11 @@ import pytest
 from soveryn.platform.ledgers.books import (
     CSV_FIELDS,
     LEGACY_FIELDS,
+    amend_row,
     append_row,
     changes_path,
+    exclusive_book,
+    load_book,
     load_rows,
     write_book,
 )
@@ -1235,3 +1239,164 @@ def test_write_book_is_single_writer(tmp_path: Path):
     assert backups
     log = changes_path(book).read_text(encoding="utf-8")
     assert "second" in log
+
+
+QUOTED_INCH_DESC = 'Pump Pro-Tector 12" + Sealproof 2" pipe'
+QUOTED_INCH_CSV = '"Pump Pro-Tector 12"" + Sealproof 2"" pipe"'
+
+
+def _legacy_plain_line(i: int) -> str:
+    return (
+        f"2026,2026-01-0{i},Vendor{i},plain item {i},supplies,{i}.00,"
+        f"DOCUMENTED,,evidence/2026/v{i}.pdf,note{i}"
+    )
+
+
+def _legacy_quoted_line() -> str:
+    return (
+        f"2026,2026-01-08,HoseCo,{QUOTED_INCH_CSV},supplies,10.00,"
+        f"DOCUMENTED,,evidence/2026/hose.pdf,inch note"
+    )
+
+
+def _write_inch_quote_book(path: Path, *, full_columns: bool) -> bytes:
+    """Header + 7 unquoted rows, then a row with embedded ``""`` after line 8."""
+    if full_columns:
+        header = ",".join(CSV_FIELDS)
+        plains = [
+            _legacy_plain_line(i) + f",rid{i:029d},,,,,,," for i in range(1, 8)
+        ]
+        quoted = _legacy_quoted_line() + ",quotedrowid01,,,,,,,"
+    else:
+        header = ",".join(LEGACY_FIELDS)
+        plains = [_legacy_plain_line(i) for i in range(1, 8)]
+        quoted = _legacy_quoted_line()
+    raw = (header + "\n" + "\n".join(plains) + "\n" + quoted + "\n").encode("utf-8")
+    text_lines = raw.decode("utf-8").splitlines()
+    assert len(text_lines) >= 9
+    assert all('"' not in line for line in text_lines[:8])
+    assert '""' in text_lines[8]
+    path.write_bytes(raw)
+    return raw
+
+
+def test_quoted_inches_after_unquoted_sample_round_trip(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    original = _write_inch_quote_book(book, full_columns=True)
+    loaded = load_book(book)
+    assert loaded.rows[7]["description"] == QUOTED_INCH_DESC
+    assert '""' not in loaded.rows[7]["description"]
+    assert not loaded.rows[7]["description"].endswith(' pipe"')
+    write_book(book, loaded.rows, actor="test", changes=[], reason="noop rewrite")
+    assert book.read_bytes() == original
+
+
+def test_migrate_apply_keeps_quoted_description(tmp_path: Path):
+    from scripts.migrate_ledger_columns import main as migrate_main
+
+    book = tmp_path / "old.csv"
+    _write_inch_quote_book(book, full_columns=False)
+    assert migrate_main(["--path", str(book), "--apply"]) == 0
+    rows = load_rows(book)
+    assert rows[7]["description"] == QUOTED_INCH_DESC
+    assert rows[7]["vendor"] == "HoseCo"
+    header = book.read_text(encoding="utf-8").splitlines()[0]
+    assert header.split(",")[: len(LEGACY_FIELDS)] == list(LEGACY_FIELDS)
+    assert header.endswith("printed_total")
+    assert rows[7]["row_id"]
+    assert rows[0]["description"] == "plain item 1"
+
+
+def test_append_and_amend_quoted_inch_row(tmp_path: Path):
+    book = tmp_path / "book.csv"
+    _write_inch_quote_book(book, full_columns=True)
+    row_id = load_rows(book)[7]["row_id"]
+    edited = amend_row(
+        book,
+        row_id,
+        reason="clarify note",
+        updates={"notes": "kept the inch marks"},
+        actor="ledger_amend",
+    )
+    assert edited["ok"] is True
+    after_amend = load_rows(book)
+    assert after_amend[7]["description"] == QUOTED_INCH_DESC
+    assert after_amend[7]["notes"] == "kept the inch marks"
+    appended = append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-01-09",
+            "vendor": "HoseCo",
+            "description": 'another 1" fitting',
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "2.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "evidence/2026/fitting.pdf",
+            "notes": "",
+        },
+        actor="test",
+        reason="append after quoted row",
+    )
+    assert appended["description"] == 'another 1" fitting'
+    rows = load_rows(book)
+    assert rows[7]["description"] == QUOTED_INCH_DESC
+    assert rows[-1]["description"] == 'another 1" fitting'
+
+
+def test_failed_write_does_not_block_next_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    book = tmp_path / "book.csv"
+    _write_inch_quote_book(book, full_columns=True)
+    real_replace = os.replace
+    fail = {"on": True}
+
+    def _boom(src, dst, *args, **kwargs):
+        if fail["on"]:
+            raise RuntimeError("disk full mid-write")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr("soveryn.platform.ledgers.books.os.replace", _boom)
+    with pytest.raises(RuntimeError, match="disk full"):
+        append_row(
+            book,
+            {
+                "tax_year": "2026",
+                "date": "2026-01-10",
+                "vendor": "Nope",
+                "description": "should not land",
+                "schedule_c_or_form": "supplies",
+                "amount_usd": "1.00",
+                "status": "DOCUMENTED",
+                "payment_method": "",
+                "evidence": "",
+                "notes": "",
+            },
+            actor="test",
+            reason="fail",
+        )
+    fail["on"] = False
+    assert not list(tmp_path.glob("book.csv.bak-*"))
+    appended = append_row(
+        book,
+        {
+            "tax_year": "2026",
+            "date": "2026-01-10",
+            "vendor": "After",
+            "description": QUOTED_INCH_DESC,
+            "schedule_c_or_form": "supplies",
+            "amount_usd": "3.00",
+            "status": "DOCUMENTED",
+            "payment_method": "",
+            "evidence": "",
+            "notes": "",
+        },
+        actor="test",
+        reason="after failed write",
+    )
+    assert appended["vendor"] == "After"
+    vendors = {row["vendor"] for row in load_rows(book)}
+    assert "After" in vendors
+    assert "Nope" not in vendors
+    with exclusive_book(book):
+        pass

@@ -37,6 +37,10 @@ from .paths import cwg_csv, evidence_root, repo_root, soveryn_csv
 DOCUMENTED = "DOCUMENTED"
 DEFAULT_OPEN_DAYS = 10
 
+# Folders under evidence/ that are archives, not live shelf. Shared so
+# check_book / check_all and audit_books / ledger_reconcile cannot drift.
+EVIDENCE_ARCHIVE_FOLDERS: frozenset[str] = frozenset({"superseded", "duplicates"})
+
 
 def _parse_row_date(raw: str) -> date | None:
     raw = (raw or "").strip()
@@ -50,24 +54,33 @@ def _parse_row_date(raw: str) -> date | None:
     return None
 
 
-def _evidence_files(root: Path) -> dict[str, Path]:
-    """Relative-path -> file for everything under a book's evidence tree.
+def _in_archive_folder(rel: str) -> bool:
+    """True when any path segment is an evidence archive folder."""
+    return any(part in EVIDENCE_ARCHIVE_FOLDERS for part in Path(rel).parts)
 
-    Ignores README notes and the superseded/ subtree (acknowledged
-    duplicates kept for audit). Everything else is "on the shelf" and must
-    be referenced by a row.
+
+def _evidence_files(root: Path) -> tuple[dict[str, Path], int]:
+    """Live relative-path -> file, plus a count of archived-folder files.
+
+    Ignores README notes and archive subtrees listed in
+    ``EVIDENCE_ARCHIVE_FOLDERS`` (superseded/ and duplicates/). Everything
+    else is "on the shelf" and must be referenced by a row.
     """
     out: dict[str, Path] = {}
+    archived = 0
     if not root.is_dir():
-        return out
+        return out, archived
     for p in sorted(root.rglob("*")):
         if not p.is_file():
             continue
         rel = p.relative_to(root.parent).as_posix()
-        if p.name.upper().startswith("README") or "/superseded/" in f"/{rel}":
+        if p.name.upper().startswith("README"):
+            continue
+        if _in_archive_folder(rel):
+            archived += 1
             continue
         out[rel] = p
-    return out
+    return out, archived
 
 
 def _is_evidence_path(raw: str) -> bool:
@@ -87,7 +100,7 @@ def check_book(csv_path: Path, *, open_days: int = DEFAULT_OPEN_DAYS, today: dat
 
     rows = load_rows(csv_path)
 
-    on_disk = _evidence_files(ev_root)
+    on_disk, archived_n = _evidence_files(ev_root)
     referenced: set[str] = set()
 
     missing: list[dict[str, str]] = []
@@ -130,6 +143,7 @@ def check_book(csv_path: Path, *, open_days: int = DEFAULT_OPEN_DAYS, today: dat
         "csv": str(csv_path),
         "rows": len(rows),
         "evidence_files": len(on_disk),
+        "archived_evidence_files": archived_n,
         "defects": {
             "ORPHAN_EVIDENCE": [{"evidence": f} for f in orphans],
             "MISSING_EVIDENCE": missing,
@@ -222,7 +236,7 @@ def audit_books(
         csv_path = Path(csv_path)
         rows = load_rows(csv_path)
         ev_root = Path(ev_roots.get(book_id) or (csv_path.parent / "evidence"))
-        on_disk = _evidence_files(ev_root)
+        on_disk, archived_n = _evidence_files(ev_root)
         referenced: set[str] = set()
         missing: list[dict[str, str]] = []
         for row in rows:
@@ -251,6 +265,7 @@ def audit_books(
                 "rows": len(rows),
                 "total_usd": _amount_total(rows),
                 "evidence_files": len(on_disk),
+                "archived_evidence_files": archived_n,
                 "duplicates": duplicates,
                 "missing_evidence": missing,
                 "unreferenced_evidence": [{"evidence": f} for f in orphans],
@@ -259,6 +274,7 @@ def audit_books(
                     "duplicates": len(duplicates),
                     "missing_evidence": len(missing),
                     "unreferenced_evidence": len(orphans),
+                    "archived_evidence": archived_n,
                 },
             }
         )
