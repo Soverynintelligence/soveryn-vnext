@@ -186,6 +186,11 @@
       false
     ],
     [
+      "memory_recall",
+      false,
+      false
+    ],
+    [
       "objective_assign",
       false,
       false
@@ -684,6 +689,11 @@
     ],
     [
       "make_qr",
+      false,
+      false
+    ],
+    [
+      "memory_recall",
       false,
       false
     ],
