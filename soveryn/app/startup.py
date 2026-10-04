@@ -330,6 +330,28 @@ def create_app(
             except Exception:
                 logger.exception("remember_fact tool not registered")
 
+        # Self-initiated recall (self-model roadmap item 2, 2026-10-03) —
+        # the seat asks its own memory mid-work instead of only receiving
+        # turn-start recall injected from the user message. Same store +
+        # embed path as AgentLoop._build_recall_context, so results match.
+        if recall_lattice is not None:
+            try:
+                from soveryn.platform.lattice.recall_tool import build_memory_recall_tool
+
+                _recall_agents = ["aetheria", "eve"]
+                if _kernel_lattice_enabled():
+                    _recall_agents.append("forge")
+                for _recall_agent in _recall_agents:
+                    tool_registry.register(
+                        build_memory_recall_tool(
+                            recall_lattice,
+                            _recall_agent,
+                            embed_fn=_default_embed,
+                        )
+                    )
+            except Exception:
+                logger.exception("memory_recall tool not registered")
+
         # Project Sandbox - Aetheria-only deterministic agency gym. State lives
         # under data/sandbox/runs/<run_id>/state.json so each seeded station run
         # remains available for post-hoc comparison and reflection.

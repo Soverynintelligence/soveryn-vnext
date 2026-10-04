@@ -23,7 +23,7 @@
       }
     },
     {
-      "description": "Search the **AKT Specialty** dealer catalog only (/home/ubuntu/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
+      "description": "Search the **AKT Specialty** dealer catalog only (/home/jon-deoliveira/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
       "name": "akt_catalog_search",
       "schema": {
         "additionalProperties": false,
@@ -50,7 +50,7 @@
       }
     },
     {
-      "description": "Search the **Apex Distribution** master price list only (/home/ubuntu/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
+      "description": "Search the **Apex Distribution** master price list only (/home/jon-deoliveira/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
       "name": "apex_catalog_search",
       "schema": {
         "additionalProperties": false,
@@ -1028,6 +1028,30 @@
           "why",
           "stance",
           "trigger"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Search your own memory (lattice) on demand. Use when YOU notice a connection mid-work \u2014 not only when the user's message already triggered recall. Query embeddings rank against stored nodes the same way turn-start recall does; this is you asking, not the system injecting.",
+      "name": "memory_recall",
+      "schema": {
+        "properties": {
+          "include_historical": {
+            "description": "Set true to include historical_snapshot nodes (archival). Default false: current-state only.",
+            "type": "boolean"
+          },
+          "k": {
+            "description": "Max hits (1-20, default 6).",
+            "type": "integer"
+          },
+          "query": {
+            "description": "What to search your memory for. Natural language.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
         ],
         "type": "object"
       }
@@ -2271,7 +2295,7 @@
   ],
   "eve": [
     {
-      "description": "Search the **AKT Specialty** dealer catalog only (/home/ubuntu/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
+      "description": "Search the **AKT Specialty** dealer catalog only (/home/jon-deoliveira/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
       "name": "akt_catalog_search",
       "schema": {
         "additionalProperties": false,
@@ -2298,7 +2322,7 @@
       }
     },
     {
-      "description": "Search the **Apex Distribution** master price list only (/home/ubuntu/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
+      "description": "Search the **Apex Distribution** master price list only (/home/jon-deoliveira/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
       "name": "apex_catalog_search",
       "schema": {
         "additionalProperties": false,
@@ -3649,6 +3673,30 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "description": "Search your own memory (lattice) on demand. Use when YOU notice a connection mid-work \u2014 not only when the user's message already triggered recall. Query embeddings rank against stored nodes the same way turn-start recall does; this is you asking, not the system injecting.",
+      "name": "memory_recall",
+      "schema": {
+        "properties": {
+          "include_historical": {
+            "description": "Set true to include historical_snapshot nodes (archival). Default false: current-state only.",
+            "type": "boolean"
+          },
+          "k": {
+            "description": "Max hits (1-20, default 6).",
+            "type": "integer"
+          },
+          "query": {
+            "description": "What to search your memory for. Natural language.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
         ],
         "type": "object"
       }
@@ -5879,7 +5927,7 @@
       }
     },
     {
-      "description": "Search the **AKT Specialty** dealer catalog only (/home/ubuntu/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
+      "description": "Search the **AKT Specialty** dealer catalog only (/home/jon-deoliveira/pondpro/akt_catalog.json \u2014 aktspecialty.com). PondGard, EasyPro, Atlantic, Aqua UV, \u2026 Dealer storefront price is in ws (no MAP). Pick this catalog when buying/pricing from AKT \u2014 not Apex. Never quote wholesale (ws) to customers.",
       "name": "akt_catalog_search",
       "schema": {
         "additionalProperties": false,
@@ -5906,7 +5954,7 @@
       }
     },
     {
-      "description": "Search the **Apex Distribution** master price list only (/home/ubuntu/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
+      "description": "Search the **Apex Distribution** master price list only (/home/jon-deoliveira/pondpro/catalog.json). Aquascape, EasyPro, Oase, Blue Thumb, \u2026 Returns MAP/MSRP/wholesale. Customer retail = MAP else MSRP. Pick this catalog when quoting Apex dealer cost/list \u2014 not AKT. Never quote wholesale (ws) to customers.",
       "name": "apex_catalog_search",
       "schema": {
         "additionalProperties": false,
