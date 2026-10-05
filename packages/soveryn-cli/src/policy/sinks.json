@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "note": "Gate 3 — hardening a sink obliges auditing its callers. Doctor fails if any callers_audited is not true.",
+  "note": "Gate 3 \u2014 hardening a sink obliges auditing its callers. Doctor fails if any callers_audited is not true.",
   "sinks": [
     {
       "id": "spawn_pi_launch",
@@ -9,13 +9,14 @@
       "description": "Spawns pi binary for TUI and -p print mode",
       "callers_audited": true,
       "callers": [
-        "src/cli.js cmdCode → launchPi",
+        "src/cli.js cmdCode \u2192 launchPi",
         "src/launch.js launchPi (entry)",
-        "bin/soveryn-pi100 → src/cli.js (pinned Pi 1.0.0 via src/pinned-pi.js piCommand; soveryn-cli only, Kernel ignores)",
-        "bin/soveryn-pi099 → src/cli.js (rollback pin Pi 0.99.1, same path)",
-        "bin/soveryn-pi087 → src/cli.js (rollback pin Pi 0.87.1, same path)"
+        "bin/soveryn-pi103 \u2192 src/cli.js (pinned Pi 1.0.3 via src/pinned-pi.js piCommand; soveryn-cli only, Kernel ignores)",
+        "bin/soveryn-pi100 \u2192 src/cli.js (rollback pin Pi 1.0.0, same path)",
+        "bin/soveryn-pi099 \u2192 src/cli.js (rollback pin Pi 0.99.1, same path)",
+        "bin/soveryn-pi087 \u2192 src/cli.js (rollback pin Pi 0.87.1, same path)"
       ],
-      "audited_at": "2026-10-02"
+      "audited_at": "2026-10-05"
     },
     {
       "id": "profile_write",
@@ -26,7 +27,7 @@
       "callers": [
         "src/cli.js cmdUse",
         "src/cli.js cmdModel",
-        "src/launch.js launchPi → generatePiConfig"
+        "src/launch.js launchPi \u2192 generatePiConfig"
       ],
       "audited_at": "2026-09-10"
     },

@@ -223,7 +223,7 @@ function buildPiConfig(data, activeProfile, { overlay = loadPinnedRuntimeOverlay
       provider: { timeoutMs: 3600000, maxRetries: 0 },
     },
     httpIdleTimeoutMs: 600000,
-    // Pinned soveryn-cli runtime (1.0.0) vs legacy/Kernel (0.74.2): suppress the
+    // Pinned soveryn-cli runtime (1.0.3) vs legacy/Kernel (0.74.2): suppress the
     // what's-new screen on every launch without lying to the other harness.
     lastChangelogVersion: piVersionLabel(),
   };

@@ -57,20 +57,22 @@ Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
-# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi103" "$HOME/bin/soveryn"
+# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
 ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn-074"   # rollback runtime
 # ensure ~/bin is on PATH
 soveryn doctor
 ```
 
-Runtime (2026-10-02): `soveryn` runs pinned **Pi 1.0.0** on **Node 22.23.2**
-(`bin/soveryn-pi100`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
-`~/.soveryn/pi/1.0.0`; nvm default stays Node 20, PATH untouched; Pi 1.0.0 needs Node >=22.19).
-Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.0.0 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.0.0`.
-Previous pin `bin/soveryn-pi099` (Pi 0.99.1, `~/.soveryn/pi/0.99.1`) stays installed as the first rollback,
-`bin/soveryn-pi087` (Pi 0.87.1, `~/.soveryn/pi/0.87.1`) as the second;
+Runtime (2026-10-05): `soveryn` runs pinned **Pi 1.0.3** on **Node 22.23.2**
+(`bin/soveryn-pi103`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/1.0.3`; nvm default stays Node 20, PATH untouched; Pi 1.0.x needs Node >=22.19).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.0.3 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.0.3`
+(keeps a prefix `package-lock.json`; Pi removed `npm-shrinkwrap.json` from the published package in 1.0.1).
+Previous pin `bin/soveryn-pi100` (Pi 1.0.0, `~/.soveryn/pi/1.0.0`) stays installed as the first rollback,
+`bin/soveryn-pi099` (Pi 0.99.1) / `bin/soveryn-pi087` (Pi 0.87.1) as older rollbacks;
 version-gated settings follow `SOVERYN_PI_VERSION`, so rolling the symlink back also rolls the generated settings back.
 Pi 1.0 defaults the interactive TUI to fullscreen (alt screen). The pinned runtime on Pi >=1.0.0 writes
 `"tuiMode": "regular"` (`src/pinned-pi.js` `pinnedSettingsTuiMode`) so the locked C64/PETSCII look and the

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# SOVERYN CLI on pinned Pi 1.0.0 / Node 22 (rollback; was current 2026-10-02..2026-10-05).
+# SOVERYN CLI on pinned Pi 1.0.3 / Node 22 (cut over 2026-10-05).
 #
 # Side-by-side runtimes:
-#   ~/bin/soveryn      -> bin/soveryn-pi103 (Pi 1.0.3, Node 22 via explicit nvm path)
-#   bin/soveryn-pi100  -> this file (Pi 1.0.0) — first rollback:
+#   ~/bin/soveryn      -> this file (Pi 1.0.3, Node 22 via explicit nvm path)
+#   bin/soveryn-pi100  -> previous pin (Pi 1.0.0) — kept as first rollback:
 #                         ln -sfn ~/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100 ~/bin/soveryn
 #   bin/soveryn-pi099  -> older pin (Pi 0.99.1) — second rollback
 #   bin/soveryn-pi087  -> older pin (Pi 0.87.1) — third rollback
@@ -27,18 +27,18 @@ _DEFAULT_REPO="$(cd "$PKG/../.." && pwd)"
 REPO="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$_DEFAULT_REPO}}"
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 
-PI_PIN_VERSION="1.0.0"
+PI_PIN_VERSION="1.0.3"
 NODE_PIN_VERSION="v22.23.2"
 
 SOVERYN_PI_NODE="${SOVERYN_PI_NODE:-$NVM_DIR/versions/node/$NODE_PIN_VERSION/bin/node}"
 SOVERYN_PI_BIN="${SOVERYN_PI_BIN:-$HOME/.soveryn/pi/$PI_PIN_VERSION/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js}"
 
 if [[ ! -x "$SOVERYN_PI_NODE" ]]; then
-  echo "soveryn: pinned node missing: $SOVERYN_PI_NODE (rollback: soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  echo "soveryn: pinned node missing: $SOVERYN_PI_NODE (rollback: soveryn-pi100 / soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
   exit 1
 fi
 if [[ ! -f "$SOVERYN_PI_BIN" ]]; then
-  echo "soveryn: pinned Pi $PI_PIN_VERSION missing: $SOVERYN_PI_BIN (rollback: soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  echo "soveryn: pinned Pi $PI_PIN_VERSION missing: $SOVERYN_PI_BIN (rollback: soveryn-pi100 / soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
   exit 1
 fi
 

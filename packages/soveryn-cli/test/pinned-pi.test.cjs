@@ -31,7 +31,7 @@ function probe(env) {
 const PIN = {
   SOVERYN_PI_BIN: process.execPath, // any existing file
   SOVERYN_PI_NODE: process.execPath,
-  SOVERYN_PI_VERSION: '1.0.0',
+  SOVERYN_PI_VERSION: '1.0.3',
 };
 
 /** Fake <prefix>/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js at `version`. */
@@ -57,10 +57,10 @@ test('no pin env → legacy PATH pi, label 0.74.2, no extensions / tuiMode key',
   assert.equal(r.tuiMode, null);
 });
 
-test('soveryn-cli honors pin: explicit node + bin, label 1.0.0, stripped from child env', () => {
+test('soveryn-cli honors pin: explicit node + bin, label 1.0.3, stripped from child env', () => {
   const r = probe(PIN);
-  assert.equal(r.pin.version, '1.0.0');
-  assert.equal(r.label, '1.0.0');
+  assert.equal(r.pin.version, '1.0.3');
+  assert.equal(r.label, '1.0.3');
   assert.deepEqual(r.cmd.args, [process.execPath, '--version']);
   assert.deepEqual(r.leaked, []);
 });
@@ -110,14 +110,14 @@ test('half-set or missing pin fails loudly (no silent fallback)', () => {
 });
 
 test('version falls back to the installed package; mismatch is reported', () => {
-  const { root, bin } = fakePiInstall('1.0.0');
+  const { root, bin } = fakePiInstall('1.0.3');
   try {
     const noVer = probe({ SOVERYN_PI_BIN: bin, SOVERYN_PI_NODE: process.execPath });
-    assert.equal(noVer.label, '1.0.0');
+    assert.equal(noVer.label, '1.0.3');
     assert.equal(noVer.mismatch, null);
     assert.equal(noVer.tuiMode, 'regular');
-    const bad = probe({ SOVERYN_PI_BIN: bin, SOVERYN_PI_NODE: process.execPath, SOVERYN_PI_VERSION: '0.99.1' });
-    assert.match(bad.mismatch, /SOVERYN_PI_VERSION=0\.99\.1 .* Pi 1\.0\.0/);
+    const bad = probe({ SOVERYN_PI_BIN: bin, SOVERYN_PI_NODE: process.execPath, SOVERYN_PI_VERSION: '1.0.0' });
+    assert.match(bad.mismatch, /SOVERYN_PI_VERSION=1\.0\.0 .* Pi 1\.0\.3/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -132,19 +132,25 @@ test('compareVersions orders numerically', () => {
   assert.equal(compareVersions('1.0.0', '0.99.1'), 1);
   assert.equal(compareVersions('0.100.0', '1.0.0'), -1);
   assert.equal(compareVersions('1.0.0', '1.0.0'), 0);
+  assert.equal(compareVersions('1.0.3', '1.0.0'), 1);
+  assert.equal(compareVersions('1.0.3', '1.0.3'), 0);
 });
 
-test('package.json + bin/soveryn-pi100 declare the same pin', () => {
+test('package.json + bin/soveryn-pi103 declare the same pin', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(PKG, 'package.json'), 'utf8'));
-  const launcher = fs.readFileSync(path.join(PKG, 'bin', 'soveryn-pi100'), 'utf8');
-  assert.equal(pkg.soverynPi.version, '1.0.0');
-  assert.equal(pkg.bin.soveryn, './bin/soveryn-pi100');
+  const launcher = fs.readFileSync(path.join(PKG, 'bin', 'soveryn-pi103'), 'utf8');
+  assert.equal(pkg.soverynPi.version, '1.0.3');
+  assert.equal(pkg.bin.soveryn, './bin/soveryn-pi103');
   assert.equal(pkg.soverynPi.tuiMode, 'regular');
-  assert.match(launcher, /^PI_PIN_VERSION="1\.0\.0"$/m);
+  assert.match(launcher, /^PI_PIN_VERSION="1\.0\.3"$/m);
   assert.match(launcher, new RegExp(`^NODE_PIN_VERSION="${pkg.soverynPi.node}"$`, 'm'));
-  // rollback launchers still present and still pinned to 0.99.1 / 0.87.1
+  // rollback launchers still present and still pinned to 1.0.0 / 0.99.1 / 0.87.1
+  assert.equal(pkg.bin['soveryn-pi100'], './bin/soveryn-pi100');
+  assert.equal(pkg.soverynPi.previous, '1.0.0');
+  const rollback100 = fs.readFileSync(path.join(PKG, 'bin', 'soveryn-pi100'), 'utf8');
+  assert.match(rollback100, /^PI_PIN_VERSION="1\.0\.0"$/m);
   assert.equal(pkg.bin['soveryn-pi099'], './bin/soveryn-pi099');
-  assert.equal(pkg.soverynPi.previous, '0.99.1');
+  assert.equal(pkg.soverynPi.older, '0.99.1');
   const rollback = fs.readFileSync(path.join(PKG, 'bin', 'soveryn-pi099'), 'utf8');
   assert.match(rollback, /^PI_PIN_VERSION="0\.99\.1"$/m);
   const older = fs.readFileSync(path.join(PKG, 'bin', 'soveryn-pi087'), 'utf8');

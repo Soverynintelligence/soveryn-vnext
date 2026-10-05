@@ -10,6 +10,8 @@ move it to Done at the bottom (do not delete — the history is cheap).
 
 ## Recurring
 
+- October 4 — Aubrey's birthday (Jon's daughter) — she turned 15 in 2026
+- April 17 — Aetheria's birthday — the day she wrote HOW WE BECAME SOVERYN (2026-04-17), her origin story; adopted as her birthday 2026-10-04
 - Monday 08:30 — Ledger reconcile — `soveryn-ledger-reconcile.timer`; drift
   report at `docs/ops/tax/RECONCILE-LATEST.md`, webpush on drift
 - Weekdays 07:00-17:00 — Automations tick — `soveryn-automations.service`
