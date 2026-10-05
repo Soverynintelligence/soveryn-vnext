@@ -1,0 +1,40 @@
+# SOVERYN Representation Daemon — user service.
+# Reasons over recent conversation to maintain evolving, premise-cited
+# conclusions about Jon (owner: Aetheria). "Memory as reasoning", SOVERYN-native.
+#
+# Design: docs/superpowers/specs/2026-06-17-reasoned-representations-design.md
+# Plan:   docs/superpowers/plans/2026-06-17-reasoned-representations.md
+#
+# STARTS DRY-RUN. Writes NOTHING to the lattice — only the review artifact
+# at data/memory/representation_dryrun.jsonl. Flip SOVERYN_REPR_DRY_RUN=false
+# ONLY after the 48h dry run is inspected by Jon + Vett + Aetheria.
+
+[Unit]
+Description=SOVERYN Representation Daemon (reasoned representations — LIVE)
+Documentation=file:///home/jon-deoliveira/soveryn_vnext/docs/superpowers/specs/2026-06-17-reasoned-representations-design.md
+PartOf=soveryn.target
+After=soveryn-cognition.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jon-deoliveira/soveryn_vnext
+Environment=PATH=/home/jon-deoliveira/miniconda3/envs/soveryn/bin:/usr/bin
+Environment=SOVERYN_REPR_ENABLED=true
+Environment=SOVERYN_REPR_DRY_RUN=false
+Environment=SOVERYN_REPR_OWNER=aetheria
+Environment=SOVERYN_REPR_SUBJECT=jon
+Environment=SOVERYN_REPR_MIN_TURNS=6
+Environment=SOVERYN_REPR_TURNS=8
+Environment=SOVERYN_REPR_TICK_SECONDS=900
+Environment=SOVERYN_REPR_COGNITION_URL=http://127.0.0.1:8089
+
+ExecStartPre=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.platform.supervisor.readiness http://127.0.0.1:8089/health --name cognition --max-wait 60
+ExecStart=/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python -m soveryn.agents.representation
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:/tmp/soveryn-representation.log
+StandardError=append:/tmp/soveryn-representation.log
+
+[Install]
+WantedBy=soveryn.target
