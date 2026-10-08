@@ -6,7 +6,7 @@ const http = require('node:http');
 const createRequire = require('node:module').createRequire;
 
 const req = createRequire(__filename);
-const { probe, probeStable } = req('../src/health');
+const { probe, probeStable, findModel } = req('../src/health');
 const { assertExact, codePoints } = req('../src/policy/assert');
 const { canonicalizeId, resolveCanonicalKey } = req('../src/policy/canonical');
 
@@ -35,6 +35,42 @@ test('probe: 200 but model missing → fail with ids listed', async () => {
   assert.strictEqual(r.ok, false);
   assert.match(r.detail, /model "m1" missing/);
   srv.close();
+});
+
+test('probe: model served as llama.cpp router alias → ok, reports matchedId', async () => {
+  const srv = await serve(
+    200,
+    '{"data":[{"id":"cognition","aliases":["cognition"]},{"id":"qwen38","aliases":["Qwen3.8-27B","aetheria","qwen38"]}]}'
+  );
+  const p = { baseUrl: `http://127.0.0.1:${portOf(srv)}/v1`, modelId: 'aetheria' };
+  const r = await probe(p, 1000, { requireModel: true });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.matchedId, 'qwen38');
+  assert.match(r.detail, /alias of qwen38/);
+  srv.close();
+});
+
+test('probe: 200 from a server that does not serve the name → fail (vLLM :8090 case)', async () => {
+  const srv = await serve(
+    200,
+    '{"data":[{"id":"qwen38-nvfp4"},{"id":"eve"},{"id":"qwen38"},{"id":"bench-flash"}]}'
+  );
+  const p = { baseUrl: `http://127.0.0.1:${portOf(srv)}/v1`, modelId: 'aetheria' };
+  const r = await probe(p, 1000, { requireModel: true });
+  assert.strictEqual(r.ok, false);
+  assert.match(r.detail, /model "aetheria" missing/);
+  srv.close();
+});
+
+test('findModel: id beats alias; unknown → null', () => {
+  const models = [
+    { id: 'a', aliases: ['x'] },
+    { id: 'x', aliases: [] },
+  ];
+  assert.strictEqual(findModel(models, 'x').id, 'x');
+  assert.strictEqual(findModel(models, 'a').id, 'a');
+  assert.strictEqual(findModel(models, 'nope'), null);
+  assert.strictEqual(findModel([{ id: 'm' }], 'm').id, 'm'); // no aliases field
 });
 
 test('probe: 503 → fail', async () => {

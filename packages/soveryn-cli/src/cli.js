@@ -353,7 +353,10 @@ async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false, 
           : null,
       });
     } else {
-      const h = await probeStable(p, 1000, { retries: 1 });
+      // requireModel: HTTP 200 on /models is not enough. The endpoint must
+      // actually serve modelId (as id or alias), or doctor reports OK while
+      // every request 404s (aetheria on :8090 after the 2026-09-29 seat swap).
+      const h = await probeStable(p, 1000, { requireModel: true, retries: 1 });
       profileRows.push({
         id,
         parked: false,
