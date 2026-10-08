@@ -7,7 +7,7 @@ Citizens: Aetheria (soul), Kernel (build), Eve (research + ship). Runtime facts:
 Pi auto-loads this via `AGENTS.md` → `SOVERYN.md` (symlink). `SYSTEM.md` stays the short Kernel voice/prompt.
 
 ## Defaults
-- **Brain:** active profile is whatever `~/.soveryn/kernel_brain` says — `kernel status` is truth (2026-09-28: GLM-5.3-Flash EXL3 TP=2 @ `http://10.10.10.2:8001/v1`, live Kernel brain). Flash-Next `:8888` parked. Aetheria @ `:8090`. Do not trust prose in docs over `kernel status`.
+- **Brain:** active profile is whatever `~/.soveryn/kernel_brain` says — `kernel status` is truth (2026-09-28: GLM-5.3-Flash EXL3 TP=2 @ `http://10.10.10.2:8001/v1`, live Kernel brain). Flash-Next `:8888` parked. Aetheria @ `:8091`. Do not trust prose in docs over `kernel status`.
 - **Thinking:** default is Pi **medium**. On this GLM that sends `reasoning_effort` **high**. `kernel --high` sends **max**, and max can spend the whole 16k output cap on reasoning before an answer. `kernel --build` sends the lowest effort this model allows (`low`). GLM has no true off. Flash-Next is on/off, not GLM low/high/max.
 - **Online by default.** No `--offline` / `PI_OFFLINE` unless Jon opts in. Stay on house endpoints; nothing leaves the machine unless `models.json` baseUrl changes.
 - **Compaction:** on. Working budget **262144** (reserve **18432**, keep-recent **65536**). Stay inside that budget. The server window is larger. Output cap **16k including thinking**. Do not draft full files in the thinking channel. After a compaction summary: re-read only the files you still need. Do not compact-chase or re-walk the whole tree.
@@ -20,7 +20,7 @@ Profiles SSOT: `config/soveryn-cli/profiles.json` (symlinked at `config/pi/profi
 ```bash
 kernel status                 # active brain + health
 kernel use flash              # Flash-Next :8888
-kernel use aetheria           # Aetheria :8090  (alias: --qwen)
+kernel use aetheria           # Aetheria :8091  (alias: --qwen)
 kernel use glm                # live Kernel brain at :8001
 kernel model                  # interactive picker
 kernel --flash | --aetheria | --qwen | --profile NAME

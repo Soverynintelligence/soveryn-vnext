@@ -38,9 +38,9 @@
     },
     "kernel-qwen": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Kernel alt \u00b7 Qwen 3.8 (:8090)",
+      "name": "Kernel alt \u00b7 Qwen 3.8 (:8091)",
       "options": {
-        "baseURL": "http://127.0.0.1:8090/v1",
+        "baseURL": "http://127.0.0.1:8091/v1",
         "apiKey": "local"
       },
       "models": {

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Local-only Aider against the SOVERYN house routers.
-# Default: Blackwell router :8090, model alias "aetheria" (Qwen3.8-27B as of 2026-08-17).
+# Default: Quadro router :8091, model alias "aetheria" (Qwen3.8-27B as of 2026-08-17).
 #
 # Usage:
-#   soveryn-aider                    # current dir, aetheria @ 8090
+#   soveryn-aider                    # current dir, aetheria @ 8091
 #   soveryn-aider --kernel           # Kernel Flash-Next on 127.0.0.1:8888 + persona
 #   soveryn-aider --flash            # same as --kernel
 #   soveryn-aider --model openai/vett-scotty
@@ -41,7 +41,7 @@ for arg in "$@"; do
         export AIDER_MODEL="${AIDER_MODEL:-openai/glm-5.3-flash}"
         ;;
       aetheria|qwen)
-        export AIDER_BASE="${AIDER_BASE:-http://127.0.0.1:8090/v1}"
+        export AIDER_BASE="${AIDER_BASE:-http://127.0.0.1:8091/v1}"
         export AIDER_MODEL="${AIDER_MODEL:-openai/aetheria}"
         ;;
       *)
@@ -80,7 +80,7 @@ for arg in "$@"; do
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
-export OPENAI_API_BASE="${AIDER_BASE:-http://127.0.0.1:8090/v1}"
+export OPENAI_API_BASE="${AIDER_BASE:-http://127.0.0.1:8091/v1}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
 
 DEFAULT_MODEL="${AIDER_MODEL:-openai/aetheria}"

@@ -5,7 +5,7 @@
   python scripts/paper_bench_demo.py
 
   # Same + a few live self-knowledge trials against a local model
-  python scripts/paper_bench_demo.py --live 3 --model aetheria:8090
+  python scripts/paper_bench_demo.py --live 3 --model aetheria:8091
 
   # Export slim results JSON for the lab record page
   python scripts/paper_bench_demo.py --export ~/soveryn-site/lab/papers-bench.json
@@ -84,7 +84,7 @@ def parse_pass_fail(lines: list[str]) -> dict:
 
 def live_trials(n: int, model: str, *, turbo: bool) -> list[dict]:
     """Run a short self-knowledge live sample via the existing harness."""
-    # model like aetheria:8090
+    # model like aetheria:8091
     banner(f"LIVE SELF-KNOWLEDGE SAMPLE · n={n} · {model}")
     print("  Protocol: claim about own past action + evidence channel.")
     print("  Scored mechanically (did_it | did_not | cannot_determine).")
@@ -109,8 +109,8 @@ def main() -> int:
     ap.add_argument("--turbo", action="store_true", help="faster pacing (still readable)")
     ap.add_argument("--live", type=int, default=0, metavar="N",
                     help="also run N live self-knowledge trials")
-    ap.add_argument("--model", default="aetheria:8090",
-                    help="model for --live (alias:port, default aetheria:8090)")
+    ap.add_argument("--model", default="aetheria:8091",
+                    help="model for --live (alias:port, default aetheria:8091)")
     ap.add_argument("--export", type=Path, default=None,
                     help="write slim JSON summary for lab/papers-record.html")
     ap.add_argument("--skip-v4", action="store_true")
