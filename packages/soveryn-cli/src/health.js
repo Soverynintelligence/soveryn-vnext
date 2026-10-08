@@ -9,8 +9,26 @@ const { URL } = require('url');
  * @param {object} profile
  * @param {number} [timeoutMs=1000]
  * @param {{ requireModel?: boolean }} [opts]
- *   requireModel: if true, also require profile.modelId present in /models JSON
+ *   requireModel: if true, also require profile.modelId present in /models JSON,
+ *   either as a model `id` or in that model's `aliases` (llama.cpp router lists
+ *   e.g. id "qwen38" with aliases ["aetheria", ...]). A bare HTTP 200 from a
+ *   server that does not serve the name is NOT healthy.
  */
+/**
+ * Find the /models entry serving `name`: exact `id`, else listed in `aliases`.
+ * @param {Array<{id: string, aliases?: string[]}>} models
+ * @param {string} name
+ * @returns {object|null}
+ */
+function findModel(models, name) {
+  if (!name) return null;
+  const byId = models.find((m) => m.id === name);
+  if (byId) return byId;
+  return (
+    models.find((m) => Array.isArray(m.aliases) && m.aliases.includes(name)) || null
+  );
+}
+
 function probe(profile, timeoutMs = 1000, opts = {}) {
   const requireModel = !!opts.requireModel;
   const base = profile.baseUrl.replace(/\/$/, '');
@@ -60,16 +78,21 @@ function probe(profile, timeoutMs = 1000, opts = {}) {
           }
           const body = Buffer.concat(chunks).toString('utf8');
           let ids = [];
+          let match = null;
           try {
             const j = JSON.parse(body);
-            ids = (j.data || []).map((m) => m && m.id).filter(Boolean);
+            const models = (j.data || []).filter((m) => m && m.id);
+            ids = models.map((m) => m.id);
+            match = findModel(models, profile.modelId);
           } catch (_) {
             done(false, `HTTP ${res.statusCode} but body not JSON models list`);
             return;
           }
-          if (ids.includes(profile.modelId)) {
-            done(true, `HTTP ${res.statusCode}; model ${profile.modelId} present`, {
+          if (match) {
+            const via = match.id === profile.modelId ? '' : ` (alias of ${match.id})`;
+            done(true, `HTTP ${res.statusCode}; model ${profile.modelId} present${via}`, {
               modelIds: ids,
+              matchedId: match.id,
             });
           } else {
             done(
@@ -106,4 +129,4 @@ async function probeStable(profile, timeoutMs = 1000, opts = {}) {
   return last;
 }
 
-module.exports = { probe, probeStable };
+module.exports = { probe, probeStable, findModel };
