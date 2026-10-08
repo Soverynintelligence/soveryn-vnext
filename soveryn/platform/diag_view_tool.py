@@ -212,7 +212,7 @@ def house_diag(action: str, args: Mapping[str, Any]) -> str:
     elif action == "file":
         out = diag_file(args.get("path"), args.get("lines"))
     elif action == "gitlog":
-        out = diag_gitlog(args.get("repo"), args.get("lines"))
+        out = diag_gitlog(args.get("path") or args.get("repo"), args.get("lines"))
     else:
         raise ToolArgError(f"action must be one of: {', '.join(_ACTIONS)}")
     return out
