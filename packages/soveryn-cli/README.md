@@ -24,8 +24,8 @@ soveryn resume 01a0898b  # reload by partial UUID
 soveryn sessions         # list recent transcripts
 soveryn --new            # skip resume even on a fresh thread
 soveryn code             # same as launch
-soveryn use flash        # set active profile
-soveryn use glm          # refuses loudly while parked
+soveryn use glm          # set active profile (refuses loudly while parked)
+soveryn use flash        # refuses: flash is parked (2026-10-08)
 soveryn model            # interactive picker
 soveryn status           # active + health + pi version
 soveryn doctor           # status + paths + policy gates
@@ -33,7 +33,7 @@ soveryn doctor --gates    # policy gates only
 soveryn doctor --json     # machine-readable: health + drift + config freshness + gates (exit 1 on problems)
 soveryn doctor --self-test # assertExact self-test
 npm test                  # unit tests (node --test test/)
-soveryn --flash --build  # one-shot flags
+soveryn --glm --build    # one-shot flags (--flash refuses while parked)
 soveryn --glm            # error if parked — never silently Flash
 soveryn unpark glm --dry-run     # Lab steps (no swap)
 soveryn unpark glm --if-healthy  # enable if :8001 already has glm-5.3-flash
@@ -48,17 +48,19 @@ GLM unpark is **not** hot-standby: needs both Sparks; stops Flash-Next first. Se
 
 `config/soveryn-cli/profiles.json` drives generated `models.json` / `settings.json` in the same directory.
 
-- `flash` → `http://127.0.0.1:8888/v1` / `qwen3.8-flash-next` (live)
+- `flash` → `http://127.0.0.1:8888/v1` / `qwen3.8-flash-next` (**parked** 2026-10-08: `enabled: false` + `disabledReason`; `--flash` / `use flash` refuse; GLM is the default)
 - `glm` → `http://10.10.10.2:8001/v1` / `glm-5.3-flash` (park/unpark is owner-gated; `soveryn status` shows live truth, `doctor` flags parked-but-live drift and hand-edited generated configs)
-- `aetheria` → `http://127.0.0.1:8090/v1` / `aetheria` (live)
+- `aetheria` → `http://127.0.0.1:8091/v1` / `aetheria` (Quadro router; `:8090` is Eve's seat)
 
 Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi103" "$HOME/bin/soveryn"
-# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi110" "$HOME/bin/soveryn"
+# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi104" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi103" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi087" "$HOME/bin/soveryn"
 ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/soveryn-074"   # rollback runtime
@@ -66,13 +68,13 @@ ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/sovery
 soveryn doctor
 ```
 
-Runtime (2026-10-05): `soveryn` runs pinned **Pi 1.0.3** on **Node 22.23.2**
-(`bin/soveryn-pi103`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
-`~/.soveryn/pi/1.0.3`; nvm default stays Node 20, PATH untouched; Pi 1.0.x needs Node >=22.19).
-Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.0.3 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.0.3`
+Runtime (2026-10-08): `soveryn` runs pinned **Pi 1.1.0** on **Node 22.23.2**
+(`bin/soveryn-pi110`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/1.1.0`; nvm default stays Node 20, PATH untouched; Pi 1.x needs Node >=22.19).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.1.0 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.1.0`
 (keeps a prefix `package-lock.json`; Pi removed `npm-shrinkwrap.json` from the published package in 1.0.1).
-Previous pin `bin/soveryn-pi100` (Pi 1.0.0, `~/.soveryn/pi/1.0.0`) stays installed as the first rollback,
-`bin/soveryn-pi099` (Pi 0.99.1) / `bin/soveryn-pi087` (Pi 0.87.1) as older rollbacks;
+Previous pin `bin/soveryn-pi104` (Pi 1.0.4, `~/.soveryn/pi/1.0.4`) stays installed as the first rollback,
+`bin/soveryn-pi103` (Pi 1.0.3) / `bin/soveryn-pi100` (Pi 1.0.0) / `bin/soveryn-pi099` (Pi 0.99.1) / `bin/soveryn-pi087` (Pi 0.87.1) as older rollbacks;
 version-gated settings follow `SOVERYN_PI_VERSION`, so rolling the symlink back also rolls the generated settings back.
 Pi 1.0 defaults the interactive TUI to fullscreen (alt screen). The pinned runtime on Pi >=1.0.0 writes
 `"tuiMode": "regular"` (`src/pinned-pi.js` `pinnedSettingsTuiMode`) so the locked C64/PETSCII look and the
@@ -84,6 +86,12 @@ because `defaultProjectTrust: "always"` would otherwise auto-connect a project `
 `codemode` / `tool_search` stay loaded but their tools are off by default (only MCP turns them on);
 llama.cpp stays enabled (no `--no-extensions`). Note: a project `.pi/settings.json` entry `+builtin:mcp`
 still overrides the user setting (Pi behavior), same trust surface as project extensions.
+Pi 1.0.4 adds `--no-mcp` and `*` patterns for `--tools` / `--exclude-tools`; `--tools` (which the tool packs
+pass) now keeps MCP tools unless an entry starts with `mcp__`. Moot here: with `-builtin:mcp` no MCP server
+starts, so there are no MCP tools to keep.
+Pi 1.1.0 adds `+name` / `-name` entries to `--tools` (adjust the default set instead of replacing it); the tool
+packs still pass plain names, which keep the replace behavior. It also estimates input at 3.5 chars/token
+(was 4) for the output clamp below, so on a long prompt the computed output cap comes out slightly lower.
 `soveryn-074` = legacy Pi 0.74.2 from PATH on Node 20. Kernel (`kernel` / `soveryn-pi`)
 is unaffected: `SOVERYN_HARNESS=kernel` ignores the pin (`src/pinned-pi.js`).
 Pinned-runtime extras: `PI_TRUE_COLOR=1` (keeps the locked theme in truecolor),

@@ -21,7 +21,7 @@
     }
   },
   "httpIdleTimeoutMs": 600000,
-  "lastChangelogVersion": "1.0.3",
+  "lastChangelogVersion": "1.1.0",
   "extensions": [
     "-builtin:mcp"
   ],

@@ -96,7 +96,9 @@ function providerPath(piBin) {
  * Pi >=0.8x ships a bundled CLI (dist/bundle/cli.js) with pi-ai inlined into
  * minified chunks (0.87.1: openai-completions-OBX42CLD.js; 0.99.1:
  * openai-completions-XW2Q5HVC.js; 1.0.0: openai-completions-JXDDPZ23.js;
- * 1.0.3: openai-completions-OSRCWAAA.js — needle verified once in all four).
+ * 1.0.3 + 1.0.4: openai-completions-OSRCWAAA.js, byte-identical; 1.1.0:
+ * openai-completions-WWQW7S3V.js, only import chunk hashes changed — needle
+ * verified once in all of them).
  * Locate the openai-completions chunk next to the bundle.
  */
 function bundledProviderPath(piBin) {

@@ -19,7 +19,7 @@ const { ensurePiImageCap } = require('./cap-pi-images');
 const { pinnedPi, piCommand, stripPinEnv, pinVersionMismatch } = require('./pinned-pi');
 
 function findPi() {
-  // soveryn-cli pinned runtime (bin/soveryn-pi103; soveryn-pi100 / soveryn-pi099 / soveryn-pi087 = rollbacks). Kernel never takes this path.
+  // soveryn-cli pinned runtime (bin/soveryn-pi110; soveryn-pi104 / soveryn-pi103 / soveryn-pi100 / soveryn-pi099 / soveryn-pi087 = rollbacks). Kernel never takes this path.
   const pin = pinnedPi();
   if (pin) return pin.bin;
   if (process.env.PI_BIN && fs.existsSync(process.env.PI_BIN)) {

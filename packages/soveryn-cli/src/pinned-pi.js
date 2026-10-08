@@ -4,8 +4,10 @@
  * Pinned Pi runtime for the SOVERYN CLI.
  *   2026-09-28: Pi 0.87.1 on Node 22 (bin/soveryn-pi087 — kept as rollback)
  *   2026-09-30: Pi 0.99.1 on Node 22 (bin/soveryn-pi099 — kept as rollback)
- *   2026-10-02: Pi 1.0.0 on Node 22 (bin/soveryn-pi100 — kept as first rollback)
- *   2026-10-05: Pi 1.0.3 on Node 22 (bin/soveryn-pi103 — current)
+ *   2026-10-02: Pi 1.0.0 on Node 22 (bin/soveryn-pi100 — kept as rollback)
+ *   2026-10-05: Pi 1.0.3 on Node 22 (bin/soveryn-pi103 — kept as rollback)
+ *   2026-10-06: Pi 1.0.4 on Node 22 (bin/soveryn-pi104 — kept as first rollback)
+ *   2026-10-08: Pi 1.1.0 on Node 22 (bin/soveryn-pi110 — current)
  *
  * bin/soveryn-piNNN exports SOVERYN_PI_BIN + SOVERYN_PI_NODE (+ SOVERYN_PI_VERSION).
  * Only the soveryn-cli harness honors them. Kernel (SOVERYN_HARNESS=kernel via

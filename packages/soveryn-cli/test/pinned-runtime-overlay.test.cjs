@@ -49,18 +49,40 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
   try {
     const data = loadProfiles();
     const active = data.profiles[readActiveId(data)];
-    setPin('1.0.3');
+    setPin('1.1.0');
     const cur = buildPiConfig(data, active, { overlay: null }).settings;
     assert.deepEqual(cur.extensions, ['-builtin:mcp']);
     assert.equal(cur.tuiMode, 'regular');
-    assert.equal(cur.lastChangelogVersion, '1.0.3');
+    assert.equal(cur.lastChangelogVersion, '1.1.0');
     assert.equal(cur.defaultProjectTrust, 'always');
+    setPin('1.0.4');
+    const p104 = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.deepEqual(p104.extensions, ['-builtin:mcp']);
+    assert.equal(p104.tuiMode, 'regular');
+    assert.equal(p104.lastChangelogVersion, '1.0.4');
+    // 1.1.0 settings = 1.0.4 settings except lastChangelogVersion (no other drift)
+    {
+      const { lastChangelogVersion: _a, ...a } = cur;
+      const { lastChangelogVersion: _b, ...b } = p104;
+      assert.deepEqual(a, b);
+    }
+    setPin('1.0.3');
+    const p103 = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.deepEqual(p103.extensions, ['-builtin:mcp']);
+    assert.equal(p103.tuiMode, 'regular');
+    assert.equal(p103.lastChangelogVersion, '1.0.3');
+    // 1.1.0 settings = 1.0.3 settings except lastChangelogVersion (no other drift)
+    {
+      const { lastChangelogVersion: _a, ...a } = cur;
+      const { lastChangelogVersion: _b, ...b } = p103;
+      assert.deepEqual(a, b);
+    }
     setPin('1.0.0');
     const p100 = buildPiConfig(data, active, { overlay: null }).settings;
     assert.deepEqual(p100.extensions, ['-builtin:mcp']);
     assert.equal(p100.tuiMode, 'regular');
     assert.equal(p100.lastChangelogVersion, '1.0.0');
-    // 1.0.3 settings = 1.0.0 settings except lastChangelogVersion (no other drift)
+    // 1.1.0 settings = 1.0.0 settings except lastChangelogVersion (no other drift)
     const { lastChangelogVersion: _curVer, ...curRest } = cur;
     const { lastChangelogVersion: _p100Ver, ...p100Rest } = p100;
     assert.deepEqual(curRest, p100Rest);
