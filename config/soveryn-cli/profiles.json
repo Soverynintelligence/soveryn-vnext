@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "defaultProfile": "flash",
+  "defaultProfile": "glm",
   "profiles": {
     "flash": {
       "id": "flash",
       "displayName": "Flash-Next",
-      "enabled": true,
+      "enabled": false,
       "piProviderId": "soveryn-flash",
       "baseUrl": "http://127.0.0.1:8888/v1",
       "healthPath": "/models",
@@ -39,7 +39,8 @@
         "reserveTokens": 18432,
         "keepRecentTokens": 65536
       },
-      "preset": "standard"
+      "preset": "standard",
+      "disabledReason": "Flash-Next (qwen3.8-flash-next @ 127.0.0.1:8888) parked 2026-10-08 (Jon approved): lane retired for the SOVERYN CLI, GLM is the brain. Server not touched. Unpark: set profiles.flash.enabled=true (drop disabledReason) once :8888 serves qwen3.8-flash-next, then soveryn use flash."
     },
     "glm": {
       "id": "glm",
@@ -82,6 +83,35 @@
       "startNotes": "Lab 2026-09-10: NOT hot-standby. Stop Flash-Next on spark2 first, then EXL3 start on spark1. Prefer EXL3 over legacy NVFP4 glm53-serve. No ABLIT. See: kernel unpark glm (prints steps); kernel unpark glm --confirm",
       "flashStopCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./stop.sh'",
       "flashStartCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./start.sh'",
+      "preset": "standard"
+    },
+    "eve": {
+      "id": "eve",
+      "displayName": "Eve",
+      "enabled": true,
+      "piProviderId": "soveryn-eve",
+      "baseUrl": "http://127.0.0.1:8090/v1",
+      "healthPath": "/models",
+      "modelId": "eve",
+      "modelName": "SOVERYN · Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 65536,
+      "maxTokens": 16384,
+      "defaultThinkingLevel": "off",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "compaction": {
+        "enabled": false,
+        "reserveTokens": 16384,
+        "keepRecentTokens": 20000
+      },
       "preset": "standard"
     },
     "aetheria": {
