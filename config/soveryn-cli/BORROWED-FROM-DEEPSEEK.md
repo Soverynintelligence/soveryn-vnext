@@ -15,7 +15,7 @@ Research source: [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/d
 | **Plugin-shaped policy layer** | Cordis “services” / plugin rows | **Documented mapping only** onto existing `packages/soveryn-cli/src/policy/*` + chrome (below). No Cordis runtime. |
 | **Code mode (spirit)** | `tools.mode: code` + `run_code` + generated SDK | Guidance in `SOVERYN.md` + session append via `--code-mode` → Pi `--append-system-prompt` `packages/soveryn-cli/prompts/CODE-MODE.append.md`. Prefer one coherent edit/script pass over micro round-trips. |
 | **AGENTS.md compatibility** | Agent context files | **Already done:** `config/pi/AGENTS.md` → `SOVERYN.md`, `config/soveryn-cli/AGENTS.md` → `../pi/SOVERYN.md`, repo root `SOVERYN.md` → `config/pi/SOVERYN.md`. Pi loads AGENTS.md. |
-| **OpenAI-compat custom provider** | dsh custom OpenAI-compatible endpoint | **Already have** Flash-Next / GLM / Aetheria as Pi `openai-completions` providers in `models.json` (from profiles). Same house endpoints. After Node 22, dsh could point at the same `:8888` / `:8001` / `:8090` URLs — not installed here. |
+| **OpenAI-compat custom provider** | dsh custom OpenAI-compatible endpoint | **Already have** Flash-Next / GLM / Aetheria as Pi `openai-completions` providers in `models.json` (from profiles). Same house endpoints. After Node 22, dsh could point at the same `:8888` / `:8001` / `:8091` URLs — not installed here. |
 
 ### Cordis-like “services” → existing SOVERYN modules
 
@@ -53,7 +53,7 @@ Agreed shape when we pick this up:
 
 1. Isolated home + workspace (not `~/.dsh` on the live Kernel tree). Suggested: `~/soveryn-harness/dsh-trial/` + a disposable sandbox.
 2. **Node 22 sidecar** — do not upgrade tower Node 20. Do not `npx @deepseek-ai/dsh` on Node 20.
-3. Point at **Flash-Next** `http://127.0.0.1:8888/v1` (OpenAI-compat already in `models.json`). Optional: GLM `:8001` / Aetheria `:8090` if parked/unparked.
+3. Point at **Flash-Next** `http://127.0.0.1:8888/v1` (OpenAI-compat already in `models.json`). Optional: GLM `:8001` / Aetheria `:8091` if parked/unparked.
 4. Headless or `--no-open` first. Web UI `:3080` only in a sandbox; **never** swap Kernel’s C64 / soveryn-lab TUI.
 5. Score against the Kernel drain we already know: stale-session resume, compaction amnesia, loop guard, bash-vs-open-html, thinking default. One short coding task + one long session — not a chassis swap.
 6. Kernel stays Pi until Jon says otherwise.

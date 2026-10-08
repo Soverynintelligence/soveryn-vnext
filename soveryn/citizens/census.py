@@ -67,7 +67,7 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="aetheria_primary",
             workspace_path=str(DEFAULT_WORKSPACES / "aetheria"),
             notes=(
-                "Philosophical partner / primary intelligence. Blackwell :8090, "
+                "Philosophical partner / primary intelligence. Quadro :8091, "
                 "alone — never co-tenanted (charter §8). Holds partnership with "
                 "Jon. Still wired as temporary CoS relay for assign→verify "
                 "(autonomy-first; CoS rename deferred) — briefs peers' work, "

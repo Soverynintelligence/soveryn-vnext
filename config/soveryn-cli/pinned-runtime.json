@@ -9,6 +9,6 @@
   "evidence": {
     "glm": "GET http://10.10.10.2:8001/v1/models -> max_model_len 1000000 (2026-09-28); 0.74.2 sessions ran GLM at up to 523847 input tokens",
     "flash": "vLLM 400s in session logs: maximum context length is 262144 tokens",
-    "aetheria": "llama-server --alias aetheria --ctx-size 65536 --parallel 1 (router :8090)"
+    "aetheria": "llama-server --alias aetheria --ctx-size 65536 --parallel 1 (Quadro router :8091)"
   }
 }

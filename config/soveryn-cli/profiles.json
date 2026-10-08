@@ -89,7 +89,7 @@
       "displayName": "Aetheria",
       "enabled": true,
       "piProviderId": "soveryn-aetheria",
-      "baseUrl": "http://127.0.0.1:8090/v1",
+      "baseUrl": "http://127.0.0.1:8091/v1",
       "healthPath": "/models",
       "modelId": "aetheria",
       "modelName": "SOVERYN · Qwen 3.8 (Aetheria lane)",
