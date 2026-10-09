@@ -6,7 +6,11 @@ one of those claims — a green suite here IS the trust boundary.
 """
 from __future__ import annotations
 
+import inspect
 import json
+import os
+import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,6 +24,7 @@ from soveryn.platform.diag_view_tool import (
     diag_http,
     diag_journal,
     diag_unit,
+    house_diag,
 )
 from soveryn.platform.tools.registry import ToolArgError
 
@@ -112,3 +117,64 @@ def test_allowlist_covers_expected_roots():
     names = [p.name for p in ALLOWED_ROOTS]
     assert SoverynPaths.root() in ALLOWED_ROOTS
     assert "teammates" in names
+
+
+def _git_repo(path: Path) -> None:
+    """One-commit repo so gitlog tests do not depend on the checkout."""
+    env = os.environ | {
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "test@example.com",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "test@example.com",
+    }
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True, env=env)
+    (path / "note.txt").write_text("hello\n")
+    subprocess.run(["git", "add", "note.txt"], cwd=path, check=True, env=env)
+    subprocess.run(["git", "commit", "-q", "-m", "seed"], cwd=path, check=True, env=env)
+
+
+def test_gitlog_dispatch_accepts_path_and_repo(tmp_path, monkeypatch):
+    """Agents send schema key `path`. `repo` stays as a backward-compat alias.
+
+    Calling diag_gitlog() directly hides a dispatch that drops `path`
+    (the pre-35828a3 bug: args.get("repo") only).
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_repo(repo)
+    monkeypatch.setattr(
+        "soveryn.platform.diag_view_tool.ALLOWED_ROOTS",
+        (repo.resolve(),),
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.diag_view_tool._receipt_dir",
+        lambda: tmp_path / "receipts",
+    )
+    tool = build_house_diag_tool(owner_agent="test")
+
+    by_path = tool.handler({"action": "gitlog", "path": str(repo), "lines": 5})
+    assert by_path["ok"] is True
+    assert "seed" in by_path["output"]
+
+    by_repo = tool.handler({"action": "gitlog", "repo": str(repo), "lines": 5})
+    assert by_repo["ok"] is True
+    assert "seed" in by_repo["output"]
+
+    filed = tool.handler({"action": "file", "path": str(repo / "note.txt"), "lines": 5})
+    assert filed["ok"] is True
+    assert "hello" in filed["output"]
+
+    receipts = list((tmp_path / "receipts").glob("diag-*.jsonl"))
+    assert len(receipts) == 3
+    assert all(json.loads(r.read_text())["ok"] is True for r in receipts)
+
+
+def test_schema_covers_keys_house_diag_reads():
+    """A key the dispatch reads but the schema does not declare is how
+    gitlog dropped `path` while `file` worked. `repo` is the one allowed
+    undeclared alias."""
+    src = inspect.getsource(house_diag)
+    read = set(re.findall(r'args\.get\(\s*"([^"]+)"\s*\)', src))
+    declared = set(build_house_diag_tool(owner_agent="test").schema["properties"])
+    assert read - declared == {"repo"}
+    assert "path" in read and "path" in declared
