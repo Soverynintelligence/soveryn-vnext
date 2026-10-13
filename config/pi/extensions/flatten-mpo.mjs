@@ -1,0 +1,1 @@
+../../../packages/soveryn-cli/extensions/flatten-mpo.mjs

@@ -22,6 +22,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { flattenMpoInMessages } from "./flatten-mpo.mjs";
 
 function enabled() {
   const v =
@@ -92,6 +93,13 @@ function textResult(text: string) {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Before every model call, drop the iPhone depth frame. The bytes may already
+  // be in this session, so this has to run on the way out, not only on read.
+  pi.on("context", (event) => {
+    const messages = flattenMpoInMessages(event.messages);
+    if (messages) return { messages };
+  });
+
   if (!enabled()) return;
 
   // ---- per-session memory cache (B) ----
