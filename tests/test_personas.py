@@ -21,6 +21,47 @@ def no_persona_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("SOVERYN_DATA_ROOT", str(tmp_path))
 
 
+def test_build_brain_persona_is_separate_from_citizen_roster():
+    """Kernel gets a persona without joining the citizen roster.
+
+    Jon 2026-10-19: persona first, roster wiring is a separate decision. The
+    citizen mapping must stay equal to ACTIVE_AGENTS, so the build seat lives
+    in its own mapping and cannot be reached through get_persona.
+    """
+    from soveryn.agents import personas as personas_mod
+
+    assert "kernel" not in PERSONAS
+    assert "kernel" not in ACTIVE_AGENTS
+    assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS)
+    text = personas_mod.build_brain_persona("kernel")
+    assert text.startswith("You are Kernel")
+    assert personas_mod.build_brain_persona("KERNEL ") == text  # normalises
+    with pytest.raises(PersonaError):
+        personas_mod.build_brain_persona("forge")
+    with pytest.raises(PersonaError):
+        personas_mod.get_persona("kernel")
+
+
+def test_build_brain_persona_puts_truth_first():
+    """Jon dislikes confabulation: the anti-invention rule must be present and
+    must precede voice/style guidance, not trail it."""
+    from soveryn.agents.personas import KERNEL_PERSONA
+
+    lowered = KERNEL_PERSONA.lower()
+    # The three registers and the refusal to guess.
+    for needle in ("observed", "inferred", "unknown", "confabulation"):
+        assert needle in lowered, f"kernel persona missing {needle!r}"
+    assert "i don't have that fact" in lowered
+    # Runtime over documents -- the failure that let a dead brain sit in truth.
+    assert "never from a document" in lowered
+    assert "kernel status" in lowered
+    # Proof gates for the words "done" and "green".
+    assert '"done" requires the tool result' in lowered
+    assert '"green" requires the gate' in lowered
+    # Ordering: truth discipline before voice.
+    assert lowered.index("truth discipline") < lowered.index("## voice")
+
+
 def test_personas_cover_all_active_agents():
     assert set(PERSONAS.keys()) == set(ACTIVE_AGENTS) == {
         "aetheria", "forge", "eve",
