@@ -102,6 +102,22 @@ def test_vnext_deferred_when_router_unhealthy():
     assert d[0].action == "skip_router_down"
 
 
+def test_probe_ignores_retired_vett_patrol():
+    """Vett is folded into Eve (Jon 2026-10-19). A stopped patrol daemon must
+    not read as unhealthy -- otherwise the medic heals it back within a minute
+    and `disable --now` never holds. Same trap as the retired tg-bridge."""
+    unhealthy, _ = medic.probe_unhealthy(
+        http_ok={"vnext": True, "embeddings": True, "router": True},
+        unit_active={"dream": True, "x-feed": True, "parakeet": True,
+                     "vett-patrol": False, "representation": True},
+        heartbeat_age=100.0,
+        comfyui_on_her_card=False,
+    )
+    assert "vett-patrol" not in unhealthy
+    assert "vett-patrol" not in medic.TARGETS
+    assert "vett-patrol" not in medic._UNIT_KEYS
+
+
 def test_probe_unhealthy_classifies_from_readings():
     unhealthy, router_healthy = medic.probe_unhealthy(
         http_ok={"vnext": False, "router": True},

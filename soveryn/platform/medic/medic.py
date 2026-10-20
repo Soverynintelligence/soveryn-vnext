@@ -74,7 +74,12 @@ TARGETS: dict[str, MedicTarget] = {
     # cannot distinguish "deliberately retired" from "crashed" — the watch list
     # is the only place that distinction can live, so it is removed here.
     "parakeet":   MedicTarget("parakeet", "parakeet.service", 300.0, escalation_priority=False),
-    "vett-patrol": MedicTarget("vett-patrol", "soveryn-vett-patrol.service", 300.0, escalation_priority=False),
+    # vett-patrol REMOVED 2026-10-19 (Jon: the lane falls under Eve). Same trap
+    # as tg-bridge above: `disable --now` does not hold, because the medic reads
+    # a stopped unit as unhealthy and healed it 33s after the stop. Vett is
+    # folded; his watch runs through Eve's `funding-watch` skill. A medic cannot
+    # distinguish "deliberately retired" from "crashed", so the watch list is
+    # the only place that distinction can live.
     "representation": MedicTarget("representation", "soveryn-representation.service", 300.0, escalation_priority=False),
     "comfyui":    MedicTarget("comfyui", "soveryn-comfyui.service", 600.0, escalation_priority=False, verb="stop"),
 }
@@ -142,7 +147,7 @@ def decide(
 # ── probe classification (pure) ─────────────────────────────────────────────
 _HTTP_PORTS = {"vnext": 5001, "router": 8090}
 _HTTP_URLS: dict[str, str] = {"embeddings": "http://127.0.0.1:8096/health"}
-_UNIT_KEYS = ("dream", "x-feed", "parakeet", "vett-patrol", "representation")
+_UNIT_KEYS = ("dream", "x-feed", "parakeet", "representation")
 
 
 def probe_unhealthy(
