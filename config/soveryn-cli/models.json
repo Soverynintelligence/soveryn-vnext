@@ -137,7 +137,7 @@
       },
       "models": [
         {
-          "id": "DeepSeek-V4.1-Flash-1017",
+          "id": "deepseek-v4.1-flash-1017",
           "name": "SOVERYN · DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
           "reasoning": false,
           "input": [

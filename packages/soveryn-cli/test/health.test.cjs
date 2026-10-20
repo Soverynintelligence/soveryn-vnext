@@ -73,6 +73,18 @@ test('findModel: id beats alias; unknown → null', () => {
   assert.strictEqual(findModel([{ id: 'm' }], 'm').id, 'm'); // no aliases field
 });
 
+test('findModel: mixed-case served id resolves from a canonical modelId', () => {
+  // tensorfold serves DeepSeek-V4.1-Flash-1017; profiles keep the id canonical
+  // (gate G4) and the router accepts either spelling on the wire.
+  const models = [{ id: 'DeepSeek-V4.1-Flash-1017' }];
+  assert.strictEqual(
+    findModel(models, 'deepseek-v4.1-flash-1017').id,
+    'DeepSeek-V4.1-Flash-1017'
+  );
+  assert.strictEqual(findModel(models, 'deepseek-v4.1-flash-1018'), null);
+  assert.strictEqual(findModel(models, 'DeepSeek-V4.1-Flash'), null);
+});
+
 test('probe: 503 → fail', async () => {
   const srv = await serve(503, '');
   const p = { baseUrl: `http://127.0.0.1:${portOf(srv)}/v1`, modelId: 'm1' };

@@ -1,6 +1,6 @@
 {
   "defaultProvider": "soveryn-deepseek",
-  "defaultModel": "DeepSeek-V4.1-Flash-1017",
+  "defaultModel": "deepseek-v4.1-flash-1017",
   "defaultThinkingLevel": "off",
   "theme": "soveryn-lab",
   "quietStartup": false,

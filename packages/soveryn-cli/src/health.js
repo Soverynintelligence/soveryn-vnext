@@ -3,6 +3,7 @@
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');
+const { canonicalizeId } = require('./policy/canonical');
 
 /**
  * Probe profile health endpoint.
@@ -15,17 +16,28 @@ const { URL } = require('url');
  *   server that does not serve the name is NOT healthy.
  */
 /**
- * Find the /models entry serving `name`: exact `id`, else listed in `aliases`.
+ * Find the /models entry serving `name`: canonical `id`, else listed in
+ * `aliases`.
+ *
+ * Canonical, not byte-exact: tensorfold routers serve mixed-case ids
+ * (DeepSeek-V4.1-Flash-1017) and accept either spelling on the wire. Profiles
+ * keep modelId canonical (gate G4); this resolves that back to what the
+ * server advertises. Unknown names still return null -- case is normalised,
+ * presence is not assumed.
  * @param {Array<{id: string, aliases?: string[]}>} models
  * @param {string} name
  * @returns {object|null}
  */
 function findModel(models, name) {
-  if (!name) return null;
-  const byId = models.find((m) => m.id === name);
+  const want = canonicalizeId(name);
+  if (!want) return null;
+  const byId = models.find((m) => canonicalizeId(m.id) === want);
   if (byId) return byId;
   return (
-    models.find((m) => Array.isArray(m.aliases) && m.aliases.includes(name)) || null
+    models.find(
+      (m) =>
+        Array.isArray(m.aliases) && m.aliases.some((a) => canonicalizeId(a) === want)
+    ) || null
   );
 }
 

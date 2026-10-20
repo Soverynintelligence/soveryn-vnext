@@ -150,7 +150,7 @@
       "piProviderId": "soveryn-deepseek",
       "baseUrl": "http://10.10.10.2:8888/v1",
       "healthPath": "/models",
-      "modelId": "DeepSeek-V4.1-Flash-1017",
+      "modelId": "deepseek-v4.1-flash-1017",
       "modelName": "SOVERYN \u00b7 DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
       "api": "openai-completions",
       "apiKey": "local",
