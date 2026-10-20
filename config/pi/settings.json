@@ -1,14 +1,14 @@
 {
-  "defaultProvider": "soveryn-glm",
-  "defaultModel": "glm-5.3-flash",
-  "defaultThinkingLevel": "medium",
+  "defaultProvider": "soveryn-deepseek",
+  "defaultModel": "deepseek-v4.1-flash-1017",
+  "defaultThinkingLevel": "off",
   "theme": "soveryn-lab",
   "quietStartup": false,
   "defaultProjectTrust": "always",
   "enableInstallTelemetry": false,
   "compaction": {
     "enabled": true,
-    "reserveTokens": 18432,
+    "reserveTokens": 32768,
     "keepRecentTokens": 65536
   },
   "retry": {

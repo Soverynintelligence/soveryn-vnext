@@ -126,6 +126,33 @@
           }
         }
       ]
+    },
+    "soveryn-deepseek": {
+      "baseUrl": "http://10.10.10.2:8888/v1",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "deepseek-v4.1-flash-1017",
+          "name": "SOVERYN · DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 262144,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
     }
   }
 }
