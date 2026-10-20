@@ -2,13 +2,15 @@
 # SOVERYN CLI on pinned Pi 1.0.4 / Node 22 (rollback; was current 2026-10-06..2026-10-08).
 #
 # Side-by-side runtimes:
-#   ~/bin/soveryn      -> bin/soveryn-pi110 (Pi 1.1.0, Node 22 via explicit nvm path)
-#   bin/soveryn-pi104  -> this file (Pi 1.0.4) — first rollback:
+#   ~/bin/soveryn      -> bin/soveryn-pi130 (Pi 1.3.0, Node 22 via explicit nvm path)
+#   bin/soveryn-pi120  -> older pin (Pi 1.2.0) — first rollback
+#   bin/soveryn-pi110  -> older pin (Pi 1.1.0) — second rollback
+#   bin/soveryn-pi104  -> this file (Pi 1.0.4) — third rollback:
 #                         ln -sfn ~/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi104 ~/bin/soveryn
-#   bin/soveryn-pi103  -> older pin (Pi 1.0.3) — second rollback
-#   bin/soveryn-pi100  -> older pin (Pi 1.0.0) — third rollback
-#   bin/soveryn-pi099  -> older pin (Pi 0.99.1) — fourth rollback
-#   bin/soveryn-pi087  -> older pin (Pi 0.87.1) — fifth rollback
+#   bin/soveryn-pi103  -> older pin (Pi 1.0.3) — fourth rollback
+#   bin/soveryn-pi100  -> older pin (Pi 1.0.0) — fifth rollback
+#   bin/soveryn-pi099  -> older pin (Pi 0.99.1) — sixth rollback
+#   bin/soveryn-pi087  -> older pin (Pi 0.87.1) — seventh rollback
 #   ~/bin/soveryn-074  -> bin/soveryn (Pi 0.74.2 from PATH, Node 20) — legacy rollback
 #   kernel/soveryn-pi  -> unchanged (Pi 0.74.2, Node 20, config/pi)
 #

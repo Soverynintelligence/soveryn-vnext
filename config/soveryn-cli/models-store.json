@@ -1433,7 +1433,8 @@
           "supportsAdditionalTools": true,
           "supportsToolSearch": true,
           "supportsMidConvoSystemMessages": true,
-          "supportsExplicitPromptCacheMode": true
+          "supportsExplicitPromptCacheMode": true,
+          "supportsMidConvoEffort": true
         },
         "inputLimits": {
           "maxRequestBytes": 536870912,
@@ -1492,7 +1493,8 @@
           "supportsAdditionalTools": true,
           "supportsToolSearch": true,
           "supportsMidConvoSystemMessages": true,
-          "supportsExplicitPromptCacheMode": true
+          "supportsExplicitPromptCacheMode": true,
+          "supportsMidConvoEffort": true
         },
         "inputLimits": {
           "maxRequestBytes": 536870912,
@@ -1551,7 +1553,8 @@
           "supportsAdditionalTools": true,
           "supportsToolSearch": true,
           "supportsMidConvoSystemMessages": true,
-          "supportsExplicitPromptCacheMode": true
+          "supportsExplicitPromptCacheMode": true,
+          "supportsMidConvoEffort": true
         },
         "inputLimits": {
           "maxRequestBytes": 536870912,
@@ -1610,7 +1613,8 @@
           "supportsAdditionalTools": true,
           "supportsToolSearch": true,
           "supportsMidConvoSystemMessages": true,
-          "supportsExplicitPromptCacheMode": true
+          "supportsExplicitPromptCacheMode": true,
+          "supportsMidConvoEffort": true
         },
         "inputLimits": {
           "maxRequestBytes": 536870912,
@@ -2058,8 +2062,8 @@
         "contextWindow": 922000
       }
     ],
-    "checkedAt": 1791468540414,
-    "lastModified": 1791463507000,
-    "etag": "W/\"e71dfd5151c9e19d4e70b5c976396f24\""
+    "lastModified": 1792154495000,
+    "etag": "W/\"66ade7f4bebf0ce0a7650e47031e58dd\"",
+    "checkedAt": 1792464966465
   }
 }

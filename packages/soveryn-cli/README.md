@@ -57,8 +57,10 @@ Provider ids: `soveryn-flash`, `soveryn-glm`, `soveryn-aetheria`.
 ## Install (this machine)
 
 ```bash
-ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi110" "$HOME/bin/soveryn"
-# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi104" "$HOME/bin/soveryn"
+ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi130" "$HOME/bin/soveryn"
+# rollback to the previous pin: ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi120" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi110" "$HOME/bin/soveryn"
+# older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi104" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi103" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi100" "$HOME/bin/soveryn"
 # older pin:                     ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi099" "$HOME/bin/soveryn"
@@ -68,13 +70,13 @@ ln -sfn "$HOME/soveryn_vnext/packages/soveryn-cli/bin/soveryn" "$HOME/bin/sovery
 soveryn doctor
 ```
 
-Runtime (2026-10-08): `soveryn` runs pinned **Pi 1.1.0** on **Node 22.23.2**
-(`bin/soveryn-pi110`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
-`~/.soveryn/pi/1.1.0`; nvm default stays Node 20, PATH untouched; Pi 1.x needs Node >=22.19).
-Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.1.0 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.1.0`
+Runtime (2026-10-16): `soveryn` runs pinned **Pi 1.3.0** on **Node 22.23.2**
+(`bin/soveryn-pi130`: explicit `~/.nvm/versions/node/v22.23.2/bin/node` +
+`~/.soveryn/pi/1.3.0`; nvm default stays Node 20, PATH untouched; Pi 1.x needs Node >=22.19).
+Pin install: `PATH=~/.nvm/versions/node/v22.23.2/bin:$PATH npm install --prefix ~/.soveryn/pi/1.3.0 --ignore-scripts --save-exact @earendil-works/pi-coding-agent@1.3.0`
 (keeps a prefix `package-lock.json`; Pi removed `npm-shrinkwrap.json` from the published package in 1.0.1).
-Previous pin `bin/soveryn-pi104` (Pi 1.0.4, `~/.soveryn/pi/1.0.4`) stays installed as the first rollback,
-`bin/soveryn-pi103` (Pi 1.0.3) / `bin/soveryn-pi100` (Pi 1.0.0) / `bin/soveryn-pi099` (Pi 0.99.1) / `bin/soveryn-pi087` (Pi 0.87.1) as older rollbacks;
+Previous pin `bin/soveryn-pi120` (Pi 1.2.0, `~/.soveryn/pi/1.2.0`) stays installed as the first rollback,
+`bin/soveryn-pi110` (Pi 1.1.0) / `bin/soveryn-pi104` (Pi 1.0.4) / `bin/soveryn-pi103` (Pi 1.0.3) / `bin/soveryn-pi100` (Pi 1.0.0) / `bin/soveryn-pi099` (Pi 0.99.1) / `bin/soveryn-pi087` (Pi 0.87.1) as older rollbacks;
 version-gated settings follow `SOVERYN_PI_VERSION`, so rolling the symlink back also rolls the generated settings back.
 Pi 1.0 defaults the interactive TUI to fullscreen (alt screen). The pinned runtime on Pi >=1.0.0 writes
 `"tuiMode": "regular"` (`src/pinned-pi.js` `pinnedSettingsTuiMode`) so the locked C64/PETSCII look and the
@@ -92,6 +94,15 @@ starts, so there are no MCP tools to keep.
 Pi 1.1.0 adds `+name` / `-name` entries to `--tools` (adjust the default set instead of replacing it); the tool
 packs still pass plain names, which keep the replace behavior. It also estimates input at 3.5 chars/token
 (was 4) for the output clamp below, so on a long prompt the computed output cap comes out slightly lower.
+Pi 1.2.0: `-p` now exits 1 (partial text + stderr warning) when a reply is cut off at the output limit;
+the wrapper passes the exit code through (timeouts stay 124). Theme/settings/models schemas moved to
+`https://pi.dev/schemas/*.schema.json` and startup now validates themes; `before_agent_start` also fires for
+`sendMessage(..., { triggerTurn: true })` runs (`messageType: "custom"`, no `prompt`) — kernel-lattice's handler
+already treats a missing prompt as "no correction", and no SOVERYN extension starts custom-message runs.
+Pi 1.3.0: `--model` prefers the provider that has credentials and reports ambiguity otherwise (the wrapper always
+passes `provider/model`, e.g. `soveryn-glm/glm-5.3-flash`); malformed tool-call JSON now fails validation instead
+of running with partial arguments; resumed sessions keep their active tools, with `--tools +name/-name` applied on top
+(the tool packs pass plain names, which still select tools explicitly).
 `soveryn-074` = legacy Pi 0.74.2 from PATH on Node 20. Kernel (`kernel` / `soveryn-pi`)
 is unaffected: `SOVERYN_HARNESS=kernel` ignores the pin (`src/pinned-pi.js`).
 Pinned-runtime extras: `PI_TRUE_COLOR=1` (keeps the locked theme in truecolor),

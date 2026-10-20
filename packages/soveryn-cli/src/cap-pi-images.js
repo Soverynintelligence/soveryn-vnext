@@ -97,7 +97,8 @@ function providerPath(piBin) {
  * minified chunks (0.87.1: openai-completions-OBX42CLD.js; 0.99.1:
  * openai-completions-XW2Q5HVC.js; 1.0.0: openai-completions-JXDDPZ23.js;
  * 1.0.3 + 1.0.4: openai-completions-OSRCWAAA.js, byte-identical; 1.1.0:
- * openai-completions-WWQW7S3V.js, only import chunk hashes changed — needle
+ * openai-completions-WWQW7S3V.js, only import chunk hashes changed; 1.2.0:
+ * openai-completions-QW2B4SML.js; 1.3.0: openai-completions-BGCEXFAB.js — needle
  * verified once in all of them).
  * Locate the openai-completions chunk next to the bundle.
  */

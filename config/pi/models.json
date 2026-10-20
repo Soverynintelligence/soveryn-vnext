@@ -73,6 +73,33 @@
         }
       ]
     },
+    "soveryn-eve": {
+      "baseUrl": "http://127.0.0.1:8090/v1",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "eve",
+          "name": "SOVERYN · Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 65536,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    },
     "soveryn-aetheria": {
       "baseUrl": "http://127.0.0.1:8091/v1",
       "api": "openai-completions",

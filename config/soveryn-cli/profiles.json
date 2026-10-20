@@ -10,7 +10,7 @@
       "baseUrl": "http://127.0.0.1:8888/v1",
       "healthPath": "/models",
       "modelId": "qwen3.8-flash-next",
-      "modelName": "SOVERYN · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+      "modelName": "SOVERYN \u00b7 Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": true,
@@ -50,7 +50,7 @@
       "baseUrl": "http://10.10.10.2:8001/v1",
       "healthPath": "/models",
       "modelId": "glm-5.3-flash",
-      "modelName": "SOVERYN · GLM-5.3-Flash EXL3",
+      "modelName": "SOVERYN \u00b7 GLM-5.3-Flash EXL3",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": true,
@@ -93,7 +93,7 @@
       "baseUrl": "http://127.0.0.1:8090/v1",
       "healthPath": "/models",
       "modelId": "eve",
-      "modelName": "SOVERYN · Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
+      "modelName": "SOVERYN \u00b7 Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": false,
@@ -122,7 +122,7 @@
       "baseUrl": "http://127.0.0.1:8091/v1",
       "healthPath": "/models",
       "modelId": "aetheria",
-      "modelName": "SOVERYN · Qwen 3.8 (Aetheria lane)",
+      "modelName": "SOVERYN \u00b7 Qwen 3.8 (Aetheria lane)",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": false,
@@ -142,6 +142,35 @@
         "keepRecentTokens": 20000
       },
       "preset": "standard"
+    },
+    "deepseek": {
+      "id": "deepseek",
+      "displayName": "DeepSeek V4.1 Flash (trial)",
+      "enabled": true,
+      "piProviderId": "soveryn-deepseek",
+      "baseUrl": "http://10.10.10.2:8888/v1",
+      "healthPath": "/models",
+      "modelId": "DeepSeek-V4.1-Flash-1017",
+      "modelName": "SOVERYN \u00b7 DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "contextWindow": 65536,
+      "maxTokens": 16384,
+      "defaultThinkingLevel": "off",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "compaction": {
+        "enabled": true,
+        "reserveTokens": 16384,
+        "keepRecentTokens": 32768
+      },
+      "preset": "standard"
     }
   },
   "limits": {
@@ -155,7 +184,7 @@
         "bash",
         "edit"
       ],
-      "note": "Pi --tools bash,edit — tight surface (dsh minimal spirit)"
+      "note": "Pi --tools bash,edit \u2014 tight surface (dsh minimal spirit)"
     },
     "standard": {
       "tools": null,
