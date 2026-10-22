@@ -134,10 +134,9 @@ CITIZENS: tuple[tuple[Citizen, tuple[str, ...]], ...] = (
             model_server="kernel_build",
             workspace_path=str(DEFAULT_WORKSPACES / "forge"),
             notes=(
-                "Build / code desk. Qwen3.8-Flash-Next NVFP4 TP=1 spark2 "
-                f"(:8888 / {_alias_of('kernel_build')}, house ctx 131072). "
-                "GLM TP=2 parked. Eve stays on Quadros Qwen 3.8 :8091. Jon "
-                "assigns build work here — not Scotty's repair queue."
+                "Build / code desk. Routes to kernel_build, which follows "
+                f"~/.soveryn/kernel_brain (alias {_alias_of('kernel_build')}). "
+                "Jon assigns build work here — not Scotty's repair queue."
             ),
         ),
         (),  # no dedicated process unit on the tower yet — invoked on demand

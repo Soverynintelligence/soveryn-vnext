@@ -67,6 +67,7 @@ def build_heartbeat_prompt(
     daily_post_invite: str = "",
     last_note: str = "",
     failure_sit_label: str | None = None,
+    kernel_brain_section: str = "",
 ) -> str:
     """Construct the freed heartbeat brief. Returns a plain-text prompt string.
 
@@ -93,6 +94,9 @@ def build_heartbeat_prompt(
         last_note: Prior pulse note (truncated by caller). When non-empty,
             she is told not to repeat it.
         failure_sit_label: If set, force a failure-admission pulse (no exit theater).
+        kernel_brain_section: Verified Kernel-brain probe (real endpoint +
+            result). Empty in tests; daemon fills it so she cannot invent
+            127.0.0.1:8080.
     """
     if material_signals is None:
         material_signals = []
@@ -161,6 +165,9 @@ def build_heartbeat_prompt(
     )
     if x_digest:
         lines.append(f"- X: {x_digest}")
+    if kernel_brain_section.strip():
+        lines.append("")
+        lines.append(kernel_brain_section.rstrip())
     if material_signals:
         lines.append("- Things that have been sitting, or that crossed a line:")
         for sig in material_signals:

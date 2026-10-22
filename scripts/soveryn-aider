@@ -40,6 +40,10 @@ for arg in "$@"; do
         export AIDER_BASE="${AIDER_BASE:-http://10.10.10.2:8001/v1}"
         export AIDER_MODEL="${AIDER_MODEL:-openai/glm-5.3-flash}"
         ;;
+      deepseek)
+        export AIDER_BASE="${AIDER_BASE:-http://10.10.10.2:8888/v1}"
+        export AIDER_MODEL="${AIDER_MODEL:-openai/DeepSeek-V4.1-Flash-1017}"
+        ;;
       aetheria|qwen)
         export AIDER_BASE="${AIDER_BASE:-http://127.0.0.1:8091/v1}"
         export AIDER_MODEL="${AIDER_MODEL:-openai/aetheria}"

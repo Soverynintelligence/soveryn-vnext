@@ -13,6 +13,23 @@ from soveryn.automations.runner import main as runner_main, run_automation
 
 ROOT = Path(__file__).resolve().parent.parent
 
+_STUB_KERNEL_BLOCK = (
+    "## Kernel build brain (verified probe — do not invent an endpoint)\n"
+    "Active brain: `deepseek` (DeepSeek-V4.1-Flash-1017) at "
+    "http://10.10.10.2:8888.\n"
+    "Probe: deepseek HTTP 200 from http://10.10.10.2:8888/health → ok.\n"
+    "Never claim this brain is down at a guessed port "
+    "(including 127.0.0.1:8080). Only this probe result is allowed.\n\n"
+)
+
+
+@pytest.fixture(autouse=True)
+def _stub_kernel_brain_probe(monkeypatch):
+    monkeypatch.setattr(
+        "soveryn.platform.inference.health.format_kernel_brain_health_block",
+        lambda timeout=2.0: _STUB_KERNEL_BLOCK,
+    )
+
 REQUIRED_IDS = [
     "morning_brief",
     "ai_news_digest",

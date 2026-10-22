@@ -149,8 +149,11 @@ def _patch_all_checks(model_results=None, service_results=None, runtime_results=
     svc_r = service_results or [_ok(e.name, "service_endpoint") for e in runtime.SERVICE_ENDPOINTS]
     rt_r = runtime_results or [_ok(r.name, "runtime_service") for r in runtime.RUNTIME_SERVICES]
 
+    kernel_r = next((r for r in model_r if r.name == "kernel_build"), _ok("kernel_build"))
+    llama_r = [r for r in model_r if r.name != "kernel_build"]
     return (
-        patch("soveryn.app.preflight.check_llama_server", side_effect=model_r),
+        patch("soveryn.app.preflight.check_llama_server", side_effect=llama_r),
+        patch("soveryn.app.preflight.check_kernel_brain", return_value=kernel_r),
         patch("soveryn.app.preflight.check_service_endpoint", side_effect=svc_r),
         patch("soveryn.app.preflight.check_runtime_service", side_effect=rt_r),
     )
@@ -158,7 +161,7 @@ def _patch_all_checks(model_results=None, service_results=None, runtime_results=
 
 def test_run_preflight_returns_preflight_report():
     patches = _patch_all_checks()
-    with patches[0], patches[1], patches[2]:
+    with patches[0], patches[1], patches[2], patches[3]:
         report = run_preflight()
     assert isinstance(report, PreflightReport)
 
@@ -169,7 +172,7 @@ def test_run_preflight_does_not_call_sys_exit():
     patches = _patch_all_checks(
         model_results=[_fail(s.name, "model_server") for s in runtime.MODEL_SERVERS],
     )
-    with patches[0], patches[1], patches[2], \
+    with patches[0], patches[1], patches[2], patches[3], \
          patch.object(sys, "exit") as mock_exit:
         run_preflight()
     mock_exit.assert_not_called()
@@ -183,7 +186,7 @@ def test_run_preflight_result_count_equals_all_tiers():
         + len(runtime.RUNTIME_SERVICES)
     )
     patches = _patch_all_checks()
-    with patches[0], patches[1], patches[2]:
+    with patches[0], patches[1], patches[2], patches[3]:
         report = run_preflight()
     assert len(report.results) == expected
 
@@ -191,24 +194,26 @@ def test_run_preflight_result_count_equals_all_tiers():
 def test_run_preflight_uses_injected_env():
     env = load_env_config(env={"SOVERYN_APP_PORT": "9999"})
     patches = _patch_all_checks()
-    with patches[0], patches[1], patches[2]:
+    with patches[0], patches[1], patches[2], patches[3]:
         report = run_preflight(env=env)
     assert report.env.app_port == 9999
 
 
 def test_run_preflight_passes_timeout_to_checks():
     """When timeout= is given, it should be forwarded to all check_* calls."""
-    mock_results = [_ok(s.name) for s in runtime.MODEL_SERVERS]
+    llama_results = [_ok(s.name) for s in runtime.MODEL_SERVERS if s.name != "kernel_build"]
     svc_results = [_ok(e.name) for e in runtime.SERVICE_ENDPOINTS]
     rt_results = [_ok(r.name) for r in runtime.RUNTIME_SERVICES]
 
-    with patch("soveryn.app.preflight.check_llama_server", side_effect=mock_results) as p1, \
+    with patch("soveryn.app.preflight.check_llama_server", side_effect=llama_results) as p1, \
+         patch("soveryn.app.preflight.check_kernel_brain", return_value=_ok("kernel_build")) as pk, \
          patch("soveryn.app.preflight.check_service_endpoint", side_effect=svc_results) as p2, \
          patch("soveryn.app.preflight.check_runtime_service", side_effect=rt_results) as p3:
         run_preflight(timeout=0.5)
 
     for call in p1.call_args_list:
-        assert call.kwargs.get("timeout") == 0.5 or call.args[1] == 0.5
+        assert call.kwargs.get("timeout") == 0.5 or (len(call.args) > 1 and call.args[1] == 0.5)
+    assert pk.call_args.kwargs.get("timeout") == 0.5 or pk.call_args.args[0] == 0.5
     for call in p2.call_args_list:
         assert call.kwargs.get("timeout") == 0.5 or call.args[1] == 0.5
     for call in p3.call_args_list:
@@ -217,7 +222,7 @@ def test_run_preflight_passes_timeout_to_checks():
 
 def test_run_preflight_ok_all_checks_pass():
     patches = _patch_all_checks()
-    with patches[0], patches[1], patches[2]:
+    with patches[0], patches[1], patches[2], patches[3]:
         report = run_preflight()
     assert report.ok is True
 
@@ -227,7 +232,7 @@ def test_run_preflight_not_ok_when_one_model_fails():
         _ok(s.name, "model_server") for s in runtime.MODEL_SERVERS[1:]
     ]
     patches = _patch_all_checks(model_results=model_r)
-    with patches[0], patches[1], patches[2]:
+    with patches[0], patches[1], patches[2], patches[3]:
         report = run_preflight()
     assert report.ok is False
     assert len(report.failures) == 1

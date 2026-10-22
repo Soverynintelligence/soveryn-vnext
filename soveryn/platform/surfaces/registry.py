@@ -225,6 +225,26 @@ CORE_SURFACES: tuple[Surface, ...] = (
     ),
 )
 
+
+def kernel_build_surface() -> Surface:
+    """Kernel build brain — URL from the resolved runtime record, never a guess."""
+    from soveryn.config.runtime import _kernel_server, resolve_kernel_brain
+
+    server = _kernel_server()
+    key = resolve_kernel_brain()
+    return Surface(
+        "kernel-build",
+        Kind.HTTP,
+        f"{server.base_url}/health",
+        owner="soveryn",
+        interval_s=300,
+        notes=(
+            f"Kernel house build brain `{key}` ({server.model_alias}) at "
+            f"{server.base_url}. Resolved from ~/.soveryn/kernel_brain; "
+            "never a hardcoded or model-guessed port (not 127.0.0.1:8080)."
+        ),
+    )
+
 def all_surfaces() -> tuple[Surface, ...]:
     try:
         from soveryn.plugins.loader import plugin_surfaces
@@ -232,8 +252,9 @@ def all_surfaces() -> tuple[Surface, ...]:
         extra = plugin_surfaces()
     except Exception:
         extra = []
-    seen = {s.name for s in CORE_SURFACES}
-    out = list(CORE_SURFACES)
+    core = list(CORE_SURFACES) + [kernel_build_surface()]
+    seen = {s.name for s in core}
+    out = list(core)
     for item in extra:
         name = getattr(item, "name", None)
         if not name or name in seen:
