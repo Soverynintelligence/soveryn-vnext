@@ -9,9 +9,12 @@ Derived from docs/CURRENT_TRUTH_2026-05-23.md § 1, 3, 4, 8, 10.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent identity
@@ -210,10 +213,11 @@ def _vett_scotty_server() -> ModelServer:
     )
 
 
-# Kernel build brain — live default is Flash-Next TP=1 on spark2 (`~/.soveryn/kernel_brain`).
-# Switch:  scripts/switch_kernel_brain.sh flashnext|glm|flash|qwen38
+# Kernel build brain — live default is DeepSeek on spark2 (`~/.soveryn/kernel_brain`).
+# Switch:  scripts/switch_kernel_brain.sh deepseek|flashnext|glm|flash|qwen38
 # Precedence: SOVERYN_KERNEL_BRAIN env > ~/.soveryn/kernel_brain > flash (test/fallback)
-# glm remains a rollback key (EXL3 TP=2 :8001). Eve stays on Quadros Qwen 3.8.
+# Unknown names warn and fall back to flash (never silently).
+# glm :8001 is retired/rollback. Eve stays on Quadros Qwen 3.8.
 _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
     "flash": {
         # Router preset [kernel]; alias bench-flash kept so old callers still hit it.
@@ -262,22 +266,71 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
         ),
         "n_ctx": 131072,
     },
+    "deepseek": {
+        "alias": "DeepSeek-V4.1-Flash-1017",
+        "house_name": "DeepSeek V4.1 Flash",
+        "blurb": "EXL3 2.9bpw · tensorfold spark2 :8888 · GLM :8001 retired",
+        "host": "10.10.10.2",
+        "port": 8888,
+        "path": "DeepSeek-V4.1-Flash-1017-EXL3-2.9bpw",
+        "role": (
+            "Kernel — DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw tensorfold "
+            "on spark2 :8888 (http://10.10.10.2:8888/v1)"
+        ),
+        "n_ctx": 262144,
+    },
 }
 _KERNEL_BRAIN_FILE = Path.home() / ".soveryn" / "kernel_brain"
+_KNOWN_KERNEL_BRAINS = ", ".join(sorted(_KERNEL_BRAIN_PROFILES))
+
+
+def _warn_unknown_kernel_brain(key: str, source: str) -> None:
+    logger.warning(
+        "unknown kernel brain %r from %s; known: %s — falling back to flash",
+        key,
+        source,
+        _KNOWN_KERNEL_BRAINS,
+    )
 
 
 def resolve_kernel_brain() -> str:
-    """Return Kernel brain key: flash | qwen38 | glm | flashnext."""
+    """Return Kernel brain key: deepseek | flash | qwen38 | glm | flashnext.
+
+    Unknown names log a warning instead of silently mapping to flash.
+    """
     env = (os.environ.get("SOVERYN_KERNEL_BRAIN") or "").strip().lower()
     if env in _KERNEL_BRAIN_PROFILES:
         return env
+    if env:
+        _warn_unknown_kernel_brain(env, "SOVERYN_KERNEL_BRAIN")
     try:
         key = _KERNEL_BRAIN_FILE.read_text(encoding="utf-8").strip().lower()
     except OSError:
         key = ""
     if key in _KERNEL_BRAIN_PROFILES:
         return key
+    if key:
+        _warn_unknown_kernel_brain(key, str(_KERNEL_BRAIN_FILE))
     return "flash"
+
+
+def describe_kernel_brain() -> dict:
+    """Resolved Kernel brain record — the only place callers should read host/port."""
+    key = resolve_kernel_brain()
+    prof = _KERNEL_BRAIN_PROFILES[key]
+    server = _kernel_server()
+    return {
+        "brain": key,
+        "alias": server.model_alias,
+        "house_name": prof["house_name"],
+        "blurb": prof["blurb"],
+        "host": server.host,
+        "port": server.port,
+        "base_url": server.base_url,
+        "role": server.role,
+        "n_ctx": server.n_ctx,
+        "path": str(prof["path"]),
+    }
 
 
 def _kernel_server() -> ModelServer:

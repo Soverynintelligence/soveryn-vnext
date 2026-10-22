@@ -210,13 +210,13 @@ def api_system_daemons():
 
 @bp.get("/api/system/bench_flash")
 def api_system_bench_flash():
-    """Kernel (build brain) — weights, router, warm/cold state."""
+    """Kernel (build brain) — resolved ~/.soveryn/kernel_brain weights + probe."""
     return jsonify(bench_flash_status().as_dict()), 200
 
 
 @bp.post("/api/system/bench_flash/warm")
 def api_system_bench_flash_warm():
-    """Start loading Kernel (glm-5.3-flash on Spark :8001) in the background."""
+    """Start loading the resolved Kernel brain in the background."""
     result = bench_flash_warm()
     code = 200 if result.get("ok") else 409
     return jsonify(result), code

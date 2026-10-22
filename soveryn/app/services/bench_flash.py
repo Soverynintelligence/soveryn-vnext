@@ -1,7 +1,7 @@
-"""Kernel — SOVERYN local build brain (Flash-Next under the hood).
+"""Kernel — SOVERYN local build brain.
 
 House name: Kernel. Live weights follow ``~/.soveryn/kernel_brain``
-(default: Qwen3.8-Flash-Next on 127.0.0.1:8888). Command Center uses this
+(resolved at call time via ``_kernel_server()``). Command Center uses this
 so operators can warm and talk without CLI.
 """
 
@@ -17,15 +17,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-def _kernel_ep() -> tuple[str, str]:
-    from soveryn.config.runtime import _kernel_server
+def _kernel_ep() -> tuple[str, str, str]:
+    from soveryn.config.runtime import _kernel_server, resolve_kernel_brain
 
     s = _kernel_server()
-    return f"http://{s.host}:{s.port}", s.model_alias
+    return f"http://{s.host}:{s.port}", s.model_alias, resolve_kernel_brain()
 
 
-ROUTER_BASE, MODEL_ALIAS = _kernel_ep()
-# Display-only. Live weights are on spark2 vLLM, not a tower GGUF.
+ROUTER_BASE, MODEL_ALIAS, KERNEL_BRAIN = _kernel_ep()
+# Display-only. Live weights follow the resolved Kernel brain, not a tower GGUF.
 ENTRY_SHARD = Path("/home/soverynspark2/Qwen3.8-Flash-Next-Single-DGX-Spark")
 WEIGHTS_DIR = ENTRY_SHARD
 AIDER_CMD = (
@@ -51,6 +51,7 @@ _warm_state: dict[str, Any] = {
 @dataclass
 class BenchFlashStatus:
     name: str = HOUSE_NAME
+    brain: str = KERNEL_BRAIN
     alias: str = MODEL_ALIAS
     router: str = ROUTER_BASE
     weights_ok: bool = False
@@ -91,9 +92,10 @@ def _post_chat(
     temperature: float = 0.2,
     timeout: float = CHAT_TIMEOUT_S,
 ) -> dict[str, Any]:
+    base, alias, _key = _kernel_ep()
     body = json.dumps(
         {
-            "model": MODEL_ALIAS,
+            "model": alias,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -101,7 +103,7 @@ def _post_chat(
         }
     ).encode("utf-8")
     req = urllib.request.Request(
-        f"{ROUTER_BASE}/v1/chat/completions",
+        f"{base}/v1/chat/completions",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -123,17 +125,22 @@ def _post_chat(
 
 
 def get_status() -> BenchFlashStatus:
+    base, alias, key = _kernel_ep()
     st = BenchFlashStatus(
+        brain=key,
+        alias=alias,
+        router=base,
+        aider_cmd=f"AIDER_BASE={base}/v1 AIDER_MODEL=openai/{alias} soveryn-aider",
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
-    models = _http_json(f"{ROUTER_BASE}/v1/models", timeout=3.0)
+    models = _http_json(f"{base}/v1/models", timeout=3.0)
     st.router_ok = models is not None
     listed = False
     llama_status = None
     for m in (models or {}).get("data") or []:
         mid = m.get("id") or ""
         aliases = m.get("aliases") or []
-        if mid == MODEL_ALIAS or MODEL_ALIAS in aliases:
+        if mid == alias or alias in aliases:
             listed = True
             llama_status = (m.get("status") or {}).get("value")
             break
@@ -155,7 +162,7 @@ def get_status() -> BenchFlashStatus:
         st.state = "warm"
         return st
     st.state = "missing"
-    st.note = st.note + " GLM not listed on Spark :8001."
+    st.note = st.note + f" {alias} not listed on {base}."
     return st
 
 
@@ -384,7 +391,7 @@ def chat(
         "tools_enabled": True,
         "usage": last_usage,
         "latency_s": round(total_lat, 3),
-        "model": MODEL_ALIAS,
+        "model": _kernel_ep()[1],
     }
 
 
@@ -439,6 +446,6 @@ def _chat_plain(
         "tools_enabled": False,
         "usage": data.get("usage"),
         "latency_s": data.get("_client_latency_s"),
-        "model": MODEL_ALIAS,
+        "model": _kernel_ep()[1],
         "finish_reason": choice.get("finish_reason"),
     }

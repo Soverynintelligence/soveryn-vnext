@@ -4,7 +4,8 @@
 #
 # Usage:
 #   switch_kernel_brain.sh                 # show current
-#   switch_kernel_brain.sh flashnext       # Qwen3.8-Flash-Next TP=1 spark2 :8888 (live)
+#   switch_kernel_brain.sh deepseek        # DeepSeek-V4.1-Flash-1017 spark2 :8888 (live)
+#   switch_kernel_brain.sh flashnext       # Qwen3.8-Flash-Next TP=1 spark2 tunnel :8888
 #   switch_kernel_brain.sh glm             # GLM-5.3-Flash TP=2 on Sparks :8001 (rollback)
 #   switch_kernel_brain.sh flash           # Qwen3.8 GGUF on Quadros :8091 (legacy)
 #   switch_kernel_brain.sh qwen38          # Qwen3.8-27B NVFP4 on Spark :8001
@@ -21,7 +22,8 @@ PY="${SOVERYN_PYTHON:-/home/jon-deoliveira/miniconda3/envs/soveryn/bin/python}"
 VETT_SWITCH="${REPO}/scripts/switch_vett_brain.sh"
 
 usage() {
-  echo "Usage: $0 [flashnext|glm|flash|qwen38] [--take-spark]"
+  echo "Usage: $0 [deepseek|flashnext|glm|flash|qwen38] [--take-spark]"
+  echo "  deepseek   DeepSeek-V4.1-Flash-1017 EXL3 on spark2 via 10.10.10.2:8888"
   echo "  flashnext  Qwen3.8-Flash-Next NVFP4 TP=1 spark2 via 127.0.0.1:8888"
   echo "  glm        GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Sparks :8001 (rollback)"
   echo "  flash      Qwen3.8 GGUF on Quadros :8091 (legacy alias bench-flash)"
@@ -59,7 +61,7 @@ for arg in "$@"; do
   case "$arg" in
     --take-spark) TAKE_SPARK=1 ;;
     -h|--help) usage ;;
-    flash|qwen38|glm|flashnext) BRAIN="$arg" ;;
+    flash|qwen38|glm|flashnext|deepseek) BRAIN="$arg" ;;
     *)
       if [[ -n "$arg" ]]; then
         echo "unknown arg: $arg" >&2
@@ -77,6 +79,16 @@ fi
 mkdir -p "${HOME}/.soveryn"
 echo "$BRAIN" > "$BRAIN_FILE_TOWER"
 echo "wrote tower $BRAIN_FILE_TOWER → $BRAIN"
+
+if [[ "$BRAIN" == "deepseek" ]]; then
+  body="$(curl -sS -m 5 http://10.10.10.2:8888/v1/models 2>/dev/null || true)"
+  if ! echo "$body" | grep -qi 'DeepSeek-V4.1-Flash-1017'; then
+    echo "ERROR: 10.10.10.2:8888 is not serving DeepSeek-V4.1-Flash-1017." >&2
+    echo "  Current: $(echo "$body" | "$PY" -c 'import sys,json; d=json.load(sys.stdin); print(",".join(m["id"] for m in d.get("data",[])))' 2>/dev/null || echo 'unreachable')" >&2
+    exit 2
+  fi
+  echo "DeepSeek already serving on 10.10.10.2:8888"
+fi
 
 if [[ "$BRAIN" == "flashnext" ]]; then
   body="$(curl -sS -m 5 http://127.0.0.1:8888/v1/models 2>/dev/null || true)"

@@ -2,6 +2,7 @@
 
 Stdlib-only probes:
 - check_llama_server(server, timeout): HTTP GET /health
+- check_kernel_brain(timeout): resolved Kernel brain /health or /v1/models
 - check_service_endpoint(endpoint, timeout): TCP connect
 - check_runtime_service(service, timeout): conservative process / systemd /
   thread liveness depending on kind
@@ -37,8 +38,28 @@ class HealthResult:
     detail: str             # human-readable cause
 
 
+def _http_ok(url: str, timeout: float) -> tuple[bool, float, str]:
+    """GET ``url``. Returns (ok, latency_ms, detail)."""
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            elapsed_ms = (time.monotonic() - started) * 1000.0
+            if 200 <= resp.status < 300:
+                return True, elapsed_ms, f"HTTP {resp.status} from {url}"
+            return False, elapsed_ms, f"HTTP {resp.status} from {url}"
+    except urllib.error.URLError as e:
+        elapsed_ms = (time.monotonic() - started) * 1000.0
+        return False, elapsed_ms, f"URLError: {e.reason} ({url})"
+    except (TimeoutError, socket.timeout):
+        elapsed_ms = (time.monotonic() - started) * 1000.0
+        return False, elapsed_ms, f"timeout after {timeout}s ({url})"
+    except Exception as e:
+        elapsed_ms = (time.monotonic() - started) * 1000.0
+        return False, elapsed_ms, f"{type(e).__name__}: {e} ({url})"
+
+
 def check_llama_server(server: ModelServer, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> HealthResult:
-    """HTTP GET http://127.0.0.1:<port>/health — llama-server exposes this."""
+    """HTTP GET http://<host>:<port>/health — llama-server exposes this."""
     url = f"{server.base_url}/health"
     started = time.monotonic()
     try:
@@ -61,6 +82,67 @@ def check_llama_server(server: ModelServer, timeout: float = DEFAULT_TIMEOUT_SEC
         elapsed_ms = (time.monotonic() - started) * 1000.0
         return HealthResult(server.name, "model_server", "fail", elapsed_ms,
                             f"{type(e).__name__}: {e}")
+
+
+def check_kernel_brain(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> HealthResult:
+    """Probe the resolved Kernel build brain — never a hardcoded or guessed port.
+
+    Hits ``/health`` first, then ``/v1/models``. Host/port come only from
+    ``_kernel_server()`` (``~/.soveryn/kernel_brain`` / ``SOVERYN_KERNEL_BRAIN``).
+    """
+    from soveryn.config.runtime import _kernel_server, resolve_kernel_brain
+
+    server = _kernel_server()
+    key = resolve_kernel_brain()
+    last_detail = "no probe attempted"
+    last_ms = 0.0
+    for path in ("/health", "/v1/models"):
+        url = f"{server.base_url}{path}"
+        ok, elapsed_ms, detail = _http_ok(url, timeout)
+        last_detail, last_ms = detail, elapsed_ms
+        if ok:
+            return HealthResult(
+                "kernel_build",
+                "model_server",
+                "ok",
+                elapsed_ms,
+                f"{key} {detail}",
+            )
+    return HealthResult(
+        "kernel_build",
+        "model_server",
+        "fail",
+        last_ms,
+        f"{key} {server.base_url} {last_detail}",
+    )
+
+
+def kernel_brain_health_report(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> dict:
+    """Verified Kernel-brain probe plus the resolved endpoint record."""
+    from soveryn.config.runtime import describe_kernel_brain
+
+    rec = describe_kernel_brain()
+    result = check_kernel_brain(timeout=timeout)
+    return {
+        **rec,
+        "status": result.status,
+        "detail": result.detail,
+        "latency_ms": result.latency_ms,
+        "probed": True,
+    }
+
+
+def format_kernel_brain_health_block(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
+    """Prompt block: real endpoint + verified probe. Do not invent ports."""
+    report = kernel_brain_health_report(timeout=timeout)
+    return (
+        "## Kernel build brain (verified probe — do not invent an endpoint)\n"
+        f"Active brain: `{report['brain']}` ({report['alias']}) at "
+        f"{report['base_url']}.\n"
+        f"Probe: {report['detail']} → {report['status']}.\n"
+        "Never claim this brain is down at a guessed port "
+        "(including 127.0.0.1:8080). Only this probe result is allowed.\n\n"
+    )
 
 
 def check_service_endpoint(endpoint: ServiceEndpoint, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> HealthResult:

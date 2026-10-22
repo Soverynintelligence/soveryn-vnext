@@ -10,6 +10,17 @@ from soveryn.config.runtime import ACTIVE_AGENTS
 from soveryn.memory.conversation_store import ConversationStore
 
 
+@pytest.fixture(autouse=True)
+def _stub_kernel_brain_probe(monkeypatch):
+    monkeypatch.setattr(
+        "soveryn.platform.inference.health.format_kernel_brain_health_block",
+        lambda timeout=2.0: (
+            "## Kernel build brain (verified probe)\n"
+            "Active brain: `deepseek` at http://10.10.10.2:8888.\n\n"
+        ),
+    )
+
+
 @pytest.fixture
 def client(tmp_path, fake_chat, monkeypatch):
     """Isolated app client with SOVERYN_DATA_ROOT pointed at tmp."""

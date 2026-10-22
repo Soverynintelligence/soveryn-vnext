@@ -335,7 +335,8 @@ def test_the_incident_surfaces_are_declared():
     # probes already ran, but they shared a name, so a finding could not say
     # which had failed.
     for name in ("atticus-chat", "atticus-health", "soveryn-agent", "shepherd",
-                 "soverynintelligence.com", "router-blackwell", "qwen-spark"):
+                 "soverynintelligence.com", "router-blackwell", "qwen-spark",
+                 "kernel-build"):
         assert name in registry.BY_NAME, f"{name} is undeclared and therefore unwatched"
 
 

@@ -35,7 +35,9 @@ CRON_HINT = (
     "You are running as a scheduled house automation. Your reply lands in "
     "the Command Center inbox — do not try to deliver it yourself. If there "
     "is genuinely nothing new versus the previous run, reply with exactly "
-    "[SILENT] and nothing else.\n\n"
+    "[SILENT] and nothing else. House service claims (including the Kernel "
+    "build brain) must use the verified probe block below — never invent a "
+    "port (127.0.0.1:8080 has never been a house brain).\n\n"
 )
 
 FetchFn = Callable[[str], Tuple[bool, str]]
@@ -578,6 +580,12 @@ def assemble_run_prompt(
     monitor_block: str | None = None,
 ) -> str:
     parts: List[str] = [CRON_HINT]
+    try:
+        from soveryn.platform.inference.health import format_kernel_brain_health_block
+
+        parts.append(format_kernel_brain_health_block(timeout=0.4))
+    except Exception:  # noqa: BLE001 — prompt assembly must never raise
+        pass
     if getattr(spec, "notepad", True):
         pad = render_notepad_section(spec.id, data_root=data_root)
         if pad:

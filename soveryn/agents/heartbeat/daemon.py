@@ -397,6 +397,17 @@ class HeartbeatDaemon:
             # Walk past empty unchanged-skip rows to the last real note.
             last_note = self._thoughts_log.last_standing_note()
             failure_sit_label = detect_failure_avoidance(last_note)
+            kernel_brain_section = ""
+            try:
+                from soveryn.platform.inference.health import (
+                    format_kernel_brain_health_block,
+                )
+
+                kernel_brain_section = format_kernel_brain_health_block()
+            except Exception:
+                logger.debug(
+                    "heartbeat: kernel brain probe unavailable", exc_info=True
+                )
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
                 board=board,
@@ -408,6 +419,7 @@ class HeartbeatDaemon:
                 daily_post_invite=daily_post_invite,
                 last_note=last_note,
                 failure_sit_label=failure_sit_label,
+                kernel_brain_section=kernel_brain_section,
             )
         except Exception as e:
             logger.exception("heartbeat tick failed during context gathering")

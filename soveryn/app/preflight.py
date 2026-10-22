@@ -16,6 +16,7 @@ from soveryn.config.loader import EnvConfig, load_env_config
 from soveryn.inference.health import (
     DEFAULT_TIMEOUT_SECONDS,
     HealthResult,
+    check_kernel_brain,
     check_llama_server,
     check_runtime_service,
     check_service_endpoint,
@@ -83,6 +84,9 @@ def run_preflight(
                 0.0,
                 "skip_preflight (external backend)",
             ))
+            continue
+        if server.name == "kernel_build":
+            results.append(check_kernel_brain(timeout=t))
             continue
         results.append(check_llama_server(server, timeout=t))
     for endpoint in runtime.SERVICE_ENDPOINTS:

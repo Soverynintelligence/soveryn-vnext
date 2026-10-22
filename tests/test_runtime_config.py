@@ -92,6 +92,10 @@ def test_glm_kernel_window_is_32k():
         assert kernel.n_ctx == 131072
         assert kernel.host == "127.0.0.1" and kernel.port == 8888
         assert kernel.model_alias == "qwen3.8-flash-next"
+    if runtime.resolve_kernel_brain() == "deepseek":
+        assert kernel.n_ctx == 262144
+        assert kernel.host == "10.10.10.2" and kernel.port == 8888
+        assert kernel.model_alias == "DeepSeek-V4.1-Flash-1017"
     eve = next(s for s in runtime.MODEL_SERVERS if s.name == "eve_flash")
     assert eve.n_ctx == 65536
     assert eve.port == 8090  # 2026-09-29 seat swap: Eve → Blackwell :8090
@@ -138,9 +142,15 @@ def test_aetheria_on_8091_eve_on_8090_after_seat_swap():
     ports = {s.port for s in live_others}
     assert {8090, 8091, 8096}.issubset(ports)
     assert 8001 in ports or 8888 in ports
-    # Local quadro slots (and Flash-Next tunnel) stay on loopback; Spark :8001 is remote.
-    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8090, 8091, 8096, 8888))
+    # Local quadro slots stay on loopback; Spark :8001 is remote.
+    # Kernel :8888 is loopback for flashnext (SSH tunnel) and remote for deepseek.
+    assert all(s.host == "127.0.0.1" for s in live_others if s.port in (8090, 8091, 8096))
     assert all(s.host != "127.0.0.1" for s in live_others if s.port == 8001)
+    kernel = next(s for s in live_others if s.name == "kernel_build")
+    if runtime.resolve_kernel_brain() == "flashnext":
+        assert kernel.host == "127.0.0.1" and kernel.port == 8888
+    if runtime.resolve_kernel_brain() == "deepseek":
+        assert kernel.host == "10.10.10.2" and kernel.port == 8888
     # No non-eve entry may share Eve's Blackwell port.
     assert all(s.port != 8090 for s in others if s.name != "eve_flash")
 
@@ -185,6 +195,15 @@ def test_each_model_server_has_router_alias_populated():
     assert actual == expected
 
 
+def test_deepseek_profile_is_spark2_8888():
+    prof = runtime._KERNEL_BRAIN_PROFILES["deepseek"]
+    assert prof["host"] == "10.10.10.2"
+    assert prof["port"] == 8888
+    assert prof["alias"] == "DeepSeek-V4.1-Flash-1017"
+    assert "house_name" in prof and "blurb" in prof and "role" in prof
+    assert "path" in prof and "n_ctx" in prof
+
+
 def test_kernel_brain_defaults_to_flash(tmp_path, monkeypatch):
     monkeypatch.delenv("SOVERYN_KERNEL_BRAIN", raising=False)
     monkeypatch.setattr(runtime, "_KERNEL_BRAIN_FILE", tmp_path / "missing")
@@ -201,6 +220,8 @@ def test_kernel_brain_file_and_env(tmp_path, monkeypatch):
     assert runtime.resolve_kernel_brain() == "flash"
     monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "flashnext")
     assert runtime.resolve_kernel_brain() == "flashnext"
+    monkeypatch.setenv("SOVERYN_KERNEL_BRAIN", "deepseek")
+    assert runtime.resolve_kernel_brain() == "deepseek"
 
 
 def test_eve_flash_names_qwen38_mmproj_kernel_uses_native_glm_vision():
@@ -266,11 +287,11 @@ def test_all_ports_includes_parakeet():
     and :8096 (Librarian embeddings) — because Aetheria's GPU must never be shared."""
     ports = runtime.all_ports()
     assert 8087 in ports
-    # 8001 = Spark vLLM (qwen-serve). 8888 = Flash-Next tunnel when Kernel is flashnext.
+    # 8001 = Spark vLLM (qwen-serve). 8888 = Kernel when flashnext or deepseek.
     assert {8090, 8091, 8096}.issubset(ports)
     assert 8001 in ports or 8888 in ports
     expected = {8001, 8087, 8090, 8091, 8096}
-    if runtime.resolve_kernel_brain() == "flashnext":
+    if runtime.resolve_kernel_brain() in ("flashnext", "deepseek"):
         expected.add(8888)
     assert ports == expected
 
