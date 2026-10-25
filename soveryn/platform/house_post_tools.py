@@ -180,10 +180,7 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                 "brain, not a citizen. When Jon says 'ask Eve "
                 "to…' or 'have Forge check…' — call this in the SAME turn with "
                 "to_id set and a clear brief in body. Prefer kind=request "
-                "(default). A Forge/Kernel handoff is sent only when the tool "
-                "returns task_id from the delegation ledger — do not report "
-                "commission_id as sent. Kinds: memo, request, report, "
-                "directive, ack."
+                "(default). Kinds: memo, request, report, directive, ack."
             ),
             schema={
                 "type": "object",

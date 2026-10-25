@@ -209,9 +209,6 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                 "catalogs first, not the open web), hl (History's Ledger), soveryn "
                 "(house/product). Owners: eve (research+ship) or forge (build). "
                 "Vett/Scotty are parked. Kernel is the build brain, not a citizen. "
-                "A Forge/Kernel assign is sent only when the tool returns "
-                "task_id from the delegation ledger — do not report "
-                "commission_id or objective_id as sent. "
                 "After they finish, check objective_status "
                 "and call objective_verify when Jon accepts."
             ),
