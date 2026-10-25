@@ -313,6 +313,7 @@ class HeartbeatDaemon:
     def _tick_body(self, *, now: datetime, eligibility: TickEligibility) -> None:
         tick_id = str(uuid.uuid4())
         triggered_at = now.isoformat()
+        kernel_probes: list = []
         if not eligibility.eligible:
             # Skipped tick — log and return.
             self._write_log_row(
@@ -401,9 +402,19 @@ class HeartbeatDaemon:
             try:
                 from soveryn.platform.inference.health import (
                     format_kernel_brain_health_block,
+                    kernel_brain_health_report,
+                )
+                from soveryn.platform.inference.outage import (
+                    apply_outage_gate,
+                    probe_from_health,
                 )
 
-                kernel_brain_section = format_kernel_brain_health_block()
+                kernel_report = kernel_brain_health_report(timeout=0.4)
+                kernel_probes.append(probe_from_health(kernel_report))
+                kernel_brain_section = format_kernel_brain_health_block(
+                    timeout=0.4, report=kernel_report
+                )
+                last_note = apply_outage_gate(last_note, kernel_probes).text
             except Exception:
                 logger.debug(
                     "heartbeat: kernel brain probe unavailable", exc_info=True
@@ -558,6 +569,17 @@ class HeartbeatDaemon:
             # Her whole response is her note; it already persists in the
             # [heartbeat] session via the /chat round-trip above.
             note = (response_text or "").strip()
+            outage_verdict = None
+            try:
+                from soveryn.platform.inference.outage import apply_outage_gate
+
+                outage_verdict = apply_outage_gate(note, kernel_probes)
+                note = outage_verdict.text
+            except Exception:
+                logger.debug(
+                    "heartbeat: outage gate unavailable", exc_info=True
+                )
+                outage_verdict = None
 
             # Memory Grades PR3: dual-write. Full note stays in thoughts log +
             # [heartbeat] session (process/self preserved). Lattice gets only a
@@ -621,6 +643,13 @@ class HeartbeatDaemon:
                     # Surfacing to a "primary" chat was removed: pulse notes live
                     # only in the [heartbeat] session, so this is always False.
                     "surfaced": False,
+                    "probes": [p.as_dict() for p in kernel_probes],
+                    "blocks_dispatch": bool(
+                        outage_verdict.blocks_dispatch if outage_verdict is not None else False
+                    ),
+                    "unverified_outages": list(
+                        outage_verdict.unverified if outage_verdict is not None else ()
+                    ),
                 }
                 self._thoughts_log.append(_tlog_record)
                 # Carry the CONCLUSION across rails. Before 2026-07-28 the

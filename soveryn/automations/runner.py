@@ -59,8 +59,10 @@ def run_automation(
         }
 
     assembled: str | None = None
+    run_probes: tuple = ()
     if not dry_run:
         prep = prepare_run(spec)
+        run_probes = tuple(getattr(prep, "probes", ()) or ())
         if prep.skip:
             skip_status = prep.reason or "no_change"
             channels = ["command_center"]
@@ -129,6 +131,17 @@ def run_automation(
         result["usage"] = delivery.get("usage")
         result["context_usage"] = delivery.get("context_usage")
         content = str(delivery.get("content") or "")
+        try:
+            from soveryn.platform.inference.outage import apply_outage_gate
+
+            verdict = apply_outage_gate(content, run_probes)
+            content = verdict.text
+            result["content"] = content
+            result["outage"] = verdict.as_dict()
+            result["blocks_dispatch"] = verdict.blocks_dispatch
+        except Exception:  # noqa: BLE001 — gate must never fail a live run
+            logger.debug("automation outage gate unavailable", exc_info=True)
+            result["blocks_dispatch"] = False
         if status == "ok" and content:
             save_last_output(spec.id, content)
 

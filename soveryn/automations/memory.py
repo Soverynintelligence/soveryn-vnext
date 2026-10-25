@@ -573,17 +573,25 @@ def is_silent(content: str) -> bool:
     return str(content or "").strip() == "[SILENT]"
 
 
-def assemble_run_prompt(
+def assemble_run(
     spec: AutomationSpec,
     *,
     data_root: Path | None = None,
     monitor_block: str | None = None,
-) -> str:
+) -> Tuple[str, tuple]:
+    """Assemble the run prompt and the same-run probe records."""
     parts: List[str] = [CRON_HINT]
+    probes: list = []
     try:
-        from soveryn.platform.inference.health import format_kernel_brain_health_block
+        from soveryn.platform.inference.health import (
+            format_kernel_brain_health_block,
+            kernel_brain_health_report,
+        )
+        from soveryn.platform.inference.outage import probe_from_health
 
-        parts.append(format_kernel_brain_health_block(timeout=0.4))
+        report = kernel_brain_health_report(timeout=0.4)
+        probes.append(probe_from_health(report))
+        parts.append(format_kernel_brain_health_block(timeout=0.4, report=report))
     except Exception:  # noqa: BLE001 — prompt assembly must never raise
         pass
     if getattr(spec, "notepad", True):
@@ -597,7 +605,19 @@ def assemble_run_prompt(
     if monitor_block:
         parts.append(monitor_block.rstrip() + "\n\n")
     parts.append(spec.prompt)
-    return "".join(parts)
+    return "".join(parts), tuple(probes)
+
+
+def assemble_run_prompt(
+    spec: AutomationSpec,
+    *,
+    data_root: Path | None = None,
+    monitor_block: str | None = None,
+) -> str:
+    prompt, _probes = assemble_run(
+        spec, data_root=data_root, monitor_block=monitor_block
+    )
+    return prompt
 
 
 @dataclass
@@ -607,6 +627,7 @@ class PrepareResult:
     reason: str | None = None
     error: str | None = None
     monitor_changed: bool = False
+    probes: tuple = ()
 
 
 def prepare_run(
@@ -625,16 +646,20 @@ def prepare_run(
         if not outcome.changed:
             return PrepareResult(skip=True, prompt="", reason="no_change")
         monitor_block = outcome.context_block
+        prompt, probes = assemble_run(
+            spec, data_root=data_root, monitor_block=monitor_block
+        )
         return PrepareResult(
             skip=False,
-            prompt=assemble_run_prompt(
-                spec, data_root=data_root, monitor_block=monitor_block
-            ),
+            prompt=prompt,
             monitor_changed=True,
+            probes=probes,
         )
+    prompt, probes = assemble_run(spec, data_root=data_root)
     return PrepareResult(
         skip=False,
-        prompt=assemble_run_prompt(spec, data_root=data_root),
+        prompt=prompt,
+        probes=probes,
     )
 
 

@@ -19,6 +19,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Literal
 
 from soveryn.config.runtime import ModelServer, RuntimeService, ServiceEndpoint
@@ -123,25 +124,48 @@ def kernel_brain_health_report(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> dict
 
     rec = describe_kernel_brain()
     result = check_kernel_brain(timeout=timeout)
+    probed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    target = rec["base_url"]
+    probe = {
+        "target": target,
+        "timestamp": probed_at,
+        "result": result.status,
+        "name": result.name,
+        "detail": result.detail,
+    }
     return {
         **rec,
         "status": result.status,
         "detail": result.detail,
         "latency_ms": result.latency_ms,
         "probed": True,
+        "probed_at": probed_at,
+        "target": target,
+        "probe": probe,
     }
 
 
-def format_kernel_brain_health_block(timeout: float = DEFAULT_TIMEOUT_SECONDS) -> str:
+def format_kernel_brain_health_block(
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    *,
+    report: dict | None = None,
+) -> str:
     """Prompt block: real endpoint + verified probe. Do not invent ports."""
-    report = kernel_brain_health_report(timeout=timeout)
+    report = report if report is not None else kernel_brain_health_report(timeout=timeout)
+    probe = report.get("probe") if isinstance(report.get("probe"), dict) else {}
+    target = probe.get("target") or report.get("base_url")
+    timestamp = probe.get("timestamp") or report.get("probed_at") or ""
+    result = probe.get("result") or report.get("status")
     return (
         "## Kernel build brain (verified probe — do not invent an endpoint)\n"
         f"Active brain: `{report['brain']}` ({report['alias']}) at "
         f"{report['base_url']}.\n"
         f"Probe: {report['detail']} → {report['status']}.\n"
+        f"Probe record: target={target} timestamp={timestamp} result={result}.\n"
         "Never claim this brain is down at a guessed port "
-        "(including 127.0.0.1:8080). Only this probe result is allowed.\n\n"
+        "(including 127.0.0.1:8080). Only this probe result is allowed.\n"
+        "A down or blocked claim without a matching same-run probe record "
+        "is unverified and must not block dispatch.\n\n"
     )
 
 

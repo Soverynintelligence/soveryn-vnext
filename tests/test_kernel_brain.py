@@ -120,11 +120,18 @@ def test_kernel_brain_health_report_and_prompt_block(tmp_path, monkeypatch):
     assert report["port"] == 8888
     assert report["status"] == "ok"
     assert report["probed"] is True
+    assert report["probed_at"]
+    assert report["target"] == "http://10.10.10.2:8888"
+    assert report["probe"]["target"] == "http://10.10.10.2:8888"
+    assert report["probe"]["result"] == "ok"
+    assert report["probe"]["timestamp"] == report["probed_at"]
     assert "10.10.10.2:8888" in block
     assert "deepseek" in block
     assert "8080" in block  # named only as a port that must not be invented
     assert "do not invent" in block.lower()
     assert "verified probe" in block.lower()
+    assert "probe record:" in block.lower()
+    assert "must not block dispatch" in block.lower()
 
 
 def test_kernel_build_surface_uses_resolved_endpoint(tmp_path, monkeypatch):

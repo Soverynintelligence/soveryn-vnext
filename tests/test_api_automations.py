@@ -14,10 +14,31 @@ from soveryn.memory.conversation_store import ConversationStore
 def _stub_kernel_brain_probe(monkeypatch):
     monkeypatch.setattr(
         "soveryn.platform.inference.health.format_kernel_brain_health_block",
-        lambda timeout=2.0: (
+        lambda timeout=2.0, report=None: (
             "## Kernel build brain (verified probe)\n"
             "Active brain: `deepseek` at http://10.10.10.2:8888.\n\n"
         ),
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.inference.health.kernel_brain_health_report",
+        lambda timeout=2.0: {
+            "brain": "deepseek",
+            "alias": "DeepSeek-V4.1-Flash-1017",
+            "base_url": "http://10.10.10.2:8888",
+            "status": "ok",
+            "detail": "ok",
+            "latency_ms": 1.0,
+            "probed": True,
+            "probed_at": "2026-10-25T00:00:00Z",
+            "target": "http://10.10.10.2:8888",
+            "probe": {
+                "target": "http://10.10.10.2:8888",
+                "timestamp": "2026-10-25T00:00:00Z",
+                "result": "ok",
+                "name": "kernel_build",
+                "detail": "ok",
+            },
+        },
     )
 
 
