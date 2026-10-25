@@ -246,13 +246,11 @@ def build_task_status_tool(
         description=(
             "Check a task you dispatched. Pass task_id for one task; a unique "
             "prefix of at least 8 characters resolves to the full id. Omit "
-            "task_id for {open, recent}: open is dispatched, executing, "
-            "in_review, recorded, or pending-verify; recent is the latest "
-            "landed, rejected, and failed tasks with their summary. An "
-            "empty open list means nothing is in flight. Failed work is in "
-            "recent, not missing. A task is done only when its status is "
-            "'landed' — and landed is written only when landing proof "
-            "(commit on main, named test pass, service reload) succeeds."
+            "task_id for {open, recent}: open is dispatched, executing, or "
+            "in_review; recent is the latest landed, rejected, and failed "
+            "tasks with their summary. An empty open list means nothing is "
+            "in flight. Failed work is in recent, not missing. A task is "
+            "done only when its status is 'landed'."
         ),
     )
 
