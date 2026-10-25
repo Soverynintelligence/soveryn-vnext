@@ -5,14 +5,21 @@ Path-injected; no module-level DB connection. Mirrors the connection-per-call
 pattern of soveryn.platform.documents.store.
 
 Legal status transitions (the honesty invariant):
-    dispatched  → executing
-    dispatched  → failed
-    executing   → in_review
-    executing   → failed
-    in_review   → landed
-    in_review   → rejected
+    dispatched      → executing
+    dispatched      → failed
+    executing       → in_review
+    executing       → failed
+    in_review       → landed
+    in_review       → rejected
+    in_review       → pending-verify
+    in_review       → failed
+    pending-verify  → landed
+    pending-verify  → failed
+    pending-verify  → rejected
 
-Terminal states (landed / rejected / failed) cannot transition further.
+``pending-verify`` is the landing-proof wait state (commit + test proven,
+service not yet reloaded). Terminal states (landed / rejected / failed)
+cannot transition further.
 """
 
 from __future__ import annotations
@@ -58,6 +65,11 @@ _LEGAL: frozenset[tuple[str, str]] = frozenset({
     ("executing",  "failed"),
     ("in_review",  "landed"),
     ("in_review",  "rejected"),
+    ("in_review",  "pending-verify"),
+    ("in_review",  "failed"),
+    ("pending-verify", "landed"),
+    ("pending-verify", "failed"),
+    ("pending-verify", "rejected"),
 })
 
 _TERMINAL: frozenset[str] = frozenset({"landed", "rejected", "failed"})
