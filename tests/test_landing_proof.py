@@ -15,8 +15,10 @@ from soveryn.platform.delegation.landing import (
     LANDED,
     PENDING_VERIFY,
     ReloadRecord,
+    as_probe_records,
     evaluate_landing,
     mark_landed,
+    recent_landing_probes,
 )
 from soveryn.platform.delegation.store import DelegationStore
 
@@ -124,3 +126,46 @@ def test_explicit_reload_record_covers_a_stale_unit_start(tmp_path):
     )
     assert verdict.status == LANDED
     assert store.get_task(tid).status == LANDED
+
+
+def test_failing_proof_writes_through_store_and_feeds_outage_gate(tmp_path):
+    """mark_landed re-reads the ledger row; probe() is a real outage-gate record."""
+    from soveryn.platform.inference.outage import (
+        ProbeRecord,
+        apply_outage_gate,
+        merge_tick_probes,
+        should_block_dispatch,
+    )
+
+    store = _store(tmp_path)
+    tid = _in_review(store)
+    verdict = mark_landed(
+        store,
+        tid,
+        **_facts(test_passed=False, test_output="1 failed: test_retired_units"),
+    )
+    row = store.get_task(tid)
+    assert row is not None
+    assert row.status == FAILED
+    assert row.id == tid
+    persisted = recent_landing_probes(path=tmp_path / "landing_probes.jsonl")
+    assert persisted and persisted[-1]["name"] == "landing_proof"
+    assert persisted[-1]["result"] == "fail"
+    assert "test_retired_units" in persisted[-1]["detail"]
+
+    probe = verdict.as_probe_record()
+    assert isinstance(probe, ProbeRecord)
+    assert probe.name == "landing_proof"
+    assert probe.result == "fail"
+    ok_brain = ProbeRecord(
+        target="http://10.10.10.2:8888",
+        timestamp="2026-10-25T13:50:00Z",
+        result="ok",
+        name="kernel_build",
+    )
+    invented = "build brain on 127.0.0.1:8080 is down; blocked Forge until it returns."
+    merged = merge_tick_probes((ok_brain,), as_probe_records(persisted))
+    gate = apply_outage_gate(invented, merged)
+    assert any(row["name"] == "landing_proof" for row in gate.reported)
+    assert "8080" not in gate.text
+    assert should_block_dispatch(merged) is True

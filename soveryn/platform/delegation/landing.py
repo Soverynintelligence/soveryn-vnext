@@ -16,14 +16,17 @@ Otherwise the status stays ``pending-verify`` (stale service) or
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from soveryn.platform.delegation.store import DelegationStore
+from soveryn.paths import SoverynPaths
+from soveryn.platform.delegation.store import DelegationStore, LedgerWriteError
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +34,7 @@ LANDED = "landed"
 PENDING_VERIFY = "pending-verify"
 FAILED = "failed"
 PROBE_NAME = "landing_proof"
+_PROBES_ENV = "SOVERYN_LANDING_PROBES"
 
 GitRun = Callable[..., str]
 SysRun = Callable[..., Any]
@@ -112,6 +116,21 @@ class LandingVerdict:
             "name": PROBE_NAME,
             "detail": self.reason,
         }
+
+    def as_probe_record(self) -> Any:
+        raw = self.probe()
+        try:
+            from soveryn.platform.inference.outage import ProbeRecord
+
+            return ProbeRecord(
+                target=raw["target"],
+                timestamp=raw["timestamp"],
+                result=raw["result"],
+                name=raw["name"],
+                detail=raw["detail"],
+            )
+        except Exception:
+            return raw
 
 
 def commit_reachable_from_main(
@@ -299,9 +318,14 @@ def apply_landing(
     task_id: str,
     verdict: LandingVerdict,
 ) -> LandingVerdict:
-    """Write the verdict. ``landed`` is recorded only when the verdict is landed."""
+    """Write the verdict through the committed-dispatch store. Re-read after.
+
+    ``landed`` is recorded only when the verdict is landed *and* the row
+    still reads that way. A persist miss is a fail probe, never a claim.
+    """
     task = store.get_task(task_id)
     if task is None:
+        _record_probe(verdict.probe(), store=store)
         return verdict
     try:
         if verdict.status == LANDED:
@@ -315,8 +339,31 @@ def apply_landing(
             if task.status in {"in_review", PENDING_VERIFY}:
                 store.set_status(task_id, FAILED)
             store.set_review(task_id, review_feedback=verdict.reason)
+    except LedgerWriteError as exc:
+        missed = LandingVerdict(
+            status=FAILED,
+            reason=f"landing ledger write failed for {task_id}; not landed: {exc}",
+            commit=verdict.commit,
+            test_name=verdict.test_name,
+            service=verdict.service,
+        )
+        _record_probe(missed.probe(), store=store)
+        return missed
     except Exception:
         logger.exception("landing: could not apply %s to task %s", verdict.status, task_id)
+
+    again = store.get_task(task_id)
+    if verdict.status == LANDED and (again is None or again.status != LANDED):
+        missed = LandingVerdict(
+            status=FAILED,
+            reason=f"landing ledger write did not persist {task_id}; not landed",
+            commit=verdict.commit,
+            test_name=verdict.test_name,
+            service=verdict.service,
+        )
+        _record_probe(missed.probe(), store=store)
+        return missed
+    _record_probe(verdict.probe(), store=store)
     return verdict
 
 
@@ -328,6 +375,87 @@ def mark_landed(
     """The only honest write path to landed/done. Unproven work stays unlanded."""
     verdict = evaluate_landing(**evidence)
     return apply_landing(store, task_id, verdict)
+
+
+def recent_landing_probes(
+    *,
+    limit: int = 8,
+    path: Path | None = None,
+) -> tuple[dict[str, Any], ...]:
+    """Recent landing-proof fail probes for the pulse / outage gate."""
+    probe_path = path or _probe_path()
+    if not probe_path.is_file():
+        return ()
+    try:
+        lines = probe_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ()
+    rows: list[dict[str, Any]] = []
+    for line in lines[-max(1, limit) * 4 :]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict) and row.get("result") == "fail":
+            rows.append(row)
+    return tuple(rows[-limit:])
+
+
+def format_landing_error_block(*, limit: int = 8) -> str:
+    """Heartbeat prompt block. Empty when nothing probed-failing."""
+    downs = recent_landing_probes(limit=limit)
+    if not downs:
+        return ""
+    lines = ["## Verified landing failures (same-store probe records)"]
+    for row in downs:
+        lines.append(
+            f"- {row.get('name') or PROBE_NAME}: result={row.get('result')} "
+            f"target={row.get('target')} timestamp={row.get('timestamp')}"
+            + (f" ({row.get('detail')})" if row.get("detail") else "")
+        )
+    lines.append(
+        "These are code-gathered probe records. Do not claim the matching "
+        "task landed or is done."
+    )
+    return "\n".join(lines) + "\n\n"
+
+
+def as_probe_records(
+    probes: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> list[Any]:
+    """PR 1 ProbeRecord when that module exists; otherwise the raw dicts."""
+    try:
+        from soveryn.platform.delegation.dispatch import (
+            as_probe_records as _dispatch_as_probe_records,
+        )
+
+        return _dispatch_as_probe_records(probes)
+    except Exception:
+        return list(probes)
+
+
+def _probe_path() -> Path:
+    override = os.environ.get(_PROBES_ENV, "").strip()
+    if override:
+        return Path(override)
+    return SoverynPaths.data() / "landing_probes.jsonl"
+
+
+def _record_probe(probe: dict[str, Any], *, store: DelegationStore | None) -> None:
+    if probe.get("result") != "fail":
+        return
+    path = _probe_path()
+    if store is not None and not os.environ.get(_PROBES_ENV, "").strip():
+        path = store.db_path.parent / "landing_probes.jsonl"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(probe, default=str) + "\n")
+    except Exception:
+        logger.warning("landing probe persist failed", exc_info=True)
 
 
 def _default_git(repo: str | Path, *args: str) -> str:

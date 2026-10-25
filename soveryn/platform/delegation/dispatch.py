@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 FORGE_ASSIGNEES: frozenset[str] = frozenset({"forge", "kernel", "scotty"})
 LIVE_STATUSES: frozenset[str] = frozenset(
-    {"dispatched", "executing", "in_review", "recorded"}
+    {"dispatched", "executing", "in_review", "recorded", "pending-verify"}
 )
 PROBE_NAME = "delegation_dispatch"
 _PROBES_ENV = "SOVERYN_DISPATCH_PROBES"

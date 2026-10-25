@@ -315,6 +315,7 @@ class HeartbeatDaemon:
         triggered_at = now.isoformat()
         kernel_probes: list = []
         dispatch_probes: list = []
+        landing_probes: list = []
         if not eligibility.eligible:
             # Skipped tick — log and return.
             self._write_log_row(
@@ -426,19 +427,27 @@ class HeartbeatDaemon:
                     format_dispatch_error_block,
                     recent_dispatch_probes,
                 )
+                from soveryn.platform.delegation.landing import (
+                    format_landing_error_block,
+                    recent_landing_probes,
+                )
                 from soveryn.platform.inference.outage import (
                     apply_outage_gate,
                     merge_tick_probes,
                 )
 
                 dispatch_probes = as_probe_records(recent_dispatch_probes())
+                landing_probes = as_probe_records(recent_landing_probes())
                 kernel_brain_section = (
-                    (kernel_brain_section or "") + format_dispatch_error_block()
+                    (kernel_brain_section or "")
+                    + format_dispatch_error_block()
+                    + format_landing_error_block()
                 )
-                # Standing note sees ledger-write failures the same as kernel
-                # probes. Unverified claims still cannot block.
+                # Standing note sees ledger-write and landing-proof failures
+                # the same as kernel probes. Unverified claims still cannot block.
                 last_note = apply_outage_gate(
-                    last_note, merge_tick_probes(kernel_probes, dispatch_probes)
+                    last_note,
+                    merge_tick_probes(kernel_probes, dispatch_probes, landing_probes),
                 ).text
             except Exception:
                 logger.debug(
@@ -600,16 +609,21 @@ class HeartbeatDaemon:
                     as_probe_records,
                     recent_dispatch_probes,
                 )
+                from soveryn.platform.delegation.landing import recent_landing_probes
                 from soveryn.platform.inference.outage import (
                     apply_outage_gate,
                     merge_tick_probes,
                 )
 
-                # A pulse tool call may have written new ledger-fail probes.
+                # A pulse tool call may have written new ledger-fail or
+                # landing-proof probes.
                 dispatch_probes = as_probe_records(recent_dispatch_probes())
-                # Dispatch failures feed the gate as probes. Unverified
-                # outage claims (no matching probe) never set blocks_dispatch.
-                gate_probes = merge_tick_probes(kernel_probes, dispatch_probes)
+                landing_probes = as_probe_records(recent_landing_probes())
+                # Dispatch / landing failures feed the gate as probes.
+                # Unverified outage claims (no matching probe) never block.
+                gate_probes = merge_tick_probes(
+                    kernel_probes, dispatch_probes, landing_probes
+                )
                 outage_verdict = apply_outage_gate(note, gate_probes)
                 note = outage_verdict.text
             except Exception:
@@ -684,6 +698,10 @@ class HeartbeatDaemon:
                     "dispatch_probes": [
                         p.as_dict() if hasattr(p, "as_dict") else p
                         for p in dispatch_probes
+                    ],
+                    "landing_probes": [
+                        p.as_dict() if hasattr(p, "as_dict") else p
+                        for p in landing_probes
                     ],
                     "blocks_dispatch": bool(
                         outage_verdict.blocks_dispatch if outage_verdict is not None else False

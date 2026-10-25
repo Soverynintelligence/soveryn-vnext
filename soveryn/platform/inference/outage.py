@@ -120,7 +120,7 @@ def should_block_dispatch(probes: Sequence[ProbeRecord]) -> bool:
 
 
 def merge_tick_probes(*groups: Sequence[ProbeRecord] | None) -> tuple[ProbeRecord, ...]:
-    """Kernel health + dispatch-ledger failures for one outage-gate call.
+    """Kernel health + dispatch-ledger + landing-proof probes for one gate call.
 
     Only these records may report an outage or set ``blocks_dispatch``.
     """
