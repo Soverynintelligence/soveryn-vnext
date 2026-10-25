@@ -13,6 +13,7 @@ from soveryn.platform.inference.outage import (
     apply_outage_gate,
     evaluate_outage_claims,
     format_outage_report,
+    merge_tick_probes,
     official_outages,
     should_block_dispatch,
 )
@@ -74,6 +75,33 @@ def test_failing_probe_is_reported_with_evidence_and_blocks_dispatch():
     # Name-level claim matches the real target, so the sentence may stay;
     # the evidence is the probe record, not a guessed port.
     assert "8080" not in row["target"]
+
+
+FAIL_DISPATCH = ProbeRecord(
+    target="delegation.db",
+    timestamp="2026-10-25T14:00:00Z",
+    result="fail",
+    name="delegation_dispatch",
+    detail="ledger write did not persist; not sent",
+)
+
+
+def test_dispatch_failure_feeds_gate_unverified_never_blocks():
+    """Ledger-write failures are probes. Invented 8080 still cannot block."""
+    merged = merge_tick_probes((OK_DEEPSEEK,), (FAIL_DISPATCH,))
+    verdict = apply_outage_gate(INVENTED, merged)
+    assert any(row["name"] == "delegation_dispatch" for row in verdict.reported)
+    assert any("8080" in item for item in verdict.unverified)
+    assert "8080" not in verdict.text
+    assert "blocked Forge" not in verdict.text
+    # Block is the verified ledger miss, not the unverified outage sentence.
+    assert verdict.blocks_dispatch is True
+    assert should_block_dispatch(merged) is True
+
+    ok_only = apply_outage_gate(INVENTED, merge_tick_probes((OK_DEEPSEEK,), ()))
+    assert ok_only.blocks_dispatch is False
+    assert ok_only.reported == ()
+    assert should_block_dispatch(merge_tick_probes((OK_DEEPSEEK,), ())) is False
 
 
 def test_passing_probe_clears_a_down_claim():
@@ -139,6 +167,64 @@ def test_heartbeat_drops_invented_outage_and_does_not_block(tmp_path, monkeypatc
     assert rec.get("probes")
     assert rec["probes"][0]["target"] == "http://10.10.10.2:8888"
     assert rec["probes"][0]["result"] == "ok"
+    assert rec.get("dispatch_probes") == []
+    assert rec.get("unverified_outages")
+
+
+def test_heartbeat_dispatch_failure_feeds_gate_and_keeps_receipt_keys(
+    tmp_path, monkeypatch
+):
+    """Pulse receipt keeps PR1 keys plus dispatch_probes; 8080 stays unverified."""
+    import json
+
+    from soveryn.agents.heartbeat.thoughts_log import ThoughtsLog
+    from tests.test_heartbeat_integration import (
+        _ONE_MATERIAL,
+        _make_daemon,
+        _run_tick_with_fakes,
+    )
+
+    report = {
+        "brain": "deepseek",
+        "alias": "DeepSeek-V4.1-Flash-1017",
+        "base_url": "http://10.10.10.2:8888",
+        "status": "ok",
+        "detail": "ok",
+        "latency_ms": 1.0,
+        "probed": True,
+        "probed_at": "2026-10-25T13:50:00Z",
+        "target": "http://10.10.10.2:8888",
+        "probe": {
+            "target": "http://10.10.10.2:8888",
+            "timestamp": "2026-10-25T13:50:00Z",
+            "result": "ok",
+            "name": "kernel_build",
+            "detail": "ok",
+        },
+    }
+    monkeypatch.setattr(
+        "soveryn.platform.inference.health.kernel_brain_health_report",
+        lambda timeout=2.0: report,
+    )
+    probe_path = tmp_path / "dispatch_probes.jsonl"
+    probe_path.write_text(json.dumps(FAIL_DISPATCH.as_dict()) + "\n", encoding="utf-8")
+    monkeypatch.setenv("SOVERYN_DISPATCH_PROBES", str(probe_path))
+    tlog_path = tmp_path / "thoughts.jsonl"
+    daemon = _make_daemon(tmp_path, thoughts_path=tlog_path)
+    _run_tick_with_fakes(
+        daemon,
+        model_response=INVENTED + " Also I sent 1f1f049d.",
+        material_signals=_ONE_MATERIAL,
+    )
+    rec = ThoughtsLog(tlog_path).last()
+    assert rec is not None
+    assert "8080" not in (rec.get("note") or "")
+    assert rec["probes"][0]["result"] == "ok"
+    assert rec["dispatch_probes"]
+    assert rec["dispatch_probes"][0]["name"] == "delegation_dispatch"
+    assert rec["dispatch_probes"][0]["result"] == "fail"
+    assert rec.get("blocks_dispatch") is True
+    assert any("8080" in item for item in rec.get("unverified_outages") or [])
 
 
 def test_heartbeat_failing_probe_is_recorded_with_evidence(tmp_path, monkeypatch):

@@ -111,8 +111,24 @@ def official_outages(probes: Sequence[ProbeRecord]) -> tuple[dict[str, Any], ...
 
 
 def should_block_dispatch(probes: Sequence[ProbeRecord]) -> bool:
-    """Dispatch is blocked only by a same-run failing probe."""
+    """Dispatch is blocked only by a same-run failing probe.
+
+    Unverified outage claims (model prose with no matching probe) are not
+    probes and must never set this to True.
+    """
     return any(p.is_down for p in probes)
+
+
+def merge_tick_probes(*groups: Sequence[ProbeRecord] | None) -> tuple[ProbeRecord, ...]:
+    """Kernel health + dispatch-ledger failures for one outage-gate call.
+
+    Only these records may report an outage or set ``blocks_dispatch``.
+    """
+    merged: list[ProbeRecord] = []
+    for group in groups:
+        if group:
+            merged.extend(group)
+    return tuple(merged)
 
 
 def format_outage_report(probes: Sequence[ProbeRecord]) -> str:

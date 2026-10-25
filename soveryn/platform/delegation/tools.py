@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from soveryn.platform.delegation.dispatch import dispatch as commit_dispatch
 from soveryn.platform.delegation.store import DelegationStore
 from soveryn.platform.delegation.validate import acceptance_problem
 from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
@@ -29,32 +30,6 @@ from soveryn.platform.tools.registry import ToolArgError, ToolRegistry, ToolSpec
 # "./script" remains excluded: acceptance runs as a real subprocess and a bare
 # script prefix would let it execute ANY file in the worktree (which Scotty
 # writes). Constrain the entrypoint to a known runner.
-
-
-# Statuses in which a task is still live — a second dispatch of the same
-# objective would duplicate work rather than retry it. A `failed` or `rejected`
-# task is deliberately NOT here: re-dispatching after a failure is legitimate.
-_LIVE_STATUSES: frozenset[str] = frozenset({"dispatched", "executing", "in_review"})
-
-
-def _find_open_duplicate(store: DelegationStore, objective: str):
-    """Return a live task with the same objective, or None.
-
-    Compared on normalised whitespace and case so that a re-worded-but-identical
-    objective still matches; the five dispatches on 2026-07-28 differed only in
-    incidental spacing.
-    """
-    def norm(text: str) -> str:
-        return " ".join((text or "").split()).casefold()
-
-    target = norm(objective)
-    try:
-        for task in store.list_tasks():
-            if task.status in _LIVE_STATUSES and norm(task.objective) == target:
-                return task
-    except Exception:
-        return None      # a guard that breaks dispatch is worse than no guard
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -95,56 +70,23 @@ def build_dispatch_task_tool(
         if problem is not None:
             raise ToolArgError(problem)
 
-        # ── Duplicate guard ──────────────────────────────────────────────
-        # 2026-07-28, 20:50→22:50: the same Cross-Rail task was dispatched five
-        # times, once per heartbeat pulse, each run waking Scotty for 10–20
-        # minutes of GPU. The work had already been merged that morning and one
-        # dispatch was already sitting in_review. Nothing she could read said
-        # so — the board still showed Ready, and a heartbeat pulse carries no
-        # memory of what a previous pulse dispatched.
-        #
-        # She was told in conversation that it was done. That did not survive
-        # into the next pulse, because a fact stated on one rail has no path
-        # into an autonomous session. So this is enforced in code, where it
-        # cannot be forgotten, rather than in prose she may not be carrying.
-        #
-        # Returns the EXISTING task rather than raising: the useful answer to
-        # "dispatch this" when it is already running is "you already did, here
-        # it is, here is its status" — which is also the read path that was
-        # missing.
-        existing = _find_open_duplicate(store, objective.strip())
-        if existing is not None:
-            return {
-                "task_id": existing.id,
-                "status": existing.status,
-                "duplicate": True,
-                "message": (
-                    f"Already dispatched. Task {existing.id} was created at "
-                    f"{existing.created_at} and is currently '{existing.status}'. "
-                    "Not dispatching again. Check its status or wait for review "
-                    "rather than re-sending."
-                ),
-            }
-
-        # What happened last time this was asked. Not a block — the retry that
-        # fixed the 2026-08-07 connection leak was legitimate and must stay
-        # possible. But the same direction went out at least seven times in ten
-        # days because nothing put the previous outcome in front of her at the
-        # moment she asked again.
+        # Duplicate + commit live in dispatch(): the id is returned only after
+        # the ledger row is readable. A write miss raises — never "sent".
         from soveryn.platform.delegation.history import (
             dispatch_warning,
             prior_attempts,
         )
         prior = prior_attempts(store, objective.strip())
 
-        task_id = store.create_task(
+        committed = commit_dispatch(
+            store,
             dispatched_by=owner_agent,
             objective=objective.strip(),
             scope=scope.strip(),
             acceptance=acceptance.strip(),
         )
-        result: dict[str, Any] = {"task_id": task_id, "status": "dispatched"}
-        if prior:
+        result: dict[str, Any] = committed.as_dict()
+        if prior and not committed.duplicate:
             result["prior_attempts"] = [p.as_dict() for p in prior]
             result["warning"] = dispatch_warning(prior)
         return result
@@ -202,7 +144,9 @@ def build_dispatch_task_tool(
 # build_task_status_tool
 # ---------------------------------------------------------------------------
 
-_OPEN_STATUSES: frozenset[str] = frozenset({"dispatched", "executing", "in_review"})
+_OPEN_STATUSES: frozenset[str] = frozenset(
+    {"dispatched", "executing", "in_review", "recorded"}
+)
 _TERMINAL_STATUSES: frozenset[str] = frozenset({"landed", "rejected", "failed"})
 _RECENT_LIMIT = 8
 # Shorter than this stays an exact-id miss. Eight characters is the prefix

@@ -314,6 +314,7 @@ class HeartbeatDaemon:
         tick_id = str(uuid.uuid4())
         triggered_at = now.isoformat()
         kernel_probes: list = []
+        dispatch_probes: list = []
         if not eligibility.eligible:
             # Skipped tick — log and return.
             self._write_log_row(
@@ -418,6 +419,30 @@ class HeartbeatDaemon:
             except Exception:
                 logger.debug(
                     "heartbeat: kernel brain probe unavailable", exc_info=True
+                )
+            try:
+                from soveryn.platform.delegation.dispatch import (
+                    as_probe_records,
+                    format_dispatch_error_block,
+                    recent_dispatch_probes,
+                )
+                from soveryn.platform.inference.outage import (
+                    apply_outage_gate,
+                    merge_tick_probes,
+                )
+
+                dispatch_probes = as_probe_records(recent_dispatch_probes())
+                kernel_brain_section = (
+                    (kernel_brain_section or "") + format_dispatch_error_block()
+                )
+                # Standing note sees ledger-write failures the same as kernel
+                # probes. Unverified claims still cannot block.
+                last_note = apply_outage_gate(
+                    last_note, merge_tick_probes(kernel_probes, dispatch_probes)
+                ).text
+            except Exception:
+                logger.debug(
+                    "heartbeat: dispatch probe block unavailable", exc_info=True
                 )
             prompt = build_heartbeat_prompt(
                 minutes_since_last_heartbeat=minutes_since,
@@ -571,9 +596,21 @@ class HeartbeatDaemon:
             note = (response_text or "").strip()
             outage_verdict = None
             try:
-                from soveryn.platform.inference.outage import apply_outage_gate
+                from soveryn.platform.delegation.dispatch import (
+                    as_probe_records,
+                    recent_dispatch_probes,
+                )
+                from soveryn.platform.inference.outage import (
+                    apply_outage_gate,
+                    merge_tick_probes,
+                )
 
-                outage_verdict = apply_outage_gate(note, kernel_probes)
+                # A pulse tool call may have written new ledger-fail probes.
+                dispatch_probes = as_probe_records(recent_dispatch_probes())
+                # Dispatch failures feed the gate as probes. Unverified
+                # outage claims (no matching probe) never set blocks_dispatch.
+                gate_probes = merge_tick_probes(kernel_probes, dispatch_probes)
+                outage_verdict = apply_outage_gate(note, gate_probes)
                 note = outage_verdict.text
             except Exception:
                 logger.debug(
@@ -644,6 +681,10 @@ class HeartbeatDaemon:
                     # only in the [heartbeat] session, so this is always False.
                     "surfaced": False,
                     "probes": [p.as_dict() for p in kernel_probes],
+                    "dispatch_probes": [
+                        p.as_dict() if hasattr(p, "as_dict") else p
+                        for p in dispatch_probes
+                    ],
                     "blocks_dispatch": bool(
                         outage_verdict.blocks_dispatch if outage_verdict is not None else False
                     ),

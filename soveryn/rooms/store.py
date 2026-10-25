@@ -305,6 +305,22 @@ def ask_peer(
 
     # Route as CoS so we don't require a `jon` citizen row (FK). Jon is the
     # human operating the room UI; the commission is still attributed in body.
+    # Forge/Kernel handoffs write the delegation ledger first — a commission
+    # id is not a sent receipt.
+    ledger_id = None
+    from soveryn.platform.delegation.dispatch import is_forge_assignee
+
+    if is_forge_assignee(peer):
+        from soveryn.platform.delegation.dispatch import dispatch_forge_handoff
+
+        committed = dispatch_forge_handoff(
+            dispatched_by=from_id or COS_ID,
+            objective=brief[:400],
+            scope=f"room:{session_id}:{peer}",
+            acceptance=body[:800],
+        )
+        ledger_id = committed.task_id
+
     with connect(Path(citizens_db)) as conn:
         result = house_post.route_via_cos(
             conn,
@@ -314,12 +330,17 @@ def ask_peer(
             at=at,
             subject=f"room ask {peer}",
         )
+    if ledger_id:
+        result["task_id"] = ledger_id
+        result["sent"] = True
 
     marker = MESSAGED_MARKER.format(peer=peer)
+    sent_id = ledger_id or result.get("commission_id")
+    sent_label = "Task" if ledger_id else "Commission"
     room_line = (
         f"{marker} Messaged {peer.title()} — commissioned.\n"
         f"Brief: {brief}\n"
-        f"Commission `{result.get('commission_id')}`."
+        f"{sent_label} `{sent_id}`."
     )
     conv.save_turn(session_id, COS_ID, "system", room_line, source="room")
 
@@ -337,6 +358,7 @@ def ask_peer(
         "at": at,
         "brief": brief,
         "commission_id": result.get("commission_id"),
+        "task_id": ledger_id,
         "directive_post_id": result.get("directive_post_id"),
         "room_session_id": session_id,
         "dm_session_id": dm,

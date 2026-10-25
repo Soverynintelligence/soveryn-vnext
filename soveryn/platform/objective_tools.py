@@ -15,6 +15,12 @@ from soveryn.platform.tools.registry import ToolRegistry, ToolSpec
 _DEFAULT_DB = SoverynPaths.root() / "data" / "citizens.db"
 
 
+def _is_forge_owner(owner_id: str) -> bool:
+    from soveryn.platform.delegation.dispatch import is_forge_assignee
+
+    return is_forge_assignee(owner_id)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -36,6 +42,28 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
         enqueue = args.get("enqueue", True)
         if isinstance(enqueue, str):
             enqueue = enqueue.strip().lower() not in ("0", "false", "no")
+        ledger_id = None
+        if _is_forge_owner(owner_id):
+            from soveryn.platform.delegation.dispatch import (
+                DispatchError,
+                dispatch_forge_handoff,
+            )
+
+            try:
+                committed = dispatch_forge_handoff(
+                    dispatched_by=owner_agent,
+                    objective=title or brief[:400],
+                    scope=f"objective:{desk}:{owner_id}",
+                    acceptance=(success or brief)[:800],
+                )
+            except DispatchError as exc:
+                return {
+                    "ok": False,
+                    "sent": False,
+                    "error": str(exc),
+                    "probe": exc.probe(),
+                }
+            ledger_id = committed.task_id
         try:
             with connect(_db()) as conn:
                 row = objectives_mod.assign(
@@ -65,7 +93,7 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                         objectives_mod.commission_body_for(row),
                         at=_now(),
                     )
-            return {
+            out = {
                 "ok": True,
                 "objective_id": row["id"],
                 "desk": row["desk"],
@@ -78,6 +106,10 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                     f"to verify."
                 ),
             }
+            if ledger_id:
+                out["task_id"] = ledger_id
+                out["sent"] = True
+            return out
         except (ValueError, KeyError) as exc:
             return {"ok": False, "error": str(exc)}
         except Exception as exc:
@@ -177,6 +209,9 @@ def register_objective_tools(registry: ToolRegistry, *, owner_agent: str) -> Non
                 "catalogs first, not the open web), hl (History's Ledger), soveryn "
                 "(house/product). Owners: eve (research+ship) or forge (build). "
                 "Vett/Scotty are parked. Kernel is the build brain, not a citizen. "
+                "A Forge/Kernel assign is sent only when the tool returns "
+                "task_id from the delegation ledger — do not report "
+                "commission_id or objective_id as sent. "
                 "After they finish, check objective_status "
                 "and call objective_verify when Jon accepts."
             ),

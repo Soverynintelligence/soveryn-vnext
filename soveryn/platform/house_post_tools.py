@@ -26,6 +26,12 @@ def _db() -> Path:
     return Path(os.environ.get("SOVERYN_CITIZENS_DB") or _DEFAULT_DB)
 
 
+def _is_forge_target(to_id: str) -> bool:
+    from soveryn.platform.delegation.dispatch import is_forge_assignee
+
+    return is_forge_assignee(to_id)
+
+
 def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> None:
     def send(args: Mapping[str, Any]) -> dict[str, Any]:
         to_id = (args.get("to_id") or "").strip().lower()
@@ -39,6 +45,29 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
 
             when = _now()
             commission_id = None
+            ledger_id = None
+            if _is_forge_target(to_id):
+                # Ledger first. A commission id is not a sent receipt.
+                from soveryn.platform.delegation.dispatch import (
+                    DispatchError,
+                    dispatch_forge_handoff,
+                )
+
+                try:
+                    committed = dispatch_forge_handoff(
+                        dispatched_by=owner_agent,
+                        objective=(subject or body)[:400],
+                        scope=f"house_post:{to_id}",
+                        acceptance=body[:800],
+                    )
+                except DispatchError as exc:
+                    return {
+                        "ok": False,
+                        "sent": False,
+                        "error": str(exc),
+                        "probe": exc.probe(),
+                    }
+                ledger_id = committed.task_id
             with connect(_db()) as conn:
                 # Aetheria asking a peer to do work must hit the commission
                 # queue — bare house_post is silent mail and Vett never wakes.
@@ -80,6 +109,9 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                     out = {
                         "ok": True, "post_id": pid, "to_id": to_id, "kind": kind,
                     }
+            if ledger_id:
+                out["task_id"] = ledger_id
+                out["sent"] = True
             # Project CoS↔peer posts into messenger-style room + DM chip.
             try:
                 from soveryn.rooms import context as room_ctx
@@ -110,7 +142,7 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                 pass
             return out
         except Exception as exc:
-            return {"ok": False, "error": repr(exc)}
+            return {"ok": False, "sent": False, "error": repr(exc)}
 
     def list_posts(args: Mapping[str, Any]) -> dict[str, Any]:
         box = (args.get("box") or "inbox").strip()
@@ -148,7 +180,10 @@ def register_house_post_tools(registry: ToolRegistry, *, owner_agent: str) -> No
                 "brain, not a citizen. When Jon says 'ask Eve "
                 "to…' or 'have Forge check…' — call this in the SAME turn with "
                 "to_id set and a clear brief in body. Prefer kind=request "
-                "(default). Kinds: memo, request, report, directive, ack."
+                "(default). A Forge/Kernel handoff is sent only when the tool "
+                "returns task_id from the delegation ledger — do not report "
+                "commission_id as sent. Kinds: memo, request, report, "
+                "directive, ack."
             ),
             schema={
                 "type": "object",

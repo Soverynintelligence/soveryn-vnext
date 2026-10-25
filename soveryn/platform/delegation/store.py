@@ -71,6 +71,10 @@ class IllegalTransition(Exception):
     """Raised when set_status is called with a transition not in _LEGAL."""
 
 
+class LedgerWriteError(RuntimeError):
+    """Insert committed nothing readable. Callers must not claim the task was sent."""
+
+
 # ─── Dataclass ───────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -152,16 +156,33 @@ class DelegationStore:
         objective: str,
         scope: str,
         acceptance: str,
+        status: str = "dispatched",
     ) -> str:
-        """Insert a new task row with status 'dispatched'. Returns the new task id (uuid4)."""
+        """Insert a new task row. Returns the id only after the row is readable.
+
+        ``status`` is ``dispatched`` (engine drain) or ``recorded`` (ledger
+        proof of a house_post / objective / room handoff — worker ignores it).
+        """
+        if status not in {"dispatched", "recorded"}:
+            raise ValueError(f"create_task status must be dispatched or recorded, got {status!r}")
         task_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
-        with self._conn() as conn:
-            conn.execute(
-                "INSERT INTO delegation_tasks "
-                "(id, dispatched_by, objective, scope, acceptance, status, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, 'dispatched', ?, ?)",
-                (task_id, dispatched_by, objective, scope, acceptance, now, now),
+        try:
+            with self._conn() as conn:
+                conn.execute(
+                    "INSERT INTO delegation_tasks "
+                    "(id, dispatched_by, objective, scope, acceptance, status, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (task_id, dispatched_by, objective, scope, acceptance, status, now, now),
+                )
+        except Exception as exc:
+            raise LedgerWriteError(
+                f"delegation ledger insert failed; not sent: {exc}"
+            ) from exc
+        task = self.get_task(task_id)
+        if task is None:
+            raise LedgerWriteError(
+                f"delegation ledger write did not persist {task_id}; not sent"
             )
         return task_id
 
