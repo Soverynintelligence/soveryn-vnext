@@ -11,7 +11,7 @@
 <link rel="manifest" href="/static/messages/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/messages/icons/icon-180.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500&display=swap">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20261103flat">
 <style>
   :root {
     --bg: #000; --row: #0c0b0a; --line: rgba(255,255,255,0.08);
@@ -121,192 +121,41 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .meta .preview.hot { color: var(--mint); }
+  /* cc revamp: home pane next to the sidebar */
+  .mx-empty { padding: 40px 32px; color: var(--mute); max-width: 560px; }
+  .mx-empty h2 { color: var(--ink); font-size: 22px; margin: 0 0 8px; }
+  @media (max-width: 899px) {
+    .mx-empty { display: none; }
+  }
 </style>
 <link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
-<body class="sd">
-  <header>
-    <div class="brand">
-      <h1>Messages</h1>
-      <p class="sub">Your house — talk to them here</p>
+<body class="sd" data-mx-page="home">
+<!--mx-sidebar-->
+  <main class="mx-home" data-testid="messages-home">
+    <!-- Server-rendered so phones see this even if JS/cache is stale -->
+    <div data-push-banner role="region" aria-label="House alerts" data-tone="ask">
+      <div class="push-copy">
+        <strong>House alerts</strong> — Gate and needs-you from any citizen (not only Signal).<br>
+        <span class="push-note">On iPhone: Safari Share → <strong>Add to Home Screen</strong>, open the SOVERYN icon, then tap Allow below.</span>
+      </div>
+      <button type="button" data-push-allow class="push-allow">Allow house alerts</button>
     </div>
-    <div class="links">
-      <a class="muted" href="/citizens">Staff</a>
-      <a class="muted" href="/command-center">Desk</a>
-    </div>
-  </header>
-  <!-- Server-rendered so phones see this even if JS/cache is stale -->
-  <div data-push-banner role="region" aria-label="House alerts" data-tone="ask">
-    <div class="push-copy">
-      <strong>House alerts</strong> — Gate and needs-you from any citizen (not only Signal).<br>
-      <span class="push-note">On iPhone: Safari Share → <strong>Add to Home Screen</strong>, open the SOVERYN icon, then tap Allow below.</span>
-    </div>
-    <button type="button" data-push-allow class="push-allow">Allow house alerts</button>
-  </div>
-  <ul class="list" data-testid="messages-list" aria-label="Your house">
-    <!-- filled by JS -->
-  </ul>
+    <section class="mx-empty" aria-label="Pick a conversation">
+      <h2>Pick someone to talk to</h2>
+      <p>Your house is on the left. The dot is live status from each citizen's model seat: green live, amber working, red down.</p>
+    </section>
+  </main>
+  <script>
+  // Phone: alerts banner sits under the Messages title, above the list (as before).
+  (function () {
+    if (!window.matchMedia("(max-width: 899px)").matches) return;
+    var b = document.querySelector("[data-push-banner]"), s = document.querySelector(".mx-side .mx-search");
+    if (b && s) s.parentNode.insertBefore(b, s);
+  })();
+  </script>
 <script src="/messages-push-client.js?v=20260825c" defer></script>
-<script src="/static/citizen-icons.js?v=20260901bots3"></script>
-<script>
-(function () {
-  // Fleet freeze 2026-08-27: MESSAGES_CONTACTS only (Vett/Scotty parked).
-  const CONTACTS = [
-    { id: "aetheria", name: "Aetheria", role: "Runs the house", letter: "A" },
-    { id: "forge", name: "Forge", role: "Builds with you", letter: "F" },
-    { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
-    // Teammates overnight → Messages (merge). Read-only inboxes.
-    { id: "t_critic", name: "Critic", role: "Overnight review", letter: "C" },
-    { id: "t_scout", name: "Scout", role: "Overnight scan", letter: "Sc" },
-  ];
+<script src="/static/citizen-icons.js?v=20261103flat"></script>
 
-  const list = document.querySelector("[data-testid=messages-list]");
-  const SEEN_KEY = "soveryn_messages_seen_v1";
-
-  function esc(s) {
-    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  }
-
-  function loadSeen() {
-    try {
-      return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {};
-    } catch (_) {
-      return {};
-    }
-  }
-
-  function isUnread(agent, updatedAt) {
-    if (!updatedAt) return false;
-    const seenAt = loadSeen()[agent];
-    if (!seenAt) return true; // never opened this contact — activity waiting
-    try {
-      return new Date(updatedAt).getTime() > new Date(seenAt).getTime();
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function rel(iso) {
-    if (!iso) return "";
-    try {
-      const t = new Date(iso).getTime();
-      const d = Date.now() - t;
-      if (d < 60000) return "now";
-      if (d < 3600000) return Math.floor(d/60000) + "m";
-      if (d < 86400000) return Math.floor(d/3600000) + "h";
-      return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    } catch { return ""; }
-  }
-
-  const INBOX_ONLY = { t_critic: true, t_scout: true };
-
-  function isRoomSession(s) {
-    return ((s && s.title) || "").trim().startsWith("[room:");
-  }
-
-  // Match message_thread: don't preview heartbeat/commission/room as the DM.
-  function isResumableDmSession(s) {
-    if (!s || !s.session_id) return false;
-    const t = ((s && s.title) || "").trim();
-    if (!t) return true;
-    if (isRoomSession(s)) return false;
-    if (/^\[(heartbeat|direct:|commission|signal|specialist|webhook)/i.test(t)) return false;
-    if (t.startsWith("automation:")) return false;
-    if (t.startsWith("verify-")) return false;
-    if (t.startsWith("[m]")) return true;
-    if (t.startsWith("[")) return false;
-    return true;
-  }
-
-  async function preview(agent) {
-    const inbox = !!INBOX_ONLY[agent];
-    const fallback = inbox ? "Overnight inbox" : "Tap to talk";
-    try {
-      const r = await fetch("/sessions?agent=" + encodeURIComponent(agent) + "&limit=30");
-      if (!r.ok) return { text: fallback, hot: false, when: "" };
-      const d = await r.json();
-      const list = d.sessions || [];
-      const s = inbox
-        ? (list[0] || null)
-        : (list.find(isResumableDmSession) || null);
-      if (!s) return { text: fallback, hot: false, when: "", updatedAt: null };
-      let text = inbox ? (s.title || "Overnight inbox") : "Continue conversation";
-      let hot = false;
-      if (agent === "aetheria" && s.session_id) {
-        try {
-          const c = await fetch("/api/rooms/collabs?dm_session_id=" + encodeURIComponent(s.session_id));
-          if (c.ok) {
-            const cj = await c.json();
-            const active = (cj.collabs || []).find((ev) => {
-              const st = (ev.state || "").toLowerCase();
-              const overlay = (ev.commission_state || "").toLowerCase();
-              if (st === "done" || st === "failed" || overlay === "done" || overlay === "failed") return false;
-              if (st !== "working" && overlay !== "queued" && overlay !== "running") return false;
-              if (!ev.at) return false;
-              const age = Date.now() - new Date(ev.at).getTime();
-              return age < 45 * 60 * 1000;
-            });
-            if (active && active.peer) {
-              text = "Working with " + active.peer;
-              hot = true;
-            }
-          }
-        } catch (_) {}
-      }
-      if (!hot && !inbox && s.title && !String(s.title).startsWith("[")) text = s.title;
-      return {
-        text,
-        hot,
-        when: rel(s.updated_at),
-        session: s.session_id,
-        updatedAt: s.updated_at || null,
-      };
-    } catch {
-      return { text: fallback, hot: false, when: "", updatedAt: null };
-    }
-  }
-
-  async function paint() {
-    if (!list) return;
-    try {
-      const rows = await Promise.all(CONTACTS.map(async (c) => {
-        const p = await preview(c.id);
-        const href = "/messages/" + encodeURIComponent(c.id);
-        const unread = isUnread(c.id, p.updatedAt);
-        const dot = unread
-          ? '<span class="unread-dot" title="New" aria-label="Unread"></span>'
-          : "";
-        return (
-          '<li><a class="row' + (unread ? " unread" : "") + '" href="' + href + '"' +
-            (unread ? ' aria-label="' + esc(c.name) + ', unread"' : "") + ">" +
-            '<div class="av-wrap" data-pick-shape="' + esc(c.id) + '" title="Change shape">' +
-              (typeof soverynCitizenIcon === 'function'
-              ? soverynCitizenIcon(c.id, { size: 56, className: 'avatar', letter: c.letter, busy: false, label: c.name })
-              : '<div class="avatar" data-agent="' + esc(c.id) + '">' + esc(c.letter) + '</div>') +
-              dot +
-            "</div>" +
-            '<div class="meta">' +
-              '<div class="name"><span>' + esc(c.name) + "</span><time>" + esc(p.when) + "</time></div>" +
-              '<div class="preview' + (p.hot ? " hot" : "") + '">' + esc(p.text) + "</div>" +
-            "</div>" +
-          "</a></li>"
-        );
-      }));
-      list.innerHTML = rows.join("");
-    } catch (e) {
-      list.innerHTML =
-        '<li style="padding:16px;color:var(--mute)">Couldn\'t load contacts — ' +
-        esc(e.message || "network error") + "</li>";
-    }
-  }
-
-  paint();
-  // Returning from a thread (bfcache / tab focus) — refresh dots.
-  window.addEventListener("pageshow", () => { paint(); });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") paint();
-  });
-})();
-</script>
 </body>
 </html>

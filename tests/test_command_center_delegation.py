@@ -7,7 +7,7 @@ Run with:
 
 
 def _html(app_state):
-    return app_state.get("/command-center").get_data(as_text=True)
+    return app_state.get("/house").get_data(as_text=True)  # panels moved to House (cc-redesign)
 
 
 # ── Structural presence ────────────────────────────────────────────────────────

@@ -53,6 +53,11 @@ from soveryn.platform.tools.registry import ToolRegistry
 logger = logging.getLogger(__name__)
 
 
+def _staging_mode() -> bool:
+    import os as _o
+    return _o.environ.get("SOVERYN_STAGING", "").strip() == "1"
+
+
 def create_app(
     env: EnvConfig | None = None,
     conv_store: ConversationStore | None = None,
@@ -66,6 +71,12 @@ def create_app(
     app = Flask("soveryn")
     app.config.setdefault("SOVERYN_REQUIRE_LOCALHOST", True)
     app.config.setdefault("SOVERYN_VERSION", __version__)
+    # STAGING (cc-redesign 2026-11-03): no background workers, no plugin
+    # workers, no coord dispatch. Staging must never act on the world.
+    if _staging_mode():
+        for _k in ("SOVERYN_START_DELEGATION_WORKER", "SOVERYN_START_CITIZENS_WORKER",
+                   "SOVERYN_START_MESSENGER_WORKER", "SOVERYN_START_LEAD_WATCH"):
+            app.config[_k] = False
     import os as _os
     _delegation_flag = _os.environ.get("SOVERYN_START_DELEGATION_WORKER", "").strip().lower()
     if _delegation_flag in ("0", "false", "no", "off"):
@@ -1193,7 +1204,8 @@ def create_app(
             coord_worker = CoordEventWorker(
                 coord_event_bus, dispatcher, lattice_db_path=env.lattice_db,
             )
-            coord_worker.start()
+            if not _staging_mode():
+                coord_worker.start()
 
         # Messenger delivery worker — drains m_outbound_queue every 5s,
         # resolving each pending intent into a conversation turn so the PWA
@@ -1220,7 +1232,8 @@ def create_app(
         try:
             from soveryn.plugins.loader import start_background_workers
 
-            start_background_workers(app)
+            if not _staging_mode():
+                start_background_workers(app)
         except Exception:
             logger.exception("plugin background workers not started")
 
@@ -1776,5 +1789,9 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(delegation_bp)
     # Register ui_bp BEFORE ui_compat_bp so / is owned by the native UI.
     # The legacy bridge owns /legacy and /legacy/mobile only.
+    from soveryn.app.routes.api_kernel_desk import bp as api_kernel_desk_bp
+    app.register_blueprint(api_kernel_desk_bp)
+    from soveryn.app.routes.api_messages_presence import bp as api_messages_presence_bp
+    app.register_blueprint(api_messages_presence_bp)
     app.register_blueprint(ui_bp)
     app.register_blueprint(ui_compat_bp)

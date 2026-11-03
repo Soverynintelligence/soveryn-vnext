@@ -1,368 +1,147 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SOVERYN · Citizens</title>
-<meta name="theme-color" content="#000000">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOVERYN · Staff</title>
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
-<link rel="stylesheet" href="/static/lab-console.css">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20261103flat">
 <style>
-  body { min-height: 100vh; }
-  .page { max-width: 1100px; margin: 0 auto; }
-
-  .mast {
-    display: grid;
-    border-bottom: 1px solid var(--line);
-  }
-  @media (min-width: 900px) {
-    .mast { grid-template-columns: 1.2fr 0.8fr; }
-  }
-  .mast .say {
-    padding: 28px 22px;
-    border-bottom: 1px solid var(--line);
-  }
-  @media (min-width: 900px) {
-    .mast .say { border-bottom: none; border-right: 1px solid var(--line); }
-  }
-  .mast h1 {
-    margin: 0 0 12px;
-    font-size: clamp(1.15rem, 2.4vw, 1.5rem);
-    font-weight: 500;
-    line-height: 1.38;
-    letter-spacing: -0.01em;
-    max-width: 28ch;
-  }
-  .mast p {
-    margin: 0;
-    font-family: var(--sans);
-    color: var(--ink-2);
-    font-size: 0.95rem;
-    line-height: 1.62;
-    max-width: 52ch;
-  }
-  .mast .seal {
-    padding: 22px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .mast .seal img { width: min(160px, 40vw); height: auto; }
-
-  .actions {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 12px 22px;
-    border-bottom: 1px solid var(--line);
-    background: var(--panel);
-  }
-  .reading {
-    font-size: 0.62rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
-
-  .roster { display: flex; flex-direction: column; }
-  .citizen {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px 18px;
-    padding: 18px 22px;
-    border-top: 1px solid var(--line);
-  }
-  .citizen:first-child { border-top: none; }
-  .citizen .name {
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: lowercase;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .meta {
-    margin-top: 6px;
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
-    color: var(--ink-3);
-    line-height: 1.55;
-  }
-  .meta strong { color: var(--ink-2); font-weight: 500; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .side {
-    text-align: right;
-    font-size: 0.62rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    min-width: 120px;
-  }
-  .side .status-label {
-    color: var(--ink);
-    margin-bottom: 6px;
-    font-size: 0.7rem;
-  }
-  .err { color: var(--down); font-size: 0.78rem; margin-top: 8px; font-family: var(--sans); }
-  .empty { color: var(--ink-3); font-size: 0.72rem; padding: 18px 22px; letter-spacing: 0.08em; }
-
-  form.commission { display: flex; flex-direction: column; gap: 10px; }
-  form.commission .row { display: flex; gap: 8px; flex-wrap: wrap; }
-  form.commission select,
-  form.commission input[type=text],
-  form.commission textarea {
-    font-family: var(--mono);
-    color: var(--ink);
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 8px 12px;
-  }
-  form.commission select,
-  form.commission input[type=text] { min-width: 140px; }
-  form.commission textarea {
-    width: 100%;
-    min-height: 90px;
-    resize: vertical;
-    font-family: var(--sans);
-    font-size: 0.95rem;
-  }
-  form.commission .row.end { justify-content: flex-end; align-items: center; }
-
-  .commissions { display: flex; flex-direction: column; }
-  .comm {
-    border-top: 1px solid var(--line);
-    padding: 14px 22px;
-    font-size: 0.78rem;
-  }
-  .comm:first-child { border-top: none; }
-  .comm .head {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 6px;
-    font-size: 0.62rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-  }
-  .comm .state { color: var(--gold); }
-  .comm .state.done { color: var(--ok); }
-  .comm .state.failed { color: var(--down); }
-  .comm .state.running { color: var(--gold); }
-  .comm .body {
-    font-family: var(--sans);
-    color: var(--ink-2);
-    white-space: pre-wrap;
-    font-size: 0.92rem;
-    line-height: 1.55;
-  }
-  .comm .ref {
-    margin-top: 6px;
-    color: var(--ink-3);
-    word-break: break-all;
-    font-size: 0.68rem;
-  }
-  .spawn-note {
-    padding: 12px 22px;
-    border-bottom: 1px solid var(--line);
-    font-family: var(--sans);
-    font-size: 0.88rem;
-    color: var(--ink-3);
-    line-height: 1.55;
-  }
-  .chip.conn { border-color: var(--line); color: var(--ink-3); }
-  .chip.conn.armed { color: var(--ok, #6a9); border-color: rgba(100,160,120,.45); }
-  .chip.conn.unarmed { color: var(--gold, #c9a227); border-color: rgba(201,162,39,.4); }
-  .spawn-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px 16px;
-    padding: 14px 22px;
-    border-top: 1px solid var(--line);
-    align-items: center;
-  }
-  .spawn-row:first-of-type { border-top: none; }
-  .spawn-row .nm {
-    font-size: 0.9rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .spawn-row .meta { margin-top: 4px; }
-  footer.lab-foot {
-    padding: 22px;
-    color: var(--ink-3);
-    font-size: 0.62rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    border-top: 1px solid var(--line);
+  :root{--bg:#0d0f10;--panel:#15181a;--panel-2:#0f1213;--line:rgba(232,227,213,.10);--ink:#ece6d6;--dim:rgba(232,227,213,.55);
+        --acc:#c0824f;--ok:#5ee1a0;--warn:#d4a827;--bad:#e0645a;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+  *{box-sizing:border-box} html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+  a{color:inherit} .page{max-width:1440px;margin:0 auto;padding:18px 22px 40px}
+  .plate{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .plate .id{display:flex;gap:10px;align-items:center;text-decoration:none}
+  .plate .id b{letter-spacing:.18em;font-size:13px} .plate .id i{display:block;font-style:normal;color:var(--dim);font-size:11px}
+  .plate .right{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .reading{font-size:12px;color:var(--dim)}
+  .act{display:inline-block;padding:6px 12px;border-radius:6px;border:1px solid var(--line);text-decoration:none;font-size:12px;background:var(--panel-2);color:var(--ink);cursor:pointer;font-family:inherit}
+  .act.primary{background:var(--acc);border-color:var(--acc);color:#1a120b;font-weight:600}
+  .act:disabled{opacity:.4;cursor:default}
+  h2.sd-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:20px 0 10px;font-weight:600}
+  h2.sd-h .r{text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .p-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .p-head h3{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .p-head .r{font-size:12px;color:var(--dim)}
+  .health{font-size:12px;color:var(--dim);margin:12px 0 0} .health strong{color:var(--ink)}
+  .note{font-size:12px;color:var(--dim);margin:0 0 10px;line-height:1.5} .note strong{color:var(--ink);font-weight:500}
+  .note code{font:11px var(--mono)}
+  /* roster: Desk agent cards, richer */
+  .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px}
+  .citizen{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+  .citizen .name{font-weight:600;display:flex;align-items:center;gap:10px;font-size:15px}
+  .meta{margin-top:6px;font-size:12px;color:var(--dim);line-height:1.5;word-break:break-word} .meta strong{color:var(--ink);font-weight:500}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font:11px var(--mono);border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--dim)}
+  .chip.disabled{opacity:.5;text-decoration:line-through}
+  .chip.conn.armed{color:var(--ok);border-color:rgba(94,225,160,.35)} .chip.conn.unarmed{color:var(--warn);border-color:rgba(212,168,39,.35)}
+  .side{text-align:right;font-size:11px;color:var(--dim);min-width:110px}
+  .side .status-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--dim);flex:none}
+  .dot.resident,.dot.on_duty{background:var(--ok)} .dot.unobserved{background:var(--warn)} .dot.offline,.dot.retired{background:var(--bad)}
+  .err{color:var(--bad);font-size:12px;margin-top:6px}
+  .empty{color:var(--dim);font-size:13px;padding:6px 0}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+  form.commission{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+  form.commission .row{display:flex;gap:8px;flex-wrap:wrap} form.commission .row.end{justify-content:flex-end;align-items:center}
+  form.commission select,form.commission input[type=text],form.commission textarea{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:13px system-ui,-apple-system,Segoe UI,sans-serif}
+  form.commission textarea{width:100%;min-height:76px;resize:vertical}
+  .commissions{display:flex;flex-direction:column;gap:8px;max-height:560px;overflow:auto}
+  .comm{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--panel-2)}
+  .comm .head{display:flex;justify-content:space-between;gap:10px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .comm .state{color:var(--warn)} .comm .state.done{color:var(--ok)} .comm .state.failed{color:var(--bad)}
+  .comm .body{white-space:pre-wrap;font-size:13px;color:#d9d3c4;line-height:1.5}
+  .comm .ref{margin-top:4px;font:11px var(--mono);color:var(--dim);word-break:break-all}
+  .spawn-row{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)} .spawn-row:first-child{border-top:0}
+  .spawn-row .nm{font-weight:600;display:flex;gap:8px;align-items:center}
+  details.fold summary{cursor:pointer;color:var(--dim);font-size:12px}
+  @media (max-width:980px){.grid2{grid-template-columns:1fr}.roster{grid-template-columns:1fr}}
+  /* phone: logo + nav on their own rows, census reading + refresh in one tidy row */
+  @media (max-width:760px){
+    .plate{flex-wrap:wrap;gap:10px 12px}
+    .plate .right{margin-left:0;flex:1 1 100%;flex-wrap:nowrap;justify-content:space-between;gap:10px}
+    .plate .right .reading{flex:1;min-width:0;font-size:11px;line-height:1.35}
+    .plate .right .act{flex:0 0 auto;white-space:nowrap}
   }
 </style>
-<link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
-<body class="lab sd" data-lab data-testid="citizens-board">
-
-<div class="plate">
-  <a class="id" href="/messages">
-    <img src="/static/lab-seal.png" alt="" width="44" height="44">
-    <span><b>SOVERYN</b><i>House staff</i></span>
-  </a>
-  <nav>
-    <a href="/messages" class="keep">Messages</a>
-    <a href="/citizens" class="active keep">Staff</a>
-    <a href="/command-center">Desk</a>
-    <a href="/fleet">Fleet</a>
-    <a href="/documents">Docs</a>
-    <a href="/charters" class="keep">Charters</a>
-  </nav>
-</div>
-
-<div class="lab-panel">
-  <div class="mast">
-    <div class="say">
-      <h1>House staff — talk in Messages, evidence here.</h1>
-      <p class="prose">Day-to-day door is <a href="/messages" style="color:var(--brass)">Messages</a>.
-        This board is who lives here, duties, and commissions — not a second chat app.
-        Residence is derived from observation. Nothing is green by default.</p>
-    </div>
-    <div class="seal">
-      <img src="/static/lab-seal.png" alt="SOVERYN Intelligence Labs">
+<body data-testid="citizens-board">
+<div class="page">
+  <div class="plate">
+    <a class="id" href="/command-center"><img src="/static/lab-seal.png" alt="" width="36" height="36"><span><b>SOVERYN</b><i>House staff</i></span></a>
+    <!--sd-nav:staff-->
+    <div class="right">
+      <span class="reading" data-reading>loading…</span>
+      <button type="button" class="act" data-refresh>Refresh census</button>
     </div>
   </div>
+  <p class="health" data-house-health>House health: loading…</p>
+
+  <h2 class="sd-h">Citizens <span class="r">talk in <a href="/messages">Messages</a>; evidence here. Status is observed, never green by default.</span></h2>
+  <section class="roster" data-roster aria-label="Citizens" aria-live="polite"><div class="empty">loading…</div></section>
+
+  <div class="grid2" style="margin-top:16px">
+    <section class="panel" aria-label="House Post">
+      <div class="p-head"><h3>House Post · Chief of Staff</h3><span class="r" data-post-reading>inter-citizen mail</span></div>
+      <p class="note">Route work through Aetheria (<strong>Chief of Staff</strong>) to commission Eve or Forge, or post peer to peer.</p>
+      <form class="commission" data-post-form>
+        <div class="row">
+          <select data-post-mode aria-label="Mode">
+            <option value="via_cos">Route via COS → assignee + commission</option>
+            <option value="direct">Direct post (peer to peer)</option>
+          </select>
+          <select data-post-assignee aria-label="To / assignee">
+            <option value="eve">eve</option>
+            <option value="forge">forge</option>
+            <option value="aetheria">aetheria (COS)</option>
+          </select>
+          <input type="text" data-post-subject placeholder="subject (optional)" style="flex:1;min-width:160px">
+        </div>
+        <textarea data-post-body placeholder="What should happen?" required></textarea>
+        <div class="row end"><span class="err" data-post-err></span><button type="submit" class="act primary">Send</button></div>
+      </form>
+      <div class="commissions" data-posts><div class="empty">no posts yet.</div></div>
+    </section>
+
+    <section class="panel" aria-label="Commissions">
+      <div class="p-head"><h3>New commission</h3><span class="r">result → citizen outbox</span></div>
+      <form class="commission" data-commission-form>
+        <div class="row">
+          <select data-commission-citizen aria-label="Citizen">
+            <option value="aetheria">aetheria</option>
+            <option value="eve">eve</option>
+            <option value="forge">forge</option>
+          </select>
+          <input type="text" data-commission-title placeholder="title (optional)" style="flex:1;min-width:200px">
+        </div>
+        <textarea data-commission-body placeholder="What should they do?" required></textarea>
+        <div class="row end"><span class="err" data-commission-err></span><button type="submit" class="act primary">Enqueue</button></div>
+      </form>
+      <div class="p-head"><h3>Recent commissions</h3><span class="r">newest first</span></div>
+      <div class="commissions" data-commissions><div class="empty">none yet.</div></div>
+    </section>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <section class="panel" data-testid="spawned-panel" aria-label="Spawned under Aetheria">
+      <div class="p-head"><h3>Spawned under Aetheria</h3><span class="r" data-spawned-count>ephemeral · not citizens</span></div>
+      <p class="note" data-spawned-note>Session-scoped deputies for one job. Not citizens.</p>
+      <div data-spawned-list><div class="empty">none active.</div></div>
+    </section>
+    <section class="panel" aria-label="Connectors">
+      <div class="p-head"><h3>Connectors</h3><span class="r" data-conn-reading>grants + armed state</span></div>
+      <div class="note" data-connectors-house></div>
+      <details class="fold"><summary>What granted / armed mean</summary>
+        <p class="note" data-conn-note style="margin-top:8px"><strong>Granted</strong> is who may use it; <strong>armed</strong> means configured and live.
+        Citizen email is <strong>not production</strong>: live send stays off until DNS aliases + SPF/DKIM, <code>SOVERYN_SMTP_HOST</code> / <code>SOVERYN_SMTP_FROM</code>, and <code>SOVERYN_EMAIL_PRODUCTION=1</code>.</p>
+      </details>
+    </section>
+  </div>
 </div>
 
-<div class="actions">
-  <button type="button" class="act primary" data-refresh>Refresh census</button>
-  <span class="reading" data-reading>loading…</span>
-</div>
-<p class="spawn-note" data-house-health style="margin:0 0 1rem">
-  House health: loading…
-</p>
-
-<section class="lab-panel">
-  <div class="lab-panel-head">
-    <span class="n">01</span>
-    <h2>Roster · founding citizens</h2>
-    <span class="r">derived · not probed on request</span>
-  </div>
-  <div class="roster" data-roster>
-    <div class="empty">loading…</div>
-  </div>
-</section>
-
-<section class="lab-panel">
-  <div class="lab-panel-head">
-    <span class="n">02</span>
-    <h2>Connectors</h2>
-    <span class="r" data-conn-reading>grants + armed state</span>
-  </div>
-  <p class="spawn-note" data-conn-note>
-    Web (house SearXNG), email, Signal, files, House Post, …
-    <strong>Granted</strong> is who may use it; <strong>armed</strong> means configured and live.
-    <strong>Citizen email is NOT PRODUCTION</strong> — identity map exists, live send stays off
-    until DNS aliases + SPF/DKIM, <code>SOVERYN_SMTP_HOST</code> / <code>SOVERYN_SMTP_FROM</code>,
-    and <code>SOVERYN_EMAIL_PRODUCTION=1</code> (IMAP optional for list).
-  </p>
-  <div data-connectors-house class="spawn-note" style="border-top:1px solid var(--line)"></div>
-</section>
-
-<section class="lab-panel" data-testid="spawned-panel">
-  <div class="lab-panel-head">
-    <span class="n">02b</span>
-    <h2>Spawned under Aetheria</h2>
-    <span class="r" data-spawned-count>ephemeral · not citizens</span>
-  </div>
-  <p class="spawn-note" data-spawned-note>
-    Session-scoped deputies she spins up for one job (usually Forge or Eve).
-    They are not founding citizens — no soul, no desk, no standing.
-  </p>
-  <div data-spawned-list>
-    <div class="empty">none active.</div>
-  </div>
-</section>
-
-<section class="lab-panel">
-  <div class="lab-panel-head">
-    <span class="n">03</span>
-    <h2>House Post · Chief of Staff</h2>
-    <span class="r" data-post-reading>inter-citizen mail · desks/inbox</span>
-  </div>
-  <div class="lab-panel-body">
-    <p class="spawn-note" style="padding:0 0 12px;border:0">
-      Citizens write each other here. Aetheria is <strong>Chief of Staff</strong>:
-      route work through her to put a commission on Eve or Forge and a directive in their inbox.
-      Completed commissions report upward to COS automatically.
-    </p>
-    <form class="commission" data-post-form>
-      <div class="row">
-        <select data-post-mode aria-label="Mode">
-          <option value="via_cos">Route via COS → assignee + commission</option>
-          <option value="direct">Direct post (peer to peer)</option>
-        </select>
-        <select data-post-assignee aria-label="To / assignee">
-          <option value="eve">eve</option>
-          <option value="forge">forge</option>
-          <option value="aetheria">aetheria (COS)</option>
-        </select>
-        <input type="text" data-post-subject placeholder="subject (optional)" style="flex:1;min-width:160px">
-      </div>
-      <textarea data-post-body placeholder="what should happen? (COS will commission + direct when routing)" required></textarea>
-      <div class="row end">
-        <span class="err" data-post-err></span>
-        <button type="submit" class="act primary">Send</button>
-      </div>
-    </form>
-  </div>
-  <div class="commissions" data-posts>
-    <div class="empty">no posts yet.</div>
-  </div>
-</section>
-
-<section class="lab-panel">
-  <div class="lab-panel-head">
-    <span class="n">04</span>
-    <h2>New commission</h2>
-    <span class="r">localhost write · result → outbox</span>
-  </div>
-  <div class="lab-panel-body">
-    <form class="commission" data-commission-form>
-      <div class="row">
-        <select data-commission-citizen aria-label="Citizen">
-          <option value="aetheria">aetheria</option>
-          <option value="eve">eve</option>
-          <option value="forge">forge</option>
-        </select>
-        <input type="text" data-commission-title placeholder="title (optional)" style="flex:1; min-width:200px;">
-      </div>
-      <textarea data-commission-body placeholder="what should they do? result lands in their outbox/" required></textarea>
-      <div class="row end">
-        <span class="err" data-commission-err></span>
-        <button type="submit" class="act primary">Enqueue</button>
-      </div>
-    </form>
-  </div>
-</section>
-
-<section class="lab-panel">
-  <div class="lab-panel-head">
-    <span class="n">05</span>
-    <h2>Recent commissions</h2>
-    <span class="r">newest first</span>
-  </div>
-  <div class="commissions" data-commissions>
-    <div class="empty">none yet.</div>
-  </div>
-</section>
-
-<footer class="lab-foot">House network · my data is my data · no corporate call-home</footer>
-
-<script src="/static/citizen-icons.js?v=20260901bots3"></script>
+<script src="/static/citizen-icons.js?v=20261103flat"></script>
 <script>
 (function () {
   const rosterEl = document.querySelector("[data-roster]");
@@ -424,7 +203,7 @@
       return `
         <article class="citizen" data-citizen="${esc(c.id)}" data-state="${esc(c.status)}">
           <div>
-            <div class="name"><span class="dot ${esc(c.status)}"></span>${typeof soverynCitizenIcon === 'function' ? soverynCitizenIcon(c.id, { size: 32, letter: (c.display_name || c.id || '?').charAt(0), busy: false,  /* on_duty is the status dot, not thinking */ label: c.display_name || c.id }) : ''}${esc(c.display_name || c.id)}${c.is_chief_of_staff ? '<span class="chip" style="margin-left:8px">chief of staff</span>' : ''}</div>
+            <div class="name"><span class="dot ${esc(c.status)}"></span>${typeof soverynCitizenIcon === 'function' ? soverynCitizenIcon(c.id, { size: 32, letter: (c.display_name || c.id || '?').charAt(0), busy: false,  /* on_duty is the status dot, not thinking */ label: c.display_name || c.id, state: soverynCitizenIcon.stateOf(c.id) || '' }) : ''}${esc(c.display_name || c.id)}${c.is_chief_of_staff ? '<span class="chip" style="margin-left:8px">chief of staff</span>' : ''}</div>
             <div class="meta">
               <strong>${esc(c.id)}</strong> · model ${esc(c.model_server || "—")} · ${last}
               · open commissions <strong>${open}</strong>${spawned}${(c.unread_post || 0) ? ` · <strong>${c.unread_post}</strong> unread post` : ""}
@@ -475,32 +254,8 @@
               · id ${esc(id.slice(0, 8))}…
             </div>
           </div>
-          <button type="button" class="act" data-kill-specialist="${esc(id)}"
-            title="Jon's override — kill this specialist">kill</button>
         </div>`;
     }).join("");
-    spawnedListEl.querySelectorAll("[data-kill-specialist]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const sid = btn.getAttribute("data-kill-specialist");
-        if (!sid) return;
-        if (!confirm(`Kill specialist ${sid.slice(0, 8)}…? Not a citizen — session only.`)) return;
-        btn.disabled = true;
-        try {
-          const res = await fetch("/api/specialists/kill", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ specialist_id: sid }),
-          });
-          if (!res.ok) {
-            const j = await res.json().catch(() => ({}));
-            alert((j.error && j.error.message) || "kill failed");
-          }
-        } finally {
-          await loadBoard();
-        }
-      });
-    });
   }
 
   function renderPosts(items) {
@@ -587,7 +342,7 @@
         `unobserved ${counts.unobserved || 0} · offline ${counts.offline || 0} · ` +
         `queue ${q} running ${run} · ` +
         `subagents ${((h.spawned && h.spawned.count) || 0)}` +
-        `${esc(probs)} · <a href="/api/citizens/health" style="color:var(--brass)">JSON</a>`;
+        `${esc(probs)} · <a href="/api/citizens/health" style="color:var(--acc)">JSON</a>`;
     } catch (e) {
       el.textContent = "House health unavailable";
     }
@@ -598,6 +353,7 @@
     const data = await res.json();
     readingEl.textContent = data.reading || "";
     renderRoster(data.citizens || []);
+    if (window.soverynCitizenIcon && soverynCitizenIcon.watchPresence) soverynCitizenIcon.watchPresence(30000);
     renderSpawned(data.spawned);
     await loadHouseHealth();
     await loadConnectors();
@@ -719,7 +475,8 @@
   loadBoard().catch(e => {
     rosterEl.innerHTML = `<div class="err" style="padding:18px 22px">${esc(e)}</div>`;
   });
-  setInterval(() => { loadBoard().catch(() => {}); }, 15000);
+  setInterval(() => { if (!document.hidden) loadBoard().catch(() => {}); }, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) loadBoard().catch(() => {}); });
 })();
 </script>
 </body>

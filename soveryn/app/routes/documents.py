@@ -45,6 +45,8 @@ def documents_ui():
     if not _TEMPLATE.is_file():
         return _err("ui_unavailable", f"Documents template missing at {_TEMPLATE}", 500)
     html = _TEMPLATE.read_text(encoding="utf-8")
+    from soveryn.app.routes.ui import apply_sd_nav
+    html = apply_sd_nav(html)
     resp = make_response(html, 200)
     resp.headers["Content-Type"] = "text/html; charset=utf-8"
     resp.headers["X-SOVERYN-UI-Source"] = "vnext-native"

@@ -1,4 +1,6 @@
-/* Grok-style badges: a colored shape + two black eyes. User picks the shape. */
+/* Grok-style badges: a colored shape + two black eyes. User picks the shape.
+   2026-11 cc-revamp: each citizen also gets an animated trait (halo, sparks, antenna, monocle,
+   radar, ripples, spectacles) and a live state (live / busy / down / inbox) via data-state. */
 (function (root) {
   "use strict";
 
@@ -33,22 +35,28 @@
     eve: "pill",
     t_critic: "diamond",
     t_scout: "bean",
+    pondwright: "drop",
+    atticus: "egg",
     vett: "round",
     scotty: "squircle"
   };
   var NAMES = {
     aetheria: "Aetheria", forge: "Forge", kernel: "Kernel", eve: "Eve",
-    t_critic: "Critic", t_scout: "Scout", vett: "Vett", scotty: "Scotty"
+    t_critic: "Critic", t_scout: "Scout", pondwright: "Pondwright", atticus: "Atticus", vett: "Vett", scotty: "Scotty"
   };
+  /* v2 (2026-11-03): flat, friendly, one clear hue per citizen; readable on the dark UI.
+     mid = body fill, lo = outline (same hue, darker), hi = light accent. */
   var PALETTE = {
-    aetheria: { hi: "#f0e2b8", mid: "#c6a664", lo: "#8a7038" },
-    forge:    { hi: "#c5f0d4", mid: "#9ee0b8", lo: "#3d7a55" },
-    kernel:   { hi: "#c5f0d4", mid: "#9ee0b8", lo: "#3d7a55" },
-    eve:      { hi: "#f0d4ff", mid: "#e0b0ff", lo: "#7a4a9a" },
-    t_critic: { hi: "#e8c9a0", mid: "#d4a574", lo: "#6b4a2e" },
-    t_scout:  { hi: "#c5dcec", mid: "#8eb8d4", lo: "#3a5a70" },
-    vett:     { hi: "#d4f0f8", mid: "#7ec8e3", lo: "#3a7a9a" },
-    scotty:   { hi: "#f0c9a8", mid: "#e8a87c", lo: "#a65d3b" }
+    aetheria:   { hi: "#ffe39a", mid: "#ffbf3c", lo: "#a8700a" },  /* sunny gold */
+    forge:      { hi: "#b9f5a8", mid: "#5fd35a", lo: "#2a7d28" },  /* leaf green */
+    kernel:     { hi: "#b9f5a8", mid: "#5fd35a", lo: "#2a7d28" },
+    eve:        { hi: "#dccbff", mid: "#a97cff", lo: "#5a33b5" },  /* violet */
+    t_critic:   { hi: "#ffc2b0", mid: "#ff7b54", lo: "#a83a1e" },  /* coral */
+    t_scout:    { hi: "#b5dcff", mid: "#4aa3ff", lo: "#1d5aa3" },  /* sky blue */
+    pondwright: { hi: "#b2f4ee", mid: "#26cfc2", lo: "#0f746c" },  /* teal */
+    atticus:    { hi: "#ffc4e1", mid: "#ff6fae", lo: "#a3265f" },  /* pink */
+    vett:       { hi: "#c9ecf7", mid: "#7ec8e3", lo: "#2f6f8a" },
+    scotty:     { hi: "#ffd2ad", mid: "#ff9a4d", lo: "#a3521a" }
   };
   var cache = {};
   var hydrated = false;
@@ -121,23 +129,10 @@
   }
 
   function bodyPath(shape, p, u) {
-    var g = u("g");
-    var c = u("c");
+    /* flat fill, no metallic gradient or sheen */
     return (
-      "<defs>" +
-        '<radialGradient id="' + g + '" cx="34%" cy="28%">' +
-          '<stop offset="0%" stop-color="' + p.hi + '"/>' +
-          '<stop offset="52%" stop-color="' + p.mid + '"/>' +
-          '<stop offset="100%" stop-color="' + p.lo + '"/>' +
-        "</radialGradient>" +
-        '<clipPath id="' + c + '">' + shapeEl(shape, "") + "</clipPath>" +
-      "</defs>" +
-      '<g clip-path="url(#' + c + ')">' +
-        shapeEl(shape, ' fill="url(#' + g + ')"') +
-        '<ellipse class="sov-shine" cx="24" cy="22" rx="12" ry="8" fill="#fff" opacity="0.28"/>' +
-        '<ellipse cx="34" cy="42" rx="14" ry="8" fill="#000" opacity="0.12"/>' +
-      "</g>" +
-      shapeEl(shape, ' fill="none" stroke="' + p.lo + '" stroke-width="1.7"')
+      shapeEl(shape, ' fill="' + p.mid + '"') +
+      shapeEl(shape, ' fill="none" stroke="' + p.lo + '" stroke-width="2"')
     );
   }
 
@@ -154,6 +149,55 @@
     );
   }
 
+  var STATES = { live: 1, busy: 1, down: 1, inbox: 1, idle: 1 };
+  var TRAIT_ALIAS = { kernel: "forge" };
+
+  /* One small animated accessory per citizen. Drawn in the 64-box, above/around the body. */
+  function trait(n, p) {
+    var t = TRAIT_ALIAS[n] || n;
+    if (t === "aetheria") {
+      return '<g class="sov-tr sov-tr-halo"><ellipse cx="32" cy="3.5" rx="12.5" ry="3.4" fill="none" stroke="#f8e9b6" stroke-width="2.2"/>' +
+        '<ellipse cx="32" cy="3.5" rx="12.5" ry="3.4" fill="none" stroke="#fff6d8" stroke-width="0.8" opacity="0.9"/></g>' +
+        '<path class="sov-tr sov-tr-twinkle" d="M55 9 L56.4 12.6 L60 14 L56.4 15.4 L55 19 L53.6 15.4 L50 14 L53.6 12.6 Z" fill="#fff3c8"/>';
+    }
+    if (t === "forge") {
+      return '<g class="sov-tr sov-tr-sparks" stroke="#ffd36b" stroke-width="2" stroke-linecap="round">' +
+        '<line x1="52" y1="11" x2="57" y2="5"/><line x1="55" y1="15" x2="62" y2="13"/><line x1="48" y1="8" x2="49" y2="1"/></g>' +
+        '<circle class="sov-tr sov-tr-ember" cx="58" cy="3" r="1.6" fill="#ffb347"/>';
+    }
+    if (t === "eve") {
+      return '<line x1="32" y1="14" x2="32" y2="3.5" stroke="' + p.lo + '" stroke-width="1.8" stroke-linecap="round"/>' +
+        '<circle class="sov-tr sov-tr-ring" cx="32" cy="2" r="3" fill="none" stroke="#f3dcff" stroke-width="1.4"/>' +
+        '<circle class="sov-tr sov-tr-bulb" cx="32" cy="2" r="3.1" fill="#fbefff" stroke="' + p.mid + '" stroke-width="1"/>';
+    }
+    if (t === "t_critic") {
+      return '<path class="sov-tr sov-tr-brow" d="M19.5 22.6 Q24.6 19.4 29.4 22.2" fill="none" stroke="#14110e" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<g class="sov-tr sov-tr-monocle"><circle cx="39.4" cy="29.2" r="6.4" fill="rgba(255,255,255,0.10)" stroke="#f4dfb4" stroke-width="1.7"/>' +
+        '<path d="M45.6 31.5 Q49 40 46.5 47" fill="none" stroke="#f4dfb4" stroke-width="0.9"/>' +
+        '<path class="sov-tr-glint" d="M35.6 26.4 L38.6 23.6" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></g>';
+    }
+    if (t === "t_scout") {
+      return '<g class="sov-tr sov-tr-radar"><circle cx="54" cy="8" r="2" fill="#e6f4ff"/>' +
+        '<circle class="sov-tr-ping" cx="54" cy="8" r="2" fill="none" stroke="#cfe6f7" stroke-width="1.3"/>' +
+        '<circle class="sov-tr-ping sov-tr-ping2" cx="54" cy="8" r="2" fill="none" stroke="#cfe6f7" stroke-width="1.3"/></g>' +
+        '<line x1="47" y1="15" x2="52.6" y2="9.6" stroke="' + p.lo + '" stroke-width="1.6" stroke-linecap="round"/>';
+    }
+    if (t === "pondwright") {
+      return '<g class="sov-tr sov-tr-pond" fill="none" stroke="#9fe3d6" stroke-width="1.3">' +
+        '<ellipse class="sov-tr-ripple" cx="32" cy="59" rx="10" ry="2.4"/>' +
+        '<ellipse class="sov-tr-ripple sov-tr-ripple2" cx="32" cy="59" rx="10" ry="2.4"/></g>' +
+        '<path class="sov-tr sov-tr-leaf" d="M50 12 C 56 6, 62 8, 61 14 C 58 18, 52 17, 50 12 Z" fill="#7fd08a" stroke="#2e6b3a" stroke-width="0.9"/>';
+    }
+    if (t === "atticus") {
+      return '<g class="sov-tr sov-tr-specs" fill="rgba(255,255,255,0.08)" stroke="#f1e2c2" stroke-width="1.5">' +
+        '<circle cx="24.6" cy="29.2" r="5.6"/><circle cx="39.4" cy="29.2" r="5.6"/>' +
+        '<path d="M30.2 28.6 Q32 27 33.8 28.6" fill="none"/></g>' +
+        '<g class="sov-tr sov-tr-page"><rect x="49" y="4" width="10" height="12" rx="1.4" fill="#fbf4e4" stroke="#8a6a4a" stroke-width="0.8"/>' +
+        '<path d="M51 8 H57 M51 10.5 H57 M51 13 H55" stroke="#8a6a4a" stroke-width="0.7"/></g>';
+    }
+    return "";
+  }
+
   function svgInner(id, letter, shape) {
     var n = norm(id);
     var p = PALETTE[n] || PALETTE.aetheria;
@@ -162,10 +206,12 @@
     if (SHAPES.indexOf(sh) < 0) sh = "round";
     var L = letter || (n ? n.charAt(0).toUpperCase() : "?");
     return (
-      '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
+      '<svg viewBox="-4 -6 72 72" aria-hidden="true" focusable="false">' +
+        '<circle class="sov-aura" cx="32" cy="32" r="30" fill="none" stroke="' + p.mid + '" stroke-width="2.4"/>' +
         '<g class="sov-bob">' +
           bodyPath(sh, p, u) +
           eyes() +
+          trait(n, p) +
         "</g>" +
       "</svg>" +
       '<span class="sov-cit-letter">' + esc(L) + "</span>"
@@ -177,6 +223,7 @@
     var n = norm(id);
     var cls = ["sov-cit", "sov-cit--" + (PALETTE[n] ? n : "generic"), "has-eyes"];
     if (opts.busy) cls.push("is-busy");
+    var st = STATES[opts.state] ? opts.state : "";
     if (opts.className) cls.push(String(opts.className));
     var size = opts.size ? Number(opts.size) : 0;
     var style = size ? ' style="width:' + size + "px;height:" + size + 'px"' : "";
@@ -187,6 +234,7 @@
         ' data-agent="' + esc(n) + '" data-citizen="' + esc(n) + '"' +
         ' data-shape="' + esc(opts.shape || shapeFor(n)) + '"' +
         (opts.busy ? ' data-busy="1"' : "") +
+        (st ? ' data-state="' + st + '"' : "") +
         style + ">" + svgInner(n, opts.letter, opts.shape) + "</span>"
     );
   }
@@ -206,6 +254,7 @@
     el.setAttribute("data-agent", n);
     el.setAttribute("data-citizen", n);
     el.setAttribute("data-shape", opts.shape || shapeFor(n));
+    if (STATES[opts.state]) el.setAttribute("data-state", opts.state);
     el.setAttribute("role", "img");
     el.setAttribute("aria-label", opts.label || NAMES[n] || n || "citizen");
     el.removeAttribute("aria-hidden");
@@ -225,7 +274,7 @@
       var busy = el.classList.contains("is-busy") || el.getAttribute("data-busy") === "1";
       var label = el.getAttribute("aria-label");
       var w = parseInt(el.style.width, 10) || 0;
-      paint(el, id, { busy: busy, label: label, size: w || undefined });
+      paint(el, id, { busy: busy, label: label, size: w || undefined, state: el.getAttribute("data-state") || "" });
     }
   }
 
@@ -319,6 +368,44 @@
     }, true);
   }
 
+  /* Live state for every badge of a citizen on the page (status dots drive this). */
+  function setState(agent, state) {
+    var n = norm(agent);
+    if (!STATES[state]) return;
+    var sel = '.sov-cit[data-agent="' + n + '"]' + (n === "forge" ? ',.sov-cit[data-agent="kernel"]' : "");
+    var nodes = document.querySelectorAll(sel);
+    for (var i = 0; i < nodes.length; i += 1) nodes[i].setAttribute("data-state", state);
+  }
+  var presence = {};
+  function applyPresence(list) {
+    (list || []).forEach(function (c) { if (c && c.id) { presence[norm(c.id)] = c.state; setState(c.id, c.state); } });
+  }
+  function stateOf(agent) { var n = norm(agent); return presence[n] || (n === "kernel" ? presence.forge : "") || ""; }
+  var watching = null;
+  function watchPresence(ms) {
+    if (watching || typeof fetch === "undefined") return;
+    var tick = function () {
+      if (document.visibilityState === "hidden") return;
+      fetch("/api/messages/presence", { headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { if (d) applyPresence(d.citizens); })
+        .catch(function () {});
+    };
+    tick();
+    watching = setInterval(tick, ms || 30000);
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "visible") tick(); });
+  }
+  /* keep state across shape repaints */
+  if (typeof document !== "undefined") {
+    document.addEventListener("soveryn-shapes-ready", function () {
+      Object.keys(presence).forEach(function (k) { setState(k, presence[k]); });
+    });
+  }
+
+  soverynCitizenIcon.setState = setState;
+  soverynCitizenIcon.applyPresence = applyPresence;
+  soverynCitizenIcon.stateOf = stateOf;
+  soverynCitizenIcon.watchPresence = watchPresence;
   soverynCitizenIcon.svg = svgInner;
   soverynCitizenIcon.paint = paint;
   soverynCitizenIcon.shapes = SHAPES;

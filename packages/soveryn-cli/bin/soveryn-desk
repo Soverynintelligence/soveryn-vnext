@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Lease-aware front for ~/bin/soveryn. Does not modify ~/bin/soveryn.
+# If args carry --session <id|path>, take the single-writer lease for that
+# session under this shell's pid, then exec soveryn (same pid -> the lease
+# lives exactly as long as the CLI). Refuses (exit 3) while the Desk holds it.
+set -euo pipefail
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+STAGE_ROOT="$(cd "$(dirname "$SELF")/../../.." && pwd)"
+export SOVERYN_ROOT="${SOVERYN_ROOT:-$STAGE_ROOT}"
+SESS_ROOT="${KDESK_SESSIONS_ROOT:-$SOVERYN_ROOT/config/soveryn-cli/sessions}"
+PY="${KDESK_PYTHON:-$HOME/miniconda3/envs/soveryn/bin/python}"
+sid=""
+args=("$@")
+for ((i=0; i<${#args[@]}; i++)); do
+  a="${args[$i]}"
+  case "$a" in
+    --session) sid="${args[$((i+1))]:-}";;
+    --session=*) sid="${a#--session=}";;
+  esac
+done
+if [[ -n "$sid" ]]; then
+  PYTHONPATH="$SOVERYN_ROOT" "$PY" -m soveryn.kernel_desk.lease acquire \
+    --root "$SESS_ROOT" --session "$sid" --owner cli --pid $$ || exit $?
+fi
+exec "${KDESK_SOVERYN_BIN:-$HOME/bin/soveryn}" "$@"
