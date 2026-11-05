@@ -2,10 +2,10 @@
 
 > **Source of authority for what is actually running — right now.**  
 > Observed / operator-confirmed. Not aspirational. Not a phase dump.  
-> Last rotated: 2026-10-19 (Kernel — full re-observe; previous rotation 2026-09-28 had drifted 21 days and listed a dead brain).
+> Last rotated: 2026-11-04 (Kernel — §1 representation row steady since 2026-10-26, no restarts in 9 days; crash-watch quiet. Rows not re-observed today still carry 2026-10-19/10-30).
 > Prior archive: `docs/archive/CURRENT_TRUTH_2026-05-23.md` (historical — do not treat as live).
 > Staleness rule: key off the **newest per-row** "last observed" / "Last verified" date in this file, not this header date. If that newest per-row date is >7 days old, treat the file as stale and re-observe. The header "Last rotated" date is updated on every row edit to track the newest per-row date.  
-> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. Row-date check: every row that makes a **status claim** must carry a parseable 2026 date. Table header rows are the only legal exception. Command: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vE '^\|[-: |]+\|$' | grep -vE '^\| *(Layer|Messages contact|Row|Pulled|Surface|Product|Lane|Repo|Item|Brand|Branch)[^|]*\|' | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` must equal **0**. (Prior rotations violated this: the 2026-09-28 file carried 73 undated rows, which is how a dead brain row sat unread for 21 days.) Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer. Escalation rule: two consecutive missed Monday re-observes → affected rows marked `STALE-UNVERIFIED` in the table itself. Integrity check: `grep -c '^END-OF-TRUTH' docs/CURRENT_TRUTH.md` must equal **1** (zero = truncated file; two or more = marker leaked into body).
+> Machine check: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -oE '2026-[0-9]{2}-[0-9]{2}' | sort -r | head -1` — newest per-row date; if older than 7 days before today, file is stale, re-observe. Completeness check: `grep -cE '^## [0-9]' docs/CURRENT_TRUTH.md` must equal **6** (§0–§5; corrected 2026-11-04 — the file had carried 7 since a removed section, header lagged) — freshness alone can pass on a truncated file; the section count makes truncation fail the check. **Update this number in the same edit whenever a numbered section is added or removed** — the count is a truncation tripwire, not a fixed constant. Row-date check: every row that makes a **status claim** must carry a parseable 2026 date. Header rows are the only legal exception, and they are detected **structurally, not by name**: a header row is the line immediately followed by a separator row (`|---|:--|`). Command: `grep -E '^\|' docs/CURRENT_TRUTH.md | grep -vE '^\|[-: |]+\|$' | grep -vE '^\| *[^|]*\| *[-: |]+\|$' | grep -vcE '2026-[0-9]{2}-[0-9]{2}'` must equal **0**. The name-based exclusion this replaced (a hardcoded `Layer|Messages contact|Row|Pulled|Surface|Product|Lane|Repo|Item|Brand|Branch` alternation) silently passed any new table whose header used a different word — a header row with no date would have been counted as a dated row. (Prior rotations violated this: the 2026-09-28 file carried 73 undated rows, which is how a dead brain row sat unread for 21 days.) Readers must confirm the section count before trusting any single section — a truncated read can still pass freshness on visible rows. Re-observe is assigned to **Kernel** (house build brain), cadence weekly — Monday morning, alongside the ledger reconcile timer. The docs pass (README + this file's integrity checks) is Forge's standing objective. Escalation rule: two consecutive missed Monday re-observes → affected rows marked `STALE-UNVERIFIED` in the table itself. Integrity check: `grep -c '^END-OF-TRUTH' docs/CURRENT_TRUTH.md` must equal **1** (zero = truncated file; two or more = marker leaked into body).
 > <!-- Staleness check: scope to | table rows only, not free-text prose dates. -->
 
 If runtime behavior changes, **update this file first**, then code/notes.
@@ -86,7 +86,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ---
 
 ## 1. What is live
-*Last observed: 2026-10-19 (full re-observe: units, ports, /v1/models, public URLs).*
+*Last observed: 2026-11-04 (representation daemon state re-observed — steady 9 days; all other §1 rows keep their 2026-10-19/10-30 dates).*
 
 ### House (soveryn_vnext) — tower `:5001`
 | Surface | Status |
@@ -99,7 +99,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Heartbeat / dream / automations (`soveryn-heartbeat`, `soveryn-dream`, `soveryn-automations`) | **Live 2026-10-19** |
 | Cognition surface (`soveryn-cognition.service` — Gemma 4 26B-A4B Q5, CPU-only `:8089`, alias `dream`) | **Live 2026-10-19** — restarted 2026-10-04 22:05. Was silently down ~Aug 30 → Sep 13 |
 | Deep Cognition Cycle (`soveryn-cognition-cycle.service`) | **Live 2026-10-19** — Aetheria reflect → process → distill loop |
-| Representation daemon (`soveryn-representation.service`) | **LIVE 2026-10-19 — re-enabled 2026-10-04 22:08.** Previously PARKED 2026-09-22 after a 7,921-restart loop; re-enabled together with cognition. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) |
+| Representation daemon (`soveryn-representation.service`) | **LIVE — steady 2026-11-04.** Re-enabled 2026-10-04; last restart was 2026-10-26 11:27 (restart counter 16 is historical, from the flap window). 9 days with no restart; `soveryn-crash-watch.timer` quiet. Previously PARKED 2026-09-22 after a 7,921-restart loop. Quality gate before leaving dry-run still open (outputs read shallow/repetitive) — see §2 |
 | Vett patrol (`soveryn-vett-patrol.service`) | **DISABLED + STOPPED 2026-10-19 (Jon: falls under Eve).** Ownership is Eve's: sources + verify-or-say-nothing standard live in `data/memory/skills/eve/funding-watch.md`, which already said “do not restart it — run the watch through your automations.” **The stop did not hold at first** — `soveryn-medic` read the stopped unit as unhealthy and healed it 33s later; `vett-patrol` is now removed from medic's `TARGETS` and `_UNIT_KEYS` (same trap the retired tg-bridge documented). Confirmed holding with medic reporting `unhealthy: []`. Daemon left in the repo for a future deterministic crawler |
 | Service crash watch (`soveryn-crash-watch.timer` 15min) | **Live 2026-10-19** — deterministic `scripts/systemd_health_watch.py` writes `data/automations/watches/systemd_health.txt` only on failed/activating/NRestarts≥10 units; unchanged file = no LLM, change = Aetheria briefs Jon |
 | SOVERYN CLI harness hardening | **Live 2026-10-19** — `doctor --json` machine-readable; parked-but-live drift check; generated-config freshness gate; `doctor --gates` 8/8 PASS; pinned Pi **1.3.0** (`bin/soveryn-pi130`, rollbacks pi120/pi110/pi104/pi103/pi100/pi099/pi087) |
@@ -132,7 +132,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Messages / CoS | **Live 2026-10-19** — default `/` door; PWA + Web Push on (Gate / needs-you / brief ready); Signal = Aetheria-only |
 | Verification gate | **Live 2026-10-19** — owner: Eve (default was Vett; repointed 2026-09-01, `58cb1e9`) |
 | Lounge (`data/rooms/lounge.json`) | **Created 2026-09-24, unused 2026-10-19** — pointer exists, 0 wall_notes, no peers active. Calendar dated it 2026-09-25; it never became a working group chat |
-| Undocumented trial lanes | **Live 2026-10-19, no owner** — `:8097` llama-server `mellum2.1` (`llama.cpp_head/build-cuda131`, `~/mellum-trial`); `:8193` ComfyUI (`ablit-bake/cwg-ming-vs-qwen-20261003`); `:8123` `python -m http.server` from `~/pondpro`; `:19200` `cwg_pdf_proxy.py` **running from `/tmp`** (survives reboot only by luck) |
+| Undocumented trial lanes | **Re-observed 2026-10-30, no owner** — `:8193` ComfyUI (`ablit-bake/cwg-ming-vs-qwen-20261003`); `:8123` `python -m http.server` from `~/pondpro`. **RETIRED:** `:8097` mellum (llama-server `mellum2.1`, `~/mellum-trial`) and `:19200` `cwg_pdf_proxy.py` (the `/tmp` stray) are **no longer listening** — both dropped from the live set 2026-10-30 |
 | PondWright access proxy | **Live 2026-10-19** — `:18100`–`:18500` from `~/access-logs/pondwright_access_proxy.py` |
 | Pondviz (`cwg-pondviz`) | **Live 2026-10-19** — uvicorn on Tailscale `100.71.129.32:8771` |
 
@@ -190,7 +190,7 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 ---
 
 ## 2. Incomplete / blocked
-*Last observed: 2026-10-19.*
+*Last observed: 2026-10-30 (representation flap + retired `/tmp` proxy re-observed; other rows carry 2026-10-19).*
 
 | Item | State |
 |------|-------|
@@ -199,8 +199,9 @@ Refs: `docs/mockups/messenger-one-door/` + `refs/` (Grok Bots screenshots).
 | Cathedral public DNS | **Blocked on Jon 2026-10-19** — `cathedral.soverynintelligence.com` does not resolve; CNAME → `85970537-f4aa-40cf-b616-c5f185e2ae81.cfargotunnel.com` not added in the CF dashboard |
 | Delegation `in_review` backlog | **6 tasks 2026-10-19** — 4 redundant house_diag duplicates (18eebfdc, 0c2ca529, 0840b1e8, 0587ec8d; the break is closed by `de72ca7`) + b6596b58, 45eb1664. Needs approve/reject sweep |
 | Sweep + reconcile unit state | **Cosmetic but misleading 2026-10-19** — both timers exit 1 whenever findings exist, so `systemctl` shows `failed` weekly. A real break would look identical |
+| Crash-watch flap | **FIXED 2026-10-23** — `scripts/systemd_health_watch.py` counted `ActiveState=activating` as a break, so oneshot units (and the watch itself, mid-run) flapped the watch file every 15 min (journal: 3 → 5 → 3 → 4 problems across 09:03–09:49). `activating` now only counts past a 600s stuck-start budget. Guard: `tests/test_systemd_health_watch.py` |
 | Vett patrol daemon | **RESOLVED 2026-10-19** — disabled + stopped; lane owned by Eve via `funding-watch` skill | 2026-10-19 |
-| Stray `/tmp` service | **Live 2026-10-19** — `cwg_pdf_proxy.py` runs from `/tmp` on `:19200`; `/tmp` is not durable |
+| Stray `/tmp` service | **RETIRED 2026-10-30** — `cwg_pdf_proxy.py` on `:19200` is no longer listening; the `/tmp` durability risk is gone with it |
 | Representation quality gate | **Open 2026-10-19** — daemon is LIVE again since 2026-10-04, but outputs still read shallow/repetitive; the gate before leaving dry-run has not been defined |
 | CoS rename | **Deferred** — Aetheria still `COS_ID` | 2026-10-19 |
 | Eve Allow → Signal | **Done 2026-08-24** — interactive Gate; Meta IG still later |
@@ -242,11 +243,11 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 ---
 
 ## 5. Git / ops
-*Last observed: 2026-10-19.*
+*Last observed: 2026-10-30 (tip re-read; branch census still 2026-10-19).*
 
 | Repo | Branch / tip |
 |------|----------------|
-| `soveryn_vnext` | **`main` @ `8eb581a` (2026-10-19)** — synced with `origin/main`. Working tree clean except untracked `AGENTS.md` at repo root |
+| `soveryn_vnext` | **`main` @ `b0de6d7` (2026-10-30)** — synced with `origin/main`. Working tree clean except untracked `AGENTS.md` at repo root |
 | `teammates` | **`feat/phase-0` @ `83ce7e0` (2026-10-17)** — overnight + Messages bridge |
 
 ### Branch census (2026-10-19 — Jon verdicts needed)
@@ -263,9 +264,9 @@ Runbooks (not kill-list copies): `docs/runbooks/secrets-state-backup.md` · `doc
 
 Notes in `docs/notes/` are **not** authority. **This file is.**
 
-<!-- integrity footer (2026-10-19 re-observe, Kernel) -->
-<!-- Expected sections: §0 House spine, §1 What is live, §2 Incomplete/blocked, §3 Brands, §4 Kill list, §5 Git/ops. -->
-<!-- Last full-rotation checksum: re-derive with `git show HEAD:docs/CURRENT_TRUTH.md | sha256sum` after this rotation lands. Rotation date: 2026-10-19. -->
+<!-- integrity footer (2026-10-22 docs pass, Forge) -->
+<!-- Expected sections: §0 House spine, §1 What is live, §2 Incomplete/blocked, §3 Brands, §4 Kill list, §5 Git/ops, §6 Changelog. -->
+<!-- Last full-rotation checksum: re-derive with `git show HEAD:docs/CURRENT_TRUTH.md | sha256sum` after this rotation lands. Rotation date: 2026-10-30 (partial rows); docs pass 2026-10-22. -->
 END-OF-TRUTH §5
 
 

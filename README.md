@@ -1,8 +1,8 @@
 # SOVERYN vNext
 
-Last reviewed: 2026-09-22 by Kernel
+Last reviewed: 2026-10-22 by Forge
 Who: see CURRENT_TRUTH §0
-Staleness owner: Kernel — re-verifies this README against the tree and CURRENT_TRUTH on each docs pass; Jon arbitrates disputes.
+Staleness owner: Forge (house desk clerk) — re-verifies this README against the tree and CURRENT_TRUTH on each docs pass. CURRENT_TRUTH re-observe (weekly, Monday) is Kernel's, per the CURRENT_TRUTH staleness rule. Jon arbitrates disputes.
 Staleness rule: re-verify against CURRENT_TRUTH per-row dates before relying on this file; update this line on each review.
 
 > **One rule:** if Jon needs it day-to-day, it shows up in **Messages**. Everything else is engine room or a satellite.
@@ -26,19 +26,35 @@ Public surfaces: see [CURRENT_TRUTH §1 — What is live](docs/CURRENT_TRUTH.md#
 ## Layout
 
 ```text
-soveryn/
-├── agents/        # agent policy and entry surfaces
-├── app/           # Flask app and route surface
-├── backup/        # code backup daemon
+soveryn_vnext/
+├── soveryn/       # the package
+│   ├── agents/        # agent policy and entry surfaces
+│   ├── app/           # Flask app and route surface
+│   ├── backup/        # code backup daemon
+│   ├── config/        # runtime/config loading
+│   ├── inference/     # compatibility shims to platform.inference
+│   ├── memory/        # conversation store + lattice compatibility shim
+│   ├── platform/      # shared mechanisms
+│   │   └── email/     # citizen email (not armed)
+│   └── validation/    # prod-vnext comparison harness
 ├── docs/          # truth, notes, runbooks, archive
-│   ├── notes/    # dated notes (not authority)
-│   └── archive/  # archived truth snapshots
-├── config/        # runtime/config loading
-├── inference/     # compatibility shims to platform.inference
-├── memory/        # conversation store + lattice compatibility shim
-├── platform/      # shared mechanisms
-│   └── email/     # citizen email (not armed)
-└── validation/    # prod-vnext comparison harness
+│   ├── notes/         # dated notes (not authority)
+│   ├── runbooks/      # operational runbooks (env vars, secrets backup)
+│   └── archive/       # archived truth snapshots
+├── packages/      # standalone apps: soveryn-cli, soveryn-console, soveryn-acttruth
+├── scripts/       # operator + harness scripts (soveryn-pi, soveryn-aider, see.sh, backups)
+├── systemd/       # unit files (install via scripts/install_systemd_units.sh)
+├── demos/         # demo surfaces
+├── tests/         # pytest suite
+├── config/        # repo-level config trees (pi/, runtime profiles)
+├── data/          # runtime state: DBs, black_box receipts, lattice, medic, automations
+├── logs/          # service logs
+├── backups/       # nightly DB/archive snapshots
+├── runtime/       # runtime scratch for live processes
+├── eval_runs/     # eval outputs
+├── scratch/       # throwaway work
+├── carolina-redesign/  # CWG site redesign work
+└── tmp/           # ephemeral
 
 ~/teammates/        # Critic/Scout overnight — briefs → Messages
 ```

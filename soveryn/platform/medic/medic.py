@@ -147,6 +147,9 @@ def decide(
 # ── probe classification (pure) ─────────────────────────────────────────────
 _HTTP_PORTS = {"vnext": 5001, "router": 8090}
 _HTTP_URLS: dict[str, str] = {"embeddings": "http://127.0.0.1:8096/health"}
+# Guard (2026-11-04, from the Vett 33s-heal failure): when Jon stops a unit on
+# purpose, remove it from _UNIT_KEYS/TARGETS in the SAME action, or medic will
+# "heal" (restart) the intentionally stopped unit within a minute.
 _UNIT_KEYS = ("dream", "x-feed", "parakeet", "representation")
 
 

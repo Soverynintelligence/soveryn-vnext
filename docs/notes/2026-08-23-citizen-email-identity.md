@@ -3,7 +3,7 @@ Roster authority: docs/CURRENT_TRUTH.md §0 (House spine) — live roster lives 
 # Citizen email identity (ours — not AgentMail)
 
 **Date:** 2026-08-23  
-**Status:** **Pending — not armed.** Code + identity map exist. DNS/SMTP/`SOVERYN_EMAIL_PRODUCTION=1` have not been flipped. The canonical step list and its count live in `docs/CURRENT_TRUTH.md` §2 (Citizen email row); this note holds the full checklist body and does not restate the number. The latch stays off.  
+**Status:** **Pending — not armed.** Code + identity map exist. DNS/SMTP/`SOVERYN_EMAIL_PRODUCTION=1` have not been flipped. The canonical step list and its count (9 steps) live in this note, §Ops checklist below; `docs/CURRENT_TRUTH.md` §2 links here rather than restating the number. The latch stays off.  
 **Trigger:** Musk / Grok Bot “why its own email?” + AgentMail pitch. Same problem we’ve held: agents must not write as Jon from his personal inbox.
 
 ## Claim (design intent — not live)
