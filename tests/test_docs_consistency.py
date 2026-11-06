@@ -104,3 +104,39 @@ def test_stale_archive_quarantined() -> None:
         "superseded snapshot still at docs/ top level; move to docs/archive/"
     )
     assert (REPO / "docs" / "archive" / "CURRENT_TRUTH_2026-05-23.md").exists()
+
+
+def test_readme_last_reviewed_is_current() -> None:
+    """README must carry a Last reviewed line dated 2026-10-22 (docs pass)."""
+    readme = _read(README)
+    for line in readme.splitlines():
+        if line.strip().startswith("Last reviewed:"):
+            assert "2026-10-22" in line, (
+                f"README Last reviewed is stale: {line.strip()!r}; expected 2026-10-22"
+            )
+            return
+    pytest.fail("README lost its 'Last reviewed:' line")
+
+
+def test_readme_layout_lists_house_dirs() -> None:
+    """README Layout tree must name every top-level house directory."""
+    readme = _read(README)
+    section = "## Layout"
+    assert section in readme, "README lost its Layout section"
+    after = readme.split(section, 1)[1].split("\n## ", 1)[0]
+    expected = (
+        "scripts/",
+        "data/",
+        "systemd/",
+        "packages/",
+        "demos/",
+        "logs/",
+        "backups/",
+        "runtime/",
+        "eval_runs/",
+        "scratch/",
+        "carolina-redesign/",
+        "tmp/",
+    )
+    missing = [d for d in expected if d not in after]
+    assert not missing, f"README Layout tree missing dir(s): {missing}"
