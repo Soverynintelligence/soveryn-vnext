@@ -1,0 +1,37 @@
+# SOVERYN tgthrmess Telegram bridge (:5065) — user service.
+# Written 2026-10-24 by Forge (commission 6c21dc33); rewritten 2026-10-25
+# (commission 06987ed5).
+#
+# LIVE process: python3 pid 282556, LISTEN 0.0.0.0:5065, /health -> {"ok":true}.
+# No unit file existed in soveryn_vnext/systemd/, teammates/systemd/, or the
+# user manager before this file.
+#
+# CAVEAT — ExecStart and WorkingDirectory are RECONSTRUCTED, not captured.
+# Messages origin has no shell: /proc/282556/cmdline and /proc/282556/cwd are
+# unreadable from this seat (house_diag refuses /proc; list_directory is jailed
+# to the repo). Verify both lines against the live process before enabling:
+#   tr '\0' ' ' < /proc/282556/cmdline; echo
+#   readlink /proc/282556/cwd
+# Adjust ExecStart/WorkingDirectory to match, then daemon-reload.
+#
+# Do NOT `enable --now` while pid 282556 is alive: the new instance cannot bind
+# :5065 (address in use) and will restart-loop. Stop the old process first, or
+# let the unit take over on the next reboot.
+
+[Unit]
+Description=SOVERYN tgthrmess Telegram bridge (:5065)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/tgthrmess-app
+EnvironmentFile=-%h/tgthrmess-app/.env
+ExecStart=%h/tgthrmess-app/.venv/bin/python %h/tgthrmess-app/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
