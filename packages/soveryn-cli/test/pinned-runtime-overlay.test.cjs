@@ -49,18 +49,29 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
   try {
     const data = loadProfiles();
     const active = data.profiles[readActiveId(data)];
-    setPin('1.3.0');
+    setPin('1.5.0');
     const cur = buildPiConfig(data, active, { overlay: null }).settings;
     assert.deepEqual(cur.extensions, ['-builtin:mcp']);
     assert.equal(cur.tuiMode, 'regular');
-    assert.equal(cur.lastChangelogVersion, '1.3.0');
+    assert.equal(cur.lastChangelogVersion, '1.5.0');
     assert.equal(cur.defaultProjectTrust, 'always');
+    setPin('1.3.0');
+    const p130 = buildPiConfig(data, active, { overlay: null }).settings;
+    assert.deepEqual(p130.extensions, ['-builtin:mcp']);
+    assert.equal(p130.tuiMode, 'regular');
+    assert.equal(p130.lastChangelogVersion, '1.3.0');
+    // 1.5.0 settings = 1.3.0 settings except lastChangelogVersion (no other drift)
+    {
+      const { lastChangelogVersion: _a, ...a } = cur;
+      const { lastChangelogVersion: _b, ...b } = p130;
+      assert.deepEqual(a, b);
+    }
     setPin('1.2.0');
     const p120 = buildPiConfig(data, active, { overlay: null }).settings;
     assert.deepEqual(p120.extensions, ['-builtin:mcp']);
     assert.equal(p120.tuiMode, 'regular');
     assert.equal(p120.lastChangelogVersion, '1.2.0');
-    // 1.3.0 settings = 1.2.0 settings except lastChangelogVersion (no other drift)
+    // 1.5.0 settings = 1.2.0 settings except lastChangelogVersion (no other drift)
     {
       const { lastChangelogVersion: _a, ...a } = cur;
       const { lastChangelogVersion: _b, ...b } = p120;
@@ -71,7 +82,7 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
     assert.deepEqual(p110.extensions, ['-builtin:mcp']);
     assert.equal(p110.tuiMode, 'regular');
     assert.equal(p110.lastChangelogVersion, '1.1.0');
-    // 1.3.0 settings = 1.1.0 settings except lastChangelogVersion (no other drift)
+    // 1.5.0 settings = 1.1.0 settings except lastChangelogVersion (no other drift)
     {
       const { lastChangelogVersion: _a, ...a } = cur;
       const { lastChangelogVersion: _b, ...b } = p110;
@@ -82,7 +93,7 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
     assert.deepEqual(p104.extensions, ['-builtin:mcp']);
     assert.equal(p104.tuiMode, 'regular');
     assert.equal(p104.lastChangelogVersion, '1.0.4');
-    // 1.3.0 settings = 1.0.4 settings except lastChangelogVersion (no other drift)
+    // 1.5.0 settings = 1.0.4 settings except lastChangelogVersion (no other drift)
     {
       const { lastChangelogVersion: _a, ...a } = cur;
       const { lastChangelogVersion: _b, ...b } = p104;
@@ -93,7 +104,7 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
     assert.deepEqual(p103.extensions, ['-builtin:mcp']);
     assert.equal(p103.tuiMode, 'regular');
     assert.equal(p103.lastChangelogVersion, '1.0.3');
-    // 1.3.0 settings = 1.0.3 settings except lastChangelogVersion (no other drift)
+    // 1.5.0 settings = 1.0.3 settings except lastChangelogVersion (no other drift)
     {
       const { lastChangelogVersion: _a, ...a } = cur;
       const { lastChangelogVersion: _b, ...b } = p103;
@@ -104,7 +115,7 @@ test('generated settings: extensions -builtin:mcp only on Pi >=0.99, tuiMode reg
     assert.deepEqual(p100.extensions, ['-builtin:mcp']);
     assert.equal(p100.tuiMode, 'regular');
     assert.equal(p100.lastChangelogVersion, '1.0.0');
-    // 1.3.0 settings = 1.0.0 settings except lastChangelogVersion (no other drift)
+    // 1.5.0 settings = 1.0.0 settings except lastChangelogVersion (no other drift)
     const { lastChangelogVersion: _curVer, ...curRest } = cur;
     const { lastChangelogVersion: _p100Ver, ...p100Rest } = p100;
     assert.deepEqual(curRest, p100Rest);

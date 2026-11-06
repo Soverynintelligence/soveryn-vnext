@@ -141,7 +141,8 @@
           "name": "SOVERYN · DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
           "reasoning": false,
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "contextWindow": 262144,
           "maxTokens": 16384,

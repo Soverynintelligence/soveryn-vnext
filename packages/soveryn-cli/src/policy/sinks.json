@@ -11,7 +11,8 @@
       "callers": [
         "src/cli.js cmdCode \u2192 launchPi",
         "src/launch.js launchPi (entry)",
-        "bin/soveryn-pi130 \u2192 src/cli.js (pinned Pi 1.3.0 via src/pinned-pi.js piCommand; soveryn-cli only, Kernel ignores)",
+        "bin/soveryn-pi140 \u2192 src/cli.js (pinned Pi 1.4.0 via src/pinned-pi.js piCommand; soveryn-cli only, Kernel ignores)",
+        "bin/soveryn-pi130 \u2192 src/cli.js (rollback pin Pi 1.3.0, same path)",
         "bin/soveryn-pi120 \u2192 src/cli.js (rollback pin Pi 1.2.0, same path)",
         "bin/soveryn-pi110 \u2192 src/cli.js (rollback pin Pi 1.1.0, same path)",
         "bin/soveryn-pi104 \u2192 src/cli.js (rollback pin Pi 1.0.4, same path)",
@@ -20,7 +21,7 @@
         "bin/soveryn-pi099 \u2192 src/cli.js (rollback pin Pi 0.99.1, same path)",
         "bin/soveryn-pi087 \u2192 src/cli.js (rollback pin Pi 0.87.1, same path)"
       ],
-      "audited_at": "2026-10-16"
+      "audited_at": "2026-10-22"
     },
     {
       "id": "profile_write",

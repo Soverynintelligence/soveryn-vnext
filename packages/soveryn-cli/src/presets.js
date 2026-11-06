@@ -22,6 +22,8 @@ const WEB_EXTENSION = path.join(PKG_ROOT, 'extensions', 'web-pack.ts');
 const WEB_SCRIPTS = path.join(PKG_ROOT, 'scripts', 'web');
 const HARNESS_EXTENSION = path.join(PKG_ROOT, 'extensions', 'harness-controls.ts');
 const LATTICE_EXTENSION = path.join(PKG_ROOT, 'extensions', 'kernel-lattice.ts');
+// revamp phase 1: inert unless SOVERYN_DESK_GATE=1 (Desk RPC children)
+const DANGER_GATE_EXTENSION = path.join(PKG_ROOT, 'extensions', 'danger-gate.ts');
 const LATTICE_TOOLS = Object.freeze(['remember_fact', 'memory_search', 'memory_get']);
 
 /** Tools allowlist + lattice memory tools (deduped, order kept). */
@@ -57,6 +59,7 @@ function defaultCfgDir() {
 function baseExtensions(cfgDir = defaultCfgDir()) {
   const exts = [];
   if (fs.existsSync(HARNESS_EXTENSION)) exts.push(HARNESS_EXTENSION);
+  if (process.env.SOVERYN_DESK_GATE === '1' && fs.existsSync(DANGER_GATE_EXTENSION)) exts.push(DANGER_GATE_EXTENSION);
   if (fs.existsSync(LATTICE_EXTENSION) && !agentDirHasLattice(cfgDir)) {
     exts.push(LATTICE_EXTENSION);
   }

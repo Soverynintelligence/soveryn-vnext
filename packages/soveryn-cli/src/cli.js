@@ -35,6 +35,8 @@ const {
 } = require('./policy/gates');
 const { cmdPark, cmdUnpark } = require('./park');
 const { cmdDesk } = require('./desk');
+const { acquireLease, leaseRoot, otherLiveLeases, hasPiPickerFlag } = require('./lease-check');
+const { SoverynPaths: _LeasePaths } = require('./paths');
 const {
   listSessions,
   latestSession,
@@ -489,7 +491,18 @@ async function cmdStatus({ doctor = false, gatesOnly = false, selfTest = false, 
   }
 }
 
+function requireLeaseOrExit(file) {
+  const repo = process.env.SOVERYN_ROOT || _LeasePaths.root();
+  const r = acquireLease(repo, file);
+  if (r.message && r.ok) console.error(`${CMD}: ${r.message}`);
+  if (!r.ok) {
+    console.error(r.message);
+    process.exit(r.code || 3);
+  }
+}
+
 function injectSession(parsed, picked) {
+  requireLeaseOrExit(picked.file);
   const rest = (parsed.rest || []).filter((a) => a !== '--continue' && a !== '-c');
   const cwdArg =
     picked.cwd && fs.existsSync(picked.cwd) && fs.statSync(picked.cwd).isDirectory()
@@ -678,6 +691,7 @@ function cmdResume(cmdArgs, peeled) {
     `${CMD}: resume ${picked.id.slice(0, 8)}  cwd=${picked.cwd || '-'}  ${picked.harness}  ${picked.file}`,
   );
 
+  requireLeaseOrExit(picked.file);
   const launchArgs = [
     ...packFlagsFromParsed(peeled),
     ...(cwdArg ? [cwdArg] : []),
@@ -713,6 +727,17 @@ async function main(argv) {
 
     const cmd = peeled.rest[0];
     const cmdArgs = peeled.rest.slice(1);
+
+    // revamp phase 1: Pi's --resume/-r picker bypasses the lease; refuse while
+    // another writer (Desk or CLI) holds any thread.
+    if (hasPiPickerFlag(peeled.rest) && process.env.SOVERYN_LEASE_SKIP !== '1') {
+      const held = otherLiveLeases(leaseRoot(process.env.SOVERYN_ROOT || _LeasePaths.root()));
+      if (held.length) {
+        for (const l of held) console.error(`${CMD}: session ${l.session_id} is held by ${l.owner} pid ${l.pid}`);
+        console.error(`${CMD}: --resume picker refused while a thread is leased; use \`${CMD} resume <id>\` (lease-checked).`);
+        process.exit(3);
+      }
+    }
 
     if (peeled.help && !cmd) {
       printHelp();

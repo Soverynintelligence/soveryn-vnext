@@ -1,14 +1,14 @@
 {
-  "defaultProvider": "soveryn-deepseek",
-  "defaultModel": "deepseek-v4.1-flash-1017",
-  "defaultThinkingLevel": "off",
+  "defaultProvider": "soveryn-glm",
+  "defaultModel": "glm-5.3-flash",
+  "defaultThinkingLevel": "medium",
   "theme": "soveryn-lab",
   "quietStartup": false,
   "defaultProjectTrust": "always",
   "enableInstallTelemetry": false,
   "compaction": {
     "enabled": true,
-    "reserveTokens": 32768,
+    "reserveTokens": 18432,
     "keepRecentTokens": 65536
   },
   "retry": {
@@ -21,7 +21,7 @@
     }
   },
   "httpIdleTimeoutMs": 600000,
-  "lastChangelogVersion": "1.3.0",
+  "lastChangelogVersion": "1.5.0",
   "extensions": [
     "-builtin:mcp"
   ],

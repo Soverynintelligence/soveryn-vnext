@@ -10,7 +10,7 @@
       "baseUrl": "http://127.0.0.1:8888/v1",
       "healthPath": "/models",
       "modelId": "qwen3.8-flash-next",
-      "modelName": "SOVERYN \u00b7 Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
+      "modelName": "SOVERYN · Qwen3.8-Flash-Next NVFP4 TP=1 spark2",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": true,
@@ -45,12 +45,12 @@
     "glm": {
       "id": "glm",
       "displayName": "GLM 5.3 Flash",
-      "enabled": false,
+      "enabled": true,
       "piProviderId": "soveryn-glm",
       "baseUrl": "http://10.10.10.2:8001/v1",
       "healthPath": "/models",
       "modelId": "glm-5.3-flash",
-      "modelName": "SOVERYN \u00b7 GLM-5.3-Flash EXL3",
+      "modelName": "SOVERYN · GLM-5.3-Flash EXL3",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": true,
@@ -78,13 +78,12 @@
         "reserveTokens": 18432,
         "keepRecentTokens": 65536
       },
-      "startCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./start.sh'",
-      "stopCommand": "ssh spark 'cd /home/soverynspark/src/GLM-5.3-Flash-EXL3-2x-DGX-Sparks && ./stop.sh'",
-      "startNotes": "Lab 2026-09-10: NOT hot-standby. Stop Flash-Next on spark2 first, then EXL3 start on spark1. Prefer EXL3 over legacy NVFP4 glm53-serve. No ABLIT. See: kernel unpark glm (prints steps); kernel unpark glm --confirm",
+      "startCommand": "ssh spark 'cd /home/soverynspark/src/glm53-bf5f945 && PORT=8001 PREPARE=0 ./start.sh'",
+      "stopCommand": "ssh spark 'cd /home/soverynspark/src/glm53-bf5f945 && ./stop.sh'",
+      "startNotes": "Lab 2026-10-31 (Jon approved): GLM 5.3 Flash EXL3 TensorFold v0.6.0 recipe bf5f945 (image tensorfold-glm53:v0.6.0-789e8f3bdfa2 b925352f3515; cut over 2026-11-02, Jon approved; rollback: old 549fdc5 dir GLM-5.3-Flash-EXL3-2x-DGX-Sparks-TensorFold, image a24e8b6fdb17) TP=2 on both Sparks, :8001. Not hot-standby: stop dsv41-tensorfold (DeepSeek :8888) first. No ABLIT.",
       "flashStopCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./stop.sh'",
       "flashStartCommand": "ssh spark2 'cd ~/Qwen3.8-Flash-Next-Single-DGX-Spark && ./start.sh'",
-      "preset": "standard",
-      "disabledReason": "GLM :8001 parked 2026-10-19 (Jon: park for now). Serve is not listening on either Spark; deepseek :8888 is the active seat. Parking is profile-only \u2014 no SSH, no serve swap, Flash-Next stays stopped. Unpark needs both Sparks (owner-gated): stop whatever owns them, start GLM EXL3, then set enabled=true."
+      "preset": "standard"
     },
     "eve": {
       "id": "eve",
@@ -94,7 +93,7 @@
       "baseUrl": "http://127.0.0.1:8090/v1",
       "healthPath": "/models",
       "modelId": "eve",
-      "modelName": "SOVERYN \u00b7 Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
+      "modelName": "SOVERYN · Qwen3.8-27B-NVFP4 (Eve seat, Blackwell)",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": false,
@@ -123,7 +122,7 @@
       "baseUrl": "http://127.0.0.1:8091/v1",
       "healthPath": "/models",
       "modelId": "aetheria",
-      "modelName": "SOVERYN \u00b7 Qwen 3.8 (Aetheria lane)",
+      "modelName": "SOVERYN · Qwen 3.8 (Aetheria lane)",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": false,
@@ -152,12 +151,13 @@
       "baseUrl": "http://10.10.10.2:8888/v1",
       "healthPath": "/models",
       "modelId": "deepseek-v4.1-flash-1017",
-      "modelName": "SOVERYN \u00b7 DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
+      "modelName": "SOVERYN · DeepSeek-V4.1-Flash-1017 EXL3 2.9bpw (one-time trial)",
       "api": "openai-completions",
       "apiKey": "local",
       "reasoning": false,
       "input": [
-        "text"
+        "text",
+        "image"
       ],
       "contextWindow": 262144,
       "maxTokens": 16384,
@@ -185,7 +185,7 @@
         "bash",
         "edit"
       ],
-      "note": "Pi --tools bash,edit \u2014 tight surface (dsh minimal spirit)"
+      "note": "Pi --tools bash,edit — tight surface (dsh minimal spirit)"
     },
     "standard": {
       "tools": null,
