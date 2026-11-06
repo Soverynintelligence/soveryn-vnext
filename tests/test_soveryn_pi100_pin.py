@@ -1,4 +1,4 @@
-"""Guards for the current Pi launcher pin (pi130 as of 2026-10-16) and generated CLI settings."""
+"""Guards for the current Pi launcher pin (pi140 as of 2026-10-22) and generated CLI settings."""
 
 from __future__ import annotations
 
@@ -9,24 +9,25 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 CLI = REPO / "packages" / "soveryn-cli"
-LAUNCHER = CLI / "bin" / "soveryn-pi130"
+LAUNCHER = CLI / "bin" / "soveryn-pi140"
 PKG_JSON = CLI / "package.json"
 SETTINGS = REPO / "config" / "soveryn-cli" / "settings.json"
 
 
-def test_pi130_launcher_exists_executable_and_matches_package_pin() -> None:
+def test_pi140_launcher_exists_executable_and_matches_package_pin() -> None:
     assert LAUNCHER.is_file()
     assert LAUNCHER.stat().st_mode & stat.S_IXUSR
     text = LAUNCHER.read_text(encoding="utf-8")
     pkg = json.loads(PKG_JSON.read_text(encoding="utf-8"))
-    assert re.search(r'^PI_PIN_VERSION="1\.3\.0"$', text, re.M)
+    assert re.search(r'^PI_PIN_VERSION="1\.4\.0"$', text, re.M)
     node = pkg["soverynPi"]["node"]
     assert re.search(rf'^NODE_PIN_VERSION="{re.escape(node)}"$', text, re.M)
 
 
-def test_package_json_bin_soveryn_is_pi130_and_rollbacks_stay_pinned() -> None:
+def test_package_json_bin_soveryn_is_pi140_and_rollbacks_stay_pinned() -> None:
     pkg = json.loads(PKG_JSON.read_text(encoding="utf-8"))
-    assert pkg["bin"]["soveryn"] == "./bin/soveryn-pi130"
+    assert pkg["bin"]["soveryn"] == "./bin/soveryn-pi140"
+    assert pkg["bin"]["soveryn-pi130"] == "./bin/soveryn-pi130"
     assert pkg["bin"]["soveryn-pi120"] == "./bin/soveryn-pi120"
     assert pkg["bin"]["soveryn-pi110"] == "./bin/soveryn-pi110"
     assert pkg["bin"]["soveryn-pi104"] == "./bin/soveryn-pi104"
@@ -36,6 +37,7 @@ def test_package_json_bin_soveryn_is_pi130_and_rollbacks_stay_pinned() -> None:
     assert pkg["bin"]["soveryn-pi087"] == "./bin/soveryn-pi087"
     assert pkg["bin"]["soveryn-074"] == "./bin/soveryn"
 
+    pi130 = CLI / "bin" / "soveryn-pi130"
     pi120 = CLI / "bin" / "soveryn-pi120"
     pi110 = CLI / "bin" / "soveryn-pi110"
     pi104 = CLI / "bin" / "soveryn-pi104"
@@ -43,6 +45,7 @@ def test_package_json_bin_soveryn_is_pi130_and_rollbacks_stay_pinned() -> None:
     pi100 = CLI / "bin" / "soveryn-pi100"
     pi099 = CLI / "bin" / "soveryn-pi099"
     pi087 = CLI / "bin" / "soveryn-pi087"
+    assert pi130.is_file()
     assert pi120.is_file()
     assert pi110.is_file()
     assert pi104.is_file()
@@ -50,6 +53,7 @@ def test_package_json_bin_soveryn_is_pi130_and_rollbacks_stay_pinned() -> None:
     assert pi100.is_file()
     assert pi099.is_file()
     assert pi087.is_file()
+    assert re.search(r'^PI_PIN_VERSION="1\.3\.0"$', pi130.read_text(encoding="utf-8"), re.M)
     assert re.search(r'^PI_PIN_VERSION="1\.2\.0"$', pi120.read_text(encoding="utf-8"), re.M)
     assert re.search(r'^PI_PIN_VERSION="1\.1\.0"$', pi110.read_text(encoding="utf-8"), re.M)
     assert re.search(r'^PI_PIN_VERSION="1\.0\.4"$', pi104.read_text(encoding="utf-8"), re.M)
