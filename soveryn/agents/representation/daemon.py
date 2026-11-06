@@ -176,6 +176,9 @@ class RepresentationDaemon:
             supersedes=None,  # P3 — not yet implemented
         )
 
+        self._record_gate(run_id=run_id, now=now, conclusions=conclusions,
+                          written=written)
+
         # Advance the last-run cursor ONLY on eligible ticks
         self._last_run_at = now
 
@@ -190,6 +193,29 @@ class RepresentationDaemon:
             "conclusion_count": len(conclusions),
             "written": written,
         }
+
+    def _record_gate(self, *, run_id: str, now: datetime, conclusions: list,
+                     written: dict) -> None:
+        """Novelty-gate measurement (approved criterion 2026-11-05: 7 days,
+        ≥80% novel writes). One JSONL line per tick, appended next to the
+        lattice DB. Measurement ONLY — the gate never blocks writes; the
+        verdict stays human. Best-effort — never crashes the tick."""
+        try:
+            gate_path = self.lattice_store.db_path.parent / "representation_gate.jsonl"
+            gate_path.parent.mkdir(parents=True, exist_ok=True)
+            line = json.dumps({
+                "ts": now.isoformat(),
+                "run_id": run_id,
+                "dry_run": self.config.dry_run,
+                "offered": len(conclusions),
+                "written": written.get("written", 0),
+                "skipped_exact": written.get("skipped_exact", 0),
+                "skipped_near": written.get("skipped_near", 0),
+            }, sort_keys=True)
+            with gate_path.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except Exception:
+            logger.exception("representation gate log append failed")
 
     def _record_dryrun(self, *, run_id: str, now: datetime, conclusions: list) -> None:
         """The dry-run review artifact for Vett/Aetheria: log each would-write

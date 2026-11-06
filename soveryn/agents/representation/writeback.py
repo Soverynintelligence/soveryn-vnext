@@ -14,7 +14,10 @@ dict only.
 """
 from __future__ import annotations
 
+import difflib
+import hashlib
 import json
+import re
 import sqlite3
 import uuid
 from datetime import datetime
@@ -50,12 +53,15 @@ def write_conclusions(
                     Conclusions at those indices replace the named old nodes.
 
     Returns:
-        dict with keys: written, edges, superseded, dry_run.
+        dict with keys: written, edges, superseded, dry_run,
+        skipped_duplicates, skipped_exact, skipped_near.
     """
     supersedes = supersedes or {}
     written = 0
     edges_written = 0
     superseded = 0
+    skipped_exact = 0
+    skipped_near = 0
 
     if dry_run:
         return {
@@ -63,13 +69,30 @@ def write_conclusions(
             "edges": 0,
             "superseded": 0,
             "dry_run": True,
+            "skipped_duplicates": 0,
+            "skipped_exact": 0,
+            "skipped_near": 0,
         }
 
     db_path = lattice_store.db_path
+    existing_norm = _load_existing_conclusions(db_path)
+    existing_hashes = {_hash(n) for n in existing_norm}
 
     for i, c in enumerate(conclusions):
         # Build provenance dict
         old_node_id = supersedes.get(i)
+
+        # Dedupe: never write a conclusion whose content already exists.
+        norm = _normalize(c.content)
+        if _hash(norm) in existing_hashes:
+            skipped_exact += 1
+            continue
+        if _is_near_duplicate(norm, existing_norm):
+            skipped_near += 1
+            continue
+        existing_hashes.add(_hash(norm))
+        existing_norm.append(norm)
+
         prov = {
             "kind": "conclusion",
             "subject": subject,
@@ -129,10 +152,51 @@ def write_conclusions(
         "edges": edges_written,
         "superseded": superseded,
         "dry_run": False,
+        "skipped_duplicates": skipped_exact + skipped_near,
+        "skipped_exact": skipped_exact,
+        "skipped_near": skipped_near,
     }
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+NEAR_DUP_RATIO = 0.92
+
+
+def _normalize(text: str) -> str:
+    """Lowercase, strip punctuation edges, collapse whitespace."""
+    t = (text or "").lower()
+    t = re.sub(r"[^\w\s]", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _hash(norm: str) -> str:
+    return hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+
+def _load_existing_conclusions(db_path) -> list[str]:
+    try:
+        with sqlite3.connect(str(db_path)) as con:
+            rows = con.execute(
+                "SELECT content FROM nodes WHERE type='conclusion'"
+            ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [_normalize(r[0]) for r in rows]
+
+
+def _is_near_duplicate(norm: str, existing: list[str]) -> bool:
+    """Local-only similarity check (difflib), no external APIs."""
+    for e in existing:
+        if not e:
+            continue
+        # cheap length prefilter
+        if min(len(e), len(norm)) / max(len(e), len(norm), 1) < NEAR_DUP_RATIO:
+            continue
+        if difflib.SequenceMatcher(None, norm, e).ratio() >= NEAR_DUP_RATIO:
+            return True
+    return False
+
 
 def _resolve_real_premises(db_path, premises: tuple[str, ...]) -> list[str]:
     """Return the subset of premise tokens that are real existing node ids.

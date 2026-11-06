@@ -237,3 +237,44 @@ def test_dry_run_writes_nothing(tmp_path):
     assert _node_count(db) == 0
     assert _edge_count(db) == 0
     assert _log_count(db) == 0
+
+
+# ─── Dedupe: exact + near-duplicate conclusions are skipped ───
+
+def _c(content):
+    return Conclusion(mode="inductive", confidence="tentative",
+                      content=content, premises=("turn:s:0",))
+
+
+def _conclusion_count(db):
+    with sqlite3.connect(str(db)) as con:
+        return con.execute(
+            "SELECT COUNT(*) FROM nodes WHERE type='conclusion'").fetchone()[0]
+
+
+def test_dedupe_exact_and_near(tmp_path):
+    db = tmp_path / "l.db"
+    store = LatticeStore(db)
+    kw = dict(owner_agent="aetheria", subject="jon", run_id="r1",
+              embed_fn=None, dry_run=False)
+    r1 = write_conclusions(store, [_c("Jon values honest feedback.")], **kw)
+    assert r1["written"] == 1 and r1["skipped_duplicates"] == 0
+    r2 = write_conclusions(store, [
+        _c("Jon values honest feedback."),          # exact
+        _c("  jon VALUES honest   feedback "),      # normalized exact
+        _c("Jon values honest feedbacks."),         # near
+        _c("Jon gardens on weekends."),             # novel
+        _c("Jon gardens on weekends."),             # in-batch dup
+    ], **kw)
+    assert r2["written"] == 1
+    assert r2["skipped_exact"] == 3
+    assert r2["skipped_near"] == 1
+    assert r2["skipped_duplicates"] == 4
+    assert _conclusion_count(db) == 2
+
+
+def test_dedupe_dry_run_keys(tmp_path):
+    store = LatticeStore(tmp_path / "l.db")
+    r = write_conclusions(store, [_c("x")], owner_agent="a", subject="j",
+                          run_id="r", embed_fn=None, dry_run=True)
+    assert r["dry_run"] is True and r["skipped_duplicates"] == 0
