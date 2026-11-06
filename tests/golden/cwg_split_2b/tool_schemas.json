@@ -698,7 +698,7 @@
       }
     },
     {
-      "description": "List, stop, or steer Kernel's live Aider/OpenCode children. Stop keeps the partial working tree. Steer interrupts and respawns with the correction. Does not spawn a new mend \u2014 use run_aider / run_opencode for that.",
+      "description": "List, stop, or steer Kernel's live Aider/OpenCode children. Stop keeps the partial working tree. Steer interrupts and respawns with the correction. Does not spawn a new mend \u2014 use run_aider for that.",
       "name": "kernel_child",
       "schema": {
         "additionalProperties": false,
@@ -4785,7 +4785,7 @@
       }
     },
     {
-      "description": "List, stop, or steer Kernel's live Aider/OpenCode children. Stop keeps the partial working tree. Steer interrupts and respawns with the correction. Does not spawn a new mend \u2014 use run_aider / run_opencode for that.",
+      "description": "List, stop, or steer Kernel's live Aider/OpenCode children. Stop keeps the partial working tree. Steer interrupts and respawns with the correction. Does not spawn a new mend \u2014 use run_aider for that.",
       "name": "kernel_child",
       "schema": {
         "additionalProperties": false,
@@ -5201,7 +5201,7 @@
       }
     },
     {
-      "description": "Default Kernel write path: soveryn-aider --kernel --yes on Flash-Next :8888. Surgical diffs. Prefer this over run_opencode. Use run_opencode only for a short bounded --auto one-shot.",
+      "description": "Default Kernel write path: soveryn-aider --kernel --yes on Flash-Next :8888. Surgical diffs.",
       "name": "run_aider",
       "schema": {
         "additionalProperties": false,
@@ -5219,27 +5219,6 @@
           },
           "repo": {
             "description": "Working tree. Default ~/soveryn_vnext. House repos only.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "prompt"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "description": "Short soveryn-opencode run --auto on Flash-Next :8888. Prefer run_aider for real patches. Do not use this for a lookup.",
-      "name": "run_opencode",
-      "schema": {
-        "additionalProperties": false,
-        "properties": {
-          "prompt": {
-            "description": "The mend. Concrete: files, expected behavior, how to verify. OpenCode edits and runs on Flash-Next :8888.",
-            "type": "string"
-          },
-          "repo": {
-            "description": "Working tree. Default ~/soveryn_vnext. Must be a house repo (soveryn_vnext or kernel desk).",
             "type": "string"
           }
         },

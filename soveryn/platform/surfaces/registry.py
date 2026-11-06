@@ -115,6 +115,8 @@ CORE_SURFACES: tuple[Surface, ...] = (
                  "messages": [{"role": "user",
                                "content": "In one sentence, what is SOVERYN?"}]},
         expect_json_field="reply", expect_min_chars=60,
+        retired="2026-10-30 — Seneca (soveryn-agent on the Spark) stopped and disabled by Jon; "
+                "restore: ssh spark systemctl --user enable --now soveryn-agent, then clear this.",
         notes="SENECA, the public front door. On the Spark behind the same "
               "cloudflared tunnel as atticus — if both fail together, suspect the "
               "tunnel, not either service.\n"
@@ -183,6 +185,8 @@ CORE_SURFACES: tuple[Surface, ...] = (
     Surface(
         "seneca-public", Kind.HTTP, "https://ask.soverynintelligence.com/health",
         owner="soveryn", interval_s=600, expect_contains='"model_ok": true',
+        retired="2026-10-30 — Seneca (soveryn-agent on the Spark) stopped and disabled by Jon; "
+                "restore: ssh spark systemctl --user enable --now soveryn-agent, then clear this.",
         notes="The public voice of SOVERYN. Visible to anyone reading the site.",
     ),
     Surface(

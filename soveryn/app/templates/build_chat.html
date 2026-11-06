@@ -4,25 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SOVERYN · Kernel</title>
+<link rel="stylesheet" href="/static/desk.css?v=20261105sky">
 <style>
-  :root {
-    --bg: #050608;
-    --panel: rgba(10,12,16,0.92);
-    --line: rgba(232,227,213,0.12);
-    --text: #e8e3d5;
-    --dim: rgba(232,227,213,0.55);
-    --mute: rgba(232,227,213,0.35);
-    --gold: #c6a664;
-    --mint: #6fb98a;
-    --hot: #ff6b6b;
-    --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, monospace;
-  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    background: radial-gradient(1200px 600px at 20% -10%, rgba(198,166,100,0.08), transparent 55%),
+    background: radial-gradient(1200px 600px at 20% -10%, rgba(192,130,79,0.08), transparent 55%),
                 radial-gradient(900px 500px at 90% 0%, rgba(80,120,160,0.06), transparent 50%),
                 var(--bg);
     color: var(--text);
@@ -67,12 +55,12 @@
     color: var(--gold);
     text-decoration: none;
     font-size: 13px;
-    border: 1px solid rgba(198,166,100,0.3);
+    border: 1px solid rgba(192,130,79,0.3);
     padding: 7px 12px;
     border-radius: 10px;
-    background: rgba(198,166,100,0.08);
+    background: rgba(192,130,79,0.08);
   }
-  .nav a:hover { background: rgba(198,166,100,0.16); }
+  .nav a:hover { background: rgba(192,130,79,0.16); }
   .status {
     display: flex;
     flex-wrap: wrap;
@@ -92,11 +80,11 @@
     border: 1px solid var(--line);
     background: rgba(0,0,0,0.35);
   }
-  .pill[data-state="warm"] { border-color: rgba(111,185,138,0.45); color: var(--mint); }
-  .pill[data-state="loading"] { border-color: rgba(198,166,100,0.45); color: var(--gold); }
+  .pill[data-state="warm"] { border-color: rgba(94,225,160,0.45); color: var(--mint); }
+  .pill[data-state="loading"] { border-color: rgba(192,130,79,0.45); color: var(--gold); }
   .pill[data-state="cold"] { border-color: var(--line); color: var(--dim); }
   .pill[data-state="missing"],
-  .pill[data-state="router_down"] { border-color: rgba(255,107,107,0.4); color: var(--hot); }
+  .pill[data-state="router_down"] { border-color: rgba(224,100,90,0.4); color: var(--hot); }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .actions button {
     font-family: var(--font);
@@ -109,9 +97,9 @@
     cursor: pointer;
   }
   .actions button.primary {
-    border-color: rgba(198,166,100,0.4);
-    background: rgba(198,166,100,0.12);
-    color: #f3efe6;
+    border-color: rgba(192,130,79,0.4);
+    background: rgba(192,130,79,0.12);
+    color: #ece6d6;
   }
   .actions button:disabled { opacity: 0.45; cursor: wait; }
   .log {
@@ -138,8 +126,8 @@
   }
   .msg.user {
     align-self: flex-end;
-    background: rgba(198,166,100,0.12);
-    border: 1px solid rgba(198,166,100,0.25);
+    background: rgba(192,130,79,0.12);
+    border: 1px solid rgba(192,130,79,0.25);
   }
   .msg.assistant {
     align-self: flex-start;
@@ -154,7 +142,7 @@
     background: transparent;
     padding: 0;
   }
-  .msg.err { color: var(--hot); border-color: rgba(255,107,107,0.35); }
+  .msg.err { color: var(--hot); border-color: rgba(224,100,90,0.35); }
   form.composer {
     margin-top: 12px;
     display: flex;
@@ -179,9 +167,9 @@
     font-size: 13px;
     padding: 12px 16px;
     border-radius: 12px;
-    border: 1px solid rgba(198,166,100,0.4);
-    background: rgba(198,166,100,0.16);
-    color: #f3efe6;
+    border: 1px solid rgba(192,130,79,0.4);
+    background: rgba(192,130,79,0.16);
+    color: #ece6d6;
     cursor: pointer;
   }
   form.composer button:disabled { opacity: 0.5; cursor: wait; }
@@ -203,8 +191,8 @@
   .proposal {
     align-self: stretch;
     max-width: 100%;
-    border: 1px solid rgba(240,193,74,0.45);
-    background: rgba(240,193,74,0.08);
+    border: 1px solid rgba(212,168,39,0.45);
+    background: rgba(212,168,39,0.08);
     border-radius: 12px;
     padding: 12px;
     margin: 4px 0;
@@ -232,13 +220,13 @@
     cursor: pointer;
   }
   .proposal button.approve {
-    border-color: rgba(111,185,138,0.5);
-    background: rgba(111,185,138,0.15);
+    border-color: rgba(94,225,160,0.5);
+    background: rgba(94,225,160,0.15);
     color: var(--mint);
   }
   .proposal button.reject {
-    border-color: rgba(255,107,107,0.45);
-    background: rgba(255,107,107,0.1);
+    border-color: rgba(224,100,90,0.45);
+    background: rgba(224,100,90,0.1);
     color: var(--hot);
   }
   .proposal pre {
@@ -255,9 +243,8 @@
     color: var(--dim);
   }
 </style>
-<link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
-<body class="sd">
+<body class="desk">
   <div class="wrap">
     <header>
       <div class="brand">

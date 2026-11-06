@@ -361,7 +361,7 @@ def test_forge_has_house_web_tools(
     app = create_app(conv_store=ConversationStore(tmp_path / "conv.db"))
     loop = app.extensions["soveryn"]["agent_loops"]["forge"]
     names = {schema["function"]["name"] for schema in loop._tool_schemas()}
-    assert {"web_search", "fetch_url", "run_aider", "run_opencode", "kernel_child", "kernel_run"} <= names
+    assert {"web_search", "fetch_url", "run_aider", "kernel_child", "kernel_run"} <= names
 
 
 def test_cron_notepad_registered_for_automation_agents(

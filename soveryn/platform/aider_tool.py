@@ -193,7 +193,6 @@ def build_run_aider_tool(*, owner_agent: str = "kernel") -> ToolSpec:
         handler=handler,
         description=(
             "Default Kernel write path: soveryn-aider --kernel --yes on "
-            "Flash-Next :8888. Surgical diffs. Prefer this over run_opencode. "
-            "Use run_opencode only for a short bounded --auto one-shot."
+            "Flash-Next :8888. Surgical diffs."
         ),
     )

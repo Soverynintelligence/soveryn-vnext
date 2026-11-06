@@ -263,12 +263,10 @@ def _register_code(ctx: PackContext, owner: str) -> None:
     if owner != "forge":
         return
     from soveryn.platform.aider_tool import build_run_aider_tool
-    from soveryn.platform.opencode_tool import build_run_opencode_tool
     from soveryn.platform.kernel_child_tool import build_kernel_child_tool
     from soveryn.platform.kernel_run_tool import build_kernel_run_tool
 
     ctx.registry.register(build_run_aider_tool(owner_agent="forge"))
-    ctx.registry.register(build_run_opencode_tool(owner_agent="forge"))
     ctx.registry.register(build_kernel_child_tool(owner_agent="forge"))
     ctx.registry.register(build_kernel_run_tool(owner_agent="forge"))
     _ok(ctx, owner, "code")

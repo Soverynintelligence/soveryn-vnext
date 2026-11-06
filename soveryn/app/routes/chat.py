@@ -6,6 +6,8 @@ Stable machine-readable error codes (see soveryn/app/startup.py).
 
 from __future__ import annotations
 import json as _json
+import time as _time_mod
+import datetime as _dt_mod
 import logging
 from datetime import datetime
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
@@ -451,6 +453,7 @@ def chat():
     try:
         from soveryn.platform.intake.turn_files import files_from_pdf_data_urls
 
+        _turn_t0 = _time_mod.time()
         response = loop.process_message(
             session_id, message, attachments=images, source=source,
             files=files_from_pdf_data_urls(pdfs) if pdfs else None,
@@ -480,9 +483,44 @@ def chat():
         "content": response.content,
         "finish_reason": response.finish_reason,
         "tool_calls": list(response.tool_calls) if response.tool_calls else None,
+        "turn_tool_calls": _turn_tool_calls(loop, agent, session_id, message, _turn_t0),
         "usage": response.usage,
         "context_usage": response.context_usage,
     }), 200
+
+
+def _turn_tool_calls(loop, agent, session_id, message, t0):
+    """Every tool call from this turn (all rounds), read back from the
+    black-box record the loop just wrote. Transparency field added
+    2026-11-04 (Jon); `tool_calls` above stays final-message-only for
+    compatibility. Returns [] for a no-tool turn, None if unavailable."""
+    try:
+        bb = getattr(loop, "black_box", None)
+        if bb is None:
+            return None
+        from soveryn.platform.black_box import _safe_filename
+        path = bb.root / _safe_filename(agent) / f"{_safe_filename(session_id)}.jsonl"
+        if not path.exists():
+            return []
+        last = path.read_text(encoding="utf-8").strip().splitlines()[-1]
+        rec = _json.loads(last)
+        started = _dt_mod.datetime.fromisoformat(rec.get("started_at")).timestamp()
+        if started < t0 - 2 or rec.get("user_message") != message:
+            return []
+        out = []
+        for ev in rec.get("actions_and_observations") or []:
+            if ev.get("type") != "action":
+                continue
+            for tc in ev.get("tool_calls") or []:
+                args = str(tc.get("arguments") or "")
+                out.append({
+                    "round": ev.get("round"),
+                    "name": tc.get("name"),
+                    "arguments": args if len(args) <= 300 else args[:300] + "…",
+                })
+        return out
+    except Exception:
+        return None
 
 
 # ─── /chat_stream (SSE streaming) ────────────────────────────────────────────

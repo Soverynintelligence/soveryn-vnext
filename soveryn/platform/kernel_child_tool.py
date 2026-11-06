@@ -105,6 +105,6 @@ def build_kernel_child_tool(*, owner_agent: str = "kernel") -> ToolSpec:
             "List, stop, or steer Kernel's live Aider/OpenCode children. "
             "Stop keeps the partial working tree. Steer interrupts and "
             "respawns with the correction. Does not spawn a new mend — use "
-            "run_aider / run_opencode for that."
+            "run_aider for that."
         ),
     )

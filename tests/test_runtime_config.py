@@ -82,11 +82,11 @@ def test_app_port_is_5001_during_side_by_side():
     assert runtime.APP_PORT == 5001
 
 
-def test_glm_kernel_window_is_32k():
-    """2026-08-30: Kernel GLM TP=2 is 32k (was 16k; 16k 400'd ~17k prompts)."""
+def test_glm_kernel_window_is_262k():
+    """2026-11-03: Kernel GLM TP=2 window matches the soveryn-cli profile contextWindow (262144; was 32k)."""
     kernel = next(s for s in runtime.MODEL_SERVERS if s.name == "kernel_build")
     if runtime.resolve_kernel_brain() == "glm":
-        assert kernel.n_ctx == 32768
+        assert kernel.n_ctx == 262144
         assert kernel.host == "10.10.10.2" and kernel.port == 8001
     if runtime.resolve_kernel_brain() == "flashnext":
         assert kernel.n_ctx == 131072

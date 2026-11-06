@@ -1,0 +1,79 @@
+/* SOVERYN house style — Desk (charcoal + blue). One file for every live page.
+   Chosen by Jon 2026-11-05 (Option A). Tokens were copied verbatim from
+   command_center.html; pages link this instead of carrying their own :root.
+
+   Layer 1  :root tokens + base   — every page that links this file.
+   Layer 2  body.desk             — older pages (Messages family, lab-console,
+                                    soft-desk) whose own CSS uses other token
+                                    names; those names are re-pointed at Desk. */
+
+:root{
+  --bg:#0d0f10;--panel:#15181a;--panel-2:#0f1213;--line:rgba(232,227,213,.10);
+  --ink:#ece6d6;--dim:rgba(232,227,213,.55);
+  --acc:#2f9ee8;--ok:#5ee1a0;--warn:#d4a827;--bad:#e0645a;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+a{color:inherit}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+
+/* ── Layer 2: legacy token names → Desk ─────────────────────────────────── */
+html:has(body.desk){background:var(--bg)}
+body.desk{
+  --bg:#0d0f10;--panel:#15181a;--panel-2:#0f1213;--line:rgba(232,227,213,.10);
+  --ink:#ece6d6;--dim:rgba(232,227,213,.55);
+  --acc:#2f9ee8;--ok:#5ee1a0;--warn:#d4a827;--bad:#e0645a;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* Messages / room / build */
+  --row:transparent;--mute:var(--dim);--gold:var(--acc);--mint:var(--ok);--hot:var(--bad);
+  --text:var(--ink);--text-dim:var(--dim);--font:var(--sans);
+  --bubble-them:var(--panel);--bubble-me:#141a24;
+  /* lab-console.css */
+  --ground:var(--bg);--line-lit:rgba(232,227,213,.18);
+  --ink-2:var(--dim);--ink-3:rgba(232,227,213,.38);
+  --gold-dim:#1f6fa8;--down:var(--bad);--unknown:#2b2f31;
+  --sov-canvas:var(--bg);--canvas:var(--bg);
+  --sov-bronze:var(--acc);--sov-amber:var(--acc);--bronze:var(--acc);--copper:var(--acc);
+  --node:var(--acc);--leaf:var(--acc);--sov-electric-blue:var(--acc);
+  --sov-sage:var(--ok);--sov-sage-bright:var(--ok);--sov-maroon:var(--bad);
+  --sov-deep-blue:var(--dim);--sov-gray:var(--dim);--sov-olive:var(--dim);
+  --glass-bg:var(--panel);--glass-border:var(--line);--earth:var(--panel-2);--slate:var(--panel-2);
+  background:var(--bg) !important;
+  background-image:none !important;
+  color:var(--ink);
+  font-family:var(--sans) !important;
+}
+body.desk.lab,body.desk[data-lab]{font-size:14px;line-height:1.45}
+body.desk a{color:inherit}
+body.desk :focus-visible{outline:1px solid var(--acc);outline-offset:2px}
+
+/* lab-console plate → Desk plate (flat, hairline underline, blue active) */
+body.desk.lab .plate,body.desk[data-lab] .plate{
+  background:var(--bg);backdrop-filter:none;border-bottom:1px solid var(--line);
+  align-items:center;gap:18px;padding:14px 22px;
+}
+body.desk.lab .plate .id,body.desk[data-lab] .plate .id{border-right:0;padding:0;gap:10px}
+body.desk.lab .plate .id img,body.desk[data-lab] .plate .id img{width:36px;height:36px}
+body.desk.lab .plate .id b,body.desk[data-lab] .plate .id b{letter-spacing:.18em;font-size:13px}
+body.desk.lab .plate .id i,body.desk[data-lab] .plate .id i{color:var(--dim);font-size:11px;letter-spacing:normal}
+body.desk .lab-panel-head{background:var(--panel)}
+body.desk .lab-panel-head h2,body.desk .lab-panel-head h3{font-family:var(--sans);color:var(--dim)}
+body.desk .act{font-family:var(--sans);border-radius:6px;color:var(--ink);border-color:var(--line)}
+body.desk .act.primary{background:var(--acc);border-color:var(--acc);color:#0b101a;font-weight:600}
+body.desk .chip{border-radius:999px}
+body.desk .prose{font-family:var(--sans)}
+body.desk .dot.ok,body.desk .dot.up,body.desk .dot.resident,body.desk [data-state="up"] .dot{box-shadow:0 0 0 3px rgba(94,225,160,.14)}
+body.desk .dot.down,body.desk .dot.offline,body.desk [data-state="down"] .dot{box-shadow:0 0 0 3px rgba(224,100,90,.16)}
+body.desk .dot.on_duty,body.desk [data-state="on_duty"] .dot{box-shadow:0 0 0 3px rgba(47,158,232,.16)}
+
+/* headings: Desk uses the sans face everywhere (soft desk used Georgia) */
+body.desk h1,body.desk h2,body.desk h3{font-family:var(--sans)}
+
+/* shared form controls, flat */
+body.desk input:not([type=checkbox]):not([type=radio]),body.desk select,body.desk textarea{
+  background:var(--panel-2);color:var(--ink);border:1px solid var(--line);
+}
+body.desk input:focus,body.desk select:focus,body.desk textarea:focus{border-color:rgba(47,158,232,.55);outline:none}

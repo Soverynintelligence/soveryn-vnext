@@ -1,450 +1,254 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SOVERYN · Documents</title>
-<meta name="theme-color" content="#000000">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOVERYN · Library</title>
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
-<link rel="stylesheet" href="/static/lab-console.css">
+<link rel="stylesheet" href="/static/desk.css?v=20261105sky">
 <style>
-  body { min-height: 100vh; }
-  .page { max-width: 1280px; margin: 0 auto; padding: 0 0 48px; }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 1fr 1.8fr;
-    gap: 0;
-    border-top: 1px solid var(--line);
-  }
-  @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; }
-  }
-
-  .layout > .lab-panel {
-    border-right: 1px solid var(--line);
-    min-height: 60vh;
-  }
-  @media (max-width: 900px) {
-    .layout > .lab-panel { border-right: none; border-bottom: 1px solid var(--line); }
-  }
-  .layout > .lab-panel:last-child { border-right: none; }
-
-  .lab-panel-body { padding: 16px 18px 22px; }
-
-  .filter-row {
-    display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
-  }
-  .filter-row select, .filter-row input[type="text"] {
-    background: var(--panel-2);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 6px 10px;
-    font-size: 12px;
-    font-family: var(--mono);
-    outline: none;
-  }
-  .filter-row select:focus, .filter-row input[type="text"]:focus {
-    border-color: var(--gold-dim);
-  }
-
-  .doc-list { display: flex; flex-direction: column; gap: 0; }
-
-  .doc-item {
-    display: flex; align-items: center; gap: 14px;
-    padding: 12px 4px;
-    border-top: 1px solid var(--line);
-    cursor: pointer;
-    transition: background 0.12s ease;
-  }
-  .doc-item:first-child { border-top: none; }
-  .doc-item:hover { background: rgba(198, 166, 100, 0.04); }
-  .doc-item.active { background: rgba(198, 166, 100, 0.08); }
-
-  .doc-item .agent-disc {
-    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border: 1px solid var(--line-lit);
-    background: var(--panel-2);
-    color: var(--gold);
-  }
-  .doc-item[data-agent="aetheria"] .agent-disc { color: var(--ok); }
-  .doc-item[data-agent="vett"] .agent-disc { color: var(--ink); }
-  .doc-item[data-agent="scotty"] .agent-disc { color: var(--down); }
-
-  .doc-item .doc-meta { flex: 1; min-width: 0; }
-  .doc-item .doc-title {
-    font-size: 13px; font-weight: 500; color: var(--ink);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .doc-item .doc-sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
-  .doc-item .doc-sub .status { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
-  .doc-item .doc-sub .status[data-status="draft"] { color: var(--gold); }
-  .doc-item .doc-sub .status[data-status="final"] { color: var(--ok); }
-  .doc-item .doc-sub .status[data-status="archived"] { color: var(--ink-3); }
-
-  .doc-item .download-group { display: flex; gap: 6px; flex-shrink: 0; }
-  .dl-btn {
-    padding: 4px 8px;
-    border-radius: var(--r-sm);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    border: 1px solid var(--line);
-    color: var(--ink-2);
-  }
-  .dl-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
-
-  .empty-state {
-    padding: 28px 0;
-    text-align: center;
-    color: var(--ink-3);
-    font-style: italic;
-  }
-
-  .viewer-panel { position: sticky; top: 56px; }
-  .viewer-panel .viewer-placeholder {
-    padding: 48px 24px;
-    text-align: center;
-    color: var(--ink-3);
-    font-style: italic;
-  }
-  .viewer-header {
-    display: flex; align-items: flex-start; justify-content: space-between;
-    gap: 16px; margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  .viewer-header .viewer-title { font-size: 15px; font-weight: 500; line-height: 1.35; color: var(--ink); }
-  .viewer-header .viewer-meta { font-size: 11px; color: var(--ink-3); margin-top: 4px; letter-spacing: 0.04em; }
-  .viewer-header .viewer-downloads { display: flex; gap: 6px; flex-shrink: 0; }
-
-  .doc-content {
-    max-height: 65vh; overflow-y: auto; padding-right: 4px;
-    font-family: var(--sans);
-    font-size: 13px; line-height: 1.65; color: var(--ink-2);
-  }
-  .doc-content h1 { font-size: 18px; font-weight: 600; margin: 0 0 12px; color: var(--ink); font-family: var(--mono); }
-  .doc-content h2 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; color: var(--ink); font-family: var(--mono); }
-  .doc-content h3 { font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: var(--ink); font-family: var(--mono); }
-  .doc-content p  { margin: 6px 0; }
-  .doc-content ul, .doc-content ol { margin: 6px 0 6px 18px; }
-  .doc-content li { margin: 2px 0; }
-  .doc-content pre {
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    padding: 10px 14px;
-    border-radius: var(--r-sm);
-    font-size: 12px;
-    overflow-x: auto;
-    font-family: var(--mono);
-  }
-  .doc-content code {
-    font-size: 12px;
-    background: var(--panel-2);
-    padding: 1px 5px;
-    border-radius: var(--r-sm);
-    font-family: var(--mono);
-  }
-  .doc-content pre code { background: none; padding: 0; }
-  .doc-content blockquote {
-    border-left: 2px solid var(--gold-dim);
-    padding: 4px 12px;
-    margin: 8px 0;
-    color: var(--ink-3);
-  }
-  .doc-content table { border-collapse: collapse; width: 100%; font-size: 12px; margin: 10px 0; }
-  .doc-content th, .doc-content td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
-  .doc-content th { background: var(--panel-2); color: var(--ink); }
-
-  .loading-spinner {
-    display: inline-block; width: 14px; height: 14px;
-    border: 2px solid var(--line-lit);
-    border-top-color: var(--gold);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    vertical-align: middle; margin-right: 8px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .panel-count {
-    font-size: 11px;
-    color: var(--ink-3);
-    letter-spacing: 0.08em;
-  }
+  a{color:inherit} .page{max-width:1440px;margin:0 auto;padding:18px 22px 40px}
+  .plate{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .plate .id{display:flex;gap:10px;align-items:center;text-decoration:none}
+  .plate .id b{letter-spacing:.18em;font-size:13px} .plate .id i{display:block;font-style:normal;color:var(--dim);font-size:11px}
+  .plate .right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:5px 11px;border-radius:6px;border:1px solid var(--line);text-decoration:none;font-size:12px;background:var(--panel-2);color:var(--ink);cursor:pointer;font-family:inherit}
+  .btn .sub{color:var(--dim)}
+  .tabs{display:flex;gap:4px;margin:16px 0 12px}
+  .tabs button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:6px 14px;font:13px inherit;cursor:pointer}
+  .tabs button[aria-selected=true]{background:rgba(192,130,79,.14);color:var(--ink);border-color:rgba(192,130,79,.4)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .p-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .p-head h3{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .p-head .r{font-size:12px;color:var(--dim)}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+  .controls input[type=text],.controls select{background:var(--panel-2);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font:13px inherit}
+  .controls input[type=text]{flex:1;min-width:180px}
+  .controls label{font-size:12px;color:var(--dim);display:flex;gap:6px;align-items:center}
+  .docs{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);gap:16px}
+  .list{display:flex;flex-direction:column;gap:6px;max-height:calc(100vh - 260px);min-height:420px;overflow:auto}
+  .doc-item{display:flex;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);cursor:pointer}
+  .doc-item:hover{border-color:rgba(192,130,79,.4)} .doc-item.active{border-color:var(--acc);background:rgba(192,130,79,.08)}
+  .av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:rgba(192,130,79,.18);color:var(--acc);flex:none;font-size:12px}
+  .doc-meta{flex:1;min-width:0} .doc-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .doc-sub{font-size:12px;color:var(--dim)}
+  .status[data-status=final]{color:var(--ok)} .status[data-status=draft]{color:var(--warn)}
+  .dl{display:flex;gap:4px} .dl a{font:11px var(--mono);color:var(--dim);border:1px solid var(--line);border-radius:4px;padding:1px 6px;text-decoration:none}
+  .dl a:hover{color:var(--ink)}
+  .viewer{min-height:420px;max-height:calc(100vh - 220px);overflow:auto}
+  .viewer-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:12px}
+  .viewer-title{font-size:17px;font-weight:600} .viewer-meta{font-size:12px;color:var(--dim)}
+  .doc-content{line-height:1.6;color:#d9d3c4} .doc-content h1,.doc-content h2,.doc-content h3{color:var(--ink);line-height:1.3}
+  .doc-content code{font:12px var(--mono);background:var(--panel-2);padding:1px 4px;border-radius:4px}
+  .doc-content pre{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto}
+  .doc-content blockquote{border-left:3px solid var(--acc);margin:0;padding-left:12px;color:var(--dim)}
+  .doc-content a{color:var(--acc)}
+  .empty{color:var(--dim);font-size:13px;padding:6px 0}
+  .mem-scope{font-size:12px;color:var(--dim);margin-bottom:8px} .mem-scope b{color:var(--ink)}
+  .mem-feed{display:flex;flex-direction:column;gap:6px}
+  .mem-item{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:var(--panel-2);cursor:pointer}
+  .mem-item .mh{display:flex;gap:10px;font:11px var(--mono);color:var(--dim)} .mem-item .ag{color:var(--acc)} .mem-item .pv{color:var(--bad)}
+  .mem-item .mp{margin-top:4px;font-size:13px} .mem-item .mt{font-size:11px;color:var(--dim);margin-top:3px}
+  .mem-full{white-space:pre-wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:13px;color:#d9d3c4}
+  .mem-edges{margin-top:6px;font-size:12px;color:var(--dim)} .mem-edges .rel{color:var(--acc)}
+  [hidden]{display:none!important}
+  @media (max-width:980px){.docs{grid-template-columns:1fr}.list,.viewer{max-height:none}}
 </style>
-<link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
-<body class="lab sd">
-
-<div class="plate">
-  <a class="id" href="/messages">
-    <img src="/static/lab-seal.png" alt="" width="44" height="44">
-    <span><b>SOVERYN</b><i>Documents</i></span>
-  </a>
-  <nav>
-    <a href="/messages" class="keep">Messages</a>
-    <a href="/citizens" class="keep">Staff</a>
-    <a href="/command-center">Desk</a>
-    <a href="/fleet">Fleet</a>
-    <a href="/documents" class="active">Docs</a>
-    <a href="/charters" class="keep">Charters</a>
-  </nav>
-</div>
-
+<body data-testid="library-page">
 <div class="page">
-  <div class="layout">
+  <div class="plate">
+    <a class="id" href="/command-center"><img src="/static/lab-seal.png" alt="" width="36" height="36"><span><b>SOVERYN</b><i>Library</i></span></a>
+    <!--sd-nav:library-->
+    <div class="right">
+      <a class="btn" href="/cathedral" data-testid="lib-galaxy">Galaxy <span class="sub">· memory map</span></a>
+      <a class="btn" href="/charters" data-testid="lib-charters">Charters <span class="sub" data-charters-count>· review only</span></a>
+    </div>
+  </div>
 
-    <section class="lab-panel" id="list-panel">
-      <div class="lab-panel-head">
-        <span class="n">01</span>
-        <h2>Agent documents</h2>
-        <span class="r panel-count" id="doc-count">—</span>
-      </div>
-      <div class="lab-panel-body">
-        <div class="filter-row">
-          <select id="agent-filter">
-            <option value="">All agents</option>
-            <option value="aetheria">Aetheria</option>
-            <option value="vett">Vett</option>
-            <option value="scotty">Scotty</option>
-            <option value="forge">Forge</option>
-            <option value="kernel">Kernel</option>
-            <option value="eve">Eve</option>
-          </select>
-          <select id="status-filter">
-            <option value="">All statuses</option>
-            <option value="draft">Draft</option>
-            <option value="final">Final</option>
-            <option value="archived">Archived</option>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="docs" aria-selected="true">Documents <span data-doc-count></span></button>
+    <button role="tab" data-tab="memory" aria-selected="false">Memory <span data-mem-count></span></button>
+  </div>
+
+  <section data-pane="docs" data-testid="documents-pane">
+    <div class="docs">
+      <div class="panel">
+        <div class="controls">
+          <input type="text" id="doc-q" placeholder="filter by title…" aria-label="Filter documents">
+          <select id="agent-filter" aria-label="Agent"><option value="">All agents</option></select>
+          <select id="status-filter" aria-label="Status">
+            <option value="">All statuses</option><option value="draft">Draft</option><option value="final">Final</option><option value="archived">Archived</option>
           </select>
         </div>
-        <div class="doc-list" id="doc-list">
-          <div class="empty-state">Loading…</div>
-        </div>
+        <div class="list" id="doc-list" aria-live="polite"><div class="empty">Loading…</div></div>
       </div>
-    </section>
-
-    <section class="lab-panel viewer-panel" id="viewer-panel">
-      <div class="lab-panel-head">
-        <span class="n">02</span>
-        <h2>Viewer</h2>
-        <span class="r">select a document</span>
-      </div>
-      <div class="lab-panel-body">
-        <div class="viewer-placeholder" id="viewer-placeholder">
-          Select a document to view its content.
-        </div>
-        <div id="viewer-body" style="display:none">
-          <div class="viewer-header">
-            <div>
-              <div class="viewer-title" id="viewer-title"></div>
-              <div class="viewer-meta" id="viewer-meta"></div>
-            </div>
-            <div class="viewer-downloads" id="viewer-downloads"></div>
+      <div class="panel viewer">
+        <div class="empty" id="viewer-placeholder">Select a document to read it.</div>
+        <div id="viewer-body" hidden>
+          <div class="viewer-head">
+            <div><div class="viewer-title" id="viewer-title"></div><div class="viewer-meta" id="viewer-meta"></div></div>
+            <div class="dl" id="viewer-downloads"></div>
           </div>
           <div class="doc-content" id="viewer-content"></div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-  </div>
+  <section data-pane="memory" data-testid="memory-panel" hidden>
+    <div class="panel">
+      <div class="p-head"><h3>Memory · the lattice</h3><span class="r">click a node for full text + edges</span></div>
+      <div class="controls">
+        <input type="text" data-mem-q placeholder="search memory…" aria-label="Search memory">
+        <select data-mem-type aria-label="Filter by type"><option value="">all types</option></select>
+        <select data-mem-agent aria-label="Filter by agent"><option value="">all agents</option></select>
+        <label><input type="checkbox" data-mem-private> show private</label>
+      </div>
+      <div class="mem-scope" data-mem-scope></div>
+      <div class="mem-feed" data-mem-feed aria-live="polite"><div class="empty">Open this tab to load.</div></div>
+    </div>
+  </section>
 </div>
 
-<footer class="lab-foot">House network · my data is my data · no corporate call-home</footer>
-
 <script>
-// ─── Tiny markdown renderer (no external deps) ────────────────────────────
-// Covers headings, bold, italic, code, links, blockquote, lists, paragraphs.
-// For full fidelity, we delegate to the server /download?fmt=html.
-function renderMarkdown(md) {
-  // Escape HTML entities first so raw HTML in docs isn't executed
-  let s = md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+(function(){
+"use strict";
+const $ = (s, r) => (r || document).querySelector(s);
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function relativeTime(iso){ if(!iso) return "—"; const d = new Date(iso); if(isNaN(d)) return iso; const s=(Date.now()-d.getTime())/1000;
+  if(s<60) return "just now"; if(s<3600) return Math.round(s/60)+"m ago"; if(s<86400) return Math.round(s/3600)+"h ago"; return Math.round(s/86400)+"d ago"; }
 
-  // Fenced code blocks
-  s = s.replace(/```[\s\S]*?```/g, m => {
-    const inner = m.slice(3, -3).replace(/^\w*\n/, '');
-    return `<pre><code>${inner}</code></pre>`;
-  });
-  // Inline code
-  s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // Headings
-  s = s.replace(/^######\s+(.*)$/gm, '<h6>$1</h6>');
-  s = s.replace(/^#####\s+(.*)$/gm, '<h5>$1</h5>');
-  s = s.replace(/^####\s+(.*)$/gm, '<h4>$1</h4>');
-  s = s.replace(/^###\s+(.*)$/gm, '<h3>$1</h3>');
-  s = s.replace(/^##\s+(.*)$/gm, '<h2>$1</h2>');
-  s = s.replace(/^#\s+(.*)$/gm, '<h1>$1</h1>');
-  // Blockquote
-  s = s.replace(/^&gt;\s+(.*)$/gm, '<blockquote>$1</blockquote>');
-  // Bold + italic
-  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // Links
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  // Unordered lists
-  s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, m => {
-    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^[-*]\s+/, '')}</li>`).join('');
-    return `<ul>${items}</ul>`;
-  });
-  // Ordered lists
-  s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, m => {
-    const items = m.trim().split('\n').map(l => `<li>${l.replace(/^\d+\.\s+/, '')}</li>`).join('');
-    return `<ol>${items}</ol>`;
-  });
-  // Paragraphs (double newline → <p>)
-  s = s.replace(/\n{2,}/g, '</p><p>');
-  s = '<p>' + s + '</p>';
-  // Clean up stray empty paras
-  s = s.replace(/<p>\s*<\/p>/g, '');
+// ── Tiny markdown renderer (escapes first; links only http(s), / or #) ──
+function safeHref(h){ h = String(h).trim(); return /^(https?:\/\/|\/|#)/i.test(h) ? h : "#"; }
+function renderMarkdown(md){
+  let s = String(md).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  s = s.replace(/```[\s\S]*?```/g, m => `<pre><code>${m.slice(3,-3).replace(/^\w*\n/,"")}</code></pre>`);
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  for (let i = 6; i >= 1; i--) s = s.replace(new RegExp("^#{"+i+"}\\s+(.*)$","gm"), `<h${i}>$1</h${i}>`);
+  s = s.replace(/^&gt;\s+(.*)$/gm, "<blockquote>$1</blockquote>");
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g,"<strong><em>$1</em></strong>").replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/\*(.+?)\*/g,"<em>$1</em>");
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, t, h) => `<a href="${safeHref(h).replace(/"/g,"&quot;")}" target="_blank" rel="noopener">${t}</a>`);
+  s = s.replace(/((?:^[-*]\s+.+\n?)+)/gm, m => "<ul>"+m.trim().split("\n").map(l=>`<li>${l.replace(/^[-*]\s+/,"")}</li>`).join("")+"</ul>");
+  s = s.replace(/((?:^\d+\.\s+.+\n?)+)/gm, m => "<ol>"+m.trim().split("\n").map(l=>`<li>${l.replace(/^\d+\.\s+/,"")}</li>`).join("")+"</ol>");
+  s = ("<p>" + s.replace(/\n{2,}/g,"</p><p>") + "</p>").replace(/<p>\s*<\/p>/g,"");
   return s;
 }
 
-// ─── State ───────────────────────────────────────────────────────────────────
-let allDocs = [];
-let activeDocId = null;
-
-// ─── Fetch helpers ───────────────────────────────────────────────────────────
-async function fetchDocs(agent, status) {
-  const params = new URLSearchParams();
-  if (agent)  params.set('agent', agent);
-  if (status) params.set('status', status);
-  const url = '/api/documents' + (params.toString() ? '?' + params.toString() : '');
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch documents: ' + res.status);
-  return (await res.json()).documents;
+// ── Tabs (#memory deep link) ──
+let memLoaded = false;
+function showTab(t){
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === t)));
+  document.querySelectorAll("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== t);
+  if (t === "memory" && !memLoaded){ memLoaded = true; Mem.start(); }
+  history.replaceState(null, "", t === "memory" ? "#memory" : location.pathname);
 }
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
-async function fetchDoc(id) {
-  const res = await fetch('/api/documents/' + encodeURIComponent(id));
-  if (!res.ok) throw new Error('Failed to fetch document ' + id);
-  return res.json();
+// ── Documents ──
+let allDocs = [], activeDocId = null;
+async function fetchDocs(agent, status){
+  const p = new URLSearchParams(); if(agent) p.set("agent", agent); if(status) p.set("status", status);
+  const res = await fetch("/api/documents" + (p.toString() ? "?" + p : ""), {cache:"no-store"});
+  if(!res.ok) throw new Error("documents " + res.status);
+  return (await res.json()).documents || [];
 }
-
-// ─── Render list ─────────────────────────────────────────────────────────────
-function renderList(docs) {
-  allDocs = docs;
-  const list = document.getElementById('doc-list');
-  const count = document.getElementById('doc-count');
-  count.textContent = docs.length + ' doc' + (docs.length !== 1 ? 's' : '');
-
-  if (!docs.length) {
-    list.innerHTML = '<div class="empty-state">No documents yet.</div>';
-    return;
-  }
-
-  list.innerHTML = docs.map(d => {
-    const when = relativeTime(d.updated_at);
-    const agentInitial = d.agent ? d.agent[0].toUpperCase() : '?';
-    return `
-      <div class="doc-item${d.id === activeDocId ? ' active' : ''}"
-           data-id="${esc(d.id)}" data-agent="${esc(d.agent)}"
-           role="button" tabindex="0" aria-label="View ${esc(d.title)}">
-        <div class="agent-disc">${agentInitial}</div>
-        <div class="doc-meta">
-          <div class="doc-title">${esc(d.title)}</div>
-          <div class="doc-sub">
-            ${esc(d.agent)}
-            &nbsp;·&nbsp;
-            <span class="status" data-status="${esc(d.status)}">${esc(d.status)}</span>
-            &nbsp;·&nbsp;${when}
-          </div>
-        </div>
-        <div class="download-group">
-          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=md"
-             download title="Download Markdown" onclick="event.stopPropagation()">md</a>
-          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=html"
-             download title="Download HTML" onclick="event.stopPropagation()">html</a>
-          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=pdf"
-             download title="Download PDF" onclick="event.stopPropagation()">pdf</a>
-          <a class="dl-btn" href="/documents/${esc(d.id)}/download?fmt=docx"
-             download title="Download DOCX" onclick="event.stopPropagation()">docx</a>
-        </div>
-      </div>`;
-  }).join('');
-
-  // Click handlers
-  list.querySelectorAll('.doc-item').forEach(el => {
-    const open = () => openDoc(el.dataset.id);
-    el.addEventListener('click', open);
-    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') open(); });
+function renderList(){
+  const q = $("#doc-q").value.trim().toLowerCase();
+  const docs = allDocs.filter(d => !q || String(d.title||"").toLowerCase().includes(q));
+  $("[data-doc-count]").textContent = `(${allDocs.length})`;
+  const list = $("#doc-list");
+  if(!docs.length){ list.innerHTML = `<div class="empty">${allDocs.length ? "Nothing matches." : "No documents yet."}</div>`; return; }
+  list.innerHTML = docs.map(d => `<div class="doc-item${d.id===activeDocId?" active":""}" data-id="${esc(d.id)}" role="button" tabindex="0" aria-label="Read ${esc(d.title)}">
+      <div class="av">${esc((d.agent||"?")[0].toUpperCase())}</div>
+      <div class="doc-meta"><div class="doc-title">${esc(d.title)}</div>
+        <div class="doc-sub">${esc(d.agent)} · <span class="status" data-status="${esc(d.status)}">${esc(d.status)}</span> · ${relativeTime(d.updated_at)}</div></div>
+      <div class="dl">${["md","pdf"].map(f=>`<a href="/documents/${encodeURIComponent(d.id)}/download?fmt=${f}" download onclick="event.stopPropagation()">${f}</a>`).join("")}</div></div>`).join("");
+  list.querySelectorAll(".doc-item").forEach(el => {
+    el.addEventListener("click", () => openDoc(el.dataset.id));
+    el.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); openDoc(el.dataset.id); } });
   });
 }
-
-// ─── Open doc viewer ─────────────────────────────────────────────────────────
-async function openDoc(id) {
+async function openDoc(id){
   activeDocId = id;
-  // Mark active in list
-  document.querySelectorAll('.doc-item').forEach(el =>
-    el.classList.toggle('active', el.dataset.id === id));
+  document.querySelectorAll(".doc-item").forEach(el => el.classList.toggle("active", el.dataset.id === id));
+  const ph = $("#viewer-placeholder"), body = $("#viewer-body");
+  ph.textContent = "Loading…"; ph.hidden = false; body.hidden = true;
+  try{
+    const res = await fetch("/api/documents/" + encodeURIComponent(id), {cache:"no-store"});
+    if(!res.ok) throw new Error(res.status);
+    const doc = await res.json();
+    $("#viewer-title").textContent = doc.title;
+    $("#viewer-meta").textContent = `${doc.agent} · ${doc.status} · ${relativeTime(doc.updated_at)}`;
+    $("#viewer-downloads").innerHTML = ["md","html","pdf","docx"].map(f => `<a href="/documents/${encodeURIComponent(doc.id)}/download?fmt=${f}" download>${f}</a>`).join("");
+    $("#viewer-content").innerHTML = renderMarkdown(doc.content || "");
+    ph.hidden = true; body.hidden = false;
+  }catch(e){ ph.textContent = "Failed to load document."; }
+}
+async function reloadDocs(){
+  try{
+    allDocs = await fetchDocs($("#agent-filter").value, $("#status-filter").value);
+    const sel = $("#agent-filter");
+    if(sel.options.length === 1){   // agents come from the data, not a hardcoded roster
+      [...new Set(allDocs.map(d => d.agent).filter(Boolean))].sort().forEach(a => sel.insertAdjacentHTML("beforeend", `<option value="${esc(a)}">${esc(a)}</option>`));
+    }
+    renderList();
+  }catch(e){ $("#doc-list").innerHTML = `<div class="empty">Failed to load documents.</div>`; }
+}
+$("#agent-filter").addEventListener("change", reloadDocs);
+$("#status-filter").addEventListener("change", reloadDocs);
+$("#doc-q").addEventListener("input", renderList);
 
-  const placeholder = document.getElementById('viewer-placeholder');
-  const viewerBody  = document.getElementById('viewer-body');
-  placeholder.innerHTML = '<span class="loading-spinner"></span> Loading…';
-  placeholder.style.display = '';
-  viewerBody.style.display = 'none';
-
-  try {
-    const doc = await fetchDoc(id);
-    document.getElementById('viewer-title').textContent = doc.title;
-    document.getElementById('viewer-meta').textContent =
-      doc.agent + ' · ' + doc.status + ' · ' + relativeTime(doc.updated_at);
-    document.getElementById('viewer-downloads').innerHTML =
-      ['md','html','pdf','docx'].map(fmt =>
-        `<a class="dl-btn" href="/documents/${esc(doc.id)}/download?fmt=${fmt}" download>${fmt}</a>`
-      ).join('');
-    document.getElementById('viewer-content').innerHTML = renderMarkdown(doc.content || '');
-    placeholder.style.display = 'none';
-    viewerBody.style.display = '';
-  } catch (err) {
-    placeholder.innerHTML = '<span style="color:rgba(236,243,244,0.4)">Failed to load document.</span>';
-    console.error(err);
+// ── Memory browser (moved from House; same endpoints) ──
+const Mem = (function(){
+  const feed = $("[data-mem-feed]"), qIn = $("[data-mem-q]"), tSel = $("[data-mem-type]"), aSel = $("[data-mem-agent]"),
+        pChk = $("[data-mem-private]"), scope = $("[data-mem-scope]");
+  let open = null, timer = null;
+  function qs(){ const p = new URLSearchParams(); if(qIn.value.trim()) p.set("q", qIn.value.trim());
+    if(tSel.value) p.set("type", tSel.value); if(aSel.value) p.set("agent", aSel.value); if(pChk.checked) p.set("private","1"); p.set("limit","60"); return p.toString(); }
+  async function loadFacets(){
+    try{ const d = await (await fetch("/api/memory/facets" + (pChk.checked ? "?private=1" : ""))).json();
+      const kt = tSel.value, ka = aSel.value;
+      tSel.innerHTML = `<option value="">all types</option>` + (d.types||[]).map(t => `<option value="${esc(t.type)}">${esc(t.type)} (${t.n})</option>`).join("");
+      aSel.innerHTML = `<option value="">all agents</option>` + (d.agents||[]).map(a => `<option value="${esc(a.agent)}">${esc(a.agent)} (${a.n})</option>`).join("");
+      tSel.value = kt; aSel.value = ka;
+      $("[data-mem-count]").textContent = `(${d.total})`;
+      scope.innerHTML = d.include_private ? `showing <b>all ${d.total}</b> nodes, private included`
+        : `showing <b>${d.total}</b> non-private nodes · <b>${d.private_hidden}</b> private hidden`;
+    }catch(_){}
   }
-}
-
-// ─── Filter wiring ───────────────────────────────────────────────────────────
-async function reload() {
-  const agent  = document.getElementById('agent-filter').value;
-  const status = document.getElementById('status-filter').value;
-  try {
-    const docs = await fetchDocs(agent, status);
-    renderList(docs);
-  } catch (err) {
-    document.getElementById('doc-list').innerHTML =
-      '<div class="empty-state">Failed to load documents.</div>';
-    console.error(err);
+  async function load(){
+    try{ const d = await (await fetch("/api/memory/browse?" + qs())).json();
+      if(d.error){ feed.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+      if(!d.nodes || !d.nodes.length){ feed.innerHTML = `<div class="empty">Nothing matches.</div>`; return; }
+      open = null;
+      feed.innerHTML = d.nodes.map(n => `<div class="mem-item" data-id="${esc(n.id)}"><div class="mh"><span>${esc((n.created_at||"").slice(0,16).replace("T"," "))}</span>
+        <span class="ag">${esc(n.agent)}</span><span>${esc(n.type)}</span>${n.layer==="private"?`<span class="pv">private</span>`:""}</div>
+        <div class="mp">${esc(n.preview)}</div>${(n.tags&&n.tags.length)?`<div class="mt">${esc(n.tags.join(" · "))}</div>`:""}</div>`).join("");
+    }catch(_){ feed.innerHTML = `<div class="empty">memory unavailable</div>`; }
   }
-}
+  feed.addEventListener("click", async (e) => {
+    const el = e.target.closest(".mem-item[data-id]"); if(!el) return;
+    if(open === el){ el.querySelectorAll(".mem-full,.mem-edges").forEach(x => x.remove()); open = null; return; }
+    try{ const r = await fetch("/api/memory/node/" + encodeURIComponent(el.dataset.id) + (pChk.checked ? "?private=1" : ""));
+      if(!r.ok) return; const n = await r.json();
+      let h = `<div class="mem-full">${esc(n.content)}</div>`;
+      if(n.edges && n.edges.length) h += `<div class="mem-edges">${n.edges.length} edge(s)` + n.edges.slice(0,8).map(x => `<div>${x.direction==="out"?"→ ":"← "}<span class="rel">${esc(x.relationship)}</span> · ${esc(String(x.other_preview||"").slice(0,90))}</div>`).join("") + `</div>`;
+      el.insertAdjacentHTML("beforeend", h); open = el;
+    }catch(_){}
+  });
+  qIn.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+  tSel.addEventListener("change", load); aSel.addEventListener("change", load);
+  pChk.addEventListener("change", () => { loadFacets(); load(); });
+  return { start(){ loadFacets(); load(); } };
+})();
 
-document.getElementById('agent-filter').addEventListener('change', reload);
-document.getElementById('status-filter').addEventListener('change', reload);
+// Charters count (review-only imports)
+fetch("/api/botdirectory/imports").then(r => r.ok ? r.json() : null).then(d => { if(d) $("[data-charters-count]").textContent = `· ${d.count} imports · review only`; }).catch(()=>{});
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function relativeTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60)    return 'just now';
-  if (diff < 3600)  return Math.round(diff / 60) + 'm ago';
-  if (diff < 86400) return Math.round(diff / 3600) + 'h ago';
-  return Math.round(diff / 86400) + 'd ago';
-}
-
-// ─── Boot ─────────────────────────────────────────────────────────────────────
-reload();
+reloadDocs();
+showTab(location.hash === "#memory" ? "memory" : "docs");
+})();
 </script>
 </body>
 </html>

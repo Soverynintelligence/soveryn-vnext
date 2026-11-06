@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOVERYN · Estate</title>
+<link rel="icon" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/desk.css?v=20261105sky">
+<style>
+  a{color:inherit} .page{max-width:1440px;margin:0 auto;padding:18px 22px 40px}
+  .plate{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  .plate .id{display:flex;gap:10px;align-items:center;text-decoration:none}
+  .plate .id b{letter-spacing:.18em;font-size:13px} .plate .id i{display:block;font-style:normal;color:var(--dim);font-size:11px}
+  .status-strip{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--dim);white-space:nowrap}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+  .pill[data-s=ok] .dot{background:var(--ok)} .pill[data-s=warn] .dot{background:var(--warn)} .pill[data-s=bad] .dot{background:var(--bad)}
+  .pill b{color:var(--ink);font-weight:600}
+  h2.sd-h{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:20px 0 10px;font-weight:600}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .p-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .p-head h3{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+  .p-head .meta{font-size:12px;color:var(--dim)}
+  .btn{background:#0f1213;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;text-decoration:none;display:inline-block}
+  .btn.primary{background:var(--acc);border-color:var(--acc);color:#1a120b;font-weight:600}
+  .btn:disabled{opacity:.4;cursor:default}
+  .empty{color:var(--dim);font-size:13px}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  /* rig */
+  .rig{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+  .rig-card,.bay{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:#0f1213}
+  .rc-top{display:flex;align-items:center;gap:10px}
+  .rc-name{font-weight:600;min-width:150px} .rc-temp{font:12px var(--mono);color:var(--dim)} .rc-temp[data-hot=true]{color:var(--warn)}
+  .bar{flex:1;height:8px;border-radius:4px;background:rgba(232,227,213,.08);overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--acc)}
+  .bar[data-hi=true] i{background:var(--warn)}
+  .rc-mem{font:12px var(--mono);color:var(--dim);white-space:nowrap}
+  .chips{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font:11px var(--mono);border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--dim)}
+  .chip b{color:var(--ink);font-weight:500}
+  .bay h4{margin:0 0 6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .dead{color:var(--bad)}
+  /* lists */
+  .row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .row .main{flex:1;min-width:0} .row .t{font-weight:600} .row .s{color:var(--dim);font-size:12px;word-break:break-word}
+  .sev{font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:2px 6px;border-radius:4px;border:1px solid var(--line);white-space:nowrap}
+  .sev[data-sev=emergency]{color:var(--bad);border-color:var(--bad)} .sev[data-sev=critical]{color:var(--bad)} .sev[data-sev=warning]{color:var(--warn)}
+  .agent{border:1px solid var(--line);border-radius:8px;padding:10px;background:#0f1213}
+  .agent .n{font-weight:600;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--dim)}
+  .dot[data-s=ok]{background:var(--ok)} .dot[data-s=bad]{background:var(--bad)} .dot[data-s=warn]{background:var(--warn)}
+  .kv{font-size:12px;color:var(--dim)} .kv b{color:var(--ink);font-weight:500}
+  table.auto{width:100%;border-collapse:collapse;font-size:13px}
+  table.auto th{text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+  table.auto td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.auto td.c{font:12px var(--mono);color:var(--dim);white-space:nowrap}
+  .preview{margin-top:10px;white-space:pre-wrap;font:12px var(--mono);max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;background:#0f1213}
+  .stats{display:flex;gap:18px;flex-wrap:wrap} .stat .v{font-size:20px;font-weight:600} .stat .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  details.more summary{cursor:pointer;color:var(--dim);font-size:12px;margin-top:6px}
+  @media (max-width:980px){.grid2,.rig,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body data-testid="estate-page">
+<div class="page">
+  <div class="plate">
+    <a class="id" href="/command-center"><img src="/static/lab-seal.png" alt="" width="36" height="36"><span><b>SOVERYN</b><i>Estate</i></span></a>
+    <!--sd-nav:estate-->
+    <div class="status-strip" data-testid="status-strip">
+      <span class="pill" data-pill="kernel" data-s="unknown"><span class="dot"></span><b>Kernel</b><span data-v>…</span></span>
+      <span class="pill" data-pill="fabric" data-s="unknown"><span class="dot"></span>Fabric<span data-v></span></span>
+      <span class="pill" data-pill="heartbeat" data-s="unknown"><span class="dot"></span>Heartbeat<span data-v></span></span>
+      <span class="pill" data-pill="patrol" data-s="unknown"><span class="dot"></span>Patrol<span data-v></span></span>
+      <span class="pill" data-pill="ares" data-s="unknown"><span class="dot"></span>Ares<span data-v></span></span>
+    </div>
+  </div>
+
+  <h2 class="sd-h">Rig <span data-rig-totals style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+  <section class="panel" data-testid="rig" aria-label="Rig">
+    <div class="rig">
+      <div><div class="p-head"><h3>Tower GPUs</h3><span class="meta" data-rig-at></span></div>
+        <div data-rig-gpus aria-live="polite"><div class="empty">Loading…</div></div></div>
+      <div><div class="p-head"><h3>DGX Sparks</h3><span class="meta" data-spark-at></span></div>
+        <div class="bay"><h4>Spark A · 10.10.10.2</h4><div data-rig-spark-a><div class="empty">Loading…</div></div></div>
+        <div class="bay"><h4>Spark B · TP worker</h4><div data-rig-spark-b><div class="empty">Loading…</div></div></div></div>
+    </div>
+  </section>
+
+  <div class="grid2" style="margin-top:16px">
+    <section class="panel" id="ares" data-testid="ares-panel" aria-label="Ares findings">
+      <div class="p-head"><h3>Ares findings</h3><span class="meta" data-ares-counts></span></div>
+      <div data-ares-list aria-live="polite"><div class="empty">Loading…</div></div>
+      <details class="more" data-ares-warn-wrap><summary data-ares-warn-sum>Warnings</summary><div data-ares-warn></div></details>
+      <div class="p-head" style="margin:12px 0 0" data-ares-toolbar>
+        <span class="meta" data-ares-note></span>
+        <button class="btn" data-ares-clear-warn>Clear all warnings</button>
+      </div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <section class="panel" data-testid="daemons-panel" aria-label="Daemons">
+        <div class="p-head"><h3>Daemons</h3></div>
+        <div data-daemons><div class="empty">Loading…</div></div>
+        <details class="more"><summary>Recent heartbeat pulses</summary><div data-pulses></div></details>
+      </section>
+      <section class="panel" id="approvals" data-testid="gate-panel" aria-label="Approval gate">
+        <div class="p-head"><h3>Approval gate <span data-gate-count></span></h3><a class="btn" href="/house#approvals-anchor">Diffs &amp; X posts in House</a></div>
+        <div data-gate><div class="empty">Loading…</div></div>
+      </section>
+    </div>
+  </div>
+
+  <h2 class="sd-h">Public agents</h2>
+  <section class="panel" data-testid="public-agents" aria-label="Public agents">
+    <div class="p-head"><h3 data-pa-talking>—</h3><span class="meta" data-pa-crm></span></div>
+    <div class="grid3" data-pa-grid><div class="empty">Loading…</div></div>
+  </section>
+
+  <h2 class="sd-h">Automations</h2>
+  <section class="panel" data-testid="automations-panel" aria-label="Automations">
+    <div class="p-head"><h3><span data-auto-count>—</span></h3><span class="meta">Dry-run shows output only. Run now executes live and delivers to its channel.</span></div>
+    <div data-auto-list><div class="empty">Loading…</div></div>
+    <div class="preview" data-auto-preview hidden></div>
+  </section>
+
+  <div class="grid2" style="margin-top:16px">
+    <section class="panel" data-testid="activity-feed" aria-label="Recent sessions">
+      <div class="p-head"><h3>Recent sessions</h3></div>
+      <div data-feed aria-live="polite"><div class="empty">Loading…</div></div>
+    </section>
+    <section class="panel" data-testid="system-panel" aria-label="House counts">
+      <div class="p-head"><h3>House counts</h3></div>
+      <div class="stats">
+        <div class="stat"><div class="v" data-stat="nodes">—</div><div class="l">lattice nodes</div></div>
+        <div class="stat"><div class="v" data-stat="writes">—</div><div class="l">lattice writes today</div></div>
+        <div class="stat"><div class="v" data-stat="sessions">—</div><div class="l">sessions (last 200)</div></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = (s, r) => (r || document).querySelector(s);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  async function getJson(url){ try{ const r = await fetch(url, {cache:"no-store"}); if(!r.ok) return null; return await r.json(); }catch(_){ return null; } }
+  function ago(iso){ if(!iso) return ""; const t = typeof iso === "number" ? iso*1000 : Date.parse(iso); if(isNaN(t)) return ""; const s=(Date.now()-t)/1000;
+    if(s<90) return "just now"; if(s<3600) return Math.round(s/60)+"m ago"; if(s<86400) return Math.round(s/3600)+"h ago"; return Math.round(s/86400)+"d ago"; }
+  function pill(name, state, text){ const p=$(`[data-pill="${name}"]`); if(!p) return; p.dataset.s=state; $("[data-v]",p).textContent=text?(" · "+text):""; }
+  const gb = (mib) => (mib/1024).toFixed(1);
+
+  // ── Rig: tower GPUs (/api/system/rig) — labels come from the API, never hardcoded ──
+  function gpuCard(g, known){
+    const total = g.mem_total_mib || 0, used = Math.max(0, Math.min(g.mem_used_mib || 0, total));
+    const pct = total ? Math.round(used/total*100) : 0;
+    const name = String(g.name || "GPU").replace(/^NVIDIA\s+/i, "");
+    const res = !known ? `<span class="chip">residents unknown</span>`
+      : (g.residents && g.residents.length ? g.residents.map(r => `<span class="chip"><b>${esc(r.name)}</b> ${gb(r.mem_mib||0)}G</span>`).join("") : `<span class="chip">idle</span>`);
+    return `<div class="rig-card" data-gpu-index="${Number(g.index)}"><div class="rc-top"><span class="rc-name">#${Number(g.index)} ${esc(name)}</span>
+      <span class="bar" data-hi="${pct>=90}"><i style="width:${pct}%"></i></span><span class="rc-mem">${gb(used)} / ${Math.round(total/1024)} GB</span>
+      <span class="rc-temp" data-hot="${g.temp_c!=null && g.temp_c>=75}">${g.temp_c==null?"—":g.temp_c+"°C"}</span></div><div class="chips">${res}</div></div>`;
+  }
+  function sparkBay(d, sel, worker){
+    const el = $(sel); if(!el) return;
+    if(!d || !d.available){ el.innerHTML = `<div class="dead">unreachable</div><div class="kv">${esc((d && d.message) || "no answer")}</div>`; return; }
+    const h = d.host_known === false ? {} : (d.host || {});
+    let mem = "host metrics unavailable", pct = null;
+    if(h.mem_total_bytes && h.mem_used_bytes != null){ pct = Math.round(h.mem_used_bytes/h.mem_total_bytes*100);
+      mem = `${(h.mem_used_bytes/1073741824).toFixed(0)} / ${(h.mem_total_bytes/1073741824).toFixed(0)} GB unified`; }
+    const cont = (d.containers || []).map(c => `<span class="chip"><b>${esc(c.name)}</b> ${esc(c.state)}</span>`).join("");
+    const v = d.vllm || {};
+    const srv = v.up ? `<span class="chip"><b>${esc(v.model || "server")}</b> ${worker ? esc(worker) : `${Math.round(v.requests_running||0)} running${v.requests_waiting?` · ${Math.round(v.requests_waiting)} queued`:""}`}</span>`
+                     : (worker ? "" : `<span class="chip dead">server down</span>`);
+    el.innerHTML = `<div class="rc-top">${pct==null?"":`<span class="bar" data-hi="${pct>=90}"><i style="width:${pct}%"></i></span>`}<span class="rc-mem">${esc(mem)}</span>
+      <span class="rc-temp" data-hot="${h.gpu_temp_c!=null && h.gpu_temp_c>=75}">${h.gpu_temp_c==null?"—":h.gpu_temp_c+"°C"}${h.gpu_util_pct==null?"":` · ${h.gpu_util_pct}%`}</span></div>
+      <div class="chips">${srv}${cont}</div>`;
+  }
+  let sparkBusy = false;
+  async function renderRig(){
+    const rig = await getJson("/api/system/rig");
+    const bay = $("[data-rig-gpus]"); let n = 0, tot = 0;
+    if(!rig || !rig.available || !(rig.gpus||[]).length){ bay.innerHTML = `<div class="empty">${esc((rig && rig.message) || "rig stats unavailable")}</div>`; }
+    else { const gpus = rig.gpus.slice().sort((a,b)=>(a.index||0)-(b.index||0)); n = gpus.length; tot = gpus.reduce((s,g)=>s+(g.mem_total_mib||0),0);
+      bay.innerHTML = gpus.map(g => gpuCard(g, rig.residents_known === true)).join(""); $("[data-rig-at]").textContent = "updated " + new Date().toLocaleTimeString(); }
+    if(sparkBusy) return; sparkBusy = true;           // /api/system/spark is slow (~1.8 s); never stack calls
+    try{
+      const sp = await getJson("/api/system/spark");
+      sparkBay(sp, "[data-rig-spark-a]"); sparkBay(sp && sp.b, "[data-rig-spark-b]", "tp worker");
+      const fab = !sp || !sp.available ? ["bad","Spark unreachable"] : (sp.path === "fabric" ? ["ok","200G live"] : ["warn","down — on wifi"]);
+      pill("fabric", fab[0], fab[1]);
+      const sparks = (sp && sp.available ? 1 : 0) + (sp && sp.b && sp.b.available ? 1 : 0);
+      $("[data-rig-totals]").textContent = `· ${n||"—"} GPUs · ${tot?Math.round(tot/1024):"—"} GB VRAM · ${sparks} Spark${sparks===1?"":"s"}`;
+      $("[data-spark-at]").textContent = "updated " + new Date().toLocaleTimeString();
+    } finally { sparkBusy = false; }
+  }
+
+  // ── Status strip + daemons ──
+  async function renderStatus(){
+    const [brain, bench, d, hb] = await Promise.all([getJson("/api/ops/brain"), getJson("/api/system/bench_flash"), getJson("/api/system/daemons"), getJson("/api/heartbeat/recent?limit=5")]);
+    if(brain){ const up = bench && bench.router_ok && bench.model_status === "loaded";
+      pill("kernel", up ? "ok" : "bad", `${brain.house_name || brain.alias} · ${brain.blurb || ""}${up ? "" : " · down"}`); }
+    else pill("kernel","bad","status unavailable");
+    const rows = [];
+    if(d){ for(const k of ["heartbeat","patrol","ares"]){ const v = d[k] || {}; const st = v.status || "unknown";
+      const s = st==="active"||st==="quiet" ? "ok" : (st==="stale" ? "warn" : "bad");
+      pill(k, s, st + (v.last_tick ? " · "+ago(v.last_tick) : ""));
+      rows.push(`<div class="row"><span class="dot" data-s="${s}" style="margin-top:6px"></span><div class="main"><div class="t">${esc(k)}</div>
+        <div class="s">${esc(st)}${v.last_tick ? " · last tick "+esc(v.last_tick.replace("T"," ").slice(0,16))+" ("+ago(v.last_tick)+")" : " · no tick recorded"}${v.skip_reason ? " · skip: "+esc(v.skip_reason) : ""}</div></div></div>`); } }
+    $("[data-daemons]").innerHTML = rows.join("") || `<div class="empty">daemon status unavailable</div>`;
+    const ps = (hb && hb.pulses) || [];
+    $("[data-pulses]").innerHTML = ps.length ? ps.map(p => `<div class="row"><div class="main"><div class="s">${esc((p.triggered_at||"").replace("T"," ").slice(0,16))} · ${esc(p.skip_reason ? "skipped: "+p.skip_reason : (p.action_taken || "ran"))}${p.error?" · error: "+esc(p.error):""}</div></div></div>`).join("") : `<div class="empty">no pulses</div>`;
+  }
+
+  // ── Ares ──
+  async function clearAres(body){
+    const note = $("[data-ares-note]"); note.textContent = "Clearing…";
+    try{ const r = await fetch("/api/ares/findings/clear", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(Object.assign({reason:"human_clear"}, body))});
+      const j = await r.json().catch(()=>({}));
+      note.textContent = (!r.ok || j.ok === false) ? (j.error || j.message || `Clear failed (${r.status})`) : (j.count ? `Cleared ${j.count}. Reappears only if Ares re-detects it.` : "Nothing matched.");
+    }catch(e){ note.textContent = String(e); }
+    renderAres();
+  }
+  function findingRow(f){
+    let ev = f.evidence; try{ const o = JSON.parse(f.evidence); ev = Object.entries(o).map(([k,v])=>`${k}=${v}`).join(" · "); }catch(_){}
+    return `<div class="row"><span class="sev" data-sev="${esc(f.severity)}">${esc(f.severity)}</span><div class="main"><div class="t">${esc(f.finding_type)}</div>
+      <div class="s">${esc(String(ev).slice(0,220))}</div><div class="s">last seen ${esc(ago(f.last_seen))}</div></div>
+      <button class="btn" data-ares-key="${esc(f.key)}">Clear</button></div>`;
+  }
+  async function renderAres(){
+    const a = await getJson("/api/ares/findings?limit=200");
+    if(!a){ $("[data-ares-list]").innerHTML = `<div class="empty">Ares unavailable</div>`; return; }
+    const c = a.counts || {}; const fs = a.findings || [];
+    $("[data-ares-counts]").textContent = `${c.emergency||0} emergency · ${c.critical||0} critical · ${c.warning||0} warning`;
+    const hot = fs.filter(f => f.severity === "emergency" || f.severity === "critical");
+    const warn = fs.filter(f => f.severity === "warning");
+    $("[data-ares-list]").innerHTML = hot.length ? hot.map(findingRow).join("") : `<div class="empty">No emergency or critical findings.</div>`;
+    $("[data-ares-warn-sum]").textContent = `Warnings (${warn.length})`;
+    $("[data-ares-warn]").innerHTML = warn.map(findingRow).join("") || `<div class="empty">none</div>`;
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-ares-key]");
+    if(b){ if(confirm("Clear this Ares finding? It comes back only if Ares re-detects it.")) clearAres({keys:[b.dataset.aresKey]}); return; }
+    if(e.target.closest("[data-ares-clear-warn]")){ if(confirm("Clear all Ares warnings?")) clearAres({severities:["warning"]}); }
+  });
+
+  // ── Approval gate (read-only list; decisions stay in House this swap) ──
+  async function renderGate(){
+    const g = await getJson("/api/approvals/pending");
+    const items = (g && g.approvals) || [];
+    $("[data-gate-count]").textContent = items.length ? `(${items.length})` : "";
+    $("[data-gate]").innerHTML = items.length ? items.map(a => `<div class="row"><div class="main"><div class="t">${esc(a.citizen || "")}</div><div class="s">${esc(a.summary || a.action || a.id)}</div></div></div>`).join("")
+      : `<div class="empty">${g ? "No egress approvals pending." : "gate unavailable"}</div>`;
+  }
+
+  // ── Public agents ──
+  async function renderAgents(){
+    const d = await getJson("/api/system/public_agents");
+    if(!d){ $("[data-pa-grid]").innerHTML = `<div class="empty">public agents probe failed</div>`; return; }
+    $("[data-pa-talking]").textContent = (d.talking && d.talking.length) ? `Talking today: ${d.talking.join(", ")}` : "Quiet today (probes excluded)";
+    const crm = (d.intake && d.intake.crm_open) || (d.crm && d.crm.open) || "";
+    $("[data-pa-crm]").innerHTML = crm ? `CRM: ${Number((d.intake||{}).crm_new||0)} new · ${Number((d.intake||{}).pending||0)} pending · <a href="${esc(crm)}" target="_blank" rel="noopener">open CRM</a>` : "";
+    $("[data-pa-grid]").innerHTML = (d.agents || []).map(a => {
+      const s = a.reachable ? (a.model_ok === false ? "warn" : "ok") : "bad";
+      const last = (a.recent && a.recent[0]) ? `“${esc(String(a.recent[0].preview||"").slice(0,80))}” · ${esc(ago(a.recent[0].ts))}` : "";
+      return `<div class="agent" data-public-agent="${esc(a.id)}"><div class="n"><span class="dot" data-s="${s}"></span>${esc(a.name)}<span class="kv" style="margin-left:auto">${esc(a.role||"")}</span></div>
+        <div class="kv">${a.reachable ? "reachable" : "down"}${a.error ? " · "+esc(a.error) : ""}${a.model ? " · model <b>"+esc(a.model)+"</b>" : ""}</div>
+        <div class="kv">today <b>${a.conversations_today ?? "—"}</b> convos · total <b>${a.conversations_total ?? "—"}</b> · leads <b>${a.leads_captured ?? "—"}</b></div>
+        <div class="kv">last activity <b>${esc(a.last_activity ? ago(a.last_activity) : "—")}</b></div>
+        ${last ? `<div class="kv" style="margin-top:4px">${last}</div>` : ""}
+        ${a.site ? `<div style="margin-top:6px"><a class="btn" href="${esc(a.site)}" target="_blank" rel="noopener">Open</a></div>` : ""}</div>`;
+    }).join("") || `<div class="empty">no public agents</div>`;
+  }
+
+  // ── Automations (list loads once; buttons are explicit) ──
+  async function renderAutomations(){
+    const d = await getJson("/api/automations");
+    const list = (d && d.automations) || [];
+    $("[data-auto-count]").textContent = d ? `${list.filter(a=>a.enabled).length} enabled of ${list.length}` : "automations unavailable";
+    $("[data-auto-list]").innerHTML = list.length ? `<table class="auto"><thead><tr><th>Automation</th><th>Agent</th><th>Schedule</th><th>Delivers to</th><th></th></tr></thead><tbody>` +
+      list.map(a => `<tr data-auto="${esc(a.id)}"><td><b>${esc(a.title || a.id)}</b>${a.enabled ? "" : ` <span class="kv">(disabled)</span>`}</td><td>${esc(a.agent)}</td><td class="c">${esc(a.cron || "—")}</td>
+        <td class="c">${esc(((a.delivery_effective||{}).channels || a.channels || []).join(", "))}</td>
+        <td style="white-space:nowrap"><button class="btn" data-auto-dry="${esc(a.id)}">Dry-run</button> <button class="btn" data-auto-live="${esc(a.id)}">Run now</button></td></tr>`).join("") + `</tbody></table>`
+      : `<div class="empty">no automations</div>`;
+  }
+  async function runAuto(id, live, btn){
+    const pv = $("[data-auto-preview]"); btn.disabled = true; const label = btn.textContent; btn.textContent = "…";
+    try{ const r = await fetch(`/api/automations/${encodeURIComponent(id)}/run`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(live ? {live:true, source:"manual"} : {live:false})});
+      const j = await r.json().catch(()=>({})); pv.hidden = false;
+      const res = j.result; pv.textContent = res ? (typeof res === "string" ? res : (res.content || res.text || JSON.stringify(res, null, 2))) : (j.message || (j.error && (j.error.message || j.error)) || `failed (${r.status})`);
+    }catch(e){ pv.hidden = false; pv.textContent = String(e); }
+    finally{ btn.disabled = false; btn.textContent = label; }
+  }
+  document.addEventListener("click", (e) => {
+    const dry = e.target.closest("[data-auto-dry]"); if(dry){ runAuto(dry.dataset.autoDry, false, dry); return; }
+    const live = e.target.closest("[data-auto-live]");
+    if(live && confirm(`Run ${live.dataset.autoLive} live now? It delivers to its channel.`)) runAuto(live.dataset.autoLive, true, live);
+  });
+
+  // ── Sessions + counts (moved from Fleet) ──
+  async function renderFeed(){
+    const [s, act] = await Promise.all([getJson("/sessions?limit=200"), getJson("/api/memory/activity?days=1")]);
+    const ss = (s && s.sessions) || [];
+    $("[data-feed]").innerHTML = ss.length ? ss.slice(0,6).map(x => `<div class="row"><div class="main"><div class="t">${esc(x.agent)}</div><div class="s">${esc(x.title || "(untitled session)")} · ${esc(ago(x.updated_at))}</div></div></div>`).join("") : `<div class="empty">no sessions</div>`;
+    const set = (k, v) => { const el = $(`[data-stat="${k}"]`); if(el && v != null) el.textContent = v; };
+    if(act){ set("nodes", act.total_nodes); const b = (act.buckets || []).slice(-1)[0]; set("writes", b ? b.count : 0); }
+    if(s) set("sessions", ss.length);
+  }
+
+  // One loop, 45 s, paused while the tab is hidden. Automations list loads once.
+  async function tick(){ await Promise.all([renderStatus(), renderRig(), renderAres(), renderGate(), renderAgents(), renderFeed()]); }
+  tick(); renderAutomations();
+  setInterval(() => { if(!document.hidden) tick(); }, 45000);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) tick(); });
+})();
+</script>
+</body>
+</html>

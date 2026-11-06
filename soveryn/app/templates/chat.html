@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
 <link rel="stylesheet" href="/static/voice/presence.css?v=alive5">
-<link rel="stylesheet" href="/static/citizen-icons.css?v=20260901bots3">
+<link rel="stylesheet" href="/static/citizen-icons.css?v=20261103crisp">
 <style>
 
   :root {
@@ -899,6 +899,15 @@
   }
   input, button, select, textarea { font-family: var(--mono) !important; }
 
+  /* revamp phase 2 (2026-11-05): every tool call of a sync turn (turn_tool_calls). */
+  details.turn-tools { margin:4px 0 2px; font-size:12px; opacity:.85; }
+  details.turn-tools summary { cursor:pointer; color:var(--text); opacity:.7; }
+  details.turn-tools .tt-row { font-family:ui-monospace,monospace; white-space:pre-wrap; word-break:break-all; padding:2px 0 2px 10px; }
+  /* revamp phase 3 (2026-11-05): always-on context meter. */
+  .context-meter { font-size:11px; opacity:.7; padding:2px 12px; text-align:right; flex-shrink:0; }
+  .context-meter .bar { display:inline-block; width:90px; height:6px; background:rgba(140,145,100,.25); border-radius:3px; vertical-align:middle; margin:0 6px; overflow:hidden; }
+  .context-meter .fill { display:block; height:100%; background:rgba(140,190,120,.8); }
+  .context-meter.warn .fill { background:rgba(240,180,80,.9); }
 </style>
 <link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
@@ -1026,6 +1035,7 @@
     </div>
 
     <div class="context-banner" data-testid="context-banner" aria-live="polite" aria-atomic="true"></div>
+    <div class="context-meter" data-testid="context-meter" title="">Context: no turn yet</div>
     <div class="collab-chips" data-testid="collab-chips" hidden aria-label="Agent collaborations"></div>
     <div class="thread" data-testid="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
 
@@ -1045,7 +1055,7 @@
   </main>
 </div><!-- /.chat-shell -->
 <script src="/static/voice/presence.js?v=alive5"></script>
-<script src="/static/citizen-icons.js?v=20260901bots3"></script>
+<script src="/static/citizen-icons.js?v=20261103crisp"></script>
 <script>
 (() => {
   const ACTIVE_AGENTS = ["aetheria","vett","scotty","forge","eve"];
@@ -1248,7 +1258,46 @@
 
   const CONTEXT_BANNER_THRESHOLD = 0.85;
 
+  // revamp phase 3: the limit shown is the one the server reports for THIS
+  // citizen's loop (/chat context_usage.context_window, set in
+  // soveryn/app/startup.py: fleet 32,768, Eve 65,536, clamped to the server's
+  // n_ctx in soveryn/config/runtime.py). GLM/Kernel's configured 262,144
+  // (runtime.py glm n_ctx; config/soveryn-cli/profiles.json contextWindow)
+  // applies to the Desk, not to these citizens, so it is never assumed here.
+  function updateContextMeter(usage) {
+    const el = document.querySelector('[data-testid="context-meter"]');
+    if (!el) return;
+    if (!usage || !usage.prompt_tokens) {
+      el.textContent = "Context: not reported for this turn";
+      el.title = "server sent no context_usage";
+      el.classList.remove("warn");
+      return;
+    }
+    const used = usage.prompt_tokens;
+    const lim = usage.context_window;
+    el.textContent = "";
+    const label = document.createElement("span");
+    if (!lim) {
+      label.textContent = `Context: ${used.toLocaleString()} tok · limit unknown`;
+      el.appendChild(label);
+      el.title = "server reported no context_window";
+      return;
+    }
+    const pct = Math.min(100, Math.round((used / lim) * 100));
+    label.textContent = `Context ${used.toLocaleString()} / ${lim.toLocaleString()} tok`;
+    const bar = document.createElement("span"); bar.className = "bar";
+    const fill = document.createElement("span"); fill.className = "fill"; fill.style.width = pct + "%";
+    bar.appendChild(fill);
+    const tail = document.createElement("span");
+    tail.textContent = `${pct}% · limit: ${state.agent} loop (server-reported)`;
+    el.appendChild(label); el.appendChild(bar); el.appendChild(tail);
+    el.title = `context_window from /chat context_usage for ${state.agent}` +
+      (usage.budget_tokens ? `; history budget ${usage.budget_tokens.toLocaleString()} tok` : "");
+    el.classList.toggle("warn", used / lim >= CONTEXT_BANNER_THRESHOLD);
+  }
+
   function updateContextUsage(usage) {
+    updateContextMeter(usage);
     const el = document.querySelector('[data-testid="context-banner"]');
     if (!el) return;
     if (!usage || !usage.context_window || !usage.prompt_tokens) {
@@ -1659,6 +1708,25 @@
     btn.hidden = !agents.includes(state.agent);
   }
 
+  // revamp phase 2: render every tool call in a turn from /chat's turn_tool_calls.
+  // textContent only (args are untrusted). null = unavailable, [] = no tools.
+  function renderTurnTools(beforeEl, calls) {
+    if (!Array.isArray(calls) || calls.length === 0) return;
+    const d = document.createElement("details");
+    d.className = "turn-tools";
+    d.dataset.testid = "turn-tools";
+    const sum = document.createElement("summary");
+    sum.textContent = `${calls.length} tool call${calls.length === 1 ? "" : "s"} this turn`;
+    d.appendChild(sum);
+    for (const c of calls) {
+      const row = document.createElement("div");
+      row.className = "tt-row";
+      row.textContent = `→ ${c.round != null ? "r" + c.round + " " : ""}${c.name || "?"}(${c.arguments || ""})`;
+      d.appendChild(row);
+    }
+    elThread().insertBefore(d, beforeEl);
+  }
+
   function appendBubble(role, content, opts = {}) {
     const div = document.createElement("div");
     div.className = `bubble ${role}`;
@@ -1941,6 +2009,7 @@
         setBubbleText(respBubble, `error · ${data.error.code}: ${data.error.message}`);
       } else {
         setBubbleText(respBubble, data.content || "");
+        renderTurnTools(respBubble, data.turn_tool_calls);
         updateContextUsage(data.context_usage);
         enhanceBubbleWithImages(respBubble);
         if (state.agent === "aetheria" && state.sessionId) {

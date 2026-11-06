@@ -4,9 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SOVERYN · Charters</title>
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#0d0f10">
 <link rel="icon" type="image/png" href="/static/lab-favicon.png">
 <link rel="stylesheet" href="/static/lab-console.css">
+<link rel="stylesheet" href="/static/desk.css?v=20261105sky">
 <style>
   body { min-height: 100vh; }
   .page { max-width: 1280px; margin: 0 auto; padding: 0 0 48px; }
@@ -41,7 +42,7 @@
     font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
     padding: 3px 8px; border: 1px solid var(--line); color: var(--ink-3);
   }
-  .badge.warn { border-color: rgba(198,166,100,0.4); color: var(--gold); }
+  .badge.warn { border-color: rgba(192,130,79,0.4); color: var(--gold); }
   .charter-list { display:flex; flex-direction:column; gap:0; }
   .charter-item {
     display:flex; flex-direction:column; gap:4px;
@@ -49,8 +50,8 @@
     cursor: pointer; transition: background 0.12s ease;
   }
   .charter-item:first-child { border-top: none; }
-  .charter-item:hover { background: rgba(198,166,100,0.04); }
-  .charter-item.active { background: rgba(198,166,100,0.08); }
+  .charter-item:hover { background: rgba(192,130,79,0.04); }
+  .charter-item.active { background: rgba(192,130,79,0.08); }
   .charter-item .name { font-size: 13px; font-weight: 500; color: var(--ink); }
   .charter-item .meta {
     font-size: 11px; color: var(--ink-3); font-family: var(--mono);
@@ -81,23 +82,15 @@
     max-height: 62vh; overflow: auto;
   }
 </style>
-<link rel="stylesheet" href="/static/softdesk.css?v=20260925">
 </head>
-<body class="lab sd" data-lab data-testid="charters-board">
+<body class="lab desk" data-lab data-testid="charters-board">
 
 <div class="plate">
   <a class="id" href="/messages">
     <img src="/static/lab-seal.png" alt="" width="44" height="44">
     <span><b>SOVERYN</b><i>Charters</i></span>
   </a>
-  <nav>
-    <a href="/messages" class="keep">Messages</a>
-    <a href="/citizens" class="keep">Staff</a>
-    <a href="/command-center">Desk</a>
-    <a href="/fleet">Fleet</a>
-    <a href="/documents">Docs</a>
-    <a href="/charters" class="active keep">Charters</a>
-  </nav>
+  <!--sd-nav:charters-->
 </div>
 
 <div class="page">

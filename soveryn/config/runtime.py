@@ -170,7 +170,7 @@ _VETT_BRAIN_PROFILES: dict[str, dict] = {
     "glm": {
         "alias": "glm-5.3-flash",
         "house_name": "GLM 5.3 Flash",
-        "blurb": "NVFP4 TP=2 · both Sparks · Lightning parked",
+        "blurb": "EXL3 4bpw · TensorFold v0.6.0 · TP=2 both Sparks :8001",
         "role": "Vett + Scotty on GLM-5.3-Flash NVFP4 (Spark TP=2 :8001)",
         "path": "GLM-5.3-Flash-NVFP4",
     },
@@ -246,12 +246,12 @@ _KERNEL_BRAIN_PROFILES: dict[str, dict] = {
     "glm": {
         "alias": "glm-5.3-flash",
         "house_name": "GLM 5.3 Flash",
-        "blurb": "EXL3 TR3 4bpw · TP=2 both Sparks :8001 · parked 2026-09-06",
+        "blurb": "EXL3 4bpw · TensorFold v0.6.0 · TP=2 both Sparks :8001",
         "host": "10.10.10.2",
         "port": 8001,
         "path": "GLM-5.3-Flash-EXL3-TR3-4bpw",
         "role": "Kernel — GLM-5.3-Flash EXL3 TR3 4bpw TP=2 on Spark1+Spark2 :8001 (rollback)",
-        "n_ctx": 32768,
+        "n_ctx": 262144,  # matches config/soveryn-cli profile contextWindow (2026-11-03, Jon)
     },
     "flashnext": {
         "alias": "qwen3.8-flash-next",

@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Desk Gate · SOVERYN</title>
+<link rel="icon" type="image/png" href="/static/lab-favicon.png">
+<link rel="stylesheet" href="/static/desk.css?v=20261105sky">
+<style>
+.page{max-width:1100px;margin:0 auto;padding:18px 22px 40px}
+.plate{display:flex;align-items:center;gap:18px;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:18px;flex-wrap:wrap}
+.plate .id{display:flex;gap:10px;align-items:center;text-decoration:none}
+.plate .id b{letter-spacing:.18em;font-size:13px} .plate .id i{display:block;font-style:normal;color:var(--dim);font-size:11px}
+h1{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 6px;font-weight:600}
+.sub{color:var(--dim);margin-bottom:16px}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0;background:var(--panel)}
+.pending{border-color:var(--warn)}.approved{border-color:var(--ok)}.denied,.expired{opacity:.6}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--panel-2);border:1px solid var(--line);padding:8px;border-radius:8px;margin:8px 0;font:12px var(--mono)}
+button{font:600 14px system-ui,-apple-system,Segoe UI,sans-serif;padding:8px 18px;margin-right:8px;border-radius:6px;border:1px solid var(--line);cursor:pointer}
+.ok{background:var(--ok);border-color:var(--ok);color:#0b1a12}.no{background:transparent;border-color:var(--bad);color:var(--bad)}.meta{color:var(--dim);font-size:12px}
+</style></head><body data-testid="desk-gate">
+<div class="page">
+<div class="plate">
+  <a class="id" href="/command-center"><img src="/static/lab-seal.png" alt="" width="36" height="36"><span><b>SOVERYN</b><i>Desk gate</i></span></a>
+  <!--sd-nav:desk-->
+</div>
+<h1>Desk Gate</h1>
+<div class="sub">Dangerous Desk Kernel commands wait here for your click. Approve runs that one call once. Deny or 15 min with no answer = blocked.</div>
+<div id="list">Loading…</div>
+<script>
+let CSRF="";
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function load(){
+  const r=await fetch('/api/desk-gate/list',{cache:'no-store'}); const d=await r.json(); CSRF=d.csrf;
+  const el=document.getElementById('list');
+  if(!d.items.length){el.textContent='Nothing held.';return}
+  el.innerHTML=d.items.map(i=>{
+    const what=i.tool==='bash'?(i.args&&i.args.command):JSON.stringify(i.args);
+    const t=new Date(i.created*1000).toLocaleString('en-US',{timeZone:'America/New_York'});
+    return `<div class="card ${i.status}"><b>${esc(i.status.toUpperCase())}</b> · ${esc(i.tool)} · rule <b>${esc(i.rule)}</b> — ${esc(i.reason)}
+<pre>${esc(what||'')}</pre><div class="meta">cwd ${esc(i.cwd||'-')} · session ${esc(i.session||'-')} · ${esc(t)} ET · ${esc(i.id)}</div>
+${i.status==='pending'?`<div style="margin-top:8px"><button class="ok" onclick="dec('${i.id}','approved')">Approve once</button><button class="no" onclick="dec('${i.id}','denied')">Deny</button></div>`:''}</div>`}).join('');
+}
+async function dec(id,decision){
+  await fetch('/api/desk-gate/decide/'+id,{method:'POST',headers:{'Content-Type':'application/json','X-Desk-Gate-CSRF':CSRF},body:JSON.stringify({decision})});
+  load();
+}
+load(); setInterval(load,3000);
+</script></div></body></html>

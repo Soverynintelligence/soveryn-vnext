@@ -1,0 +1,152 @@
+<!-- Messages sidebar (cc revamp): Grok-style conversation list with status dots.
+     Server-inlined into messages.html + message_thread.html (no /static fetch,
+     phone PWAs often fail those). Data: /api/messages/presence + /api/messages/sidebar. -->
+<style id="mx-css">
+  .mx-side{background:#0f1213;color:var(--ink,#ece6d6);display:flex;flex-direction:column;font-family:var(--sans,system-ui,sans-serif)}
+  .mx-side .mx-plate{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:14px 14px 10px;padding-top:max(14px,env(safe-area-inset-top));border-bottom:1px solid rgba(232,227,213,.10)}
+  .mx-side .mx-id{display:flex;align-items:center;justify-content:space-between;text-decoration:none;color:inherit}
+  .mx-side .mx-id h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+  .mx-side .mx-id span{font-size:11px;letter-spacing:.16em;color:rgba(232,227,213,.45);text-transform:uppercase}
+  .mx-side .plate nav.sd-nav{margin-left:0;flex-wrap:wrap;gap:2px}
+  .mx-side .plate nav.sd-nav a{padding:4px 8px;font-size:12px}
+  .mx-side .mx-search{padding:10px 14px 6px}
+  .mx-side .mx-search input{width:100%;background:#1a1e20;border:1px solid rgba(232,227,213,.10);border-radius:10px;color:inherit;padding:8px 11px;font:14px inherit;outline:none}
+  .mx-side .mx-search input:focus{border-color:rgba(47,158,232,.5)}
+  .mx-list{list-style:none;margin:0;padding:4px 8px 8px;flex:1;overflow-y:auto}
+  .mx-row{display:flex;gap:12px;align-items:center;padding:10px 10px;border-radius:12px;text-decoration:none;color:inherit;margin-bottom:2px}
+  .mx-row:hover{background:#1a1e20} .mx-row[aria-current=page]{background:#1d2124}
+  .mx-av{position:relative;flex:none;width:44px;height:44px}
+  .mx-av .avatar,.mx-av .sov-cit{width:44px!important;height:44px!important}
+  .mx-av .mx-letter{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:linear-gradient(145deg,#2f9ee8,#1f6fa8);color:#0b101a}
+  .mx-dot{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;border:2.5px solid #0f1213;background:#6b6760}
+  .mx-dot[data-state=live]{background:#5ee1a0}
+  .mx-dot[data-state=busy]{background:#d4a827;animation:mxpulse 1.6s ease-in-out infinite}
+  .mx-dot[data-state=down]{background:#e0645a}
+  .mx-dot[data-state=inbox]{background:#6f8fb0}
+  @keyframes mxpulse{50%{box-shadow:0 0 0 4px rgba(212,168,39,.25)}}
+  .mx-meta{flex:1;min-width:0}
+  .mx-top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .mx-name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mx-time{font-size:12px;color:rgba(232,227,213,.45);flex:none}
+  .mx-bottom{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:2px}
+  .mx-prev{font-size:13px;color:rgba(232,227,213,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mx-row.unread .mx-prev{color:rgba(232,227,213,.82)} .mx-row.unread .mx-name{color:#fff}
+  .mx-badge{flex:none;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#2f9ee8;color:#0b101a;font-size:11px;font-weight:700;display:grid;place-items:center}
+  .mx-state{font-size:11px;color:rgba(232,227,213,.4);margin-top:1px}
+  .mx-state[data-state=down]{color:#e0645a} .mx-state[data-state=busy]{color:#d4a827}
+  .mx-legend{display:flex;gap:12px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));border-top:1px solid rgba(232,227,213,.10);font-size:11px;color:rgba(232,227,213,.45)}
+  .mx-legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:0}
+  /* Desktop: fixed left rail, page content to the right (Grok-style). */
+  @media (min-width:900px){
+    .mx-side{position:fixed;left:0;top:0;bottom:0;width:320px;border-right:1px solid rgba(232,227,213,.10);z-index:6}
+    body{padding-left:320px}
+    header.top .back{display:none}
+    .thread{padding-left:max(16px,calc((100% - 860px)/2))!important;padding-right:max(16px,calc((100% - 860px)/2))!important}
+    .composer{padding-left:max(12px,calc((100% - 860px)/2))!important;padding-right:max(12px,calc((100% - 860px)/2))!important}
+  }
+  /* Phone: the list IS the home screen; inside a thread the rail hides. */
+  @media (max-width:899px){
+    body[data-mx-page=thread] .mx-side{display:none}
+    body[data-mx-page=home] .mx-side{min-height:100vh;min-height:100dvh}
+  }
+</style>
+<style id="mx-color-css">
+  /* cc-revamp msgcolor: per-citizen accent (avatar hue). --ac = accent, --ac-ink = readable label tint, --ac-rgb for tints. Unknown agents = neutral. */
+  :root,.mx-row{--ac:#a39e94;--ac-ink:#bfbbb4;--ac-rgb:163,158,148}
+  [data-agent="aetheria"]{--ac:#ffbf3c;--ac-ink:#ffd276;--ac-rgb:255,191,60}
+  [data-agent="forge"]{--ac:#5fd35a;--ac-ink:#8fe08c;--ac-rgb:95,211,90}
+  [data-agent="kernel"]{--ac:#5fd35a;--ac-ink:#8fe08c;--ac-rgb:95,211,90}
+  [data-agent="eve"]{--ac:#a97cff;--ac-ink:#c3a3ff;--ac-rgb:169,124,255}
+  [data-agent="t_critic"]{--ac:#ff7b54;--ac-ink:#ffa387;--ac-rgb:255,123,84}
+  [data-agent="t_scout"]{--ac:#4aa3ff;--ac-ink:#80bfff;--ac-rgb:74,163,255}
+  [data-agent="pondwright"]{--ac:#26cfc2;--ac-ink:#67ddd4;--ac-rgb:38,207,194}
+  [data-agent="atticus"]{--ac:#ff6fae;--ac-ink:#ff9ac6;--ac-rgb:255,111,174}
+  .mx-row{box-shadow:inset 3px 0 0 rgba(var(--ac-rgb),.85)}
+  .mx-row .mx-name,.mx-row.unread .mx-name{color:var(--ac-ink)}
+  .mx-row:hover{background:rgba(var(--ac-rgb),.07)}
+  .mx-row[aria-current=page]{background:rgba(var(--ac-rgb),.13)}
+  .mx-row .mx-badge{background:var(--ac)}
+</style>
+<aside class="mx-side" data-testid="messages-sidebar" aria-label="Conversations">
+  <div class="plate mx-plate">
+    <a class="mx-id" href="/messages"><h1>Messages</h1><span>SOVERYN</span></a>
+    <!--sd-nav:messages-->
+  </div>
+  <div class="mx-search"><input type="search" data-mx-q placeholder="Search" aria-label="Search conversations" autocomplete="off"></div>
+  <ul class="mx-list" data-testid="messages-list" data-mx-list aria-label="Your house"></ul>
+  <div class="mx-legend" aria-hidden="true"><span><i style="background:#5ee1a0"></i>live</span><span><i style="background:#d4a827"></i>busy</span><span><i style="background:#e0645a"></i>down</span><span><i style="background:#6f8fb0"></i>inbox</span></div>
+</aside>
+<script>
+(function () {
+  // MESSAGES_CONTACTS (fleet freeze) + overnight teammate inboxes.
+  const CONTACTS = [
+    { id: "aetheria", name: "Aetheria", role: "Runs the house", letter: "A" },
+    { id: "forge", name: "Forge", role: "Builds with you", letter: "F" },
+    { id: "eve", name: "Eve", role: "Shows up online", letter: "E" },
+    { id: "t_critic", name: "Critic", role: "Overnight review", letter: "C" },
+    { id: "t_scout", name: "Scout", role: "Overnight scan", letter: "Sc" },
+  ];
+  const SEEN_KEY = "soveryn_messages_seen_v1";
+  const STATE_TEXT = { live: "online", busy: "working…", down: "offline — model not answering", inbox: "overnight inbox", unknown: "status unknown" };
+  const parts = location.pathname.split("/").filter(Boolean);
+  const current = parts[0] === "messages" && parts[1] ? parts[1].toLowerCase() : null;
+  document.body.dataset.mxPage = current ? "thread" : "home";
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  function seen(){ try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}") || {}; } catch (_) { return {}; } }
+  function rel(iso){ if(!iso) return ""; const t = Date.parse(iso); if(isNaN(t)) return ""; const d = Date.now() - t;
+    if(d < 60000) return "now"; if(d < 3600000) return Math.floor(d/60000)+"m"; if(d < 86400000) return Math.floor(d/3600000)+"h";
+    return new Date(t).toLocaleDateString(undefined, {month:"short", day:"numeric"}); }
+  async function getJson(u){ try { const r = await fetch(u, {cache:"no-store"}); return r.ok ? await r.json() : null; } catch (_) { return null; } }
+  let last = { presence: {}, side: {} };
+  function avatar(c, st){
+    return (typeof soverynCitizenIcon === "function")
+      ? soverynCitizenIcon(c.id, { size: 44, className: "avatar", letter: c.letter, busy: false, label: c.name, state: st })
+      : `<div class="mx-letter">${esc(c.letter)}</div>`;
+  }
+  function paint(){
+    const list = document.querySelector("[data-mx-list]"); if(!list) return;
+    const q = (document.querySelector("[data-mx-q]") || {}).value || "";
+    const rows = CONTACTS.filter(c => !q || c.name.toLowerCase().includes(q.toLowerCase())).map(c => {
+      const p = last.presence[c.id] || {}; const s = last.side[c.id] || {};
+      const st = p.state || "unknown";
+      const unread = c.id === current ? 0 : (s.unread || 0);
+      const lm = s.last;
+      const prev = lm ? (lm.role === "user" ? "You: " : "") + lm.preview : (s.inbox ? "Overnight inbox" : "Say hi");
+      const tip = `${c.name} · ${STATE_TEXT[st] || st}${p.latency_ms != null ? " · " + p.latency_ms + " ms" : ""}${p.error ? " · " + p.error : ""}`;
+      return `<li><a class="mx-row${unread ? " unread" : ""}" href="/messages/${encodeURIComponent(c.id)}" data-agent="${esc(c.id)}"
+          ${c.id === current ? 'aria-current="page"' : ""} title="${esc(tip)}" aria-label="${esc(c.name)}, ${esc(STATE_TEXT[st] || st)}${unread ? ", " + unread + " unread" : ""}">
+        <div class="mx-av">${avatar(c, st)}<span class="mx-dot" data-state="${esc(st)}" data-testid="status-dot"></span></div>
+        <div class="mx-meta">
+          <div class="mx-top"><span class="mx-name">${esc(c.name)}</span><span class="mx-time">${esc(rel(lm && lm.at || s.updated_at))}</span></div>
+          <div class="mx-bottom"><span class="mx-prev">${esc(prev)}</span>${unread ? `<span class="mx-badge" data-testid="unread-badge">${unread > 99 ? "99+" : unread}</span>` : ""}</div>
+          <div class="mx-state" data-state="${esc(st)}">${esc(STATE_TEXT[st] || st)}</div>
+        </div></a></li>`;
+    });
+    list.innerHTML = rows.join("") || `<li class="mx-state" style="padding:12px">No match.</li>`;
+  }
+  let busy = false;
+  async function refresh(){
+    if(busy) return; busy = true;
+    try {
+      const sn = seen(); if(current) sn[current] = new Date().toISOString();
+      const [pr, sb] = await Promise.all([
+        getJson("/api/messages/presence"),
+        getJson("/api/messages/sidebar?since=" + encodeURIComponent(JSON.stringify(sn))),
+      ]);
+      if(pr) last.presence = Object.fromEntries((pr.citizens || []).map(x => [x.id, x]));
+      if(sb) last.side = Object.fromEntries((sb.contacts || []).map(x => [x.id, x]));
+      paint();
+      // animated avatars elsewhere on the page (thread header) follow the same status dots
+      if(pr && window.soverynCitizenIcon && soverynCitizenIcon.applyPresence) soverynCitizenIcon.applyPresence(pr.citizens);
+    } finally { busy = false; }
+  }
+  function boot(){
+    paint(); refresh();
+    const qIn = document.querySelector("[data-mx-q]"); if(qIn) qIn.addEventListener("input", paint);
+    setInterval(() => { if(!document.hidden) refresh(); }, 30000);
+    document.addEventListener("visibilitychange", () => { if(!document.hidden) refresh(); });
+    window.addEventListener("pageshow", refresh);
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
+})();
+</script>

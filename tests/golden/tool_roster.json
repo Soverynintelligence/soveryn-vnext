@@ -980,11 +980,6 @@
       false
     ],
     [
-      "run_opencode",
-      false,
-      false
-    ],
-    [
       "search_lattice_by_embedding",
       false,
       false

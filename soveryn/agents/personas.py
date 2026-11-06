@@ -76,7 +76,7 @@ Chat history + Lattice search when prior decisions matter. Do not invent house l
 - Surgical edits: `edit_file` — targeted old/new replacement, never full-file rewrites for small changes.
 - New files / full rewrites: `write_file` — verified (byte + sha receipt on success).
 - Paths: use repo-rooted relative paths (`docs/...`, `packages/...`) or absolute paths. `~/` reaches house trees. The tool verifies what it wrote — read the receipt and report the real path.
-- Mends beyond your hands: `run_aider` (`soveryn-aider --kernel --yes`). `run_opencode` only if Aider cannot do the job.
+- Mends beyond your hands: `run_aider` (`soveryn-aider --kernel --yes`).
 - Live kids: `kernel_child` action=list|stop|steer. Never treat finish_reason tool_round_limit as success — say so when a turn was cut.
 - Never touch secrets (.ssh, .env, credentials). Escalate on secrets, sudo, force-push, or outside the allowed tree.
 

@@ -31,17 +31,20 @@
   border-radius: 0 !important;
 }
 
-.sov-cit svg { width: 100%; height: 100%; display: block; pointer-events: none; }
+.sov-cit svg { width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; }
 .sov-cit-letter {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-.sov-cit--aetheria { --cit-hi: #f0e2b8; --cit-mid: #c6a664; --cit-lo: #8a7038; }
-.sov-cit--kernel   { --cit-hi: #c5f0d4; --cit-mid: #9ee0b8; --cit-lo: #3d7a55; }
-.sov-cit--eve      { --cit-hi: #f0d4ff; --cit-mid: #e0b0ff; --cit-lo: #7a4a9a; }
-.sov-cit--t_critic { --cit-hi: #e8c9a0; --cit-mid: #d4a574; --cit-lo: #6b4a2e; }
-.sov-cit--t_scout  { --cit-hi: #c5dcec; --cit-mid: #8eb8d4; --cit-lo: #3a5a70; }
+.sov-cit--aetheria { --cit-hi: #ffe39a; --cit-mid: #ffbf3c; --cit-lo: #a8700a; }
+.sov-cit--forge    { --cit-hi: #b9f5a8; --cit-mid: #5fd35a; --cit-lo: #2a7d28; }
+.sov-cit--pondwright { --cit-hi: #b2f4ee; --cit-mid: #26cfc2; --cit-lo: #0f746c; }
+.sov-cit--atticus  { --cit-hi: #ffc4e1; --cit-mid: #ff6fae; --cit-lo: #a3265f; }
+.sov-cit--kernel   { --cit-hi: #b9f5a8; --cit-mid: #5fd35a; --cit-lo: #2a7d28; }
+.sov-cit--eve      { --cit-hi: #dccbff; --cit-mid: #a97cff; --cit-lo: #5a33b5; }
+.sov-cit--t_critic { --cit-hi: #ffc2b0; --cit-mid: #ff7b54; --cit-lo: #a83a1e; }
+.sov-cit--t_scout  { --cit-hi: #b5dcff; --cit-mid: #4aa3ff; --cit-lo: #1d5aa3; }
 .sov-cit--vett     { --cit-hi: #d4f0f8; --cit-mid: #7ec8e3; --cit-lo: #3a7a9a; }
 .sov-cit--scotty   { --cit-hi: #f0c9a8; --cit-mid: #e8a87c; --cit-lo: #a65d3b; }
 
@@ -55,7 +58,7 @@
 }
 .sov-cit .sov-bob {
   animation: sov-bob 3.6s ease-in-out infinite;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.42));
+  /* no CSS filter here: filters on animated SVG rasterize at 1x in WebKit (blurry on iPhone) */
 }
 .sov-cit.has-eyes .sov-eyes { animation: sov-eye-blink 5.6s ease-in-out infinite; }
 .sov-cit.has-eyes .sov-pupils { animation: sov-glance 7.8s ease-in-out infinite; }
@@ -72,8 +75,8 @@ a.messaged-peer[data-state="working"] .sov-cit .sov-bob {
 }
 
 @keyframes sov-bob {
-  0%, 100% { transform: translateY(0) rotate(-2.2deg) scale(1, 1); }
-  50%      { transform: translateY(-2.5px) rotate(2.2deg) scale(1.04, 0.96); }
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
 }
 @keyframes sov-bob-busy {
   0%, 100% { transform: translateY(0) scale(1, 1); }
@@ -88,6 +91,93 @@ a.messaged-peer[data-state="working"] .sov-cit .sov-bob {
   28%, 40% { transform: translateX(1.8px); }
   52%, 64% { transform: translateX(-1.6px); }
   74%, 100%{ transform: translateX(0); }
+}
+
+/* ── 2026-11 animated citizens: traits + live state ───────────────────────── */
+.sov-cit .sov-tr, .sov-cit .sov-aura, .sov-cit .sov-tr-ping, .sov-cit .sov-tr-ripple, .sov-cit .sov-tr-glint {
+  transform-box: fill-box; transform-origin: center;
+}
+.sov-cit .sov-aura { opacity: 0; transform-box: view-box; transform-origin: 32px 32px; }
+.sov-cit { transition: filter .4s ease, opacity .4s ease; }
+
+/* idle traits: slow, small */
+.sov-cit .sov-tr-halo    { animation: sov-halo 4.2s ease-in-out infinite; }
+.sov-cit .sov-tr-twinkle { animation: sov-twinkle 3.2s ease-in-out infinite; }
+.sov-cit .sov-tr-sparks  { animation: sov-sparks 2.6s steps(1, end) infinite; }
+.sov-cit .sov-tr-ember   { animation: sov-ember 2.6s ease-out infinite; }
+.sov-cit .sov-tr-bulb    { animation: sov-bulb 2.8s ease-in-out infinite; }
+.sov-cit .sov-tr-ring    { opacity: 0; }
+.sov-cit .sov-tr-glint   { animation: sov-glint 5s ease-in-out infinite; }
+.sov-cit .sov-tr-brow    { animation: sov-brow 6.5s ease-in-out infinite; }
+.sov-cit .sov-tr-ping    { animation: sov-ping 3.6s ease-out infinite; }
+.sov-cit .sov-tr-ping2   { animation-delay: 1.8s; }
+.sov-cit .sov-tr-ripple  { animation: sov-ripple 3.8s ease-out infinite; }
+.sov-cit .sov-tr-ripple2 { animation-delay: 1.9s; }
+.sov-cit .sov-tr-leaf    { animation: sov-leaf 4.6s ease-in-out infinite; }
+.sov-cit .sov-tr-page    { animation: sov-page 5.2s ease-in-out infinite; }
+
+/* busy: more motion + pulsing aura */
+.sov-cit[data-state="busy"] .sov-bob { animation-name: sov-bob-busy; animation-duration: .72s; }
+.sov-cit.is-busy .sov-aura, .sov-cit[data-busy="1"] .sov-aura, .sov-cit[data-state="busy"] .sov-aura {
+  animation: sov-aura 1.3s ease-out infinite;
+}
+.sov-cit.is-busy .sov-tr-halo, .sov-cit[data-state="busy"] .sov-tr-halo { animation: sov-halo-spin 1.4s linear infinite; }
+.sov-cit.is-busy .sov-tr-twinkle, .sov-cit[data-state="busy"] .sov-tr-twinkle { animation-duration: .9s; }
+.sov-cit.is-busy .sov-tr-sparks, .sov-cit[data-state="busy"] .sov-tr-sparks { animation-duration: .45s; }
+.sov-cit.is-busy .sov-tr-ember, .sov-cit[data-state="busy"] .sov-tr-ember { animation-duration: .6s; }
+.sov-cit.is-busy .sov-tr-bulb, .sov-cit[data-state="busy"] .sov-tr-bulb { animation-duration: .7s; }
+.sov-cit.is-busy .sov-tr-ring, .sov-cit[data-state="busy"] .sov-tr-ring { animation: sov-ring 1.1s ease-out infinite; }
+.sov-cit.is-busy .sov-tr-glint, .sov-cit[data-state="busy"] .sov-tr-glint { animation-duration: 1.2s; }
+.sov-cit.is-busy .sov-tr-monocle, .sov-cit[data-state="busy"] .sov-tr-monocle { animation: sov-squint 1.6s ease-in-out infinite; }
+.sov-cit.is-busy .sov-tr-ping, .sov-cit[data-state="busy"] .sov-tr-ping { animation-duration: 1.1s; }
+.sov-cit.is-busy .sov-tr-ping2, .sov-cit[data-state="busy"] .sov-tr-ping2 { animation-delay: .55s; }
+.sov-cit.is-busy .sov-tr-ripple, .sov-cit[data-state="busy"] .sov-tr-ripple { animation-duration: 1.2s; }
+.sov-cit.is-busy .sov-tr-ripple2, .sov-cit[data-state="busy"] .sov-tr-ripple2 { animation-delay: .6s; }
+.sov-cit.is-busy .sov-tr-page, .sov-cit[data-state="busy"] .sov-tr-page { animation: sov-page-flip .9s ease-in-out infinite; }
+.sov-cit.is-busy .sov-pupils, .sov-cit[data-state="busy"] .sov-pupils { animation: sov-glance-busy 1.6s ease-in-out infinite; }
+
+/* inbox (overnight teammates): sleepy, slower */
+.sov-cit[data-state="inbox"] .sov-bob { animation-duration: 5.4s; }
+.sov-cit[data-state="inbox"] .sov-eyes { animation-duration: 8s; }
+
+/* down: dim, still, eyes shut */
+.sov-cit[data-state="down"] { filter: grayscale(.85) brightness(.75); opacity: .5; }
+.sov-cit[data-state="down"] .sov-bob,
+.sov-cit[data-state="down"] .sov-tr,
+.sov-cit[data-state="down"] .sov-tr *,
+.sov-cit[data-state="down"] .sov-pupils { animation: none !important; }
+.sov-cit[data-state="down"] .sov-eyes { animation: none; transform: scaleY(.14); }
+.sov-cit[data-state="down"] .sov-tr-ring, .sov-cit[data-state="down"] .sov-aura { opacity: 0; }
+
+@keyframes sov-halo    { 0%,100% { transform: translateY(0); opacity: .85; } 50% { transform: translateY(-1.6px); opacity: 1; } }
+@keyframes sov-halo-spin { 0% { transform: translateY(-1px) scaleX(1); } 50% { transform: translateY(-2.4px) scaleX(.55); } 100% { transform: translateY(-1px) scaleX(1); } }
+@keyframes sov-twinkle { 0%,60%,100% { transform: scale(.35) rotate(0); opacity: 0; } 75% { transform: scale(1) rotate(45deg); opacity: 1; } }
+@keyframes sov-sparks  { 0%,70% { opacity: .4; transform: scale(.9); } 72%,80% { opacity: 1; transform: scale(1.15); } 82% { opacity: .4; } 86%,92% { opacity: 1; transform: scale(1.1); } 100% { opacity: .4; transform: scale(.9); } }
+@keyframes sov-ember   { 0%,65% { opacity: 0; transform: translate(0,0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(3px,-4px); } }
+@keyframes sov-bulb    { 0%,100% { opacity: .75; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.12); } }
+@keyframes sov-ring    { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(3.4); } }
+@keyframes sov-glint   { 0%,80%,100% { opacity: 0; transform: translate(0,0); } 88% { opacity: 1; transform: translate(1.5px,-1.5px); } }
+@keyframes sov-brow    { 0%,70%,100% { transform: translateY(0); } 78%,86% { transform: translateY(-1.8px) rotate(-6deg); } }
+@keyframes sov-squint  { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes sov-ping    { 0% { opacity: .9; transform: scale(1); } 100% { opacity: 0; transform: scale(4.5); } }
+@keyframes sov-ripple  { 0% { opacity: .85; transform: scale(.5); } 100% { opacity: 0; transform: scale(1.7); } }
+@keyframes sov-leaf    { 0%,100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(8deg) translateY(-1.5px); } }
+@keyframes sov-page    { 0%,100% { transform: rotate(-6deg) translateY(0); } 50% { transform: rotate(5deg) translateY(-2px); } }
+@keyframes sov-page-flip { 0%,100% { transform: rotate(-8deg) scaleX(1); } 50% { transform: rotate(6deg) scaleX(-1); } }
+@keyframes sov-aura    { 0% { opacity: .75; transform: scale(.82); } 100% { opacity: 0; transform: scale(1.12); } }
+@keyframes sov-glance-busy { 0%,100% { transform: translateX(0); } 25% { transform: translateX(1.8px); } 60% { transform: translateX(-1.8px); } }
+
+/* phones: keep it light — idle avatars only bob + blink; trait motion only while busy */
+@media (max-width: 899px), (pointer: coarse) {
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr,
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr *,
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-pupils { animation: none; }
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-twinkle { opacity: .8; transform: none; }
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-sparks { opacity: .55; }
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-ping,
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-ripple { opacity: .5; }
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-ember,
+  .sov-cit:not(.is-busy):not([data-busy="1"]):not([data-state="busy"]) .sov-tr-glint { opacity: 0; }
 }
 
 /* Picker */
@@ -134,7 +224,13 @@ a.messaged-peer[data-state="working"] .sov-cit .sov-bob {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sov-cit *, .sov-cit *::before, .sov-cit *::after {
+  .sov-cit, .sov-cit *, .sov-cit *::before, .sov-cit *::after {
     animation: none !important; transition: none !important;
   }
+  /* still show state without motion: busy = steady ring, down = dim (above) */
+  .sov-cit.is-busy .sov-aura, .sov-cit[data-busy="1"] .sov-aura, .sov-cit[data-state="busy"] .sov-aura { opacity: .7; }
+  .sov-cit .sov-tr-twinkle { opacity: .8; }
+  .sov-cit .sov-tr-sparks { opacity: .6; }
+  .sov-cit .sov-tr-ping, .sov-cit .sov-tr-ripple { opacity: .5; }
+  .sov-cit .sov-tr-ember, .sov-cit .sov-tr-glint { opacity: 0; }
 }
