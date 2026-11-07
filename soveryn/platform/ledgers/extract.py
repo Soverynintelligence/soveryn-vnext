@@ -112,7 +112,12 @@ def extract_image_path(path: str | Path) -> ExtractResult:
     )
 
 
-_MONEY_HINT = re.compile(r"\$\s*\d+\.\d{2}")
+_MONEY_HINT = re.compile(
+    r"\$\s*\d+\.\d{2}"
+    r"|(?:grand\s+total|amount(?:\s+(?:due|paid))?|payment\s+amount|"
+    r"subtotal|total(?:\s+tax)?)\s*:?\s*-?\s*\$?\s*\d+\.\d{2}",
+    re.I,
+)
 
 
 def _extract_pdf_with_fallbacks(path: Path) -> ExtractResult:
