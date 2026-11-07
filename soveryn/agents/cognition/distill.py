@@ -58,6 +58,7 @@ the cap.  This enforces the "never an unbounded growing rulebook" contract.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Callable
 
 from soveryn.agents.cognition.store import CognitionStore
@@ -173,6 +174,23 @@ def _enforce_cap(text: str, max_lines: int) -> str:
 
 # ─── Public API ──────────────────────────────────────────────────────────────
 
+# Cap on how many reflection memories are sent to the model, keeping the MOST
+# RECENT. The prompt is oldest-first with later entries superseding, so
+# dropping the head preserves semantics. Uncapped, 400+ accumulated
+# reflections produced an ~82k-char prompt (~20k+ tokens) against the
+# cognition model's 16k ctx — HTTP 400 on EVERY deep cycle (observed
+# 2026-11-07: 227 failed cycles since Oct 20, sense-of-us note frozen).
+DEFAULT_MAX_MEMORIES = 40
+
+
+def _max_memories() -> int:
+    raw = os.environ.get("SOVERYN_COGNITION_DISTILL_MAX_MEMORIES", "")
+    try:
+        return int(raw) if raw.strip() else DEFAULT_MAX_MEMORIES
+    except ValueError:
+        return DEFAULT_MAX_MEMORIES
+
+
 def distill(
     agent: str,
     memories: list[ReflectionMemory],
@@ -207,6 +225,11 @@ def distill(
     # Empty memories → nothing to synthesize; skip write entirely.
     if not memories:
         return None
+
+    # Keep the most recent N memories (see DEFAULT_MAX_MEMORIES above).
+    limit = _max_memories()
+    if limit > 0 and len(memories) > limit:
+        memories = memories[-limit:]
 
     # Determine the id of the current note version for supersedes linkage.
     supersedes_id: str | None = store.current_note_id()

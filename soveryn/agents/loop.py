@@ -26,6 +26,7 @@ turn-processing time.
 
 from __future__ import annotations
 import json
+import re
 import logging
 import time
 from dataclasses import dataclass, field
@@ -1337,7 +1338,7 @@ class AgentLoop:
             tools=turn_tools,
             thinking_budget_tokens=self.thinking_budget_tokens,
         )
-        response = self._chat(request)
+        response = self._coerce_text_tool_calls(self._chat(request))
 
         tool_rounds = 0
         # Verification ledger + budget for the Vett-only finalization gate.
@@ -1447,7 +1448,7 @@ class AgentLoop:
                         tools=turn_tools,
                         thinking_budget_tokens=self.thinking_budget_tokens,
                     )
-                response = self._chat(request)
+                response = self._coerce_text_tool_calls(self._chat(request))
                 tool_rounds += 1
                 if force_final:
                     # No-tools generation already requested; strip any sticky
@@ -1624,6 +1625,81 @@ class AgentLoop:
             "prelude_soft_budget": PRELUDE_SOFT_BUDGET_TOKENS,
             "total_input_soft_budget": TOTAL_INPUT_SOFT_BUDGET_TOKENS,
         }
+
+    # Textual tool-call blocks some models emit as plain content (no native
+    # tool_calls in the API response) — seen from Aetheria's Gemma surface on
+    # 2026-11-07 and common in Qwen-style textual tool syntax. The character
+    # class in the closing tag avoids the literal token in source.
+    _TEXT_TOOL_CALL_RE = re.compile(r"<tool[_]call>(.*?)</tool[_]call>", re.DOTALL)
+
+    @classmethod
+    def _coerce_text_tool_calls(cls, response: ChatResponse) -> ChatResponse:
+        """Convert textual tool-call blocks into native tool_calls.
+
+        Handles the standard {"name": …, "arguments": …} JSON shape and the
+        Grok-style <function=use_tools> {"toolName": …} shape Aetheria
+        emitted on 2026-11-07. Returns the response unchanged when it already
+        carries native tool_calls or contains no parsable block.
+        """
+        if response.tool_calls or not response.content:
+            return response
+        specs = cls._extract_text_tool_call_specs(response.content)
+        if not specs:
+            return response
+        coerced = tuple(
+            {
+                "id": f"textcall-{i}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args)},
+            }
+            for i, (name, args) in enumerate(specs)
+        )
+        content = cls._TEXT_TOOL_CALL_RE.sub("", response.content).strip()
+        return ChatResponse(
+            content=content,
+            finish_reason=response.finish_reason,
+            tool_calls=coerced,
+            usage=response.usage,
+            raw=response.raw,
+            context_usage=response.context_usage,
+        )
+
+    @classmethod
+    def _extract_text_tool_call_specs(cls, text: str) -> list[tuple[str, dict]]:
+        specs: list[tuple[str, dict]] = []
+        for m in cls._TEXT_TOOL_CALL_RE.finditer(text):
+            body = m.group(1)
+            name: str | None = None
+            fn = re.search(r"<function\s*=\s*([^>]+)>", body)
+            if fn:
+                name = fn.group(1).strip()
+                rest = body[fn.end():]
+                end = rest.rfind("</function>")
+                body = rest[:end] if end != -1 else rest
+            try:
+                obj = json.loads(body.strip())
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(obj, dict):
+                continue
+            name = obj.get("toolName") or obj.get("name") or name
+            if not name:
+                continue
+            args = obj.get("arguments")
+            if args is None:
+                args = {
+                    k: v for k, v in obj.items()
+                    if k not in ("toolName", "name", "arguments")
+                }
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (json.JSONDecodeError, ValueError):
+                    args = {}
+            if not isinstance(args, dict):
+                args = {}
+            specs.append((str(name), args))
+        return specs
 
     def _parse_tool_args(self, raw_args: object) -> dict:
         if isinstance(raw_args, dict):
