@@ -233,14 +233,67 @@ def _ocr_score(text: str) -> int:
     if not text.strip():
         return 0
     score = min(len(text), 800) // 20
-    if _MONEY_HINT.search(text):
-        score += 100
+    money_hits = list(_MONEY_HINT.finditer(text))
+    if money_hits:
+        score += 60 + 20 * min(len(money_hits), 4)
     upper = text.upper()
+    if "TOTAL TAX" in upper:
+        score += 40
+    if re.search(r"\bINVOICE\s+\d+", upper):
+        score += 15
+    if re.search(r"\bA[HNM]OUNT\s*:?\s*\d+\.\d{2}", upper):
+        score += 20
     if "AMOUNT" in upper or "TOTAL" in upper or "PAYMENT" in upper:
         score += 20
     if "SALE" in upper or "LLC" in upper:
         score += 10
+    if re.search(r"\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b", text):
+        score += 10
+    if re.search(r"\b\d+\.\s*$", text.strip()):
+        score -= 15
+    if len(text) > 900:
+        score -= 25
     return score
+
+
+def _paper_crop(im):
+    """Crop to bright thermal paper on a dark snap. Original if no paper."""
+    from PIL import ImageOps
+
+    gray = ImageOps.grayscale(im)
+    bw = gray.point(lambda p: 255 if p > 210 else 0)
+    bbox = bw.getbbox()
+    if not bbox:
+        return im
+    x0, y0, x1, y1 = bbox
+    width, height = im.size
+    box_w, box_h = x1 - x0, y1 - y0
+    if box_w < width * 0.25 or box_h < height * 0.25:
+        return im
+    if box_w > width * 0.98 and box_h > height * 0.98:
+        return im
+    pad = 16
+    return im.crop(
+        (
+            max(0, x0 - pad),
+            max(0, y0 - pad),
+            min(width, x1 + pad),
+            min(height, y1 + pad),
+        )
+    )
+
+
+def _enhance_for_ocr(im):
+    """Upscale small snaps and stretch contrast. In-memory only; not evidence."""
+    from PIL import Image, ImageOps
+
+    gray = ImageOps.grayscale(im)
+    width, height = gray.size
+    if max(width, height) < 1800:
+        gray = gray.resize(
+            (int(width * 2), int(height * 2)), Image.Resampling.LANCZOS
+        )
+    return ImageOps.autocontrast(gray).convert("RGB")
 
 
 def _tesseract_image(im, tess: Path, psm: int) -> str:
@@ -266,17 +319,22 @@ def _tesseract_image(im, tess: Path, psm: int) -> str:
 
 
 def _best_ocr(im, tess: Path) -> str:
-    """EXIF-upright first; if no money, try other rotations. Never invent."""
+    """EXIF-upright, paper crop, contrast. Rotations only if no money. Never invent."""
+    cropped = _paper_crop(im)
+    variants = [im]
+    if cropped.size != im.size:
+        variants.append(cropped)
+    variants.append(_enhance_for_ocr(cropped))
+
     best_text = ""
     best_score = 0
-    for psm in (4, 6):
-        text = _tesseract_image(im, tess, psm)
-        score = _ocr_score(text)
-        if score > best_score:
-            best_score = score
-            best_text = text
-        if score >= 120:
-            return text
+    for variant in variants:
+        for psm in (4, 6):
+            text = _tesseract_image(variant, tess, psm)
+            score = _ocr_score(text)
+            if score > best_score:
+                best_score = score
+                best_text = text
     if best_score >= 100:
         return best_text
     for deg in (90, 270, 180):

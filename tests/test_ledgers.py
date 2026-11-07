@@ -570,6 +570,76 @@ def test_parse_storefront_bare_amounts_hyphen_date_and_sku_lines():
     assert row.schedule_c_or_form == "supplies"
 
 
+OCR_TRUNCATED_STOREFRONT = """
+LOWE'S HOME CENTERS, LLC
+SALE
+03-15-26
+111111 12-OZ PRO MARKING ORANGE     8.50
+SUBTOTAL: 25.50
+INVOICE 42424 TOT 27.29
+TOTAL T 1.79
+TOTAL: 27.29
+H/C: 27.29
+EST. POINTS EARNED: 31%
+HC: XXKXXXXXXXXX4411 ANOUNT: 27.
+"""
+
+
+def test_parse_ocr_truncated_tax_and_hc_mask():
+    row = parse_receipt(OCR_TRUNCATED_STOREFRONT, source_name="chat.jpg")
+    assert row.vendor == "Lowe's"
+    assert row.amount_usd == "27.29"
+    assert row.subtotal == "25.50"
+    assert row.tax == "1.79"
+    assert row.printed_total == "27.29"
+    assert row.order_id == "42424"
+    assert row.status == "DOCUMENTED"
+    assert "4411" in row.payment_method
+    assert "Mercury" not in row.payment_method
+    assert row.schedule_c_or_form == "supplies"
+
+
+def test_ingest_preview_not_blocked_when_tax_ocr_truncated(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    photo = tmp_path / "storefront.jpg"
+    photo.write_bytes(b"fake-photo-bytes")
+    kw = _ingest_kw(tmp_path, cwg, OCR_TRUNCATED_STOREFRONT, "storefront.jpg")
+    preview = ingest_path(photo, confirm=False, **kw)
+    assert preview.action == "preview"
+    assert preview.confirm_token
+    assert preview.amount_usd == "27.29"
+    assert preview.rows[0]["tax"] == "1.79"
+    assert preview.rows[0]["subtotal"] == "25.50"
+    assert load_rows(cwg) == []
+
+
+def test_ocr_score_prefers_total_tax_over_truncated_label():
+    from soveryn.platform.ledgers.extract import _ocr_score
+
+    pad = "LOWE'S HOME CENTERS, LLC\nSALE\nSUBTOTAL: 25.50\n"
+    truncated = pad + "INVOICE 42424 TOT 27.29\nTOTAL T 1.79\nTOTAL: 27.29\n"
+    clean = pad + "INVOICE 42424 TOTAL: 27.29\nTOTAL TAX: 1.79\nTOTAL: 27.29\nAMOUNT: 27.29\n"
+    noisy = (pad + "INVOICE 42424 TOTAL: 27.29\nTOTAL TAX: 1.79\n" + ("junk " * 400))
+    assert _ocr_score(clean) > _ocr_score(truncated)
+    assert _ocr_score(clean) > _ocr_score(noisy)
+
+
+def test_paper_crop_keeps_bright_receipt_drops_dark_margin():
+    from PIL import Image
+    from soveryn.platform.ledgers.extract import _paper_crop
+
+    im = Image.new("RGB", (400, 500), (10, 10, 10))
+    for x in range(80, 320):
+        for y in range(40, 460):
+            im.putpixel((x, y), (240, 240, 240))
+    cropped = _paper_crop(im)
+    assert cropped.size[0] < im.size[0]
+    assert cropped.size[1] < im.size[1]
+    assert cropped.size[0] > 200
+    assert cropped.size[1] > 350
+
+
 def test_parse_does_not_book_subtotal_invoice_points_or_card_as_total():
     row = parse_receipt(STOREFRONT_FALSE_TOTALS, source_name="chat.jpg")
     assert row.amount_usd == "12.34"

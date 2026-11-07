@@ -95,7 +95,7 @@ _DATE_PATTERNS = (
 
 _SUBTOTAL = re.compile(r"Item(?:\(s\))?\s*Subtotal:|\bSubtotal\b", re.I)
 _TAX = re.compile(
-    r"Estimated tax to be\s*collected:|TOTAL\s+TAX\b|(?<!before )(?<!after )\bTax\b",
+    r"Estimated tax to be\s*collected:|TOTAL\s+T(?:AX)?\b|(?<!before )(?<!after )\bTax\b",
     re.I,
 )
 _REWARDS = re.compile(r"Rewards(?: Points)?:", re.I)
@@ -108,11 +108,12 @@ _SHIP = re.compile(
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
 _GRAND = re.compile(
-    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?|\bAMOUNT\b",
+    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?"
+    r"|\bA[HNM]OUNT\b",
     re.I,
 )
-# Do not treat "TOTAL TAX" / "Total before tax" as the cash total.
-_TOTAL = re.compile(r"\bTOTAL\b(?!\s*TAX)(?!\s*BEFORE)", re.I)
+# Do not treat "TOTAL TAX" / OCR "TOTAL T" / "Total before tax" as cash total.
+_TOTAL = re.compile(r"\bTOTAL\b(?!\s*TAX)(?!\s+T\b)(?!\s*BEFORE)", re.I)
 _PER_MONTH = re.compile(r"\s*/\s*mo", re.I)
 _OCR_DASHES = str.maketrans(
     {
@@ -373,7 +374,7 @@ def _payment(text: str) -> str:
     m = re.search(r"Prime Visa ending in\s*(\d{4})", blob, re.I)
     if m:
         return f"Prime Visa {m.group(1)}"
-    m = re.search(r"\bM/?C:?\s*[X*]{4,}(\d{4})\b", blob, re.I)
+    m = re.search(r"\b[MH]/?C:?\s*[XK*]{4,}(\d{4})\b", blob, re.I)
     if m:
         return f"Mastercard {m.group(1)}"
     m = re.search(r"Mastercard(?: ending in)?\s*-?\s*(\d{4})", blob, re.I)
