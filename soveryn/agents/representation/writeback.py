@@ -37,6 +37,8 @@ def write_conclusions(
     embed_fn: Callable[[str], tuple[float, ...]] | None,
     dry_run: bool,
     supersedes: dict[int, str] | None = None,
+    node_type: str = "conclusion",
+    provenance_extra: dict[int, dict] | None = None,
 ) -> dict:
     """Write Conclusion objects to the lattice.
 
@@ -75,7 +77,7 @@ def write_conclusions(
         }
 
     db_path = lattice_store.db_path
-    existing_norm = _load_existing_conclusions(db_path)
+    existing_norm = _load_existing_conclusions(db_path, owner_agent=owner_agent, node_type=node_type)
     existing_hashes = {_hash(n) for n in existing_norm}
 
     for i, c in enumerate(conclusions):
@@ -94,7 +96,7 @@ def write_conclusions(
         existing_norm.append(norm)
 
         prov = {
-            "kind": "conclusion",
+            "kind": node_type,
             "subject": subject,
             "premises": list(c.premises),
             "confidence": c.confidence,
@@ -103,6 +105,10 @@ def write_conclusions(
             "run_id": run_id,
             "supersedes": old_node_id,
         }
+
+        if provenance_extra and i in provenance_extra:
+            # Metadata is supplied by the trusted pass, never parsed model JSON.
+            prov.update(provenance_extra[i])
 
         # Compute embedding (best-effort)
         embedding: tuple[float, ...] | None = None
@@ -116,7 +122,7 @@ def write_conclusions(
         new_node_id = lattice_store.write_node(
             agent=owner_agent,
             content=c.content,
-            node_type="conclusion",
+            node_type=node_type,
             layer="private",
             embedding=embedding,
             provenance=prov,
@@ -174,11 +180,13 @@ def _hash(norm: str) -> str:
     return hashlib.sha256(norm.encode("utf-8")).hexdigest()
 
 
-def _load_existing_conclusions(db_path) -> list[str]:
+def _load_existing_conclusions(db_path, *, owner_agent: str,
+                               node_type: str = "conclusion") -> list[str]:
     try:
         with sqlite3.connect(str(db_path)) as con:
             rows = con.execute(
-                "SELECT content FROM nodes WHERE type='conclusion'"
+                "SELECT content FROM nodes WHERE type=? AND agent=?",
+                (node_type, owner_agent)
             ).fetchall()
     except sqlite3.Error:
         return []

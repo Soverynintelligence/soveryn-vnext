@@ -22,7 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from soveryn.agents.representation.briefing import build_briefing
-from soveryn.agents.representation.cognition import run_representation_pass
+from soveryn.agents.representation.cognition import CognitionFailure, run_representation_pass
+from soveryn.agents.representation.sources import recent_turns, is_autonomous_title
+from soveryn.agents.representation.novelty_gate import to_ny
 from soveryn.agents.representation.config import RepresentationConfig
 from soveryn.agents.representation.trigger import evaluate
 from soveryn.agents.representation.writeback import write_conclusions
@@ -31,20 +33,7 @@ from soveryn.platform.lattice.legacy import LatticeStore
 
 logger = logging.getLogger(__name__)
 
-# How far back to scan when _last_run_at is None (first ever run).
-_FIRST_RUN_LOOKBACK_HOURS = 72
-
-# Autonomous session title prefixes to exclude from turn counts (same list
-# as in briefing.py / dream daemon).
-_AUTONOMOUS_PREFIXES = ("⚙️", "🤖", "[daemon]", "[ares]", "[signal]",
-                        "[heartbeat]", "[signal]", "[patrol]", "[webhook]")
-
-
-def _is_autonomous_title(title: str | None) -> bool:
-    if not title:
-        return False
-    lower = title.lower()
-    return any(lower.startswith(p.lower()) for p in _AUTONOMOUS_PREFIXES)
+_is_autonomous_title = is_autonomous_title
 
 
 class RepresentationDaemon:
@@ -88,13 +77,27 @@ class RepresentationDaemon:
         # _last_run_at advances only on eligible ticks.
         # last_tick_at advances EVERY tick so sleep_target never drifts into
         # the past on consecutive skipped ticks.
+        forge_pass = None
+        if self.config.forge_memory_enabled:
+            from soveryn.agents.representation.forge_memory import ForgeMemoryPass
+            forge_pass = ForgeMemoryPass(
+                conv_store=self.conv_store, lattice_store=self.lattice_store,
+                config=self.config, chat_fn=self.chat_fn, embed_fn=self.embed_fn,
+            )
         last_tick_at: datetime | None = None
         while not self._stop:
             now = datetime.now()
             try:
-                self._do_tick(now=now)
+                summary = self._do_tick(now=now)
+                self._record_tick_summary(summary, now=now)
             except Exception:
                 logger.exception("representation tick failed")
+            if forge_pass is not None and not self._stop:
+                try:
+                    forge_pass.tick(now=datetime.now())
+                except Exception:
+                    logger.exception("Forge memory tick failed; house pass unaffected")
+            self._record_novelty_gate(now=now)
             last_tick_at = now  # always advance — the spin-bug fix
             sleep_target = last_tick_at + timedelta(
                 seconds=self.config.tick_interval_seconds
@@ -123,11 +126,13 @@ class RepresentationDaemon:
             conclusion_count — int (0 when ineligible or empty)
             written        — dict from write_conclusions (dry_run fields, etc.)
         """
-        new_turn_count = self._count_new_turns_since(self._last_run_at, now)
+        turns = recent_turns(self.conv_store, now=now)
+        new_turn_count = sum(self._last_run_at is None or
+                            t.timestamp > to_ny(self._last_run_at) for t in turns)
         eligibility = evaluate(new_turn_count, self.config)
 
         if not eligibility.eligible:
-            logger.debug(
+            logger.info(
                 "representation tick skipped: %s (new_turns=%d)",
                 eligibility.skip_reason, new_turn_count,
             )
@@ -150,15 +155,42 @@ class RepresentationDaemon:
             owner_agent=self.config.owner_agent,
             subject=self.config.subject,
             turns_per_briefing=self.config.turns_per_briefing,
+            now=now, turns=turns,
         )
 
-        conclusions = run_representation_pass(
-            subject=self.config.subject,
-            briefing=briefing_text,
-            prior_conclusions=prior_text,
-            cognition_url=self.config.cognition_url,
-            chat_fn=self.chat_fn,
-        )
+        selected_ids = {i for i in source_ids if i.startswith("turn:")}
+        selected = [t for t in turns if t.id in selected_ids]
+        evidence_summary = {
+            "run_id": run_id, "new_turns": new_turn_count,
+            "available_turns": len(turns), "selected_turns": len(selected),
+            "selected_ids": [t.id for t in selected],
+            "selected_from": selected[0].timestamp.isoformat() if selected else None,
+            "selected_through": selected[-1].timestamp.isoformat() if selected else None,
+            "selected_agents": sorted({t.agent for t in selected}),
+            "pondwright_available": sum(t.agent.casefold() == "pondwright" for t in turns),
+        }
+        logger.info("representation evidence: %s", evidence_summary)
+        try:
+            conclusions = run_representation_pass(
+                subject=self.config.subject, briefing=briefing_text,
+                prior_conclusions=prior_text, cognition_url=self.config.cognition_url,
+                chat_fn=self.chat_fn,
+            )
+        except CognitionFailure:
+            logger.exception("representation request failed; processed cursor unchanged")
+            return {"eligible": True, "skip_reason": "cognition_failure",
+                    "conclusion_count": 0, "written": None, **evidence_summary}
+
+        allowed = set(source_ids)
+        valid = [c for c in conclusions
+                 if len(set(c.premises)) >= 2 and set(c.premises) <= allowed
+                 and set(c.premises) & selected_ids]
+        if len(valid) != len(conclusions):
+            logger.warning("representation rejected invalid/stale/unknown citations: %d",
+                           len(conclusions) - len(valid))
+        evidence_summary["parsed_conclusions"] = len(conclusions)
+        evidence_summary["rejected_citations"] = len(conclusions) - len(valid)
+        conclusions = valid
 
         # Review artifact — record what this tick concluded (the dry-run log
         # Vett + Aetheria inspect) BEFORE writeback, so it's captured whether
@@ -192,7 +224,42 @@ class RepresentationDaemon:
             "skip_reason": None,
             "conclusion_count": len(conclusions),
             "written": written,
+            **evidence_summary,
         }
+
+    def _record_tick_summary(self, summary: dict, *, now: datetime) -> None:
+        """Inspectable live outcome without logging conversation text."""
+        try:
+            path = Path(self.lattice_store.db_path).parent / "representation_last_tick.json"
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps({"ts": to_ny(now).isoformat(), **summary}, indent=2))
+            tmp.replace(path)
+        except Exception:
+            logger.exception("representation last-tick status write failed")
+
+    def _record_novelty_gate(self, *, now: datetime) -> dict | None:
+        """LIVE novelty gate (Jon 2026-11-06): recompute per-day table, streak
+        and pass/fail every tick; write status JSON next to the lattice and
+        log one line. Measurement only, never blocks writes. Best-effort."""
+        try:
+            from soveryn.agents.representation import novelty_gate as ng
+            db = Path(self.lattice_store.db_path)
+            conv_db = getattr(self.conv_store, "db_path", None) or getattr(
+                self.conv_store, "_db_path", None)
+            if conv_db is None:
+                return None
+            res = ng.run_live(db, Path(conv_db), now=now)
+            out = db.parent / "representation_novelty_gate_status.json"
+            tmp = out.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(res, indent=2), encoding="utf-8")
+            tmp.replace(out)
+            logger.info("representation novelty gate: status=%s streak=%d/%d "
+                        "through=%s", res["status"], res["streak"],
+                        res["required"], res["evaluated_through"])
+            return res
+        except Exception:
+            logger.exception("representation novelty gate evaluation failed")
+            return None
 
     def _record_gate(self, *, run_id: str, now: datetime, conclusions: list,
                      written: dict) -> None:
@@ -251,46 +318,6 @@ class RepresentationDaemon:
     def _count_new_turns_since(
         self, since: datetime | None, now: datetime
     ) -> int:
-        """Count user+assistant turns for owner_agent in non-autonomous
-        sessions since `since` (or a wide lookback window when None).
-
-        Uses conv_store's public API (list_sessions + load_history) so the
-        count works in tests with a real ConversationStore on tmp_path — no
-        direct SQLite needed.
-        """
-        if since is None:
-            since_dt = now - timedelta(hours=_FIRST_RUN_LOOKBACK_HOURS)
-        else:
-            since_dt = since
-
-        try:
-            sessions = self.conv_store.list_sessions_with_recent_activity(
-                agent=self.config.owner_agent,
-                since=since_dt,
-                exclude_session_id="",  # never exclude anything
-            )
-        except Exception:
-            logger.exception("representation: failed to list sessions for turn count")
-            return 0
-
-        total = 0
-        for session in sessions:
-            if _is_autonomous_title(session.title):
-                continue
-            try:
-                history = self.conv_store.load_history(session.session_id)
-            except Exception:
-                logger.exception(
-                    "representation: failed to load history session=%s", session.session_id
-                )
-                continue
-            for turn in history:
-                if turn.role not in ("user", "assistant"):
-                    continue
-                # Only count turns timestamped AFTER the cutoff.
-                # Turn.timestamp is an isoformat string; compare lexicographically.
-                if since is not None and turn.timestamp <= since_dt.isoformat():
-                    continue
-                total += 1
-
-        return total
+        """Count recent substantive turns across every agent, even first run."""
+        return sum(since is None or t.timestamp > to_ny(since)
+                   for t in recent_turns(self.conv_store, now=now))

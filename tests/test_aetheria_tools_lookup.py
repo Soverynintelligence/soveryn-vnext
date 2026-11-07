@@ -109,17 +109,20 @@ def test_get_node_is_owner_parameterised(node_ids) -> None:
     assert spec.name == "get_lattice_node"
 
 
-def test_get_node_reads_any_agents_node_by_id(node_ids) -> None:
-    """Lookup is by id and stays id-addressed regardless of owner.
-
-    Visibility is enforced upstream at search time; a node id the agent already
-    holds resolves. Pinning this so a later "scope lookup to owner" change is a
-    deliberate decision rather than a silent one.
-    """
+def test_get_node_denies_other_agents_private_node_by_known_id(node_ids) -> None:
+    """Jon explicitly tightened ID lookup ownership on 2026-11-06."""
     store, channel_a_id, _channel_b_id = node_ids
     spec = build_get_node_tool(store=store, owner_agent="kernel")
-
     result = spec.handler({"node_id": channel_a_id})
+    assert result["not_found"] is True
+    assert result["stateable"] == [] and result["context_only"] == []
+    assert channel_a_id not in repr(result)
 
-    (entry,) = result["stateable"]
-    assert entry["id"] == channel_a_id
+
+def test_get_node_keeps_shared_global_node_visible(node_ids) -> None:
+    store, _, _ = node_ids
+    shared = store.write_node("aetheria", "Shared factual anchor.", node_type="fact", layer="global",
+                              provenance={"cls":"witnessed","source":"test"})
+    result = build_get_node_tool(store=store, owner_agent="forge").handler({"node_id":shared})
+    assert not result.get("not_found")
+    assert shared in repr(result)

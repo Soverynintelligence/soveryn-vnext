@@ -5,6 +5,7 @@ All tests use injected fake stores, chat_fn, embed_fn, and a fixed 'now'.
 from __future__ import annotations
 
 import sqlite3
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -22,10 +23,11 @@ def _fake_embed(text: str) -> tuple[float, ...]:
     return (0.1, 0.2, 0.3)
 
 
-def _valid_conclusion_line() -> str:
+def _valid_conclusion_line(prompt: str) -> str:
     """One well-formed conclusion line — needs >=2 premises to survive the
     parser's durable-trait rule (gate 2026-06-19)."""
-    return "deductive | confident | Jon values autonomy and self-determination. | [node:turn:abc:0],[node:turn:abc:2]"
+    ids = list(dict.fromkeys(re.findall(r"\[node:(turn:[^\]]+)\]", prompt)))
+    return f"deductive | confident | Jon values autonomy and self-determination. | [node:{ids[0]}],[node:{ids[1]}]"
 
 
 def _node_count(db_path: Path) -> int:
@@ -52,7 +54,7 @@ def _seed_turns(conv_store: ConversationStore, agent: str, n: int) -> str:
     session_id = conv_store.new_session(agent)
     for i in range(n):
         role = "user" if i % 2 == 0 else "assistant"
-        conv_store.save_turn(session_id, agent=agent, role=role, content=f"turn {i}")
+        conv_store.save_turn(session_id, agent=agent, role=role, content=f"substantive recent conversation turn number {i}")
     return session_id
 
 
@@ -74,7 +76,7 @@ def test_tick_eligible_dry_run_no_lattice_write(tmp_path):
 
     def fake_chat_fn(prompt: str, url: str) -> str:
         call_count["n"] += 1
-        return _valid_conclusion_line()
+        return _valid_conclusion_line(prompt)
 
     cfg = _make_config(min_turns=1, dry_run=True)
     daemon = RepresentationDaemon(
@@ -85,7 +87,7 @@ def test_tick_eligible_dry_run_no_lattice_write(tmp_path):
         config=cfg,
     )
 
-    now = datetime(2026, 6, 17, 12, 0, 0)
+    now = datetime.now() + timedelta(seconds=1)
     summary = daemon._do_tick(now=now)
 
     # Cognition was called
@@ -116,7 +118,7 @@ def test_tick_ineligible_no_cognition_call(tmp_path):
 
     def fake_chat_fn(prompt: str, url: str) -> str:
         call_count["n"] += 1
-        return _valid_conclusion_line()
+        return _valid_conclusion_line(prompt)
 
     cfg = _make_config(min_turns=4, dry_run=True)
     daemon = RepresentationDaemon(
@@ -127,7 +129,7 @@ def test_tick_ineligible_no_cognition_call(tmp_path):
         config=cfg,
     )
 
-    now = datetime(2026, 6, 17, 12, 0, 0)
+    now = datetime.now() + timedelta(seconds=1)
     summary = daemon._do_tick(now=now)
 
     assert call_count["n"] == 0, "chat_fn must not be called when ineligible"
@@ -147,7 +149,7 @@ def test_tick_advances_last_run_at(tmp_path):
     _seed_turns(conv_store, "aetheria", 5)
 
     def fake_chat_fn(prompt, url):
-        return _valid_conclusion_line()
+        return _valid_conclusion_line(prompt)
 
     cfg = _make_config(min_turns=1, dry_run=True)
     daemon = RepresentationDaemon(
@@ -159,7 +161,7 @@ def test_tick_advances_last_run_at(tmp_path):
     )
 
     assert daemon._last_run_at is None
-    now = datetime(2026, 6, 17, 14, 0, 0)
+    now = datetime.now() + timedelta(seconds=1)
     daemon._do_tick(now=now)
     assert daemon._last_run_at == now
 
@@ -181,7 +183,7 @@ def test_second_tick_no_new_turns_skipped(tmp_path):
 
     def fake_chat_fn(prompt, url):
         call_count["n"] += 1
-        return _valid_conclusion_line()
+        return _valid_conclusion_line(prompt)
 
     cfg = _make_config(min_turns=1, dry_run=True)
     daemon = RepresentationDaemon(
@@ -218,11 +220,11 @@ def test_dryrun_artifact_records_conclusions(tmp_path):
     artifact = tmp_path / "dry.jsonl"
     daemon = RepresentationDaemon(
         conv_store=conv_store, lattice_store=lattice_store,
-        chat_fn=lambda p, u: _valid_conclusion_line(),
+        chat_fn=lambda p, u: _valid_conclusion_line(p),
         embed_fn=_fake_embed, config=_make_config(min_turns=1, dry_run=True),
         dryrun_log_path=artifact,
     )
-    daemon._do_tick(now=datetime(2026, 6, 17, 12, 0, 0))
+    daemon._do_tick(now=datetime.now() + timedelta(seconds=1))
     assert artifact.exists(), "dry-run artifact should be created"
     lines = artifact.read_text().strip().splitlines()
     assert len(lines) == 1
@@ -231,7 +233,8 @@ def test_dryrun_artifact_records_conclusions(tmp_path):
     c = rec["conclusions"][0]
     assert c["content"] == "Jon values autonomy and self-determination."
     assert c["mode"] == "deductive"
-    assert c["premises"] == ["turn:abc:0", "turn:abc:2"]
+    assert len(set(c["premises"])) == 2
+    assert all(x.startswith("turn:") for x in c["premises"])
 
 
 def test_no_artifact_when_path_none(tmp_path):
@@ -241,8 +244,8 @@ def test_no_artifact_when_path_none(tmp_path):
     _seed_turns(conv_store, "aetheria", 3)
     daemon = RepresentationDaemon(
         conv_store=conv_store, lattice_store=lattice_store,
-        chat_fn=lambda p, u: _valid_conclusion_line(),
+        chat_fn=lambda p, u: _valid_conclusion_line(p),
         embed_fn=_fake_embed, config=_make_config(min_turns=1, dry_run=True),
     )
-    daemon._do_tick(now=datetime(2026, 6, 17, 12, 0, 0))  # must not raise
+    daemon._do_tick(now=datetime.now() + timedelta(seconds=1))  # must not raise
     assert not (tmp_path / "dry.jsonl").exists()

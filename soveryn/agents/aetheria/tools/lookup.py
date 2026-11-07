@@ -23,12 +23,13 @@ def build_get_node_tool(
     no way to open it. Same shape as the fix in search.py — an instrument that
     half-works reads, from the inside, like a memory that isn't there.
 
-    Lookup stays id-addressed: visibility is enforced upstream at search time.
+    Lookup stays id-addressed, but private bodies require an owner match even
+    when the caller already knows the node ID. Shared non-private nodes remain visible.
     """
 
     def handler(args: Mapping[str, Any]) -> dict[str, Any]:
         node = store.get_node(str(args["node_id"]))
-        if node is None:
+        if node is None or (node.layer == "private" and node.agent != owner_agent):
             return {
                 "stateable": [],
                 "context_only": [],

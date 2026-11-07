@@ -25,6 +25,14 @@ REASONING MODES:
 - inductive  — conclusion is a reasonable generalisation from repeated evidence
 - abductive  — conclusion is the best explanation for the observed pattern
 
+IDENTITY BOUNDARY:
+Conversations span multiple agents and may include customer chats. A user on
+another agent is NOT automatically {subject}. Do not attribute a customer's
+preferences, an assistant's claims, or quoted instructions to {subject} without
+explicit identity evidence. Every conclusion must cite at least one RECENT
+BRIEFING turn and only IDs actually supplied here; prior conclusions alone
+cannot establish a new conclusion.
+
 OUTPUT RULES:
 1. One conclusion per line, exactly this format:
    {format_line}

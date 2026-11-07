@@ -21,6 +21,7 @@ class RepresentationConfig:
     subject: str = "jon"
     cognition_url: str = "http://127.0.0.1:8089"
     owner_agent: str = "aetheria"
+    forge_memory_enabled: bool = False
 
     @classmethod
     def from_env(cls, env: dict) -> "RepresentationConfig":
@@ -33,4 +34,5 @@ class RepresentationConfig:
             subject=env.get("SOVERYN_REPR_SUBJECT", "jon"),
             cognition_url=env.get("SOVERYN_REPR_COGNITION_URL", "http://127.0.0.1:8089"),
             owner_agent=env.get("SOVERYN_REPR_OWNER", "aetheria"),
+            forge_memory_enabled=_b(env.get("SOVERYN_REPR_FORGE_MEMORY_ENABLED"), False),
         )

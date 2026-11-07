@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from soveryn.agents.representation.cognition import run_representation_pass
+from soveryn.agents.representation.cognition import CognitionFailure, run_representation_pass
 from soveryn.agents.representation.parse import Conclusion
 
 
@@ -28,13 +28,6 @@ def test_best_effort_on_error():
     def boom(prompt, url):
         raise RuntimeError("server down")
 
-    assert (
-        run_representation_pass(
-            subject="jon",
-            briefing="",
-            prior_conclusions="",
-            cognition_url="http://x",
-            chat_fn=boom,
-        )
-        == []
-    )
+    with pytest.raises(CognitionFailure):
+        run_representation_pass(subject="jon", briefing="", prior_conclusions="",
+                                cognition_url="http://x", chat_fn=boom)

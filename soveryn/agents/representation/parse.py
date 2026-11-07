@@ -43,7 +43,7 @@ def parse_conclusions(raw: str) -> list[Conclusion]:
         # restatements like "Jon seeks confirmation of daily objectives" from
         # one "are we done?"). A one-turn read is a moment, not a trait; if a
         # value is real it recurs and earns a second premise.
-        if len(premises) < 2:
+        if len(set(premises)) < 2:
             continue
         out.append(Conclusion(mode=mode, confidence=confidence,
                               content=content, premises=premises))
