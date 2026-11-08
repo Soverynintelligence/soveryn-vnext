@@ -1,14 +1,14 @@
-"""Auto-file a chat photo when Jon says to put it on CWG or SOVERYN."""
+"""Preview a chat photo when Jon names CWG or SOVERYN. Never auto-book."""
 
 from __future__ import annotations
 
 import base64
+import os
 import re
-from datetime import datetime, timezone
+import tempfile
 from pathlib import Path
 
 from soveryn.platform.ledgers.ingest import ingest_path
-from soveryn.platform.ledgers.paths import ensure_drop_dirs
 from soveryn.platform.vision_types import ALLOWED_IMAGE_MIME_PREFIXES
 
 _FILE_INTENT = re.compile(
@@ -28,7 +28,7 @@ def _chat_regex(book_id: str) -> re.Pattern[str] | None:
 
 
 def receipt_file_book(message: str) -> str | None:
-    """Return soveryn/cwg when this turn is 'file this receipt on X'."""
+    """Which book the turn *names*. Not authorization to write the book."""
     text = message or ""
     if not _FILE_INTENT.search(text):
         return None
@@ -43,12 +43,19 @@ def receipt_file_book(message: str) -> str | None:
 
 
 def apply_chat_receipt(message: str, image_data_urls: tuple[str, ...]) -> str | None:
-    """Save the snap, ingest, return a splice block for the model. None if N/A."""
+    """Preview-only splice. Does not book, copy evidence, or write intake."""
     book = receipt_file_book(message)
     if not book or not image_data_urls:
         return None
-    dest = _save_data_url(image_data_urls[0], book)
-    result = ingest_path(dest, book=book, folder_hint=book)
+    dest = _save_preview_image(image_data_urls[0])
+    result = ingest_path(
+        dest,
+        book=book,
+        folder_hint=book,
+        confirm=False,
+        actor="chat_receipt_preview",
+    )
+    token = result.confirm_token or ""
     return (
         "[Ledger ingest]\n"
         f"book={result.book} action={result.action} "
@@ -56,12 +63,17 @@ def apply_chat_receipt(message: str, image_data_urls: tuple[str, ...]) -> str | 
         f"order={result.order_id or '-'} "
         f"evidence={result.evidence or '-'} "
         f"gap={result.gap or 'none'}\n"
+        f"confirm_token={token or '-'}\n"
         f"{result.message}\n"
+        "PREVIEW ONLY — ledger CSV and evidence were not written. "
+        "Naming CWG or SOVERYN classifies the book; it does not authorize a booking. "
+        "Call ledger_ingest with confirm=true and this confirm_token to write. "
         "Report these facts. Do not create_document. Do not invent a second filing."
     )
 
 
-def _save_data_url(url: str, book: str) -> Path:
+def _save_preview_image(url: str) -> Path:
+    """Decode to a temp file for OCR. Not intake, not evidence."""
     if not url.startswith(ALLOWED_IMAGE_MIME_PREFIXES):
         raise ValueError("chat receipt is not a data:image URL")
     header, _, payload = url.partition(",")
@@ -72,9 +84,8 @@ def _save_data_url(url: str, book: str) -> Path:
         suffix = ".webp"
     else:
         suffix = ".jpg"
-    dest_dir = ensure_drop_dirs() / book
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    dest = dest_dir / f"chat-{stamp}{suffix}"
+    fd, name = tempfile.mkstemp(prefix="chat-receipt-preview-", suffix=suffix)
+    os.close(fd)
+    dest = Path(name)
     dest.write_bytes(data)
     return dest

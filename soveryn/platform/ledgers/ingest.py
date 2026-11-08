@@ -335,13 +335,25 @@ def ingest_path(
     override_reason: str | None = None,
     actor: str = "ledger_ingest",
 ) -> IngestResult:
+    """Copy evidence and append when confirm is true.
+
+    Chat photo hooks and ledger_ingest tool previews must pass confirm=False.
+    A write from the tool requires the confirm_token issued by that preview.
+    Default confirm=True is for explicit CLI/library callers only.
+    """
     path = Path(path)
     extract_fn = extract or extract_receipt_path
     house_defaults = books is None
     book_paths = books if books is not None else _registered_book_paths()
     ev_roots = evidence_roots if evidence_roots is not None else _registered_evidence_roots()
     override = (override_reason or "").strip()
+    if actor == "chat_receipt_preview":
+        # Chat uploads never book, even if a caller passes confirm=True.
+        confirm = False
+        confirm_token = None
 
+    bound_sha = None
+    bound_book = None
     if confirm_token:
         payload = consume_confirm_token(confirm_token)
         if payload is None:
@@ -353,6 +365,21 @@ def ingest_path(
                 message="confirm token is missing or expired",
             )
         confirm = True
+        bound_sha = payload.get("source_sha256")
+        bound_book = payload.get("book")
+        if (
+            isinstance(bound_sha, str)
+            and bound_sha
+            and path.is_file()
+            and _sha256(path) != bound_sha
+        ):
+            return IngestResult(
+                book=str(bound_book or "unsorted"),
+                action="blocked",
+                source_name=path.name,
+                gap="confirm token does not match this receipt",
+                message="confirm token does not match this receipt",
+            )
 
     extracted = extract_fn(path)
     text = extracted.text or ""
@@ -407,9 +434,23 @@ def ingest_path(
                     message="left unsorted",
                 )
     book = routed
+    if (
+        isinstance(bound_book, str)
+        and bound_book
+        and bound_book not in {"unsorted", "split"}
+        and book != bound_book
+    ):
+        return IngestResult(
+            book=book,
+            action="blocked",
+            source_name=path.name,
+            gap="confirm token does not match this book",
+            message="confirm token does not match this book",
+        )
 
     if book == "unsorted":
-        if house_defaults and path.is_file():
+        # Preview must not copy into intake. Booking still parks unsure files.
+        if confirm and house_defaults and path.is_file():
             hold = ensure_drop_dirs() / "unsorted"
             hold.mkdir(parents=True, exist_ok=True)
             if path.parent.resolve() != hold.resolve():
@@ -471,6 +512,7 @@ def ingest_path(
             "book": book,
             "folder_hint": folder_hint,
             "override_reason": override,
+            "source_sha256": _sha256(path) if path.is_file() else "",
         }
         return _preview_result(
             book,
