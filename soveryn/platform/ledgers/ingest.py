@@ -83,6 +83,7 @@ class IngestResult:
     confirm_token: str | None = None
     confirm_expires_at: str | None = None
     ocr: dict[str, str] | None = None
+    ocr_gap: str | None = None
     corrections: dict[str, str] | None = None
 
     def as_dict(self) -> dict[str, object]:
@@ -362,6 +363,9 @@ def _apply_reviewed_corrections(
         extra.append("ocr " + "; ".join(ocr_bits))
     if ocr_text_sha256:
         extra.append(f"ocr_sha256={ocr_text_sha256}")
+    ocr_gap = (ocr.get("gap") or "").strip()
+    if ocr_gap and any(key in corrections for key in ("vendor", "amount_usd")):
+        extra.append(f"ocr_gap={ocr_gap}")
     if "amount_usd" in corrections:
         extra.append(
             "effective amount_usd "
@@ -473,6 +477,11 @@ def _cash_review_block(
             "vendor unknown — reviewed vendor + review_provenance required; "
             "override_reason is not permission"
         )
+    if status == "NEED_REVIEW" and not amount and not operator_amount:
+        return (
+            "uncorroborated cash — reviewed amount_usd + review_provenance "
+            "required; override_reason is not permission"
+        )
     if operator_amount and operator_amount_conflicts_breakdown(
         planned, operator_amount
     ):
@@ -498,6 +507,17 @@ def _cash_review_block(
             )
         return detail
     return None
+
+
+def _actionable_gap(
+    planned: Mapping[str, str],
+    parsed: ParsedRow,
+    cash_block: str | None,
+) -> str | None:
+    """Current booking deficiency. Original OCR gap lives on ocr/ocr_gap."""
+    if (planned.get("status") or "") == "DOCUMENTED":
+        return None
+    return cash_block or parsed.gap
 
 
 def _token_mismatch(book: str, source_name: str, detail: str) -> IngestResult:
@@ -717,7 +737,7 @@ def _preview_result(
         order_id=(planned0.get("order_id") if planned0 else None) or parsed.order_id,
         amount_usd=(planned0.get("amount_usd") if planned0 else None) or parsed.amount_usd,
         evidence=planned0.get("evidence") if planned0 else parsed.evidence or None,
-        gap=gap or parsed.gap,
+        gap=gap,
         message=message,
         splits=list(splits or []),
         rows=[dict(r) for r in planned],
@@ -725,6 +745,7 @@ def _preview_result(
         confirm_token=token,
         confirm_expires_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires)),
         ocr=dict(ocr) if ocr is not None else None,
+        ocr_gap=parsed.gap,
         corrections=dict(corrections) if corrections else None,
     )
 
@@ -757,6 +778,7 @@ def _blocked_result(
         rows=[dict(r) for r in planned],
         row=dict(planned0) if planned0 is not None else None,
         ocr=dict(ocr) if ocr is not None else None,
+        ocr_gap=parsed.gap,
         corrections=dict(corrections) if corrections else None,
     )
 
@@ -1068,7 +1090,7 @@ def ingest_path(
             ),
             ocr=ocr,
             corrections=applied_corrections,
-            gap=cash_block or parsed.gap,
+            gap=_actionable_gap(planned, parsed, cash_block),
         )
 
     if cash_block:
@@ -1140,11 +1162,12 @@ def ingest_path(
         order_id=written.get("order_id") or parsed.order_id,
         amount_usd=written.get("amount_usd") or parsed.amount_usd,
         evidence=rel_evidence,
-        gap=parsed.gap,
-        message=f"appended {parsed.amount_usd or 'NO AMOUNT'} to {book}",
+        gap=_actionable_gap(planned, parsed, None),
+        message=f"appended {written.get('amount_usd') or 'NO AMOUNT'} to {book}",
         row=written,
         rows=[written],
         ocr=ocr,
+        ocr_gap=parsed.gap,
         corrections=applied_corrections or None,
     )
 

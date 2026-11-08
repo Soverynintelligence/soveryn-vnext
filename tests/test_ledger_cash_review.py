@@ -183,6 +183,22 @@ def test_lowes_matching_46_99_stays_documented():
     assert row.status == "DOCUMENTED"
 
 
+def test_known_vendor_listed_only_total_is_not_documented():
+    """Lone TOTAL is uncorroborated even when the vendor dictionary hits."""
+    row = parse_receipt(
+        "LOWE'S HOME CENTERS, LLC\nSALE\n01-15-26\nTOTAL: 90.92\n",
+        source_name="receipt.jpg",
+    )
+    assert row.vendor == "Lowe's"
+    assert row.printed_total == "90.92"
+    assert row.subtotal == ""
+    assert row.tax == ""
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
+    assert "uncorroborated" in (row.gap or "")
+
+
 def test_canonical_cents_rejects_malformed_negative_nonfinite_exponent():
     assert canonical_cents("90.92") == "90.92"
     assert canonical_cents("0.01") == "0.01"
@@ -253,6 +269,9 @@ def test_mismatch_preview_is_diagnostic_not_accepted(tmp_path: Path):
     assert preview.ocr["card_amount"] == "90.32"
     assert preview.ocr["amount_usd"] == ""
     assert "90.92" in (row["notes"] or "")
+    assert preview.ocr_gap and "disagree" in preview.ocr_gap
+    assert preview.gap and "review" in preview.gap.lower()
+    assert preview.row["status"] == "NEED_REVIEW"
     assert load_rows(ctx["cwg"]) == []
 
 
@@ -307,6 +326,13 @@ def test_coherent_reviewed_cash_keeps_raw_printed_total(tmp_path: Path):
     assert row["tax"] == "5.94"
     assert row["vendor"] == "Acme Hardware"
     assert row["status"] == "DOCUMENTED"
+    assert preview.gap is None
+    assert preview.ocr_gap
+    assert "disagree" in preview.ocr_gap
+    assert preview.ocr is not None
+    assert preview.ocr["gap"] == preview.ocr_gap
+    assert "ocr_gap=" in row["notes"]
+    assert "disagree" in row["notes"]
     assert "vendor=unknown" in row["notes"]
     assert "amount_usd=(none)" in row["notes"]
     assert "effective amount_usd 90.92" in row["notes"]
@@ -335,6 +361,10 @@ def test_coherent_reviewed_cash_keeps_raw_printed_total(tmp_path: Path):
     assert booked["tax"] == "5.94"
     assert booked["vendor"] == "Acme Hardware"
     assert booked["status"] == "DOCUMENTED"
+    assert written.gap is None
+    assert written.ocr_gap
+    assert "disagree" in written.ocr_gap
+    assert "ocr_gap=" in booked["notes"]
     log = changes_path(ctx["cwg"]).read_text(encoding="utf-8")
     assert "review_provenance=operator reviewed source image" in log
     assert "amount_usd" in log
@@ -549,3 +579,50 @@ def test_confirm_does_not_recompute_over_operator_amount(tmp_path: Path):
     assert written.row["amount_usd"] == "90.92"
     assert written.row["printed_total"] == "30.92"
     assert written.row["amount_usd"] != written.row["printed_total"]
+
+
+LOWES_LISTED_ONLY = """
+LOWE'S HOME CENTERS, LLC
+SALE
+01-15-26
+TOTAL: 90.92
+"""
+
+
+def test_listed_only_known_vendor_requires_money_review(tmp_path: Path):
+    ctx = _books(tmp_path, LOWES_LISTED_ONLY)
+    blocked = ingest_path(ctx["photo"], confirm=True, **ctx["kw"])
+    assert blocked.action == "blocked"
+    assert "uncorroborated cash" in (blocked.message or "")
+    assert load_rows(ctx["cwg"]) == []
+    money = {
+        "amount_usd": "90.92",
+        "review_provenance": "operator reviewed source image",
+        "review_rationale": "source image shows paid total 90.92",
+    }
+    preview = ingest_path(
+        ctx["photo"], confirm=False, corrections=money, **ctx["kw"]
+    )
+    assert preview.row is not None
+    assert preview.row["vendor"] == "Lowe's"
+    assert preview.row["amount_usd"] == "90.92"
+    assert preview.row["printed_total"] == "90.92"
+    assert preview.row["subtotal"] == ""
+    assert preview.row["tax"] == ""
+    assert preview.row["status"] == "DOCUMENTED"
+    assert preview.gap is None
+    assert preview.ocr_gap and "uncorroborated" in preview.ocr_gap
+    written = ingest_path(
+        ctx["photo"],
+        confirm=True,
+        confirm_token=preview.confirm_token,
+        corrections=money,
+        **ctx["kw"],
+    )
+    assert written.action == "appended"
+    assert written.gap is None
+    booked = load_rows(ctx["cwg"])[0]
+    assert booked["amount_usd"] == "90.92"
+    assert booked["printed_total"] == "90.92"
+    assert booked["status"] == "DOCUMENTED"
+    assert "ocr_gap=" in booked["notes"]

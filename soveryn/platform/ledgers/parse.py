@@ -317,7 +317,15 @@ def _cash(
                 "printed total and card amount disagree — do not book unverified cash"
             )
             return "", diagnostics, gap, "NEED_REVIEW"
-        return _fmt(listed), f"listed total {_fmt(listed)}", None, "DOCUMENTED"
+        # Lone listed/card total is uncorroborated even for a known vendor.
+        # Independent subtotal+tax (or the Apex unitemized-shipping exception
+        # above) is required before cash is DOCUMENTED.
+        gap = (
+            "listed total is uncorroborated (no matching subtotal+tax) — "
+            "not DOCUMENTED until reviewed"
+        )
+        note = diagnostics or f"listed total {_fmt(listed)}"
+        return "", note, gap, "NEED_REVIEW"
 
     return (
         "",
