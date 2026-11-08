@@ -116,6 +116,42 @@ def test_aquascape_text_is_cwg_even_without_filename_hint():
     assert hit.book == "cwg"
 
 
+def test_preview_unsorted_does_not_copy_into_drop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from soveryn.platform.ledgers.ingest import ingest_path as ingest
+
+    drop = tmp_path / "intake" / "ledgers"
+    (drop / "unsorted").mkdir(parents=True)
+    csv_s = tmp_path / "s.csv"
+    csv_c = tmp_path / "c.csv"
+    header = ",".join(CSV_FIELDS) + "\n"
+    csv_s.write_text(header, encoding="utf-8")
+    csv_c.write_text(header, encoding="utf-8")
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest._registered_book_paths",
+        lambda: {"soveryn": csv_s, "cwg": csv_c},
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest._registered_evidence_roots",
+        lambda: {"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest.ensure_drop_dirs",
+        lambda root=None: drop,
+    )
+    pdf = tmp_path / "scan.pdf"
+    pdf.write_bytes(b"%PDF-scan")
+    result = ingest(
+        pdf,
+        confirm=False,
+        extract=lambda _p: _extract("Thanks for your order", "scan.pdf"),
+    )
+    assert result.book == "unsorted"
+    assert result.action == "unsorted"
+    assert list(drop.rglob("*.pdf")) == []
+    assert load_rows(csv_c) == []
+    assert load_rows(csv_s) == []
+
+
 def test_ambiguous_or_empty_goes_unsorted_with_gap():
     hit = classify_receipt("scan.pdf", "Thanks for your order")
     assert hit.book == "unsorted"
@@ -786,6 +822,13 @@ def test_receipt_file_intent_cwg_not_instagram():
     assert receipt_file_book("Log this in cwg docs /receipts") == "cwg"
     assert receipt_file_book("file this on soveryn") == "soveryn"
     assert receipt_file_book("draft an IG post for CWG") is None
+    # Naming the book is classification, not a booking order.
+    assert (
+        receipt_file_book(
+            "Preview this CWG receipt only; do not book or file anything."
+        )
+        == "cwg"
+    )
 
 
 def test_ingest_drop_picks_up_jpg(tmp_path: Path):
