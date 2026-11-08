@@ -331,9 +331,14 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                         "Changing corrections, book, or file invalidates the token. "
                         "Supported: invoice/order_id, description, "
                         "category/schedule_c_or_form, payment/payment_method, "
-                        "purpose (operator context, not OCR). "
-                        "Does not change amounts; does not bypass totals, "
-                        "duplicates, or the locked writer. "
+                        "purpose (operator context, not OCR), vendor, "
+                        "amount_usd (canonical cents), review_provenance, "
+                        "review_rationale. vendor/amount_usd require "
+                        "review_provenance='operator reviewed source image' "
+                        "and review_rationale; purpose and override_reason "
+                        "are not permission. Does not rewrite raw "
+                        "subtotal/tax/printed_total. Does not bypass "
+                        "duplicates or the locked writer. "
                         "Do not book an uncorrected preview when OCR fields are wrong."
                     ),
                     "properties": {
@@ -345,6 +350,10 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                         "payment": {"type": "string"},
                         "payment_method": {"type": "string"},
                         "purpose": {"type": "string"},
+                        "vendor": {"type": "string"},
+                        "amount_usd": {"type": "string"},
+                        "review_provenance": {"type": "string"},
+                        "review_rationale": {"type": "string"},
                     },
                     "additionalProperties": False,
                 },
@@ -356,14 +365,15 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
             "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. "
             "First call (confirm omitted/false) returns the exact rows that would "
             "be added and a short-lived confirm_token; it writes nothing. "
-            "If OCR invoice/description/category/payment is wrong, pass "
+            "If OCR invoice/description/category/payment/vendor/cash is wrong, pass "
             "corrections on a preview call and confirm THAT token — do not book "
-            "the uncorrected preview. Second call with confirm=true and that "
+            "the uncorrected preview. vendor/amount_usd require review_provenance "
+            "and review_rationale. Second call with confirm=true and that "
             "token writes through the single locked book writer. Name a specific "
             "file (path, image=\"current\", or order_id+splits) — folder-wide "
             "re-ingest is refused. Re-submitting the same receipt is a safe "
-            "no-op that returns the existing row. Totals that do not match "
-            "within a cent are blocked unless override_reason is given. "
+            "no-op that returns the existing row. Conflicting printed totals "
+            "stay diagnostic; override_reason does not silently book them. "
             "One receipt, two businesses: pass splits. Never create_document. "
             "Cite-or-stop on garbled totals. Does not file a return. "
             "Use ledger_amend to edit/remove a row; ledger_reconcile to audit."

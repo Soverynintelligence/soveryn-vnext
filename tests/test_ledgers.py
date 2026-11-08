@@ -526,6 +526,7 @@ def test_parse_thermal_pos_amount_and_slash_date():
     assert row.vendor == "Star Ridge Aquatics"
     assert row.date == "2026-08-29"
     assert row.amount_usd == "90.91"
+    assert row.status == "DOCUMENTED"
     assert row.order_id == "466241492734687"
     assert "5010" in row.payment_method
 
@@ -676,6 +677,33 @@ def test_paper_crop_keeps_bright_receipt_drops_dark_margin():
     assert cropped.size[1] > 350
 
 
+def test_unknown_vendor_matching_cash_is_not_documented():
+    """Deliberate: corroborated cents still need a reviewed vendor."""
+    row = parse_receipt(
+        "STORE SALE\n01-15-26\nSUBTOTAL: 10.00\nTAX: 0.70\nTOTAL: 10.70\nAMOUNT: 10.70\n",
+        source_name="receipt.jpg",
+    )
+    assert row.vendor == "unknown"
+    assert row.amount_usd == "10.70"
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
+
+
+def test_mismatched_printed_total_is_not_documented_or_recomputed_as_cash():
+    """Deliberate: do not book recompute or the printed lie as paid cash."""
+    row = parse_receipt(
+        "STORE SALE\n01-15-26\nSUBTOTAL: 84.98\nTAX: 5.94\nTOTAL: 30.92\nAMOUNT: 90.32\n",
+        source_name="receipt.jpg",
+    )
+    assert row.amount_usd == ""
+    assert row.printed_total == "30.92"
+    assert row.subtotal == "84.98"
+    assert row.tax == "5.94"
+    assert row.status == "NEED_REVIEW"
+    assert "booking recompute" not in row.notes.lower()
+    assert "90.92" in row.notes
+
+
 def test_parse_does_not_book_subtotal_invoice_points_or_card_as_total():
     row = parse_receipt(STOREFRONT_FALSE_TOTALS, source_name="chat.jpg")
     assert row.amount_usd == "12.34"
@@ -692,6 +720,7 @@ def test_parse_thermal_pos_bare_amount_and_hyphen_date():
     assert row.vendor == "Star Ridge Aquatics"
     assert row.date == "2026-08-29"
     assert row.amount_usd == "90.91"
+    assert row.status == "DOCUMENTED"
     assert row.order_id == "466241492734687"
     assert "5010" in row.payment_method
 
@@ -1059,7 +1088,10 @@ def test_reingesting_same_file_without_order_id_is_duplicate(tmp_path: Path):
     cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
     pdf = tmp_path / "chat-1.pdf"
     pdf.write_bytes(b"%PDF-receipt-no-order-id")
-    text = "Aquascape pond bacteria\nOrder placed May 1, 2026\nSubtotal $10.00\nTax $0.70\nTotal $10.70\n"
+    text = (
+        "Star Ridge Aquatics\nAquascape pond bacteria\n"
+        "Order placed May 1, 2026\nSubtotal $10.00\nTax $0.70\nTotal $10.70\n"
+    )
     kw = dict(
         books={"soveryn": tmp_path / "s.csv", "cwg": cwg},
         evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
@@ -1265,7 +1297,7 @@ def test_mismatch_block_and_override(tmp_path: Path):
     pdf = tmp_path / "freight.pdf"
     pdf.write_bytes(b"%PDF-freight")
     text = (
-        "Aquascape pond liner\nOrder placed May 1, 2026\n"
+        "Apex Distribution\nAquascape pond liner\nOrder placed May 1, 2026\n"
         "Subtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
     )
     kw = _ingest_kw(tmp_path, cwg, text, "freight.pdf")

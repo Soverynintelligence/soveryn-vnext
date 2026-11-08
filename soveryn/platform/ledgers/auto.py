@@ -68,7 +68,8 @@ def apply_chat_receipt(message: str, image_data_urls: tuple[str, ...]) -> str | 
         "PREVIEW ONLY — ledger CSV and evidence were not written. "
         "Naming CWG or SOVERYN classifies the book; it does not authorize a booking. "
         "This chat token cannot book. Call ledger_ingest to preview "
-        "(add corrections if OCR invoice/description/category/payment is wrong), "
+        "(add corrections if OCR invoice/description/category/payment/vendor/"
+        "cash is wrong; vendor/amount_usd need review_provenance), "
         "then confirm=true with THAT token. Do not book an uncorrected preview. "
         "Report these facts. Do not create_document. Do not invent a second filing."
     )
