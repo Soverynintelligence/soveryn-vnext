@@ -58,14 +58,17 @@ class ParsedRow:
 # Well-formed money only: dollars with exactly two cents digits, no extra dots.
 # Allow 4+ digit amounts without commas ($4279.99) — Amazon prints those.
 _MONEY = re.compile(r"\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)")
+# Labeled totals on thermal storefronts often omit `$` ("TOTAL: 12.34").
+# Unlabeled line prices are not totals; only this after-label form is optional-$.
 _MONEY_AFTER_LABEL = re.compile(
-    r"[:\s]*-?\s*\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
+    r"[:\s]*-?\s*\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
 )
 
 _ORDER_PATTERNS = (
     re.compile(r"Order\s*#\s*(\d{3}-\d{7}-\d{7})", re.I),
     re.compile(r"\bORDER\s+(DG-\d+)\b", re.I),
     re.compile(r"Invoice number\s+(IN\d+|HRB[A-Z0-9]+)", re.I),
+    re.compile(r"\bINVOICE\s+(\d{4,8})\b", re.I),
     re.compile(r"Receipt number\s+(\d{10,})", re.I),
     re.compile(r"Order\s*#\s*(OW[A-Z0-9]+)", re.I),
     re.compile(r"ORDER NO\s*#(\d+)", re.I),
@@ -85,11 +88,16 @@ _DATE_PATTERNS = (
     re.compile(r"paid on\s+([A-Za-z]+ \d{1,2}, \d{4})", re.I),
     re.compile(r"\bDATE\s+(\d{1,2} [A-Za-z]+ \d{4})", re.I),
     re.compile(r"Confirmed\s+([A-Za-z]+ \d{1,2}(?:,?\s+\d{4})?)", re.I),
-    re.compile(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b"),
+    # Slash (08/29/26) or hyphen (03-15-26) numeric dates. Not ISO YYYY-MM-DD
+    # — the first group is 1-2 digits, so 2026-03-15 does not match.
+    re.compile(r"\b(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b"),
 )
 
 _SUBTOTAL = re.compile(r"Item(?:\(s\))?\s*Subtotal:|\bSubtotal\b", re.I)
-_TAX = re.compile(r"Estimated tax to be\s*collected:|(?<!before )(?<!after )\bTax\b", re.I)
+_TAX = re.compile(
+    r"Estimated tax to be\s*collected:|TOTAL\s+T(?:AX)?\b|(?<!before )(?<!after )\bTax\b",
+    re.I,
+)
 _REWARDS = re.compile(r"Rewards(?: Points)?:", re.I)
 # Optional carrier parenthetical: "Shipping (FedEx Ground®) $20.16".
 _SHIP_CARRIER = r"(?:\s*\([^)\n]{1,40}\))?"
@@ -100,15 +108,29 @@ _SHIP = re.compile(
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
 _GRAND = re.compile(
-    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?|\bAMOUNT\b",
+    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?"
+    r"|\bA[HNM]OUNT\b",
     re.I,
 )
-_TOTAL = re.compile(r"\bTOTAL\b|\bTotal\b", re.I)
+# Do not treat "TOTAL TAX" / OCR "TOTAL T" / "Total before tax" as cash total.
+_TOTAL = re.compile(r"\bTOTAL\b(?!\s*TAX)(?!\s+T\b)(?!\s*BEFORE)", re.I)
 _PER_MONTH = re.compile(r"\s*/\s*mo", re.I)
+_OCR_DASHES = str.maketrans(
+    {
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+        "\u2018": "'",
+        "\u2019": "'",
+    }
+)
+_SKU_ITEM = re.compile(
+    r"^\s*\d{4,8}\s+(\S.*?)\s+(\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\s*$"
+)
 
 
 def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
-    blob = (text or "").replace("\x00", "")
+    blob = (text or "").replace("\x00", "").translate(_OCR_DASHES)
     order_id = _first_group(blob, _ORDER_PATTERNS)
     date = _parse_date(blob)
     tax_year = date[:4] if date else ""
@@ -287,8 +309,9 @@ def _parse_date(text: str) -> str:
             return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
         except ValueError:
             continue
-    if "/" in raw:
-        parts = raw.split("/")
+    sep = "/" if "/" in raw else "-" if "-" in raw else ""
+    if sep:
+        parts = raw.split(sep)
         if len(parts) == 3:
             mm, dd, yy = parts
             if len(yy) == 2:
@@ -311,6 +334,8 @@ def _parse_date(text: str) -> str:
 
 def _vendor(text: str, source_name: str) -> str:
     blob = f"{text}\n{source_name}".lower()
+    if re.search(r"\blowe['’]?s\b", blob):
+        return "Lowe's"
     if "star ridge" in blob:
         return "Star Ridge Aquatics"
     if "next insurance" in blob or "ergo next" in blob:
@@ -349,6 +374,9 @@ def _payment(text: str) -> str:
     m = re.search(r"Prime Visa ending in\s*(\d{4})", blob, re.I)
     if m:
         return f"Prime Visa {m.group(1)}"
+    m = re.search(r"\b[MH]/?C:?\s*[XK*]{4,}(\d{4})\b", blob, re.I)
+    if m:
+        return f"Mastercard {m.group(1)}"
     m = re.search(r"Mastercard(?: ending in)?\s*-?\s*(\d{4})", blob, re.I)
     if m:
         return f"Mastercard {m.group(1)}"
@@ -392,6 +420,9 @@ _PRODUCT_HINTS = (
 
 
 def _product(text: str, source_name: str) -> str:
+    sku_items = _sku_item_names(text)
+    if sku_items:
+        return "; ".join(sku_items)
     skip = re.compile(
         r"order summary|ship to|payment method|grand total|item\(s\)|"
         r"sold by|supplied by|return window|back to top|conditions of use|"
@@ -400,7 +431,10 @@ def _product(text: str, source_name: str) -> str:
         r"amount due|company name|cloudflare|order placed|jon deoliveira|"
         r"gmail\.com|gmail - |fairmount|townsend|summer wind|invoice to|"
         r"customer details|congratulations|policy details|payment summary|"
-        r"hi jon|next insurance <|1 message|@",
+        r"hi jon|next insurance <|1 message|@|"
+        r"sign in to|track rewards|manage account|home centers|"
+        r"pro rewards|points earned|points are awarded|settled and fulfilled|"
+        r"sales#|trans#|\binvoice\b|total tax|authcd|est\.?\s*points",
         re.I,
     )
     lines: list[str] = []
@@ -424,6 +458,23 @@ def _product(text: str, source_name: str) -> str:
         return lines[0]
     stem = re.sub(r"[-_]+", " ", Path(source_name).stem).strip()
     return stem
+
+
+def _sku_item_names(text: str) -> list[str]:
+    """Storefront SKU lines: '111111 12-OZ PRO MARKING ORANGE    8.50'."""
+    names: list[str] = []
+    for raw in text.splitlines():
+        hit = _SKU_ITEM.match(raw)
+        if not hit:
+            continue
+        name = re.sub(r"\s+", " ", hit.group(1)).strip(" -")
+        if len(name) < 4:
+            continue
+        letters = sum(c.isalpha() for c in name)
+        if letters < 3:
+            continue
+        names.append(name[:80])
+    return names
 
 
 def _schedule(text: str, desc: str, vendor: str) -> str:

@@ -116,6 +116,42 @@ def test_aquascape_text_is_cwg_even_without_filename_hint():
     assert hit.book == "cwg"
 
 
+def test_preview_unsorted_does_not_copy_into_drop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from soveryn.platform.ledgers.ingest import ingest_path as ingest
+
+    drop = tmp_path / "intake" / "ledgers"
+    (drop / "unsorted").mkdir(parents=True)
+    csv_s = tmp_path / "s.csv"
+    csv_c = tmp_path / "c.csv"
+    header = ",".join(CSV_FIELDS) + "\n"
+    csv_s.write_text(header, encoding="utf-8")
+    csv_c.write_text(header, encoding="utf-8")
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest._registered_book_paths",
+        lambda: {"soveryn": csv_s, "cwg": csv_c},
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest._registered_evidence_roots",
+        lambda: {"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
+    )
+    monkeypatch.setattr(
+        "soveryn.platform.ledgers.ingest.ensure_drop_dirs",
+        lambda root=None: drop,
+    )
+    pdf = tmp_path / "scan.pdf"
+    pdf.write_bytes(b"%PDF-scan")
+    result = ingest(
+        pdf,
+        confirm=False,
+        extract=lambda _p: _extract("Thanks for your order", "scan.pdf"),
+    )
+    assert result.book == "unsorted"
+    assert result.action == "unsorted"
+    assert list(drop.rglob("*.pdf")) == []
+    assert load_rows(csv_c) == []
+    assert load_rows(csv_s) == []
+
+
 def test_ambiguous_or_empty_goes_unsorted_with_gap():
     hit = classify_receipt("scan.pdf", "Thanks for your order")
     assert hit.book == "unsorted"
@@ -494,6 +530,232 @@ def test_parse_thermal_pos_amount_and_slash_date():
     assert "5010" in row.payment_method
 
 
+# Synthetic storefront thermal OCR: bare cents amounts, hyphen MM-DD-YY,
+# invoice+total on one line, TOTAL TAX, rewards points, masked MC.
+# Values are invented; they only need to keep the printed-total traps distinct.
+STOREFRONT_BARE = """
+LOWE'S
+SIGN IN TO TRACK REWARDS AND MANAGE ACCOUNT
+LOWE'S HOME CENTERS, LLC
+1234 EXAMPLE HWY
+ANYTOWN, NC 00000 (910) 555-0100
+- SALE -
+SALES#: S0000XXX 1111111 TRANS#: 999000111 03-15-26
+111111 12-OZ PRO MARKING ORANGE     8.50
+222222 12-OZ PRO MARKING BLUE       17.00
+        2 @ 8.50
+SUBTOTAL: 25.50
+INVOICE 42424 TOTAL: 27.29
+TOTAL TAX: 1.79
+TOTAL: 27.29
+M/C: 27.29
+******* MY LOWE'S PRO REWARDS *******
+EST. POINTS EARNED: 31*
+* Points are awarded on eligible purchases
+for orders that have been settled and fulfilled
+MC: XXXXXXXXXX4411 AMOUNT: 27.29 AUTHCD: AB1234
+"""
+
+STOREFRONT_FALSE_TOTALS = """
+LOWE'S HOME CENTERS, LLC
+SALE
+03-15-26
+555555 SAMPLE SKU PAINT CAN         4.00
+SUBTOTAL: 10.00
+INVOICE 11111
+EST. POINTS EARNED: 54
+MC: XXXXXXXXXX7788
+TOTAL TAX: 2.34
+TOTAL: 12.34
+AMOUNT: 12.34
+"""
+
+THERMAL_POS_BARE = """
+STAR RIDGE AQUATICS LLC
+180 STAR RIDGE RD
+CARTHAGE, NC 28327
+SALE
+08-29-26
+Trans ID 466241492734687
+VISA 5010
+Contactless
+AMOUNT 90.91
+APPROVED
+"""
+
+
+def test_parse_storefront_bare_amounts_hyphen_date_and_sku_lines():
+    row = parse_receipt(STOREFRONT_BARE, source_name="chat.jpg")
+    assert row.vendor == "Lowe's"
+    assert row.date == "2026-03-15"
+    assert row.amount_usd == "27.29"
+    assert row.subtotal == "25.50"
+    assert row.tax == "1.79"
+    assert row.printed_total == "27.29"
+    assert row.order_id == "42424"
+    assert row.status == "DOCUMENTED"
+    assert row.gap is None
+    assert "4411" in row.payment_method
+    low = row.description.lower()
+    assert "sign in" not in low
+    assert "rewards" not in low
+    assert "marking orange" in low
+    assert "marking blue" in low
+    assert "cwg projects" not in low
+    # Category is a default, not a guessed job purpose.
+    assert row.schedule_c_or_form == "supplies"
+
+
+OCR_TRUNCATED_STOREFRONT = """
+LOWE'S HOME CENTERS, LLC
+SALE
+03-15-26
+111111 12-OZ PRO MARKING ORANGE     8.50
+SUBTOTAL: 25.50
+INVOICE 42424 TOT 27.29
+TOTAL T 1.79
+TOTAL: 27.29
+H/C: 27.29
+EST. POINTS EARNED: 31%
+HC: XXKXXXXXXXXX4411 ANOUNT: 27.
+"""
+
+
+def test_parse_ocr_truncated_tax_and_hc_mask():
+    row = parse_receipt(OCR_TRUNCATED_STOREFRONT, source_name="chat.jpg")
+    assert row.vendor == "Lowe's"
+    assert row.amount_usd == "27.29"
+    assert row.subtotal == "25.50"
+    assert row.tax == "1.79"
+    assert row.printed_total == "27.29"
+    assert row.order_id == "42424"
+    assert row.status == "DOCUMENTED"
+    assert "4411" in row.payment_method
+    assert "Mercury" not in row.payment_method
+    assert row.schedule_c_or_form == "supplies"
+
+
+def test_ingest_preview_not_blocked_when_tax_ocr_truncated(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    photo = tmp_path / "storefront.jpg"
+    photo.write_bytes(b"fake-photo-bytes")
+    kw = _ingest_kw(tmp_path, cwg, OCR_TRUNCATED_STOREFRONT, "storefront.jpg")
+    preview = ingest_path(photo, confirm=False, **kw)
+    assert preview.action == "preview"
+    assert preview.confirm_token
+    assert preview.amount_usd == "27.29"
+    assert preview.rows[0]["tax"] == "1.79"
+    assert preview.rows[0]["subtotal"] == "25.50"
+    assert load_rows(cwg) == []
+
+
+def test_ocr_score_prefers_total_tax_over_truncated_label():
+    from soveryn.platform.ledgers.extract import _ocr_score
+
+    pad = "LOWE'S HOME CENTERS, LLC\nSALE\nSUBTOTAL: 25.50\n"
+    truncated = pad + "INVOICE 42424 TOT 27.29\nTOTAL T 1.79\nTOTAL: 27.29\n"
+    clean = pad + "INVOICE 42424 TOTAL: 27.29\nTOTAL TAX: 1.79\nTOTAL: 27.29\nAMOUNT: 27.29\n"
+    noisy = (pad + "INVOICE 42424 TOTAL: 27.29\nTOTAL TAX: 1.79\n" + ("junk " * 400))
+    assert _ocr_score(clean) > _ocr_score(truncated)
+    assert _ocr_score(clean) > _ocr_score(noisy)
+
+
+def test_paper_crop_keeps_bright_receipt_drops_dark_margin():
+    from PIL import Image
+    from soveryn.platform.ledgers.extract import _paper_crop
+
+    im = Image.new("RGB", (400, 500), (10, 10, 10))
+    for x in range(80, 320):
+        for y in range(40, 460):
+            im.putpixel((x, y), (240, 240, 240))
+    cropped = _paper_crop(im)
+    assert cropped.size[0] < im.size[0]
+    assert cropped.size[1] < im.size[1]
+    assert cropped.size[0] > 200
+    assert cropped.size[1] > 350
+
+
+def test_parse_does_not_book_subtotal_invoice_points_or_card_as_total():
+    row = parse_receipt(STOREFRONT_FALSE_TOTALS, source_name="chat.jpg")
+    assert row.amount_usd == "12.34"
+    assert row.amount_usd not in {"10.00", "2.34", "4.00", "54", "54.00", "11111", "7788"}
+    assert row.order_id == "11111"
+    assert row.subtotal == "10.00"
+    assert row.tax == "2.34"
+    assert "7788" in row.payment_method
+    assert row.payment_method != row.amount_usd
+
+
+def test_parse_thermal_pos_bare_amount_and_hyphen_date():
+    row = parse_receipt(THERMAL_POS_BARE, source_name="chat.jpg")
+    assert row.vendor == "Star Ridge Aquatics"
+    assert row.date == "2026-08-29"
+    assert row.amount_usd == "90.91"
+    assert row.order_id == "466241492734687"
+    assert "5010" in row.payment_method
+
+
+def test_classify_storefront_without_entity_signal_stays_unsorted():
+    hit = classify_receipt("chat.jpg", STOREFRONT_BARE)
+    assert hit.book == "unsorted"
+    assert hit.gap
+
+
+def test_pdf_text_is_usable_with_labeled_bare_totals():
+    from soveryn.platform.ledgers.extract import _usable_receipt_text
+
+    pad = "storefront receipt body " * 3
+    assert _usable_receipt_text(pad + "SUBTOTAL: 10.00\nTOTAL: 12.34")
+    assert _usable_receipt_text(pad + "Grand Total: $12.34")
+    assert not _usable_receipt_text(pad + "thanks for your visit")
+
+
+def test_ingest_preview_storefront_receipt_writes_nothing(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    photo = tmp_path / "storefront.jpg"
+    photo.write_bytes(b"fake-photo-bytes")
+    kw = _ingest_kw(tmp_path, cwg, STOREFRONT_BARE, "storefront.jpg")
+    preview = ingest_path(photo, confirm=False, **kw)
+    assert preview.action == "preview"
+    assert preview.confirm_token
+    assert preview.amount_usd == "27.29"
+    assert preview.rows and preview.rows[0]["vendor"] == "Lowe's"
+    assert preview.rows[0]["date"] == "2026-03-15"
+    assert preview.rows[0]["order_id"] == "42424"
+    assert load_rows(cwg) == []
+    assert not list((tmp_path / "ev-c").rglob("*"))
+
+    blocked = ingest_path(photo, confirm=True, confirm_token="not-a-token", **kw)
+    assert blocked.action == "blocked"
+    assert load_rows(cwg) == []
+
+    written = ingest_path(
+        photo, confirm=True, confirm_token=preview.confirm_token, **kw
+    )
+    assert written.action == "appended"
+    assert len(load_rows(cwg)) == 1
+    assert load_rows(cwg)[0]["amount_usd"] == "27.29"
+
+
+def test_original_and_ocr_derivative_same_invoice_are_one_receipt(tmp_path: Path):
+    cwg = tmp_path / "c.csv"
+    cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
+    original = tmp_path / "original.jpg"
+    derivative = tmp_path / "ocr-clean.jpg"
+    original.write_bytes(b"original-photo-bytes")
+    derivative.write_bytes(b"ocr-derivative-bytes-not-the-same")
+    kw = _ingest_kw(tmp_path, cwg, STOREFRONT_BARE, "receipt.jpg")
+    first = ingest_path(original, confirm=True, **kw)
+    second = ingest_path(derivative, confirm=True, **kw)
+    assert first.action == "appended"
+    assert second.action == "duplicate"
+    assert second.row is not None
+    assert second.row["row_id"] == first.row["row_id"]
+    assert len(load_rows(cwg)) == 1
+
+
 GMAIL_NEXT_INSURANCE = """
 Gmail - Your business insurance is active
 Jon DeOliveira <owner@example.test>
@@ -560,6 +822,13 @@ def test_receipt_file_intent_cwg_not_instagram():
     assert receipt_file_book("Log this in cwg docs /receipts") == "cwg"
     assert receipt_file_book("file this on soveryn") == "soveryn"
     assert receipt_file_book("draft an IG post for CWG") is None
+    # Naming the book is classification, not a booking order.
+    assert (
+        receipt_file_book(
+            "Preview this CWG receipt only; do not book or file anything."
+        )
+        == "cwg"
+    )
 
 
 def test_ingest_drop_picks_up_jpg(tmp_path: Path):

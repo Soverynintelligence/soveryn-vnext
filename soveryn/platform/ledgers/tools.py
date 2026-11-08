@@ -104,6 +104,8 @@ def _as_bool(raw: Any, *, name: str) -> bool:
 
 
 def _ingest_kwargs(args: Mapping[str, Any]) -> dict[str, Any]:
+    from soveryn.platform.ledgers.ingest import normalize_corrections
+
     confirm = _as_bool(args.get("confirm"), name="confirm")
     token = args.get("confirm_token", "")
     override = args.get("override_reason", "")
@@ -117,10 +119,24 @@ def _ingest_kwargs(args: Mapping[str, Any]) -> dict[str, Any]:
         raise ToolArgError(
             "confirm=true requires the confirm_token from the preview call"
         )
+    if "corrections" not in args:
+        corrections: dict[str, str] | None = None
+    else:
+        raw_corr = args.get("corrections")
+        if raw_corr is None:
+            corrections = None
+        elif not isinstance(raw_corr, Mapping):
+            raise ToolArgError("corrections must be an object of field=value")
+        else:
+            try:
+                corrections = normalize_corrections(raw_corr)
+            except ValueError as exc:
+                raise ToolArgError(str(exc)) from exc
     return {
         "confirm": confirm,
         "confirm_token": token_s or None,
         "override_reason": override_s or None,
+        "corrections": corrections,
         "actor": "ledger_ingest",
     }
 
@@ -307,6 +323,31 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
                         "Logged in the change log."
                     ),
                 },
+                "corrections": {
+                    "type": "object",
+                    "description": (
+                        "Reviewed field fixes before booking. Preview with these "
+                        "to get a new confirm_token bound to the corrected row. "
+                        "Changing corrections, book, or file invalidates the token. "
+                        "Supported: invoice/order_id, description, "
+                        "category/schedule_c_or_form, payment/payment_method, "
+                        "purpose (operator context, not OCR). "
+                        "Does not change amounts; does not bypass totals, "
+                        "duplicates, or the locked writer. "
+                        "Do not book an uncorrected preview when OCR fields are wrong."
+                    ),
+                    "properties": {
+                        "invoice": {"type": "string"},
+                        "order_id": {"type": "string"},
+                        "description": {"type": "string"},
+                        "category": {"type": "string"},
+                        "schedule_c_or_form": {"type": "string"},
+                        "payment": {"type": "string"},
+                        "payment_method": {"type": "string"},
+                        "purpose": {"type": "string"},
+                    },
+                    "additionalProperties": False,
+                },
             },
             "additionalProperties": False,
         },
@@ -315,9 +356,11 @@ def build_ledger_ingest_tool(*, owner_agent: str) -> ToolSpec:
             "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. "
             "First call (confirm omitted/false) returns the exact rows that would "
             "be added and a short-lived confirm_token; it writes nothing. "
-            "Second call with confirm=true and that token writes through the "
-            "single locked book writer. Name a specific file "
-            "(path, image=\"current\", or order_id+splits) — folder-wide "
+            "If OCR invoice/description/category/payment is wrong, pass "
+            "corrections on a preview call and confirm THAT token — do not book "
+            "the uncorrected preview. Second call with confirm=true and that "
+            "token writes through the single locked book writer. Name a specific "
+            "file (path, image=\"current\", or order_id+splits) — folder-wide "
             "re-ingest is refused. Re-submitting the same receipt is a safe "
             "no-op that returns the existing row. Totals that do not match "
             "within a cent are blocked unless override_reason is given. "

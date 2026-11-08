@@ -82,9 +82,191 @@ class IngestResult:
     rows: list[dict[str, str]] = field(default_factory=list)
     confirm_token: str | None = None
     confirm_expires_at: str | None = None
+    ocr: dict[str, str] | None = None
+    corrections: dict[str, str] | None = None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+# Reviewed pre-booking fields. Money stays with OCR + totals_mismatch.
+_CORRECTION_ALIASES = {
+    "invoice": "order_id",
+    "order_id": "order_id",
+    "description": "description",
+    "category": "schedule_c_or_form",
+    "schedule_c_or_form": "schedule_c_or_form",
+    "payment": "payment_method",
+    "payment_method": "payment_method",
+    "purpose": "purpose",
+}
+_CORRECTION_ORDER = (
+    "order_id",
+    "description",
+    "schedule_c_or_form",
+    "payment_method",
+    "purpose",
+)
+_CORRECTION_LIMITS = {
+    "order_id": 40,
+    "description": 300,
+    "schedule_c_or_form": 80,
+    "payment_method": 80,
+    "purpose": 300,
+}
+_MONEY_CORRECTION_FIELDS = frozenset(
+    {
+        "amount",
+        "amount_usd",
+        "subtotal",
+        "tax",
+        "shipping",
+        "discount",
+        "printed_total",
+        "total",
+    }
+)
+_SEMANTIC_FIELDS = (
+    "order_id",
+    "description",
+    "schedule_c_or_form",
+    "payment_method",
+    "notes",
+    "amount_usd",
+    "date",
+    "vendor",
+)
+_OCR_FIELDS = (
+    "order_id",
+    "description",
+    "schedule_c_or_form",
+    "payment_method",
+    "amount_usd",
+    "date",
+    "vendor",
+)
+
+
+def normalize_corrections(raw: Mapping[str, object] | None) -> dict[str, str]:
+    """Canonical reviewed-field map. Rejects money and unknown keys."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        raise ValueError("corrections must be an object of field=value")
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        name = str(key).strip()
+        if name in _MONEY_CORRECTION_FIELDS:
+            raise ValueError(
+                f"corrections.{name} is not supported — money stays with OCR "
+                "and totals; pass override_reason only when printed totals mismatch"
+            )
+        canon = _CORRECTION_ALIASES.get(name)
+        if canon is None:
+            raise ValueError(
+                f"unknown correction field {name!r}; supported: invoice, "
+                "description, category, payment, purpose"
+            )
+        if not isinstance(value, str):
+            raise ValueError(f"corrections.{name} must be a string")
+        text = re.sub(r"\s+", " ", value).strip()
+        if not text:
+            raise ValueError(f"corrections.{name} must not be empty")
+        if len(text) > _CORRECTION_LIMITS[canon]:
+            raise ValueError(f"corrections.{name} is too long")
+        if canon in out and out[canon] != text:
+            raise ValueError(f"corrections.{name} conflicts with another alias")
+        out[canon] = text
+    return {key: out[key] for key in _CORRECTION_ORDER if key in out}
+
+
+def _ocr_fields(parsed: ParsedRow) -> dict[str, str]:
+    return {
+        "order_id": parsed.order_id or "",
+        "description": parsed.description,
+        "schedule_c_or_form": parsed.schedule_c_or_form,
+        "payment_method": parsed.payment_method,
+        "amount_usd": parsed.amount_usd,
+        "date": parsed.date,
+        "vendor": parsed.vendor,
+    }
+
+
+def _semantic_fields(row: Mapping[str, str]) -> dict[str, str]:
+    return {key: (row.get(key) or "") for key in _SEMANTIC_FIELDS}
+
+
+def _apply_reviewed_corrections(
+    planned: dict[str, str],
+    *,
+    ocr: Mapping[str, str],
+    corrections: Mapping[str, str],
+    ocr_text_sha256: str,
+) -> None:
+    if not corrections:
+        return
+    ocr_bits: list[str] = []
+    for field in ("order_id", "description", "schedule_c_or_form", "payment_method"):
+        if field not in corrections:
+            continue
+        before = ocr.get(field) or ""
+        after = corrections[field]
+        if before != after:
+            ocr_bits.append(f"{field}={before}")
+        planned[field] = after
+    extra: list[str] = []
+    if ocr_bits:
+        extra.append("ocr " + "; ".join(ocr_bits))
+    if ocr_text_sha256:
+        extra.append(f"ocr_sha256={ocr_text_sha256}")
+    purpose = corrections.get("purpose")
+    if purpose:
+        extra.append(f"operator: {purpose}")
+    if extra:
+        planned["notes"] = (
+            planned["notes"] + " | " if planned["notes"] else ""
+        ) + " | ".join(extra)
+
+
+def _ingest_reason(
+    *,
+    corrections: Mapping[str, str],
+    ocr: Mapping[str, str],
+    override: str,
+) -> str:
+    if not corrections:
+        return f"override: {override}" if override else "ingest"
+    fields = [
+        key
+        for key in ("order_id", "description", "schedule_c_or_form", "payment_method")
+        if key in corrections
+    ]
+    parts = ["reviewed correction"]
+    if fields:
+        parts.append(", ".join(fields))
+    purpose = corrections.get("purpose")
+    if purpose:
+        parts.append(f"operator: {purpose}")
+    ocr_bits = []
+    for field in fields:
+        before = ocr.get(field) or ""
+        if before != corrections[field]:
+            ocr_bits.append(f"{field}={before}")
+    if ocr_bits:
+        parts.append("ocr " + "; ".join(ocr_bits))
+    if override:
+        parts.append(f"override: {override}")
+    return "; ".join(parts)
+
+
+def _token_mismatch(book: str, source_name: str, detail: str) -> IngestResult:
+    return IngestResult(
+        book=book,
+        action="blocked",
+        source_name=source_name,
+        gap=detail,
+        message=detail,
+    )
 
 
 def normalize_splits(raw: Sequence[Mapping[str, object]] | Sequence[SplitSpec]) -> list[SplitSpec]:
@@ -281,21 +463,26 @@ def _preview_result(
     payload: Mapping[str, Any],
     message: str,
     splits: list[dict[str, str]] | None = None,
+    ocr: Mapping[str, str] | None = None,
+    corrections: Mapping[str, str] | None = None,
 ) -> IngestResult:
     token, expires = issue_confirm_token(payload)
+    planned0 = planned[0] if planned else None
     return IngestResult(
         book=book,
         action="preview",
         source_name=source_name,
-        order_id=parsed.order_id,
-        amount_usd=parsed.amount_usd,
-        evidence=planned[0].get("evidence") if planned else parsed.evidence or None,
+        order_id=(planned0.get("order_id") if planned0 else None) or parsed.order_id,
+        amount_usd=(planned0.get("amount_usd") if planned0 else None) or parsed.amount_usd,
+        evidence=planned0.get("evidence") if planned0 else parsed.evidence or None,
         message=message,
         splits=list(splits or []),
         rows=[dict(r) for r in planned],
-        row=dict(planned[0]) if len(planned) == 1 else None,
+        row=dict(planned0) if planned0 is not None and len(planned) == 1 else None,
         confirm_token=token,
         confirm_expires_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires)),
+        ocr=dict(ocr) if ocr is not None else None,
+        corrections=dict(corrections) if corrections else None,
     )
 
 
@@ -333,15 +520,38 @@ def ingest_path(
     confirm: bool = True,
     confirm_token: str | None = None,
     override_reason: str | None = None,
+    corrections: Mapping[str, object] | None = None,
     actor: str = "ledger_ingest",
 ) -> IngestResult:
+    """Copy evidence and append when confirm is true.
+
+    Chat photo hooks and ledger_ingest tool previews must pass confirm=False.
+    A write from the tool requires the confirm_token issued by that preview.
+    Default confirm=True is for explicit CLI/library callers only.
+    Reviewed corrections (invoice/description/category/payment/purpose) bind
+    into the preview token; changing them, the book, or the file invalidates it.
+    """
     path = Path(path)
     extract_fn = extract or extract_receipt_path
     house_defaults = books is None
     book_paths = books if books is not None else _registered_book_paths()
     ev_roots = evidence_roots if evidence_roots is not None else _registered_evidence_roots()
     override = (override_reason or "").strip()
+    caller_corrections: dict[str, str] | None
+    if corrections is None:
+        caller_corrections = None
+    else:
+        caller_corrections = normalize_corrections(corrections)
+    if actor == "chat_receipt_preview":
+        # Chat uploads never book, even if a caller passes confirm=True.
+        confirm = False
+        confirm_token = None
 
+    bound_sha = None
+    bound_book = None
+    bound_corrections: dict[str, str] | None = None
+    bound_semantic: dict[str, str] | None = None
+    applied_corrections: dict[str, str] = caller_corrections or {}
     if confirm_token:
         payload = consume_confirm_token(confirm_token)
         if payload is None:
@@ -352,7 +562,53 @@ def ingest_path(
                 gap="confirm token is missing or expired — preview again",
                 message="confirm token is missing or expired",
             )
+        if payload.get("source") == "chat_preview":
+            return _token_mismatch(
+                str(payload.get("book") or "unsorted"),
+                path.name,
+                "chat preview token cannot book — preview again with "
+                "ledger_ingest and reviewed corrections if OCR fields are wrong",
+            )
         confirm = True
+        bound_sha = payload.get("source_sha256")
+        bound_book = payload.get("book")
+        token_corr = payload.get("corrections")
+        if isinstance(token_corr, Mapping):
+            bound_corrections = normalize_corrections(token_corr)
+        token_sem = payload.get("semantic")
+        if isinstance(token_sem, Mapping):
+            bound_semantic = {str(k): str(v) for k, v in token_sem.items()}
+        if caller_corrections is not None:
+            if bound_corrections is None:
+                if caller_corrections:
+                    return _token_mismatch(
+                        str(bound_book or "unsorted"),
+                        path.name,
+                        "confirm token does not match these corrections",
+                    )
+            elif caller_corrections != bound_corrections:
+                return _token_mismatch(
+                    str(bound_book or "unsorted"),
+                    path.name,
+                    "confirm token does not match these corrections",
+                )
+            applied_corrections = caller_corrections
+        elif bound_corrections is not None:
+            applied_corrections = bound_corrections
+        if (
+            isinstance(bound_sha, str)
+            and bound_sha
+            and path.is_file()
+            and _sha256(path) != bound_sha
+        ):
+            return _token_mismatch(
+                str(bound_book or "unsorted"),
+                path.name,
+                "confirm token does not match this receipt",
+            )
+
+    if splits and applied_corrections:
+        raise ValueError("corrections apply to a single receipt preview, not splits")
 
     extracted = extract_fn(path)
     text = extracted.text or ""
@@ -371,6 +627,8 @@ def ingest_path(
         )
     if path.is_file():
         parsed.evidence_sha256 = _sha256(path)
+    ocr = _ocr_fields(parsed)
+    ocr_text_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     if splits:
         specs = normalize_splits(splits)
@@ -407,9 +665,23 @@ def ingest_path(
                     message="left unsorted",
                 )
     book = routed
+    if (
+        isinstance(bound_book, str)
+        and bound_book
+        and bound_book not in {"unsorted", "split"}
+        and book != bound_book
+    ):
+        return IngestResult(
+            book=book,
+            action="blocked",
+            source_name=path.name,
+            gap="confirm token does not match this book",
+            message="confirm token does not match this book",
+        )
 
     if book == "unsorted":
-        if house_defaults and path.is_file():
+        # Preview must not copy into intake. Booking still parks unsure files.
+        if confirm and house_defaults and path.is_file():
             hold = ensure_drop_dirs() / "unsorted"
             hold.mkdir(parents=True, exist_ok=True)
             if path.parent.resolve() != hold.resolve():
@@ -429,21 +701,45 @@ def ingest_path(
 
     csv_path = book_paths[book]
     ev_root = Path(ev_roots[book])
+    planned = _csv_from_parsed(parsed)
+    planned["evidence"] = _planned_evidence_rel(path, parsed, ev_root)
+    planned["evidence_sha256"] = parsed.evidence_sha256
+    planned["order_id"] = parsed.order_id or ""
+    _apply_reviewed_corrections(
+        planned,
+        ocr=ocr,
+        corrections=applied_corrections,
+        ocr_text_sha256=ocr_text_sha256,
+    )
+    semantic = _semantic_fields(planned)
+    if bound_semantic is not None and semantic != bound_semantic:
+        return _token_mismatch(
+            book,
+            path.name,
+            "confirm token does not match the reviewed fields",
+        )
+
     other = next((bid for bid in book_paths if bid != book), None)
     other_csv = book_paths.get(other) if other else None
-    if parsed.order_id and other_csv is not None and has_order_id(load_rows(other_csv), parsed.order_id):
-        return IngestResult(
-            book="unsorted",
-            action="needs_split",
-            source_name=path.name,
-            order_id=parsed.order_id,
-            amount_usd=parsed.amount_usd,
-            gap=(
-                f"order {parsed.order_id} already on the {other} book — "
-                "do not file the full total on both. Pass splits."
-            ),
-            message="needs split across books",
-        )
+    split_ids = {oid for oid in (parsed.order_id, planned.get("order_id")) if oid}
+    if other_csv is not None:
+        other_rows = load_rows(other_csv)
+        for oid in split_ids:
+            if has_order_id(other_rows, oid):
+                return IngestResult(
+                    book="unsorted",
+                    action="needs_split",
+                    source_name=path.name,
+                    order_id=oid,
+                    amount_usd=parsed.amount_usd,
+                    gap=(
+                        f"order {oid} already on the {other} book — "
+                        "do not file the full total on both. Pass splits."
+                    ),
+                    message="needs split across books",
+                    ocr=ocr,
+                    corrections=applied_corrections or None,
+                )
 
     existing = load_rows(csv_path)
     found = _duplicate_of(
@@ -453,13 +749,11 @@ def ingest_path(
         ev_root=ev_root,
         digest=parsed.evidence_sha256,
     )
+    if found is None and planned.get("order_id"):
+        found = find_duplicate(existing, order_id=planned["order_id"])
     if found is not None:
         return _exists_result(book, path.name, parsed, found)
 
-    planned = _csv_from_parsed(parsed)
-    planned["evidence"] = _planned_evidence_rel(path, parsed, ev_root)
-    planned["evidence_sha256"] = parsed.evidence_sha256
-    planned["order_id"] = parsed.order_id or ""
     mismatch, detail = totals_mismatch(planned)
     if mismatch and not override:
         return _blocked_result(book, path.name, parsed, [planned], detail)
@@ -471,14 +765,27 @@ def ingest_path(
             "book": book,
             "folder_hint": folder_hint,
             "override_reason": override,
+            "source_sha256": _sha256(path) if path.is_file() else "",
+            "corrections": applied_corrections,
+            "semantic": semantic,
+            "source": (
+                "chat_preview" if actor == "chat_receipt_preview" else "ledger_ingest"
+            ),
+            "ocr_text_sha256": ocr_text_sha256,
         }
+        reviewed = " with reviewed corrections" if applied_corrections else ""
         return _preview_result(
             book,
             path.name,
             parsed,
             [planned],
             payload=payload,
-            message=f"preview {planned['amount_usd'] or 'NO AMOUNT'} on {book} — call again with confirm=true",
+            message=(
+                f"preview {planned['amount_usd'] or 'NO AMOUNT'} on {book}"
+                f"{reviewed} — call again with confirm=true"
+            ),
+            ocr=ocr,
+            corrections=applied_corrections,
         )
 
     with exclusive_book(csv_path):
@@ -490,14 +797,16 @@ def ingest_path(
             ev_root=ev_root,
             digest=parsed.evidence_sha256,
         )
+        if found is None and planned.get("order_id"):
+            found = find_duplicate(existing, order_id=planned["order_id"])
         if found is not None:
             return _exists_result(book, path.name, parsed, found)
         rel_evidence = _place_evidence(path, parsed, ev_root)
         parsed.evidence = rel_evidence
         planned["evidence"] = rel_evidence
-        reason = "ingest"
-        if override:
-            reason = f"override: {override}"
+        reason = _ingest_reason(
+            corrections=applied_corrections, ocr=ocr, override=override
+        )
         written = write_book(
             csv_path,
             existing + [planned],
@@ -518,13 +827,15 @@ def ingest_path(
         book=book,
         action="appended",
         source_name=path.name,
-        order_id=parsed.order_id,
+        order_id=written.get("order_id") or parsed.order_id,
         amount_usd=written.get("amount_usd") or parsed.amount_usd,
         evidence=rel_evidence,
         gap=parsed.gap,
         message=f"appended {parsed.amount_usd or 'NO AMOUNT'} to {book}",
         row=written,
         rows=[written],
+        ocr=ocr,
+        corrections=applied_corrections or None,
     )
 
 

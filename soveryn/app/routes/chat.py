@@ -232,6 +232,26 @@ def _state():
     return current_app.extensions["soveryn"]
 
 
+def _require_session(session_id: str, agent: str):
+    """404/409 before receipt or file side effects. Same codes as AgentLoop."""
+    session = _state()["conv_store"].get_session(session_id)
+    if session is None:
+        return _err(
+            "missing_session",
+            f"session_id={session_id!r} does not exist; "
+            "call conv_store.new_session() first",
+            404,
+        )
+    if session.agent != agent:
+        return _err(
+            "session_agent_mismatch",
+            f"session {session_id!r} belongs to agent {session.agent!r}, "
+            f"not {agent!r}",
+            409,
+        )
+    return None
+
+
 def maybe_resolve_x_approval(
     *, agent: str, message: str, state: dict, now: str,
 ) -> ResolveResult | None:
@@ -387,6 +407,10 @@ def chat():
     session_id = body.get("session_id")
     if not isinstance(session_id, str) or not session_id.strip():
         return _err("missing_field", "Required field: session_id", 400)
+
+    session_err = _require_session(session_id, agent)
+    if session_err is not None:
+        return session_err
 
     message = body.get("message")
     if not isinstance(message, str):
@@ -590,6 +614,10 @@ def chat_stream():
     session_id = body.get("session_id")
     if not isinstance(session_id, str) or not session_id.strip():
         return _err("missing_field", "Required field: session_id", 400)
+
+    session_err = _require_session(session_id, agent)
+    if session_err is not None:
+        return session_err
 
     message = body.get("message")
     if not isinstance(message, str):
