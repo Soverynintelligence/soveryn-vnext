@@ -162,6 +162,7 @@ def test_apply_chat_receipt_preview_writes_nothing(tmp_path, monkeypatch):
     assert block is not None
     assert "action=preview" in block
     assert "PREVIEW ONLY" in block
+    assert "chat token cannot book" in block
     assert "confirm_token=" in block
     assert load_rows(cwg) == []
     assert load_rows(sov) == []
@@ -187,20 +188,41 @@ def test_chat_actor_cannot_book_even_if_confirm_true(tmp_path, monkeypatch):
     assert load_rows(cwg) == []
 
 
-def test_explicit_confirm_token_books_once_on_temp_ledger(tmp_path, monkeypatch):
+def test_chat_preview_token_cannot_book(tmp_path, monkeypatch):
     sov, cwg = _isolate_books(tmp_path, monkeypatch)
     block = apply_chat_receipt(PREVIEW_MSG, (_jpeg_data_url(),))
+    assert "chat token cannot book" in (block or "")
     token = re.search(r"confirm_token=(\S+)", block or "").group(1)
     payload = peek_confirm_token(token)
     assert payload is not None
+    assert payload["source"] == "chat_preview"
     path = Path(payload["path"])
     books = {"soveryn": sov, "cwg": cwg}
     ev = {"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"}
-    first = ingest_path(
+    blocked = ingest_path(
         path,
         book="cwg",
         confirm=True,
         confirm_token=token,
+        extract=_extract_storefront,
+        books=books,
+        evidence_roots=ev,
+    )
+    assert blocked.action == "blocked"
+    assert load_rows(cwg) == []
+    preview = ingest_path(
+        path,
+        book="cwg",
+        confirm=False,
+        extract=_extract_storefront,
+        books=books,
+        evidence_roots=ev,
+    )
+    first = ingest_path(
+        path,
+        book="cwg",
+        confirm=True,
+        confirm_token=preview.confirm_token,
         extract=_extract_storefront,
         books=books,
         evidence_roots=ev,
@@ -211,7 +233,7 @@ def test_explicit_confirm_token_books_once_on_temp_ledger(tmp_path, monkeypatch)
         path,
         book="cwg",
         confirm=True,
-        confirm_token=token,
+        confirm_token=preview.confirm_token,
         extract=_extract_storefront,
         books=books,
         evidence_roots=ev,
@@ -290,6 +312,7 @@ def test_chat_preview_upload_does_not_book(app_state):
     text = _user_text(app_state["fake"].calls[-1]["request"])
     assert "action=preview" in text
     assert "PREVIEW ONLY" in text
+    assert "chat token cannot book" in text
     assert PREVIEW_MSG in text
     assert load_rows(app_state["cwg"]) == []
     assert load_rows(app_state["sov"]) == []
@@ -313,6 +336,7 @@ def test_chat_stream_preview_upload_does_not_book(app_state):
     text = _user_text(app_state["stream"].calls[-1]["request"])
     assert "action=preview" in text
     assert "PREVIEW ONLY" in text
+    assert "chat token cannot book" in text
     assert PREVIEW_MSG in text
     assert load_rows(app_state["cwg"]) == []
     assert load_rows(app_state["sov"]) == []
