@@ -24,6 +24,67 @@ DATE=$(date +%Y-%m-%d)
 DEST="$BASE/backups/$DATE"
 LOG_PREFIX="[backup $(date +%H:%M:%S)]"
 
+# Pondwright CRM (Spark ops.sqlite): WAL-safe online backup of the live DB.
+# A raw `cat` of the main file skips WAL-committed leads. `.backup` from a
+# read-only CLI open captures them without checkpointing the live file.
+# Bounded one-shot (no secrets/rotation/easystore/full nightly):
+#   scripts/backup_soveryn.sh --crm-sqlite-only DEST_DIR
+backup_pondwright_crm_ops() {
+    local dest_dir dest local_tmp crm_ok=0 integ=""
+    mkdir -p "$1"
+    dest_dir="$(cd "$1" && pwd)"
+    dest="$dest_dir/pondwright-crm-ops.sqlite"
+
+    if ! curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8100/health 2>/dev/null; then
+        return 0
+    fi
+
+    # Unique scratch in dest_dir so overlapping runs cannot share a filename.
+    if ! local_tmp="$(mktemp -p "$dest_dir" .pondwright-crm-ops.XXXXXX)"; then
+        echo "$LOG_PREFIX ✗ pondwright CRM db copy failed (non-fatal, flagged)"
+        return 0
+    fi
+    # Explicit checks (not `if (set -e; …)`): bash ignores errexit inside an
+    # `if` test, which would mv an empty/partial scratch over the last good dest.
+    if ssh -o ConnectTimeout=8 spark bash -s >"$local_tmp" 2>/dev/null <<'REMOTE'
+set -euo pipefail
+src="$HOME/pondwright-cwg-ops/data/ops.sqlite"
+tmp=$(mktemp /tmp/pondwright-crm-ops.XXXXXX)
+trap 'rm -f -- "$tmp" "$tmp-wal" "$tmp-shm"' EXIT
+sqlite3 -batch -readonly "$src" ".backup '$tmp'"
+cat "$tmp"
+REMOTE
+    then
+        # Completed snapshot is a single file; immutable URI validates it
+        # without creating -wal/-shm next to the scratch that we then rename.
+        integ="$(sqlite3 -batch "file:${local_tmp}?mode=ro&immutable=1" "PRAGMA integrity_check;" 2>/dev/null || true)"
+        if [ "$integ" = "ok" ] && mv -f -- "$local_tmp" "$dest"; then
+            # Uncouple this dest from leftover journals (prior read checks leave
+            # empty -wal + 32KiB -shm). Replacing the main file and keeping an
+            # old -wal can yield integrity ok while queries replay the stale
+            # journal instead of the snapshot. Only this dest's sqlite sidecars.
+            rm -f -- "${dest}-wal" "${dest}-shm" "${dest}-journal"
+            crm_ok=1
+        fi
+    fi
+    rm -f -- "$local_tmp" "${local_tmp}-wal" "${local_tmp}-shm"
+    if [ "$crm_ok" -eq 1 ]; then
+        echo "$LOG_PREFIX ✓ docs-ops/pondwright-crm-ops.sqlite ($(stat -c%s "$dest") bytes)"
+    else
+        echo "$LOG_PREFIX ✗ pondwright CRM db copy failed (non-fatal, flagged)"
+    fi
+    return 0
+}
+
+if [ "${1:-}" = "--crm-sqlite-only" ]; then
+    if [ -z "${2:-}" ]; then
+        echo "usage: $0 --crm-sqlite-only DEST_DIR" >&2
+        exit 2
+    fi
+    backup_pondwright_crm_ops "$2"
+    exit 0
+fi
+
 mkdir -p "$DEST"
 echo "$LOG_PREFIX starting backup of $DATA → $DEST"
 
@@ -112,12 +173,7 @@ for d in tax tax-cwg soveryn-business cwg-business house-economy; do
     fi
 done
 # Pondwright CRM ops DB lives on the Spark; mirror it here when the tunnel is up.
-if curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8100/health 2>/dev/null; then
-    ssh -o ConnectTimeout=8 spark "cat ~/pondwright-cwg-ops/data/ops.sqlite" \
-        > "$DOCS_DEST/pondwright-crm-ops.sqlite" 2>/dev/null \
-        && echo "$LOG_PREFIX ✓ docs-ops/pondwright-crm-ops.sqlite ($(stat -c%s "$DOCS_DEST/pondwright-crm-ops.sqlite") bytes)" \
-        || echo "$LOG_PREFIX ✗ pondwright CRM db copy failed (non-fatal, flagged)"
-fi
+backup_pondwright_crm_ops "$DOCS_DEST"
 
 # ── Off-disk mirror to easystore ─────────────────────────────────────────
 
