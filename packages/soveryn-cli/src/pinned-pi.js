@@ -11,7 +11,8 @@
  *   2026-10-13: Pi 1.2.0 on Node 22 (bin/soveryn-pi120 — kept as rollback)
  *   2026-10-16: Pi 1.3.0 on Node 22 (bin/soveryn-pi130 — kept as rollback)
  *   2026-10-22: Pi 1.4.0 on Node 22 (bin/soveryn-pi140 — kept as first rollback)
- *   2026-11-02: Pi 1.5.0 on Node 22 (bin/soveryn-pi150 — current)
+ *   2026-11-02: Pi 1.5.0 on Node 22 (bin/soveryn-pi150 — first rollback)
+ *   2026-11-10: Pi 1.5.2 on Node 22 (bin/soveryn-pi152 — current)
  *
  * bin/soveryn-piNNN exports SOVERYN_PI_BIN + SOVERYN_PI_NODE (+ SOVERYN_PI_VERSION).
  * Only the soveryn-cli harness honors them. Kernel (SOVERYN_HARNESS=kernel via

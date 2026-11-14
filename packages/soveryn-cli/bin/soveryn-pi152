@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SOVERYN CLI: pinned Pi 1.5.2, same explicit Node v22.23.2 as Pi 1.5.0.
+# Approved cutover 2026-11-10; default nvm Node 20 and other harnesses unchanged.
+# Pi 1.5.1 omits empty tools after tool history; grep context comes from ripgrep.
+# cacheWarming uses Pi's new idle default; no override unless GLM testing needs it.
+# Rollback: ln -sfn ~/soveryn_vnext/packages/soveryn-cli/bin/soveryn-pi150 ~/bin/soveryn
+# Backup + exact rollback: ~/harness-backups/pi152-20261110-0935/ROLLBACK.md
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+PKG="$(cd "$(dirname "$SELF")/.." && pwd)"
+# bin/ → soveryn-cli → packages → checkout root
+_DEFAULT_REPO="$(cd "$PKG/../.." && pwd)"
+REPO="${SOVERYN_ROOT:-${SOVERYN_VNEXT:-$_DEFAULT_REPO}}"
+NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+
+PI_PIN_VERSION="1.5.2"
+NODE_PIN_VERSION="v22.23.2"
+
+SOVERYN_PI_NODE="${SOVERYN_PI_NODE:-$NVM_DIR/versions/node/$NODE_PIN_VERSION/bin/node}"
+SOVERYN_PI_BIN="${SOVERYN_PI_BIN:-$HOME/.soveryn/pi/$PI_PIN_VERSION/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js}"
+
+if [[ ! -x "$SOVERYN_PI_NODE" ]]; then
+  echo "soveryn: pinned node missing: $SOVERYN_PI_NODE (rollback: soveryn-pi150 / soveryn-pi140 / soveryn-pi130 / soveryn-pi120 / soveryn-pi110 / soveryn-pi104 / soveryn-pi103 / soveryn-pi100 / soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  exit 1
+fi
+if [[ ! -f "$SOVERYN_PI_BIN" ]]; then
+  echo "soveryn: pinned Pi $PI_PIN_VERSION missing: $SOVERYN_PI_BIN (rollback: soveryn-pi150 / soveryn-pi140 / soveryn-pi130 / soveryn-pi120 / soveryn-pi110 / soveryn-pi104 / soveryn-pi103 / soveryn-pi100 / soveryn-pi099 / soveryn-pi087 / soveryn-074)" >&2
+  exit 1
+fi
+
+# Always the soveryn-cli harness + its own agent dir, even when launched from
+# inside a Kernel session (soveryn-pi exports SOVERYN_HARNESS=kernel and points
+# SOVERYN_CLI_DIR/PI_CODING_AGENT_DIR at config/pi).
+export SOVERYN_HARNESS=soveryn-cli
+export SOVERYN_ROOT="$REPO"
+export SOVERYN_VNEXT="$REPO"
+unset SOVERYN_KERNEL_DIR SOVERYN_CLI_PROFILE_FILE
+case "${SOVERYN_CLI_DIR:-}" in
+  ""|*/config/pi|*/config/pi/) export SOVERYN_CLI_DIR="$REPO/config/soveryn-cli" ;;
+esac
+
+export SOVERYN_PI_NODE SOVERYN_PI_BIN
+export SOVERYN_PI_VERSION="$PI_PIN_VERSION"
+
+# Single-writer lease (cc-redesign 2026-11-03): refuse --session <id|path>
+# while another live writer (the Desk, or another CLI) holds that thread.
+# The lease lives as long as this pid (exec keeps it). Skip: SOVERYN_LEASE_SKIP=1.
+_sv_sid=""
+_sv_args=("$@")
+for ((_sv_i=0; _sv_i<${#_sv_args[@]}; _sv_i++)); do
+  case "${_sv_args[$_sv_i]}" in
+    --session) _sv_sid="${_sv_args[$((_sv_i+1))]:-}" ;;
+    --session=*) _sv_sid="${_sv_args[$_sv_i]#--session=}" ;;
+  esac
+done
+_sv_lease="$REPO/soveryn/kernel_desk/lease.py"
+if [[ -n "$_sv_sid" && "${SOVERYN_LEASE_SKIP:-}" != "1" && -f "$_sv_lease" ]]; then
+  /usr/bin/python3 "$_sv_lease" acquire --root "$SOVERYN_CLI_DIR/sessions" \
+    --session "$_sv_sid" --owner cli --pid $$ --token "${SOVERYN_LEASE_TOKEN:-}" || exit $?
+fi
+
+exec "$SOVERYN_PI_NODE" "$PKG/src/cli.js" "$@"
