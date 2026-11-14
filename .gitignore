@@ -178,3 +178,11 @@ logs/
 
 # lounge runtime state (reads/nudges/live markers)
 data/lounge/
+
+# Runtime data output (watch snapshots, OCR derivatives, pondwright digests)
+data/ledger_watch/
+data/ocr-derivatives/
+data/pondwright/
+
+# models.dev registry cache (etag/checkedAt churn every run)
+config/soveryn-cli/models-store.json
