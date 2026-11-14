@@ -800,90 +800,48 @@
       }
     },
     {
-      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment/vendor/cash/date is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. vendor/amount_usd/date require review_provenance and review_rationale. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Conflicting printed totals stay diagnostic; override_reason does not silently book them. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "path": {
-            "type": "string",
-            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused."
-          },
-          "image": {
-            "type": "string",
-            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total."
-          },
           "book": {
-            "type": "string",
+            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books.",
             "enum": [
               "soveryn",
               "cwg",
               "auto"
             ],
-            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books."
-          },
-          "order_id": {
-            "type": "string",
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error."
-          },
-          "splits": {
-            "type": "array",
-            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "book": {
-                  "type": "string",
-                  "enum": [
-                    "soveryn",
-                    "cwg"
-                  ]
-                },
-                "amount": {
-                  "type": "string"
-                },
-                "amount_usd": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "book"
-              ],
-              "additionalProperties": false
-            }
+            "type": "string"
           },
           "confirm": {
-            "type": "boolean",
-            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned."
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
           },
           "confirm_token": {
-            "type": "string",
-            "description": "Token from the preview call. Required with confirm=true."
-          },
-          "override_reason": {
-            "type": "string",
-            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log."
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
           },
           "corrections": {
-            "type": "object",
-            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR). Does not change amounts; does not bypass totals, duplicates, or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
+            "additionalProperties": false,
+            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR), vendor, amount_usd (canonical cents), date (ISO YYYY-MM-DD from the receipt; tax_year is derived), review_provenance, review_rationale. vendor/amount_usd/date require review_provenance='operator reviewed source image' and review_rationale; purpose and override_reason are not permission. Does not rewrite raw subtotal/tax/printed_total. Does not bypass duplicates or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
             "properties": {
-              "invoice": {
-                "type": "string"
-              },
-              "order_id": {
-                "type": "string"
-              },
-              "description": {
+              "amount_usd": {
                 "type": "string"
               },
               "category": {
                 "type": "string"
               },
-              "schedule_c_or_form": {
+              "date": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "invoice": {
+                "type": "string"
+              },
+              "order_id": {
                 "type": "string"
               },
               "payment": {
@@ -894,12 +852,69 @@
               },
               "purpose": {
                 "type": "string"
+              },
+              "review_provenance": {
+                "type": "string"
+              },
+              "review_rationale": {
+                "type": "string"
+              },
+              "schedule_c_or_form": {
+                "type": "string"
+              },
+              "vendor": {
+                "type": "string"
               }
             },
-            "additionalProperties": false
+            "type": "object"
+          },
+          "image": {
+            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
+            "type": "string"
+          },
+          "splits": {
+            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "string"
+                },
+                "amount_usd": {
+                  "type": "string"
+                },
+                "book": {
+                  "enum": [
+                    "soveryn",
+                    "cwg"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "book"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           }
         },
-        "additionalProperties": false
+        "type": "object"
       }
     },
     {
@@ -3410,90 +3425,48 @@
       }
     },
     {
-      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment/vendor/cash/date is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. vendor/amount_usd/date require review_provenance and review_rationale. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Conflicting printed totals stay diagnostic; override_reason does not silently book them. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "path": {
-            "type": "string",
-            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused."
-          },
-          "image": {
-            "type": "string",
-            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total."
-          },
           "book": {
-            "type": "string",
+            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books.",
             "enum": [
               "soveryn",
               "cwg",
               "auto"
             ],
-            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books."
-          },
-          "order_id": {
-            "type": "string",
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error."
-          },
-          "splits": {
-            "type": "array",
-            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "book": {
-                  "type": "string",
-                  "enum": [
-                    "soveryn",
-                    "cwg"
-                  ]
-                },
-                "amount": {
-                  "type": "string"
-                },
-                "amount_usd": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "book"
-              ],
-              "additionalProperties": false
-            }
+            "type": "string"
           },
           "confirm": {
-            "type": "boolean",
-            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned."
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
           },
           "confirm_token": {
-            "type": "string",
-            "description": "Token from the preview call. Required with confirm=true."
-          },
-          "override_reason": {
-            "type": "string",
-            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log."
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
           },
           "corrections": {
-            "type": "object",
-            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR). Does not change amounts; does not bypass totals, duplicates, or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
+            "additionalProperties": false,
+            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR), vendor, amount_usd (canonical cents), date (ISO YYYY-MM-DD from the receipt; tax_year is derived), review_provenance, review_rationale. vendor/amount_usd/date require review_provenance='operator reviewed source image' and review_rationale; purpose and override_reason are not permission. Does not rewrite raw subtotal/tax/printed_total. Does not bypass duplicates or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
             "properties": {
-              "invoice": {
-                "type": "string"
-              },
-              "order_id": {
-                "type": "string"
-              },
-              "description": {
+              "amount_usd": {
                 "type": "string"
               },
               "category": {
                 "type": "string"
               },
-              "schedule_c_or_form": {
+              "date": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "invoice": {
+                "type": "string"
+              },
+              "order_id": {
                 "type": "string"
               },
               "payment": {
@@ -3504,12 +3477,69 @@
               },
               "purpose": {
                 "type": "string"
+              },
+              "review_provenance": {
+                "type": "string"
+              },
+              "review_rationale": {
+                "type": "string"
+              },
+              "schedule_c_or_form": {
+                "type": "string"
+              },
+              "vendor": {
+                "type": "string"
               }
             },
-            "additionalProperties": false
+            "type": "object"
+          },
+          "image": {
+            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
+            "type": "string"
+          },
+          "splits": {
+            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "string"
+                },
+                "amount_usd": {
+                  "type": "string"
+                },
+                "book": {
+                  "enum": [
+                    "soveryn",
+                    "cwg"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "book"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           }
         },
-        "additionalProperties": false
+        "type": "object"
       }
     },
     {
@@ -4982,90 +5012,48 @@
       }
     },
     {
-      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Totals that do not match within a cent are blocked unless override_reason is given. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
+      "description": "Preview, then confirm, a receipt onto the SOVERYN or CWG tax ledger. First call (confirm omitted/false) returns the exact rows that would be added and a short-lived confirm_token; it writes nothing. If OCR invoice/description/category/payment/vendor/cash/date is wrong, pass corrections on a preview call and confirm THAT token \u2014 do not book the uncorrected preview. vendor/amount_usd/date require review_provenance and review_rationale. Second call with confirm=true and that token writes through the single locked book writer. Name a specific file (path, image=\"current\", or order_id+splits) \u2014 folder-wide re-ingest is refused. Re-submitting the same receipt is a safe no-op that returns the existing row. Conflicting printed totals stay diagnostic; override_reason does not silently book them. One receipt, two businesses: pass splits. Never create_document. Cite-or-stop on garbled totals. Does not file a return. Use ledger_amend to edit/remove a row; ledger_reconcile to audit.",
       "name": "ledger_ingest",
       "schema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "path": {
-            "type": "string",
-            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused."
-          },
-          "image": {
-            "type": "string",
-            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total."
-          },
           "book": {
-            "type": "string",
+            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books.",
             "enum": [
               "soveryn",
               "cwg",
               "auto"
             ],
-            "description": "soveryn or cwg when Jon says which business. auto (default) classifies from the file/OCR. Unsorted if unclear \u2014 do not guess. Do not file the same full total on both books."
-          },
-          "order_id": {
-            "type": "string",
-            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error."
-          },
-          "splits": {
-            "type": "array",
-            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
-            "items": {
-              "type": "object",
-              "properties": {
-                "book": {
-                  "type": "string",
-                  "enum": [
-                    "soveryn",
-                    "cwg"
-                  ]
-                },
-                "amount": {
-                  "type": "string"
-                },
-                "amount_usd": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "book"
-              ],
-              "additionalProperties": false
-            }
+            "type": "string"
           },
           "confirm": {
-            "type": "boolean",
-            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned."
+            "description": "Default false: return a preview of the rows that would be added plus a short-lived confirm_token. Writes only when confirm=true and that token is returned.",
+            "type": "boolean"
           },
           "confirm_token": {
-            "type": "string",
-            "description": "Token from the preview call. Required with confirm=true."
-          },
-          "override_reason": {
-            "type": "string",
-            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log."
+            "description": "Token from the preview call. Required with confirm=true.",
+            "type": "string"
           },
           "corrections": {
-            "type": "object",
-            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR). Does not change amounts; does not bypass totals, duplicates, or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
+            "additionalProperties": false,
+            "description": "Reviewed field fixes before booking. Preview with these to get a new confirm_token bound to the corrected row. Changing corrections, book, or file invalidates the token. Supported: invoice/order_id, description, category/schedule_c_or_form, payment/payment_method, purpose (operator context, not OCR), vendor, amount_usd (canonical cents), date (ISO YYYY-MM-DD from the receipt; tax_year is derived), review_provenance, review_rationale. vendor/amount_usd/date require review_provenance='operator reviewed source image' and review_rationale; purpose and override_reason are not permission. Does not rewrite raw subtotal/tax/printed_total. Does not bypass duplicates or the locked writer. Do not book an uncorrected preview when OCR fields are wrong.",
             "properties": {
-              "invoice": {
-                "type": "string"
-              },
-              "order_id": {
-                "type": "string"
-              },
-              "description": {
+              "amount_usd": {
                 "type": "string"
               },
               "category": {
                 "type": "string"
               },
-              "schedule_c_or_form": {
+              "date": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "invoice": {
+                "type": "string"
+              },
+              "order_id": {
                 "type": "string"
               },
               "payment": {
@@ -5076,12 +5064,69 @@
               },
               "purpose": {
                 "type": "string"
+              },
+              "review_provenance": {
+                "type": "string"
+              },
+              "review_rationale": {
+                "type": "string"
+              },
+              "schedule_c_or_form": {
+                "type": "string"
+              },
+              "vendor": {
+                "type": "string"
               }
             },
-            "additionalProperties": false
+            "type": "object"
+          },
+          "image": {
+            "description": "Pass \"current\" to file the photo Jon just sent on this Messages turn (Expensify-style). OCR the snap; never invent a garbled total.",
+            "type": "string"
+          },
+          "order_id": {
+            "description": "Amazon/eBay/etc order id when splitting a receipt already on the books (no file needed). Alone is an error.",
+            "type": "string"
+          },
+          "override_reason": {
+            "description": "Required to book when subtotal+shipping+tax-discount does not match the printed total within a cent. Logged in the change log.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path to one receipt, or 'current' / 'current:2' for a PDF Jon just attached. Required unless image or order_id+splits. Folder-wide ingest is refused.",
+            "type": "string"
+          },
+          "splits": {
+            "description": "When one receipt has items for both businesses, list each line Jon named. Example: [{book:\"cwg\", amount:\"22.30\", description:\"Aquascape potting media\"}, {book:\"soveryn\", amount:\"69.90\", description:\"Tecmojo 6U rack\"}]. Do not invent amounts. Do not put the full cash total on both books.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "amount": {
+                  "type": "string"
+                },
+                "amount_usd": {
+                  "type": "string"
+                },
+                "book": {
+                  "enum": [
+                    "soveryn",
+                    "cwg"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "book"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           }
         },
-        "additionalProperties": false
+        "type": "object"
       }
     },
     {
