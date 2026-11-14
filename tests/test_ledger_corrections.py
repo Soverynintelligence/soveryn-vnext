@@ -103,9 +103,13 @@ def test_ocr_limitation_is_not_parser_special_case():
 
 def test_unknown_and_malformed_corrections_rejected():
     with pytest.raises(ValueError, match="unknown correction"):
-        normalize_corrections({"vendor": "Nope"})
+        normalize_corrections({"sku": "Nope"})
     with pytest.raises(ValueError, match="not supported"):
+        normalize_corrections({"printed_total": "1.00"})
+    with pytest.raises(ValueError, match="review_provenance"):
         normalize_corrections({"amount_usd": "1.00"})
+    with pytest.raises(ValueError, match="review_provenance"):
+        normalize_corrections({"vendor": "Acme Hardware"})
     with pytest.raises(ValueError, match="must be a string"):
         normalize_corrections({"invoice": 79318})
     with pytest.raises(ValueError, match="must not be empty"):
@@ -119,12 +123,16 @@ def test_tool_rejects_bad_corrections_before_path():
 
     tool = build_ledger_ingest_tool(owner_agent="eve")
     with pytest.raises(ToolArgError, match="unknown correction"):
-        tool.handler({"corrections": {"vendor": "Nope"}})
+        tool.handler({"corrections": {"sku": "Nope"}})
     with pytest.raises(ToolArgError, match="not supported"):
         tool.handler({"corrections": {"total": "46.99"}})
+    with pytest.raises(ToolArgError, match="review_provenance"):
+        tool.handler({"corrections": {"amount_usd": "46.99"}})
     props = tool.schema["properties"]["corrections"]["properties"]
     assert "invoice" in props and "purpose" in props
-    assert "amount_usd" not in props
+    assert "vendor" in props and "amount_usd" in props
+    assert "review_provenance" in props and "review_rationale" in props
+    assert "printed_total" not in props
 
 
 def test_corrections_preview_writes_nothing_and_keeps_ocr(tmp_path: Path):

@@ -288,7 +288,9 @@ def test_parse_moo_cwg_cards():
     row = parse_receipt(MOO_CWG, source_name="73745198-en.pdf")
     assert row.order_id == "0073745198"
     assert row.date == "2026-07-25"
-    assert row.amount_usd == "154.08"
+    assert row.printed_total == "154.08"
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
     assert "MOO" in row.vendor
 
 
@@ -301,7 +303,9 @@ def test_parse_strips_nul_bytes_from_cloudflare_invoice_number():
         source_name="cf.pdf",
     )
     assert row.order_id == "IN62228858"
-    assert row.amount_usd == "160.00"
+    assert row.printed_total == "160.00"
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
     assert "Registrar" in row.description
     assert "Townsend" not in row.description
 
@@ -525,7 +529,11 @@ def test_parse_thermal_pos_amount_and_slash_date():
     row = parse_receipt(THERMAL_POS, source_name="chat.jpg")
     assert row.vendor == "Star Ridge Aquatics"
     assert row.date == "2026-08-29"
-    assert row.amount_usd == "90.91"
+    assert row.printed_total == "90.91"
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
+    assert "uncorroborated" in (row.gap or "")
     assert row.order_id == "466241492734687"
     assert "5010" in row.payment_method
 
@@ -676,6 +684,33 @@ def test_paper_crop_keeps_bright_receipt_drops_dark_margin():
     assert cropped.size[1] > 350
 
 
+def test_unknown_vendor_matching_cash_is_not_documented():
+    """Deliberate: corroborated cents still need a reviewed vendor."""
+    row = parse_receipt(
+        "STORE SALE\n01-15-26\nSUBTOTAL: 10.00\nTAX: 0.70\nTOTAL: 10.70\nAMOUNT: 10.70\n",
+        source_name="receipt.jpg",
+    )
+    assert row.vendor == "unknown"
+    assert row.amount_usd == "10.70"
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
+
+
+def test_mismatched_printed_total_is_not_documented_or_recomputed_as_cash():
+    """Deliberate: do not book recompute or the printed lie as paid cash."""
+    row = parse_receipt(
+        "STORE SALE\n01-15-26\nSUBTOTAL: 84.98\nTAX: 5.94\nTOTAL: 30.92\nAMOUNT: 90.32\n",
+        source_name="receipt.jpg",
+    )
+    assert row.amount_usd == ""
+    assert row.printed_total == "30.92"
+    assert row.subtotal == "84.98"
+    assert row.tax == "5.94"
+    assert row.status == "NEED_REVIEW"
+    assert "booking recompute" not in row.notes.lower()
+    assert "90.92" in row.notes
+
+
 def test_parse_does_not_book_subtotal_invoice_points_or_card_as_total():
     row = parse_receipt(STOREFRONT_FALSE_TOTALS, source_name="chat.jpg")
     assert row.amount_usd == "12.34"
@@ -691,7 +726,10 @@ def test_parse_thermal_pos_bare_amount_and_hyphen_date():
     row = parse_receipt(THERMAL_POS_BARE, source_name="chat.jpg")
     assert row.vendor == "Star Ridge Aquatics"
     assert row.date == "2026-08-29"
-    assert row.amount_usd == "90.91"
+    assert row.printed_total == "90.91"
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
     assert row.order_id == "466241492734687"
     assert "5010" in row.payment_method
 
@@ -783,13 +821,16 @@ Your next automatic payment will be on 10/12/2026
 def test_parse_gmail_next_insurance_uses_payment_amount_not_monthly():
     """Gmail printouts are not invoices. Do not book $86.66/mo or skip the total."""
     row = parse_receipt(GMAIL_NEXT_INSURANCE, source_name="cwginsurancebill.pdf")
-    assert row.amount_usd == "163.33"
-    assert row.status == "DOCUMENTED"
+    assert row.printed_total == "163.33"
+    assert row.amount_usd == ""
+    assert row.status == "NEED_REVIEW"
+    assert row.status != "DOCUMENTED"
+    assert "86.66" not in (row.amount_usd, row.printed_total)
     assert row.date == "2026-09-12"
     assert "Next Insurance" in row.vendor
     assert "ACH" in row.payment_method
     assert "insurance" in row.schedule_c_or_form.lower()
-    assert row.gap is None
+    assert "uncorroborated" in (row.gap or "")
 
 
 def test_extract_real_gmail_insurance_pdf_if_present():
@@ -811,7 +852,9 @@ def test_extract_real_gmail_insurance_pdf_if_present():
     assert extracted.status in ("ok", "partial")
     assert "163.33" in (extracted.text or "")
     row = parse_receipt(extracted.text or "", source_name=path.name)
-    assert row.amount_usd == "163.33"
+    assert row.printed_total == "163.33"
+    assert row.amount_usd == ""
+    assert row.status != "DOCUMENTED"
     assert row.vendor == "Next Insurance"
 
 
@@ -1035,13 +1078,20 @@ def test_parse_apex_books_total_including_carrier_shipping():
     assert row.vendor == "Apex Distribution"
     assert row.order_id == "1216"
     assert row.amount_usd == "127.16"
+    assert row.status == "DOCUMENTED"
     assert "shipping 20.16" in row.notes
 
 
 def test_parse_prefers_printed_total_when_shipping_line_unparsed():
-    text = "Order placed May 1, 2026\nSubtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
+    """Apex exception: printed total above a partial recompute missing shipping/tax."""
+    text = (
+        "Apex Distribution\nOrder placed May 1, 2026\n"
+        "Subtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
+    )
     row = parse_receipt(text, source_name="x.pdf")
+    assert row.vendor == "Apex Distribution"
     assert row.amount_usd == "127.16"
+    assert row.status == "DOCUMENTED"
     assert "unitemized 20.16" in row.notes
 
 
@@ -1059,7 +1109,10 @@ def test_reingesting_same_file_without_order_id_is_duplicate(tmp_path: Path):
     cwg.write_text(",".join(CSV_FIELDS) + "\n", encoding="utf-8")
     pdf = tmp_path / "chat-1.pdf"
     pdf.write_bytes(b"%PDF-receipt-no-order-id")
-    text = "Aquascape pond bacteria\nOrder placed May 1, 2026\nSubtotal $10.00\nTax $0.70\nTotal $10.70\n"
+    text = (
+        "Star Ridge Aquatics\nAquascape pond bacteria\n"
+        "Order placed May 1, 2026\nSubtotal $10.00\nTax $0.70\nTotal $10.70\n"
+    )
     kw = dict(
         books={"soveryn": tmp_path / "s.csv", "cwg": cwg},
         evidence_roots={"soveryn": tmp_path / "ev-s", "cwg": tmp_path / "ev-c"},
@@ -1265,7 +1318,7 @@ def test_mismatch_block_and_override(tmp_path: Path):
     pdf = tmp_path / "freight.pdf"
     pdf.write_bytes(b"%PDF-freight")
     text = (
-        "Aquascape pond liner\nOrder placed May 1, 2026\n"
+        "Apex Distribution\nAquascape pond liner\nOrder placed May 1, 2026\n"
         "Subtotal $107.00\nFreight via LTL carrier $20.16\nTotal $127.16\n"
     )
     kw = _ingest_kw(tmp_path, cwg, text, "freight.pdf")

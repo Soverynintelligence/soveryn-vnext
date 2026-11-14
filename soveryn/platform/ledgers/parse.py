@@ -31,6 +31,7 @@ class ParsedRow:
     rewards: str = ""
     evidence_sha256: str = ""
     row_id: str = ""
+    card_amount: str = ""
 
     def as_csv(self) -> dict[str, str]:
         return {
@@ -61,7 +62,15 @@ _MONEY = re.compile(r"\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)")
 # Labeled totals on thermal storefronts often omit `$` ("TOTAL: 12.34").
 # Unlabeled line prices are not totals; only this after-label form is optional-$.
 _MONEY_AFTER_LABEL = re.compile(
-    r"[:\s]*-?\s*\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
+    # Optional currency parenthetical used on invoices: "Total (USD) $5,512.65",
+    # "Amount Paid (USD) $645.00". Three-letter codes only; keep the money
+    # immediately after the label otherwise.
+    # Storefront checkouts also print a bare ISO code before the dollar sign
+    # ("Total:\nUSD $30.00"); that form requires the `$` so prose such as
+    # "Total due" or other three-letter words never become a money prefix.
+    r"[:\s]*(?:\([A-Za-z]{3}\)|(?:USD|CAD|EUR|GBP|AUD)(?=\s*\$))?"
+    r"[:\s]*-?\s*\$?\s*"
+    r"((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\.?\d)"
 )
 
 _ORDER_PATTERNS = (
@@ -87,6 +96,14 @@ _DATE_PATTERNS = (
     re.compile(r"Date paid\s+([A-Za-z]+ \d{1,2}, \d{4})", re.I),
     re.compile(r"paid on\s+([A-Za-z]+ \d{1,2}, \d{4})", re.I),
     re.compile(r"\bDATE\s+(\d{1,2} [A-Za-z]+ \d{4})", re.I),
+    # Bare "Date:" label at the start of a line, value on the same or the next
+    # line ("Date:\nNovember 13, 2026" on storefront order confirmations).
+    # Line-anchored so "Due Date:", "Ship Date:", or "Expiration Date:" never
+    # match; month name is validated by strptime in _parse_date.
+    re.compile(
+        r"^[ \t]*Date:[ \t]*(?:\r?\n[ \t]*){0,2}([A-Za-z]+ \d{1,2}, \d{4})",
+        re.I | re.M,
+    ),
     re.compile(r"Confirmed\s+([A-Za-z]+ \d{1,2}(?:,?\s+\d{4})?)", re.I),
     # Slash (08/29/26) or hyphen (03-15-26) numeric dates. Not ISO YYYY-MM-DD
     # — the first group is 1-2 digits, so 2026-03-15 does not match.
@@ -108,8 +125,13 @@ _SHIP = re.compile(
 )
 _FREE_SHIP = re.compile(r"Free Shipping:", re.I)
 _GRAND = re.compile(
-    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?"
-    r"|\bA[HNM]OUNT\b",
+    r"Grand Total:|Amount due\b|Amount paid\b|Payment amount:?",
+    re.I,
+)
+# Card/terminal AMOUNT is a diagnostic candidate, not Grand Total. Used as
+# listed only when no Grand Total / TOTAL line exists (thermal POS slips).
+_CARD = re.compile(
+    r"(?<![Pp]ayment )(?<![Aa]mount )\bA[HNM]OUNT\b(?!\s+due\b)(?!\s+paid\b)",
     re.I,
 )
 # Do not treat "TOTAL TAX" / OCR "TOTAL T" / "Total before tax" as cash total.
@@ -144,12 +166,15 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
     shipping = _labeled_money(blob, _SHIP)
     free_ship = _labeled_money(blob, _FREE_SHIP)
     grand = _labeled_money(blob, _GRAND)
-    total = _labeled_money(blob, _TOTAL) if grand is None else grand
+    total = _labeled_money(blob, _TOTAL)
+    card = _labeled_money(blob, _CARD)
+    listed = grand if grand is not None else total
+    if listed is None:
+        listed = card
 
     garbled_grand = grand is None and bool(
         re.search(r"Grand Total:", blob, re.I)
     )
-    listed = grand if grand is not None else total
 
     cash, notes, gap, status = _cash(
         subtotal=subtotal,
@@ -158,8 +183,16 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
         shipping=shipping,
         free_ship=free_ship,
         listed=listed,
+        card=card,
         garbled_grand=garbled_grand,
     )
+    if vendor == "unknown" and status == "DOCUMENTED":
+        status = "NEED_REVIEW"
+        gap = (
+            (gap + " | " if gap else "")
+            + "vendor unknown — not DOCUMENTED until reviewed"
+        )
+        notes = (notes + " | " if notes else "") + "vendor unknown (OCR candidate)"
 
     desc = product or source_name or "receipt"
     if order_id:
@@ -184,7 +217,34 @@ def parse_receipt(text: str, *, source_name: str = "") -> ParsedRow:
         discount=_fmt(rewards) if rewards is not None else "",
         printed_total=_fmt(listed) if listed is not None else "",
         rewards=_fmt(rewards) if rewards is not None else "",
+        card_amount=_fmt(card) if card is not None else "",
     )
+
+
+def _agree(left: Decimal | None, right: Decimal | None) -> bool:
+    return (
+        left is not None
+        and right is not None
+        and abs(left - right) <= Decimal("0.01")
+    )
+
+
+def _candidate_note(
+    *,
+    listed: Decimal | None,
+    recomputed: Decimal | None,
+    card: Decimal | None,
+    parts: list[str],
+) -> str:
+    bits: list[str] = []
+    if listed is not None:
+        bits.append(f"printed_total {_fmt(listed)}")
+    if recomputed is not None:
+        formula = " + ".join(parts) if parts else _fmt(recomputed)
+        bits.append(f"recompute {formula} = {_fmt(recomputed)}")
+    if card is not None:
+        bits.append(f"card {_fmt(card)}")
+    return "ocr candidates: " + "; ".join(bits) if bits else ""
 
 
 def _cash(
@@ -195,6 +255,7 @@ def _cash(
     shipping: Decimal | None,
     free_ship: Decimal | None,
     listed: Decimal | None,
+    card: Decimal | None,
     garbled_grand: bool,
 ) -> tuple[str, str, str | None, str]:
     parts: list[str] = []
@@ -215,9 +276,25 @@ def _cash(
             recomputed -= rewards
             parts.append(f"rewards {_fmt(rewards)}")
 
+    diagnostics = _candidate_note(
+        listed=listed, recomputed=recomputed, card=card, parts=parts
+    )
+    card_vs_listed = (
+        card is not None
+        and listed is not None
+        and not _agree(card, listed)
+    )
+    card_vs_recompute = (
+        card is not None
+        and recomputed is not None
+        and not _agree(card, recomputed)
+    )
+
     if recomputed is not None and listed is not None:
-        if abs(recomputed - listed) <= Decimal("0.01"):
+        if _agree(recomputed, listed):
             note = " + ".join(parts) + f" = cash {_fmt(listed)}"
+            if card_vs_listed:
+                note = note + " | " + diagnostics
             return _fmt(listed), note, None, "DOCUMENTED"
         # A clean printed total ABOVE a recompute that is missing a component
         # (shipping or tax never parsed) is the cash that left the account.
@@ -232,28 +309,43 @@ def _cash(
                 + f" = printed total {_fmt(listed)}"
             )
             return _fmt(listed), note, None, "DOCUMENTED"
-        # Otherwise prefer the recompute when the printed total disagrees — OCR lies.
-        note = (
-            "printed total "
-            + _fmt(listed)
-            + " != recompute "
-            + _fmt(recomputed)
-            + "; booking recompute from subtotal+tax-rewards"
+        # Conflicting well-formed totals: keep OCR values as diagnostics.
+        # Never present recompute (or the printed lie) as verified paid cash.
+        gap = (
+            "printed total and recompute disagree — do not book unverified cash"
         )
-        return _fmt(recomputed), note, None, "DOCUMENTED"
+        return "", diagnostics, gap, "NEED_REVIEW"
 
     if recomputed is not None and (tax is not None or subtotal is not None):
+        if card_vs_recompute and listed is None:
+            gap = (
+                "card amount and recompute disagree — do not book unverified cash"
+            )
+            return "", diagnostics, gap, "NEED_REVIEW"
         note = " + ".join(parts) + f" = cash {_fmt(recomputed)}"
         if garbled_grand:
             note = "Grand-total OCR garbled; recompute " + note
         return _fmt(recomputed), note, None, "DOCUMENTED"
 
     if listed is not None:
-        return _fmt(listed), f"listed total {_fmt(listed)}", None, "DOCUMENTED"
+        if card_vs_listed:
+            gap = (
+                "printed total and card amount disagree — do not book unverified cash"
+            )
+            return "", diagnostics, gap, "NEED_REVIEW"
+        # Lone listed/card total is uncorroborated even for a known vendor.
+        # Independent subtotal+tax (or the Apex unitemized-shipping exception
+        # above) is required before cash is DOCUMENTED.
+        gap = (
+            "listed total is uncorroborated (no matching subtotal+tax) — "
+            "not DOCUMENTED until reviewed"
+        )
+        note = diagnostics or f"listed total {_fmt(listed)}"
+        return "", note, gap, "NEED_REVIEW"
 
     return (
         "",
-        "",
+        diagnostics,
         "no well-formed cash total (subtotal+tax or Grand Total) — do not invent",
         "NEED_INVOICE",
     )

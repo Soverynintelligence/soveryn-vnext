@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
+import datetime as _dt
 from decimal import Decimal, InvalidOperation
 import hashlib
 from pathlib import Path
@@ -83,13 +84,15 @@ class IngestResult:
     confirm_token: str | None = None
     confirm_expires_at: str | None = None
     ocr: dict[str, str] | None = None
+    ocr_gap: str | None = None
     corrections: dict[str, str] | None = None
 
     def as_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
-# Reviewed pre-booking fields. Money stays with OCR + totals_mismatch.
+# Reviewed pre-booking fields. Raw OCR money lines are immutable diagnostics.
+# amount_usd is the effective cash snapshot and requires image-review provenance.
 _CORRECTION_ALIASES = {
     "invoice": "order_id",
     "order_id": "order_id",
@@ -99,6 +102,19 @@ _CORRECTION_ALIASES = {
     "payment": "payment_method",
     "payment_method": "payment_method",
     "purpose": "purpose",
+    "vendor": "vendor",
+    "amount_usd": "amount_usd",
+    # Reviewed receipt date (ISO YYYY-MM-DD). tax_year is derived from it and
+    # is never a separate correction.
+    "date": "date",
+    "review_provenance": "review_provenance",
+    "review_rationale": "review_rationale",
+    # Empty-string clear only (normalize_corrections). Deposit / partial-pay
+    # reviews drop invoice subtotal+tax from the booking conflict check.
+    "subtotal": "subtotal",
+    "tax": "tax",
+    "shipping": "shipping",
+    "discount": "discount",
 }
 _CORRECTION_ORDER = (
     "order_id",
@@ -106,6 +122,15 @@ _CORRECTION_ORDER = (
     "schedule_c_or_form",
     "payment_method",
     "purpose",
+    "vendor",
+    "amount_usd",
+    "date",
+    "subtotal",
+    "tax",
+    "shipping",
+    "discount",
+    "review_provenance",
+    "review_rationale",
 )
 _CORRECTION_LIMITS = {
     "order_id": 40,
@@ -113,11 +138,19 @@ _CORRECTION_LIMITS = {
     "schedule_c_or_form": 80,
     "payment_method": 80,
     "purpose": 300,
+    "vendor": 80,
+    "amount_usd": 16,
+    "date": 40,  # strict ISO check gives the useful error
+    "subtotal": 16,
+    "tax": 16,
+    "shipping": 16,
+    "discount": 16,
+    "review_provenance": 80,
+    "review_rationale": 300,
 }
-_MONEY_CORRECTION_FIELDS = frozenset(
+_RAW_MONEY_CORRECTION_FIELDS = frozenset(
     {
         "amount",
-        "amount_usd",
         "subtotal",
         "tax",
         "shipping",
@@ -126,6 +159,27 @@ _MONEY_CORRECTION_FIELDS = frozenset(
         "total",
     }
 )
+# Invoice breakdown lines may be cleared (empty string) with a reviewed
+# amount_usd; non-empty rewrites stay rejected so OCR cannot be faked.
+_CLEARABLE_BREAKDOWN_FIELDS = frozenset(
+    {"subtotal", "tax", "shipping", "discount"}
+)
+_REVIEW_PROVENANCE_ALLOWED = frozenset({"operator reviewed source image"})
+_FILENAME_INFERENCE = re.compile(
+    r"\b(filename|file name|from the name|inferred from (the )?name)\b",
+    re.I,
+)
+_FILENAME_ONLY = re.compile(
+    r"^[\w.\-]+\.(jpg|jpeg|png|webp|pdf|tif|tiff)$",
+    re.I,
+)
+_CENTS_RE = re.compile(r"^(?:0|[1-9][0-9]*)\.[0-9]{2}$")
+_ISO_DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+_MIN_RECEIPT_DATE = _dt.date(2000, 1, 1)
+# Fields that change what the ledger asserts about the receipt itself. Each
+# requires review_provenance ('operator reviewed source image') + rationale.
+_REVIEW_CASH_FIELDS = ("vendor", "amount_usd", "date")
+_MAX_CENTS = Decimal("999999.99")
 _SEMANTIC_FIELDS = (
     "order_id",
     "description",
@@ -135,6 +189,7 @@ _SEMANTIC_FIELDS = (
     "amount_usd",
     "date",
     "vendor",
+    "status",
 )
 _OCR_FIELDS = (
     "order_id",
@@ -144,11 +199,104 @@ _OCR_FIELDS = (
     "amount_usd",
     "date",
     "vendor",
+    "status",
+    "subtotal",
+    "tax",
+    "shipping",
+    "discount",
+    "printed_total",
+    "card_amount",
+    "notes",
+    "gap",
+)
+_OCR_MONEY_BIND = (
+    "amount_usd",
+    "vendor",
+    "status",
+    "subtotal",
+    "tax",
+    "shipping",
+    "discount",
+    "printed_total",
+    "card_amount",
 )
 
 
+def canonical_cents(raw: str) -> str:
+    """Exact positive cents. Reject exponents, extra precision, nonfinite."""
+    if not isinstance(raw, str):
+        raise ValueError("corrections.amount_usd must be a string")
+    text = raw.strip()
+    if not _CENTS_RE.fullmatch(text):
+        raise ValueError(
+            "corrections.amount_usd must be a canonical cents string "
+            "(e.g. '90.92'); $, commas, signs, exponents, and extra "
+            "precision are rejected"
+        )
+    try:
+        value = Decimal(text)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError("corrections.amount_usd is not a finite decimal") from exc
+    if not value.is_finite():
+        raise ValueError("corrections.amount_usd must be finite")
+    if value <= 0:
+        raise ValueError("corrections.amount_usd must be positive")
+    if value > _MAX_CENTS:
+        raise ValueError("corrections.amount_usd exceeds bound")
+    canon = format(value.quantize(Decimal("0.01")), "f")
+    if canon != text:
+        raise ValueError("corrections.amount_usd must be the canonical cents string")
+    return canon
+
+
+def canonical_receipt_date(raw: str, *, today: _dt.date | None = None) -> str:
+    """Exact ISO receipt date. Reject other formats, impossible and future dates."""
+    if not isinstance(raw, str):
+        raise ValueError("corrections.date must be a string")
+    text = raw.strip()
+    if not _ISO_DATE_RE.fullmatch(text):
+        raise ValueError(
+            "corrections.date must be an ISO date string (YYYY-MM-DD, e.g. "
+            "'2026-11-13') read from the receipt image"
+        )
+    try:
+        value = _dt.date.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError("corrections.date is not a real calendar date") from exc
+    if value < _MIN_RECEIPT_DATE:
+        raise ValueError("corrections.date is before 2000-01-01")
+    if value > (today or _dt.date.today()):
+        raise ValueError("corrections.date is in the future")
+    return value.isoformat()
+
+
+def _normalize_review_provenance(text: str) -> str:
+    lowered = text.casefold()
+    if lowered not in _REVIEW_PROVENANCE_ALLOWED:
+        raise ValueError(
+            "corrections.review_provenance must be "
+            "'operator reviewed source image' — not filename inference"
+        )
+    return "operator reviewed source image"
+
+
+def _normalize_review_rationale(text: str) -> str:
+    if _FILENAME_INFERENCE.search(text) or _FILENAME_ONLY.fullmatch(text):
+        raise ValueError(
+            "corrections.review_rationale must be operator review of the "
+            "source image, not filename inference"
+        )
+    return text
+
+
 def normalize_corrections(raw: Mapping[str, object] | None) -> dict[str, str]:
-    """Canonical reviewed-field map. Rejects money and unknown keys."""
+    """Canonical reviewed-field map.
+
+    Raw OCR money lines cannot be rewritten to new amounts. Deposit /
+    partial-payment reviews may clear subtotal/tax/shipping/discount with an
+    empty string when amount_usd is also reviewed, so the invoice breakdown
+    does not block Amount Paid booking.
+    """
     if raw is None:
         return {}
     if not isinstance(raw, Mapping):
@@ -156,44 +304,117 @@ def normalize_corrections(raw: Mapping[str, object] | None) -> dict[str, str]:
     out: dict[str, str] = {}
     for key, value in raw.items():
         name = str(key).strip()
-        if name in _MONEY_CORRECTION_FIELDS:
+        clearing = False
+        if name == "tax_year":
             raise ValueError(
-                f"corrections.{name} is not supported — money stays with OCR "
-                "and totals; pass override_reason only when printed totals mismatch"
+                "corrections.tax_year is not supported — tax_year is derived "
+                "from the reviewed date (pass corrections.date as YYYY-MM-DD)"
             )
+        if name in _RAW_MONEY_CORRECTION_FIELDS:
+            if (
+                name in _CLEARABLE_BREAKDOWN_FIELDS
+                and isinstance(value, str)
+                and value.strip() == ""
+            ):
+                clearing = True
+            else:
+                raise ValueError(
+                    f"corrections.{name} is not supported — raw OCR "
+                    "subtotal/tax/printed_total stay diagnostic; reviewed "
+                    "amount_usd is the effective cash snapshot and cannot "
+                    "fake those lines. For deposit/partial-payment receipts, "
+                    "pass an empty string to clear subtotal/tax/shipping/"
+                    "discount alongside reviewed amount_usd."
+                )
         canon = _CORRECTION_ALIASES.get(name)
         if canon is None:
             raise ValueError(
                 f"unknown correction field {name!r}; supported: invoice, "
-                "description, category, payment, purpose"
+                "description, category, payment, purpose, vendor, amount_usd, "
+                "date, subtotal, tax, shipping, discount (empty clear), "
+                "review_provenance, review_rationale"
             )
         if not isinstance(value, str):
             raise ValueError(f"corrections.{name} must be a string")
-        text = re.sub(r"\s+", " ", value).strip()
-        if not text:
-            raise ValueError(f"corrections.{name} must not be empty")
-        if len(text) > _CORRECTION_LIMITS[canon]:
-            raise ValueError(f"corrections.{name} is too long")
+        if clearing:
+            text = ""
+        else:
+            text = re.sub(r"\s+", " ", value).strip()
+            if not text:
+                raise ValueError(f"corrections.{name} must not be empty")
+            if len(text) > _CORRECTION_LIMITS[canon]:
+                raise ValueError(f"corrections.{name} is too long")
+            if canon == "amount_usd":
+                text = canonical_cents(text)
+            elif canon == "date":
+                text = canonical_receipt_date(text)
+            elif canon == "vendor":
+                if text.casefold() == "unknown":
+                    raise ValueError("corrections.vendor cannot be unknown")
+            elif canon == "review_provenance":
+                text = _normalize_review_provenance(text)
+            elif canon == "review_rationale":
+                text = _normalize_review_rationale(text)
         if canon in out and out[canon] != text:
             raise ValueError(f"corrections.{name} conflicts with another alias")
         out[canon] = text
+    cleared = [f for f in _CLEARABLE_BREAKDOWN_FIELDS if f in out and out[f] == ""]
+    needs_review = any(field in out for field in _REVIEW_CASH_FIELDS)
+    has_provenance = "review_provenance" in out
+    has_rationale = "review_rationale" in out
+    if cleared and "amount_usd" not in out:
+        raise ValueError(
+            "clearing subtotal/tax/shipping/discount requires corrections."
+            "amount_usd (deposit/partial-payment review)"
+        )
+    if needs_review and not (has_provenance and has_rationale):
+        raise ValueError(
+            "vendor/amount_usd/date corrections require review_provenance "
+            "('operator reviewed source image') and review_rationale; "
+            "purpose and override_reason are not permission"
+        )
+    if (has_provenance or has_rationale) and not needs_review:
+        raise ValueError(
+            "review_provenance/review_rationale apply only with vendor, "
+            "amount_usd, or date"
+        )
     return {key: out[key] for key in _CORRECTION_ORDER if key in out}
 
 
 def _ocr_fields(parsed: ParsedRow) -> dict[str, str]:
-    return {
-        "order_id": parsed.order_id or "",
-        "description": parsed.description,
-        "schedule_c_or_form": parsed.schedule_c_or_form,
-        "payment_method": parsed.payment_method,
-        "amount_usd": parsed.amount_usd,
-        "date": parsed.date,
-        "vendor": parsed.vendor,
-    }
+    out: dict[str, str] = {}
+    for key in _OCR_FIELDS:
+        value = getattr(parsed, key, None)
+        out[key] = "" if value is None else str(value)
+    return out
+
+
+def _ocr_money_fields(parsed: ParsedRow) -> dict[str, str]:
+    ocr = _ocr_fields(parsed)
+    return {key: ocr.get(key) or "" for key in _OCR_MONEY_BIND}
 
 
 def _semantic_fields(row: Mapping[str, str]) -> dict[str, str]:
     return {key: (row.get(key) or "") for key in _SEMANTIC_FIELDS}
+
+
+def _breakdown_total(row: Mapping[str, str]) -> Decimal | None:
+    subtotal = _money0(row.get("subtotal") or "")
+    if subtotal is None:
+        return None
+    shipping = _money0(row.get("shipping") or "") or Decimal("0.00")
+    tax = _money0(row.get("tax") or "") or Decimal("0.00")
+    discount = _money0(row.get("discount") or "") or Decimal("0.00")
+    return (subtotal + shipping + tax - discount).quantize(Decimal("0.01"))
+
+
+def operator_amount_conflicts_breakdown(row: Mapping[str, str], amount: str) -> bool:
+    """True when parsed subtotal/tax exist and disagree with operator cash."""
+    computed = _breakdown_total(row)
+    paid = _money0(amount)
+    if computed is None or paid is None:
+        return False
+    return abs(computed - paid) > Decimal("0.01")
 
 
 def _apply_reviewed_corrections(
@@ -206,19 +427,78 @@ def _apply_reviewed_corrections(
     if not corrections:
         return
     ocr_bits: list[str] = []
-    for field in ("order_id", "description", "schedule_c_or_form", "payment_method"):
+    for field in (
+        "order_id",
+        "description",
+        "schedule_c_or_form",
+        "payment_method",
+        "vendor",
+        "amount_usd",
+        "date",
+    ):
         if field not in corrections:
             continue
         before = ocr.get(field) or ""
         after = corrections[field]
         if before != after:
-            ocr_bits.append(f"{field}={before}")
+            ocr_bits.append(f"{field}={before or '(none)'}")
         planned[field] = after
+    if "date" in corrections:
+        # tax_year always follows the booked date; never set independently.
+        planned["tax_year"] = corrections["date"][:4]
+    cleared_bits: list[str] = []
+    for field in ("subtotal", "tax", "shipping", "discount"):
+        if field not in corrections:
+            continue
+        before = ocr.get(field) or planned.get(field) or ""
+        # Empty clear only — non-empty rewrites are rejected upstream.
+        planned[field] = corrections[field]
+        if corrections[field] == "":
+            cleared_bits.append(f"{field}={before or '(none)'}")
     extra: list[str] = []
     if ocr_bits:
         extra.append("ocr " + "; ".join(ocr_bits))
     if ocr_text_sha256:
         extra.append(f"ocr_sha256={ocr_text_sha256}")
+    ocr_gap = (ocr.get("gap") or "").strip()
+    if ocr_gap and any(key in corrections for key in _REVIEW_CASH_FIELDS):
+        extra.append(f"ocr_gap={ocr_gap}")
+    if cleared_bits:
+        extra.append(
+            "cleared invoice breakdown "
+            + "; ".join(cleared_bits)
+            + " (deposit/partial-payment review; OCR values retained in notes)"
+        )
+    if "date" in corrections:
+        extra.append(
+            "reviewed date "
+            + corrections["date"]
+            + "; tax_year "
+            + corrections["date"][:4]
+            + " derived; raw OCR date "
+            + (ocr.get("date") or "none")
+        )
+    if "amount_usd" in corrections:
+        raw_sub = ocr.get("subtotal") or ""
+        raw_tax = ocr.get("tax") or ""
+        raw_printed = ocr.get("printed_total") or planned.get("printed_total") or ""
+        extra.append(
+            "effective amount_usd "
+            + corrections["amount_usd"]
+            + "; raw printed_total "
+            + (raw_printed or "none")
+            + " subtotal "
+            + (raw_sub or "none")
+            + " tax "
+            + (raw_tax or "none")
+            + " retained as OCR diagnostics"
+        )
+    provenance = corrections.get("review_provenance")
+    if provenance:
+        extra.append(f"review_provenance={provenance}")
+    rationale = corrections.get("review_rationale")
+    if rationale:
+        extra.append(f"review_rationale={rationale}")
     purpose = corrections.get("purpose")
     if purpose:
         extra.append(f"operator: {purpose}")
@@ -226,6 +506,29 @@ def _apply_reviewed_corrections(
         planned["notes"] = (
             planned["notes"] + " | " if planned["notes"] else ""
         ) + " | ".join(extra)
+    _finalize_reviewed_status(planned, corrections)
+
+
+def _finalize_reviewed_status(
+    planned: dict[str, str], corrections: Mapping[str, str]
+) -> None:
+    vendor = (planned.get("vendor") or "").strip()
+    amount = (planned.get("amount_usd") or "").strip()
+    if vendor.casefold() == "unknown":
+        if planned.get("status") == "DOCUMENTED":
+            planned["status"] = "NEED_REVIEW"
+        return
+    if "amount_usd" in corrections and operator_amount_conflicts_breakdown(
+        planned, corrections["amount_usd"]
+    ):
+        planned["status"] = "NEED_REVIEW"
+        return
+    if amount and (
+        planned.get("status") == "DOCUMENTED"
+        or "vendor" in corrections
+        or "amount_usd" in corrections
+    ):
+        planned["status"] = "DOCUMENTED"
 
 
 def _ingest_reason(
@@ -238,7 +541,19 @@ def _ingest_reason(
         return f"override: {override}" if override else "ingest"
     fields = [
         key
-        for key in ("order_id", "description", "schedule_c_or_form", "payment_method")
+        for key in (
+            "order_id",
+            "description",
+            "schedule_c_or_form",
+            "payment_method",
+            "vendor",
+            "amount_usd",
+            "date",
+            "subtotal",
+            "tax",
+            "shipping",
+            "discount",
+        )
         if key in corrections
     ]
     parts = ["reviewed correction"]
@@ -247,16 +562,84 @@ def _ingest_reason(
     purpose = corrections.get("purpose")
     if purpose:
         parts.append(f"operator: {purpose}")
+    provenance = corrections.get("review_provenance")
+    if provenance:
+        parts.append(f"review_provenance={provenance}")
+    rationale = corrections.get("review_rationale")
+    if rationale:
+        parts.append(f"review_rationale={rationale}")
     ocr_bits = []
     for field in fields:
         before = ocr.get(field) or ""
         if before != corrections[field]:
-            ocr_bits.append(f"{field}={before}")
+            ocr_bits.append(f"{field}={before or '(none)'}")
     if ocr_bits:
         parts.append("ocr " + "; ".join(ocr_bits))
     if override:
         parts.append(f"override: {override}")
     return "; ".join(parts)
+
+
+def _cash_review_block(
+    planned: Mapping[str, str],
+    corrections: Mapping[str, str],
+    override: str,
+) -> str | None:
+    """None if the planned snapshot may be written. Detail if it must stay blocked."""
+    vendor = (planned.get("vendor") or "").strip()
+    amount = (planned.get("amount_usd") or "").strip()
+    status = (planned.get("status") or "").strip()
+    operator_amount = corrections.get("amount_usd")
+    mismatch, detail = totals_mismatch(planned)
+
+    if vendor.casefold() == "unknown" and amount:
+        return (
+            "vendor unknown — reviewed vendor + review_provenance required; "
+            "override_reason is not permission"
+        )
+    if status == "NEED_REVIEW" and not amount and not operator_amount:
+        return (
+            "uncorroborated cash — reviewed amount_usd + review_provenance "
+            "required; override_reason is not permission"
+        )
+    if operator_amount and operator_amount_conflicts_breakdown(
+        planned, operator_amount
+    ):
+        return (
+            "operator amount_usd conflicts with parsed subtotal/tax; "
+            "amount-only override cannot rewrite the raw breakdown. "
+            "Pass amount_usd that matches subtotal+shipping+tax-discount, "
+            "or for deposit/partial-payment receipts clear subtotal/tax "
+            "(empty-string corrections) with reviewed amount_usd + "
+            "review_provenance, or leave the row blocked. Raw printed_total "
+            "stays diagnostic."
+        )
+    if mismatch:
+        if operator_amount and not operator_amount_conflicts_breakdown(
+            planned, operator_amount
+        ):
+            return None
+        if status == "DOCUMENTED" and amount and override:
+            return None
+        if status != "DOCUMENTED" or not amount:
+            return (
+                "mismatched or uncorroborated cash — reviewed amount_usd + "
+                "review_provenance required; override_reason is not permission"
+                + (f" ({detail})" if detail else "")
+            )
+        return detail
+    return None
+
+
+def _actionable_gap(
+    planned: Mapping[str, str],
+    parsed: ParsedRow,
+    cash_block: str | None,
+) -> str | None:
+    """Current booking deficiency. Original OCR gap lives on ocr/ocr_gap."""
+    if (planned.get("status") or "") == "DOCUMENTED":
+        return None
+    return cash_block or parsed.gap
 
 
 def _token_mismatch(book: str, source_name: str, detail: str) -> IngestResult:
@@ -465,6 +848,7 @@ def _preview_result(
     splits: list[dict[str, str]] | None = None,
     ocr: Mapping[str, str] | None = None,
     corrections: Mapping[str, str] | None = None,
+    gap: str | None = None,
 ) -> IngestResult:
     token, expires = issue_confirm_token(payload)
     planned0 = planned[0] if planned else None
@@ -475,6 +859,7 @@ def _preview_result(
         order_id=(planned0.get("order_id") if planned0 else None) or parsed.order_id,
         amount_usd=(planned0.get("amount_usd") if planned0 else None) or parsed.amount_usd,
         evidence=planned0.get("evidence") if planned0 else parsed.evidence or None,
+        gap=gap,
         message=message,
         splits=list(splits or []),
         rows=[dict(r) for r in planned],
@@ -482,6 +867,7 @@ def _preview_result(
         confirm_token=token,
         confirm_expires_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires)),
         ocr=dict(ocr) if ocr is not None else None,
+        ocr_gap=parsed.gap,
         corrections=dict(corrections) if corrections else None,
     )
 
@@ -492,19 +878,30 @@ def _blocked_result(
     parsed: ParsedRow,
     planned: Sequence[Mapping[str, str]],
     detail: str,
+    *,
+    message: str | None = None,
+    ocr: Mapping[str, str] | None = None,
+    corrections: Mapping[str, str] | None = None,
 ) -> IngestResult:
+    planned0 = planned[0] if planned else None
     return IngestResult(
         book=book,
         action="blocked",
         source_name=source_name,
-        order_id=parsed.order_id,
-        amount_usd=parsed.amount_usd,
+        order_id=(planned0.get("order_id") if planned0 else None) or parsed.order_id,
+        amount_usd=(
+            (planned0.get("amount_usd") if planned0 else None) or parsed.amount_usd
+        ),
         gap=detail,
-        message=(
+        message=message
+        or (
             "totals do not match within a cent — pass override_reason to book anyway"
         ),
         rows=[dict(r) for r in planned],
-        row=dict(planned[0]) if planned else None,
+        row=dict(planned0) if planned0 is not None else None,
+        ocr=dict(ocr) if ocr is not None else None,
+        ocr_gap=parsed.gap,
+        corrections=dict(corrections) if corrections else None,
     )
 
 
@@ -528,8 +925,9 @@ def ingest_path(
     Chat photo hooks and ledger_ingest tool previews must pass confirm=False.
     A write from the tool requires the confirm_token issued by that preview.
     Default confirm=True is for explicit CLI/library callers only.
-    Reviewed corrections (invoice/description/category/payment/purpose) bind
-    into the preview token; changing them, the book, or the file invalidates it.
+    Reviewed corrections (invoice/description/category/payment/purpose/vendor/
+    amount_usd/date plus review provenance) bind into the preview token; changing
+    them, the review reason, the book, or the file invalidates it.
     """
     path = Path(path)
     extract_fn = extract or extract_receipt_path
@@ -551,6 +949,8 @@ def ingest_path(
     bound_book = None
     bound_corrections: dict[str, str] | None = None
     bound_semantic: dict[str, str] | None = None
+    bound_override: str | None = None
+    bound_ocr_money: dict[str, str] | None = None
     applied_corrections: dict[str, str] = caller_corrections or {}
     if confirm_token:
         payload = consume_confirm_token(confirm_token)
@@ -578,6 +978,20 @@ def ingest_path(
         token_sem = payload.get("semantic")
         if isinstance(token_sem, Mapping):
             bound_semantic = {str(k): str(v) for k, v in token_sem.items()}
+        token_override = payload.get("override_reason")
+        if isinstance(token_override, str):
+            bound_override = token_override
+        token_ocr_money = payload.get("ocr_money")
+        if isinstance(token_ocr_money, Mapping):
+            bound_ocr_money = {str(k): str(v) for k, v in token_ocr_money.items()}
+        if bound_override is not None and override != bound_override:
+            return _token_mismatch(
+                str(bound_book or "unsorted"),
+                path.name,
+                "confirm token does not match this override_reason",
+            )
+        if bound_override is not None:
+            override = bound_override
         if caller_corrections is not None:
             if bound_corrections is None:
                 if caller_corrections:
@@ -629,6 +1043,13 @@ def ingest_path(
         parsed.evidence_sha256 = _sha256(path)
     ocr = _ocr_fields(parsed)
     ocr_text_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    ocr_money = _ocr_money_fields(parsed)
+    if bound_ocr_money is not None and ocr_money != bound_ocr_money:
+        return _token_mismatch(
+            str(bound_book or "unsorted"),
+            path.name,
+            "confirm token does not match the parsed OCR money snapshot",
+        )
 
     if splits:
         specs = normalize_splits(splits)
@@ -702,7 +1123,6 @@ def ingest_path(
     csv_path = book_paths[book]
     ev_root = Path(ev_roots[book])
     planned = _csv_from_parsed(parsed)
-    planned["evidence"] = _planned_evidence_rel(path, parsed, ev_root)
     planned["evidence_sha256"] = parsed.evidence_sha256
     planned["order_id"] = parsed.order_id or ""
     _apply_reviewed_corrections(
@@ -711,6 +1131,14 @@ def ingest_path(
         corrections=applied_corrections,
         ocr_text_sha256=ocr_text_sha256,
     )
+    named = replace(
+        parsed,
+        vendor=planned.get("vendor") or parsed.vendor,
+        amount_usd=planned.get("amount_usd") or parsed.amount_usd,
+        description=planned.get("description") or parsed.description,
+        date=planned.get("date") or parsed.date,
+    )
+    planned["evidence"] = _planned_evidence_rel(path, named, ev_root)
     semantic = _semantic_fields(planned)
     if bound_semantic is not None and semantic != bound_semantic:
         return _token_mismatch(
@@ -718,6 +1146,7 @@ def ingest_path(
             path.name,
             "confirm token does not match the reviewed fields",
         )
+    cash_block = _cash_review_block(planned, applied_corrections, override)
 
     other = next((bid for bid in book_paths if bid != book), None)
     other_csv = book_paths.get(other) if other else None
@@ -754,10 +1183,6 @@ def ingest_path(
     if found is not None:
         return _exists_result(book, path.name, parsed, found)
 
-    mismatch, detail = totals_mismatch(planned)
-    if mismatch and not override:
-        return _blocked_result(book, path.name, parsed, [planned], detail)
-
     if not confirm:
         payload = {
             "kind": "ingest_path",
@@ -768,12 +1193,14 @@ def ingest_path(
             "source_sha256": _sha256(path) if path.is_file() else "",
             "corrections": applied_corrections,
             "semantic": semantic,
+            "ocr_money": ocr_money,
             "source": (
                 "chat_preview" if actor == "chat_receipt_preview" else "ledger_ingest"
             ),
             "ocr_text_sha256": ocr_text_sha256,
         }
         reviewed = " with reviewed corrections" if applied_corrections else ""
+        status = planned.get("status") or parsed.status
         return _preview_result(
             book,
             path.name,
@@ -781,8 +1208,30 @@ def ingest_path(
             [planned],
             payload=payload,
             message=(
-                f"preview {planned['amount_usd'] or 'NO AMOUNT'} on {book}"
+                f"preview {planned['amount_usd'] or 'NO AMOUNT'} {status} on {book}"
                 f"{reviewed} — call again with confirm=true"
+            ),
+            ocr=ocr,
+            corrections=applied_corrections,
+            gap=_actionable_gap(planned, parsed, cash_block),
+        )
+
+    if cash_block:
+        apex_style = (
+            planned.get("status") == "DOCUMENTED"
+            and bool(planned.get("amount_usd"))
+            and "amount_usd" not in applied_corrections
+        )
+        return _blocked_result(
+            book,
+            path.name,
+            parsed,
+            [planned],
+            cash_block,
+            message=(
+                "totals do not match within a cent — pass override_reason to book anyway"
+                if apex_style
+                else cash_block
             ),
             ocr=ocr,
             corrections=applied_corrections,
@@ -801,7 +1250,14 @@ def ingest_path(
             found = find_duplicate(existing, order_id=planned["order_id"])
         if found is not None:
             return _exists_result(book, path.name, parsed, found)
-        rel_evidence = _place_evidence(path, parsed, ev_root)
+        named = replace(
+            parsed,
+            vendor=planned.get("vendor") or parsed.vendor,
+            amount_usd=planned.get("amount_usd") or parsed.amount_usd,
+            description=planned.get("description") or parsed.description,
+            date=planned.get("date") or parsed.date,
+        )
+        rel_evidence = _place_evidence(path, named, ev_root)
         parsed.evidence = rel_evidence
         planned["evidence"] = rel_evidence
         reason = _ingest_reason(
@@ -830,11 +1286,12 @@ def ingest_path(
         order_id=written.get("order_id") or parsed.order_id,
         amount_usd=written.get("amount_usd") or parsed.amount_usd,
         evidence=rel_evidence,
-        gap=parsed.gap,
-        message=f"appended {parsed.amount_usd or 'NO AMOUNT'} to {book}",
+        gap=_actionable_gap(planned, parsed, None),
+        message=f"appended {written.get('amount_usd') or 'NO AMOUNT'} to {book}",
         row=written,
         rows=[written],
         ocr=ocr,
+        ocr_gap=parsed.gap,
         corrections=applied_corrections or None,
     )
 
